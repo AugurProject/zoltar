@@ -10,10 +10,10 @@ export const winningRedemptionUnavailable = 'Winning-outcome redemption becomes 
 export const migrationGuidance = 'Choose the market share separately from the fork branches. Migration permanently locks parent-universe transfers for the selected share. The same source can still migrate later into other children.'
 export const marketDataUnavailableReason = 'Market data is unavailable. Refresh the market.'
 export const universeNotForkedReason = 'The universe has not forked, so there is nothing to migrate.'
-export const noSharesToMigrateReason = 'You hold no INVALID, YES, or NO shares to migrate.'
+export const noSharesToMigrateReason = 'You hold no Invalid, Yes, or No shares to migrate.'
 export const universeForkedReason = 'The universe forked. Migrate your shares to a child universe instead.'
 export const poolNotOperationalReason = 'The security pool is not operational, so it cannot pay out ETH.'
-export const noCompleteSetsReason = 'You hold no complete sets. Redeeming needs equal INVALID, YES, and NO.'
+export const noCompleteSetsReason = 'You hold no complete sets. Redeeming needs equal Invalid, Yes, and No shares.'
 export const questionNotResolvedReason = 'The question has not resolved yet.'
 export const acknowledgeMigrationReason = 'Confirm that you understand the migration.'
 export const sourceShare = 'Source share'
@@ -28,7 +28,7 @@ export function redeemOutcomeAction(outcome: 'INVALID' | 'YES' | 'NO') {
 }
 
 export function noWinningSharesReason(outcome: 'INVALID' | 'YES' | 'NO') {
-	return `You hold no ${outcome} shares to redeem.`
+	return `You hold no ${outcomeLabel(outcome)} shares to redeem.`
 }
 
 export function completeSetsHeld(completeSets: string, value: string) {
@@ -40,7 +40,7 @@ export function migrationAmount(balance: string) {
 }
 
 export function acknowledgeMigration(balance: string, outcome: 'INVALID' | 'YES' | 'NO') {
-	return `I understand this moves all ${balance} into the selected branches and permanently locks my ${outcome} transfers in the parent universe.`
+	return `I understand this moves all ${balance} into the selected branches and permanently locks my ${outcomeLabel(outcome)} transfers in the parent universe.`
 }
 
 export function winningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO', balance: string) {

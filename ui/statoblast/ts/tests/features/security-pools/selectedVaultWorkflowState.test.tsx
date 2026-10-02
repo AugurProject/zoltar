@@ -195,7 +195,7 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 	const healthyButton = getRow(otherOwner).getByRole('button', { name: 'Liquidate vault' })
 	expect(healthyButton.hasAttribute('disabled')).toBe(true)
 	const reason = document.getElementById(healthyButton.getAttribute('aria-describedby') ?? '')
-	expect(reason?.textContent).toBe('This vault is not undercollateralized at the current Open Oracle price.')
+	expect(reason?.textContent).toBe('This vault is not undercollateralized at the current OpenOracle price.')
 	const unhealthyButton = getRow(unhealthyOwner).getByRole('button', { name: 'Liquidate vault' })
 	expect(unhealthyButton.hasAttribute('disabled')).toBe(false)
 	await act(() => fireEvent.click(unhealthyButton))

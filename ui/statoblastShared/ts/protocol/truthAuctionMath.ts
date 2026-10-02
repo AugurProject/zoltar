@@ -1,4 +1,5 @@
 import { findTruthAuctionMinSupportedTick, tickToPrice, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 
 const TRUTH_AUCTION_MIN_SUPPORTED_TICK = findTruthAuctionMinSupportedTick()
 
@@ -61,7 +62,7 @@ export function formatTruthAuctionTickPriceInput(tick: bigint) {
 	const price = getTruthAuctionPriceAtTick(tick)
 	for (let decimals = MIN_TICK_PRICE_INPUT_DECIMALS; decimals < 18; decimals += 1) {
 		const step = 10n ** BigInt(18 - decimals)
-		const roundedUpPrice = ((price + step - 1n) / step) * step
+		const roundedUpPrice = ceilDiv(price, step) * step
 		if (getTruthAuctionTickAtPrice(roundedUpPrice) === tick) return formatTruthAuctionValidationPrice(roundedUpPrice)
 	}
 	return formatTruthAuctionValidationPrice(price)

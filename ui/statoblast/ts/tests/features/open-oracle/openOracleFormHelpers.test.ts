@@ -47,7 +47,7 @@ function createProgressReport(overrides: Partial<Parameters<typeof getOpenOracle
 	}
 }
 
-describe('Open Oracle create form helpers', () => {
+describe('OpenOracle create form helpers', () => {
 	test('accepts a decimal escalation multiplier and stores it scaled by 100', () => {
 		expect(getDefaultOpenOracleCreateFormState().multiplier).toBe('1')
 		// Typing 2 means a 2× multiplier, not 0.02×.
@@ -87,7 +87,7 @@ describe('Open Oracle create form helpers', () => {
 	})
 })
 
-describe('Open Oracle fetched price input', () => {
+describe('OpenOracle fetched price input', () => {
 	test('rounds an 18-decimal quote to six significant digits', () => {
 		expect(formatOpenOraclePriceInput(1_234_567_890_123_456_789n, 18)).toBe('1.23457')
 		expect(formatOpenOraclePriceInput(123_456_789_000_000_000_000n, 18)).toBe('123.457')
@@ -100,7 +100,7 @@ describe('Open Oracle fetched price input', () => {
 	})
 })
 
-describe('Open Oracle report progress', () => {
+describe('OpenOracle report progress', () => {
 	test('combines the stored state with the live clock', () => {
 		const clock = (currentTime: bigint) => ({ currentBlockNumber: undefined, currentTime })
 		expect(getOpenOracleReportProgress(createProgressReport(), clock(105n))).toBe('awaiting-dispute-window')
@@ -127,7 +127,7 @@ describe('Open Oracle report progress', () => {
 	})
 })
 
-describe('Open Oracle created report link', () => {
+describe('OpenOracle created report link', () => {
 	test('reads the created report ID only from create results', () => {
 		const hash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 		const created: Parameters<typeof getCreatedOpenOracleReportId>[0] = { action: 'createReportInstance', hash, reportId: 9n }

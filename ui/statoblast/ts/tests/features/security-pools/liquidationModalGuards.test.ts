@@ -268,7 +268,7 @@ describe('vault liquidation launcher', () => {
 		const vault = { claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 2n * 10n ** 18n, vaultAddress: zeroAddress, vaultAttoRepBacking: 17n * 10n ** 18n }
 		const base = { repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: vault }
 		expect(getVaultNotLiquidatableReason({ ...base, repPerEthPrice: undefined })).toBeUndefined()
-		expect(getVaultNotLiquidatableReason(base)).toBe('This vault is not undercollateralized at the current Open Oracle price.')
+		expect(getVaultNotLiquidatableReason(base)).toBe('This vault is not undercollateralized at the current OpenOracle price.')
 		expect(getVaultNotLiquidatableReason({ ...base, targetVaultSummary: { ...vault, vaultAttoRepBacking: 10n ** 18n } })).toBeUndefined()
 		expect(getVaultNotLiquidatableReason({ ...base, targetVaultSummary: { ...vault, underwritingLimitAttoEth: 0n } })).toBe(liquidationCopy.targetHasNoCommitmentReason)
 		expect(getVaultNotLiquidatableReason({ ...base, targetVaultSummary: { ...vault, badDebtAttoEth: 1n, vaultAttoRepBacking: 10n ** 18n } })).toBe(liquidationCopy.targetBadDebtReason)

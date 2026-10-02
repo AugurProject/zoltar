@@ -19,7 +19,7 @@ function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, ba
 }
 
 /**
- * The wallet's YES, NO, and INVALID shares in this market, shown in the reading column so every ticket view keeps them in sight.
+ * The wallet's Yes, No, and Invalid shares in this market, shown in the reading column so every ticket view keeps them in sight.
  * `ownsBalanceError` is false while the open ticket view (liquidity or settlement) already reports a failed balance read with its retry.
  */
 export function MarketPosition({ market, holdings, wallet, disabled, ownsBalanceError }: { market: LiveMarket; holdings: TicketBalances; wallet: Pick<TicketWallet, 'networkMismatchReason'>; disabled: boolean; ownsBalanceError: boolean }) {

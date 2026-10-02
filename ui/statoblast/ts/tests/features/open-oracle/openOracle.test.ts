@@ -714,7 +714,7 @@ describe('OpenOracle helpers', () => {
 	test('create guard checks the wallet for exactly the settler reward', () => {
 		const guardInput = { isOnActiveAppChain: true, walletBalanceAttoEth: 10n ** 18n, walletConnected: true }
 		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: '0.1' })).toBeUndefined()
-		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: '1.5' })).toBe('Need 0.5\u00a0more\u00a0ETH in this wallet to create the selected standalone Open Oracle report.')
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: '1.5' })).toBe('Need 0.5\u00a0more\u00a0ETH in this wallet to create the selected standalone OpenOracle report.')
 		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: 'abc' })).toBe('Enter a valid settler reward.')
 	})
 

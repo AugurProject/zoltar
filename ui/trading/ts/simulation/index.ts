@@ -16,7 +16,7 @@ export function registerTradingSimulationScenario() {
 		label: 'Trading with liquidity',
 	})
 	registerSimulationScenario(FORKED_TRADING_SIMULATION_SCENARIO, {
-		description: 'The funded trading market after its universe forked, with YES, NO, and INVALID shares still in the parent universe. Use it to test Fork migration.',
+		description: 'The funded trading market after its universe forked, with Yes, No, and Invalid shares still in the parent universe. Use it to test Fork migration.',
 		label: 'Trading after a fork',
 	})
 }
