@@ -74,7 +74,7 @@ type OpenOracleReportBrowserProps = {
 }
 
 /**
- * Reports are browsed from this browser's favorites and downloaded summaries. Scanning Open Oracle is an explicit,
+ * Reports are browsed from this browser's favorites and downloaded summaries. Scanning OpenOracle is an explicit,
  * one-page-per-click action (newest reports first) whose results join the downloaded cache.
  */
 export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKey, loadBrowseReports, onOpenReport }: OpenOracleReportBrowserProps) {

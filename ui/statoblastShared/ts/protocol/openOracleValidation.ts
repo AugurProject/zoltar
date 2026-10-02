@@ -35,8 +35,8 @@ export function getOpenOracleCreateParameterValidation(
 	{ skipToken1MagnitudeValidation = false }: { skipToken1MagnitudeValidation?: boolean } = {},
 ): OpenOracleCreateParameterValidation | undefined {
 	if (sameAddress(token1Address, token2Address)) return { field: 'token2Address', message: 'Base and quote tokens must use different addresses.' }
-	if (sameAddress(token1Address, zeroAddress)) return { field: 'token1Address', message: 'Direct Open Oracle reports currently require two ERC-20 token addresses.' }
-	if (sameAddress(token2Address, zeroAddress)) return { field: 'token2Address', message: 'Direct Open Oracle reports currently require two ERC-20 token addresses.' }
+	if (sameAddress(token1Address, zeroAddress)) return { field: 'token1Address', message: 'Direct OpenOracle reports currently require two ERC-20 token addresses.' }
+	if (sameAddress(token2Address, zeroAddress)) return { field: 'token2Address', message: 'Direct OpenOracle reports currently require two ERC-20 token addresses.' }
 	if (exactToken1Report <= 0n) return { field: 'exactToken1Report', message: 'Base token amount must be greater than zero.' }
 	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return { field: 'exactToken1Report', message: 'Base token amount exceeds the contract maximum.' }
 	if (initialToken2Amount <= 0n) return { field: 'initialToken2Amount', message: 'Quote token amount must be greater than zero.' }

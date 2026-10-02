@@ -299,7 +299,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							prompt={estimatePrompt}
 							failedPlan={failedPlan}
 							onRetry={canRetry ? retryPreparation : undefined}
-							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
+							reason={confirmationGuardMessage ?? priceError ?? (failureLatched ? priceRequestCopy.retryRequired : previewPrompt)}
 							error={confirmationGuardMessage}
 							errorWalletBlocker={confirmationWalletBlocker}
 							preparing={valid && !preparationPaused && (running || attempted !== key)}

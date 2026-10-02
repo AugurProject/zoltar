@@ -158,14 +158,14 @@ describe('standalone trading UI model', () => {
 		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1n)
 		expect(collateralAttoEthToAttoShares(1n, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 1n })).toBeUndefined()
 		expect(() => attoSharesToCollateralAttoEth(-1n, rate)).toThrow('cannot be negative')
-		expect(formatOutcomeQuantity(10n ** 18n, 'YES')).toBe('1 YES')
+		expect(formatOutcomeQuantity(10n ** 18n, 'YES')).toBe('1 Yes')
 		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1 complete set')
 		// Exactly 0.005 ETH of shares under a rate that no longer divides evenly still reads as 0.005, while limits round down.
 		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 18n }
 		const shares = collateralAttoEthToAttoShares(5n * 10n ** 15n, drifted)
 		if (shares === undefined) throw new Error('Drifted rate must convert')
-		expect(formatOutcomeQuantity(shares, 'YES')).toBe('5 YES')
-		expect(formatOutcomeQuantity(shares, 'YES', 4, 'down')).toBe('5 YES')
+		expect(formatOutcomeQuantity(shares, 'YES')).toBe('5 Yes')
+		expect(formatOutcomeQuantity(shares, 'YES', 4, 'down')).toBe('5 Yes')
 		expect(formatCollateralEth(shares, drifted, 'down')).toBe('0.0049 ETH')
 		expect(formatCollateralEth(shares, drifted)).toBe('0.005 ETH')
 		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1 complete set')
@@ -227,7 +227,7 @@ describe('standalone trading UI model', () => {
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, universeForkTime: 999n }, 1_000n)).toBe('Universe forked')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, awaitingForkContinuation: true }, 1_000n)).toBe('Awaiting fork continuation')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, systemState: 3 }, 1_000n)).toBe('Pool inactive')
-		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved INVALID')
+		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved Invalid')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
 	})
@@ -408,7 +408,7 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('requires an explicit fork branch and names the irreversible consequence', () => {
-		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected YES balance will be copied into 12 selected child branches and locked in the parent universe.')
+		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected Yes balance will be copied into 12 selected child branches and locked in the parent universe.')
 	})
 
 	test('allows many ready fork children while requiring missing children to be created singly', () => {
@@ -481,9 +481,9 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('loading', 0n, unit)).toBe('Loading…')
 		expect(settlementBalanceLabel('error', 0n, unit)).toBe('Unavailable')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 YES')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 NO')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 INVALID')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid')
 	})
 
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {

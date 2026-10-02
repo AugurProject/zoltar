@@ -1,3 +1,5 @@
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+
 export type WalletVaultFundingState = {
 	minimumVaultRepDepositAttoRep: bigint
 	vaultRepBackingUnits: bigint
@@ -20,7 +22,7 @@ export function getWalletVaultFundingQuote(state: WalletVaultFundingState, repor
 		if (fundedTotalUnits === 0n || fundedTotalUnits > MAX_UINT256 || fundedPoolRep > MAX_UINT256) return undefined
 		const fundedBacking = (fundedVaultUnits * fundedPoolRep) / fundedTotalUnits
 		if (fundedBacking < minimum || fundedBacking < reportAmount) return undefined
-		const escrowUnits = (reportAmount * fundedTotalUnits + fundedPoolRep - 1n) / fundedPoolRep
+		const escrowUnits = ceilDiv(reportAmount * fundedTotalUnits, fundedPoolRep)
 		if (escrowUnits > fundedVaultUnits) return undefined
 		const remainingVaultUnits = fundedVaultUnits - escrowUnits
 		if (remainingVaultUnits === 0n) return 0n

@@ -382,7 +382,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			? ([
 					{
 						id: 'reputationToken',
-						label: 'Genesis Reputation Token',
+						label: 'GenesisReputationToken',
 						address: profile.genesisRepTokenAddress,
 						dependencies: ['proxyDeployer'],
 						deploy: async client => await deployViaProxy(client, SEPOLIA_GENESIS_REP_INIT_CODE),
@@ -403,7 +403,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		},
 		{
 			id: 'deploymentStatusOracle',
-			label: 'Deployment Status Oracle',
+			label: 'DeploymentStatusOracle',
 			address: getDeploymentStatusOracleAddress(profile),
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),

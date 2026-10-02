@@ -301,12 +301,12 @@ describe('Statoblast: truth auction', () => {
 
 			const zeroRepVault = addressString(TEST_ADDRESSES[1])
 			const positiveRepVault = addressString(TEST_ADDRESSES[2])
-			const credit = async (vault: typeof zeroRepVault, attoRepAmount: bigint, underwritingLimitAttoEthAmount: bigint, badDebtAttoEth: bigint) => {
+			const credit = async (vault: typeof zeroRepVault, amountAttoRep: bigint, underwritingLimitAttoEth: bigint, badDebtAttoEth: bigint) => {
 				const hash = await client.writeContract({
 					address: forkerAddress,
 					abi: test_statoblast_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
 					functionName: 'creditAuctionProceeds',
-					args: [poolAddress, vault, attoRepAmount, underwritingLimitAttoEthAmount, badDebtAttoEth],
+					args: [poolAddress, vault, amountAttoRep, underwritingLimitAttoEth, badDebtAttoEth],
 				})
 				await client.waitForTransactionReceipt({ hash })
 			}

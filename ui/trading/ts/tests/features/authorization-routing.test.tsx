@@ -42,7 +42,7 @@ describe('trading authorization routing', () => {
 
 	test('uses the receive flow without an approval action', async () => {
 		const container = await renderExit()
-		expect(container.textContent).toContain('Sell YES')
+		expect(container.textContent).toContain('Sell Yes')
 		expect(container.textContent).not.toContain('Preview trade')
 		expect(container.textContent).not.toContain('Approve router for all outcome tokens')
 	})

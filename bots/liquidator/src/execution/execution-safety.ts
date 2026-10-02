@@ -1,5 +1,5 @@
 import { type StrategySettings } from '#config/settings'
-import { BPS_DENOMINATOR, type LiquidationCandidate, requiredRepForOpenInterest, surplusRepForWithdrawal, vaultHealthBps } from '#core/strategy'
+import { BPS_DENOMINATOR, type LiquidationCandidate, requiredRepForUnderwritingLimit, surplusRepForWithdrawal, vaultHealthBps } from '#core/strategy'
 import type { finalizedReceiptWithQuorum } from '#execution/recovery'
 import { type PoolObservation, type RuntimeState } from '#state/operator-state'
 import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -78,17 +78,29 @@ export function liquidationExecutionStep(topUpAttoRep: bigint) {
 	return { kind: 'deposit-and-rescreen' as const, targetHealthFactorBps: MAX_UINT256 }
 }
 
-export function conservativeStaleTopUp(parameters: { callerDisputeStakedAttoRep?: bigint; callerOpenInterestAttoEth: bigint; callerAttoRep: bigint; requestedDebtAttoEth: bigint; fallbackPrice: bigint; minimumTopUp: bigint; multiplierBps: bigint; referencePrice: bigint; safetyBps: bigint; targetHealthBps: bigint }) {
+export function conservativeStaleTopUp(parameters: {
+	callerDisputeStakedAttoRep?: bigint
+	callerUnderwritingLimitAttoEth: bigint
+	callerAttoRep: bigint
+	requestedDebtAttoEth: bigint
+	fallbackPrice: bigint
+	minimumTopUp: bigint
+	multiplierBps: bigint
+	referencePrice: bigint
+	safetyBps: bigint
+	targetHealthBps: bigint
+}) {
 	const referencePrice = parameters.referencePrice > 0n ? parameters.referencePrice : parameters.fallbackPrice
 	if (referencePrice === 0n) throw new Error('Stale unseeded oracle requires strategy.fallbackRepPerEthPrice')
 	const bufferedPrice = (referencePrice * parameters.safetyBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
-	const requiredAttoRep = requiredRepForOpenInterest(parameters.callerOpenInterestAttoEth + parameters.requestedDebtAttoEth, parameters.multiplierBps, bufferedPrice, parameters.targetHealthBps, parameters.callerDisputeStakedAttoRep ?? 0n)
+	const requiredAttoRep = requiredRepForUnderwritingLimit(parameters.callerUnderwritingLimitAttoEth + parameters.requestedDebtAttoEth, parameters.multiplierBps, bufferedPrice, parameters.targetHealthBps, parameters.callerDisputeStakedAttoRep ?? 0n)
 	const conservativeTopUp = requiredAttoRep > parameters.callerAttoRep ? requiredAttoRep - parameters.callerAttoRep : 0n
 	return conservativeTopUp > parameters.minimumTopUp ? conservativeTopUp : parameters.minimumTopUp
 }
 
 export function assertStaleLiquidationExposureBound(candidate: Pick<LiquidationCandidate, 'requestedDebtAttoEth' | 'target'>) {
-	if (candidate.requestedDebtAttoEth >= candidate.target.openInterestAttoEth) {
+	// SecurityPoolOperationsDelegate treats debt at or above the target's underwriting limit as a full close (no minimum REP reserved).
+	if (candidate.requestedDebtAttoEth >= candidate.target.underwritingLimitAttoEth) {
 		throw new Error('Stale full-close liquidation cannot guarantee the configured REP exposure limits')
 	}
 }
@@ -103,9 +115,9 @@ export function planVaultMaintenance(
 	prioritizeLiquidationCandidate = false,
 ): VaultMaintenancePlan {
 	if (priceDependentMaintenanceAllowed && pool.lastPrice > 0n) {
-		const health = vaultHealthBps(pool.botVault.vaultAttoRepBacking, pool.botVault.openInterestAttoEth, pool.multiplierBps, pool.lastPrice, pool.botVault.disputeStakedAttoRep)
-		if (pool.botVault.openInterestAttoEth > 0n && health !== undefined && health < strategy.vaultTopUpHealthBps) {
-			const targetAttoRep = requiredRepForOpenInterest(pool.botVault.openInterestAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps, pool.botVault.disputeStakedAttoRep)
+		const health = vaultHealthBps(pool.botVault.vaultAttoRepBacking, pool.botVault.underwritingLimitAttoEth, pool.multiplierBps, pool.lastPrice, pool.botVault.disputeStakedAttoRep)
+		if (pool.botVault.underwritingLimitAttoEth > 0n && health !== undefined && health < strategy.vaultTopUpHealthBps) {
+			const targetAttoRep = requiredRepForUnderwritingLimit(pool.botVault.underwritingLimitAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps, pool.botVault.disputeStakedAttoRep)
 			return { amountAttoRep: targetAttoRep > pool.botVault.vaultAttoRepBacking ? targetAttoRep - pool.botVault.vaultAttoRepBacking : 0n, kind: 'deposit' }
 		}
 		if (!prioritizeLiquidationCandidate && strategy.allowAutomaticWithdrawals && pool.isPriceValid && pool.botVault.address.toLowerCase() === walletAddress.toLowerCase()) {

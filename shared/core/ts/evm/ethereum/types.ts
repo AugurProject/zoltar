@@ -263,6 +263,12 @@ export type Chain = {
 			http: readonly string[]
 		}
 	}
+	blockExplorers?: {
+		default: {
+			name: string
+			url: string
+		}
+	}
 	readonly [key: string]: JsonValue
 }
 

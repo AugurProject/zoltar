@@ -1,5 +1,5 @@
 import { computeEscalationTimeSinceStartFromAttritionCostAttoRep } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
-import { getDisplayedLeadingEscalationOutcome } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
+import { getDisplayedLeadingEscalationOutcome, hasReportingOpened } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
@@ -517,5 +517,15 @@ describe('fork-triggering reports', () => {
 		expect(getSecondLargestEscalationBalance([side('invalid', rep(1n)), side('yes', rep(5n)), side('no', rep(8n))])).toBe(rep(5n))
 		expect(getSecondLargestEscalationBalance([side('invalid', rep(8n)), side('yes', rep(8n)), side('no', 0n)])).toBe(rep(8n))
 		expect(getSecondLargestEscalationBalance([side('yes', rep(3n))])).toBe(0n)
+	})
+})
+
+describe('reporting opening boundary', () => {
+	// The contracts accept reporting once block.timestamp >= the question end time.
+	test('reporting opens at the question end timestamp', () => {
+		expect(hasReportingOpened(100n, 99n)).toBe(false)
+		expect(hasReportingOpened(100n, 100n)).toBe(true)
+		expect(hasReportingOpened(100n, 101n)).toBe(true)
+		expect(hasReportingOpened(100n, undefined)).toBe(undefined)
 	})
 })

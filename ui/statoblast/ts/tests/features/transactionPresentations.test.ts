@@ -145,7 +145,7 @@ describe('transaction presentations', () => {
 		expect(revertedPresentation.detail).toBe('The oracle price has not moved far enough past the target vault’s liquidation threshold.')
 	})
 
-	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
+	test('uses resolved token symbols in OpenOracle approval and withdrawal titles', () => {
 		const context = {
 			token1Symbol: 'WETH',
 			token2Symbol: 'REP',
@@ -166,12 +166,30 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }).title).toBe('Oracle balance withdrawn')
 	})
 
-	test('uses the user-facing report name for Open Oracle creation', () => {
+	test('uses the user-facing report name for OpenOracle creation', () => {
 		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Creating standalone oracle report')
 		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report created')
 	})
 
-	test('describes Open Oracle settlement as a report lifecycle action', () => {
+	test('distinguishes accepted prices and unconfirmed callbacks from report settlement', () => {
+		const accepted = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'accepted' } })
+		expect(accepted.tone).toBe('success')
+		expect(accepted.detail).toBe('Pool accepted this price.')
+		const unconfirmed = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'unconfirmed' } })
+		expect(unconfirmed.tone).toBe('warning')
+		expect(unconfirmed.title).toBe('Report settled; price acceptance unconfirmed')
+		const rejected = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Base fee too high' } })
+		expect(rejected.detail).toBe('Pool rejected this price: Base fee too high. Request a new price.')
+	})
+
+	test('shows a stale coordinator rejection as a warning after successful report settlement', () => {
+		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Report stale' } })
+		expect(presentation.tone).toBe('warning')
+		expect(presentation.title).toBe('Report settled; price rejected')
+		expect(presentation.detail).toBe('Price expired before settlement. Request a new price.')
+	})
+
+	test('describes OpenOracle settlement as a report lifecycle action', () => {
 		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling report')
 		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Settled report')
 	})

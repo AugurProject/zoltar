@@ -1,4 +1,7 @@
+import { getChainDefaultRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+
 export const defaultCoreDeploymentRpcUrls: Readonly<Record<number, string>> = {
-	1: 'https://ethereum.dark.florist',
-	11_155_111: 'https://ethereum-sepolia-rpc.publicnode.com',
+	[MAINNET_NETWORK_PROFILE.chain.id]: getChainDefaultRpcUrl(MAINNET_NETWORK_PROFILE.chain),
+	[SEPOLIA_NETWORK_PROFILE.chain.id]: getChainDefaultRpcUrl(SEPOLIA_NETWORK_PROFILE.chain),
 }

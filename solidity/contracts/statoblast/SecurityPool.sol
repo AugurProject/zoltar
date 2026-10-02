@@ -61,10 +61,10 @@ contract SecurityPool is SecurityPoolStorage {
 	SecurityPoolEventEmitter public immutable eventEmitter;
 	address private immutable operationsDelegate;
 
-	event RepWithdrawnFromVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
-	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
+	event RepWithdrawnFromVault(address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
+	event RepDepositedToVault(address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event VaultLiquidated(uint256 indexed operationId, address operator, address indexed receiverVault, address indexed targetVault, uint256 securityBondDebtMovedAttoEth, uint256 underwritingLimitMovedAttoEth, uint256 badDebtAttoEth);
-	event RepRedeemedFromVault(address indexed caller, address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
+	event RepRedeemedFromVault(address indexed caller, address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event DepositToEscalationGame(address indexed vault, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 depositedAmountAttoRep, uint256 backingUnitsEscrowed, uint256 repBackingUnits, uint256 totalRepBackingUnits, EscalationGame escalationGame);
 	event PoolForkModeActivated(uint256 repTransferredAttoRep, uint256 currentRetentionRate, SystemState systemState);
 	event EscalationGameSet(EscalationGame escalationGame);
@@ -283,15 +283,15 @@ contract SecurityPool is SecurityPoolStorage {
 		feeIndexRemainder = 0;
 	}
 
-	/// @notice Coordinator-only: withdraws up to `attoRepAmount` of REP to `vault` if the vault and pool stay backed.
+	/// @notice Coordinator-only: withdraws up to `amountAttoRep` of REP to `vault` if the vault and pool stay backed.
 	/// @dev Withdraws the vault's full backing when the remainder would fall below the minimum vault REP deposit.
-	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
+	function withdrawRepFromVault(address vault, uint256 amountAttoRep) external isOperational onlyValidOracle {
 		if (isEscalationResolved()) revert('Escalation resolved');
 		updateVaultFees(vault);
 		if (address(escalationGame) != address(0x0)) {
 			require(escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Escrow');
 		}
-		uint256 backingUnitsToWithdraw = attoRepToBackingUnits(attoRepAmount);
+		uint256 backingUnitsToWithdraw = attoRepToBackingUnits(amountAttoRep);
 		uint256 withdrawBackingUnits =
 			backingUnitsToWithdraw + attoRepToBackingUnits(minimumVaultRepDepositAttoRep) >
 				securityVaults[vault].repBackingUnits
@@ -316,18 +316,18 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	/// @notice Converts attoRep to backing units at the current pool rate, rounding down.
-	function attoRepToBackingUnits(uint256 attoRepAmount) public view returns (uint256) {
+	function attoRepToBackingUnits(uint256 amountAttoRep) public view returns (uint256) {
 		uint256 totalPoolHeldRepBalanceAttoRep = getTotalPoolHeldAttoRep();
 		if (totalRepBackingUnits == 0 || totalPoolHeldRepBalanceAttoRep == 0)
-			return Math.mulDiv(attoRepAmount, SecurityPoolUtils.PRICE_PRECISION, 1);
-		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep);
+			return Math.mulDiv(amountAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
+		return Math.mulDiv(amountAttoRep, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep);
 	}
 
-	function _attoRepToBackingUnitsRoundUp(uint256 attoRepAmount) private view returns (uint256) {
+	function _attoRepToBackingUnitsRoundUp(uint256 amountAttoRep) private view returns (uint256) {
 		uint256 totalPoolHeldRepBalanceAttoRep = getTotalPoolHeldAttoRep();
 		if (totalRepBackingUnits == 0 || totalPoolHeldRepBalanceAttoRep == 0)
-			return Math.mulDiv(attoRepAmount, SecurityPoolUtils.PRICE_PRECISION, 1);
-		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep, Math.Rounding.Ceil);
+			return Math.mulDiv(amountAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
+		return Math.mulDiv(amountAttoRep, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep, Math.Rounding.Ceil);
 	}
 
 	/// @notice Converts backing units to attoRep at the current pool rate, rounding down.
@@ -394,18 +394,18 @@ contract SecurityPool is SecurityPoolStorage {
 		return address(escalationGame) == address(0x0) ? 0 : escalationGame.totalDisputeStakedAttoRep();
 	}
 
-	function _requireVaultCoverage(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedRepAmountAttoRep, uint256 openInterestAttoEth, uint256 repEthPrice) private view {
-		require(SecurityPoolUtils.isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedRepAmountAttoRep, openInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps), 'Vault backing insufficient');
+	function _requireVaultCoverage(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedRepAmountAttoRep, uint256 vaultUnderwritingLimitAttoEth, uint256 repEthPrice) private view {
+		require(SecurityPoolUtils.isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedRepAmountAttoRep, vaultUnderwritingLimitAttoEth, repEthPrice, statoblastSecurityMultiplierBps), 'Vault backing insufficient');
 	}
 
-	function _requirePoolCoverage(uint256 totalPoolHeldAttoRep, uint256 totalDisputeStakedAttoRep, uint256 totalOpenInterestAttoEth, uint256 repEthPrice) private view {
+	function _requirePoolCoverage(uint256 totalPoolHeldAttoRep, uint256 totalDisputeStakedAttoRep, uint256 poolUnderwritingLimitAttoEth, uint256 repEthPrice) private view {
 		if (
-			!SecurityPoolUtils.isVaultHealthy(totalPoolHeldAttoRep, totalDisputeStakedAttoRep, totalOpenInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps)
+			!SecurityPoolUtils.isVaultHealthy(totalPoolHeldAttoRep, totalDisputeStakedAttoRep, poolUnderwritingLimitAttoEth, repEthPrice, statoblastSecurityMultiplierBps)
 		) revert('Pool backing insufficient');
 	}
 
-	function _requireMinimumVaultRep(uint256 attoRepAmount, bool allowZeroBalance, string memory errorMessage) private view {
-		require(attoRepAmount >= minimumVaultRepDepositAttoRep || (allowZeroBalance && attoRepAmount == 0), errorMessage);
+	function _requireMinimumVaultRep(uint256 amountAttoRep, bool allowZeroBalance, string memory errorMessage) private view {
+		require(amountAttoRep >= minimumVaultRepDepositAttoRep || (allowZeroBalance && amountAttoRep == 0), errorMessage);
 	}
 
 	function _requireValidPrice() private view {
@@ -429,10 +429,10 @@ contract SecurityPool is SecurityPoolStorage {
 		return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth;
 	}
 
-	/// @notice Deposits `attoRepAmount` of REP from the caller into the caller's vault.
+	/// @notice Deposits `amountAttoRep` of REP from the caller into the caller's vault.
 	/// @dev Requires open vault admission and `targetHealthFactorBps` of at least the pool security multiplier.
-	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
-		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositRepToVault, (attoRepAmount, targetHealthFactorBps)));
+	function depositRepToVault(uint256 amountAttoRep, uint256 targetHealthFactorBps) external {
+		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositRepToVault, (amountAttoRep, targetHealthFactorBps)));
 	}
 
 	// liquidating vault
@@ -511,14 +511,14 @@ contract SecurityPool is SecurityPoolStorage {
 		require(disputeStakedAttoRep == 0, 'Escrow locked');
 		updateVaultFees(vault);
 		uint256 backingUnitsToRedeem = securityVaults[vault].repBackingUnits;
-		uint256 attoRepAmount = backingUnitsToAttoRep(backingUnitsToRedeem);
-		require(attoRepAmount > 0, 'No redeemable REP');
+		uint256 amountAttoRep = backingUnitsToAttoRep(backingUnitsToRedeem);
+		require(amountAttoRep > 0, 'No redeemable REP');
 		require(securityVaults[vault].underwritingLimitAttoEth == 0, 'Exit commitment before REP redemption');
 		securityVaults[vault].repBackingUnits = 0;
 		totalRepBackingUnits -= backingUnitsToRedeem;
 		// A positive claim was registered when its backing units were created or transferred.
-		IERC20(address(repToken)).safeTransfer(vault, attoRepAmount);
-		emit RepRedeemedFromVault(msg.sender, vault, attoRepAmount, 0, totalRepBackingUnits);
+		IERC20(address(repToken)).safeTransfer(vault, amountAttoRep);
+		emit RepRedeemedFromVault(msg.sender, vault, amountAttoRep, 0, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(vault);
 	}
 
@@ -560,7 +560,7 @@ contract SecurityPool is SecurityPoolStorage {
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
-			require(block.timestamp > endTime, 'Question active');
+			require(block.timestamp >= endTime, 'Question active');
 			escalationGame = escalationGameFactory.deployEscalationGame(initialEscalationGameDepositAttoRep, zoltar.getNonDecisionThresholdAttoRep(universeId));
 			emit EscalationGameSet(escalationGame);
 		} else {

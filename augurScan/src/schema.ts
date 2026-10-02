@@ -2,7 +2,7 @@ import path from 'node:path'
 import { SQL } from 'bun'
 import { runtimeConfig } from './config.ts'
 import { actualSchemaLayout, expectedSchemaLayout, schemaLayoutDifferences } from './schema-layout.ts'
-import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, HISTORICAL_INTEGRITY_SCHEMA_VERSION, INITIAL_MIGRATABLE_SCHEMA_VERSION, PREVIOUS_SCHEMA_VERSION, runSchemaTransaction, type SupportedSchemaVersion, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from './schema-policy.ts'
+import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, HISTORICAL_INTEGRITY_SCHEMA_VERSION, INITIAL_MIGRATABLE_SCHEMA_VERSION, PREVIOUS_SCHEMA_VERSION, pendingSchemaMigrations, runSchemaTransaction, type SupportedSchemaVersion, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from './schema-policy.ts'
 
 const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>, schema: string, version: SupportedSchemaVersion): Promise<void> => {
 	const differences = schemaLayoutDifferences(expectedSchemaLayout(schema, version), await actualSchemaLayout(connection))
@@ -68,22 +68,20 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			}
 			const startingVersion = migrationVersions[action]
 			await assertSchemaLayout(connection, schema, startingVersion)
-			const migrations = [
-				...(action === 'migrate-from-1' ? [await Bun.file(path.resolve(import.meta.dir, '../migrations/002-historical-integrity.sql')).text()] : []),
-				...(action !== 'migrate-from-3' ? [await Bun.file(path.resolve(import.meta.dir, '../migrations/003-indexer-ownership.sql')).text()] : []),
-				await Bun.file(path.resolve(import.meta.dir, '../migrations/004-question-seconds.sql')).text(),
-			]
+			const migrations = await Promise.all(pendingSchemaMigrations(startingVersion).map(async migration => ({ ...migration, sql: await Bun.file(path.resolve(import.meta.dir, '../migrations', migration.file)).text() })))
 			await runSchemaTransaction(
 				async () => await connection.unsafe('BEGIN'),
 				async () => await connection.unsafe('COMMIT'),
 				async () => await connection.unsafe('ROLLBACK'),
 				async () => {
-					for (const migration of migrations) await connection.unsafe(migration)
+					for (const migration of migrations) await connection.unsafe(migration.sql)
 					await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
-					await connection`
-						INSERT INTO public.augurscan_schema_migrations (schema_version, description)
-						VALUES (${CURRENT_SCHEMA_VERSION}, ${'Exact question timestamps in Unix seconds'})
-					`
+					for (const migration of migrations)
+						await connection`
+							INSERT INTO public.augurscan_schema_migrations (schema_version, description)
+							VALUES (${migration.version}, ${migration.description})
+							ON CONFLICT (schema_version) DO NOTHING
+						`
 					await connection`UPDATE public.augurscan_schema SET schema_version = ${CURRENT_SCHEMA_VERSION} WHERE singleton`
 				},
 			)

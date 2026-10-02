@@ -155,10 +155,20 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 }
 
 export function createOpenOracleSuccessPresentation(result: OpenOracleActionResult, context?: OpenOracleTransactionContext) {
+	if (result.priceSettlement?.status === 'unconfirmed') return buildPresentation({ hash: result.hash, rows: getOpenOracleTransactionRows(context), title: openOracleCopy.priceSettlementUnconfirmed, detail: openOracleCopy.priceSettlementUnconfirmedDetail, tone: 'warning' })
+	if (result.priceSettlement?.status === 'rejected')
+		return buildPresentation({
+			hash: result.hash,
+			rows: getOpenOracleTransactionRows(context),
+			title: openOracleCopy.reportPriceRejected,
+			detail: openOracleCopy.formatPriceSettlementRejection(result.priceSettlement.reason),
+			tone: 'warning',
+		})
 	return buildPresentation({
 		hash: result.hash,
 		rows: getOpenOracleTransactionRows(context),
 		title: getOpenOracleSuccessPresentationTitle(result.action, context),
+		detail: result.priceSettlement?.status === 'accepted' ? openOracleCopy.poolPriceAccepted : undefined,
 		tone: 'success',
 	})
 }

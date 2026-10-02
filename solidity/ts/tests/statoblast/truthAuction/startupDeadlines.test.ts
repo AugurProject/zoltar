@@ -15,11 +15,11 @@ import { getERC20Balance, getETHBalance } from '../../../testSupport/simulator/u
 import { DAY, TEST_ADDRESSES } from '../../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../../testSupport/simulator/utils/clients'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
-import { strictEqualTypeSafe } from '../../../testSupport/simulator/utils/testUtils'
+import { ensureDefined, strictEqualTypeSafe } from '../../../testSupport/simulator/utils/testUtils'
 import assert from '../../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from '../fixture'
-import { getPendingAuctionRefund, withdrawPendingAuctionRefund, getUnassignedPosition } from './helpers'
+import { getPendingAuctionRefund, withdrawPendingAuctionRefund, getUnassignedPosition, getTruthAuctionStartedEvents } from './helpers'
 
 describe('Statoblast: truth auction', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
@@ -97,8 +97,13 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in migration at the exact parent deadline')
 
 			await mockWindow.setTime(migrationDeadline)
-			await startTruthAuction(client, yesSecurityPool.securityPool)
+			const startHash = await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should enter truth auction after the parent migration window closes')
+			const startedEvents = await getTruthAuctionStartedEvents(client, startHash)
+			strictEqualTypeSafe(startedEvents.length, 1, 'an auction start should be announced exactly once')
+			const startedEvent = ensureDefined(startedEvents[0], 'missing TruthAuctionStarted event')
+			strictEqualTypeSafe(startedEvent.args.securityPool.toLowerCase(), yesSecurityPool.securityPool.toLowerCase())
+			strictEqualTypeSafe(startedEvent.args.auctionableAttoRepAtFork, (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableAttoRepAtFork)
 		})
 
 		test('migration and auction-start competitors use exact block timestamps at deadline - 1, deadline, and deadline + 1', async () => {

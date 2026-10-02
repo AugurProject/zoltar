@@ -5,10 +5,10 @@ import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRout
 
 installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
-test('shows one primary row with Pools and Open Oracle', () => {
+test('shows one primary row with Pools and OpenOracle', () => {
 	const tabs = getStatoblastRouteTabs({ route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Open Oracle'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'OpenOracle'])
 	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
 })
 
@@ -34,7 +34,7 @@ test('hides the list views on a pool page', () => {
 	expect(getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'operate', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
 })
 
-test('routes Open Oracle view changes to their owner and preserves universe links', () => {
+test('routes OpenOracle view changes to their owner and preserves universe links', () => {
 	const setOpenOracleView = mock(() => undefined)
 	const setSecurityPoolsView = mock(() => undefined)
 	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'open-oracle', setOpenOracleView, setSecurityPoolsView })

@@ -90,14 +90,14 @@ export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRew
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
 		isOnActiveAppChain,
 		walletConnected,
-		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone Open Oracle report'),
+		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone OpenOracle report'),
 	})
 	if (walletGuardState.blocked) return walletGuardState.reason
 	// Standalone reports are ERC-20 pairs, so the transaction sends exactly the settler reward in ETH.
 	const ethSentAttoEth = getOpenOracleCreateEthSent(settlerRewardInput)
 	if (ethSentAttoEth === undefined) return 'Enter a valid settler reward.'
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (ethSentAttoEth > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethSentAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone Open Oracle report.`
+	if (ethSentAttoEth > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethSentAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone OpenOracle report.`
 	return undefined
 }
 
@@ -282,7 +282,7 @@ export function getOpenOracleCreateValidationMessage(parameters: { form: OpenOra
 	return getOpenOracleCreateValidation(parameters).message
 }
 function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
-	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('Open Oracle report is missing its atomic initial report')
+	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('OpenOracle report is missing its atomic initial report')
 	if (report.isDistributed) return 'Settled'
 	if (report.disputeOccurred) return 'Disputed'
 	return 'Pending'

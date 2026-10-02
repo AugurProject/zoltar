@@ -1652,14 +1652,14 @@ describe('Solidity bytecode coverage helpers', () => {
 				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
-		await transact(
-			priceOracleFactoryAddress,
-			encodeFunctionData({
-				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
-				functionName: 'deployOpenOraclePriceCoordinator',
-				args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
-			}),
-		)
+		const deployPriceCoordinatorData = encodeFunctionData({
+			abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
+			functionName: 'deployOpenOraclePriceCoordinator',
+			args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
+		})
+		await transact(priceOracleFactoryAddress, deployPriceCoordinatorData)
+		// Reusing the sender and salt collides with the existing CREATE2 address, which fails without constructor revert data.
+		await assert.rejects(transact(priceOracleFactoryAddress, deployPriceCoordinatorData), /Price coordinator deployment failed/)
 
 		const fakeZoltar = await deployContract(
 			client,

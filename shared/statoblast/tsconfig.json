@@ -5,9 +5,7 @@
 		"outDir": "js",
 		"baseUrl": ".",
 		"paths": {
-			"@zoltar/core-shared/*": ["../core/js/*"],
-			"@zoltar/zoltar-shared/*": ["../zoltar/js/*"],
-			"@zoltar/open-oracle-shared/*": ["../openOracle/js/*"]
+			"@zoltar/core-shared/*": ["../core/js/*"]
 		}
 	},
 	"include": ["./ts/**/*.ts"],

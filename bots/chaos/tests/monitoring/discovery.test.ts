@@ -40,6 +40,12 @@ test('keyless discovery scans protocol topology without querying account invento
 	expect(snapshot.wallet.tokens).toEqual([])
 })
 
+test('derives the universe initial escalation deposit from the Zoltar universe supply that genesis burns reduce', async () => {
+	const fake = fakeClient(10n, hash(99), { tokenTheoreticalSupplyAttoRep: 30_000_000n * 10n ** 18n, universeTheoreticalSupplyAttoRep: 20_000_000n * 10n ** 18n })
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.universes.find(universe => universe.id === '0')?.initialEscalationDepositAttoRep).toBe((2n * 10n ** 18n).toString())
+})
+
 test('monitors inventory for a known execution address without requiring a signer', async () => {
 	const fake = fakeClient(10n)
 	const wallet = address(1)
@@ -210,8 +216,10 @@ interface GraphOverrides {
 	}[]
 	questionIds?: readonly bigint[]
 	routerFactory?: Address
+	tokenTheoreticalSupplyAttoRep?: bigint
 	tradingSecurityPoolFactory?: Address
 	uniswapFactory?: Address
+	universeTheoreticalSupplyAttoRep?: bigint
 	uniswapPoolsByRep?: Readonly<Record<string, { initialized: boolean; liquidity: bigint; pool: Address }>>
 }
 
@@ -288,7 +296,9 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'getNonDecisionThresholdAttoRep':
 					return 200n
 				case 'getTotalTheoreticalSupply':
-					return 1_000_000n
+					return graph.tokenTheoreticalSupplyAttoRep ?? 1_000_000n
+				case 'getUniverseTheoreticalSupplyAttoRep':
+					return graph.universeTheoreticalSupplyAttoRep ?? 1_000_000n
 				case 'forkBurnDivisor':
 					return 5n
 				case 'getMigrationRepBalanceAttoRep':

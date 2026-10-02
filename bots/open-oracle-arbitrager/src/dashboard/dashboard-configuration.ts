@@ -1,7 +1,7 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { markFormClean } from '@zoltar/bot-shared/dashboard/form-state'
 import { CONFIGURATION_REQUEST_TIMEOUT_MS, requestWithTimeout, waitForProfileReconnect } from '@zoltar/bot-shared/dashboard/polling'
-import type { ConnectivitySettings } from '#monitoring/connectivity'
+import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
 import { isDeploymentSettings, isRuntimeLimits, isSettlementSettings, isStrategySettings, isStringArray, isSubmissionSettings } from './api-validation.ts'
 import type { DashboardControls } from './dashboard-controls.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
@@ -10,7 +10,7 @@ import { api } from './dashboard-requests.ts'
 import type { DashboardState, NetworkProfile } from './dashboard-state.ts'
 import { setText } from './dom.ts'
 import { renderHealth } from './overview-panels.ts'
-import { loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, setLoadedRpcQuorum } from './settings-forms.ts'
+import { applyQuorumRpcUrls, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, setLoadedRpcQuorum } from './settings-forms.ts'
 import { renderSettingsInsights } from './settings-insights.ts'
 
 type ConfigurationContext = {
@@ -37,14 +37,16 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		elements.publicRpcUrls.value = connectivity.publicRpcUrls.join('\n')
 	}
 
-	function synchronizePersistedConnectivity(configuration: unknown) {
+	function synchronizePersistedConnectivity(configuration: unknown, effectiveRpcQuorum: 1 | 2) {
 		const selectedNetwork = configurationField(configuration, 'network')
 		if (selectedNetwork !== 'mainnet' && selectedNetwork !== 'sepolia') throw new Error('Bot returned an invalid active chain profile')
-		const rpcQuorum = configurationField(configuration, 'rpcQuorum')
-		if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Bot returned an invalid RPC quorum setting')
+		const focused = persistedConnectivity(configuration)
+		if (configurationField(configuration, 'connectivity') !== undefined && focused === undefined) throw new Error('Bot returned an invalid connectivity setting')
+		// An unconfigured profile saves no connectivity, so the form starts empty at the requirement the bot derives from the environment.
+		const rpcQuorum = focused?.rpcQuorum ?? effectiveRpcQuorum
 		elements.rpcQuorum.value = rpcQuorum.toString()
 		setLoadedRpcQuorum(rpcQuorum)
-		const focused = persistedConnectivity(configuration)
+		applyQuorumRpcUrls(focused?.quorumRpcUrls ?? [])
 		if (focused === undefined) {
 			elements.readRpcUrl.value = ''
 			elements.publicRpcUrls.value = ''
@@ -57,7 +59,7 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		controls.updateNetworkTargetStatus()
 	}
 
-	function synchronizeFocusedConfiguration(configuration: unknown) {
+	function synchronizeFocusedConfiguration(configuration: unknown, effectiveRpcQuorum: 1 | 2) {
 		if (typeof configuration !== 'object' || configuration === null || Array.isArray(configuration)) throw new Error('Bot returned an invalid configuration document')
 		const strategy = Reflect.get(configuration, 'strategy')
 		const submission = Reflect.get(configuration, 'submission')
@@ -69,13 +71,13 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(approvedUniverses)) throw new Error('Bot returned an invalid configuration document')
 		const execute = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'execute') : undefined
 		if (!isRuntimeLimits(runtime) || typeof execute !== 'boolean' || !isSettlementSettings(settlement) || typeof centralizedMarkets !== 'object' || centralizedMarkets === null || Array.isArray(centralizedMarkets)) throw new Error('Bot returned an invalid configuration document')
-		state.configuredScanIntervalMilliseconds = strategy.pollMilliseconds
+		state.configuredScanIntervalMilliseconds = runtime.pollMilliseconds
 		if (state.latestSnapshot !== undefined) renderHealth(state.latestSnapshot, state.configuredScanIntervalMilliseconds, !state.connected)
 		loadSettings(strategy)
 		state.settingsLoaded = true
 		loadSubmission(submission)
 		state.submissionLoaded = true
-		synchronizePersistedConnectivity(configuration)
+		synchronizePersistedConnectivity(configuration, effectiveRpcQuorum)
 		loadDeployment(deployment, 'configuration')
 		state.deploymentLoaded = true
 		state.approvedUniverseIds = new Set(approvedUniverses)
@@ -107,7 +109,7 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 			const network = configurationNetwork(envelope.configuration)
 			if (state.pendingNetworkProfile !== undefined && network !== state.pendingNetworkProfile) return
 			elements.configurationJson.value = prettyJson(envelope.configuration)
-			synchronizeFocusedConfiguration(envelope.configuration)
+			synchronizeFocusedConfiguration(envelope.configuration, envelope.effectiveRpcQuorum)
 			state.configurationLoaded = true
 			state.configurationLoadError = undefined
 			setText('configuration-status', '')

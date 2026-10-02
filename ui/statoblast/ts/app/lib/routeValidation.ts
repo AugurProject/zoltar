@@ -16,7 +16,7 @@ type StatoblastRouteValidationInput = {
 	selectedPoolView: string
 }
 
-/** Pool locations come from the hash path, which the router already rejects when malformed, so only an unknown pool tab or Open Oracle view or a malformed universe can make an otherwise resolved route invalid. */
+/** Pool locations come from the hash path, which the router already rejects when malformed, so only an unknown pool tab or OpenOracle view or a malformed universe can make an otherwise resolved route invalid. */
 export function getInvalidStatoblastRouteState({ openOracleView, pageSearch, resolvedRoute, search, selectedPoolView }: StatoblastRouteValidationInput) {
 	return {
 		hasInvalidOpenOracleView: hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle', 'pools', 'deploy'], allowedViews: OPEN_ORACLE_VIEWS, key: 'openOracleView', resolvedRoute, search, value: openOracleView }),

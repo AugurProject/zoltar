@@ -1,4 +1,5 @@
 import { formatNetworkRequiredReason, positiveAmountRequired, walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
+import { outcomeLabel } from './outcomes.js'
 import { conditionalYesPriceValidation } from './liquidity.js'
 import { walletBalancesUnavailable } from './app.js'
 
@@ -16,7 +17,7 @@ export const quoteLoadingReason = 'Getting a quote…'
 export const quoteUnavailableReason = 'Quote unavailable. Change the amount or try again.'
 
 export function formatInsufficientOutcomeReason(outcome: 'YES' | 'NO') {
-	return `Insufficient ${outcome} balance.`
+	return `Insufficient ${outcomeLabel(outcome)} balance.`
 }
 
 export const holdingFeesBoundsReason = 'Holding fees exceed these limits before expiry. Increase slippage or shorten validity in Settings.'

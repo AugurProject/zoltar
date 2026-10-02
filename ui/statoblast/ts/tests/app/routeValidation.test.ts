@@ -24,14 +24,14 @@ describe('statoblast route validation', () => {
 		}
 	})
 
-	test('rejects empty and unknown Open Oracle views', () => {
+	test('rejects empty and unknown OpenOracle views', () => {
 		expect(validateRoute({ resolvedRoute: 'open-oracle', search: '?openOracleView=' }).hasInvalidOpenOracleView).toBe(true)
 		expect(validateRoute({ openOracleView: 'browse', search: '?openOracleView=browse' }).hasInvalidOpenOracleView).toBe(false)
 		expect(validateRoute({ openOracleView: 'invalid', resolvedRoute: 'open-oracle', search: '?openOracleView=invalid' }).hasInvalidOpenOracleView).toBe(true)
 		expect(validateRoute({ openOracleView: 'selected-report', resolvedRoute: 'open-oracle', search: '?openOracleView=selected-report&openOracleReportId=9' }).hasInvalidOpenOracleView).toBe(false)
 	})
 
-	test('accepts a remembered Open Oracle view while visiting Pools or Deploy', () => {
+	test('accepts a remembered OpenOracle view while visiting Pools or Deploy', () => {
 		for (const resolvedRoute of ['pools', 'deploy'] as const) {
 			expect(validateRoute({ openOracleView: 'selected-report', resolvedRoute, search: '?openOracleView=selected-report&openOracleReportId=9' }).hasInvalidOpenOracleView).toBe(false)
 		}

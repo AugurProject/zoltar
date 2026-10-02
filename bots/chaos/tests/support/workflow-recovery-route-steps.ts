@@ -241,7 +241,7 @@ export async function verifyRecoveryRoute(context: WorkflowRecoveryContext, view
 			const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
 			return { detail: row?.querySelector('small')?.textContent, status: row?.querySelector('.badge')?.textContent, tone: row?.querySelector('.badge')?.className }
 		})()`),
-	).toEqual({ detail: 'Open Oracle · 1 of 3 included attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
+	).toEqual({ detail: 'OpenOracle · 1 of 3 included attempts failed · next attempt Aug 24, 2026, 12:03:00 AM', status: 'Retry waiting', tone: 'badge warning' })
 	const recoveryTextarea = await cdp.evaluate(`(() => {
 		const fields = document.querySelector('#candidate-fields')
 		const input = document.querySelector('#candidate-confirmation')

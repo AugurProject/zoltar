@@ -5,8 +5,7 @@
 		"outDir": "js",
 		"baseUrl": ".",
 		"paths": {
-			"@zoltar/core-shared/*": ["../core/js/*"],
-			"@zoltar/statoblast-shared/*": ["../statoblast/js/*"]
+			"@zoltar/core-shared/*": ["../core/js/*"]
 		}
 	},
 	"include": ["./ts/**/*.ts"],

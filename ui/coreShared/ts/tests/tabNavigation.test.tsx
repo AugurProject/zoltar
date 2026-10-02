@@ -13,7 +13,7 @@ const DEFAULT_TABS: readonly RouteTabDefinition[] = [
 	{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
 	{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
 	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
-	{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
+	{ hash: '#/open-oracle', label: 'OpenOracle', route: 'open-oracle' },
 ]
 
 function createProps(overrides: Partial<Parameters<typeof TabNavigation>[0]> = {}): Parameters<typeof TabNavigation>[0] {
@@ -43,7 +43,7 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'OpenOracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
 		expect(documentQueries.queryByRole('link', { name: 'Protocol guide' })).toBeNull()
 	})
@@ -148,7 +148,7 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'OpenOracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})
 
 	test('preserves the current route for modified and auxiliary link clicks', async () => {

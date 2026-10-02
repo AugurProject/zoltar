@@ -12,6 +12,7 @@ export const ESCALATION_TIME_LENGTH = 4233600n
 const SCALE = 1000000n
 const LN2_SCALED = 693147n
 const MAX_ATANH_ITERATIONS = 16
+const MAX_EXP_ITERATIONS = 16
 
 function computeAtanhScaled(z: bigint) {
 	const z2 = (z * z) / SCALE
@@ -47,7 +48,7 @@ function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecis
 	const exponentRemainder = exponent - exponentPow2 * LN2_SCALED
 	let expScaled = SCALE + exponentRemainder
 	let term = exponentRemainder
-	for (let iteration = 2; iteration < MAX_ATANH_ITERATIONS; iteration += 1) {
+	for (let iteration = 2; iteration < MAX_EXP_ITERATIONS; iteration += 1) {
 		term = (term * exponentRemainder) / (BigInt(iteration) * SCALE)
 		if (term === 0n) break
 		expScaled += term

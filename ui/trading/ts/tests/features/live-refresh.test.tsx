@@ -430,11 +430,11 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onWalletSummaryChange={observeWallet} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => walletHolding('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
+		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
 		expect(document.body.textContent).not.toContain('Open a market by security pool address')
-		expect(document.body.textContent).toContain('3 INVALID')
-		expect(document.body.textContent).toContain('Conditional YES 50.0%')
+		expect(document.body.textContent).toContain('3 Invalid')
+		expect(document.body.textContent).toContain('Conditional Yes 50.0%')
 		expect(document.body.textContent).not.toContain('Current spot price')
 		expect(document.body.textContent).not.toContain('Refresh')
 		expect(document.body.textContent).not.toContain('Loading balances')
@@ -447,11 +447,11 @@ describe('live market refresh', () => {
 		discoveredMarket = { ...market, yesReserve: 25n * 10n ** 18n, noReserve: 75n * 10n ** 18n }
 		const observedBalanceLabels = new Set<string | undefined>()
 		await waitForDom(() => {
-			observedBalanceLabels.add(walletHolding('Wallet YES'))
-			return document.body.textContent?.includes('YES 75.0%') === true && balanceLoads > balanceLoadsBeforeBackgroundRefresh
+			observedBalanceLabels.add(walletHolding('Wallet Yes'))
+			return document.body.textContent?.includes('Yes 75.0%') === true && balanceLoads > balanceLoadsBeforeBackgroundRefresh
 		}, 'background market refresh')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeBackgroundRefresh)
-		expect([...observedBalanceLabels]).toEqual(['3 YES'])
+		expect([...observedBalanceLabels]).toEqual(['3 Yes'])
 		expect(walletSummaries.length).toBeGreaterThan(0)
 		expect(walletSummaries.every(summary => summary.ethAttoEth === 5n * 10n ** 18n)).toBeTrue()
 		expect(document.querySelector('[aria-busy="true"]')).toBeNull()
@@ -469,7 +469,7 @@ describe('live market refresh', () => {
 		}
 		await typeAmount('0.01')
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
-		expect(buttonByLabel('Buy YES').disabled).toBeFalse()
+		expect(buttonByLabel('Buy Yes').disabled).toBeFalse()
 		const estimateBeforeMove = document.querySelector('.transaction-review-primary')?.textContent
 		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 18n }
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent !== estimateBeforeMove, 'estimate re-priced after reserve change')
@@ -477,7 +477,7 @@ describe('live market refresh', () => {
 		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
 		await act(async () => buttonByLabel('Sell').click())
 		expect(amountInput.value).toBe('')
-		expect(document.body.textContent).toContain('You hold 3 YES')
+		expect(document.body.textContent).toContain('You hold 3 Yes')
 		expect(['25%', '50%', 'Max'].every(label => buttonByLabel(label) instanceof HTMLButtonElement)).toBeTrue()
 		await typeAmount('0.5')
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell') === true, 'exit estimate')
@@ -493,22 +493,22 @@ describe('live market refresh', () => {
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
 		await typeAmount('0.0000000000000000001')
 		expect(actionFeedback()).toContain('Enter a share amount with at most 18 decimal places.')
-		expect(buttonByLabel('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-feedback .tx-action-notice')?.id ?? null)
-		expect(buttonByLabel('Sell YES').disabled).toBeTrue()
+		expect(buttonByLabel('Sell Yes').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-feedback .tx-action-notice')?.id ?? null)
+		expect(buttonByLabel('Sell Yes').disabled).toBeTrue()
 		await typeAmount('9')
-		expect(actionFeedback()).toContain('Insufficient YES balance.')
+		expect(actionFeedback()).toContain('Insufficient Yes balance.')
 		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-feedback .tx-action-notice')).toHaveLength(1)
-		expect(buttonByLabel('Sell YES').disabled).toBeTrue()
+		expect(buttonByLabel('Sell Yes').disabled).toBeTrue()
 
 		// Simulation failures stay beside the action instead of only at the top of the route.
 		failExitSimulation = true
 		await typeAmount('0.25')
-		await act(async () => buttonByLabel('Sell YES').click())
+		await act(async () => buttonByLabel('Sell Yes').click())
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error')?.textContent?.includes('receiver rejected tokens') === true, 'simulation failure beside the action')
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
 		yesBalance = 4n * 10n ** 18n
-		await waitForDom(() => walletHolding('Wallet YES') === '4 YES', 'refreshed balance after failure')
+		await waitForDom(() => walletHolding('Wallet Yes') === '4 Yes', 'refreshed balance after failure')
 	})
 
 	test('lets a balance read slower than the block interval finish instead of restarting it every cycle', async () => {
@@ -534,13 +534,13 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => walletHolding('Wallet YES') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
+		await waitForDom(() => walletHolding('Wallet Yes') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
 		await settle(150)
 		expect(balanceLoads).toBe(1)
 		releaseBalances()
-		await waitForDom(() => walletHolding('Wallet YES') === '2 YES', 'slow balance read completes')
+		await waitForDom(() => walletHolding('Wallet Yes') === '2 Yes', 'slow balance read completes')
 		await waitForDom(() => balanceLoads > 1, 'revalidation resumes after the read completes')
-		expect(walletHolding('Wallet YES')).toBe('2 YES')
+		expect(walletHolding('Wallet Yes')).toBe('2 Yes')
 	})
 
 	test('lets a background discovery slower than the block interval finish instead of starting another on each block', async () => {
@@ -565,7 +565,7 @@ describe('live market refresh', () => {
 		// While discovery is still running the route shows one live loading state and no terminal empty state.
 		await waitForDom(() => document.body.textContent?.includes('Discovering security pools…') === true, 'portfolio discovery status')
 		expect(document.body.querySelector('.empty-state[role="status"]')?.textContent).toContain('Discovering security pools…')
-		expect(document.body.textContent).not.toContain('No YES, NO, INVALID, or LP balance was found')
+		expect(document.body.textContent).not.toContain('No Yes, No, Invalid, or LP balance was found')
 		gate = undefined
 		releaseDiscovery()
 		await waitForDom(() => document.body.textContent?.includes('Portfolio market 1') === true, 'initial portfolio discovery')

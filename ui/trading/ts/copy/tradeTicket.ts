@@ -1,3 +1,4 @@
+import { outcomeLabel } from './outcomes.js'
 export const buy = 'Buy'
 export const sell = 'Sell'
 export const tradeDirection = 'Trade direction'
@@ -16,8 +17,8 @@ export const youSellEstimate = 'You sell'
 export const minimumReceived = 'Minimum received'
 export const priceImpact = 'Price impact'
 export const averagePrice = 'Average price'
-export const invalidInsurance = 'INVALID insurance'
-export const invalidUsed = 'INVALID used'
+export const invalidInsurance = 'Invalid insurance'
+export const invalidUsed = 'Invalid used'
 export const poolFee = 'Pool fee'
 export const poolFeePaid = 'Pool fee paid'
 export const completeSets = 'Complete sets'
@@ -26,7 +27,7 @@ export const updatingEstimate = 'Updating estimate…'
 export const amountTooSmall = 'Amount too small to trade.'
 export const invalidEthAmount = 'Enter an ETH amount with at most 18 decimal places.'
 export const invalidShareAmount = 'Enter a share amount with at most 18 decimal places.'
-export const invalidCoverageReason = 'Not enough INVALID to insure this sale.'
+export const invalidCoverageReason = 'Not enough Invalid shares to insure this sale.'
 export const priceImpactBlockedReason = 'Trade a smaller amount.'
 export const acknowledgeImpactReason = 'Confirm the price impact first.'
 /** Every ticket control is disabled once the market stops taking new positions; Settlement is where holdings go next. */
@@ -47,15 +48,15 @@ export function priceImpactTierAnnouncement(tier: 'low' | 'caution' | 'warning' 
 }
 
 export function buyOutcome(outcome: 'YES' | 'NO') {
-	return `Buy ${outcome}`
+	return `Buy ${outcomeLabel(outcome)}`
 }
 
 export function sellOutcome(outcome: 'YES' | 'NO') {
-	return `Sell ${outcome}`
+	return `Sell ${outcomeLabel(outcome)}`
 }
 
 export function swapped(outcome: 'YES' | 'NO') {
-	return `${outcome} swapped in the pool`
+	return `${outcomeLabel(outcome)} swapped in the pool`
 }
 
 export function walletBalance(amount: string) {
@@ -87,7 +88,7 @@ export function acknowledgeImpact(percent: string) {
 }
 
 export function invalidCoverageExplanation(needed: string, held: string, sellable: string, outcome: 'YES' | 'NO') {
-	return `Selling pays out ETH by redeeming complete sets, so each set needs 1 INVALID. This sale needs ${needed}; you hold ${held}. You can sell up to ${sellable} now, or keep the rest of your ${outcome} as shares.`
+	return `Selling pays out ETH by redeeming complete sets, so each set needs 1 Invalid share. This sale needs ${needed}; you hold ${held}. You can sell up to ${sellable} now, or keep the rest of your ${outcomeLabel(outcome)} as shares.`
 }
 
 export function sellInsteadAction(amount: string) {

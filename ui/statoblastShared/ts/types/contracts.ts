@@ -146,8 +146,11 @@ export type OracleManagerDetails = {
 	token2: Address | undefined
 }
 
+export type OpenOraclePriceSettlement = { status: 'accepted' } | { status: 'unconfirmed' } | { status: 'rejected'; reason: string }
+
 export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
+	priceSettlement?: OpenOraclePriceSettlement | undefined
 	queuedOperation?: StagedOracleQueuedResult
 	/** The new report's ID, read from the receipt; only a successful create carries it. */
 	reportId?: bigint | undefined
@@ -190,6 +193,8 @@ export type OpenOracleReportSummaryPage = {
 }
 
 export type OpenOracleReportDetails = OpenOracleReportSummary & {
+	/** Expiry of this report’s price, only for a verified pool price coordinator callback. */
+	coordinatorPriceValidUntilTimestamp?: bigint | undefined
 	openOracleAddress: Address
 	currentTime: bigint
 	currentBlockNumber: bigint

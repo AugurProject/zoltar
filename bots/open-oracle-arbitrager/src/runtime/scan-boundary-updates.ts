@@ -58,7 +58,6 @@ function applyDeploymentUpdate(runtime: OperatorRuntime, context: OperatorContex
 	config.coordinatorAddresses = [...deployment.coordinatorAddresses]
 	config.executor = deployment.executor
 	config.openOracle = deployment.openOracle
-	config.quorumRpcUrls = [...deployment.quorumRpcUrls]
 	config.router = deployment.uniswapRouter
 	config.v2Router = deployment.uniswapV2Router
 	config.v4PoolManager = deployment.uniswapV4PoolManager
@@ -107,7 +106,10 @@ export async function applyScanBoundaryUpdates(runtime: OperatorRuntime, context
 	if (pending.deployment !== undefined) applyDeploymentUpdate(runtime, context, pending.deployment)
 	if (networkInitializationPending) await applyNetworkInitialization(runtime, context)
 	if (pending.connectivity !== undefined) {
-		config.connectivity = pending.connectivity
+		const { publicRpcUrls, quorumRpcUrls, readRpcUrl, rpcQuorum } = pending.connectivity
+		config.connectivity = { publicRpcUrls, readRpcUrl }
+		config.quorumRpcUrls = [...quorumRpcUrls]
+		config.rpcQuorum = rpcQuorum
 		pending.connectivity = undefined
 		resetReadClients(runtime, context)
 	}

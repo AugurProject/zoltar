@@ -18,7 +18,7 @@ import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 import { TRUTH_AUCTION_TIME_LENGTH } from './truthAuctionTiming.js'
 
-import { FORK_MIGRATION_DURATION_SECONDS, getUnresolvedEscalationMigrationSubmissionGuard } from './forkMigrationTiming.js'
+import { getForkMigrationEndsAt, getUnresolvedEscalationMigrationSubmissionGuard } from './forkMigrationTiming.js'
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 export async function loadForkOutcomeMigrationSeedStatus(
 	client: Pick<ReadClient, 'readContract'>,
@@ -160,7 +160,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		systemState,
 		truthAuctionStartedAt,
 	})
-	const migrationEndsAt = forkActivationTime === 0n ? undefined : forkActivationTime + FORK_MIGRATION_DURATION_SECONDS
+	const migrationEndsAt = getForkMigrationEndsAt(forkActivationTime)
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
@@ -411,7 +411,7 @@ export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, 
 		const validateTiming = async () => {
 			const forkData = requireForkDataView(await client.readContract({ address: forker, abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'forkData', args: [securityPoolAddress] }))
 			const block = await client.getBlock()
-			const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: block.timestamp, migrationEndsAt: forkData.forkActivationTime === 0n ? undefined : forkData.forkActivationTime + FORK_MIGRATION_DURATION_SECONDS })
+			const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: block.timestamp, migrationEndsAt: getForkMigrationEndsAt(forkData.forkActivationTime) })
 			if (timingGuard !== undefined) throw new Error(timingGuard)
 		}
 		await validateTiming()

@@ -63,9 +63,8 @@ for (const [name, variable] of [
 			paused: false,
 			privateKey,
 			runtime,
-			connectivity: { readRpcUrl: urls[0], publicRpcUrls: [urls[0]], ...(name === 'open-oracle-arbitrager' ? {} : { quorumRpcUrls: urls.slice(1), rpcQuorum: 2 }) },
+			connectivity: { readRpcUrl: urls[0], publicRpcUrls: [urls[0]], quorumRpcUrls: urls.slice(1), rpcQuorum: 2 },
 			network: name === 'open-oracle-arbitrager' ? 'sepolia' : { name: 'sepolia', chainId: 11155111, explorerUrl: 'https://sepolia.etherscan.io', ...(name === 'chaos' ? { maximumBlockIntervalSeconds: 60 } : {}) },
-			...(name === 'open-oracle-arbitrager' ? { deployment: { ...example.deployment, quorumRpcUrls: urls.slice(1) } } : {}),
 		}
 		const path = join(directory, 'operator.json')
 		await writeFile(path, JSON.stringify(configuration), { mode: 0o600 })

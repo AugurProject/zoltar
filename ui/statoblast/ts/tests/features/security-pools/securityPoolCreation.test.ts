@@ -141,7 +141,7 @@ describe('security pool creation helper', () => {
 		expect(result.securityPoolAddress).toBe(expectedSecurityPoolAddress)
 		expect(preparedPreviews).toHaveLength(1)
 		expect(preparedPreviews[0]?.functionName).toBe('deployOriginSecurityPool')
-		expect(preparedPreviews[0]?.contractLabel).toBe('Security Pool Factory')
+		expect(preparedPreviews[0]?.contractLabel).toBe('SecurityPoolFactory')
 		expect(preparedPreviews[0]?.reviewTitle).toBe('Create security pool')
 		expect(preparedPreviews[0]?.reviewDescription).toBe('Pool parameters are fixed at deployment.')
 	})

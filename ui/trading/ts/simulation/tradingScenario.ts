@@ -32,9 +32,9 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 	)
 	const readClient = parameters.createReadClient()
 	const writeClient = parameters.createWriteClient(account)
-	await reportBootstrapProgress(parameters.onProgress, 'Deploying Trading factory', 0.96)
+	await reportBootstrapProgress(parameters.onProgress, 'Deploying TwoWayConstantProductFactory', 0.96)
 	await deployTradingStep(writeClient, readClient, plan, plan.factory)
-	await reportBootstrapProgress(parameters.onProgress, 'Deploying Trading router', 0.98)
+	await reportBootstrapProgress(parameters.onProgress, 'Deploying TwoWayConstantProductRouter', 0.98)
 	await deployTradingStep(writeClient, readClient, plan, plan.router)
 	if (parameters.scenario !== DEPLOYED_TRADING_SIMULATION_SCENARIO) {
 		await reportBootstrapProgress(parameters.onProgress, 'Funding Trading liquidity and wallet shares', 0.984)

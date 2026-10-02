@@ -2,6 +2,8 @@
 // constant or rounding choice; tooling/docs/check-docs-example-ownership.mts compares these rules
 // with the contract sources so the rendered examples cannot drift from the implementation.
 
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+
 export type RoundingDirection = 'down' | 'up'
 
 export const attoPrecision = 10n ** 18n
@@ -90,9 +92,7 @@ export const escalationPayoutExample: EscalationPayoutInput = {
 
 // Renders an attoREP amount as REP with trailing zeros removed, keeping full precision otherwise.
 export function formatRep(attoRep: bigint): string {
-	const whole = attoRep / attoPrecision
-	const fraction = (attoRep % attoPrecision).toString().padStart(18, '0').replace(/0+$/, '')
-	return fraction.length === 0 ? whole.toString() : `${whole.toString()}.${fraction}`
+	return formatUnits(attoRep, 18)
 }
 
 export function formatUnderscored(value: bigint): string {

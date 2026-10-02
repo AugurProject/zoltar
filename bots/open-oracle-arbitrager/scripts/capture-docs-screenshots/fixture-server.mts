@@ -12,7 +12,8 @@ export function startFixtureServer() {
 			if (fixture.configurationUnavailable) throw new Error('fixture configuration endpoint unavailable')
 			const configuration = await Bun.file(join(import.meta.dir, '..', '..', 'config', 'operator.example.json')).json()
 			return {
-				configuration: { ...configuration, connectivity: snapshot.connectivity, network: fixture.network, networkConfigured: true, rpcQuorum: 2 },
+				configuration: { ...configuration, connectivity: { ...snapshot.connectivity, quorumRpcUrls: [], rpcQuorum: 2 }, network: fixture.network, networkConfigured: true },
+				effectiveRpcQuorum: 2,
 				revision: 'fixture-revision',
 			}
 		},

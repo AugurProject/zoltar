@@ -1,4 +1,4 @@
-import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 const ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 export const ORACLE_PROTOCOL_FEE = 100000
 export const ORACLE_FEE_PERCENTAGE = 10000
@@ -62,11 +62,6 @@ function calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas(parameters:
 
 export const MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS = calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas()
 
-function ceilDivide(numerator: bigint, denominator: bigint) {
-	if (denominator <= 0n) throw new Error('Cannot divide by zero or a negative denominator')
-	return divideUp(numerator, denominator)
-}
-
 export function calculateOracleMinimumWethReportAttoEth(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS) {
 	const feeSum = BigInt(parameters.openOracleProtocolFee + parameters.openOracleReporterFee)
 	const correctionProfitNumerator = parameters.targetPriceErrorForDispute - feeSum
@@ -75,11 +70,11 @@ export function calculateOracleMinimumWethReportAttoEth(parameters: OracleMinimu
 		if (gasPriceAttoEthPerGas === 0n) return 0n
 		const disputeGasCostAttoEth = parameters.gasUnitsForOneDispute * gasPriceAttoEthPerGas
 		const numerator = disputeGasCostAttoEth * parameters.openOracleSecurityMultiplierBps * (ORACLE_PERCENTAGE_PRECISION + parameters.targetPriceErrorForDispute)
-		return ceilDivide(numerator, denominator)
+		return ceilDiv(numerator, denominator)
 	}
 	const priorityFeeReport = calculateGasPriceReport(parameters.initialReportPriorityFeeAttoEthPerGas)
 	const baseFeeReport = calculateGasPriceReport(parameters.baseFeeAttoEthPerGas)
-	const openInterestReport = ceilDivide(parameters.openInterestAttoEth, ORACLE_OPEN_INTEREST_DIVIDER)
+	const openInterestReport = ceilDiv(parameters.openInterestAttoEth, ORACLE_OPEN_INTEREST_DIVIDER)
 	const dynamicReport = baseFeeReport > openInterestReport ? baseFeeReport : openInterestReport
 	const calculatedReport = priorityFeeReport + dynamicReport
 	return calculatedReport > 0n ? calculatedReport : 1n

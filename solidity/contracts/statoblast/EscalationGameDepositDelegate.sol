@@ -32,8 +32,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 
 	/// @notice Game delegatecall target: records a pool-funded deposit for `depositor` on `outcome` and returns its parent deposit index.
-	function recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) external returns (uint256 parentDepositIndex) {
-		return _recordDeposit(depositor, outcome, attoRepAmount, expectedCumulativeRepAmountAttoRep);
+	function recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) external returns (uint256 parentDepositIndex) {
+		return _recordDeposit(depositor, outcome, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 	}
 
 	/// @notice Game delegatecall target: transfers the caller's previewed REP deposit on `outcome` into the game and records it.
@@ -87,15 +87,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
 	}
 
-	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
+	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, attoRepAmount, expectedCumulativeRepAmountAttoRep);
+		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
-		_increaseEscrowedRepForBundle(depositor, attoRepAmount, true);
-		unresolvedRepByVaultAttoRep[depositor] += attoRepAmount;
-		totalLocalUnresolvedAttoRep += attoRepAmount;
-		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += attoRepAmount;
+		_increaseEscrowedRepForBundle(depositor, amountAttoRep, true);
+		unresolvedRepByVaultAttoRep[depositor] += amountAttoRep;
+		totalLocalUnresolvedAttoRep += amountAttoRep;
+		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += amountAttoRep;
 
 		uint256 depositIndex = selectedOutcomeState.localNodeIds.length;
 		parentDepositIndex = depositIndex;
@@ -109,17 +109,17 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		node.parentNodeId = selectedOutcomeState.localHeadNodeId;
 		node.depositor = depositor;
 		node.outcome = outcome;
-		node.amountAttoRep = attoRepAmount;
+		node.amountAttoRep = amountAttoRep;
 		node.parentDepositIndex = parentDepositIndex;
 		node.cumulativeAmountAttoRep = expectedCumulativeRepAmountAttoRep;
 		node.carryLeafIndex = selectedOutcomeState.currentLeafCount;
 		selectedOutcomeState.localNodeIds.push(nodeId);
 		selectedOutcomeState.localHeadNodeId = nodeId;
-		selectedOutcomeState.localUnresolvedTotalAttoRep += attoRepAmount;
+		selectedOutcomeState.localUnresolvedTotalAttoRep += amountAttoRep;
 		_appendCarryLeaf(selectedOutcomeState, nodeId);
 
-		emit LocalDepositAppended(nodeId, outcome, depositor, attoRepAmount, parentDepositIndex, expectedCumulativeRepAmountAttoRep);
-		emit DepositOnOutcome(depositor, outcome, attoRepAmount, depositIndex, expectedCumulativeRepAmountAttoRep, _claimEscrowedRepByVault(depositor), totalDisputeStakedAttoRep);
+		emit LocalDepositAppended(nodeId, outcome, depositor, amountAttoRep, parentDepositIndex, expectedCumulativeRepAmountAttoRep);
+		emit DepositOnOutcome(depositor, outcome, amountAttoRep, depositIndex, expectedCumulativeRepAmountAttoRep, _claimEscrowedRepByVault(depositor), totalDisputeStakedAttoRep);
 		if (IEscalationGameDepositContext(address(this)).hasReachedNonDecision()) {
 			nonDecisionState = NonDecisionState.Local;
 			nonDecisionTimestamp = block.timestamp;
@@ -142,15 +142,15 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit ForkedEscrowRecorded(depositor, outcome, state.sourcePrincipalAttoRep, state.childAttoRep, _claimEscrowedRepByVault(depositor), totalDisputeStakedAttoRep, outcomeState[uint8(outcome)].balanceAttoRep);
 	}
 
-	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private view {
+	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private view {
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(_isDepositResolutionOpen(IEscalationGameDepositContext(address(this)).getQuestionResolution()), 'Question resolved');
 		require(currentBalanceAttoRep < nonDecisionThresholdAttoRep, 'Outcome full');
-		require(attoRepAmount > 0, 'Deposit zero');
-		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + attoRepAmount, 'Preview mismatch');
+		require(amountAttoRep > 0, 'Deposit zero');
+		require(expectedCumulativeRepAmountAttoRep == currentBalanceAttoRep + amountAttoRep, 'Preview mismatch');
 		require(expectedCumulativeRepAmountAttoRep <= nonDecisionThresholdAttoRep, 'Deposit exceeds room');
-		require(attoRepAmount >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep, 'Below start bond');
+		require(amountAttoRep >= startBondAttoRep || expectedCumulativeRepAmountAttoRep == nonDecisionThresholdAttoRep, 'Below start bond');
 
 		uint256 maxBalance = outcomeState[0].balanceAttoRep;
 		if (outcomeState[1].balanceAttoRep > maxBalance) maxBalance = outcomeState[1].balanceAttoRep;

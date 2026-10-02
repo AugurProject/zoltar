@@ -1,8 +1,9 @@
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
+import { formatUnits, parseUnits } from '@zoltar/core-shared/evm/ethereum'
 import type { Hex } from '../ethereum.ts'
 
 const HASH32_PATTERN = /^0x[0-9a-fA-F]{64}$/
-const DECIMAL_UNIT = 10n ** 18n
+const DECIMAL_PLACES = 18
 
 export function isHash32(value: unknown): value is Hex {
 	return typeof value === 'string' && HASH32_PATTERN.test(value)
@@ -17,17 +18,24 @@ export function normalizedHash32(value: unknown, label: string) {
 	return hash32(typeof value === 'string' ? value.toLowerCase() : value, label)
 }
 
+const UNSIGNED_DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
+const SIGNED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
+
+/** Strictly parses a canonical non-negative decimal with at most 18 fractional digits into its 18-decimal integer amount. */
 export function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * DECIMAL_UNIT + BigInt(fraction.padEnd(18, '0'))
+	if (typeof value !== 'string' || !UNSIGNED_DECIMAL_PATTERN.test(value)) throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
+	return parseUnits(value, DECIMAL_PLACES)
 }
 
+/** Strictly parses a canonical, optionally negative decimal with at most 18 fractional digits into its 18-decimal integer amount. */
+export function parseSignedDecimalAmount(value: unknown, label: string) {
+	if (typeof value !== 'string' || !SIGNED_DECIMAL_PATTERN.test(value)) throw new Error(`${label} must be a decimal with at most 18 places`)
+	return parseUnits(value, DECIMAL_PLACES)
+}
+
+/** Formats an 18-decimal integer amount, including negative amounts, without trailing fractional zeros. */
 export function formatDecimalAmount(value: bigint) {
-	if (value < 0n) throw new Error('Decimal amount cannot be negative')
-	const whole = value / DECIMAL_UNIT
-	const fraction = (value % DECIMAL_UNIT).toString().padStart(18, '0').replace(/0+$/, '')
-	return fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
+	return formatUnits(value, DECIMAL_PLACES)
 }
 
 export function record(value: unknown, label: string, message = `${label} must be an object`): Record<string, unknown> {

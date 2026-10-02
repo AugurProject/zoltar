@@ -28,7 +28,7 @@
 			<section id="rounding">
 				<h2>Rounding</h2>
 				<p>Exact input computes <code>net = ⌊gross × (10,000 − fee) / 10,000⌋</code> and <code>out = ⌊reserveOut × net / (reserveIn + net)⌋</code>. Exact output computes <code>net = ⌈reserveIn × out / (reserveOut − out)⌉</code> and <code>gross = ⌈net × 10,000 / (10,000 − fee)⌉</code>. These directions favor existing LPs.</p>
-				<p>Liquidity deposits round reserve use down. Removal rounds each reserve output down. Initial alternative odds round the smaller deposited reserve down. Conditional YES is <code>NO / (YES + NO)</code>; Conditional NO is <code>YES / (YES + NO)</code>.</p>
+				<p>Liquidity deposits round reserve use down. Removal rounds each reserve output down. Initial alternative odds round the smaller deposited reserve down. Conditional Yes is <code>NO / (YES + NO)</code>; Conditional No is <code>YES / (YES + NO)</code>.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

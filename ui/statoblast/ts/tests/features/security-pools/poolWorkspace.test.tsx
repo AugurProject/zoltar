@@ -119,7 +119,7 @@ test('shows one oracle price row that counts down a pending report instead of an
 	await renderLoadedPool({ poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 10n ** 12n }) })
 	const rows = document.body.querySelectorAll('.pool-oracle-status')
 	expect(rows).toHaveLength(1)
-	expect(rows[0]?.textContent).toContain('Open Oracle price')
+	expect(rows[0]?.textContent).toContain('OpenOracle price')
 	expect(rows[0]?.textContent).toContain('Available in')
 	expect(document.body.textContent).not.toContain('Oracle price unavailable')
 	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
@@ -261,7 +261,7 @@ test('shows the pending report countdown in selected pool price fields', async (
 	expect(document.body.textContent).toContain('Available in 54s')
 	expect(document.body.textContent).not.toContain('Unavailable ↻')
 	const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
-		.filter(label => label.textContent === 'Open Oracle price')
+		.filter(label => label.textContent === 'OpenOracle price')
 		.map(label => label.nextElementSibling?.textContent?.trim())
 	// Pool details omit the price while the page's price row already shows it.
 	expect(shownOraclePrices).toEqual(['Available in 54s↻'])
@@ -358,7 +358,7 @@ test('hides the oracle price row in an ended pool, where a new price has no use'
 	// The expired price does not move into Pool details either.
 	const details = document.body.querySelector('.pool-reference-details')
 	expect(details).not.toBeNull()
-	expect(details?.textContent).not.toContain('Open Oracle price')
+	expect(details?.textContent).not.toContain('OpenOracle price')
 })
 
 test('keeps a pending report reachable from the price row in an ended pool', async () => {

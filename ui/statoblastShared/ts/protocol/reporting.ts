@@ -6,7 +6,9 @@ import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
+import { requireForkDataView } from './forkData.js'
+import { getForkMigrationEndsAt } from './forkMigrationTiming.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
@@ -22,7 +24,6 @@ import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { loadForkCarriedEscalationDepositsFromParentSnapshot, readEscalationOutcomeState, readForkContinuation } from './reportingCarryState.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
 
-const MIGRATION_TIME_LENGTH = 4838400n
 const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
 	{
 		inputs: [
@@ -404,7 +405,9 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {
 		settlementState = 'resolved'
 	} else if (universeForkTime > 0n && universeForkTime < escalationEndTime && hasReachedNonDecision === false) {
-		settlementState = block.timestamp <= universeForkTime + MIGRATION_TIME_LENGTH ? 'migration-required' : 'migration-expired'
+		const { forkActivationTime } = requireForkDataView(await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'forkData', address: getInfraContractAddresses().securityPoolForker, args: [securityPoolAddress] }))
+		const migrationEndsAt = getForkMigrationEndsAt(forkActivationTime)
+		settlementState = migrationEndsAt === undefined || block.timestamp <= migrationEndsAt ? 'migration-required' : 'migration-expired'
 	}
 	return {
 		bindingCapital,

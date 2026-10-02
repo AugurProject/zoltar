@@ -27,19 +27,18 @@
 		}
 	},
 	"deployment": {
-		"quorumRpcUrls": [],
 		"uniswapV2Enabled": true,
 		"uniswapV3Enabled": true,
 		"uniswapV4Enabled": false
 	},
 	"paused": true,
-	"rpcQuorum": 1,
 	"runtime": {
 		"execute": false,
 		"historyFile": ".state/history-mainnet.jsonl",
-		"lookbackBlocks": "256",
-		"maxHedgeSlippageBps": "50",
+		"logLookbackBlocks": 256,
+		"maxHedgeSlippageBps": 50,
 		"once": false,
+		"pollMilliseconds": 1000,
 		"positionFile": ".state/positions-mainnet.json",
 		"priceHistoryFile": ".state/prices-mainnet.jsonl",
 		"riskLimits": {
@@ -61,11 +60,10 @@
 	},
 	"strategy": {
 		"maxSpotTwapTicks": "100",
-		"minimumProfitBps": "100",
+		"minimumProfitBps": 100,
 		"minimumProfitWeth": "0.01",
 		"minimumRemainingBlocks": "3",
 		"minimumRemainingSeconds": "36",
-		"pollMilliseconds": 1000,
 		"twapSeconds": 1800
 	},
 	"submission": {
@@ -74,5 +72,5 @@
 		"relayUrls": []
 	},
 	"tokenAddresses": [],
-	"version": 4
+	"version": 5
 }

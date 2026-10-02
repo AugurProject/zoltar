@@ -69,7 +69,7 @@ export function useOpenOracleSelectedReport({
 				openOracleWithdrawableBalances.value = balances
 			},
 			onError: error => {
-				openOracleWithdrawableBalancesError.value = getErrorMessage(error, 'Failed to load Open Oracle balances')
+				openOracleWithdrawableBalancesError.value = getErrorMessage(error, 'Failed to load OpenOracle balances')
 			},
 		})
 	}

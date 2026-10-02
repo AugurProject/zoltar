@@ -54,7 +54,7 @@
 				<p>REP alone does not let the pool take collateral. Your <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a> is the ETH amount you agree to cover, and changing it needs a fresh REP/ETH price from <a href="../reference/glossary.html#open-oracle">OpenOracle</a>.</p>
 				<ol>
 					<li>Select <strong>Set commitment limit</strong>.</li>
-					<li>Enter <code>3</code> in <strong>Open Oracle REP per ETH starting price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
+					<li>Enter <code>3</code> in <strong>OpenOracle REP per ETH starting price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
 					<li>Enter <code>10</code> in <strong>Commitment limit</strong>, select <strong>Set commitment limit</strong>, and confirm. The transaction funds a new price report and stages your change; the vault shows it as a staged operation.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-set-commitment" aria-labelledby="fig-statoblast-set-commitment-caption">
@@ -67,11 +67,11 @@
 				<p>The report can be settled once it has stood unchallenged for eight minutes, and your staged change runs when it settles. The change expires a few minutes after the report becomes settleable, so settle promptly; an expired change must be staged again.</p>
 				<ol>
 					<li>In the simulator, select <strong>Show details</strong> in the banner, open <strong>QA controls, prices, and time travel</strong>, and select <strong>+10 min</strong>. On a live network, wait instead.</li>
-					<li>On the pool page, select <strong>View report</strong> next to the Open Oracle price.</li>
+					<li>On the pool page, select <strong>View report</strong> next to the <strong>OpenOracle price</strong>.</li>
 					<li>When the page says <strong>Ready to settle</strong>, select <strong>Settle report</strong> and confirm. Whoever settles collects the report's settlement bounty.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-settle-report" aria-labelledby="fig-statoblast-settle-report-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/settle-report.png"><img width="785" height="809" src="../assets/screenshots/statoblast/settle-report.png" alt="The Open Oracle report details for report #1, WETH / REP at 3.00 REP per ETH, marked Ready to settle, with a Settle report button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/settle-report.png"><img width="785" height="809" src="../assets/screenshots/statoblast/settle-report.png" alt="The OpenOracle report details for report #1, WETH / REP at 3.00 REP per ETH, marked Ready to settle, with a Settle report button." loading="lazy" /></a>
 					<figcaption id="fig-statoblast-settle-report-caption"><span class="figure-label">A settleable report.</span> Settling accepts the price and runs the staged commitment change in the same transaction.</figcaption>
 				</figure>
 				<p>Return to the pool with the browser's Back button. Under <strong>My vault</strong>, <strong>Commitment limit</strong> now reads 10.00 ETH and the staged operation reads <strong>EXECUTED</strong>.</p>

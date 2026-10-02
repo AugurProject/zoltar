@@ -187,6 +187,7 @@ export function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetai
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 0n,
 		managerAddress: zeroAddress,
+		minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 5n * 10n ** 18n,
 		repToken: zeroAddress,

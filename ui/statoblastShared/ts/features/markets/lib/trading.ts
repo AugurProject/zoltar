@@ -1,5 +1,6 @@
 import * as tradingCopy from '../../../copy/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -114,11 +115,6 @@ function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | unde
 	return shareBalances.noAttoShares
 }
 
-function divideRoundedUp(numerator: bigint, denominator: bigint) {
-	if (denominator <= 0n) throw new RangeError('Denominator must be greater than zero')
-	return (numerator + denominator - 1n) / denominator
-}
-
 export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined): undefined
 export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined): bigint
 export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined): bigint | undefined
@@ -135,7 +131,7 @@ function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, s
 		if (shareTokenSupplyAttoShares !== 0n) return undefined
 		return amountAttoEth
 	}
-	return divideRoundedUp(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
+	return ceilDiv(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
 }
 
 // Converting ETH back to shares rounds up, yet a maximum ETH amount rounded down from the share balance can map to fewer

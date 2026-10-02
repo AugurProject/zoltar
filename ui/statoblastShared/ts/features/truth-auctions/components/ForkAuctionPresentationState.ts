@@ -18,8 +18,8 @@ export function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrati
 	return undefined
 }
 
-export function getTruthAuctionBypassReason({ migratedAttoRep, parentSettlementCollateralAttoEthAmount, auctionableAttoRepAtFork }: { migratedAttoRep: bigint; parentSettlementCollateralAttoEthAmount: bigint | undefined; auctionableAttoRepAtFork: bigint | undefined }) {
-	if (parentSettlementCollateralAttoEthAmount === 0n) return forkAuctionCopy.truthAuctionNoCollateralDetail
+export function getTruthAuctionBypassReason({ migratedAttoRep, parentSettlementCollateralAttoEth, auctionableAttoRepAtFork }: { migratedAttoRep: bigint; parentSettlementCollateralAttoEth: bigint | undefined; auctionableAttoRepAtFork: bigint | undefined }) {
+	if (parentSettlementCollateralAttoEth === 0n) return forkAuctionCopy.truthAuctionNoCollateralDetail
 	if (auctionableAttoRepAtFork === undefined) return undefined
 	if (auctionableAttoRepAtFork === 0n) return forkAuctionCopy.truthAuctionNoRepDetail
 	if (migratedAttoRep >= auctionableAttoRepAtFork) return forkAuctionCopy.childUniverseFullyMigratedDetail

@@ -52,7 +52,7 @@ export function getVaultDepositAmountNotice({
 	currentVaultRepBackingAttoRep?: bigint | undefined
 	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
-	minimumVaultRepDepositAttoRep: bigint
+	minimumVaultRepDepositAttoRep: bigint | undefined
 	repTokenSymbol?: string | undefined
 	walletRepShortfallAttoRep: bigint | undefined
 }) {

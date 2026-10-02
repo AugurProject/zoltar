@@ -206,6 +206,10 @@
 			"bun": "./ts/tests/currencyValue.test.tsx",
 			"default": "./js/tests/currencyValue.test.js"
 		},
+		"./tests/deploymentStepList.test.js": {
+			"bun": "./ts/tests/deploymentStepList.test.tsx",
+			"default": "./js/tests/deploymentStepList.test.js"
+		},
 		"./tests/enumDropdown.test.js": {
 			"bun": "./ts/tests/enumDropdown.test.tsx",
 			"default": "./js/tests/enumDropdown.test.js"

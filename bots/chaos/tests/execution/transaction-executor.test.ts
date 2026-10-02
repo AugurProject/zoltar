@@ -81,7 +81,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 		privateKey: undefined,
 		runtime: {
 			execute: true,
-			lifecyclePollMilliseconds: 1_000,
+			pollMilliseconds: 1_000,
 			once: false,
 			protocolLogBlockSpan: 1,
 			protocolStartBlock: 0n,
@@ -108,7 +108,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 			mode: 'public',
 			relayUrls: [],
 		},
-		version: 1,
+		version: 2,
 	}
 }
 

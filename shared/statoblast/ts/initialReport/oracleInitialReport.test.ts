@@ -67,7 +67,7 @@ describe('oracle initial report sizing', () => {
 				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 				targetPriceErrorForDispute: 100000n,
 			}),
-		).toThrow('Cannot divide by zero or a negative denominator')
+		).toThrow('ceilDiv requires a nonnegative numerator and positive denominator')
 	})
 
 	test('caps the immutable priority fee so its report and escalation halt fit uint128', () => {

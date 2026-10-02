@@ -129,6 +129,7 @@ export const missingPoolDetail = 'Pool actions are locked until the app uses the
 export const switchToPoolUniverse = 'Switch to pool universe'
 export const returnToCurrentUniverse = 'Return to current universe'
 export const refreshVaultActionsDetail = 'Refresh the vault to use these actions.'
+export const vaultMinimumLoading = 'Loading the pool minimum REP…'
 export const retryVaultActionsDetail = 'Retry loading the vault to use these actions.'
 export const invalidVaultAddressHint = 'Try another vault owner address.'
 export const forkAlreadyTriggeredSettlementReason = 'The universe fork has already been triggered for this pool. Continue in Fork & migration.'
@@ -155,7 +156,7 @@ export const loadingQuestion = 'Loading question…'
 export const poolAddressLabel = 'Pool address'
 export const poolAlreadyExists = 'Pool already exists'
 export const statoblastSecurityMultiplierBpsHelpText = 'Up to four decimal places; higher values require more REP.'
-export const initialReportPriorityFeeHelpText = 'Fixed gas-price premium added to Open Oracle report security.'
+export const initialReportPriorityFeeHelpText = 'Fixed gas-price premium added to OpenOracle report security.'
 export const initialReportPriorityFeeUnit = 'nanoETH per gas'
 // A word rather than a lone ×, which reads as a clear-field button at the end of the input.
 export const securityMultiplierInputUnit = 'times'
@@ -259,7 +260,7 @@ export function universeVaultCount(count: bigint) {
 	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
 }
 
-export const manualRepPerEth = 'Open Oracle REP per ETH starting price'
+export const manualRepPerEth = 'OpenOracle REP per ETH starting price'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
@@ -287,8 +288,8 @@ export const customApprovalAmountDisclosure = 'Advanced: custom approval amount'
 
 export const questionEndedReason = 'This question has already ended.'
 
-export const commitmentNeedsOracleReport = 'A new Open Oracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.'
-export const vaultActionsNeedOracleReport = 'A valid Open Oracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.'
+export const commitmentNeedsOracleReport = 'A new OpenOracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.'
+export const vaultActionsNeedOracleReport = 'A valid OpenOracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.'
 export const openPriceOracle = 'Open price oracle'
 
 export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires within a minute, before this transaction could confirm. Wait about a minute for it to expire, then submit again and fund a new oracle report.'

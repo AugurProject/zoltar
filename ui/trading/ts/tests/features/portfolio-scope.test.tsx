@@ -144,15 +144,15 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).not.toContain(shareToken)
 		expect(rendered.container.textContent).not.toContain(secondShareToken)
 		expect(rendered.container.textContent).not.toContain('Question ID')
-		expect(rendered.container.textContent).toContain('1 YES')
-		expect(rendered.container.textContent).toContain('4 YES')
+		expect(rendered.container.textContent).toContain('1 Yes')
+		expect(rendered.container.textContent).toContain('4 Yes')
 		expect(rendered.container.textContent).not.toContain('LP claims')
 		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toBe('Scoped portfolio')
 		const redemption = Array.from(rendered.container.querySelectorAll('.metric-label')).find(field => field.textContent?.includes('redemption value'))
 		expect(redemption).toBeDefined()
 		expect(redemption?.closest('details')).toBeNull()
 		expect(rendered.container.querySelector('details')?.open).toBe(false)
-		expect(rendered.container.textContent).toContain('Maximum insured YES exit0 ETH')
+		expect(rendered.container.textContent).toContain('Maximum insured Yes exit0 ETH')
 		expect(rendered.container.textContent).not.toContain('Transferring LP tokens')
 		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
@@ -163,15 +163,15 @@ describe('live portfolio scope', () => {
 	test('separates stable outcome quantities, conditional payouts, and finalized redemption', async () => {
 		const valuedMarket = { ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 984_200_000_000_000_000n }
 		for (const [questionOutcome, systemState, expected] of [
-			[3, 0, '0.9842 ETH if YES wins'],
+			[3, 0, '0.9842 ETH if Yes wins'],
 			[1, 0, '0.9842 ETH redeemable'],
 			[2, 0, '0 ETH · lost'],
 			[1, 1, 'winning payout; redemption unavailable'],
 		] as const) {
 			const rendered = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, questionOutcome, systemState }} />)
-			expect(rendered.container.textContent).toContain('1 YES')
+			expect(rendered.container.textContent).toContain('1 Yes')
 			expect(rendered.container.textContent).toContain(expected)
-			expect(rendered.container.textContent).toContain('1 YES (')
+			expect(rendered.container.textContent).toContain('1 Yes (')
 			await rendered.cleanup()
 		}
 		const unavailable = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, loadError: 'RPC failed' }} />)
@@ -179,7 +179,7 @@ describe('live portfolio scope', () => {
 		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
 		await unavailable.cleanup()
 		const zero = await renderIntoDocument(<OutcomeHolding amount={0n} outcome='YES' market={valuedMarket} />)
-		expect(zero.container.textContent).toBe('0 YES')
+		expect(zero.container.textContent).toBe('0 Yes')
 		await zero.cleanup()
 	})
 
@@ -189,10 +189,10 @@ describe('live portfolio scope', () => {
 		const estimate = ticketEstimateFor(valued, 'entry', '0.9842')
 		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={valued} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.textContent).toContain('1.987158 YES')
-		expect(rendered.container.textContent).toContain('1.9558 ETH if YES wins')
+		expect(rendered.container.textContent).toContain('1.987158 Yes')
+		expect(rendered.container.textContent).toContain('1.9558 ETH if Yes wins')
 		expect(rendered.container.textContent).toContain('0 ETH otherwise')
-		expect(rendered.container.textContent?.match(/if YES wins/g)).toHaveLength(1)
+		expect(rendered.container.textContent?.match(/if Yes wins/g)).toHaveLength(1)
 		expect(rendered.container.textContent).not.toContain('sale')
 	})
 

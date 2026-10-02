@@ -36,7 +36,7 @@ function writeCachedItems(items: readonly unknown[]) {
 	window.localStorage.setItem(getDownloadedStorageKey(scope), serializeStoredValue({ version: 1, items }))
 }
 
-void describe('Open Oracle report browse cache', () => {
+void describe('OpenOracle report browse cache', () => {
 	installDomTestLifecycle({
 		afterTest: () => {
 			resetLocalEntityStoreForTesting()
