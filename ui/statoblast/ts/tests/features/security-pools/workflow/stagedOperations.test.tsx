@@ -122,6 +122,10 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 		const blocked = queries.getByRole('button', { name: 'Execute staged operation' })
 		expect(blocked.hasAttribute('disabled')).toBe(true)
 		expect(blocked.closest('details')).toBeNull()
+		expect(blocked.parentElement?.parentElement?.querySelector('.tx-action-feedback') === null).toBe(true)
+		const group = blocked.closest('.tx-action-group')
+		expect(group?.querySelector('.tx-action-feedback')?.textContent).toContain('Wait for a valid price')
+		expect(blocked.getAttribute('aria-describedby')).toBe(group?.querySelector('.tx-action-feedback [id]')?.id)
 		const selection = queries.getByRole('button', { name: 'Select operation' })
 		if (!(selection instanceof HTMLButtonElement)) throw new Error('Expected operation selection button')
 		selection.focus()
@@ -239,6 +243,26 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
 			expect(dialogQueries.getByText('#11')).not.toBeNull()
 			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
+		})
+
+		test('explains automatic execution while the queued operation waits for oracle settlement', async () => {
+			await renderSelectedPool({
+				poolOracleManagerDetails: createOracleManagerDetails({
+					isPriceValid: false,
+					pendingOperation: { amount: 10n * 10n ** 18n, operator: zeroAddress, operation: 'setVaultUnderwritingLimit', operationId: 7n, targetVault: zeroAddress },
+					pendingOperationSlotId: 7n,
+					pendingReportId: 12n,
+					pendingSettlementOperationIds: [7n],
+				}),
+				selectedPoolView: 'staged-operations',
+			})
+			const execute = within(document.body).getByRole('button', { name: 'Execute staged operation' })
+			expect(execute.hasAttribute('disabled')).toBe(true)
+			expect(document.body.textContent).toContain('Auto-executes after oracle settlement.')
+			expect(document.body.textContent).not.toContain('Request a new price in Price oracle before executing this operation.')
+			const descriptionId = execute.getAttribute('aria-describedby')
+			expect(descriptionId).not.toBeNull()
+			expect(document.getElementById(descriptionId ?? '')?.textContent).toBe('Auto-executes after oracle settlement.')
 		})
 
 		test('blocks staged-operation execution at the exact oracle expiry boundary', async () => {

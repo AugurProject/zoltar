@@ -13,7 +13,7 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '../../../types/contracts.js'
@@ -164,12 +164,12 @@ export function SecurityPoolStagedOperationsSection({
 										<span>{commonCopy.targetVault}</span>
 										<AddressValue address={operation.targetVault} />
 									</div>
-									<div className='actions'>
+									<TransactionActionGroup message={selected && canExecute ? executeGuardMessage : undefined}>
 										<button type='button' className='secondary' aria-pressed={selected} disabled={executionPending} onClick={() => onManualOperationIdChange(operation.operationId.toString())}>
 											{selected ? commonCopy.selected : securityPoolCopy.selectOperation}
 										</button>
 										{selected ? executionAction : undefined}
-									</div>
+									</TransactionActionGroup>
 									<ReadOnlyDetailAccordion title={securityPoolCopy.operationDetails}>
 										<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
 										<MetricField label={securityPoolCopy.initiator}>
@@ -192,12 +192,12 @@ export function SecurityPoolStagedOperationsSection({
 					</label>
 				</ReadOnlyDetailAccordion>
 			)}
-			<div className='actions oracle-actions'>
+			<TransactionActionGroup message={!selectedOperationListed && canExecute ? executeGuardMessage : undefined}>
 				<button className='secondary' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager || (managerDetails === undefined && managerError === undefined)}>
 					{getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded: managerDetails !== undefined })}
 				</button>
 				{selectedOperationListed ? undefined : executionAction}
-			</div>
+			</TransactionActionGroup>
 		</SectionBlock>
 	)
 }
