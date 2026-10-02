@@ -1,7 +1,6 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import type { ComponentChildren } from 'preact'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -46,7 +45,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [retry, setRetry] = useState(0)
 	const [preparationPaused, setPreparationPaused] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
-	const [unsentFailure, setUnsentFailure] = useState<{ detail: ComponentChildren }>()
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [failedWorkflow, setFailedWorkflow] = useState<Workflow>()
 	const [running, setRunning] = useState(false)
@@ -54,7 +52,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const run = useRef<PriceRequestRun>()
 	const previousReviewKey = useRef<string>()
 	const priceControlsRef = useRef<HTMLDivElement>(null)
-	const failureNoticeRef = useRef<HTMLDivElement>(null)
 	const mounted = useRef(true)
 	const confirm = useRef(onConfirm)
 	confirm.current = onConfirm
@@ -77,7 +74,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		}
 		setPreparationPaused(false)
 		setFailureLatched(false)
-		setUnsentFailure(undefined)
 		setFailedPlan(undefined)
 		setFailedWorkflow(undefined)
 		ignoredFailure.current = presentation?.tone === 'error' ? presentation : undefined
@@ -132,7 +128,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setAttempted(undefined)
 		setPreparationPaused(false)
 		setFailureLatched(false)
-		setUnsentFailure(undefined)
 		setFailedPlan(undefined)
 		setFailedWorkflow(undefined)
 	}, [review])
@@ -149,10 +144,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setFailureLatched(true)
 		setPreparationPaused(true)
 		const ownedWorkflow = ownsWorkflow ? workflow : run.current?.workflow
-		if (finalSubmittedHash === undefined) {
-			const failedStep = ownedWorkflow?.steps.findLast(step => step.failure !== undefined)
-			setUnsentFailure({ detail: failedStep?.failure?.message ?? presentation?.detail ?? priceRequestCopy.missingFailureReason })
-		} else setUnsentFailure(undefined)
 		if (ownedWorkflow !== undefined) {
 			setFailedWorkflow(ownedWorkflow)
 			const plan = {
@@ -184,9 +175,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	useLayoutEffect(() => {
 		if (preparationPaused && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
 	}, [preparationPaused, showSteps])
-	useEffect(() => {
-		if (unsentFailure !== undefined) failureNoticeRef.current?.scrollIntoView?.({ block: 'nearest' })
-	}, [unsentFailure])
 	useEffect(
 		() => () => {
 			mounted.current = false
@@ -294,11 +282,6 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider lock={unlockedTransactionActions}>
 				<OperationModal embedTransactionSteps={false} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close}>
-					{unsentFailure === undefined ? undefined : (
-						<div ref={failureNoticeRef}>
-							<UserMessage placement='section' tone='error' announcement='assertive' title={priceRequestCopy.requestNotSent} detail={unsentFailure.detail} />
-						</div>
-					)}
 					{priceControls}
 					{showSteps || failedWorkflow !== undefined ? (
 						<GlobalTransactionPresentationProvider transaction={presentation === ignoredFailure.current ? undefined : presentation}>
