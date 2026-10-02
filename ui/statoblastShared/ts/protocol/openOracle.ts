@@ -10,9 +10,11 @@ import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
-import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openOracleState.js'
+import { getOpenOraclePriceSettlement, loadCoordinatorPriceValidUntilTimestamp } from './openOracleSettlement.js'
+import * as openOracleCopy from '../copy/openOracle.js'
 import { requireBigintValue } from './decoders.js'
 import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTiming.js'
 
@@ -119,6 +121,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	return {
 		reportId,
 		openOracleAddress,
+		coordinatorPriceValidUntilTimestamp: await loadCoordinatorPriceValidUntilTimestamp(client, openOracleAddress, game),
 		currentTime: block.timestamp,
 		currentBlockNumber: block.number,
 		exactToken1Report: storedState.initialAmount1,
@@ -486,19 +489,28 @@ export async function withdrawOpenOracleBalance<TReceipt extends Pick<Transactio
 	}
 }
 export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleActionResult>
-export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint, preimage: OpenOracleStatePreimage): Promise<OpenOracleActionResult>
-export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'readContract' | 'getBlock'> & Pick<WriteClient, 'account'>>, openOracleAddress: Address, reportId: bigint, preimage?: OpenOracleStatePreimage) {
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'> & Partial<Pick<TransactionReceipt, 'logs'>>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint, preimage: OpenOracleStatePreimage): Promise<OpenOracleActionResult>
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'> & Partial<Pick<TransactionReceipt, 'logs'>>>(
+	client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'readContract' | 'getBlock' | 'multicall'> & Pick<WriteClient, 'account'>>,
+	openOracleAddress: Address,
+	reportId: bigint,
+	preimage?: OpenOracleStatePreimage,
+) {
 	let resolvedPreimage = preimage
 	if (resolvedPreimage === undefined) {
 		const { readContract } = client
 		if (readContract === undefined) throw new Error('OpenOracle settlement requires a client that can read stored report state')
 		resolvedPreimage = (await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)).latest
 	}
+	const coordinatorPriceValidUntilTimestamp = client.multicall === undefined ? undefined : await loadCoordinatorPriceValidUntilTimestamp({ multicall: client.multicall }, openOracleAddress, resolvedPreimage.game, client.chain?.id)
+	const reviewedBlock = coordinatorPriceValidUntilTimestamp === undefined ? undefined : await client.getBlock?.()
+	const reviewedPriceExpired = coordinatorPriceValidUntilTimestamp !== undefined && reviewedBlock !== undefined && reviewedBlock.timestamp >= coordinatorPriceValidUntilTimestamp
 	const reviewedStateHash = hashOpenOracleStatePreimage(resolvedPreimage)
 	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
+		...(reviewedPriceExpired ? { reviewDescription: openOracleCopy.staleSettlementWarning } : {}),
 		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game),
 		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
 	}
@@ -515,13 +527,16 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 				const block = await getBlock()
 				const clock = hasOpenOracleFlag(current.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE) ? block.timestamp : block.number
 				if (clock === undefined || clock < current.latest.game.reportTimestamp + current.latest.game.settlementTime) throw new Error('This report is not ready to settle. Refresh its settlement time.')
+				if (!reviewedPriceExpired && coordinatorPriceValidUntilTimestamp !== undefined && block.timestamp >= coordinatorPriceValidUntilTimestamp) throw new Error(openOracleCopy.priceExpiredDuringReview)
 			},
 		},
 	])
-	const hash = await writeContractAndWait(client, () => callParams)
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
+	const priceSettlement = getOpenOraclePriceSettlement(receipt, resolvedPreimage.game.callbackContract, reportId) ?? (coordinatorPriceValidUntilTimestamp === undefined ? undefined : { status: 'unconfirmed' as const })
 	return {
 		action: 'settle',
 		hash,
+		priceSettlement,
 	} satisfies OpenOracleActionResult
 }
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex) {
