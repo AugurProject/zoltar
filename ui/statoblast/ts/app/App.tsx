@@ -1,3 +1,4 @@
+import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { useCallback, useState } from 'preact/hooks'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
@@ -186,7 +187,9 @@ export function App() {
 				transactionState={transactionState.value}
 				walletActions={overviewWalletProps}
 			>
-				<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+				<RepPriceRefreshContext.Provider value={{ onRefresh: refreshRepPrices, busy: isLoadingRepPrices || isRefreshingRepPrices }}>
+					<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
+				</RepPriceRefreshContext.Provider>
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 			</ProtocolAppFrame>
 		</UniverseNamesProvider>
