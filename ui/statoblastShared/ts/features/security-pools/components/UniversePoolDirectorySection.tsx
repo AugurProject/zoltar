@@ -1,3 +1,4 @@
+import { UniverseOutcomeNavigation } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
 import { UniverseLookup } from '@zoltar/ui-core-shared/components/UniverseLookup.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -45,5 +46,5 @@ export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse,
 			</>
 		)
 	}
-	return <UniverseBrowser activeUniverseId={activeUniverseId} universe={zoltarUniverse} />
+	return <UniverseBrowser activeUniverseId={activeUniverseId} navigation={zoltarUniverse.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={zoltarUniverse} /> : undefined} universe={zoltarUniverse} />
 }

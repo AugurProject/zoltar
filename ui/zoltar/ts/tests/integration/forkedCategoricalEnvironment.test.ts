@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { loadUniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 
 void describe('forked categorical simulation backend', () => {
@@ -46,6 +47,17 @@ void describe('forked categorical simulation backend', () => {
 		expect(universeSummary.forkQuestionDetails?.marketType).toBe('categorical')
 		expect(universeSummary.forkQuestionDetails?.outcomeLabels).toHaveLength(5)
 		expect(universeSummary.childUniverses.filter(child => child.exists)).toHaveLength(2)
+	}, 60_000)
+
+	void test('bounded outcome navigation matches the fork’s known outcomes and deployed children', async () => {
+		const client = backend.createReadClient()
+		const full = await loadZoltarUniverseSummary(client, 0n)
+		if (full?.zoltarAddress === undefined) throw new Error('Expected the seeded Zoltar address')
+		const page = await loadUniverseOutcomePage(client, full.zoltarAddress, 0n, 0n)
+		expect(page.title).toBe(full.forkQuestionDetails?.title)
+		expect(page.hasNextPage).toBe(false)
+		expect(page.choices.map(choice => [choice.label, choice.universeId, choice.exists])).toEqual(full.childUniverses.map(child => [child.outcomeLabel, child.universeId, child.exists]))
+		expect(page.choices.filter(choice => choice.exists)).toHaveLength(2)
 	}, 60_000)
 
 	void test('names a deployed child universe by the fork outcome that created it', async () => {

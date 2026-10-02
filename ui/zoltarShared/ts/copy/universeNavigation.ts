@@ -1,0 +1,10 @@
+export const childOutcome = 'Child universe outcome'
+export const chooseOutcome = 'Choose an outcome'
+export const openChild = 'Open child universe'
+export const loadingOutcomes = 'Loading outcomes…'
+export const outcomesUnavailable = 'Unable to load child outcomes.'
+export const notDeployed = (label: string) => `${label} — not deployed`
+export const selectOutcomeHint = 'Choose a deployed outcome to open its universe.'
+export const scalarValue = 'Find outcome by value'
+export const findOutcome = 'Find outcome'
+export const invalidScalarValue = 'Enter an exact outcome value within the question’s range.'

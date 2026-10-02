@@ -19,6 +19,7 @@ import { UniverseLink } from './UniverseLink.js'
 type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
 	actions?: ComponentChildren
+	navigation?: ComponentChildren
 	activeUniverseId: bigint
 	/** Application facts about the browsed universe, such as pool metrics or the fork question. */
 	children?: ComponentChildren
@@ -95,7 +96,7 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
  * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
  * universes its fork created. Opening an ancestor or child changes the shared `universe` query parameter.
  */
-export function UniverseBrowser({ actions, activeUniverseId, children, renderChildSummary, universe }: UniverseBrowserProps) {
+export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe }: UniverseBrowserProps) {
 	const lineage = resolveLineage(universe)
 	const currentStep = lineage[lineage.length - 1]
 	// The lineage trail already names the ancestors, so the heading names only this generation.
@@ -127,6 +128,14 @@ export function UniverseBrowser({ actions, activeUniverseId, children, renderChi
 					</ReadOnlyDetailAccordion>
 				</div>
 			</SectionBlock>
+			{universe.universeId === 0n ? undefined : (
+				<div className='actions'>
+					<UniverseLink className='button-link secondary-link' universeId={universe.parentUniverseId}>
+						{universeCopy.parentUniverse}
+					</UniverseLink>
+				</div>
+			)}
+			{navigation}
 			<UniverseLookup activeUniverseId={activeUniverseId} />
 			{universe.relatedUniversesLoaded === false ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>

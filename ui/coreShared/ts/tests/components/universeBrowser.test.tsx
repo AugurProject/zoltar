@@ -89,6 +89,7 @@ describe('bounded universe overview', () => {
 			const queries = within(document.body)
 			expect(queries.queryByText('Child universes')).toBeNull()
 			expect(queries.queryByText('No deployed child universes.')).toBeNull()
+			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=0')
 			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
 			fireEvent.input(input, { target: { value: '0x15' } })
 			const form = document.body.querySelector('form')

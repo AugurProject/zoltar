@@ -1,3 +1,4 @@
+import { UniverseOutcomeNavigation } from '../../universes/components/UniverseOutcomeNavigation.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
@@ -47,6 +48,7 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 					</>
 				}
 				activeUniverseId={activeUniverseId}
+				navigation={universe.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={universe} /> : undefined}
 				universe={universe}
 			>
 				{universe.forkQuestionDetails === undefined ? undefined : (

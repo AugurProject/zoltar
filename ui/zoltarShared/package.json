@@ -201,6 +201,14 @@
 		"./features/universes/lib/migrationWizard.js": {
 			"bun": "./ts/features/universes/lib/migrationWizard.ts",
 			"default": "./js/features/universes/lib/migrationWizard.js"
+		},
+		"./features/universes/components/UniverseOutcomeNavigation.js": {
+			"bun": "./ts/features/universes/components/UniverseOutcomeNavigation.tsx",
+			"default": "./js/features/universes/components/UniverseOutcomeNavigation.js"
+		},
+		"./protocol/universeNavigation.js": {
+			"bun": "./ts/protocol/universeNavigation.ts",
+			"default": "./js/protocol/universeNavigation.js"
 		}
 	},
 	"version": "1.0.0"
