@@ -32,7 +32,7 @@ globalThis.global ??= globalThis
 const APP_TITLES: Record<string, string> = {
 	zoltar: 'Zoltar',
 	statoblast: 'Augur Statoblast',
-	trading: 'Augur Trading',
+	trading: 'Statoblast Trading',
 }
 
 function createBrowserVendorAliasPlugin() {
