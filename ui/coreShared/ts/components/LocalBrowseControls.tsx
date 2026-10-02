@@ -35,7 +35,7 @@ type DiscoveryState = {
 }
 
 /** Scanning the chain is an explicit, one-page-at-a-time action so public RPC users only pay for what they ask for. */
-export function DiscoveryControl({ discovery, discoverLabel, disabled = false, emphasize = false, nounPlural }: { disabled?: boolean; discoverLabel: string; discovery: DiscoveryState; emphasize?: boolean; nounPlural: string }) {
+function DiscoveryControl({ discovery, discoverLabel, disabled = false, emphasize = false, nounPlural }: { disabled?: boolean; discoverLabel: string; discovery: DiscoveryState; emphasize?: boolean; nounPlural: string }) {
 	const label = (() => {
 		if (!discovery.hasScanned) return discoverLabel
 		return discovery.hasMore ? favoritesCopy.discoverMore : favoritesCopy.rescan

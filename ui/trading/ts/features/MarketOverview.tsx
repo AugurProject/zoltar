@@ -31,7 +31,7 @@ export function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMa
 			titleRef={headingRef}
 			badge={
 				<>
-					{market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' /> : undefined}
+					{market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind={market.pair === undefined ? 'pool' : 'market'} /> : undefined}
 					<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
 				</>
 			}

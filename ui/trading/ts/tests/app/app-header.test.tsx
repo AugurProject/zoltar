@@ -152,7 +152,7 @@ describe('trading header', () => {
 		window.history.replaceState(undefined, '', '/#/market')
 		let discoveries = 0
 		const rendered = await renderConfiguredApp({
-			discoverTradingMarketPage: async () => {
+			discoverUniverses: async () => {
 				discoveries += 1
 				return emptyDiscoveryPage([0n], 0n)
 			},

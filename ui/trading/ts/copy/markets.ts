@@ -11,8 +11,6 @@ function outcomeOdds(outcome: string, percent: number) {
 }
 
 export const marketsCopy = {
-	/** The discovery order: security pools in the order they were registered. */
-	sortRegistry: 'Oldest first',
 	yes,
 	no,
 	outcomeOdds,
@@ -30,6 +28,7 @@ export const marketsCopy = {
 	endedAgo: (duration: CoarseDuration) => `${durationText(duration)} ago`,
 	listControls: 'Market list controls',
 	searchLabel: 'Search markets',
+	searchPoolsLabel: 'Search pools',
 	searchPlaceholder: 'Search or paste a pool address',
 	filterLabel: 'Market status filter',
 	filterAll: 'All',
@@ -40,7 +39,8 @@ export const marketsCopy = {
 	sortClosingSoon: 'Closing soon',
 	sortLiquidity: 'Liquidity',
 	resultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'market' : 'markets'}` : `${shown.toString()} of ${loaded.toString()} markets`),
-	noMatches: 'No downloaded markets match.',
+	poolResultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'pool' : 'pools'}` : `${shown.toString()} of ${loaded.toString()} pools`),
+	noMatches: 'No favorites match.',
 	discoverMarkets: 'Discover markets',
 	marketsNoun: 'markets',
 	clearFilters: 'Clear filters',

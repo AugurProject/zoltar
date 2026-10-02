@@ -1,3 +1,4 @@
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -75,7 +76,7 @@ export function LiveSecurityPoolDetails({
 			<RouteHeader
 				eyebrow={appCopy.securityPool}
 				title={market.title}
-				badge={market.loadError === undefined ? undefined : <Badge tone='warning'>{appCopy.poolDataUnavailable}</Badge>}
+				badge={market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='pool' /> : <Badge tone='warning'>{appCopy.poolDataUnavailable}</Badge>}
 				actions={
 					<a className='button-link' href={getTradingRouteHref(browseBack.href)}>
 						{browseBack.label}

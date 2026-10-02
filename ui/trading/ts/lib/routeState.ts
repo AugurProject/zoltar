@@ -21,7 +21,7 @@ const LIST_SORT_QUERY_PARAM = 'sort'
 const ROUTE_STATE_QUERY_PARAMS = [TICKET_QUERY_PARAM, MARKET_VIEW_QUERY_PARAM, LIST_QUERY_PARAM, LIST_FILTER_QUERY_PARAM, LIST_SORT_QUERY_PARAM] as const
 
 const DEFAULT_TICKET_SELECTION: TicketSelection = { mode: 'entry', side: 'YES' }
-export const DEFAULT_MARKET_LIST_OPTIONS: MarketListOptions = { filter: 'all', query: '', sort: 'closing-soon' }
+export const DEFAULT_MARKET_LIST_OPTIONS: MarketListOptions = { filter: 'all', query: '', sort: 'recent' }
 
 const MARKET_FILTERS: readonly MarketFilter[] = ['all', 'open', 'closing-soon', 'resolved']
 const MARKET_SORTS: readonly MarketSort[] = ['closing-soon', 'liquidity', 'recent']
