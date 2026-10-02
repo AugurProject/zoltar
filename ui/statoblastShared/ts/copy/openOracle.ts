@@ -96,7 +96,7 @@ export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 export const searchReports = 'Search reports'
 export const reportSearchPlaceholder = 'Report ID, token symbol, or token address'
 export const noFavoriteReports = 'No favorite reports yet'
-export const noFavoriteReportsDetail = 'Search a report ID. Reports you open are saved here.'
+export const noFavoriteReportsDetail = 'Reports you open are saved here.'
 export const formatOpenReportById = (reportId: CopyTemplateValue) => `Open report #${reportId}`
 export const formatReportUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
 export const settlingReport = 'Settling report…'
