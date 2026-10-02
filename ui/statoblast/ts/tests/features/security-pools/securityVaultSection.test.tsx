@@ -1513,7 +1513,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = undefined
 	})
 
-	test('uses the loaded pool minimum for a new-vault deposit', async () => {
+	test.each(['', '0', '1', '20'])('uses the loaded pool minimum for a new-vault deposit of %s', async depositAmount => {
 		const configuredMinimum = 30n * 10n ** 18n
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -1528,7 +1528,7 @@ describe('SecurityVaultSection', () => {
 						minimumVaultRepDepositAttoRep: configuredMinimum,
 					}),
 					securityVaultForm: {
-						depositAmount: '20',
+						depositAmount,
 						repWithdrawAmount: '',
 						targetHealthFactor: '2',
 						securityPoolAddress: zeroAddress,
@@ -1544,6 +1544,29 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 		expectTransactionButtonDisabled(documentQueries.getByRole('dialog', { name: 'Deposit REP' }), 'Deposit REP', 'New vaults require at least 30\u00a0REP in the first deposit.')
+	})
+
+	test('promotes the commitment launcher when REP is deposited and keeps deposit primary', async () => {
+		const backing = signal(0n)
+		const props = createSecurityVaultSectionProps({ modalFirst: true })
+		const Harness = () => <SecurityVaultSection {...props} securityVaultDetails={createSecurityVaultDetails({ vaultAttoRepBacking: backing.value, underwritingLimitAttoEth: 0n, disputeStakedAttoRep: 0n, claimableFeesAttoEth: 0n })} />
+		cleanupRenderedComponent = (await renderIntoDocument(<Harness />)).cleanup
+		const deposit = within(document.body).getByRole('button', { name: 'Deposit REP' })
+		const commitment = within(document.body).getByRole('button', { name: 'Set commitment limit' })
+		expect(deposit.classList.contains('primary')).toBe(true)
+		expect(commitment.classList.contains('secondary')).toBe(true)
+		await act(() => {
+			backing.value = 1n
+		})
+		expect(deposit.classList.contains('primary')).toBe(true)
+		expect(commitment.classList.contains('primary')).toBe(true)
+		expect(commitment.hasAttribute('disabled')).toBe(false)
+		fireEvent.click(commitment)
+		expect(within(document.body).getByRole('dialog', { name: 'Set commitment limit' })).not.toBeNull()
+		await act(() => {
+			backing.value = 0n
+		})
+		expect(commitment.classList.contains('secondary')).toBe(true)
 	})
 
 	test('checks a first deposit against the pool totals read with the vault, not the pool listing', async () => {

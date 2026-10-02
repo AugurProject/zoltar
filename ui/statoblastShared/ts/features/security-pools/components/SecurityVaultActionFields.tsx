@@ -181,6 +181,7 @@ export function VaultDepositApprovalControl({
 
 export function VaultActionLaunchers({
 	claimingFees = false,
+	hasVaultRepBacking,
 	redeemRepAction,
 	refreshVaultActionsDescriptionId,
 	securityVaultError,
@@ -193,6 +194,7 @@ export function VaultActionLaunchers({
 	walletRepBalanceError,
 }: {
 	claimingFees?: boolean
+	hasVaultRepBacking: boolean
 	redeemRepAction?: ComponentChildren
 	refreshVaultActionsDescriptionId: string
 	securityVaultError: string | undefined
@@ -217,7 +219,7 @@ export function VaultActionLaunchers({
 						pending={action.key === 'claim-fees' && claimingFees}
 						pendingLabel={action.key === 'claim-fees' ? securityPoolCopy.claimingFees : commonCopy.opening}
 						onClick={() => action.onAction?.()}
-						tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
+						tone={action.key === 'deposit-rep' || (action.key === 'adjust-backing' && hasVaultRepBacking) ? 'primary' : 'secondary'}
 						availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
 					/>
 				)}

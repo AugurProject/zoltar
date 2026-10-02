@@ -430,6 +430,7 @@ export function SecurityVaultSection({
 			) : undefined}
 			<VaultActionLaunchers
 				claimingFees={securityVaultActiveAction === 'redeemFees'}
+				hasVaultRepBacking={(currentSelectedVaultDetails?.vaultAttoRepBacking ?? 0n) > 0n}
 				redeemRepAction={effectiveRepExitMode === 'redeem' ? repExitActionButton : undefined}
 				refreshVaultActionsDescriptionId={refreshVaultActionsDescriptionId}
 				securityVaultError={securityVaultError}
