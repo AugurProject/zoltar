@@ -1,4 +1,4 @@
-export const appName = 'Augur Trading'
+export const appName = 'Statoblast Trading'
 export const market = 'Market'
 export const markets = 'Markets'
 export const create = 'Create'

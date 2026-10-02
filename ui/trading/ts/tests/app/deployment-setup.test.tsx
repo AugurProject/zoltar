@@ -394,7 +394,7 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => await new Promise<never>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Markets')
-		expect(document.title).toBe('Markets · Augur Trading')
+		expect(document.title).toBe('Markets · Statoblast Trading')
 		expect(rendered.container.querySelector('.site-header--deployment')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
 	})
@@ -422,7 +422,7 @@ describe('trading deployment setup', () => {
 		const navigationLabels = Array.from(rendered.container.querySelectorAll('nav a')).map(link => link.textContent?.trim())
 		expect(navigationLabels[0]).toBe('Deploy')
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Deploy')
-		await waitFor(() => expect(document.title).toBe('Deploy · Augur Trading'))
+		await waitFor(() => expect(document.title).toBe('Deploy · Statoblast Trading'))
 		expect(rendered.container.querySelector('.site-header .deployment-settings')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).toBeNull()
 		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
