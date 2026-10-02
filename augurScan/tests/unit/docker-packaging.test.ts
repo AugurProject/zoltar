@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage } from '../../../tooling/testing/packaging-parsers.ts'
@@ -14,6 +14,55 @@ const schemaFile = join(import.meta.dir, '..', '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
+	test('resolves transitive shared imports using only production image dependencies', async () => {
+		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const dependencies = await mkdtemp(join(tmpdir(), 'augurscan-dependencies-'))
+		const runtime = await mkdtemp(join(tmpdir(), 'augurscan-production-'))
+		try {
+			for (const copy of dockerInstructions(requireDockerStage(stages, 'workspace'), 'COPY')) {
+				const parts = copy.split(/\s+/u)
+				const destination = parts.pop()
+				if (destination === undefined) throw new Error(`Invalid workspace COPY: ${copy}`)
+				for (const source of parts) {
+					const target = join(dependencies, destination, destination.endsWith('/') ? basename(source) : '')
+					await mkdir(dirname(target), { recursive: true })
+					await cp(join(repositoryRoot, source), target)
+				}
+			}
+			for (const command of dockerInstructions(requireDockerStage(stages, 'dependencies'), 'RUN')) {
+				const install = Bun.spawn([...command.split(/\s+/u), '--offline'], { cwd: dependencies, stdout: 'pipe', stderr: 'pipe' })
+				const [status, output, errors] = await Promise.all([install.exited, new Response(install.stdout).text(), new Response(install.stderr).text()])
+				expect(status, `${command}\n${output}\n${errors}`).toBe(0)
+			}
+			for (const copy of dockerInstructions(requireDockerStage(stages, 'runtime'), 'COPY')) {
+				const parts = copy.split(/\s+/u)
+				const fromDependencies = parts[0] === '--from=dependencies'
+				if (parts[0]?.startsWith('--from=') && !fromDependencies) continue
+				if (fromDependencies) parts.shift()
+				const destination = parts.pop()
+				if (destination === undefined) throw new Error(`Invalid runtime COPY: ${copy}`)
+				for (const source of parts) {
+					if (!fromDependencies && !source.startsWith('shared/') && !source.endsWith('package.json') && source !== 'bun.lock') continue
+					const sourcePath = join(fromDependencies ? dependencies : repositoryRoot, source.replace(/^\/workspace\//u, ''))
+					const isDirectory = (await stat(sourcePath)).isDirectory()
+					const target = join(runtime, destination, destination.endsWith('/') && !isDirectory ? basename(source) : '')
+					await mkdir(dirname(target), { recursive: true })
+					await cp(sourcePath, target, { recursive: true, verbatimSymlinks: true })
+				}
+			}
+			const probe = join(runtime, 'augurScan/probe.ts')
+			await Bun.write(probe, "import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'\nconsole.log(getLiquidationVaultRepBackingToTransfer(100n, 10n ** 18n))\n")
+			const result = Bun.spawnSync([process.execPath, '--no-install', probe], { cwd: runtime, stdout: 'pipe', stderr: 'pipe' })
+			expect(result.stderr.toString()).toBe('')
+			expect(result.exitCode).toBe(0)
+			expect(result.stdout.toString().trim()).toBe('105n')
+		} finally {
+			await rm(runtime, { recursive: true, force: true })
+			await rm(dependencies, { recursive: true, force: true })
+		}
+	}, 120_000)
+
 	test('builds the browser bundle from only the image source copies', async () => {
 		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
 		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
