@@ -30,20 +30,31 @@ function createTradingPairIndex(): TradingPairIndex {
 	return createSecurityPoolDeploymentIndex()
 }
 
+function securityPoolNotFound(message: string) {
+	return Object.assign(new Error(message), { name: 'SecurityPoolNotFoundError' })
+}
+
+export function isSecurityPoolNotFoundError(error: unknown) {
+	return error instanceof Error && error.name === 'SecurityPoolNotFoundError'
+}
+
 async function loadCanonicalPoolDeployment(client: PublicClient, configuration: DeploymentConfiguration, pool: Address): Promise<SecurityPoolDeployment> {
 	const [factory, universeId, shareToken, zoltar] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'securityPoolFactory' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'universeId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'shareToken' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'zoltar' }),
-	])
-	if (getAddress(factory) !== getAddress(configuration.securityPoolFactory) || getAddress(zoltar) !== getAddress(configuration.zoltar)) throw new Error('Pool does not belong to the configured deployment')
+	]).catch(error => {
+		if (error instanceof Error && error.name === 'ContractFunctionZeroDataError') throw securityPoolNotFound('Security pool does not exist at this address. Check the address and network.')
+		throw error
+	})
+	if (getAddress(factory) !== getAddress(configuration.securityPoolFactory) || getAddress(zoltar) !== getAddress(configuration.zoltar)) throw securityPoolNotFound('Security pool does not exist in the configured deployment. Check the address and network.')
 	const originId = await client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getSecurityPoolOriginId', args: [pool] })
 	const [registeredPool, canonicalPool] = await Promise.all([
 		client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getSecurityPool', args: [originId, universeId] }),
 		client.readContract({ abi: shareTokenAbi, address: getAddress(shareToken), functionName: 'canonicalPoolByUniverse', args: [universeId] }),
 	])
-	if (getAddress(registeredPool) !== pool || getAddress(canonicalPool) !== pool) throw new Error('Address is not a canonical SecurityPool')
+	if (getAddress(registeredPool) !== pool || getAddress(canonicalPool) !== pool) throw securityPoolNotFound('This address is not a canonical security pool.')
 	const [questionId, statoblastSecurityMultiplierBps, manager] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'questionId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'statoblastSecurityMultiplierBps' }),
@@ -56,13 +67,7 @@ async function loadCanonicalPoolDeployment(client: PublicClient, configuration: 
 export async function discoverAddressedMarket(client: PublicClient, configuration: DeploymentConfiguration, address: Address) {
 	const pool = getAddress(address)
 	if (pool === zeroAddress) throw new Error('Enter a nonzero SecurityPool address')
-	let deployment
-	try {
-		deployment = await loadCanonicalPoolDeployment(client, configuration, pool)
-	} catch (error) {
-		if (error instanceof Error && error.name === 'ContractFunctionZeroDataError') throw new Error('No SecurityPool found at this address. Check the address and network.')
-		throw error
-	}
+	const deployment = await loadCanonicalPoolDeployment(client, configuration, pool)
 	const market = await loadLiveMarket(client, configuration, deployment)
 	return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [market.universeId], selectedUniverseId: market.universeId }
 }

@@ -5,8 +5,8 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { discoverAddressedMarket, discoverTradingMarketPage, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
-import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { discoverAddressedMarket, discoverTradingMarketPage, isSecurityPoolNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
+import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { latestBlockIdentity } from '../../protocol/tradeQuote.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
@@ -16,7 +16,49 @@ import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-st
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { createSecurityPoolDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { shareTokenAbi } from '../../protocol/authorization.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
+
+test('only missing pool identity reads are classified as a missing security pool', async () => {
+	const configuration = deploymentConfigurationFixture()
+	const pool = getAddress(`0x${'12'.repeat(20)}`)
+	const addresses: Readonly<Record<string, Address>> = {
+		securityPoolFactory: configuration.securityPoolFactory,
+		zoltar: configuration.zoltar,
+		shareToken: getAddress(`0x${'34'.repeat(20)}`),
+		getSecurityPool: pool,
+		canonicalPoolByUniverse: pool,
+		openOraclePriceCoordinator: getAddress(`0x${'56'.repeat(20)}`),
+	}
+	const abi = [...statoblast_SecurityPool_SecurityPool.abi, ...statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, ...statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, ...shareTokenAbi]
+	for (const failedFunction of ['securityPoolFactory', 'getSecurityPoolOriginId', 'getSecurityPool', 'initialReportPriorityFeeAttoEthPerGas']) {
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method !== 'eth_call' || !Array.isArray(params)) throw new Error(`Unexpected RPC method: ${method}`)
+					const transaction = params[0]
+					if (typeof transaction !== 'object' || transaction === null || !('data' in transaction) || typeof transaction.data !== 'string') throw new Error('Expected contract call data')
+					const { functionName } = decodeFunctionData({ abi, data: transaction.data })
+					if (functionName === failedFunction) return '0x'
+					const address = addresses[functionName]
+					if (address !== undefined) return encodeAbiParameters([{ type: 'address' }], [address])
+					if (['universeId', 'getSecurityPoolOriginId', 'questionId', 'statoblastSecurityMultiplierBps'].includes(functionName)) return encodeAbiParameters([{ type: 'uint256' }], [0n])
+					throw new Error(`Unexpected contract read: ${functionName}`)
+				},
+			}),
+		})
+		let failure: unknown
+		try {
+			await discoverAddressedMarket(client, configuration, pool)
+		} catch (error) {
+			failure = error
+		}
+		expect(failure).toBeInstanceOf(Error)
+		expect(isSecurityPoolNotFoundError(failure)).toBe(failedFunction === 'securityPoolFactory')
+	}
+})
 
 for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO])
 	describe(`${scenario} simulation market discovery`, () => {
@@ -26,6 +68,33 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			backend = await createBootstrappedSimulationBackendWithRetry(scenario, 1, 'trading')
 			await backend.setTransactionDelayMilliseconds(0)
 			await backend.setQueryDelayMilliseconds(0)
+		}, 180_000)
+
+		test('shows a missing pool without retry and offers a way back on addressed routes', async () => {
+			const addresses = getInfraContractAddresses(backend.profile)
+			const plan = getTradingDeploymentPlan({ chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30)
+			const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
+			const missingPool = getAddress('0x1111111111111111111111111111111111111111')
+			await expect(discoverAddressedMarket(backend.createReadClient(), configuration, missingPool)).rejects.toMatchObject({ name: 'SecurityPoolNotFoundError' })
+			const dom = installDomEnvironment()
+			const restore = installActiveEnvironmentForTesting(backend, backend)
+			try {
+				for (const route of [`security-pool/${missingPool}`, `market/${missingPool}`, `liquidity/${missingPool}`, `create-market/${missingPool}`] as const) {
+					const rendered = await renderIntoDocument(h(LiveTrading, { route, configuration, configurationError: undefined, selectedUniverseId: '0', controllerServices: liveTradingControllerServices, onWorkflowLockChange: () => undefined }))
+					try {
+						await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'))
+						expect(rendered.container.textContent).not.toContain('discovery failed')
+						expect(rendered.container.textContent).not.toContain('Retry')
+						const back = Array.from(rendered.container.querySelectorAll('a')).find(link => link.textContent === 'Back to security pools')
+						expect(back?.getAttribute('href')).toContain('#/create-market')
+					} finally {
+						rendered.cleanup()
+					}
+				}
+			} finally {
+				restore()
+				dom.cleanup()
+			}
 		}, 180_000)
 
 		afterAll(async () => {
@@ -85,7 +154,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 							throw failure
 						},
 					}
-					await expect(discoverAddressedMarket(failingClient, configuration, addressedPool)).rejects.toThrow(errorName === 'ContractFunctionZeroDataError' ? 'No SecurityPool found at this address. Check the address and network.' : 'RPC unavailable')
+					await expect(discoverAddressedMarket(failingClient, configuration, addressedPool)).rejects.toThrow(errorName === 'ContractFunctionZeroDataError' ? 'Security pool does not exist at this address. Check the address and network.' : 'RPC unavailable')
 				}
 				let rejectedDeployment: unknown
 				try {
@@ -93,7 +162,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				} catch (error) {
 					rejectedDeployment = error
 				}
-				expect(rejectedDeployment).toBeInstanceOf(Error)
+				expect(rejectedDeployment).toMatchObject({ name: 'SecurityPoolNotFoundError' })
 				expect(String(rejectedDeployment)).toContain('configured deployment')
 				await expect(discoverAddressedMarket(directClient, configuration, '0x0000000000000000000000000000000000000000')).rejects.toThrow('nonzero')
 				for (const directRoute of [`security-pool/${addressedPool}`, `market/${addressedPool}`, `liquidity/${addressedPool}`] as const) {

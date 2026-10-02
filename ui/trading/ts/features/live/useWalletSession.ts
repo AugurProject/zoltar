@@ -315,7 +315,7 @@ export function useWalletSummaryEffects({
 	configuration: DeploymentConfiguration | undefined
 	configurationError: string | undefined
 	selectedUniverseId: string | undefined
-	discoveryState: 'loading' | 'ready' | 'error'
+	discoveryState: 'loading' | 'ready' | 'error' | 'not-found'
 	discoveryError: string | undefined
 	selected: LiveMarket | undefined
 	retryNonce: number
@@ -372,5 +372,5 @@ export function useWalletSummaryEffects({
 			},
 		)
 		return () => requests.invalidate()
-	}, [session.account, configuration, configurationError, discoveryError, discoveryState, selected, session.walletSummaryReceiptNonce, requests, retryNonce])
+	}, [session.account, configuration, configurationError, selectedUniverseId, discoveryError, discoveryState, selected, session.walletSummaryReceiptNonce, requests, retryNonce])
 }

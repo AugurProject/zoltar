@@ -104,6 +104,8 @@ function poolPageRange(first: bigint, last: bigint, total: bigint) {
 }
 
 export const liveCopy = {
+	securityPoolDoesNotExist: 'Security pool does not exist.',
+	backToSecurityPools: 'Back to security pools',
 	openByAddress: 'Open by address',
 	poolAlreadyExists: 'This pool already has a trading market.',
 	openPoolAddress: 'Security pool address',

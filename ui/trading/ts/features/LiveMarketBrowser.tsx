@@ -106,7 +106,7 @@ export function LiveMarketBrowser({
 	lookupRoute: TradingLookupRoute
 	fetchedAtByPool?: ReadonlyMap<string, number> | undefined
 	markets: readonly LiveMarket[]
-	discoveryState: 'loading' | 'ready' | 'error'
+	discoveryState: 'loading' | 'ready' | 'error' | 'not-found'
 	discoveryError: string | undefined
 	workflowLocked: boolean
 	nowSeconds: bigint

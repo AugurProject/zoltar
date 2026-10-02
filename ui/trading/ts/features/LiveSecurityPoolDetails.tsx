@@ -147,7 +147,19 @@ export function LiveSecurityPoolDetails({
 	)
 }
 
-export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, workflowLocked, retry }: { discoveryState: 'loading' | 'ready' | 'error'; discoveryError: string | undefined; workflowLocked: boolean; retry(): void }) {
+export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, workflowLocked, retry }: { discoveryState: 'loading' | 'ready' | 'error' | 'not-found'; discoveryError: string | undefined; workflowLocked: boolean; retry(): void }) {
+	if (discoveryState === 'not-found')
+		return (
+			<EmptyState
+				live
+				title={discoveryError ?? liveCopy.securityPoolDoesNotExist}
+				actions={
+					<a className='button-link' href={getTradingRouteHref('#/create-market')}>
+						{liveCopy.backToSecurityPools}
+					</a>
+				}
+			/>
+		)
 	if (discoveryState === 'loading') return <EmptyState live title={liveCopy.loadingSecurityPoolDetails} />
 	if (discoveryState === 'error') return <RetryableNotice disabled={workflowLocked} message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} onRetry={retry} retryLabel={liveCopy.retryDiscovery} />
 	return <EmptyState title={liveCopy.noPoolSelected} detail={liveCopy.securityPoolUnavailableInUniverse} />

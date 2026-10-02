@@ -1,5 +1,5 @@
 import { hasSubmissionWindow } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
-import type { Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { LiveMarket } from './liveMarket.js'
@@ -21,10 +21,10 @@ export function capSubmissionDeadline(timing: SubmissionTiming, operation: Submi
 	return requestedDeadline < timing.endTime ? requestedDeadline : timing.endTime - 1n
 }
 
-export async function submissionDeadline(client: WalletClient, market: LiveMarket, operation: SubmissionOperation, block: Readonly<{ blockHash: Hash; blockTimestamp: bigint }>, requestedDeadline: bigint) {
+export async function submissionDeadline(client: WalletClient, market: LiveMarket, operation: SubmissionOperation, block: Readonly<{ blockNumber: bigint; blockTimestamp: bigint }>, requestedDeadline: bigint) {
 	if (operation === 'remove') return requestedDeadline
-	const questionData = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: market.pool, functionName: 'questionData', blockHash: block.blockHash })
-	const endTime = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [market.questionId], blockHash: block.blockHash })
+	const questionData = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: market.pool, functionName: 'questionData', blockNumber: block.blockNumber })
+	const endTime = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [market.questionId], blockNumber: block.blockNumber })
 	const blocker = submissionWindowBlocker({ endTime }, operation, block.blockTimestamp)
 	if (blocker !== undefined) throw new Error(blocker)
 	return capSubmissionDeadline({ endTime }, operation, requestedDeadline)
