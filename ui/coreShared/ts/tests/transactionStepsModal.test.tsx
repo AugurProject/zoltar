@@ -10,7 +10,7 @@ import { fireEvent, within } from './testUtils/queries.js'
 import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { TransactionFundingSummary } from '../components/TransactionFundingSummary.js'
-import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
+import { createTransactionStepController, transactionStepOutcome, transactionSteps } from '../transactions/transactionSteps.js'
 
 test('shows funding in plan order with readable amounts and exact values available', async () => {
 	const dom = installDomEnvironment()
@@ -342,6 +342,7 @@ for (const choice of ['default', 'buffered', 'custom'] as const) {
 				controller.submitted(hash)
 				controller.receipt(hash, 'success')
 			})
+			expect(transactionStepOutcome.value?.title.replaceAll('\u00a0', ' ')).toBe(`Approved ${expectedAmount} REP`)
 			expect(queries.queryByRole('link', { name: hash })).toBeNull()
 			expect(approvalInput.isConnected).toBe(true)
 			expect(approvalInput.hasAttribute('disabled')).toBe(true)

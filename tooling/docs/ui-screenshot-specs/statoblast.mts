@@ -11,8 +11,8 @@ const createPool: readonly UiScreenshotStep[] = [...fillPoolForm, { click: 'Crea
 const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'Vault actions' }]
 const approveRep: readonly UiScreenshotStep[] = [...openPool, { click: 'Deposit REP' }, { fill: 'REP backing', value: '1000' }, { click: 'Approve 1k REP' }, { waitForNoText: 'Approve 1k REP' }, { waitForNoText: 'Approving REP' }, { waitForNoText: 'Loading' }]
 const depositRep: readonly UiScreenshotStep[] = [...approveRep, { click: 'Deposit REP', nth: -1 }, { waitForText: 'Vault REP backing' }]
-const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'OpenOracle REP per ETH starting price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }]
-const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Set commitment limit', nth: -1 }, { waitForText: 'View in staged operations' }]
+const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'OpenOracle REP per ETH starting price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }, { waitForEnabled: 'Approve ≈ 1.62 WETH' }]
+const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Approve ≈ 1.62 WETH' }, { waitForText: 'WETH approved' }, { click: 'Approve ≈ 4.85 REP' }, { waitForText: 'REP approved' }, { click: 'Set commitment limit', nth: -1 }, { waitForText: 'View in staged operations' }]
 // The report settles after eight minutes; ten keeps the staged operation inside its validity window.
 const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForEnabled: 'Settle report' }]
 const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Settled report' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Commitment limit changed' }, { waitForText: '10.00 ETH' }]
@@ -57,7 +57,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		steps: fillCommitment,
 		expectText: ['OpenOracle REP per ETH starting price', 'Fetch from Uniswap', 'Commitment limit', 'Resulting commitment', 'Queues for execution after oracle settlement.'],
 		viewport: modalViewport,
-		crop: { selector: '[role=dialog]', containing: 'Resulting commitment', padding: 0 },
+		crop: { selector: '[role=dialog] .transaction-step-actions', padding: 0, scrollIntoView: true },
 		usedBy: tutorial,
 	},
 	{

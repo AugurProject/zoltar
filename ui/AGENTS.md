@@ -73,12 +73,17 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 
 ## Interaction and transaction states
 
+- One transaction button sends at most one wallet transaction, of the type named by that button. Never chain approvals, wrapping, deposits, requests, or execution after one click, including after a receipt confirms. A single transaction may contain multiple contract calls.
+- Show applicable prerequisite transaction controls when their form opens, before the consuming action and in dependency order (for example, wrapping, token approvals, then the oracle-backed operation). Keep them disabled while inputs or requirements load. Never require clicking the final transaction button to discover, reveal, prepare, or unlock its prerequisite buttons; prepare the read-only plan from valid form inputs, as in the Deposit REP approval flow.
+- Give each transaction type its own persistent, clearly labeled button. Never reuse a “Continue”, “Next”, or action button to send different transaction types on successive clicks. Separate preparation or review from sending, and revalidate prerequisites before each independently selected transaction.
+- Approval actions use the shared `TokenApprovalControl` flow so the user can review and adjust the approval amount. Show the required amount and any recommendation, but do not force an exact or unlimited allowance. If the selected amount is insufficient, keep the consuming action disabled and explain the remaining requirement.
+- Keep transaction buttons visible and in the same position and order across loading, review, approval, pending, success, failure, and retry states. Disable them with a reason when blocked, completed, or not needed. Do not hide, remove, reorder, replace, or move a button merely because workflow state changes; only remove a transaction type that cannot apply to the current object.
 - Active tabs and selected views must be immediately distinguishable.
 - Disable unavailable functionality instead of hiding it. Keep every step, section, and button of a workflow in place as its state changes (for example, an approval step stays visible after the approval succeeds or when the existing allowance already covers it), mark it disabled, and show why: done, not needed, blocked by an earlier step, or which prerequisite is missing. Remove a control only when it can never apply to the current object.
 - Keep disabled controls legible and explain why the primary expected action is unavailable. Every disabled button uses the single shared disabled treatment regardless of tone, so disabled primary, secondary, and approval actions look identical and never resemble an enabled secondary button. Disabled text fields keep the normal field frame and dim only their text.
 - Disable a transaction action when known local state proves it will fail, using direct reasons such as `Insufficient balance`, `Switch to Ethereum mainnet`, or `Approval required`.
 - Revalidate transaction prerequisites immediately before submission when wallet, network, allowance, balance, or contract state may have changed.
-- Keep pending feedback inside the initiating button, keep the button disabled, and prevent duplicate submission until the action resolves.
+- Keep pending feedback inside the initiating button, keep the button disabled, and prevent duplicate submission until the action resolves. Confirmation must unlock the next transaction button without activating it.
 - Loading states must not cause avoidable layout jumps.
 - Use consistent empty, loading, success, warning, and error grammar.
 - Keep important state visible without hover and preserve action placement while content changes state.
@@ -126,6 +131,9 @@ For relevant UI changes, verify:
 - meaningful use of color, badges, labeled icons, previews, and motion where they improve comprehension
 - keyboard operation, focus, accessible names, and non-color status cues
 - empty, loading, disabled, pending, success, and error states
+- one transaction type per button and one wallet transaction per click, including after receipts confirm
+- persistent button position, order, and disabled reasons across workflow states
+- editable approval amounts through the shared approval control
 - transaction prerequisite and duplicate-submission guards
 - desktop and narrow/mobile layouts
 - long values and dense data

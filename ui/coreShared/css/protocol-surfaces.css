@@ -219,11 +219,11 @@ strong.metric-value-danger {
 	box-shadow: var(--shadow-overlay);
 }
 
-body:has(.global-transaction-dialog-error) .modal-backdrop:has(> .operation-modal-panel) {
+body:has(.global-transaction-dialog) .modal-backdrop:has(> .operation-modal-panel) {
 	bottom: calc(var(--transaction-status-inset, 0px) + var(--space-4));
 }
 
-body:has(.global-transaction-dialog-error) .operation-modal-panel {
+body:has(.global-transaction-dialog) .operation-modal-panel {
 	max-height: min(calc(100dvh - var(--transaction-status-inset, 0px) - 3rem), 58rem);
 }
 
@@ -2228,7 +2228,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		padding: 0 0.75rem 0.75rem;
 	}
 
-	body:has(.global-transaction-dialog-error) .modal-panel:has(.transaction-step-actions) > .operation-modal-scroll {
+	body:has(.global-transaction-dialog) .modal-panel:has(.transaction-step-actions) > .operation-modal-scroll {
 		padding-bottom: calc(12rem + env(safe-area-inset-bottom, 0rem));
 	}
 

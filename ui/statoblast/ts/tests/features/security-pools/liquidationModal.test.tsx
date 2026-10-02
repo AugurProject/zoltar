@@ -1,9 +1,10 @@
+import { createPreparedOperationFixture } from './workflow/preparedOperationFixture.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
@@ -100,6 +101,7 @@ describe('LiquidationModal', () => {
 	})
 
 	function createLiquidationModalProps(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}): Parameters<typeof LiquidationModal>[0] {
+		const { onQueueLiquidation = () => undefined, ...otherOverrides } = overrides
 		return {
 			accountAddress: defaultCallerVaultAddress,
 			closeLiquidationModal: () => undefined,
@@ -119,7 +121,7 @@ describe('LiquidationModal', () => {
 			onLoadPoolOracleManager: () => undefined,
 			onLiquidationAmountChange: () => undefined,
 			onLiquidationTimeoutMinutesChange: () => undefined,
-			onQueueLiquidation: () => undefined,
+			onQueueLiquidation: createPreparedOperationFixture('Queue liquidation', onQueueLiquidation),
 			onSelectedPoolViewChange: () => undefined,
 			poolOracleManagerError: undefined,
 			repPerEthPrice: 1n * 10n ** 18n,
@@ -131,7 +133,7 @@ describe('LiquidationModal', () => {
 			securityPoolOverviewResult: undefined,
 			callerVaultSummary: createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress }),
 			targetVaultSummary: createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress }),
-			...overrides,
+			...otherOverrides,
 		}
 	}
 
@@ -237,8 +239,9 @@ describe('LiquidationModal', () => {
 		const page = within(document.body)
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
 		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
+		await waitFor(() => expect(page.getByRole('button', { name: 'Queue liquidation' }).hasAttribute('disabled')).toBe(false))
 		fireEvent.click(page.getByRole('button', { name: 'Queue liquidation' }))
-		expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH)
+		await waitFor(() => expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH))
 	})
 
 	test('keeps queued liquidation inputs without a funding review panel', async () => {
@@ -850,8 +853,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
-		const queueButton = within(document.body).getByRole('button', { name: 'Queue liquidation' }) as HTMLButtonElement
-		expect(queueButton.disabled).toBe(false)
+		await waitFor(() => expect(within(document.body).getByRole('button', { name: 'Queue liquidation' }).hasAttribute('disabled')).toBe(false))
 	})
 
 	test('Max estimates the transferable commitment from the pool price while the liquidation queues', async () => {
@@ -1760,7 +1762,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Execute vault liquidation' })).toBeNull()
 	})
 
-	test('uses a dedicated top-aligned action row when execute liquidation shows a disabled reason', async () => {
+	test('uses the shared action row when execute liquidation shows a disabled reason', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -1785,13 +1787,13 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		const cancelButton = documentQueries.getByRole('button', { name: 'Cancel' })
-		const actionContainer = cancelButton.closest('.liquidation-modal-actions')
+		const actionContainer = cancelButton.closest('.transaction-step-actions')
 
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByText('The receiver vault would become liquidatable after this liquidation.')).not.toBeNull()
 		expect(actionContainer).not.toBeNull()
 		expect(actionContainer?.className).toContain('actions')
-		expect(actionContainer?.className).toContain('liquidation-modal-actions')
+		expect(actionContainer?.className).toContain('transaction-step-actions')
 	})
 
 	test('distinguishes receiver vaults that remain liquidatable after the simulated liquidation', async () => {
@@ -2466,12 +2468,12 @@ describe('LiquidationModal', () => {
 		expect(document.body.querySelector("[role='dialog']")).toBeNull()
 	})
 
-	test('labels the secondary action Close while the liquidation is pending', async () => {
+	test('keeps the shared Cancel action disabled while the liquidation is pending', async () => {
 		const renderedComponent = await renderLiquidationModal({ securityPoolOverviewActiveAction: 'queueLiquidation' })
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate vault' })
-		expect(within(dialog).queryByRole('button', { name: 'Cancel' })).toBeNull()
-		expect(within(dialog).getAllByRole('button', { name: 'Close' })).toHaveLength(2)
+		expect(within(dialog).getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+		expect(within(dialog).getAllByRole('button', { name: 'Close' })).toHaveLength(1)
 	})
 
 	test('shows an inline address error for a malformed receiver vault instead of a receiver-state reason', async () => {

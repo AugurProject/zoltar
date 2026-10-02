@@ -1,3 +1,8 @@
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -238,5 +243,17 @@ export function VaultActionLaunchers({
 			<ErrorNotice message={securityVaultError} />
 			<ErrorNotice message={walletRepBalanceError} />
 		</>
+	)
+}
+
+export function VaultWithdrawalSummaryMetrics({ repTokenSymbol, amountLabel, maximumWithdrawableAttoRep, isEstimate, priceValidUntil }: { repTokenSymbol: string; amountLabel: string; maximumWithdrawableAttoRep: bigint | undefined; isEstimate: boolean; priceValidUntil: bigint | undefined }) {
+	return (
+		<MetricGrid>
+			<MetricField label={amountLabel}>
+				<CurrencyValue value={maximumWithdrawableAttoRep} suffix={repTokenSymbol} />
+				{isEstimate ? <RepPriceStatusLabel /> : undefined}
+			</MetricField>
+			<MetricField label={securityPoolCopy.priceValidUntil}>{priceValidUntil === undefined ? commonCopy.unavailable : <TimestampValue timestamp={priceValidUntil} />}</MetricField>
+		</MetricGrid>
 	)
 }
