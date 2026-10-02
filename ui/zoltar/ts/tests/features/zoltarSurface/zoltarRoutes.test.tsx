@@ -172,20 +172,21 @@ describe('ZoltarRoutes', () => {
 	})
 
 	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {
-		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false }))
+		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false, relatedUniversesLoaded: false }))
 		expect(queries.getByRole('heading', { name: 'Universes' })).toBeTruthy()
 		expect(queries.queryByRole('button', { name: 'Migrate REP' })).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Fork universe' }))
 		expect(viewChanges).toEqual(['fork'])
-		expect(queries.queryByRole('textbox')).toBeNull()
+		expect(queries.getByRole('textbox', { name: 'Open universe by ID' })).toBeTruthy()
+		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
 
 	test('shows Migrate, not Fork, in the Universes browser of a forked universe', async () => {
-		const { queries, viewChanges } = await renderRoute('universes', createUniverse())
+		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }))
 		expect(queries.queryByRole('button', { name: 'Fork universe' })).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Migrate REP' }))
 		expect(viewChanges).toEqual(['migrate'])
-		expect(queries.getByText('Yes')).toBeTruthy()
+		expect(queries.queryByText('Yes')).toBeNull()
 		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
 
