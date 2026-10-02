@@ -58,7 +58,7 @@ export type UiScreenshotApp = {
 
 export const UI_SCREENSHOT_APPS: Partial<Record<UiAppId, UiScreenshotApp>> = {
 	trading: {
-		title: 'Augur Trading',
+		title: 'Statoblast Trading',
 		// The app itself plus the shared styles, components, copy, and formatters it renders; shared protocol logic rarely changes what a screenshot shows.
 		sourceRoots: [
 			'ui/trading/ts',

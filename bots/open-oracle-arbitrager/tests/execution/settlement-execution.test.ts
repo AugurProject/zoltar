@@ -253,13 +253,22 @@ describe('third-party settlement execution against OpenOracle', () => {
 			},
 		}
 		const plan = settlementPlan(report)
-		await expect(executeSettlement({ ...base, client: impatientClient, wallet: deafWallet }, plan)).rejects.toThrow('was not confirmed in its parent-bound target block')
-		expect(records.map(record => record.status)).toEqual(['pending'])
-		// Anvil mined the attempt anyway, so the next scan's reconciliation resolves it from the receipt.
-		const [pending] = records
-		if (pending === undefined) throw new Error('pending record missing')
-		const resolved = await reconcilePendingSettlements([client], base.config, [pending], await client.getBlockNumber())
-		expect(resolved.map(record => record.status)).toEqual(['confirmed'])
+		await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [false] })
+		try {
+			await expect(executeSettlement({ ...base, client: impatientClient, wallet: deafWallet }, plan)).rejects.toThrow('was not confirmed in its parent-bound target block')
+			expect(records.map(record => record.status)).toEqual(['pending'])
+			const [pending] = records
+			if (pending === undefined) throw new Error('pending record missing')
+			expect(await reconcilePendingSettlements([client], base.config, [pending], await client.getBlockNumber())).toEqual([])
+			// Mine explicitly: the forced receipt timeout does not establish transaction inclusion.
+			await node.anvilWindowEthereum.request({ method: 'evm_mine', params: [] })
+			const receipt = await client.waitForTransactionReceipt({ hash: pending.transactionHash })
+			expect(receipt.status).toBe('success')
+			const resolved = await reconcilePendingSettlements([client], base.config, [pending], receipt.blockNumber)
+			expect(resolved.map(record => record.status)).toEqual(['confirmed'])
+		} finally {
+			await node.anvilWindowEthereum.request({ method: 'evm_setAutomine', params: [true] })
+		}
 	})
 
 	test('does not credit a settlement whose nonce was taken by an unrelated transaction, and recovers it when that replacement is orphaned', async () => {

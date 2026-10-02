@@ -5,6 +5,7 @@ set "chaos_pushed=0"
 pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed
+docker volume create zoltar-bot-signer-locks >nul || goto failed
 if "%~1"=="" goto list_archives
 rem Stop both the regular service and any interrupted retirement container.
 docker compose down --remove-orphans --timeout 60 || goto failed
