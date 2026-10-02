@@ -32,13 +32,13 @@ describe('UniversePoolDirectorySection', () => {
 		},
 	})
 
-	test('keeps direct lookup available for an unknown universe instead of spinning forever', async () => {
+	test('recovers an unknown universe through Genesis without arbitrary ID entry', async () => {
 		window.history.replaceState({}, '', '#/pools/universes?universe=999')
 		const rendered = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 999n, zoltarUniverse: undefined, universeMissing: true }))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('Choose another universe.')
 		expect(document.body.textContent).not.toContain('Loading')
-		expect(within(document.body).getByRole('textbox', { name: 'Open universe by ID' })).toBeTruthy()
+		expect(within(document.body).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
 		within(document.body).getByRole('button', { name: 'Go to Genesis universe' }).click()
 		expect(window.location.hash).toContain('universe=0')
 		expect(within(document.body).queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()

@@ -40,7 +40,7 @@ describe('universe directory', () => {
 		const selectLinks = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.entity-card .universe-link')).filter(link => link.textContent === 'Open')
 		expect(selectLinks).toHaveLength(1)
 		expect(selectLinks[0]?.getAttribute('href')).toBe('#/universe?universe=2')
-		expect(queries.getByRole('link', { name: 'Go to Genesis universe' }).getAttribute('href')).toBe('#/universe?universe=0')
+		expect(queries.queryByRole('link', { name: 'Go to Genesis universe' })).toBeNull()
 		expect(rendered.container.querySelector('select')).toBeNull()
 	})
 
@@ -131,7 +131,8 @@ describe('universe directory', () => {
 		const rendered = await renderIntoDocument(view(undefined))
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
-		expect(within(rendered.container).getByRole('textbox', { name: 'Open universe by ID' })).toBeTruthy()
+		expect(within(rendered.container).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
+		expect(within(rendered.container).getByRole('link', { name: 'Go to Genesis universe' })).toBeTruthy()
 		expect(rendered.container.textContent).not.toContain('Security pool discovery failed')
 		await waitFor(() => expect(discoveryStates.at(-1)).toBe('error'))
 		expect(rendered.container.textContent).not.toContain('Loading universe details')

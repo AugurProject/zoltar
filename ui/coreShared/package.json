@@ -1058,10 +1058,6 @@
 			"bun": "./ts/components/UniverseBrowser.tsx",
 			"default": "./js/components/UniverseBrowser.js"
 		},
-		"./components/UniverseLookup.js": {
-			"bun": "./ts/components/UniverseLookup.tsx",
-			"default": "./js/components/UniverseLookup.js"
-		},
 		"./components/UniverseSwitcher.js": {
 			"bun": "./ts/components/UniverseSwitcher.tsx",
 			"default": "./js/components/UniverseSwitcher.js"

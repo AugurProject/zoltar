@@ -1,5 +1,4 @@
 import type { ComponentChildren } from 'preact'
-import { UniverseLookup } from './UniverseLookup.js'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 import { formatUniverseIdHex } from '../lib/universeLabels.js'
@@ -46,9 +45,16 @@ function UniverseLineageTrail({ lineage }: { lineage: readonly UniverseLineageSt
 	return (
 		<nav aria-label={universeCopy.lineageAriaLabel} className='universe-lineage'>
 			<ol>
-				{lineage.map((step, index) => (
-					<li key={step.universeId.toString()}>{index === lineage.length - 1 ? <span aria-current='location'>{formatUniverseStepName(step)}</span> : <UniverseLink universeId={step.universeId}>{formatUniverseStepName(step)}</UniverseLink>}</li>
-				))}
+				{lineage.map((step, index) => {
+					const name = formatUniverseStepName(step)
+					if (index === lineage.length - 1)
+						return (
+							<li key={step.universeId.toString()}>
+								<span aria-current='location'>{name}</span>
+							</li>
+						)
+					return <li key={step.universeId.toString()}>{index === lineage.length - 2 ? <UniverseLink universeId={step.universeId}>{name}</UniverseLink> : <span>{name}</span>}</li>
+				})}
 			</ol>
 		</nav>
 	)
@@ -94,7 +100,7 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 
 /**
  * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
- * universes its fork created. Opening an ancestor or child changes the shared `universe` query parameter.
+ * universes its fork created. Opening the parent or a child changes the shared `universe` query parameter.
  */
 export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe }: UniverseBrowserProps) {
 	const lineage = resolveLineage(universe)
@@ -137,7 +143,6 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 				</div>
 			)}
 			{navigation}
-			<UniverseLookup activeUniverseId={activeUniverseId} />
 			{universe.relatedUniversesLoaded === false ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />

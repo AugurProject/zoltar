@@ -17,6 +17,3 @@ export const lineageTitle = 'Lineage'
 export const currentUniverse = 'Current'
 export const noDeployedChildren = 'No deployed child universes.'
 export const browseUniverses = 'Browse universes'
-
-export const openUniverseById = 'Open universe by ID'
-export const universeIdInvalid = 'Enter a universe ID in decimal or hexadecimal.'

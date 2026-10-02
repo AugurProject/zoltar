@@ -28,8 +28,7 @@ import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
-import { UniverseLookup } from '@zoltar/ui-core-shared/components/UniverseLookup.js'
-import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
+import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
@@ -211,7 +210,11 @@ export function LiveTrading({
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}
-					<UniverseLookup activeUniverseId={tryParseBigIntInput(selectedUniverseId ?? '') ?? 0n} />
+					{discoveryState === 'error' && selectedUniverseId !== '0' ? (
+						<UniverseLink className='button-link secondary-link' universeId={0n}>
+							{commonCopy.goToGenesisUniverse}
+						</UniverseLink>
+					) : undefined}
 				</div>
 			)
 		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />

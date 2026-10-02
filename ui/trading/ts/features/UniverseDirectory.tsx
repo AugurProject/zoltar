@@ -31,7 +31,7 @@ export function UniverseDirectory({ configuration, connectionMessage, loadUniver
 	const loadOutcomes = useCallback<LoadUniverseOutcomes>((address, id, start) => loadUniverseOutcomePage(createTradingPublicClient(configuration), address, id, start), [configuration])
 	const { retry, state } = useUniverseSummary(configuration, universeId, loadUniverse)
 	const genesisAction =
-		universeId === 0n ? undefined : (
+		universeId === 0n || (state.kind !== 'error' && !(state.kind === 'ready' && state.universe === undefined)) ? undefined : (
 			<UniverseLink className='button-link secondary-link' universeId={0n}>
 				{commonCopy.goToGenesisUniverse}
 			</UniverseLink>

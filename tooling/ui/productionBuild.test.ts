@@ -834,10 +834,10 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	const { completeTransactionReview, openSeededPool, selectPoolTool, loadSeededPools } = createWorkflowActions(driver)
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
-	await driver.waitForBodyText('Open universe by ID')
 	await driver.waitForBodyText('Child universes')
 	await driver.waitForBodyWithoutText('Loading outcomes…')
 	expect(await driver.evaluate("document.querySelectorAll('.universe-browser .entity-card-list').length")).toBe(0)
+	expect(await driver.evaluate("document.querySelector('.universe-browser input') === null")).toBe(true)
 	// The fixture has one auction child; its fork outcome opens the child without entering its ID.
 	const auctionPools = (await loadSeededPools()).filter(pool => pool.parent !== zeroAddress && pool.truthAuction !== zeroAddress)
 	expect(auctionPools).toHaveLength(1)

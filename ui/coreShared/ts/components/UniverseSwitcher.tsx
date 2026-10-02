@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
-import { formatUniverseLineageLabel, formatUniverseStepName, type UniverseLineageStep } from '../lib/universeLineage.js'
+import { formatUniverseLineageLabel, formatUniverseStepName } from '../lib/universeLineage.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import { UniverseLink } from './UniverseLink.js'
 
@@ -10,18 +10,20 @@ type UniverseSwitcherProps = {
 	/** Where the full universe browser lives; omitted when the application has no browser route. */
 	browseHref?: string | undefined
 	/** The loaded active universe; its lineage and deployed children are the switch targets. */
-	universe: Pick<ZoltarUniverseSummary, 'outcomeLabel' | 'childUniverses' | 'hasForked' | 'lineage' | 'universeId' | 'relatedUniversesLoaded'> | undefined
+	universe: Pick<ZoltarUniverseSummary, 'parentUniverseId' | 'outcomeLabel' | 'childUniverses' | 'hasForked' | 'lineage' | 'universeId' | 'relatedUniversesLoaded'> | undefined
 }
 
-/** Every ancestor of the active universe with its own lineage name; without a lineage only Genesis is known. */
-function getAncestors(activeUniverseId: bigint, lineage: readonly UniverseLineageStep[] | undefined): readonly { label: string; universeId: bigint }[] {
-	if (activeUniverseId === 0n) return []
-	if (lineage === undefined) return [{ label: formatUniverseLineageLabel(undefined, 0n), universeId: 0n }]
-	return lineage.flatMap((step, index) => (step.universeId === activeUniverseId ? [] : [{ label: formatUniverseLineageLabel(lineage.slice(0, index + 1), step.universeId), universeId: step.universeId }]))
+/** Navigation follows one edge of the universe tree at a time. */
+function getParent(universe: UniverseSwitcherProps['universe']): readonly { label: string; universeId: bigint }[] {
+	if (universe === undefined || universe.universeId === 0n) return []
+	const parentIndex = universe.lineage?.findIndex(step => step.universeId === universe.parentUniverseId) ?? -1
+	let label = universe.parentUniverseId === 0n ? universeCopy.genesis : universeCopy.parentUniverse
+	if (parentIndex >= 0) label = formatUniverseLineageLabel(universe.lineage?.slice(0, parentIndex + 1), universe.parentUniverseId)
+	return [{ label, universeId: universe.parentUniverseId }]
 }
 
 /**
- * Compact header control naming the active universe by lineage. It opens a menu of the universe's ancestors and
+ * Compact header control naming the active universe by lineage. It opens a menu of the universe's parent and
  * deployed children plus a link to the full universe browser; choosing one changes the shared `universe` parameter.
  */
 export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: UniverseSwitcherProps) {
@@ -29,7 +31,7 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: Uni
 	const loadedUniverse = universe?.universeId === activeUniverseId ? universe : undefined
 	const lineageLabel = formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId)
 	const universeLabel = loadedUniverse?.relatedUniversesLoaded === false ? loadedUniverse.outcomeLabel?.trim() || lineageLabel : lineageLabel
-	const ancestors = getAncestors(activeUniverseId, loadedUniverse?.lineage)
+	const parents = getParent(loadedUniverse)
 	const deployedChildren = loadedUniverse?.childUniverses.filter(child => child.exists) ?? []
 	// Attribute access keeps the disclosure state in sync in every DOM implementation.
 	const close = () => detailsRef.current?.removeAttribute('open')
@@ -74,10 +76,10 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: Uni
 			<div className='universe-switcher-popover'>
 				<p className='universe-switcher-heading'>{universeCopy.lineageTitle}</p>
 				<ul className='universe-switcher-list'>
-					{ancestors.map(ancestor => (
-						<li key={ancestor.universeId.toString()}>
-							<UniverseLink universeId={ancestor.universeId} onNavigate={close}>
-								{ancestor.label}
+					{parents.map(parent => (
+						<li key={parent.universeId.toString()}>
+							<UniverseLink universeId={parent.universeId} onNavigate={close}>
+								{parent.label}
 							</UniverseLink>
 						</li>
 					))}

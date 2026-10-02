@@ -85,7 +85,7 @@ describe('UniverseBrowser', () => {
 describe('bounded universe overview', () => {
 	installDomTestLifecycle()
 
-	test('omits unqueried children and opens a hexadecimal ID without a tree scan', async () => {
+	test('offers parent traversal without arbitrary universe ID entry', async () => {
 		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], lineage: undefined, outcomeLabel: 'Alpha', relatedUniversesLoaded: false })} />)
 		try {
 			const queries = within(document.body)
@@ -94,31 +94,46 @@ describe('bounded universe overview', () => {
 			expect(queries.queryByText('No deployed child universes.')).toBeNull()
 			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=0')
 			expect(document.body.querySelector('.universe-browser details')).toBeNull()
-			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
-			fireEvent.input(input, { target: { value: '0x15' } })
-			const form = document.body.querySelector('form')
-			if (form === null) throw new Error('Expected the universe lookup form')
-			await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-			expect(window.location.hash).toContain('universe=21')
+			expect(queries.queryByRole('textbox')).toBeNull()
+			await act(() => queries.getByRole('link', { name: 'Parent universe' }).click())
+			expect(window.location.hash).toContain('universe=0')
 		} finally {
 			await rendered.cleanup()
 		}
 	})
 
-	test('rejects negative and oversized universe IDs', async () => {
-		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
+	test('the bounded header traverses only to the immediate parent', async () => {
+		const rendered = await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} universe={createUniverse({ universeId: alphaUniverseId, parentUniverseId: yesUniverseId, lineage: undefined, relatedUniversesLoaded: false })} />)
 		try {
 			const queries = within(document.body)
-			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
-			const form = document.body.querySelector('form')
-			if (form === null) throw new Error('Expected the universe lookup form')
-			const initialHash = window.location.hash
-			for (const value of ['-1', (2n ** 248n).toString()]) {
-				fireEvent.input(input, { target: { value } })
-				await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-				expect(queries.getByText('Enter a universe ID in decimal or hexadecimal.')).toBeTruthy()
-				expect(window.location.hash).toBe(initialHash)
-			}
+			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=11')
+			expect(queries.queryByRole('link', { name: 'Genesis' })).toBeNull()
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('full lineage names earlier ancestors without offering jumps over the parent', async () => {
+		const universe = createUniverse({
+			universeId: alphaUniverseId,
+			parentUniverseId: yesUniverseId,
+			lineage: [
+				{ outcomeLabel: undefined, universeId: 0n },
+				{ outcomeLabel: 'Yes', universeId: yesUniverseId },
+				{ outcomeLabel: 'Alpha', universeId: alphaUniverseId },
+			],
+		})
+		const rendered = await renderIntoDocument(
+			<>
+				<UniverseBrowser activeUniverseId={alphaUniverseId} universe={universe} />
+				<UniverseSwitcher activeUniverseId={alphaUniverseId} universe={universe} />
+			</>,
+		)
+		try {
+			const queries = within(document.body)
+			expect(queries.queryByRole('link', { name: 'Genesis' })).toBeNull()
+			expect(queries.getByRole('link', { name: 'Genesis › Yes' }).getAttribute('href')).toContain('universe=11')
+			expect(queries.getByRole('link', { name: 'Yes' }).getAttribute('href')).toContain('universe=11')
 		} finally {
 			await rendered.cleanup()
 		}
@@ -145,7 +160,7 @@ describe('UniverseSwitcher', () => {
 		},
 	})
 
-	test('names the active universe by lineage and offers ancestors, deployed children, and the browser', async () => {
+	test('names the active universe by lineage and offers its parent, deployed children, and the browser', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={createUniverse()} />)).cleanup
 		const details = document.body.querySelector('details.universe-switcher')
 		if (!(details instanceof HTMLElement)) throw new Error('Expected the switcher disclosure')
