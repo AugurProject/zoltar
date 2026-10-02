@@ -151,7 +151,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { state } = await renderHook(
 			createSecurityPoolsOverviewDependencies({
 				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
-				loadSecurityPoolPage: unexpectedPageLoad(),
 				queueSecurityPoolLiquidation: mock(async () => {
 					throw new Error('queued liquidation failure')
 				}),
