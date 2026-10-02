@@ -115,7 +115,7 @@ export function VaultBackingFactorForm({
 					<MetricField label={securityPoolCopy.maximumHealthyCommitment}>
 						{/* Rounded down so typing the shown figure back never crosses the healthy limit; Max still fills the exact value. */}
 						<CurrencyValue rounding='down' value={maximum} suffix={commonCopy.eth} />
-						{executionRepPerEthPrice === undefined ? <RepPriceStatusLabel /> : undefined}
+						{executionRepPerEthPrice === undefined ? <RepPriceStatusLabel refreshable /> : undefined}
 					</MetricField>
 				)}
 			</MetricGrid>

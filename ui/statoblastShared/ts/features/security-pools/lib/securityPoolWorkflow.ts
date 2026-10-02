@@ -292,7 +292,7 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			detail: securityPoolCopy.selectedPoolUnavailableDetail,
 			key: 'unavailable',
 		}
-	if (selectedPoolLookupState === 'loading')
+	if (selectedPoolLookupState === 'loading' || (hasSelectedPoolAddress && selectedPoolLookupState === 'unknown'))
 		return {
 			detail: commonCopy.loadingWithEllipsis,
 			detailIsLoading: true,
@@ -303,13 +303,6 @@ export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddre
 			badgeLabel: commonCopy.notFound,
 			badgeTone: 'blocked',
 			detail: securityPoolCopy.securityPoolAddressNotFoundDetail,
-			key: 'not_found',
-		}
-	if (hasSelectedPoolAddress)
-		return {
-			badgeLabel: commonCopy.notFound,
-			badgeTone: 'blocked',
-			detail: securityPoolCopy.poolNotFoundDetail,
 			key: 'not_found',
 		}
 	return {

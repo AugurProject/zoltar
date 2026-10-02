@@ -1,3 +1,4 @@
+import { tradingListKindFor } from '../lib/routing.js'
 import { liveCopy } from '../copy/live.js'
 import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, discoverUniverses } from '../protocol/marketDiscovery.js'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -62,6 +63,10 @@ export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positio
 export function securityPoolAddressFromRoute(route: string) {
 	const match = /^(?:security-pool|market|liquidity|create-market)\/(0x[0-9a-fA-F]{40})$/.exec(route)
 	return match?.[1] === undefined ? undefined : getAddress(match[1])
+}
+
+export function marketDiscoveryScope(route: string, selectedUniverseId?: string) {
+	return securityPoolAddressFromRoute(route)?.toLowerCase() ?? `${tradingListKindFor(route) ?? route}:${selectedUniverseId ?? ''}`
 }
 
 export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {

@@ -11,7 +11,7 @@ import { useTransactionWorkflow } from './live/useTransactionWorkflow.js'
 import { useWalletSession, useWalletSessionController, useWalletSummaryEffects, walletNetworkMismatchReason } from './live/useWalletSession.js'
 import { createPositionTransactionController } from './live/positionTransactionController.js'
 import { useMarketDiscoveryController } from './live/useMarketDiscoveryController.js'
-import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, securityPoolAddressFromRoute } from './liveTradingControllerHelpers.js'
+import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, marketDiscoveryScope, securityPoolAddressFromRoute } from './liveTradingControllerHelpers.js'
 import { tradingListKindFor } from '../lib/routing.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 
@@ -33,7 +33,8 @@ export function useLiveTradingController({
 	settings: TradeSettings
 	services?: LiveTradingControllerServices
 }) {
-	const marketDiscovery = useMarketDiscovery()
+	const routePool = securityPoolAddressFromRoute(route)
+	const marketDiscovery = useMarketDiscovery(configuration, marketDiscoveryScope(route, selectedUniverseId))
 	const { markets, discoveryState, discoveryError, marketPage } = marketDiscovery
 	const walletSession = useWalletSession()
 	const { account, accountRef, walletClient, walletChainId, walletEthAttoEth, walletContextInvalidated, walletConnectionFeedback } = walletSession
@@ -45,7 +46,6 @@ export function useLiveTradingController({
 	const walletSummaryRequests = useRef(createLatestRequestGuard()).current
 	const connectionRequests = useRef(createLatestRequestGuard()).current
 
-	const routePool = securityPoolAddressFromRoute(route)
 	const visibleMarkets = routePool === undefined ? filterMarketsByUniverse(markets, selectedUniverseId) : markets.filter(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
