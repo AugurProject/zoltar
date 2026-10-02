@@ -3,11 +3,10 @@ import * as universeCopy from '../copy/universes.js'
 import { tryParseBigIntInput } from '../forms/integerInput.js'
 import { navigateToUniverse } from '../navigation/universeNavigation.js'
 import { FormInput } from './FormInput.js'
-import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { SectionBlock } from './SectionBlock.js'
 
 /** Direct lookup keeps navigation independent of the size of the universe tree. */
-export function UniverseLookup({ activeUniverseId, collapsible = false }: { activeUniverseId: bigint; collapsible?: boolean }) {
+export function UniverseLookup({ activeUniverseId }: { activeUniverseId: bigint }) {
 	const inputId = useId()
 	const [input, setInput] = useState('')
 	const [submitted, setSubmitted] = useState(false)
@@ -28,7 +27,7 @@ export function UniverseLookup({ activeUniverseId, collapsible = false }: { acti
 			}}
 		>
 			<div className='field'>
-				<label htmlFor={inputId}>{collapsible ? universeCopy.universeId : universeCopy.openUniverseById}</label>
+				<label htmlFor={inputId}>{universeCopy.openUniverseById}</label>
 				<FormInput
 					id={inputId}
 					value={input}
@@ -44,5 +43,5 @@ export function UniverseLookup({ activeUniverseId, collapsible = false }: { acti
 			</div>
 		</form>
 	)
-	return <SectionBlock variant='plain'>{collapsible ? <ReadOnlyDetailAccordion title={universeCopy.openUniverseById}>{form}</ReadOnlyDetailAccordion> : form}</SectionBlock>
+	return <SectionBlock variant='plain'>{form}</SectionBlock>
 }

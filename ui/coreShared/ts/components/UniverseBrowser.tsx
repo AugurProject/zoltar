@@ -10,7 +10,7 @@ import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { MetricField } from './MetricField.js'
-import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
+import { MetricGrid } from './MetricGrid.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
@@ -78,12 +78,12 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 					>
 						<div className='decision-summary'>
 							{renderChildSummary?.(childUniverse)}
-							<ReadOnlyDetailAccordion title={universeCopy.universeDetails}>
+							<MetricGrid columns={2}>
 								{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
 								<MetricField label={universeCopy.universeId}>
 									<span className='universe-id-value'>{formatUniverseIdHex(childUniverse.universeId)}</span>
 								</MetricField>
-							</ReadOnlyDetailAccordion>
+							</MetricGrid>
 						</div>
 					</EntityCard>
 				)
@@ -118,7 +118,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 					) : undefined}
 					{actions === undefined ? undefined : <div className='actions'>{actions}</div>}
 					{children}
-					<ReadOnlyDetailAccordion title={universeCopy.universeDetails}>
+					<MetricGrid columns={2}>
 						<MetricField label={universeCopy.universeId}>
 							<span className='universe-id-value'>{formatUniverseIdHex(universe.universeId)}</span>
 						</MetricField>
@@ -126,7 +126,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 						<MetricField label={universe.reputationTokenName ?? universeCopy.repSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>
-					</ReadOnlyDetailAccordion>
+					</MetricGrid>
 				</div>
 			</SectionBlock>
 			{universe.universeId === 0n ? undefined : (
@@ -137,7 +137,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 				</div>
 			)}
 			{navigation}
-			<UniverseLookup activeUniverseId={activeUniverseId} collapsible />
+			<UniverseLookup activeUniverseId={activeUniverseId} />
 			{universe.relatedUniversesLoaded === false ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />

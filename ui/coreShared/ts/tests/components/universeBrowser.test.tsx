@@ -64,11 +64,13 @@ describe('UniverseBrowser', () => {
 		expect(queries.getAllByRole('link', { name: 'Open' })).toHaveLength(1)
 	})
 
-	test('identifies the universe REP token in the collapsed details', async () => {
+	test('shows universe and child details without disclosure controls', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
 		const field = within(document.body).getByText('Fork YES Reputation').parentElement
 		expect(field?.textContent).toContain('YESREP')
-		expect(field?.closest('details')?.open).toBe(false)
+		expect(field?.closest('details')).toBeNull()
+		expect(document.body.querySelector('.universe-browser details')).toBeNull()
+		expect(within(document.body).getByText('REPa')).toBeTruthy()
 	})
 
 	test('explains that an unforked universe has no children yet and hides the trail at Genesis', async () => {
@@ -91,11 +93,8 @@ describe('bounded universe overview', () => {
 			expect(queries.queryByText('Child universes')).toBeNull()
 			expect(queries.queryByText('No deployed child universes.')).toBeNull()
 			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=0')
-			const summary = queries.getByText('Open universe by ID')
-			const lookup = summary.closest('details')
-			expect(lookup?.hasAttribute('open')).toBe(false)
-			await act(() => summary.click())
-			const input = queries.getByRole('textbox', { name: 'Universe ID' })
+			expect(document.body.querySelector('.universe-browser details')).toBeNull()
+			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
 			fireEvent.input(input, { target: { value: '0x15' } })
 			const form = document.body.querySelector('form')
 			if (form === null) throw new Error('Expected the universe lookup form')
@@ -110,7 +109,7 @@ describe('bounded universe overview', () => {
 		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
 		try {
 			const queries = within(document.body)
-			const input = queries.getByRole('textbox', { name: 'Universe ID' })
+			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
 			const form = document.body.querySelector('form')
 			if (form === null) throw new Error('Expected the universe lookup form')
 			const initialHash = window.location.hash
