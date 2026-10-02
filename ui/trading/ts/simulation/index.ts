@@ -4,6 +4,7 @@ import { registerSimulationScenario } from '@zoltar/ui-core-shared/simulation/sc
 // Intentionally reuses the core `deployed` id so Trading's seeded-pool bootstrap and presentation replace the Statoblast-only core scenario.
 export const DEPLOYED_TRADING_SIMULATION_SCENARIO = 'deployed'
 export const FUNDED_TRADING_SIMULATION_SCENARIO = 'trading-funded'
+export const FORKED_TRADING_SIMULATION_SCENARIO = 'trading-forked'
 
 export function registerTradingSimulationScenario() {
 	registerSimulationScenario(DEPLOYED_TRADING_SIMULATION_SCENARIO, {
@@ -13,6 +14,10 @@ export function registerTradingSimulationScenario() {
 	registerSimulationScenario(FUNDED_TRADING_SIMULATION_SCENARIO, {
 		description: 'A deployed trading market with liquidity and YES, NO, INVALID, and LP shares in the simulation wallet.',
 		label: 'Trading with liquidity',
+	})
+	registerSimulationScenario(FORKED_TRADING_SIMULATION_SCENARIO, {
+		description: 'The funded trading market after its universe forked, with YES, NO, and INVALID shares still in the parent universe. Use it to test Fork migration.',
+		label: 'Trading after a fork',
 	})
 }
 
