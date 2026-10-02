@@ -10,6 +10,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { UniverseOutcomeNavigation, type LoadUniverseOutcomes } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
 import type { UniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 
 const address = getAddress('0x00000000000000000000000000000000000000f1')
 const universe = createForkedUniverseSummary({ universeId: 0n, zoltarAddress: address, relatedUniversesLoaded: false, childUniverses: [] })
@@ -30,6 +31,48 @@ const lifecycle = installDomTestLifecycle({
 })
 
 describe('outcome-based universe traversal', () => {
+	test('refreshes deployment statuses on the current page without clearing visible outcomes', async () => {
+		const pending = createDeferred<UniverseOutcomePage>()
+		const starts: bigint[] = []
+		const loader: LoadUniverseOutcomes = async (_address, _id, start) => {
+			starts.push(start)
+			return starts.length === 1 ? { ...page, hasNextPage: true } : starts.length === 2 ? page : await pending.promise
+		}
+		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+		const q = within(view.container)
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open Beta universe' }).hasAttribute('disabled')).toBe(true))
+		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
+		await waitFor(() => expect(starts).toEqual([0n, 10n]))
+		await waitFor(() => expect(q.queryByText('Loading outcomes…')).toBeNull())
+		await act(() => appBlockWatcher.invalidate())
+		await waitFor(() => expect(starts).toEqual([0n, 10n, 10n]))
+		expect(q.queryByText('Loading outcomes…')).toBeNull()
+		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
+		await act(async () => {
+			pending.resolve({ ...page, choices: page.choices.map(choice => ({ ...choice, exists: true })) })
+			await pending.promise
+		})
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open Beta universe' }).hasAttribute('disabled')).toBe(false))
+	})
+
+	test('retains visible outcomes when a background refresh fails and offers retry', async () => {
+		let calls = 0
+		const loader: LoadUniverseOutcomes = async () => {
+			if (++calls === 2) throw new Error('RPC unavailable')
+			return page
+		}
+		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		await act(() => appBlockWatcher.invalidate())
+		await waitFor(() => expect(q.queryByText('Unable to load child outcomes.')).not.toBeNull())
+		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		expect(q.queryByText('Unable to load child outcomes.')).toBeNull()
+		expect(calls).toBe(3)
+	})
+
 	test('opens a deployed outcome directly from a migration-style card without requiring an ID', async () => {
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={async () => page} />))
 		const q = within(view.container)

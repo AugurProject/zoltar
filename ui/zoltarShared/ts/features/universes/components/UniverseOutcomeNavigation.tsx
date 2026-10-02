@@ -18,6 +18,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getScalarTickIndexForDisplayValue } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import * as copy from '../../../copy/universeNavigation.js'
 import { loadUniverseOutcomePage, UNIVERSE_OUTCOME_PAGE_SIZE, type UniverseOutcomePage } from '../../../protocol/universeNavigation.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 
 export type LoadUniverseOutcomes = (address: Address, universeId: bigint, start: bigint) => Promise<UniverseOutcomePage>
 const loadConnectedOutcomes: LoadUniverseOutcomes = (address, universeId, start) => loadUniverseOutcomePage(createConnectedReadClient(), address, universeId, start)
@@ -36,9 +37,11 @@ function OutcomeSelector({ address, universeId, loadPage }: { address: Address; 
 	const backend = getActiveBackend()
 	const [start, setStart] = useState(0n)
 	const [retry, setRetry] = useState(0)
+	const [refresh, setRefresh] = useState(0)
+	useBlockRefresh(() => setRefresh(count => count + 1))
 	const [value, setValue] = useState('')
 	const [valueError, setValueError] = useState<string>()
-	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; page?: UniverseOutcomePage; error?: string }>()
+	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; page?: UniverseOutcomePage | undefined; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadPage === loadPage && snapshot.start === start && snapshot.retry === retry ? snapshot : undefined
 	const page = current?.page
 	const loading = current === undefined
@@ -51,13 +54,21 @@ function OutcomeSelector({ address, universeId, loadPage }: { address: Address; 
 				if (active && guard.isCurrent()) setSnapshot({ backend, loadPage, start, retry, page })
 			} catch (error) {
 				void error
-				if (active && guard.isCurrent()) setSnapshot({ backend, loadPage, start, retry, error: copy.outcomesUnavailable })
+				if (active && guard.isCurrent())
+					setSnapshot(previous => ({
+						backend,
+						loadPage,
+						start,
+						retry,
+						page: previous?.backend === backend && previous.loadPage === loadPage && previous.start === start && previous.retry === retry ? previous.page : undefined,
+						error: copy.outcomesUnavailable,
+					}))
 			}
 		})()
 		return () => {
 			active = false
 		}
-	}, [address, backend, loadPage, retry, start, universeId])
+	}, [address, backend, loadPage, refresh, retry, start, universeId])
 	return (
 		<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 			<div className='form-grid'>
