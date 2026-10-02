@@ -47,7 +47,7 @@ void describe('amount input validation', () => {
 	})
 
 	void test('formats bounds with grouping, truncated precision, and the unit', () => {
-		expect(formatAmountForDisplay(1_200n * ONE + ONE / 3n, 18, 'REP')).toBe('1 200.3333 REP')
+		expect(formatAmountForDisplay(1_200n * ONE + ONE / 3n, 18, 'REP')).toBe('1\u00a0200.3333 REP')
 		expect(formatAmountForDisplay(1_500_000n, 6)).toBe('1.5')
 		expect(formatAmountForDisplay(12n, 0, 'sets')).toBe('12 sets')
 		expect(messageFor('1', { minimum: ONE + 1n })).toBe('Enter at least 1.000000000000000001.')

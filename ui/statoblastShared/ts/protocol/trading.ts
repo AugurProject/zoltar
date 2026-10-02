@@ -7,11 +7,16 @@ import type { TradingActionResult, TradingDetails, TradingShareBalances } from '
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as tradingCopy from '../copy/trading.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
 	currentRetentionRate?: bigint
 	currentTimestamp?: bigint
+	/** An open escalation game closes minting, which is why `mintingCapacityAttoEth` then reads zero. */
+	escalationGameActive?: boolean
 	feeEndTimestamp?: bigint
 	feeIndexRemainder?: bigint
 	lastUpdatedFeeAccumulator?: bigint
@@ -64,15 +69,17 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
 	])
 	const currentBlock = await client.getBlock()
+	const escalationGameActive = BigInt(escalationGame) !== 0n
 	return {
 		currentRetentionRate,
 		currentTimestamp: currentBlock.timestamp,
+		escalationGameActive,
 		feeEndTimestamp,
 		feeIndexRemainder: poolAccountingSnapshot.feeIndexRemainder,
 		lastUpdatedFeeAccumulator: poolAccountingSnapshot.lastUpdatedFeeAccumulator,
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
 		feeEligibleUnderwritingLimitAttoEth: poolAccountingSnapshot.feeEligibleUnderwritingLimitAttoEth,
-		mintingCapacityAttoEth: BigInt(escalationGame) === 0n ? mintingCapacityAttoEth : 0n,
+		mintingCapacityAttoEth: escalationGameActive ? 0n : mintingCapacityAttoEth,
 		shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep,
 		totalUnderwritingLimitAttoEth: poolAccountingSnapshot.totalUnderwritingLimitAttoEth,
@@ -132,6 +139,18 @@ function getShareMigrationOutcomeValue(outcome: ReportingOutcomeKey) {
 			return assertNever(outcome)
 	}
 }
+function getShareOutcomeLabel(outcome: ReportingOutcomeKey) {
+	switch (outcome) {
+		case 'invalid':
+			return commonCopy.invalid
+		case 'yes':
+			return commonCopy.yes
+		case 'no':
+			return commonCopy.no
+		default:
+			return assertNever(outcome)
+	}
+}
 function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 	const universeMask = (1n << 248n) - 1n
 	return ((universeId & universeMask) << 8n) | (getShareMigrationOutcomeValue(outcome) & 255n)
@@ -151,8 +170,10 @@ export async function redeemSharesInSecurityPool(client: WriteClient, securityPo
 		universeId,
 	} satisfies TradingActionResult
 }
-export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[]) {
+/** Migrates the wallet's whole balance of `shareOutcome`; `migratedAttoShares` is that balance, shown in the transaction review. */
+export async function migrateSharesFromUniverse<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: ReadWriteContractClient<TReceipt>, securityPoolAddress: Address, shareOutcome: ReportingOutcomeKey, targetOutcomeIndexes: bigint[], migratedAttoShares?: bigint) {
 	const sortedTargetOutcomeIndexes = sortBigIntsAscending(targetOutcomeIndexes)
+	const shareOutcomeLabel = getShareOutcomeLabel(shareOutcome)
 	const [universeId, shareTokenAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -167,6 +188,9 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 		abi: statoblast_tokens_ShareToken_ShareToken.abi,
 		functionName: 'migrate',
 		args: [getShareTokenId(universeId, shareOutcome), sortedTargetOutcomeIndexes],
+		reviewTitle: tradingCopy.formatMigrateSharesReviewTitle(shareOutcomeLabel),
+		reviewDescription: tradingCopy.formatMigrateSharesReviewDescription(shareOutcomeLabel),
+		...(migratedAttoShares === undefined ? {} : { reviewAmount: formatCurrencyBalanceWithUnit(migratedAttoShares, tradingCopy.formatMigrateSharesReviewUnit(shareOutcomeLabel)) }),
 	}))
 	return {
 		action: 'migrateShares',

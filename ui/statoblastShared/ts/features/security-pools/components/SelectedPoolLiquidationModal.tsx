@@ -38,7 +38,6 @@ export function SelectedPoolLiquidationModal({
 	loadingLiquidationFundingPreview,
 	loadingLiquidationReceiverVaultSummary,
 	loadingPoolOracleManager,
-	maximumLiquidationDebtAttoEth,
 	onLiquidationAmountChange,
 	onLiquidationApprovalIdChange,
 	onLiquidationReceiverVaultChange,
@@ -66,7 +65,6 @@ export function SelectedPoolLiquidationModal({
 			currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 			isOnActiveAppChain={isOnActiveAppChain}
 			liquidationDebtEthAmount={liquidationDebtEthAmount}
-			maximumLiquidationDebtAttoEth={maximumLiquidationDebtAttoEth}
 			liquidationManagerAddress={liquidationManagerAddress}
 			liquidationFundingPreview={liquidationFundingPreview}
 			liquidationFundingPreviewError={liquidationFundingPreviewError}

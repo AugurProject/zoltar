@@ -30,9 +30,11 @@ import {
 	formatOpenOracleFeePercentage,
 	formatOpenOracleReportPriceUnit,
 	formatOpenOracleMultiplier,
+	formatOpenOracleTimingDuration,
 	getOpenOracleDisputeAvailability,
-	getOpenOracleReportStatus,
-	getOpenOracleReportStatusTone,
+	getOpenOracleReportProgress,
+	getOpenOracleReportProgressLabel,
+	getOpenOracleReportProgressTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
 	type OpenOracleDisputeInputField,
@@ -141,24 +143,40 @@ export function OpenOracleReportDetailsCard({
 			else next.delete(field)
 			return { key: disputeRevealKey, fields: next }
 		})
+	// The lookup text is a draft: typing never replaces the loaded report, and submitting opens the typed ID.
+	const selectedReportId = openOracleForm.reportId.trim()
+	const [lookupDraft, setLookupDraft] = useState<{ selectedReportId: string; text: string }>({ selectedReportId, text: openOracleForm.reportId })
+	const lookupText = lookupDraft.selectedReportId === selectedReportId ? lookupDraft.text : openOracleForm.reportId
+	const loadedReportId = openOracleReportDetails?.reportId.toString()
+	const lookupMatchesLoadedReport = loadedReportId !== undefined && lookupText.trim() === loadedReportId
+	const submitLookup = () => {
+		const reportId = lookupText.trim()
+		setLookupDraft({ selectedReportId: reportId, text: reportId })
+		onLoadOracleReport(reportId)
+	}
 	const reportControls = (
-		<div className='form-grid'>
+		<form
+			className='form-grid'
+			onSubmit={event => {
+				event.preventDefault()
+				if (!loadingSelectedReport && lookupText.trim() !== '') submitLookup()
+			}}
+		>
 			<LookupFieldRow
 				label={openOracleCopy.reportId}
-				value={openOracleForm.reportId}
-				onInput={reportId => onOpenOracleFormChange({ reportId })}
+				value={lookupText}
+				onInput={text => setLookupDraft({ selectedReportId, text })}
 				action={
-					<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingSelectedReport}>
+					<button className='secondary' type='submit' disabled={loadingSelectedReport || lookupText.trim() === ''}>
 						{(() => {
 							if (loadingSelectedReport) return <LoadingText>{commonCopy.loadingWithEllipsis}</LoadingText>
-							if (openOracleReportDetails === undefined) return openOracleCopy.openReport
-
-							return openOracleCopy.refreshReport
+							if (lookupMatchesLoadedReport) return openOracleCopy.refreshReport
+							return openOracleCopy.openReport
 						})()}
 					</button>
 				}
 			/>
-		</div>
+		</form>
 	)
 	if (openOracleReportDetails === undefined) {
 		const reportLookupPresentationState = (() => {
@@ -175,13 +193,10 @@ export function OpenOracleReportDetailsCard({
 		)
 	}
 	const liveReportDetails = liveCurrentTime === undefined || liveCurrentTime === openOracleReportDetails.currentTime ? openOracleReportDetails : { ...openOracleReportDetails, currentTime: liveCurrentTime }
-	const status = getOpenOracleReportStatus({
-		currentReporter: openOracleReportDetails.currentReporter,
-		disputeOccurred: openOracleReportDetails.disputeOccurred,
-		isDistributed: openOracleReportDetails.isDistributed,
-		reportTimestamp: openOracleReportDetails.reportTimestamp,
-	})
-	const statusTone = getOpenOracleReportStatusTone(status)
+	// The badge follows the same live clock as the stage banner, so a report past its settlement time never reads as pending.
+	const progress = getOpenOracleReportProgress(liveReportDetails, liveReportDetails)
+	const statusLabel = getOpenOracleReportProgressLabel(progress)
+	const statusTone = getOpenOracleReportProgressTone(progress)
 	const actionMode = getOpenOracleSelectedReportActionMode(liveReportDetails)
 	const stage = getOpenOracleStagePresentation(actionMode, liveReportDetails)
 	const disputeAvailability = getOpenOracleDisputeAvailability(liveReportDetails)
@@ -246,7 +261,7 @@ export function OpenOracleReportDetailsCard({
 				badge={
 					<div className='open-oracle-report-badges'>
 						<FavoriteToggle app='statoblast' entityLabel={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())} id={getOpenOracleReportEntityId(openOracleReportDetails.reportId)} kind='oracleReport' />
-						<Badge tone={statusTone}>{status}</Badge>
+						<Badge tone={statusTone}>{statusLabel}</Badge>
 					</div>
 				}
 				eyebrow={openOracleCopy.openOracleReportDetails}
@@ -261,7 +276,7 @@ export function OpenOracleReportDetailsCard({
 				]}
 			/>
 			{reportControls}
-			{stage.label === status ? undefined : <LifecycleStageBanner stage={stage} />}
+			{stage.label === statusLabel && stage.detail === undefined ? undefined : <LifecycleStageBanner stage={stage} />}
 			{readinessActions.length > 0 ? (
 				<SectionBlock title={openOracleCopy.reportActions}>
 					<div className='action-readiness-grid open-oracle-report-actions'>
@@ -363,7 +378,8 @@ export function OpenOracleReportDetailsCard({
 						},
 						{
 							label: openOracleCopy.lastReportOpportunity,
-							value: openOracleReportDetails.lastReportOppoTime === 0n ? commonCopy.none : openOracleCopy.formatTimingValue(openOracleReportDetails.lastReportOppoTime, openOracleReportDetails.timeType ? openOracleCopy.secondsAbbreviation : openOracleCopy.blocks),
+							// The contract records this on the opposite clock: a block number for time-based reports and a timestamp otherwise.
+							value: openOracleReportDetails.lastReportOppoTime === 0n ? commonCopy.none : <OpenOracleClockValue currentTimestamp={openOracleReportDetails.currentTime} timeType={!openOracleReportDetails.timeType} value={openOracleReportDetails.lastReportOppoTime} />,
 						},
 						{
 							label: openOracleCopy.stateHash,
@@ -376,11 +392,11 @@ export function OpenOracleReportDetailsCard({
 					{renderReportFields([
 						{
 							label: openOracleCopy.settlementTime,
-							value: openOracleCopy.formatTimingValue(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType ? openOracleCopy.secondsAbbreviation : openOracleCopy.blocks),
+							value: formatOpenOracleTimingDuration(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType),
 						},
 						{
 							label: openOracleCopy.disputeDelay,
-							value: openOracleCopy.formatTimingValue(openOracleReportDetails.disputeDelay, openOracleReportDetails.timeType ? openOracleCopy.secondsAbbreviation : openOracleCopy.blocks),
+							value: formatOpenOracleTimingDuration(openOracleReportDetails.disputeDelay, openOracleReportDetails.timeType),
 						},
 						{
 							label: openOracleCopy.feePercentage,

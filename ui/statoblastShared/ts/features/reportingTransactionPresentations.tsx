@@ -1,4 +1,4 @@
-import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { createTransactionScope, securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -36,9 +36,9 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
 	let title = transactionCopy.escalationDepositsSettled
-	if (result.amountAttoRep !== undefined) title = result.amountAttoRep === 0n ? reportingCopy.clearedDeposits(getReportingOutcomeLabel(result.outcome)) : reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyInputBalance(result.amountAttoRep))
-	if (result.action === 'reportOutcome') title = reportingCopy.reportedAmount(getReportingOutcomeLabel(result.outcome), formatCurrencyInputBalance(result.amountAttoRep ?? 0n))
-	if (result.action === 'approveReportingRep') title = reportingCopy.approvedAmount(formatCurrencyInputBalance(result.amountAttoRep ?? 0n))
+	if (result.amountAttoRep !== undefined) title = result.amountAttoRep === 0n ? reportingCopy.clearedDeposits(getReportingOutcomeLabel(result.outcome)) : reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep))
+	if (result.action === 'reportOutcome') title = reportingCopy.reportedAmount(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep ?? 0n))
+	if (result.action === 'approveReportingRep') title = reportingCopy.approvedAmount(formatCurrencyBalance(result.amountAttoRep ?? 0n))
 	let detail = transactionCopy.escalationDepositsSettledDetail
 	if (result.action === 'approveReportingRep') detail = transactionCopy.reportingRepApprovalSuccessDetail
 	if (result.action === 'reportOutcome') detail = transactionCopy.reportingContributionSuccessDetail

@@ -152,21 +152,12 @@ async function loadSecurityPoolVaultSummaries(
 		}
 	}
 	const poolRepBackingTotalsPromise = Promise.all([
-		client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'getTotalPoolHeldAttoRep',
-			address: securityPoolAddress,
-			args: [],
-			blockNumber,
-		}),
-		client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'totalRepBackingUnits',
-			address: securityPoolAddress,
-			args: [],
-			blockNumber,
-		}),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [], blockNumber }),
 	])
+	// The totals start before the vault scan. If an earlier read fails, or a superseded read operation rejects every
+	// in-flight read, nothing awaits them, so mark the rejection handled; the summary reads still receive it.
+	poolRepBackingTotalsPromise.catch(() => undefined)
 	const loadCurrentVaultSummaries = async (vaultAddresses: Address[]) => {
 		const securityVaultSummaryContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
 			abi: statoblast_SecurityPool_SecurityPool.abi,

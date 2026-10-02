@@ -844,10 +844,15 @@ describe('useForkAuctionOperations', () => {
 				expect(submitTruthAuctionBid).not.toHaveBeenCalled()
 				expect(onTransactionFailed).toHaveBeenCalledTimes(1)
 				expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Truth auction ends too soon to submit a bid')
+				// A failed bid keeps the form so the user can retry.
+				expect(requireHookState(hookState).forkAuctionForm.submitBidAmount).toBe(editedBidAmount)
 			} else {
 				expect(submitTruthAuctionBid).toHaveBeenCalledTimes(1)
 				expect(requireHookState(hookState).forkAuctionResult?.action).toBe('submitBid')
 				expect(onTransactionFailed).not.toHaveBeenCalled()
+				// A successful bid clears its amount so a second click cannot repeat it; the price stays for the next bid.
+				expect(requireHookState(hookState).forkAuctionForm.submitBidAmount).toBe('')
+				expect(requireHookState(hookState).forkAuctionForm.submitBidPrice).toBe(editedBidPrice)
 			}
 		})
 	}
@@ -998,6 +1003,50 @@ describe('useForkAuctionOperations', () => {
 		expect(migrateSecurityVault).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('migrateVault')
 		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
+	test.each([
+		{ ownFork: false, expectedAmount: 20n },
+		{ ownFork: true, expectedAmount: 7n },
+	])('migration reviews receive the REP amounts the UI already loaded (own fork: $ownFork)', async ({ ownFork, expectedAmount }) => {
+		const details = createForkAuctionDetails({ ...(ownFork ? { ownForkRepBuckets: { vaultRepAtForkAttoRep: 7n, escalationChildRepPerSelectedOutcomeAttoRep: 3n, escrowSourceRepAtForkAttoRep: 2n } } : {}) })
+		const migrateRepToZoltarFromSecurityPool = mock(async (..._args: Parameters<UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>['migrateRepToZoltarFromSecurityPool']>) => createForkAuctionResult('migrateRepToZoltar'))
+		const migrateSecurityVault = mock(async (..._args: Parameters<UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>['migrateSecurityVault']>) => createForkAuctionResult('migrateVault'))
+		const dependencies = createForkAuctionOperationsDependencies({
+			loadForkAuctionDetails: mock(async () => details),
+			migrateRepToZoltarFromSecurityPool,
+			migrateSecurityVault,
+		})
+		let hookState: UseForkAuctionOperationsState | undefined
+		function Harness() {
+			hookState = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed: () => undefined,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+		await act(async () => {
+			requireHookState(hookState).setForkAuctionForm(current => ({ ...current, securityPoolAddress: SECURITY_POOL_ADDRESS, selectedOutcome: 'no' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).migrateRepToZoltar(['yes'])
+		})
+		await act(async () => {
+			await requireHookState(hookState).migrateVault({ repAttoRep: 5n, underwritingLimitAttoEth: 4n })
+		})
+		expect(migrateRepToZoltarFromSecurityPool.mock.calls[0]?.slice(1)).toEqual([SECURITY_POOL_ADDRESS, 1n, ['yes'], expectedAmount])
+		expect(migrateSecurityVault.mock.calls[0]?.slice(1)).toEqual([SECURITY_POOL_ADDRESS, 1n, 'no', { repAttoRep: 5n, underwritingLimitAttoEth: 4n }])
 	})
 
 	test('startTruthAuction override ignores a stale post-success refresh after the selected pool changes', async () => {

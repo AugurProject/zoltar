@@ -157,7 +157,31 @@ export function getReportingMinimumOutcomeChangeContribution(details: ReportingD
 		}
 	return minContribution
 }
+/** Entered amount from which a report on `outcome` fills its side to the non-decision threshold while another side already sits there, which ends the game and lets anyone trigger the universe fork. */
+export function getReportingForkTriggerAmount(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey) {
+	if (details?.status !== 'active' || details.hasReachedNonDecision || isPoolQuestionFinalized(details)) return undefined
+	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, outcome)
+	if (selectedSide === undefined || largestOtherBalance < details.nonDecisionThresholdAttoRep) return undefined
+	const availableRoom = getAvailableRoom(details, selectedSide.balance)
+	return availableRoom === 0n ? undefined : availableRoom
+}
+export function reportingContributionTriggersFork(details: ReportingDetails | undefined, outcome: ReportingOutcomeKey | undefined, amount: bigint | undefined) {
+	if (outcome === undefined || amount === undefined) return false
+	const forkTriggerAmount = getReportingForkTriggerAmount(details, outcome)
+	return forkTriggerAmount !== undefined && amount >= forkTriggerAmount
+}
+/** A fork needs two sides at the non-decision threshold, so the second-largest side measures how close the game is to forking. */
+export function getSecondLargestEscalationBalance(sides: readonly { balance: bigint | undefined }[]) {
+	const [, secondLargest] = sides
+		.map(side => side.balance ?? 0n)
+		.sort((left, right) => {
+			if (left > right) return -1
+			return left < right ? 1 : 0
+		})
+	return secondLargest ?? 0n
+}
 function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
+	if (getReportingForkTriggerAmount(details, selectedOutcome) !== undefined) return { amountAttoRep: undefined, reason: reportingCopy.maxProfitForkReason }
 	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
 	if (minContribution.amountAttoRep === undefined)
 		return {

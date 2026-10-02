@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../navigation/openOracleUrlParams.js'
-import { readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, updateSearchParams, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../navigation/urlParams.js'
+import { hasInvalidUniverseQueryParam, readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, updateSearchParams, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../navigation/urlParams.js'
 
 void describe('url params', () => {
 	void test('reads a universe query param', () => {
@@ -10,6 +10,16 @@ void describe('url params', () => {
 		expect(readUniverseQueryParam('?universe=invalid')).toBe(undefined)
 		expect(readUniverseQueryParam('?universe=-1')).toBe(undefined)
 		expect(readUniverseQueryParam('')).toBe(undefined)
+	})
+
+	void test('flags a present universe query param that is not a non-negative integer', () => {
+		expect(hasInvalidUniverseQueryParam('?universe=abc')).toBe(true)
+		expect(hasInvalidUniverseQueryParam('?universe=-1')).toBe(true)
+		expect(hasInvalidUniverseQueryParam('?universe=')).toBe(true)
+		expect(hasInvalidUniverseQueryParam('?universe=0')).toBe(false)
+		expect(hasInvalidUniverseQueryParam('?universe=12')).toBe(false)
+		expect(hasInvalidUniverseQueryParam('?foo=bar')).toBe(false)
+		expect(hasInvalidUniverseQueryParam('')).toBe(false)
 	})
 
 	void test('writes a universe query param', () => {

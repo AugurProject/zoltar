@@ -393,6 +393,14 @@ function FocusRestoreModalHarness({ onOpenSetter }: { onOpenSetter: (setOpen: (o
 	)
 }
 
+/** Text of the dialog without its context header, so a test can check that review rows do not repeat the header. */
+function getTextOutsideContextHeader(dialog: HTMLElement) {
+	const copy = dialog.cloneNode(true)
+	if (!(copy instanceof HTMLElement)) throw new Error('Expected a dialog element copy')
+	for (const header of Array.from(copy.querySelectorAll('.transaction-object-context'))) header.remove()
+	return copy.textContent ?? ''
+}
+
 describe('OperationModal', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -466,16 +474,16 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(dialog.textContent?.includes('Security pool address')).toBe(false)
-		expect(dialog.textContent?.includes('Outcome')).toBe(false)
+		expect(getTextOutsideContextHeader(dialog).includes('Security pool address')).toBe(false)
+		expect(getTextOutsideContextHeader(dialog).includes('Outcome')).toBe(false)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete prerequisite' }))
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(dialog.textContent?.includes('Security pool address')).toBe(false)
-		expect(dialog.textContent?.includes('Outcome')).toBe(false)
+		expect(getTextOutsideContextHeader(dialog).includes('Security pool address')).toBe(false)
+		expect(getTextOutsideContextHeader(dialog).includes('Outcome')).toBe(false)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Fail transaction' }))
@@ -575,6 +583,7 @@ describe('OperationModal', () => {
 		})
 
 		const dialog = within(container).getByRole('dialog', { name: 'Review Action' })
+		expect(dialog.querySelector('.transaction-object-context')).toBeNull()
 		const descriptionId = dialog.getAttribute('aria-describedby')
 		if (descriptionId === null) throw new Error('Expected dialog description id')
 		const descriptionElement = document.getElementById(descriptionId)
@@ -584,7 +593,7 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('does not repeat the implied transaction context inside the dialog', async () => {
+	test('shows the implied transaction context once above the form', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
 		const poolAddress = '0x6E2940600Ac1a17F51A1F82429aDF75f2df6Dab6'
@@ -610,12 +619,16 @@ describe('OperationModal', () => {
 		})
 
 		const dialog = within(container).getByRole('dialog', { name: 'Review Action' })
-		// The page already shows the question, pool, universe, and vault; the dialog spends its space on the form instead.
-		expect(dialog.querySelector('.transaction-object-context')).toBeNull()
-		expect(within(dialog).queryByText('Will this resolve?')).toBeNull()
-		expect(within(dialog).queryByText('Genesis (0)')).toBeNull()
-		expect(within(dialog).queryByRole('button', { name: `Copy address ${poolAddress}` })).toBeNull()
-		expect(within(dialog).queryByRole('button', { name: `Copy address ${vaultAddress}` })).toBeNull()
+		// The dialog covers the page, so it names the question, pool, universe, and vault it acts on above the form.
+		const contextHeaders = dialog.querySelectorAll('.transaction-object-context')
+		expect(contextHeaders).toHaveLength(1)
+		const contextHeader = contextHeaders[0]
+		if (!(contextHeader instanceof HTMLElement)) throw new Error('Expected the dialog context header')
+		expect(contextHeader.compareDocumentPosition(within(dialog).getByRole('button', { name: 'Confirm' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(within(contextHeader).getByText('Will this resolve?')).not.toBeNull()
+		expect(within(contextHeader).getByText('Genesis (0)')).not.toBeNull()
+		expect(contextHeader.textContent).toContain('Security pool')
+		expect(contextHeader.textContent).toContain('Vault')
 
 		render(null, container)
 		container.remove()
@@ -1111,6 +1124,45 @@ describe('OperationModal', () => {
 		await act(() => fireEvent.click(moreTools))
 		await act(() => fireEvent.click(within(container).getByRole('button', { name: 'Close' })))
 		expect(document.activeElement).toBe(within(container).getByRole('button', { name: 'Report #2' }))
+		await act(() => render(null, container))
+		container.remove()
+	})
+
+	test('moves focus to the section heading when the opening control became disabled while the dialog was open', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		function Harness() {
+			const [open, setOpen] = useState(false)
+			const [launcherDisabled, setLauncherDisabled] = useState(false)
+			return (
+				<main>
+					<section>
+						<h2>Shares</h2>
+						<button type='button' disabled={launcherDisabled} onClick={() => setOpen(true)}>
+							Redeem complete sets
+						</button>
+					</section>
+					<OperationModal
+						isOpen={open}
+						onClose={() => {
+							setOpen(false)
+							setLauncherDisabled(true)
+						}}
+						title='Redeem complete sets'
+					>
+						<p>Redeem details</p>
+					</OperationModal>
+				</main>
+			)
+		}
+		await act(() => render(<Harness />, container))
+		const launcher = within(container).getByRole('button', { name: 'Redeem complete sets' })
+		launcher.focus()
+		await act(() => fireEvent.click(launcher))
+		await act(() => fireEvent.click(within(container).getByRole('button', { name: 'Close' })))
+		const heading = within(container).getByRole('heading', { name: 'Shares' })
+		expect(document.activeElement).toBe(heading)
+		expect(heading.getAttribute('tabindex')).toBe('-1')
 		await act(() => render(null, container))
 		container.remove()
 	})

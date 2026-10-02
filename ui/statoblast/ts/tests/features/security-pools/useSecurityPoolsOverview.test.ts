@@ -188,7 +188,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			)
 
 			await act(async () => {
-				state().openLiquidationModal(managerAddress, securityPoolAddress, targetVault, 5n * 10n ** 18n)
+				state().openLiquidationModal(managerAddress, securityPoolAddress, targetVault)
 				state().setLiquidationAmount('1')
 				state().setLiquidationTimeoutMinutes('2')
 			})
@@ -227,7 +227,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			const { finishPreflight, state } = await startLiquidationAwaitingBalance(queueSecurityPoolLiquidation, managerAddressA, securityPoolAddressA, targetVaultA)
 
 			await act(async () => {
-				state().openLiquidationModal(managerAddressB, securityPoolAddressB, targetVaultB, 7n * 10n ** 18n)
+				state().openLiquidationModal(managerAddressB, securityPoolAddressB, targetVaultB)
 				state().setLiquidationAmount('3')
 				state().setLiquidationTimeoutMinutes('5')
 			})

@@ -29,6 +29,7 @@ import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPo
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { ReportingRouteContentProps } from './oracleTypes.js'
 import type { UiRepPriceSource } from './security-pools/lib/repPriceSource.js'
+import type { VaultMigrationReviewAmounts } from '../protocol/forks.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
@@ -101,7 +102,6 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 type LiquidationModalStateProps = {
 	closeLiquidationModal: () => void
 	liquidationDebtEthAmount: string
-	maximumLiquidationDebtAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -159,7 +159,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	loadingSecurityPools: boolean
 	onBrowsePools: () => void
 	onCreatePool: () => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
@@ -294,7 +294,7 @@ export type ForkAuctionRouteContentProps = {
 	onClaimParentEscalationDeposits: (outcome: ReportingOutcomeKey, depositIndexes?: bigint[]) => void
 	onMigrateUnresolvedEscalation: (selectedChildOutcome: ReportingOutcomeKey) => void
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
-	onMigrateVault: () => void
+	onMigrateVault: (vault?: VaultMigrationReviewAmounts) => void
 	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
 	onWithdrawAuctionRefund?: ((securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void) | undefined
 	onStartTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void

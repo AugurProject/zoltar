@@ -1,10 +1,9 @@
 export const poolDetails = 'Pool details'
 export const moreTools = 'More tools'
 export const moreToolsShort = 'More'
-export const poolAddressAndRefresh = 'Pool address / refresh'
-export const moreActions = 'More actions'
-export const capacityLabel = 'Collateral in use / capacity'
-export const capacityUnavailable = 'Capacity needs a current price.'
+export const poolAddressAndRefresh = 'Switch or refresh pool'
+export const capacityLabel = 'Open interest / commitment'
+export const capacityUnavailable = 'The pool commitment is unavailable.'
 export const viewReport = 'View report'
 export const stagedOperationCount = (count: bigint) => `${count.toString()} staged ${count === 1n ? 'operation' : 'operations'}`
 export const vaults = (count: bigint) => `${count.toString()} ${count === 1n ? 'vault' : 'vaults'}`

@@ -8,6 +8,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -170,10 +171,10 @@ async function fillOpenOracleCreateForm() {
 	await setInputValue('Base token amount', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
 	await setInputValue('Quote token amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
 	await setInputValue('Settler reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerRewardAttoEth))
-	await setInputValue('ETH value to send', formatCurrencyInputBalance(openOracleCreateParameters.ethValueAttoEth))
 	await clickElement(within(document.body).getByText('Advanced dispute & timing settings', { selector: 'summary' }))
 	await setInputValue('Dispute fee (%)', formatFeePercentageInput(openOracleCreateParameters.feePercentage))
-	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
+	// The form takes the escalation multiplier as a decimal; the contract stores it scaled by 100.
+	await setInputValue('Multiplier', (openOracleCreateParameters.multiplier / 100).toString())
 	await setInputValue('Settlement delay (seconds)', openOracleCreateParameters.settlementTime.toString())
 	await setInputValue('Escalation halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
 	await setInputValue('Dispute delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
@@ -254,10 +255,14 @@ describe.serial('OpenOracleSection integration', () => {
 		expect(within(document.body).queryByText('Transaction review')).toBeNull()
 
 		await fillOpenOracleCreateForm()
+		// Create waits for the entered tokens' decimals so amount precision is validated before submitting.
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone oracle report'))
 
 		await clickElement(within(document.body).getByRole('button', { name: 'Create standalone oracle report' }))
 
 		await waitForLatestAction('createReportInstance')
+		// The receipt's report ID links straight to the new report.
+		await waitFor(() => expect(within(document.body).getByRole('button', { name: `Open report #${reportId.toString()}` })).not.toBeNull())
 		await waitFor(async () => {
 			const createdReport = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 			expect(createdReport.reportId).toBe(reportId)
@@ -295,7 +300,8 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(document.body.textContent?.includes(`Current amount 2 (${reportDetails.token2Symbol})`)).toBe(true)
 		})
 		expect(within(document.body).queryByRole('button', { name: 'Initial Report' })).toBeNull()
-		expect(within(document.body).getByText('Pending')).not.toBeNull()
+		// A fresh report is either waiting for its dispute window or already disputable, never a bare pending status.
+		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toMatch(/^(Waiting for dispute window|Dispute window open)$/)
 		expect(reportDetails.currentReporter).toBe(walletAddress)
 		expect(reportDetails.currentAmount1).toBe(openOracleCreateParameters.exactToken1Report)
 		expect(reportDetails.currentAmount2).toBe(openOracleCreateParameters.initialToken2Amount)

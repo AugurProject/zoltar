@@ -26,14 +26,43 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
+/** Splits an address value, either bare or labelled as `Contract name (0x…)`, so it can render with the shared address component. */
+function parseAddressDetailValue(value: ComponentChildren) {
+	if (typeof value !== 'string') return undefined
+	if (/^0x[0-9a-fA-F]{40}$/.test(value)) return { address: value, label: undefined }
+	const labelled = /^(.+) \((0x[0-9a-fA-F]{40})\)$/.exec(value)
+	const [, label, address] = labelled ?? []
+	return label === undefined || address === undefined ? undefined : { address, label }
+}
+
+const embeddedAddressPattern = /(0x[0-9a-fA-F]{40})(?![0-9a-fA-F])/
+
+/** Splits text such as a call's argument list so each embedded address abbreviates in place instead of wrapping into a narrow column. */
+function splitEmbeddedAddresses(value: string) {
+	return value
+		.split(embeddedAddressPattern)
+		.filter(segment => segment !== '')
+		.map(segment => ({ isAddress: /^0x[0-9a-fA-F]{40}$/.test(segment), segment }))
+}
+
+function TransactionDetailText({ value }: { value: string }) {
+	const segments = splitEmbeddedAddresses(value)
+	if (!segments.some(({ isAddress }) => isAddress)) return <>{value}</>
+	return <span className='global-transaction-detail-text'>{segments.map(({ isAddress, segment }, index) => (isAddress ? <AddressValue key={index} address={segment} alwaysAbbreviated /> : <span key={index}>{segment}</span>))}</span>
+}
+
 function TransactionDetailValue({ value }: { value: ComponentChildren }) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) return <>{value}</>
-	const explorerUrl = buildAddressExplorerUrl(getActiveNetworkProfile(), value)
+	const addressValue = parseAddressDetailValue(value)
+	if (addressValue === undefined) return typeof value === 'string' ? <TransactionDetailText value={value} /> : <>{value}</>
+	const { address, label } = addressValue
+	const explorerUrl = buildAddressExplorerUrl(getActiveNetworkProfile(), address)
+	// A long address abbreviates to fit its column rather than wrapping into a narrow stack of characters.
 	return (
 		<span className='global-transaction-identifier'>
-			<AddressValue address={value} responsiveAbbreviation />
+			{label === undefined ? undefined : <span className='global-transaction-identifier-label'>{label}</span>}
+			<AddressValue address={address} responsiveAbbreviation />
 			{explorerUrl === undefined ? undefined : (
-				<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(value)}>
+				<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(address)}>
 					{transactionCopy.explorer}
 				</a>
 			)}
@@ -50,7 +79,7 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 	const technicalRows = transaction.technicalRows ?? []
 	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
 	const technicalRowsList = (
-		<dl className='global-transaction-notice-rows'>
+		<dl className='global-transaction-notice-rows global-transaction-technical-rows'>
 			{technicalRows.map((row, rowIndex) => (
 				<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
 					<dt>{row.label}</dt>

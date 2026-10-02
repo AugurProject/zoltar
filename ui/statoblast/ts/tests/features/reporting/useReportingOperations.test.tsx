@@ -7,7 +7,7 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import type { ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useReportingOperations, type UseReportingOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -447,6 +447,56 @@ describe('useReportingOperations', () => {
 		// Wallet deposits pull the accepted amount with transferFrom, so the maximum must not exceed the reviewed and approved amount.
 		expect(submittedMaximumAttoRep).toBe(contributionFunding === 'wallet' ? submittedReviewAttoRep : 5n * ATTO_REP)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
+		// A submitted report clears its amount so a second click cannot repeat it.
+		expect(requireHookState(hookState).reportingForm.reportAmount).toBe('')
+		expect(requireHookState(hookState).reportingForm.selectedOutcome).toBe('yes')
+	})
+
+	test.each([true, false])('reportOutcome marks fork-triggering reports for review only when the displayed report already triggered the fork (displayed: %s)', async displayedTriggersFork => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
+		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
+		const forkReadySides: ActiveReportingDetails['sides'] = [
+			{ balance: 20n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+		]
+		const latestDetails = createReportingDetails(securityPoolAddress, { sides: forkReadySides, viewerPoolHeldVaultRepBackingAttoRep: 100n })
+		const displayedDetails = displayedTriggersFork ? latestDetails : createReportingDetails(securityPoolAddress, { viewerPoolHeldVaultRepBackingAttoRep: 100n })
+		const loadReportingDetails = mock(async () => (loadReportingDetails.mock.calls.length === 1 ? displayedDetails : latestDetails))
+		let submittedTriggersFork: boolean | undefined
+		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+			submittedTriggersFork = args[7]
+			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const, outcome: 'yes' as const, securityPoolAddress, universeId: 1n }
+		})
+		let hookState: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({ ...current, contributionFunding: 'vault', reportAmount: '0.000000000000000018', securityPoolAddress, selectedOutcome: 'yes' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadReporting()
+		})
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+		if (displayedTriggersFork) {
+			expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+			expect(submittedTriggersFork).toBe(true)
+		} else {
+			// The user never saw or confirmed the fork warning, so the report stops and shows the updated state.
+			expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+			expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting')
+			expect(requireHookState(hookState).reportingDetails).toBe(latestDetails)
+			expect(requireHookState(hookState).reportingForm.reportAmount).toBe('0.000000000000000018')
+		}
 	})
 
 	test('does not silently switch a wallet report to vault funding when preflight discovers a continuation', async () => {
@@ -484,7 +534,7 @@ describe('useReportingOperations', () => {
 		const pool = getAddress('0x00000000000000000000000000000000000000d4')
 		let funded = false
 		let hookState: UseReportingOperationsState | undefined
-		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, depositAmount, onVaultFunded) => {
+		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, depositAmount, onVaultFunded, _triggersFork) => {
 			expect(depositAmount).toBe(15n)
 			funded = true
 			onVaultFunded()
@@ -522,10 +572,58 @@ describe('useReportingOperations', () => {
 			await requireHookState(hookState).onReportOutcome()
 		})
 		expect(execute).toHaveBeenCalledTimes(1)
+		expect(execute.mock.calls[0]?.[7]).toBe(false)
 		if (failReport) {
 			expect(requireHookState(hookState).reportingForm.contributionFunding).toBe('vault')
 			expect(requireHookState(hookState).reportingDetails?.viewerPoolHeldVaultRepBackingAttoRep).toBe(15n)
 		} else expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
+	})
+
+	test('wallet continuation reporting carries the fork-trigger review into the vault-funded report', async () => {
+		const pool = getAddress('0x00000000000000000000000000000000000000d6')
+		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
+		const forkReadySides: ActiveReportingDetails['sides'] = [
+			{ balance: 20n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+		]
+		let hookState: UseReportingOperationsState | undefined
+		const execute = mock(async (_account, _callbacks, securityPoolAddress, outcome, _amount, _depositAmount, _onVaultFunded, _triggersFork) => ({ action: 'reportOutcome' as const, hash: '0x1234' as const, outcome, securityPoolAddress, universeId: 1n })) satisfies NonNullable<
+			UseReportingOperationsDependencies['reportOutcomeWithWalletViaVault']
+		>
+		const Harness = createHarness(
+			useReportingOperations,
+			state => {
+				hookState = state
+			},
+			createReportingOperationsDependencies({
+				loadReportingDetails: async () =>
+					createReportingDetails(pool, {
+						contributionFunding: 'wallet',
+						forkContinuation: true,
+						minimumVaultRepDepositAttoRep: 10n,
+						sides: forkReadySides,
+						walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
+						viewerPoolHeldVaultRepBackingAttoRep: 0n,
+						viewerWalletRepAllowanceAttoRep: 100n,
+						viewerWalletRepBalanceAttoRep: 100n,
+					}),
+				reportOutcomeWithWalletViaVault: execute,
+			}),
+		)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(rendered.cleanup)
+		await act(async () => {
+			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000018', contributionFunding: 'wallet' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadReporting()
+		})
+		await act(async () => {
+			await requireHookState(hookState).onReportOutcome()
+		})
+		expect(execute).toHaveBeenCalledTimes(1)
+		expect(execute.mock.calls[0]?.[7]).toBe(true)
 	})
 
 	test.each([false, true])('requires a new click after the displayed vault funding changes (decrease: %s)', async decrease => {

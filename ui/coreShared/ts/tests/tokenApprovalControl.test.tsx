@@ -24,10 +24,10 @@ describe('TokenApprovalControl', () => {
 		[1000000000000000001n, 18, '≈ 1.01', '1.000000000000000001'],
 		[1n, 18, '≈ 0.01', '0.000000000000000001'],
 		[180n, 2, '1.8', '1.8'],
-		[1234567n, 0, '≈ 1.24M', '1 234 567'],
-		[999999n, 0, '≈ 1M', '999 999'],
-		[1000001n * 10n ** 18n, 18, '≈ 1.01M', '1 000 001'],
-		[10n ** 30n + 1n, 0, undefined, '1 000 000 000 000 000 000 000 000 000 001'],
+		[1234567n, 0, '≈ 1.24M', '1\u00a0234\u00a0567'],
+		[999999n, 0, '≈ 1M', '999\u00a0999'],
+		[1000001n * 10n ** 18n, 18, '≈ 1.01M', '1\u00a0000\u00a0001'],
+		[10n ** 30n + 1n, 0, undefined, '1\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0001'],
 	])('rounds button amounts upward while approving the exact value %s', async (amount, units, label, exact) => {
 		const approvals: (bigint | undefined)[] = []
 		const rendered = await renderIntoDocument(
@@ -51,6 +51,59 @@ describe('TokenApprovalControl', () => {
 		expect(button.querySelector('[title]')?.getAttribute('title')).toBe(`Approve ${exact}\u00a0WETH`)
 		await act(() => fireEvent.click(button))
 		expect(approvals).toEqual([amount])
+	})
+
+	test('rounds the required amount, the shortfall notice and the button in the same upward direction', async () => {
+		const requiredAmount = 121_153_846_238_653_846n
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='disputing the report'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving WETH…'
+				requiredAmount={requiredAmount}
+				resetKey='dispute'
+				tokenSymbol='WETH'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		const requiredValue = queries.getByText('Required WETH').parentElement?.querySelector('.currency-value')
+		expect(requiredValue?.textContent).toBe('≈ 0.13 WETH')
+		expect(requiredValue?.getAttribute('title')).toBe('0.121153846238653846 WETH')
+		expect(queries.getByRole('button', { name: 'Approve ≈ 0.13 WETH' })).not.toBeNull()
+		expect(rendered.container.textContent).toContain('Need ≈ 0.13\u00a0more\u00a0WETH approved before disputing the report.')
+		expect(rendered.container.textContent).not.toContain('0.121153846238653846 more')
+	})
+
+	test('shows large required amounts in the same grouped notation as the approved balance', async () => {
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={2_250_000n * 10n ** 18n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={2_250_000n * 10n ** 18n}
+				resetKey='deposit'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		const requiredValue = queries.getByText('Required REP').parentElement?.querySelector('.currency-value')
+		const approvedValue = queries.getByText('Approved REP').parentElement?.querySelector('.currency-value')
+		expect(requiredValue?.textContent).toBe('2\u00a0250\u00a0000.00 REP')
+		expect(approvedValue?.textContent).toBe(requiredValue?.textContent)
 	})
 
 	test.each([true, false])('preserves partial and invalid notices with showRequirementNotice=%s', async showRequirementNotice => {

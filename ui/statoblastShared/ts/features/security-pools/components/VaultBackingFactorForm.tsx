@@ -133,7 +133,7 @@ export function VaultBackingFactorForm({
 			<div className='actions'>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
-					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
+					pendingLabel={securityPoolCopy.settingCommitmentLimitPending}
 					pending={pending}
 					showDisabledReason={!fieldErrorShown && !priceErrorShown}
 					disabledReasonElementId={disabledReasonElementId}

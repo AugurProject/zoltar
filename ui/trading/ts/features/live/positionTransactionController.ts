@@ -68,6 +68,7 @@ export function createPositionTransactionController({
 		const market = selected
 		const ownerRefresh = { ownerMarket: market.pool }
 		const { slippageBps, validityMinutes } = settings
+		workflow.setRequoteNotice(market.pool, undefined)
 		await transaction.submit<Quote>({
 			prepare: async () => {
 				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
@@ -79,7 +80,10 @@ export function createPositionTransactionController({
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
 					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
 					void refresh(undefined, undefined, 'position', ownerRefresh)
-					throw new Error(ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares)))
+					const requote = ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares))
+					// The submission still stops here; the ticket presents the stop as a prompt to review the new estimate.
+					workflow.setRequoteNotice(market.pool, requote)
+					throw new Error(requote)
 				}
 				return withApprovedBounds(quote, estimate)
 			},

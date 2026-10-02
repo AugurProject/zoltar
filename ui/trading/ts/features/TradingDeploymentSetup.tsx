@@ -192,14 +192,27 @@ export function TradingDeploymentSetup({
 	const walletContextEventRevision = useRef(0)
 	const mounted = useRef(true)
 	const walletContextSubscription = useRef<ReturnType<typeof createWalletContextSubscription>>()
+	const boundWalletProvider = useRef<InjectedEthereum>()
+	const walletAccountConnected = useRef(false)
+	walletAccountConnected.current = walletAccount !== undefined
 	if (walletContextSubscription.current === undefined)
-		walletContextSubscription.current = createWalletContextSubscription(() => {
+		walletContextSubscription.current = createWalletContextSubscription(eventName => {
 			walletContextEventRevision.current += 1
 			if (walletConnectionPending.current) return
 			walletConnectionRevision.current += 1
-			setWalletAccount(undefined)
-			setWalletChain(undefined)
-			setWalletConnectionMessage(deploymentCopy.walletContextChanged)
+			const revision = walletConnectionRevision.current
+			const provider = boundWalletProvider.current
+			const dropWalletContext = () => {
+				if (!mounted.current || walletConnectionRevision.current !== revision) return
+				setWalletAccount(undefined)
+				setWalletChain(undefined)
+				setWalletConnectionMessage(deploymentCopy.walletContextChanged)
+			}
+			// A network change keeps the connected account, so setup follows the wallet's chain and offers the switch back instead of disconnecting.
+			if (eventName !== 'chainChanged' || provider === undefined || !walletAccountConnected.current) return dropWalletContext()
+			void readInjectedChainIdNumber(provider).then(chainId => {
+				if (mounted.current && walletConnectionRevision.current === revision) setWalletChain(chainId)
+			}, dropWalletContext)
 		})
 	useEffect(() => {
 		if (busy || currentConfiguration === undefined) return
@@ -222,6 +235,10 @@ export function TradingDeploymentSetup({
 		setRpcOverride(true)
 	}, [activeNetwork.chain.id, busy, chainId, configuredRpcUrl, coreDeployments, currentConfiguration, rpcOverride, rpcUrl])
 	const selectedCore = coreDeployments.find(deployment => deployment.chainId.toString() === chainId)
+	// The chain the settings asked for; when the registry has no core deployment there, setup falls back to the first registered chain and says so.
+	const requestedChainId = currentConfiguration?.chainId.toString() ?? activeNetwork.chain.id.toString()
+	const requestedNetworkName = requestedChainId === activeNetwork.chain.id.toString() ? activeNetwork.displayName : deploymentCopy.chainLabel(requestedChainId)
+	const fallbackNotice = selectedCore !== undefined && selectedCore.chainId.toString() !== requestedChainId && !coreDeployments.some(deployment => deployment.chainId.toString() === requestedChainId) ? deploymentCopy.networkFallback(requestedNetworkName, selectedCore.chainName) : undefined
 	useEffect(() => {
 		if (busy || coreDeployments.length === 0 || selectedCore !== undefined) return
 		inputRevision.current += 1
@@ -323,6 +340,7 @@ export function TradingDeploymentSetup({
 	}, [chainId, effectiveRpcUrl, feeBps, inputError, onComplete, retryNonce, selectedCore, services])
 
 	function bindWalletProvider(provider: InjectedEthereum | undefined) {
+		boundWalletProvider.current = provider
 		walletContextSubscription.current?.bind(provider)
 	}
 	useEffect(() => {
@@ -333,6 +351,7 @@ export function TradingDeploymentSetup({
 			walletConnectionRevision.current += 1
 			walletConnectionPending.current = false
 			walletContextSubscription.current?.dispose()
+			boundWalletProvider.current = undefined
 		}
 	}, [services])
 	async function connectDeploymentWallet() {
@@ -527,11 +546,14 @@ export function TradingDeploymentSetup({
 				<ErrorNotice message={inputError} />
 				{selectedCore === undefined ? null : (
 					<DataGrid dense>
+						<MetricField label={deploymentCopy.deployingTo}>{selectedCore.chainName}</MetricField>
 						<MetricField label={deploymentCopy.securityPoolFactory}>
 							<ReadOnlyAddressValue address={selectedCore.securityPoolFactory} responsiveAbbreviation />
 						</MetricField>
 					</DataGrid>
 				)}
+				{fallbackNotice === undefined ? null : <UserMessage className='detail' tone='warning' detail={fallbackNotice} />}
+				{plan === undefined || deploymentComplete ? null : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(plan.factory.label, plan.router.label)} />}
 				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<DataGrid dense>
@@ -544,6 +566,13 @@ export function TradingDeploymentSetup({
 					)}
 				</div>
 				<ErrorNotice id={networkNoticeId} message={wrongNetworkNotice} />
+				{wrongNetworkNotice === undefined || selectedCore === undefined ? null : (
+					<div className='actions'>
+						<button type='button' className='secondary' disabled={busy || walletConnecting} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
+							{walletConnecting ? deploymentCopy.switchingToNetwork(selectedCore.chainName) : deploymentCopy.switchToNetwork(selectedCore.chainName)}
+						</button>
+					</div>
+				)}
 				<ErrorNotice message={walletConnectionMessage} />
 				<ErrorNotice message={inspectionError} />
 				{actionMessage === undefined || actionError ? null : <UserMessage className='detail' announcement='polite' detail={actionMessage} />}

@@ -2,9 +2,9 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { useRef } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import type { TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
+import { formatTruthAuctionTickPriceInput, type TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
 
 type TruthAuctionDepthChartProps = {
 	clearingTick?: bigint
@@ -24,6 +24,19 @@ let nextDepthGradientId = 0
 
 function formatTruthAuctionPriceLabel(price: bigint) {
 	return forkAuctionCopy.formatEthPerRepValue(formatRoundedCurrencyBalance(price, 18, 4))
+}
+
+function getPointStatus(point: TruthAuctionDepthPoint, clearingTick: bigint | undefined) {
+	const isClearing = point.tick === clearingTick
+	const isBidPrice = point.isSelected || point.isPreviewTick
+	if (isClearing && isBidPrice) return forkAuctionCopy.depthChartClearingAndSelectedStatus
+	if (isClearing) return forkAuctionCopy.depthChartClearingStatus
+	return isBidPrice ? forkAuctionCopy.depthChartSelectedStatus : undefined
+}
+
+/** Announces the price that selecting the point fills, using the bid form's own formatter, with the depth and status sighted users see. */
+function getPointLabel(point: TruthAuctionDepthPoint, clearingTick: bigint | undefined) {
+	return forkAuctionCopy.formatDepthChartPointLabel({ depth: formatCurrencyBalance(point.cumulativeBidAttoEth), price: formatTruthAuctionTickPriceInput(point.tick), status: getPointStatus(point, clearingTick) })
 }
 
 function getDepthRatio(value: bigint, maxDepth: bigint) {
@@ -151,7 +164,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 					<div className='truth-auction-depth-hit-targets'>
 						{points.map((point, index) => (
 							<button
-								aria-label={forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart(formatCurrencyInputBalance(point.price))}
+								aria-label={getPointLabel(point, clearingTick)}
 								aria-pressed={point.isSelected}
 								className='truth-auction-depth-hit-target'
 								key={point.tick.toString()}

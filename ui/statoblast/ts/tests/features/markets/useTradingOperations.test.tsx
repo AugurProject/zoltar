@@ -2,6 +2,7 @@
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -195,6 +196,11 @@ describe('useTradingOperations', () => {
 			expectedMessage: 'No mint capacity. No active underwriting commitments',
 			name: 'total underwriting commitments exists but none is fee eligible',
 		},
+		{
+			capacity: createMintCapacity({ escalationGameActive: true, mintingCapacityAttoEth: 0n }),
+			expectedMessage: 'Minting is paused while the outcome is disputed',
+			name: 'an escalation game has started',
+		},
 	])('blocks complete-set mint writes when $name', async ({ capacity, expectedMessage }) => {
 		const createCompleteSetInSecurityPool = mock(async () => {
 			throw new Error('createCompleteSetInSecurityPool should not be called when minting is blocked')
@@ -221,6 +227,8 @@ describe('useTradingOperations', () => {
 		const hook = await renderTradingHook(
 			createMintDependencies({
 				createCompleteSetInSecurityPool,
+				// The wallet covers the amount plus the gas reserve, so only pool capacity limits this mint.
+				getWalletEthBalance: mock(async () => 3n * ATTO_ETH_PER_ETH),
 				loadSecurityPoolMintCapacity: mock(async () =>
 					createMintCapacity({
 						currentRetentionRate: ATTO_ETH_PER_ETH / 2n,
@@ -310,6 +318,60 @@ describe('useTradingOperations', () => {
 
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(submittedRedeemAmount).toBe(99n)
+	})
+
+	test('starts with empty amounts and clears the submitted amount after a successful write', async () => {
+		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address) => ({ action: 'createCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const hook = await renderTradingHook(
+			createMintDependencies({
+				createCompleteSetInSecurityPool,
+				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
+				redeemCompleteSetInSecurityPool,
+			}),
+		)
+		expect(hook.state().tradingForm.completeSetAmount).toBe('')
+		expect(hook.state().tradingForm.redeemAmount).toBe('')
+
+		await hook.setForm({ completeSetAmount: '0.5', redeemAmount: '0.25' })
+		await act(async () => {
+			await hook.state().createCompleteSet()
+		})
+		expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(hook.state().tradingForm.completeSetAmount).toBe('')
+		expect(hook.state().tradingForm.redeemAmount).toBe('0.25')
+
+		await act(async () => {
+			await hook.state().redeemCompleteSet()
+		})
+		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(hook.state().tradingForm.redeemAmount).toBe('')
+	})
+
+	test('passes the migrated outcome balance to the share-migration review', async () => {
+		const migrateSharesFromUniverse = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, shareOutcome: 'invalid' | 'yes' | 'no', targetOutcomeIndexes: bigint[], _migratedAttoShares?: bigint) => ({
+			action: 'migrateShares' as const,
+			hash: zeroHash,
+			securityPoolAddress,
+			shareOutcome,
+			targetOutcomeIndexes,
+			universeId: 1n,
+		}))
+		const hook = await renderTradingHook(
+			createTradingOperationsDependencies({
+				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: 0n, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: 3n * ATTO_ETH_PER_ETH } })),
+				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses: [createChildUniverse(1n, 0n, 'Invalid', 2n)], forkQuestionDetails: createMarketDetails(), hasForked: true })),
+				migrateSharesFromUniverse,
+			}),
+		)
+
+		await hook.setForm({ selectedShareOutcome: 'yes', targetOutcomeIndexes: '0' })
+		await act(async () => {
+			await hook.state().migrateShares()
+		})
+
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(migrateSharesFromUniverse.mock.calls[0]?.[5]).toBe(3n * ATTO_ETH_PER_ETH)
 	})
 
 	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {

@@ -27,7 +27,7 @@ import { ZOLTAR_TAB_VIEWS, ZOLTAR_VIEWS } from '@zoltar/ui-zoltar-shared/feature
 import { ZoltarWorkspaceProvider, type ZoltarWorkspace } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
-import { hasInvalidZoltarView } from './lib/routeValidation.js'
+import { isInvalidZoltarRoute } from './lib/routeValidation.js'
 import { getZoltarTabLabel, getZoltarTabView, getZoltarViewHref, type ZoltarTabView } from './lib/zoltarNavigation.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 
@@ -35,9 +35,9 @@ export function App() {
 	const { activeUniverseId, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<ZoltarRoute>(route, 'not-found', ZOLTAR_ROUTES)
-	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
+	const invalidRoute = isInvalidZoltarRoute({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'overview', ZOLTAR_VIEWS)
-	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute
+	const activeRoute = invalidRoute ? 'not-found' : resolvedRoute
 	const {
 		accountState,
 		activeEnvironmentNonce,

@@ -296,6 +296,7 @@ body:has(.global-transaction-dialog-error) .operation-modal-panel {
 
 .transaction-object-context dl > div {
 	display: grid;
+	align-content: start;
 	gap: var(--space-1);
 	min-width: 0;
 }
@@ -698,6 +699,28 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .global-transaction-dialog .global-transaction-notice-rows {
 	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 	gap: 0.35rem 0.9rem;
+}
+
+/* Call data reads as one label/value list; tiles would squeeze the function name and argument list into narrow wrapped columns. */
+.global-transaction-dialog .global-transaction-technical-rows {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+/* Text with embedded addresses flows inline and wraps between values, never inside an abbreviated address.
+ * An inline address sits on the text baseline like a link, so it drops the standalone control's touch-target box. */
+.global-transaction-detail-text .copy-value-wrap,
+.global-transaction-detail-text .address-value.copyable {
+	display: inline;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	vertical-align: baseline;
+	white-space: nowrap;
+}
+
+/* A labelled address needs more than one tile; spanning the row keeps it on one line instead of a narrow wrapped column. */
+.global-transaction-dialog .global-transaction-notice-row:has(.global-transaction-identifier-label) {
+	grid-column: 1 / -1;
 }
 
 .global-transaction-dialog .read-only-detail-accordion summary {
@@ -1447,6 +1470,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	flex: 0 0 auto;
 }
 
+/* A text suffix such as "minutes" stretches to the input height, so its text needs centring like a button label. */
+.field-inline > span.field-inline-action {
+	display: inline-flex;
+	align-items: center;
+}
+
 .field-inline > button.field-inline-action {
 	border: 1px solid var(--control-border);
 	background: var(--control-bg);
@@ -1457,21 +1486,14 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	background: var(--disabled-control-bg);
 }
 
+/* The label sits above its input so stacked approvals for different tokens start their inputs at the same edge. */
 .approval-amount-field {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.75rem 1rem;
-}
-
-.approval-amount-field > .approval-amount-label {
-	flex: 0 1 auto;
-	min-width: 0;
+	display: grid;
+	gap: 0.5rem;
 }
 
 .approval-amount-field > .approval-amount-controls {
-	flex: 1 1 18rem;
-	min-width: min(100%, 18rem);
+	min-width: 0;
 }
 
 .approval-amount-controls > .field-inline-input {
@@ -1491,6 +1513,29 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .field .enum-dropdown-trigger span {
+	color: inherit;
+	font-size: inherit;
+}
+
+/* A hint rendered as a span inside a label keeps hint styling rather than the label's weight. */
+.field > span.field-hint,
+.field > label > span.field-hint {
+	color: var(--muted);
+	font-weight: 400;
+}
+
+/* A value the form shows instead of asking for, styled like a metric value beside the neighbouring inputs. */
+.field-read-only-value {
+	min-width: 0;
+	color: var(--value);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-value);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.field .field-read-only-value span {
 	color: inherit;
 	font-size: inherit;
 }

@@ -1,6 +1,7 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
+import { TransactionObjectContext } from './TransactionObjectContext.js'
 import { ModalFrame } from './ModalFrame.js'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { TransactionReviewActiveContext } from './TransactionActionButton.js'
@@ -134,6 +135,8 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 						{description}
 					</p>
 				)}
+				{/* The dialog covers the page, so it names the objects the action touches before the form asks for input. */}
+				<TransactionObjectContext className='operation-modal-context' items={context} />
 				{/* While the review runs the form stays visible for reference but cannot be edited, and its action row steps aside for the review's. */}
 				<div className='operation-modal-body' inert={showSteps || undefined}>
 					<TransactionReviewActiveContext.Provider value={showSteps}>{children}</TransactionReviewActiveContext.Provider>

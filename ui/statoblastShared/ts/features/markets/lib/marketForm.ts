@@ -28,7 +28,7 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
 		depositAmount: '',
 		targetHealthFactor: '2',
-		repWithdrawAmount: '0',
+		repWithdrawAmount: '',
 		selectedVaultOwner: '',
 		securityPoolAddress: '',
 		stagedOperationTimeoutMinutes: '5',
@@ -37,8 +37,8 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 
 export function getDefaultTradingFormState(): TradingFormState {
 	return {
-		completeSetAmount: '0',
-		redeemAmount: '0',
+		completeSetAmount: '',
+		redeemAmount: '',
 		securityPoolAddress: '',
 		selectedShareOutcome: 'yes',
 		targetOutcomeIndexes: '',

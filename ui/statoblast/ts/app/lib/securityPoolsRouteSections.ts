@@ -212,7 +212,6 @@ export function buildLiquidationSectionProps(overview: OverviewSource, priceCoor
 		loadingLiquidationReceiverVaultSummary: overview.loadingLiquidationReceiverVaultSummary,
 		loadingPoolOracleManager: priceCoordinator.loadingPoolOracleManager,
 		loadingSecurityPools: overview.loadingSecurityPools,
-		maximumLiquidationDebtAttoEth: overview.maximumLiquidationDebtAttoEth,
 		onExecutePendingPoolOperation: priceCoordinator.executePendingPoolOperation,
 		onLiquidationAmountChange: overview.setLiquidationAmount,
 		onLiquidationApprovalIdChange: overview.setLiquidationApprovalId,

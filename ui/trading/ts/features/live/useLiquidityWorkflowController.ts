@@ -8,11 +8,22 @@ import * as liquidityCopy from '../../copy/liquidity.js'
 import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useQuotedTransaction } from './useQuotedTransaction.js'
+import { estimateLiquidity } from './liquidityEstimate.js'
 
 type LiquidityQuote = Awaited<ReturnType<LiveLiquidityServices['simulateLiquidity']>>
 
 export function liquidityOperationAvailable(operation: LiquidityOperation, market: LiveMarket, nowSeconds: bigint) {
 	return operation === 'remove' || marketAcceptsNewRisk(market, nowSeconds)
+}
+
+function poolInitialized(market: LiveMarket) {
+	return market.pair !== undefined && market.lpTotalSupply > 0n
+}
+
+/** The operation a fresh liquidity view opens on: initialize an empty pool, otherwise add, or remove once the market stops taking new risk. */
+function defaultLiquidityOperation(market: LiveMarket, nowSeconds: bigint): LiquidityOperation {
+	if (!poolInitialized(market)) return 'initialize'
+	return marketAcceptsNewRisk(market, nowSeconds) ? 'add' : 'remove'
 }
 
 /** Everything a liquidity quote prices: the exact reserves, LP supply, pool rate, and lifecycle state. */
@@ -40,7 +51,7 @@ export function useLiquidityWorkflowController({
 		nowSeconds: bigint
 		services: LiveLiquidityServices
 	}>) {
-	const [operation, setOperation] = useState<LiquidityOperation>(market.pair === undefined || market.lpTotalSupply === 0n ? 'initialize' : 'add')
+	const [operation, setOperation] = useState<LiquidityOperation>(() => defaultLiquidityOperation(market, nowSeconds))
 	const [amount, setAmount] = useState('')
 	const [probability, setProbability] = useState('50')
 	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
@@ -73,17 +84,20 @@ export function useLiquidityWorkflowController({
 		quoteFailureFallback: liquidityCopy.quoteFailed,
 	})
 	const { quote } = transaction
-	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n
+	// Without a wallet quote, the public pool state still prices the amount.
+	const estimate = quotable || parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
+	const initialized = poolInitialized(market)
+	const acceptsNewRisk = marketAcceptsNewRisk(market, nowSeconds)
 	useEffect(() => {
 		if (transaction.workflowLocked) return
-		if (initialized && operation === 'initialize') {
-			setOperation('add')
-			setAmount('')
-		} else if (!initialized && operation !== 'initialize') {
-			setOperation('initialize')
-			setAmount('')
-		}
-	}, [initialized, operation, transaction.workflowLocked])
+		let next: LiquidityOperation | undefined
+		if (initialized && operation === 'initialize') next = acceptsNewRisk ? 'add' : 'remove'
+		else if (!initialized && operation !== 'initialize') next = 'initialize'
+		else if (initialized && operation === 'add' && !acceptsNewRisk) next = 'remove'
+		if (next === undefined) return
+		setOperation(next)
+		setAmount('')
+	}, [acceptsNewRisk, initialized, operation, transaction.workflowLocked])
 
 	async function submit() {
 		if (walletClient === undefined || account === undefined || quote === undefined || transaction.workflowLocked) return
@@ -117,6 +131,7 @@ export function useLiquidityWorkflowController({
 		parsed,
 		conditionalBps,
 		operationAvailable,
+		estimate,
 		transaction,
 		selectOperation(next: LiquidityOperation) {
 			if (!transaction.invalidate()) return

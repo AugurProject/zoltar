@@ -25,7 +25,7 @@ function getPoolsViewHref(view: PoolsListView) {
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 
-/** One primary row: pool entry and OpenOracle as an advanced tool; Deploy joins while deployment is incomplete. */
+/** One primary row: pool entry and the standalone OpenOracle tool; Deploy joins while deployment is incomplete. */
 export function getStatoblastRouteTabs({ route, showDeployTab }: { route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
 		deploymentTab: { hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
@@ -33,7 +33,7 @@ export function getStatoblastRouteTabs({ route, showDeployTab }: { route: string
 		route,
 		tabs: [
 			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools, route: 'pools' },
-			{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.advanced, route: 'open-oracle' },
+			{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.openOracle, route: 'open-oracle' },
 		],
 	})
 }
