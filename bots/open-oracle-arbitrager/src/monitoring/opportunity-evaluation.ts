@@ -62,7 +62,7 @@ export async function evaluate(client: BatchReader, config: EvaluationConfigurat
 		[...(sell === undefined ? [] : [sell]), ...(buy === undefined ? [] : [buy])].filter(candidate => candidate.tokenToSwap.toLowerCase() === replacementToken?.toLowerCase()),
 		candidate => candidate.netProfitAttoWeth,
 	)
-	return { candidate: quote === undefined || executableVenueQuotes(quotes) === undefined ? undefined : { hedgeFee: pool.fee, hedgePool: pool.address, quote, venue: pool.venue }, observations, replacementAmount2: quotes.replacement, replacementQuoteFailure: quotes.failure }
+	return { candidate: quote === undefined || executableVenueQuotes(quotes) === undefined ? undefined : { hedgeFee: pool.fee, hedgePool: pool.address, quote, venue: pool.venue }, observations, replacementAmount2: quotes.replacement, replacementQuoteFailure: quotes.failure, quoteFailureSummary: quotes.failureSummary }
 }
 
 export async function executionReadQuorum(

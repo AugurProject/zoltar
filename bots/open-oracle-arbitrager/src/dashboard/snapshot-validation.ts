@@ -243,6 +243,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 			object({
 				decision: oneOf('skipped'),
 				reason: stringValue,
+				reasonDetails: optional(stringValue),
 				reportId: stringValue,
 				token: hexValue,
 				tokenSymbol: stringValue,

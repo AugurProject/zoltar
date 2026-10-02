@@ -132,6 +132,27 @@ describe('batched hedge evaluation', () => {
 	})
 })
 
+test('identifies insufficient V3 liquidity only when the failed buy exceeds the pool token balance', async () => {
+	const provider = multicallProvider(network.multicall3, ({ blockTag, data, to }) => {
+		expect(blockTag).toBe('0x64')
+		if (to.toLowerCase() === rep.toLowerCase()) {
+			const decoded = decodeFunctionData({ abi: erc20Abi, data })
+			expect(decoded.functionName).toBe('balanceOf')
+			expect(decoded.args).toEqual([pool.address])
+			return encodeAbiParameters([{ type: 'uint256' }], [500n])
+		}
+		const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
+		if (decoded.functionName === 'quoteExactOutputSingle') throw new Error('Unexpected error')
+		return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [100n, 0n, 0n, 0n])
+	})
+	const client = createPublicClient({ chain: network.chain, transport: custom(provider) })
+	const insufficient = await quoteVenue(client, config, pool, { sellAmount: 490n, buyAmount: 501n, replacementAttoWeth: 100n }, 100n)
+	expect(insufficient.failureSummary).toBe('Not enough token liquidity')
+	expect(insufficient.failure).toContain('Unexpected error')
+	const otherFailure = await quoteVenue(client, config, pool, { sellAmount: 490n, buyAmount: 499n, replacementAttoWeth: 100n }, 100n)
+	expect(otherFailure.failureSummary).toBe('Venue quote unavailable')
+})
+
 describe('report inspection over batched pool evaluations', () => {
 	const inspectionConfig: ReportInspectionConfiguration = {
 		...config,
@@ -185,10 +206,12 @@ describe('report inspection over batched pool evaluations', () => {
 			const evaluated = await inspectReport(client, undefined, inspectionConfig, report, [pool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], (_, reason) => decisions.push(reason))
 			expect(evaluated?.candidate).toBeUndefined()
 			expect(evaluated?.dexObservations).toEqual([])
-			const reason = `Venue quotes failed: Uniswap V3 ${pool.address}: Venue quote failed: Multicall contract call failed: execution reverted: replacement quote reverted`
+			const reason = 'Uniswap V3: Venue quote unavailable'
+			const reasonDetails = `Uniswap V3 ${pool.address} (fee 3000): Venue quote failed: Multicall contract call failed: execution reverted: replacement quote reverted`
 			expect(evaluated?.opportunity).toEqual({
 				decision: 'skipped',
 				reason,
+				reasonDetails,
 				reportId: '7',
 				token: rep,
 				tokenSymbol: 'REP',
@@ -214,7 +237,11 @@ describe('report inspection over batched pool evaluations', () => {
 			expect(decisions).toEqual(['2 pools exceed the 100 tick spot/TWAP limit'])
 			const mixedClient = poolQuoterClient(() => ({ buyIn: 7n * 10n ** 17n, replacementOut: undefined, sellOut: 13n * 10n ** 17n }))
 			const mixed = await inspectReport(mixedClient, undefined, inspectionConfig, report, [drifted, otherPool], 100n, marketBlock.hash, blockTimestamp, 10n ** 9n, undefined, metadata, true, true, false, [policy], () => {})
-			expect(mixed?.opportunity).toMatchObject({ decision: 'skipped', reason: `Venue quotes failed: Uniswap V3 ${otherPool.address}: Venue quote failed: Multicall contract call failed: execution reverted: replacement quote reverted; 1 pool exceeds the 100 tick spot/TWAP limit` })
+			expect(mixed?.opportunity).toMatchObject({
+				decision: 'skipped',
+				reason: 'Uniswap V3: Venue quote unavailable; 1 pool exceeds the 100 tick spot/TWAP limit',
+				reasonDetails: `Uniswap V3 ${otherPool.address} (fee 500): Venue quote failed: Multicall contract call failed: execution reverted: replacement quote reverted`,
+			})
 		} finally {
 			logged.mockRestore()
 		}
@@ -380,4 +407,33 @@ test('a higher-profit sell with a missing buy quote cannot block an executable a
 	expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', venue: 'uniswap-v4' })
 	const final = await executionReadQuorum([independentClient('uniswap-v4').client], execution, report, alternative, 'uniswap-v4', 3000, 100n, reporter)
 	expect(final.replacementAmount2).toBe(replacement)
+})
+
+test('summarizes uninitialized V4 pools and keeps the decoded cause for details', async () => {
+	const reverted = `0x6190b2b0${encodeAbiParameters([{ type: 'bytes' }], ['0x486aa307']).slice(2)}`
+	const outputs = [
+		{
+			type: 'tuple[]',
+			components: [
+				{ name: 'success', type: 'bool' },
+				{ name: 'returnData', type: 'bytes' },
+			],
+		},
+	] as const
+	const client = createPublicClient({
+		chain: network.chain,
+		transport: custom({
+			request: async () =>
+				encodeAbiParameters(outputs, [
+					[
+						{ success: false, returnData: reverted },
+						{ success: false, returnData: reverted },
+						{ success: false, returnData: reverted },
+					],
+				]),
+		}),
+	})
+	const quotes = await quoteVenue(client, config, { venue: 'uniswap-v4', address: v4PoolManager, fee: 500, token: rep }, { sellAmount: 100n, buyAmount: 100n, replacementAttoWeth: 1n }, 100n)
+	expect(quotes.failureSummary).toBe('Pool is not initialized')
+	expect(quotes.failure).toContain('UnexpectedRevertBytes(PoolNotInitialized())')
 })

@@ -45,7 +45,11 @@ export function createSnapshotView({ state, elements, controls, applyInitialFrag
 	function renderChangedPanel(name: string, value: unknown, renderPanel: () => void) {
 		const signature = JSON.stringify(value)
 		if (renderedPanelSignatures.get(name) === signature) return
+		const expanded = new Set([...document.querySelectorAll('details[data-disclosure-key][open]')].map(details => details.getAttribute('data-disclosure-key')))
 		renderPanel()
+		for (const details of document.querySelectorAll('details[data-disclosure-key]')) {
+			if (expanded.has(details.getAttribute('data-disclosure-key'))) details.setAttribute('open', '')
+		}
 		renderedPanelSignatures.set(name, signature)
 	}
 

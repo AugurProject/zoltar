@@ -58,10 +58,10 @@ export async function inspectActiveReports(runtime: OperatorRuntime, context: Op
 						executionReady,
 						state.paused,
 						runtime.coordinatorPolicies,
-						(message, reason) =>
+						(message, reason, details) =>
 							recordOperation(state, {
 								category: 'decision',
-								details: undefined,
+								details,
 								level: 'info',
 								message,
 								reason,

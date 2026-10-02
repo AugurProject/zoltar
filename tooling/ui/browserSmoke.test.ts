@@ -207,11 +207,11 @@ const createFakeDevToolsServer = (emptyTargetResponses: number) => {
 			const targets = targetRequests <= emptyTargetResponses ? [] : [pageTarget(port)]
 			return Response.json(targets)
 		},
-		websocket: { message: () => undefined },
+		websocket: { open: socket => socket.subscribe('events'), message: () => undefined },
 	})
 	if (server.port === undefined) throw new Error('Expected the fake DevTools server to use a TCP port')
 	port = server.port
-	return { port, stop: () => server.stop(true) }
+	return { port, publish: (event: { method: string; params: Record<string, unknown> }) => server.publish('events', JSON.stringify(event)), stop: () => server.stop(true) }
 }
 
 const pageTarget = (port: number) => ({ type: 'page', webSocketDebuggerUrl: `ws://127.0.0.1:${port.toString()}/ws` })
@@ -227,6 +227,21 @@ const withFakeDevToolsBrowser = async (prefix: string, emptyTargetResponses: num
 		server.stop()
 	}
 }
+
+test.skipIf(process.platform === 'win32')('worker termination remains actionable when Chromium reports an empty target URL', async () => {
+	await withFakeDevToolsBrowser('zoltar-browser-empty-worker-url-', 0, async ({ executablePath, server }) => {
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport)
+		try {
+			server.publish({ method: 'Target.targetCreated', params: { targetInfo: { targetId: 'failed-worker', type: 'worker', url: '' } } })
+			server.publish({ method: 'Target.targetDestroyed', params: { targetId: 'failed-worker' } })
+			for (let attempt = 0; attempt < 100 && session.issues.length === 0; attempt++) await Bun.sleep(10)
+			expect(session.hasWorkerStarted()).toBe(true)
+			expect(session.issues).toEqual([{ kind: 'worker', detail: 'Worker terminated before smoke completion: unknown worker URL' }])
+		} finally {
+			await session.close()
+		}
+	})
+})
 
 test('default DevTools port polling continues beyond the former 300-attempt limit', async () => {
 	let probes = 0
@@ -360,8 +375,8 @@ describe.skipIf(chromiumPath === undefined)('browser smoke failure integration',
 		await expect(runBrowserSmoke('zoltar', fixture.url.origin, { mountTimeoutMilliseconds: 5_000 })).rejects.toThrow(/\[request-failed\].*404.*missing-module\.js/s)
 	})
 
-	test('reports HTTP failures for worker entry points', async () => {
+	test('rejects failed worker entry points even when Chromium omits their URL', async () => {
 		mode = 'worker'
-		await expect(runBrowserSmoke('zoltar', fixture.url.origin, { mountTimeoutMilliseconds: 5_000 })).rejects.toThrow(/\[(?:request-failed|worker)\].*missing-worker\.js/s)
+		await expect(runBrowserSmoke('zoltar', fixture.url.origin, { mountTimeoutMilliseconds: 5_000 })).rejects.toThrow(/\[request-failed\].*missing-worker\.js|\[worker\] Worker terminated before smoke completion: (?:.*missing-worker\.js|unknown worker URL)/s)
 	})
 })

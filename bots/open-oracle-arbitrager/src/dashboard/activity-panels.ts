@@ -4,19 +4,36 @@ import { venueLabel } from '#core/venue-strategy'
 import { endpointHealthDetail, endpointRow } from '@zoltar/bot-shared/dashboard/components'
 import { amount, countLabel, exactAmount, opportunityCountLabel, opportunityDecisionReason } from './dashboard-format.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { decisionBadge, type ExplorerLink, row, setText } from './dom.ts'
+import { decisionBadge, diagnosticDisclosure, type ExplorerLink, row, setText } from './dom.ts'
+import { diagnosticSummary, groupedOperations } from './operation-log.ts'
 import { renderProfitChart } from './profit-chart.ts'
 
 const OPPORTUNITY_LABELS = ['Report', 'Decision', 'Reference deviation', 'Executable REP / ETH', 'Reason', 'Direction', 'Estimated net', 'Required WETH', 'Required token', 'Window', 'Venue', 'Pool / manager']
 const HISTORY_LABELS = ['Time', 'Report', 'Direction', 'Modeled net', 'Tracked net', 'Actual gas', 'Inventory used', 'Transaction']
 const POSITION_LABELS = ['Opened', 'Report', 'Direction', 'Status', 'Hedged pre-gas', 'Entry gas', 'Lifecycle gas', 'Settler reward', 'Realized net', 'Withdrawn', 'Entry transaction']
-const OPERATION_LABELS = ['Time', 'Level', 'Category', 'Report', 'Operation', 'Why', 'Details']
+const OPERATION_LABELS = ['Latest', 'Level', 'Category', 'Report', 'Operation', 'Result', 'Occurrences']
 const NOT_PRICED = '—'
 
 function opportunityRow(opportunity: OpportunitySnapshot, link: ExplorerLink) {
 	// A skipped report never reached a venue quote, so quote-derived columns stay blank; the direction column names the WETH/token pair instead.
 	if (opportunity.decision === 'skipped') {
-		return row([opportunity.reportId, decisionBadge(opportunity.decision), NOT_PRICED, NOT_PRICED, opportunityDecisionReason(opportunity), `WETH/${opportunity.tokenSymbol}`, NOT_PRICED, NOT_PRICED, NOT_PRICED, `${opportunity.timeRemaining} ${opportunity.windowUnit}`, NOT_PRICED, NOT_PRICED], OPPORTUNITY_LABELS)
+		return row(
+			[
+				opportunity.reportId,
+				decisionBadge(opportunity.decision),
+				NOT_PRICED,
+				NOT_PRICED,
+				diagnosticDisclosure(diagnosticSummary(opportunity.reason), opportunity.reasonDetails ?? (diagnosticSummary(opportunity.reason) === opportunity.reason ? undefined : opportunity.reason), `opportunity:${opportunity.reportId}`),
+				`WETH/${opportunity.tokenSymbol}`,
+				NOT_PRICED,
+				NOT_PRICED,
+				NOT_PRICED,
+				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
+				NOT_PRICED,
+				NOT_PRICED,
+			],
+			OPPORTUNITY_LABELS,
+		)
 	}
 	return row(
 		[
@@ -112,18 +129,33 @@ export function createActivityPanels(elements: DashboardElements, link: Explorer
 
 	function renderOperations(operations: readonly PublicOperationEntry[]) {
 		const filter = elements.operationFilter.value
-		const visibleOperations = operations.filter(operation => operation.category !== 'scan' && (filter === 'all' || operation.level === filter))
+		const visibleOperations = groupedOperations(operations).filter(({ operation }) => filter === 'all' || operation.level === filter)
 		elements.operationsBody.replaceChildren(
-			...visibleOperations.map(operation => {
+			...visibleOperations.map(({ operation, occurrences }) => {
 				const level = document.createElement('span')
 				level.className = 'log-level'
 				level.dataset['level'] = operation.level
 				level.textContent = operation.level
-				return row([new Date(operation.timestamp).toLocaleString(), level, operation.category, operation.reportId ?? '—', operation.message, operation.reason ?? '—', operation.details ?? '—'], OPERATION_LABELS)
+				const reason = operation.reason ?? '—'
+				const summary = diagnosticSummary(reason)
+				const detail = [summary === reason ? undefined : reason, operation.details].filter(value => value !== undefined).join('\n') || undefined
+				const key = JSON.stringify([operation.category, operation.reportId, operation.message, operation.reason])
+				return row(
+					[
+						new Date(operation.timestamp).toLocaleString(),
+						level,
+						operation.category,
+						operation.reportId ?? '—',
+						diagnosticDisclosure(diagnosticSummary(operation.message), diagnosticSummary(operation.message) === operation.message ? undefined : operation.message, `message:${key}`),
+						diagnosticDisclosure(summary, detail, `operation:${key}`),
+						occurrences.toString(),
+					],
+					OPERATION_LABELS,
+				)
 			}),
 		)
 		elements.operationsEmpty.hidden = visibleOperations.length !== 0
-		setText('operation-count', countLabel(visibleOperations.length, 'entry', 'entries'))
+		setText('operation-count', countLabel(visibleOperations.length, 'group', 'groups'))
 	}
 
 	function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {

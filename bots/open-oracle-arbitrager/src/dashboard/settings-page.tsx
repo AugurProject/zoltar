@@ -256,10 +256,10 @@ function SettlementPanel() {
 					<SwitchField id='settlement-enabled' label='Enable third-party settlement' leading />
 					<div class='field-grid'>
 						<NumberField label='Minimum net (ETH)' name='settlementMinimumProfitWeth' min='0' max='1' step='any' />
-						<NumberField label='Gas price cap (nanoETH)' name='settlementMaxGasPriceNanoEth' min='0.000000001' max='10000' step='any' />
+						<NumberField label='Settlement fee cap (nanoETH)' name='settlementMaxGasPriceNanoEth' min='0.000000001' max='10000' step='any' />
 						<NumberField label='Reward withdraw threshold (ETH)' name='settlementRewardWithdrawThresholdEth' min='0.000000000000000001' max='100' step='any' />
 					</div>
-					<p class='section-note'>Settler rewards are paid in ETH. Dry-run mode only reports settlement decisions; settlement shares the daily gas budget with positions.</p>
+					<p class='section-note'>The fee cap also bounds the worst-case gas budget. Lower it to accept less fee exposure; settlement waits while current gas exceeds the cap. Profitability is checked each scan.</p>
 					<FormActions statusId='settlement-status' submitLabel='Save settlement' />
 				</fieldset>
 			</form>

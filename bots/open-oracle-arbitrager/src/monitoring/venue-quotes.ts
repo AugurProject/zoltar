@@ -1,5 +1,5 @@
 import type { Configuration } from '#config/configuration'
-import { constantProductPairAbi } from '#contracts/abi'
+import { constantProductPairAbi, erc20Abi } from '#contracts/abi'
 import { uniswapV3QuoterAbi, uniswapV4QuoterAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import { batchRead, batchValue, type BatchCall, type BatchReader } from '#core/batch-read'
 import type { Pool } from '#core/operator-types'
@@ -79,7 +79,22 @@ export async function quoteVenue(client: BatchReader, config: QuoteConfiguration
 	} catch (error) {
 		failure = errorMessage(error)
 	}
-	return { sell, buy, replacement, failure }
+	let failureSummary = failure === undefined ? undefined : 'Venue quote unavailable'
+	if (failure?.includes('PoolNotInitialized()')) failureSummary = 'Pool is not initialized'
+	if (pool.venue === 'uniswap-v3' && config.router !== undefined && buy === undefined && failure !== undefined) {
+		try {
+			const balance = await batchRead(client, config.network.multicall3, [{ address: pool.token, abi: erc20Abi, functionName: 'balanceOf', args: [pool.address] }], blockNumber)
+			const available = requiredBigint(batchValue(balance[0], 'Pool token balance'), 'Pool token balance')
+			if (amounts.buyAmount > available) {
+				failureSummary = 'Not enough token liquidity'
+				failure += `; exact-output buy requires ${amounts.buyAmount.toString()} token base units; pool holds ${available.toString()}`
+			}
+		} catch (error) {
+			// A failed diagnostic read must never turn an unknown quote failure into a liquidity claim.
+			failure += `; pool token balance could not be checked: ${errorMessage(error)}`
+		}
+	}
+	return { sell, buy, replacement, failure, failureSummary }
 }
 
 /** Selection and final validation require the same complete quote set; valuation may use partial quotes. */

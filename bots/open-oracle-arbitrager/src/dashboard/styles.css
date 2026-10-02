@@ -14,9 +14,34 @@ body[data-page="settings"] [data-page-content]:not([data-page-content="settings"
 	display: none;
 }
 
-.operations-stack {
-	display: grid;
-	gap: 1rem;
+[data-activity-view][hidden] {
+	display: none;
+}
+
+.diagnostic-details {
+	margin-top: 0.35rem;
+	white-space: normal;
+}
+
+.diagnostic-details summary {
+	cursor: pointer;
+	color: var(--accent);
+	min-height: 1.5rem;
+}
+
+.diagnostic-details pre {
+	font-size: 0.8rem;
+	max-width: 32rem;
+	max-height: 20rem;
+	overflow: auto;
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+#opportunities-body td[data-label="Reason"] {
+	min-width: 13rem;
+	max-width: 25rem;
+	white-space: normal;
 }
 
 .dispute-paths {
@@ -602,8 +627,8 @@ td {
 }
 
 #transactions-body td[data-label="Target results"],
-#operations-body td[data-label="Why"],
-#operations-body td[data-label="Details"] {
+#operations-body td[data-label="Operation"],
+#operations-body td[data-label="Result"] {
 	width: 30rem;
 	max-width: 30rem;
 	white-space: normal;
@@ -910,8 +935,8 @@ a {
 	}
 
 	#transactions-body td[data-label="Target results"],
-	#operations-body td[data-label="Why"],
-	#operations-body td[data-label="Details"],
+	#operations-body td[data-label="Operation"],
+	#operations-body td[data-label="Result"],
 	#opportunities-body td[data-label="Reason"],
 	#settlement-queue-body td[data-label="Reason"] {
 		width: 100%;
