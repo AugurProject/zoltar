@@ -1,14 +1,15 @@
 import { expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { OraclePriceQueryProgress } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from '@zoltar/ui-statoblast-shared/features/security-pools/components/OracleInitialPriceFields.js'
 
-function PriceHarness({ fetchPrice }: { fetchPrice: () => Promise<bigint> }) {
+function PriceHarness({ fetchPrice }: { fetchPrice: (managerAddress: Address, onProgress?: OraclePriceQueryProgress) => Promise<bigint> }) {
 	const [value, onChange] = useState<OracleInitialPriceInput>({ price: '' })
 	return (
 		<>
@@ -21,7 +22,15 @@ function PriceHarness({ fetchPrice }: { fetchPrice: () => Promise<bigint> }) {
 test('fetches an explicit starting price and preserves manual edits over late quotes', async () => {
 	const dom = installDomEnvironment()
 	let quote = createDeferred<bigint>()
-	const rendered = await renderIntoDocument(<PriceHarness fetchPrice={async () => await quote.promise} />)
+	let progress: OraclePriceQueryProgress | undefined
+	const rendered = await renderIntoDocument(
+		<PriceHarness
+			fetchPrice={async (_manager, onProgress) => {
+				progress = onProgress
+				return await quote.promise
+			}}
+		/>,
+	)
 	try {
 		const page = within(document.body)
 		const input = page.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
@@ -33,6 +42,11 @@ test('fetches an explicit starting price and preserves manual edits over late qu
 			await Promise.resolve()
 		})
 		expect(submit.hasAttribute('disabled')).toBe(true)
+		expect(page.getByRole('status').textContent).toBe('1/3 Reading oracle…')
+		await act(() => progress?.('v4'))
+		expect(page.getByRole('status').textContent).toBe('2/3 Querying Uniswap V4…')
+		await act(() => progress?.('v3'))
+		expect(page.getByRole('status').textContent).toBe('3/3 Querying Uniswap V3…')
 		await act(async () => {
 			quote.resolve(25n * 10n ** 17n)
 			await quote.promise
@@ -47,6 +61,8 @@ test('fetches an explicit starting price and preserves manual edits over late qu
 		})
 		expect(submit.hasAttribute('disabled')).toBe(true)
 		await act(() => fireEvent.input(input, { target: { value: '3' } }))
+		await act(() => progress?.('v3'))
+		expect(page.queryByRole('status')).toBeNull()
 		await act(() => quote.resolve(4n * 10n ** 18n))
 		expect(input instanceof HTMLInputElement && input.value).toBe('3')
 	} finally {

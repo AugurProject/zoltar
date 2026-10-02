@@ -301,10 +301,9 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolUniverseMismatch: false,
 			}),
 		).toEqual({
-			badgeLabel: 'Not found',
-			badgeTone: 'blocked',
-			detail: 'Pool not found.',
-			key: 'not_found',
+			detail: 'Loading…',
+			detailIsLoading: true,
+			key: 'loading',
 		})
 
 		expect(

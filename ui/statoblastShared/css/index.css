@@ -2663,6 +2663,16 @@
 
 /* Source and staleness of the REP price behind a derived figure; stale adds an icon and the word "Stale", not only color.
    The element selectors outrank the uppercase label rules of the metric containers the label sits in. */
+.rep-price-refresh {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+}
+
+.rep-price-refresh > button {
+	flex-shrink: 0;
+}
+
 span.rep-price-status {
 	display: block;
 	overflow-wrap: anywhere;

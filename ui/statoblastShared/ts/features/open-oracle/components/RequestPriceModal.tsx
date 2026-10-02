@@ -1,3 +1,4 @@
+import type { OraclePriceQueryProgress, OraclePriceQueryStage } from '../../../protocol/openOraclePricing.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
@@ -20,8 +21,8 @@ import { cancelTransactionReview, isTransactionStepInFlight, transactionSteps } 
 import { dismissGlobalTransaction, isGlobalTransactionDismissed } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
 import type { FailedPricePlan } from './PriceRequestPreview.js'
 
-async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
-	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
+async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>, onProgress?: OraclePriceQueryProgress) {
+	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress, 0n, onProgress)
 }
 
 type Workflow = NonNullable<typeof transactionSteps.value>
@@ -39,6 +40,7 @@ function getRunSubmission(run: PriceRequestRun | undefined) {
 
 export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, confirmationWalletBlocker, closeOnSuccessKey, getReturnFocusTarget, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
 	const [fetching, setFetching] = useState(false)
+	const [queryStage, setQueryStage] = useState<OraclePriceQueryStage>()
 	const [quoteError, setQuoteError] = useState<string>()
 	const quoteAttempt = useRef(0)
 	const [price, setPrice] = useState('')
@@ -243,10 +245,13 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (review === undefined || completedRequest || fetching) return
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
+		setQueryStage('oracle')
 		setQuoteError(undefined)
 		run.current?.cancel()
 		try {
-			const value = await fetchPrice(review)
+			const value = await fetchPrice(review, stage => {
+				if (attempt === quoteAttempt.current && mounted.current) setQueryStage(stage)
+			})
 			if (attempt !== quoteAttempt.current || !mounted.current) return
 			const latest = latestPreparationState.current
 			if (latest.failureLatched || latest.preparationPaused) latest.retryPreparation()
@@ -273,6 +278,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				}}
 				error={priceError ?? quoteError}
 				fetching={fetching}
+				queryStage={queryStage}
 				onFetch={() => void fetchQuote()}
 			/>
 		</div>
@@ -302,7 +308,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							error={confirmationGuardMessage}
 							errorWalletBlocker={confirmationWalletBlocker}
 							preparing={valid && !preparationPaused && (running || attempted !== key)}
-							hideReason={!validPrice || priceError !== undefined || confirmationGuardMessage !== undefined}
+							hideReason={fetching || !validPrice || priceError !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
 						/>
 					)}
