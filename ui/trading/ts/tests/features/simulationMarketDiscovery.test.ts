@@ -5,7 +5,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { discoverAddressedMarket, discoverTradingMarketPage, isSecurityPoolNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
+import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, isSecurityPoolNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
 import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { latestBlockIdentity } from '../../protocol/tradeQuote.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
@@ -138,6 +138,49 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 					if (parameters.functionName === 'getDeployedChildUniverses') throw new Error('Direct lookup must not enumerate universes')
 					return await client.readContract(parameters)
 				}
+				const savedMarket = discovery.markets[0]
+				if (savedMarket === undefined) throw new Error('Missing saved pool fixture')
+				const checkedPools: Address[] = []
+				const savedClient = {
+					...client,
+					readContract: async (parameters: Parameters<typeof client.readContract>[0]) => {
+						if (['securityPoolDeploymentCount', 'securityPoolDeploymentsRange', 'pairDeploymentCount', 'pairDeploymentsRange'].includes(parameters.functionName)) throw new Error('Portfolio must never scan a pool registry')
+						if (parameters.functionName === 'getSecurityPoolOriginId') checkedPools.push(getAddress(String(parameters.args?.[0])))
+						return await client.readContract(parameters)
+					},
+				}
+				const savedPool = { pool: savedMarket.pool, universeId: savedMarket.universeId, market: savedMarket }
+				const saved = await discoverSavedMarkets(savedClient, configuration, 0n, [savedPool, savedPool, { ...savedPool, pool: getAddress('0x1111111111111111111111111111111111111111'), universeId: 999n }])
+				expect(saved.markets).toHaveLength(1)
+				expect(saved.markets[0]?.loadError).toBeUndefined()
+				expect(checkedPools).toEqual([savedMarket.pool])
+				const empty = await discoverSavedMarkets(savedClient, configuration, 0n, [])
+				expect(empty.markets).toEqual([])
+				expect(checkedPools).toEqual([savedMarket.pool])
+				const started = Date.now()
+				const withUnavailable = await discoverSavedMarkets(savedClient, configuration, 0n, [savedPool, { ...savedPool, pool: getAddress('0x1111111111111111111111111111111111111111') }])
+				expect(Date.now() - started).toBeGreaterThanOrEqual(1_000)
+				expect(withUnavailable.markets[0]?.loadError).toBeUndefined()
+				expect(withUnavailable.markets[1]?.loadError).toContain('does not exist')
+				let current = true
+				let cancelled: unknown
+				try {
+					await discoverSavedMarkets(
+						savedClient,
+						configuration,
+						0n,
+						[savedPool, { ...savedPool, pool: getAddress('0x1111111111111111111111111111111111111111') }],
+						() => {
+							current = false
+						},
+						() => current,
+					)
+				} catch (error) {
+					cancelled = error
+				}
+				expect(cancelled).toBeInstanceOf(Error)
+				expect(String(cancelled)).toContain('Portfolio refresh cancelled')
+				expect(checkedPools).toEqual([savedMarket.pool, savedMarket.pool, savedMarket.pool])
 				const directClient = {
 					...client,
 					readContract,
@@ -176,7 +219,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 							controllerServices: {
 								...liveTradingControllerServices,
 								createTradingPublicClient: () => directClient,
-								discoverAllLiveMarketsInUniverse: async () => {
+								discoverSavedMarkets: async () => {
 									throw new Error('Addressed pages must not discover every pool')
 								},
 							},

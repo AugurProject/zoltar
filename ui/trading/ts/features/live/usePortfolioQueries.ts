@@ -1,3 +1,4 @@
+import { createPortfolioReadQueue } from './portfolioReadQueue.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -54,68 +55,80 @@ export function usePortfolioRefreshEffects({
 	portfolioBalanceRequests: RequestGuard
 	balanceRequests: RequestGuard
 }) {
-	// Background refreshes commit fresh market objects every cycle. A read that is still current and in flight for
-	// the same account and pools is left to finish instead of being restarted, so slow RPCs still reach a ready state.
+	// Partial discovery adds pools gradually; queued reads reuse each unchanged market object.
 	const portfolioScope = useRef<string>()
-	const portfolioRead = useRef<{ key: string; request: RequestIdentity }>()
+	const currentMarkets = useRef(visibleMarkets)
+	currentMarkets.current = visibleMarkets
+	const portfolioQueue = useRef<{ key: string; read: (market: LiveMarket) => Promise<PortfolioBalanceEntry> }>()
 	const balanceRead = useRef<{ key: string; request: RequestIdentity }>()
 
 	useEffect(() => {
 		if (route !== 'portfolio') {
 			portfolioBalanceRequests.invalidate()
+			portfolioQueue.current = undefined
 			queries.setPortfolioEntries([])
 			queries.setPortfolioBalanceState('disconnected')
 			queries.setPortfolioBalanceError(undefined)
 			return
 		}
 		// Keep balances already loaded for the same pools visible while they revalidate so background refreshes do not flash cards empty.
-		const scopeKey = `${account ?? ''}|${configuration?.chainId ?? ''}|${selectedUniverseId ?? ''}`
+		const scopeKey = `${account ?? ''}|${configuration?.chainId ?? ''}|${configuration?.securityPoolFactory ?? ''}|${configuration?.zoltar ?? ''}|${selectedUniverseId ?? ''}`
 		const previousEntries = portfolioScope.current === scopeKey ? queries.portfolioEntries : []
 		portfolioScope.current = scopeKey
+		const previousByPool = new Map(previousEntries.map(entry => [entry.market.pool, entry]))
 		const retainedEntries = visibleMarkets.map(market => {
-			const previous = previousEntries.find(entry => entry.market.pool === market.pool && entry.market.shareToken === market.shareToken && entry.market.universeId === market.universeId)
+			const candidate = previousByPool.get(market.pool)
+			const previous = candidate?.market.shareToken === market.shareToken && candidate.market.universeId === market.universeId ? candidate : undefined
 			return { market, balances: liveBalancesForMarket(previous?.balances, market), error: market.loadError ?? previous?.error }
 		})
 		queries.setPortfolioEntries(retainedEntries)
 		if (configuration === undefined || account === undefined) {
 			portfolioBalanceRequests.invalidate()
+			portfolioQueue.current = undefined
 			queries.setPortfolioBalanceState(walletContextInvalidated ? 'error' : 'disconnected')
 			queries.setPortfolioBalanceError(walletContextInvalidated ? 'Wallet context changed; reconnect before loading portfolio positions' : undefined)
 			return
 		}
-		const readKey = [account, queries.portfolioRefreshNonce.toString(), ...visibleMarkets.map(market => `${market.pool}:${market.shareToken}:${market.universeId.toString()}:${market.loadError ?? ''}`)].join('|')
-		const inFlight = portfolioRead.current
-		if (inFlight !== undefined && inFlight.key === readKey && portfolioBalanceRequests.isCurrent(inFlight.request)) return
-		const request = portfolioBalanceRequests.begin()
-		portfolioRead.current = { key: readKey, request }
-		const settle = () => {
-			if (portfolioRead.current?.request === request) portfolioRead.current = undefined
+		const queueKey = `${scopeKey}|${configuration.rpcUrl}|${configuration.zoltar}|${queries.portfolioRefreshNonce.toString()}`
+		if (portfolioQueue.current?.key !== queueKey) {
+			const client = services.createTradingPublicClient(configuration)
+			let lastReadStarted = 0
+			const canRead = (market: LiveMarket) => portfolioQueue.current?.key === queueKey && accountRef.current === account && currentMarkets.current.includes(market)
+			portfolioQueue.current = {
+				key: queueKey,
+				read: createPortfolioReadQueue(async market => {
+					if (!canRead(market)) return { market, balances: undefined, error: undefined }
+					const delay = Math.max(0, 1_000 - (Date.now() - lastReadStarted))
+					if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay))
+					if (!canRead(market)) return { market, balances: undefined, error: undefined }
+					lastReadStarted = Date.now()
+					try {
+						const loaded = await withReadTimeout(services.loadLiveBalances(client, market, account))
+						return { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
+					} catch (error) {
+						return { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
+					}
+				}),
+			}
 		}
+		const readBalance = portfolioQueue.current.read
+		const request = portfolioBalanceRequests.begin()
 		const revalidating = retainedEntries.every(entry => entry.balances !== undefined || entry.error !== undefined)
 		queries.setPortfolioBalanceState(revalidating ? 'ready' : 'loading')
 		queries.setPortfolioBalanceError(undefined)
-		const client = services.createTradingPublicClient(configuration)
-		void mapWithConcurrency(visibleMarkets, 6, async (market, index) => {
+		void mapWithConcurrency(visibleMarkets, 1, async (market, index) => {
 			if (market.loadError !== undefined) return { market, balances: undefined, error: market.loadError }
-			let entry: PortfolioBalanceEntry
-			try {
-				const loaded = await withReadTimeout(services.loadLiveBalances(client, market, account))
-				entry = { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
-			} catch (error) {
-				entry = { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
-			}
+			const entry = await readBalance(market)
 			if (portfolioBalanceRequests.isCurrent(request) && accountRef.current === account) queries.setPortfolioEntries(current => current.map((currentEntry, currentIndex) => (currentIndex === index ? withCurrentMarket(entry, currentEntry) : currentEntry)))
 			return entry
 		})
 			.then(entries => {
-				settle()
 				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
 				queries.setPortfolioEntries(current => entries.map((entry, index) => withCurrentMarket(entry, current[index])))
 				queries.setPortfolioBalanceState('ready')
 				queries.setPortfolioBalanceError(undefined)
 			})
 			.catch(error => {
-				settle()
 				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
 				queries.setPortfolioBalanceState('error')
 				queries.setPortfolioBalanceError(publicErrorMessage(error, 'Portfolio balance refresh failed'))
@@ -173,6 +186,7 @@ export function usePortfolioRefreshEffects({
 	useEffect(
 		() => () => {
 			portfolioBalanceRequests.invalidate()
+			portfolioQueue.current = undefined
 			balanceRequests.invalidate()
 		},
 		[balanceRequests, portfolioBalanceRequests],

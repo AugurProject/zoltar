@@ -1,7 +1,7 @@
 import { setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
-import type { discoverAllLiveMarketsInUniverse } from '../../protocol/live.js'
+import type { discoverSavedMarkets } from '../../protocol/marketDiscovery.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { useLiveTradingController } from '../../features/liveTradingController.js'
 import { describe, expect, test } from 'bun:test'
@@ -54,7 +54,7 @@ function walletHolding(label: string) {
 	return document.querySelector(`.market-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
 }
 
-async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services']) {
+async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services'], onUniversesChange: Parameters<typeof useLiveTradingController>[0]['onUniversesChange'] = () => undefined) {
 	let controller: ReturnType<typeof useLiveTradingController> | undefined
 	function Harness({ route = 'portfolio' }: { route?: string }) {
 		controller = useLiveTradingController({
@@ -62,7 +62,7 @@ async function renderDiscoveryController(services: Parameters<typeof useLiveTrad
 			configuration,
 			configurationError: undefined,
 			selectedUniverseId: '1',
-			onUniversesChange: () => undefined,
+			onUniversesChange,
 			onWorkflowLockChange: () => undefined,
 			onWalletSummaryChange: () => undefined,
 			walletSummaryRetryNonce: 0,
@@ -103,19 +103,117 @@ describe('live market refresh', () => {
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
+	test('an empty saved portfolio checks only the saved list, including manual refreshes', async () => {
+		const snapshots: Array<readonly { pool: Address }[]> = []
+		const rendered = await renderDiscoveryController({
+			...offlineControllerServices,
+			discoverSavedMarkets: async (_client, _configuration, _universe, saved) => {
+				snapshots.push(saved)
+				return discoveryPage([])
+			},
+		})
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'empty portfolio')
+		await act(() => rendered.state().discovery.refresh())
+		expect(snapshots).toEqual([[], []])
+	})
+
+	test('portfolio discovery follows saved pools and markets, excluding unfavorited cache entries', async () => {
+		const other = { ...market, pool: '0x8888888888888888888888888888888888888888' as const }
+		const unrelated = { ...market, pool: '0x9999999999999999999999999999999999999999' as const }
+		const poolScope = getLocalEntityScope('trading', 'pool')
+		const marketScope = getLocalEntityScope('trading', 'market')
+		marketDownloadStore.record(
+			poolScope,
+			[market, other, unrelated].map(data => ({ id: data.pool, data })),
+		)
+		marketDownloadStore.record(marketScope, [{ id: market.pool, data: market }])
+		setEntityFavorite(poolScope, market.pool, true)
+		setEntityFavorite(poolScope, other.pool, true)
+		setEntityFavorite(marketScope, market.pool, true)
+		const snapshots: Array<readonly Address[]> = []
+		const rendered = await renderDiscoveryController({
+			...offlineControllerServices,
+			discoverSavedMarkets: async (_client, _configuration, _universe, saved) => {
+				snapshots.push(saved.map(entry => entry.pool))
+				return discoveryPage([])
+			},
+		})
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => snapshots.length === 1, 'saved pools')
+		expect(snapshots[0]).toEqual([other.pool, market.pool])
+		await act(() => setEntityFavorite(poolScope, other.pool, false))
+		await waitForDom(() => snapshots.length === 2, 'removed saved pool')
+		expect(snapshots[1]).toEqual([market.pool])
+	})
+
+	test('unmounting cancels queued portfolio discovery reads', async () => {
+		const firstRead = createDeferred<void>()
+		let started = false
+		let laterReads = 0
+		let universeUpdates = 0
+		const rendered = await renderDiscoveryController(
+			{
+				...offlineControllerServices,
+				discoverSavedMarkets: async (_client, _configuration, _universe, _saved, _progress, isCurrent) => {
+					started = true
+					await firstRead.promise
+					if (isCurrent?.()) laterReads += 1
+					return discoveryPage([market])
+				},
+			},
+			() => {
+				universeUpdates += 1
+			},
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => started, 'first portfolio read')
+		await rendered.cleanup()
+		cleanupRendered = undefined
+		firstRead.resolve()
+		await settle()
+		expect(laterReads).toBe(0)
+		expect(universeUpdates).toBe(0)
+	})
+
+	test('caching a saved market summary does not restart portfolio discovery', async () => {
+		setEntityFavorite(getLocalEntityScope('trading', 'market'), market.pool, true)
+		let reads = 0
+		const rendered = await renderIntoDocument(
+			<LiveTrading
+				route='portfolio'
+				configuration={configuration}
+				configurationError={undefined}
+				selectedUniverseId='1'
+				onWorkflowLockChange={() => undefined}
+				controllerServices={{
+					...offlineControllerServices,
+					discoverSavedMarkets: async () => {
+						reads += 1
+						return discoveryPage([{ ...market }])
+					},
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => marketDownloadStore.read(getLocalEntityScope('trading', 'market')).length === 1, 'saved summary cache')
+		await settle()
+		expect(reads).toBe(1)
+	})
+
 	test('explicit invalidation retains first-load rows and reruns foreground progress', async () => {
 		const finish = createDeferred<void>()
 		const progress = createDeferred<void>()
 		let reads = 0
 		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Later row' }
-		const discover: typeof discoverAllLiveMarketsInUniverse = async (_client, _configuration, _universe, _size, _index, onProgress) => {
+		const discover: typeof discoverSavedMarkets = async (_client, _configuration, _universe, _saved, onProgress) => {
 			const read = ++reads
 			if (read === 2) await progress.promise
 			onProgress?.(discoveryPage(read === 1 ? [market] : [market, second]))
 			await finish.promise
 			return discoveryPage([market, second])
 		}
-		const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverAllLiveMarketsInUniverse: discover })
+		const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverSavedMarkets: discover })
 		cleanupRendered = rendered.cleanup
 		try {
 			await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'first row')
@@ -131,13 +229,13 @@ describe('live market refresh', () => {
 		}
 	})
 
-	test('explicit invalidation supersedes a pending block refresh without another block', async () => {
+	test('explicit invalidation supersedes a pending manual refresh without another block', async () => {
 		appBlockWatcher.reportBlock(appBlockWatcher.getLatestBlockNumber() ?? 0n)
 		const older = createDeferred<void>()
 		let reads = 0
 		const services = {
 			...offlineControllerServices,
-			discoverAllLiveMarketsInUniverse: async () => {
+			discoverSavedMarkets: async () => {
 				const read = ++reads
 				if (read === 2) await older.promise
 				return discoveryPage([{ ...market, title: read >= 3 ? 'Explicitly refreshed' : 'Old state' }])
@@ -150,7 +248,12 @@ describe('live market refresh', () => {
 			appBlockWatcher.reportBlock(appBlockWatcher.getLatestBlockNumber() ?? 0n)
 			appBlockWatcher.reportBlock((appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n)
 		})
-		await waitForDom(() => reads === 2, 'block refresh')
+		await settle()
+		expect(reads).toBe(1)
+		await act(() => {
+			void rendered.state().discovery.refresh()
+		})
+		await waitForDom(() => reads === 2, 'manual refresh')
 		try {
 			await act(() => invalidateAppData())
 			await waitForDom(() => reads === 3, 'explicit refresh')
@@ -170,14 +273,14 @@ describe('live market refresh', () => {
 			test(`restores the initial list when a workflow blocks partial discovery ${outcome} (superseded: ${supersede})`, async () => {
 				const finish = createDeferred<void>()
 				let reads = 0
-				const discover: typeof discoverAllLiveMarketsInUniverse = async (_client, _configuration, _universe, _size, _index, onProgress) => {
+				const discover: typeof discoverSavedMarkets = async (_client, _configuration, _universe, _saved, onProgress) => {
 					reads += 1
 					onProgress?.(discoveryPage([market]))
 					await finish.promise
 					if (outcome === 'error') throw new Error('Read failed')
 					return discoveryPage([market])
 				}
-				const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverAllLiveMarketsInUniverse: discover })
+				const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverSavedMarkets: discover })
 				cleanupRendered = rendered.cleanup
 				try {
 					await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'partial row')
@@ -204,13 +307,13 @@ describe('live market refresh', () => {
 		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Slow market' }
 		const page = (markets: LiveMarket[]) => ({ start: 0n, count: 2n, total: 2n, previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
 		let reads = 0
-		const discover: typeof discoverAllLiveMarketsInUniverse = async (_client, _configuration, _universe, _size, _index, onProgress) => {
+		const discover: typeof discoverSavedMarkets = async (_client, _configuration, _universe, _saved, onProgress) => {
 			if (++reads === 1) return page([first, second])
 			onProgress?.(page([first]))
 			await timeout.promise
 			throw new Error('RPC read timed out. Retry loading data.')
 		}
-		const services = { ...offlineControllerServices, discoverAllLiveMarketsInUniverse: discover }
+		const services = { ...offlineControllerServices, discoverSavedMarkets: discover }
 		let controller: ReturnType<typeof useLiveTradingController> | undefined
 		function Harness() {
 			controller = useLiveTradingController({
@@ -432,44 +535,94 @@ describe('live market refresh', () => {
 		expect(walletHolding('Wallet Yes')).toBe('2 Yes')
 	})
 
-	test('lets a background discovery slower than the block interval finish instead of starting another on each block', async () => {
+	test('portfolio ignores new blocks and refreshes only when requested', async () => {
 		let discoveries = 0
-		let releaseDiscovery: () => void = () => undefined
-		let gate: Promise<void> | undefined
 		const services = {
 			...offlineControllerServices,
-			discoverAllLiveMarketsInUniverse: async () => {
+			discoverSavedMarkets: async () => {
 				discoveries += 1
-				if (gate !== undefined) await gate
 				return discoveryPage([{ ...market, title: `Portfolio market ${discoveries.toString()}` }])
 			},
 		}
-		gate = new Promise<void>(resolve => {
-			releaseDiscovery = resolve
-		})
-		stopBlocks?.()
 		stopBlocks = produceBlocks(30)
 		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		// While discovery is still running the route shows one live loading state and no terminal empty state.
-		await waitForDom(() => document.body.textContent?.includes('Discovering security pools…') === true, 'portfolio discovery status')
-		expect(document.body.querySelector('.empty-state[role="status"]')?.textContent).toContain('Discovering security pools…')
-		expect(document.body.textContent).not.toContain('No Yes, No, Invalid, or LP balance was found')
-		gate = undefined
-		releaseDiscovery()
 		await waitForDom(() => document.body.textContent?.includes('Portfolio market 1') === true, 'initial portfolio discovery')
-		// Gate the next background discovery for several ticks; only one may be in flight.
-		gate = new Promise<void>(resolve => {
-			releaseDiscovery = resolve
-		})
-		await waitForDom(() => discoveries === 2, 'background discovery started')
+		await settle(150)
+		expect(discoveries).toBe(1)
+		await act(() => buttonByLabel('Refresh portfolio').click())
+		await waitForDom(() => document.body.textContent?.includes('Portfolio market 2') === true, 'manual refresh')
 		await settle(150)
 		expect(discoveries).toBe(2)
-		expect(document.body.textContent).toContain('Portfolio market 1')
-		gate = undefined
-		releaseDiscovery()
-		await waitForDom(() => document.body.textContent?.includes('Portfolio market 2') === true, 'slow background discovery commits')
-		await waitForDom(() => discoveries > 2, 'refresh cadence resumes')
+	})
+
+	test('retrying a saved pool whose market read failed reloads its details before balances', async () => {
+		installSilentInjectedWallet()
+		let discoveries = 0
+		let failMarketRead = true
+		const rendered = await renderDiscoveryController({
+			...offlineControllerServices,
+			...connectedWalletServices(account, configuration.chainId),
+			createTradingWalletClient: () => ({}),
+			discoverSavedMarkets: async () => {
+				discoveries += 1
+				return discoveryPage([{ ...market, loadError: failMarketRead ? 'Pool read failed' : undefined }])
+			},
+			loadLiveBalances: async (_client, selected) => ({ scope: shareBalanceScope(selected), invalid: 1n, yes: 1n, no: 0n, lp: 0n }),
+		})
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'failed pool snapshot')
+		await act(() => rendered.state().wallet.connect())
+		await waitForDom(() => rendered.state().balances.portfolioBalanceState === 'ready', 'failed pool balance state')
+		const beforeRetry = discoveries
+		failMarketRead = false
+		await act(() => rendered.state().balances.retryPortfolioBalances())
+		expect(discoveries).toBe(beforeRetry + 1)
+		await waitForDom(() => rendered.state().balances.visiblePortfolioEntries[0]?.balances?.yes === 1n, 'recovered pool balances')
+	})
+
+	test('manual portfolio refresh updates completed rows while preserving rows still waiting', async () => {
+		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Previous second pool' }
+		const scope = getLocalEntityScope('trading', 'pool')
+		marketDownloadStore.record(
+			scope,
+			[market, second].map(data => ({ id: data.pool, data })),
+		)
+		setEntityFavorite(scope, second.pool, true)
+		setEntityFavorite(scope, market.pool, true)
+		const finish = createDeferred<void>()
+		let reads = 0
+		const rendered = await renderIntoDocument(
+			<LiveTrading
+				route='portfolio'
+				configuration={configuration}
+				configurationError={undefined}
+				selectedUniverseId='1'
+				onWorkflowLockChange={() => undefined}
+				controllerServices={{
+					...offlineControllerServices,
+					discoverSavedMarkets: async (_client, _configuration, _universe, _saved, onProgress) => {
+						if (++reads === 1) return discoveryPage([market, second])
+						const first = { ...market, title: 'Refreshed first pool' }
+						onProgress?.({ ...discoveryPage([first, second]), markets: [first, undefined] })
+						await finish.promise
+						return discoveryPage([first, { ...second, title: 'Refreshed second pool' }])
+					},
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		try {
+			await waitForDom(() => document.body.textContent?.includes('Previous second pool') === true, 'initial portfolio')
+			await act(() => buttonByLabel('Refresh portfolio').click())
+			await waitForDom(() => document.body.textContent?.includes('Refreshed first pool') === true, 'first refresh result')
+			expect(document.body.textContent).toContain('Previous second pool')
+			expect(buttonByLabel('Refreshing…').disabled).toBe(true)
+			finish.resolve()
+			await waitForDom(() => document.body.textContent?.includes('Refreshed second pool') === true, 'completed refresh')
+		} finally {
+			finish.resolve()
+		}
 	})
 
 	test('lookup routes use saved favorites without scanning pool or pair registries, including block refreshes', async () => {

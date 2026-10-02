@@ -61,7 +61,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		steps: [...initializeAtSeventyPercent, { click: 'Initialize pool' }, { waitForText: 'TRADING OPEN' }, { click: 'Portfolio' }, { waitForText: 'LP' }],
 		expectText: ['Portfolio', 'Invalid', 'LP'],
 		viewport: pageViewport,
-		crop: { selector: '.portfolio-positions' },
+		crop: { selector: '.portfolio-positions', padding: 0 },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{

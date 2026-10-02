@@ -5,7 +5,7 @@ import { getDownloadedStorageKey, resetLocalEntityStoreForTesting, serializeStor
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
-import { getRememberableMarket, marketDownloadStore, selectFavoriteMarkets, selectMarketCacheUpdates } from '../../lib/favoriteMarkets.js'
+import { getRememberableMarket, marketDownloadStore, selectFavoriteMarkets, selectMarketCacheUpdates, selectPortfolioMarkets } from '../../lib/favoriteMarkets.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
@@ -65,6 +65,17 @@ describe('favorite markets', () => {
 		expect(selectFavoriteMarkets(downloaded, favorites, '1').map(market => market.title)).toEqual(['Market 1'])
 		expect(selectFavoriteMarkets(downloaded, favorites, '2').map(market => market.title)).toEqual(['Market 3'])
 		expect(selectFavoriteMarkets(downloaded, favorites, undefined)).toEqual([])
+	})
+
+	test('portfolio combines saved pools and markets without checking unrelated cached pools', () => {
+		const pool = createMarket(1, { pair: undefined })
+		const market = createMarket(2)
+		const unrelated = createMarket(3)
+		const downloads = [pool, market, unrelated].map(data => ({ id: data.pool.toLowerCase(), data, fetchedAt: 1 }))
+		const favorites = [pool, market].map(data => ({ id: data.pool.toLowerCase(), addedAt: 1 }))
+		expect(selectPortfolioMarkets(downloads, favorites, downloads, favorites.slice(1)).map(entry => entry.market)).toEqual([pool, market])
+		expect(selectPortfolioMarkets(downloads, [], downloads, [])).toEqual([])
+		expect(selectPortfolioMarkets([], favorites, [], []).map(entry => entry.pool)).toEqual([pool.pool, market.pool])
 	})
 
 	test('refreshes cached favorites without saving unrelated discovered markets', () => {
