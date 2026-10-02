@@ -55,7 +55,9 @@
 				<ol>
 					<li>Select <strong>Set commitment limit</strong>.</li>
 					<li>Enter <code>3</code> in <strong>OpenOracle REP per ETH starting price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
-					<li>Enter <code>10</code> in <strong>Commitment limit</strong>, select <strong>Set commitment limit</strong>, and confirm. The transaction funds a new price report and stages your change; the vault shows it as a staged operation.</li>
+					<li>Enter <code>10</code> in <strong>Commitment limit</strong> and select <strong>Set commitment limit</strong> to review funding.</li>
+					<li>Approve WETH and REP with their separate buttons. Each approval has an editable amount; use the suggested amounts for this tutorial.</li>
+					<li>Select <strong>Queue commitment limit</strong> and confirm that transaction. It funds a new price report and stages your change; the vault shows it as a staged operation.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-set-commitment" aria-labelledby="fig-statoblast-set-commitment-caption">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/set-commitment.png"><img width="768" height="660" src="../assets/screenshots/statoblast/set-commitment.png" alt="The Set commitment limit dialog with a starting price of 3 REP per ETH, a 10 ETH commitment limit, minimum backing ratio 2×, current commitment 0 ETH, resulting commitment 10.00 ETH, and the note Queues for execution after oracle settlement." loading="lazy" /></a>

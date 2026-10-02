@@ -1,4 +1,5 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
+import * as transactionStepsCopy from '../copy/transactionSteps.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
 import { ModalFrame } from './ModalFrame.js'
@@ -28,6 +29,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const [reviewScope, setReviewScope] = useState<AbortController>()
+	const [retainedWorkflow, setRetainedWorkflow] = useState<NonNullable<typeof transactionSteps.value>>()
 	useLayoutEffect(() => {
 		if (!isOpen || !embedTransactionSteps || hostsExternalReview) return
 		const scope = new AbortController()
@@ -46,7 +48,12 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = !hostsExternalReview && ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
 	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
-	const showSteps = ownedWorkflow?.showReviewDialog === true && activeStep !== undefined && !approvalOnly && !singleFormAction
+	const displayedWorkflow = ownedWorkflow ?? retainedWorkflow
+	const showSteps = displayedWorkflow?.showReviewDialog === true && displayedWorkflow.steps[displayedWorkflow.activeIndex] !== undefined && !approvalOnly && !singleFormAction
+	const runningReview = showSteps && ownedWorkflow !== undefined
+	useEffect(() => {
+		if (!isOpen || ownsWorkflow) setRetainedWorkflow(undefined)
+	}, [isOpen, ownsWorkflow])
 	useEffect(() => {
 		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
@@ -56,12 +63,20 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	// status (no hash yet, or a hash one of its steps sent) may fail, unlock, or feed the review.
 	const ownsPresentation = activeTransaction !== undefined && (ownedWorkflow === undefined || activeTransaction.hash === undefined || ownedWorkflow.steps.some(step => step.hash === activeTransaction.hash))
 	const ownedFailure = ownsPresentation && activeTransaction?.tone === 'error'
-	// A step that fails after it was sent returns to the form on its own; the outcome notice below the form explains what happened.
+	// Release a failed controller for retry while keeping its transaction buttons visible and disabled.
 	useEffect(() => {
 		if (ownedWorkflow === undefined || activeStep === undefined || activeStep.phase === 'review' || activeStep.phase === 'upcoming') return
 		if (activeStep.phase !== 'failed' && !ownedFailure) return
+		if (ownedWorkflow.steps.length > 1)
+			setRetainedWorkflow({
+				...ownedWorkflow,
+				steps: ownedWorkflow.steps.map((step, index): (typeof ownedWorkflow.steps)[number] => {
+					if (index !== ownedWorkflow.activeIndex) return step
+					return { ...step, phase: 'failed', failure: step.failure ?? { kind: 'error', message: typeof activeTransaction?.detail === 'string' ? activeTransaction.detail : transactionStepsCopy.requirementsFailed } }
+				}),
+			})
 		ownedWorkflow.cancel()
-	}, [activeStep, ownedFailure, ownedWorkflow])
+	}, [activeStep, activeTransaction?.detail, ownedFailure, ownedWorkflow])
 	// Only an open wallet prompt holds the dialog; a broadcast transaction keeps running and stays in the activity list after it closes.
 	const awaitingWallet = ownsWorkflow && workflow.steps.some(step => step.phase === 'wallet') && !ownedFailure
 	const cannotClose = closeDisabled || awaitingWallet
@@ -76,6 +91,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const requestClose = () => {
 		if (!cannotClose) {
 			if (ownsWorkflow) workflow.cancel()
+			setRetainedWorkflow(undefined)
 			onClose()
 		}
 	}
@@ -98,6 +114,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		const submittedActionSucceeded = activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && activeTransaction.hash === closeOnSuccessKey && activeTransactionOperationKey !== undefined && modalOperationKeysRef.current.has(activeTransactionOperationKey)
 		if (submittedActionSucceeded) {
 			if (ownsWorkflow) workflow.cancel()
+			setRetainedWorkflow(undefined)
 			onClose()
 		} else if (ownsWorkflow && activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && workflow.steps.some(step => step.hash === activeTransaction.hash)) {
 			// A standalone approval completed; keep the form for the actual action.
@@ -134,15 +151,15 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 						{description}
 					</p>
 				)}
-				{/* While the review runs the form stays visible for reference but cannot be edited, and its action row steps aside for the review's. */}
-				<div className='operation-modal-body' inert={showSteps || undefined}>
-					<TransactionReviewActiveContext.Provider value={showSteps}>{children}</TransactionReviewActiveContext.Provider>
+				{/* Keep the form and its disabled action row in place while the transaction buttons run below. */}
+				<div className='operation-modal-body' inert={runningReview || undefined}>
+					<TransactionReviewActiveContext.Provider value={runningReview}>{children}</TransactionReviewActiveContext.Provider>
 				</div>
 				{showSteps ? (
 					<div className='operation-modal-steps'>
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
+							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} retainedWorkflow={ownedWorkflow === undefined ? retainedWorkflow : undefined} />
 						</GlobalTransactionPresentationProvider>
 					</div>
 				) : undefined}

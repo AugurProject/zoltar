@@ -164,6 +164,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 											/>
 										) : (
 											<TransactionActionButton
+												ariaLabel={completedLabel ?? step.title}
 												className={completedLabel === undefined ? '' : 'tx-action-completed'}
 												idleLabel={
 													completedLabel ?? (
