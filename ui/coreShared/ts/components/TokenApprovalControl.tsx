@@ -2,7 +2,7 @@ import { UserMessage } from './UserMessage.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
-import { useEffect, useId, useMemo, useState } from 'preact/hooks'
+import { useLayoutEffect, useId, useMemo, useState } from 'preact/hooks'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -100,7 +100,7 @@ export function TokenApprovalControl({
 	const amountValidationMessageId = useId()
 	const allowanceMessageId = useId()
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
-	useEffect(() => {
+	useLayoutEffect(() => {
 		setDraftAmount('')
 	}, [resetKey])
 	const parsedAmount = useMemo(() => {

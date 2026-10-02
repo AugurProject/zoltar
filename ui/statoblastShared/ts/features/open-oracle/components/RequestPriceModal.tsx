@@ -292,6 +292,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{showSteps || failedWorkflow !== undefined ? (
 						<GlobalTransactionPresentationProvider transaction={presentation === ignoredFailure.current ? undefined : presentation}>
 							<TransactionStepsContent
+								actionsFirst
+								includeWrapAction
 								contextKey={key ?? ''}
 								onClose={close}
 								retainedWorkflow={failedWorkflow}

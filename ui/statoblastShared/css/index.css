@@ -3334,50 +3334,6 @@ span.rep-price-status.stale,
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 	gap: var(--space-4);
 }
-.liquidation-modal-content {
-	display: contents;
-}
-@media (max-width: 40rem) {
-	.liquidation-modal-panel {
-		height: 90dvh;
-		max-height: 90dvh;
-		grid-template-rows: auto minmax(0, 1fr) auto;
-		gap: 0;
-		padding: 0;
-		overflow: hidden;
-	}
-	.liquidation-modal-panel > .modal-header {
-		margin: 0;
-	}
-	.liquidation-modal-panel > .modal-header::before {
-		display: none;
-	}
-	.liquidation-modal-content {
-		display: grid;
-		align-content: start;
-		gap: var(--space-4);
-		min-height: 0;
-		overflow-y: auto;
-		padding: var(--space-4);
-		scroll-padding-block: var(--space-4);
-	}
-	.liquidation-modal-actions {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		margin: 0;
-		padding: var(--space-3);
-		border-top: 1px solid var(--border-default);
-		background: var(--surface-modal-opaque);
-		max-height: 35dvh;
-		overflow-y: auto;
-	}
-
-	/* The wrapped action label needs the full width, so Cancel keeps the right edge on its own row. */
-	.liquidation-modal-actions > button:last-child {
-		justify-self: end;
-		margin-inline-start: 0;
-	}
-}
 
 .pool-attention-item .link {
 	padding: var(--space-1) var(--space-2);

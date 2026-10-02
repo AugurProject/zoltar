@@ -1081,6 +1081,10 @@
 		"./tests/app/appSettingsMenu.test.js": {
 			"bun": "./ts/tests/app/appSettingsMenu.test.tsx",
 			"default": "./js/tests/app/appSettingsMenu.test.js"
+		},
+		"./components/TransactionFundingActionsPlaceholder.js": {
+			"bun": "./ts/components/TransactionFundingActionsPlaceholder.tsx",
+			"default": "./js/components/TransactionFundingActionsPlaceholder.js"
 		}
 	},
 	"version": "1.0.0"

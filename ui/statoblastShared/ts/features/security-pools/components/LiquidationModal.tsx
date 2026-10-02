@@ -1,15 +1,17 @@
+import { OracleOperationActions } from './OracleOperationActions.js'
+import { usePreparedOracleOperation } from '../hooks/usePreparedOracleOperation.js'
+import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import { useEffect, useId, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
@@ -37,8 +39,6 @@ import {
 	isLiquidationApprovalRouteMismatch,
 	isValidLiquidationApprovalId,
 } from '../lib/liquidationModalGuards.js'
-import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
-import { ModalFrame } from '@zoltar/ui-core-shared/components/ModalFrame.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -90,7 +90,7 @@ type LiquidationModalProps = {
 	onLoadLiquidationApproval?: (() => void) | undefined
 	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
 	onLiquidationTimeoutMinutesChange: (value: string) => void
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void | Promise<void>
 	walletBalanceAttoEth?: bigint | undefined
 }
 
@@ -155,16 +155,8 @@ export function LiquidationModal({
 		const parsed = parseOracleInitialPrice(value)
 		if (liquidationManagerAddress !== undefined && parsed.error === undefined) onLoadLiquidationFundingPreview(liquidationManagerAddress, parsed.proposedRepPerEthPrice)
 	}
-	const dialogRef = useRef<HTMLElement | null>(null)
-	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
-	const titleId = useId()
 	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolLiquidationError !== undefined
-	useModalFocusIsolation({
-		dialogRef,
-		initialFocusRef: closeButtonRef,
-		isOpen: showLiquidationModal,
-		onClose: closeLiquidationModal,
-	})
+
 	useEffect(() => {
 		if (!showLiquidationModal) return
 		if (liquidationManagerAddress === undefined || currentPoolOracleManagerDetails !== undefined || loadingPoolOracleManager || poolOracleManagerError !== undefined) return
@@ -186,7 +178,6 @@ export function LiquidationModal({
 		if (!showLiquidationModal || !delegatedReceiver || !hasValidReceiverVault || liquidationReceiverVaultSummaryResolved || liquidationReceiverVaultSummaryError !== undefined || loadingLiquidationReceiverVaultSummary) return
 		onLoadLiquidationReceiverVaultSummary()
 	}, [delegatedReceiver, hasValidReceiverVault, liquidationReceiverVaultSummaryError, liquidationReceiverVaultSummaryResolved, loadingLiquidationReceiverVaultSummary, onLoadLiquidationReceiverVaultSummary, showLiquidationModal])
-	if (!showLiquidationModal) return undefined
 	const receiverVaultSummary = delegatedReceiver ? loadedReceiverVaultSummary : (loadedReceiverVaultSummary ?? callerVaultSummary)
 	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = tryParseEthAmountInput(liquidationDebtEthAmount)
@@ -305,11 +296,21 @@ export function LiquidationModal({
 	if (!walletGuard.blocked && initialPriceError !== undefined && initialPrice.price !== '') disabledReasonElementId = `${initialPriceFieldId}-error`
 	const liquidationActionReason = getOracleOperationTimingGuard(currentPoolOracleManagerDetails, currentTimestamp, hasUsableOraclePrice) ?? initialPriceError ?? liquidationBlocker?.reason
 	const liquidationButtonDisabledReason = walletGuard.reason ?? liquidationLifecycleBlocker ?? liquidationActionReason
+	const liquidationKey = `${priceContextKey}:${liquidationDebtEthAmount}:${liquidationReceiverVault}:${liquidationApprovalId}:${liquidationTimeoutMinutes}:${proposedRepPerEthPrice}`
+	const sendLiquidation = () => (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? undefined : onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress, proposedRepPerEthPrice))
+	const preparedLiquidation = usePreparedOracleOperation({
+		key: liquidationKey,
+		enabled: showLiquidationModal && liquidationExecutionMode === 'queue' && liquidationEnabled && canUseLiquidationAction && liquidationButtonDisabledReason === undefined,
+		busy: securityPoolOverviewActiveAction !== undefined,
+		onPrepare: sendLiquidation,
+		onCompleted: securityPoolOverviewResult?.stagedExecution?.success !== false ? closeLiquidationModal : undefined,
+	})
+	const fieldsLocked = preparedLiquidation.sending || (securityPoolOverviewActiveAction !== undefined && !preparedLiquidation.preparing)
 	const queuedLiquidationOperation = getQueuedLiquidationOperation({ currentPoolOracleManagerDetails, liquidationTargetVault, securityPoolOverviewResult })
 	const queuedLiquidationStatus = getQueuedLiquidationStatus({ currentPoolOracleManagerDetails, currentTimestamp, loadingPoolOracleManager, queuedLiquidationOperation, securityPoolOverviewResult })
 	return (
-		<ModalFrame closeButtonRef={closeButtonRef} dialogRef={dialogRef} onClose={closeLiquidationModal} panelClassName='liquidation-modal-panel' title={getLiquidationModalTitle(currentPoolOracleManagerDetails, currentTimestamp)} titleId={titleId}>
-			<div className='liquidation-modal-content'>
+		<OperationModal embedTransactionSteps={false} isOpen={showLiquidationModal} closeDisabled={preparedLiquidation.workflow?.steps.some(step => step.phase === 'wallet') === true} onClose={closeLiquidationModal} title={getLiquidationModalTitle(currentPoolOracleManagerDetails, currentTimestamp)}>
+			<fieldset disabled={fieldsLocked} className='transaction-form-fields'>
 				<QueuedLiquidationStatusCard onViewInStagedOperations={() => onSelectedPoolViewChange('staged-operations')} queuedLiquidationOperation={queuedLiquidationOperation} queuedLiquidationStatus={queuedLiquidationStatus} securityPoolOverviewResult={securityPoolOverviewResult} />
 				<RetryableNotice disabled={loadingPoolOracleManager} message={poolOracleManagerError} onRetry={liquidationManagerAddress === undefined ? undefined : () => onLoadPoolOracleManager(liquidationManagerAddress)} retryLabel={liquidationCopy.retryPriceStatus} />
 				<ErrorNotice message={securityPoolLiquidationError} />
@@ -395,7 +396,7 @@ export function LiquidationModal({
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
 				{approvalClampedNotice === undefined ? null : <UserMessage tone='warning' announcement='polite' detail={approvalClampedNotice} />}
 				{liquidationExecutionMode === 'execute' ? null : <UserMessage className='detail' detail={liquidationTimeoutHelpText} />}
-				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={securityPoolOverviewActiveAction !== undefined} fieldId={initialPriceFieldId} /> : undefined}
+				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={fieldsLocked} fieldId={initialPriceFieldId} /> : undefined}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={() => (liquidationManagerAddress === undefined ? undefined : onLoadLiquidationFundingPreview(liquidationManagerAddress, proposedRepPerEthPrice))} disabled={loadingLiquidationFundingPreview}>
@@ -403,29 +404,23 @@ export function LiquidationModal({
 						</button>
 					</div>
 				)}
-			</div>
-			<div className='actions liquidation-modal-actions'>
-				<TransactionActionButton
-					disabledReasonElementId={disabledReasonElementId}
-					idleLabel={buttonLabels.idle}
-					pendingLabel={buttonLabels.pending}
-					onClick={() => {
-						if (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined) return
-						onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress, proposedRepPerEthPrice)
-					}}
-					pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
-					availability={{
-						disabled: !liquidationEnabled || !canUseLiquidationAction || liquidationActionReason !== undefined,
-						loading: canUseLiquidationAction && liquidationEnabled && liquidationBlocker?.loading === true,
-						reason: liquidationButtonDisabledReason,
-						walletBlocker: walletGuard.walletBlocker,
-					}}
-					showDisabledReason={walletGuard.blocked || ((initialPriceError === undefined || initialPrice.price === '') && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary))}
-				/>
-				<button className='secondary' onClick={closeLiquidationModal}>
-					{commonCopy.cancel}
-				</button>
-			</div>
-		</ModalFrame>
+			</fieldset>
+			<OracleOperationActions
+				prepared={preparedLiquidation}
+				operationKey={liquidationKey}
+				actionLabel={buttonLabels.idle}
+				pendingLabel={buttonLabels.pending}
+				requiresReportFunding={needsInitialPrice}
+				directExecution={liquidationExecutionMode === 'execute'}
+				busy={securityPoolOverviewActiveAction !== undefined}
+				pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
+				reason={liquidationButtonDisabledReason}
+				onExecute={sendLiquidation}
+				onCancel={closeLiquidationModal}
+				walletBlocker={walletGuard.walletBlocker}
+				disabledReasonElementId={disabledReasonElementId}
+				showDisabledReason={walletGuard.blocked || ((initialPriceError === undefined || initialPrice.price === '') && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary))}
+			/>
+		</OperationModal>
 	)
 }

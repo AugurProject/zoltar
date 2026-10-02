@@ -1610,3 +1610,12 @@ button.tx-action-wallet-fix {
 :is([data-message-placement="field"], [data-message-placement="inline"], [data-message-placement="section"])[data-message-tone="success"] {
 	color: var(--success);
 }
+
+.transaction-form-fields {
+	display: grid;
+	gap: var(--space-4);
+	border: 0;
+	padding: 0;
+	margin: 0;
+	min-inline-size: 0;
+}

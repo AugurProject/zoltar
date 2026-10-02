@@ -1,3 +1,5 @@
+import { usePreparedOracleOperation } from '../hooks/usePreparedOracleOperation.js'
+import { OracleOperationActions } from './OracleOperationActions.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
@@ -249,7 +251,6 @@ export function SecurityVaultSection({
 	const operationResults = securityVaultResult === undefined || securityVaultQueuedOperations.some(result => result.hash === securityVaultResult.hash) ? securityVaultQueuedOperations : [...securityVaultQueuedOperations, securityVaultResult]
 	const operationStatusProps = { results: operationResults, oracleManagerDetails, selectedVaultOwner: selectedVaultOwner ?? '', loadingSecurityVault, onViewStagedOperations }
 
-	const stagedOperationTimeoutField = <VaultOperationTimeoutField value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} disabled={!queueWithdrawRepEnabled} onChange={stagedOperationTimeoutMinutes => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes })} />
 	const vaultLoadNotice = (() => {
 		if (loadingSecurityVault) return <UserMessage className='detail' loading detail={securityPoolCopy.loadingVault} />
 		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: securityPoolCopy.invalidVaultAddressHint }} />
@@ -318,6 +319,8 @@ export function SecurityVaultSection({
 			busy={securityVaultActiveAction !== undefined}
 			pending={securityVaultActiveAction === 'setVaultUnderwritingLimit'}
 			onAdjust={onSetVaultUnderwritingLimit}
+			onCancel={modalFirst ? closeVaultActionModal : undefined}
+			onCompleted={modalFirst && securityVaultResult?.stagedExecution?.success !== false ? closeVaultActionModal : undefined}
 			walletBlocker={repExitLauncherBlocker === undefined ? undefined : walletBlocker}
 		/>
 	)
@@ -383,36 +386,70 @@ export function SecurityVaultSection({
 	useEffect(() => setWithdrawInitialPrice({ price: '' }), [autoLoadKey])
 	const needsWithdrawPrice = effectiveRepExitMode === 'withdraw' && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice)
 	const withdrawPrice = parseOracleInitialPrice(needsWithdrawPrice ? withdrawInitialPrice : undefined)
+	const withdrawReason = repExitGuardMessage ?? withdrawPrice.error ?? repExitLauncherBlocker
+	const withdrawKey = `${autoLoadKey}:${normalizedSecurityVaultForm.repWithdrawAmount}:${normalizedSecurityVaultForm.stagedOperationTimeoutMinutes}:${withdrawPrice.proposedRepPerEthPrice}`
+	const preparedWithdrawal = usePreparedOracleOperation({
+		key: withdrawKey,
+		enabled: effectiveRepExitMode === 'withdraw' && (!modalFirst || vaultActionModal === 'withdraw-rep') && canUseLoadedVaultActions && repExitEnabled && hasPositiveWithdrawAmount && hasWithdrawableRep && withdrawReason === undefined,
+		busy: securityVaultActiveAction !== undefined,
+		onPrepare: () => onWithdrawRep(withdrawPrice.proposedRepPerEthPrice),
+		onCompleted: modalFirst && securityVaultResult?.stagedExecution?.success !== false ? closeVaultActionModal : undefined,
+	})
+	const withdrawFieldsLocked = preparedWithdrawal.sending || (securityVaultActiveAction !== undefined && !preparedWithdrawal.preparing)
+	const stagedOperationTimeoutField = <VaultOperationTimeoutField value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} disabled={!queueWithdrawRepEnabled || withdrawFieldsLocked} onChange={stagedOperationTimeoutMinutes => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes })} />
 	const withdrawPriceFields =
 		effectiveRepExitMode === 'redeem' ? undefined : (
 			<>
 				<InlineHint message={getOracleOperationExecutionMessage(oracleManagerDetails, hasValidOraclePrice)} />
-				{needsWithdrawPrice ? <OracleInitialPriceFields managerAddress={currentSelectedVaultDetails?.managerAddress} value={withdrawInitialPrice} onChange={setWithdrawInitialPrice} disabled={securityVaultActiveAction !== undefined} fieldId={withdrawPriceFieldId} /> : undefined}
+				{needsWithdrawPrice ? <OracleInitialPriceFields managerAddress={currentSelectedVaultDetails?.managerAddress} value={withdrawInitialPrice} onChange={setWithdrawInitialPrice} disabled={withdrawFieldsLocked} fieldId={withdrawPriceFieldId} /> : undefined}
 			</>
 		)
 	const repWithdrawAmountField =
 		effectiveRepExitMode === 'redeem' ? null : (
 			<>
-				<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+				<VaultRepWithdrawAmountField
+					disabled={!queueWithdrawRepEnabled || withdrawFieldsLocked}
+					maximumWithdrawableAttoRep={maximumWithdrawableAttoRep}
+					onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })}
+					repTokenSymbol={repTokenSymbol}
+					value={normalizedSecurityVaultForm.repWithdrawAmount}
+				/>
 				{withdrawEntireVaultNotice === undefined ? undefined : <UserMessage tone='warning' announcement='polite' detail={withdrawEntireVaultNotice} />}
 			</>
 		)
-	const repExitActionButton = (
-		<VaultRepExitActionButton
-			canUseLoadedVaultActions={canUseLoadedVaultActions}
-			hasPositiveWithdrawAmount={hasPositiveWithdrawAmount}
-			hasWithdrawableRep={hasWithdrawableRep}
-			onRedeemRepFromVault={onRedeemRepFromVault}
-			onWithdrawRep={() => onWithdrawRep(withdrawPrice.proposedRepPerEthPrice)}
-			repExitActionLabel={repExitActionLabel}
-			repExitEnabled={repExitEnabled}
-			repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
-			disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined && withdrawInitialPrice.price !== '' ? `${withdrawPriceFieldId}-error` : undefined}
-			repExitMode={effectiveRepExitMode}
-			securityVaultActiveAction={securityVaultActiveAction}
-			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
-		/>
-	)
+	const repExitActionButton =
+		effectiveRepExitMode === 'withdraw' ? (
+			<OracleOperationActions
+				prepared={preparedWithdrawal}
+				operationKey={withdrawKey}
+				actionLabel={repExitActionLabel}
+				pendingLabel={securityPoolCopy.withdrawingRep}
+				requiresReportFunding={needsWithdrawPrice}
+				busy={securityVaultActiveAction !== undefined}
+				pending={securityVaultActiveAction === 'queueWithdrawRep'}
+				reason={withdrawReason}
+				onExecute={() => onWithdrawRep(withdrawPrice.proposedRepPerEthPrice)}
+				onCancel={modalFirst ? closeVaultActionModal : undefined}
+				walletBlocker={walletBlocker}
+				disabledReasonElementId={withdrawPrice.error !== undefined && withdrawInitialPrice.price !== '' ? `${withdrawPriceFieldId}-error` : undefined}
+				showDisabledReason={withdrawPrice.error === undefined || withdrawInitialPrice.price === ''}
+			/>
+		) : (
+			<VaultRepExitActionButton
+				canUseLoadedVaultActions={canUseLoadedVaultActions}
+				hasPositiveWithdrawAmount={hasPositiveWithdrawAmount}
+				hasWithdrawableRep={hasWithdrawableRep}
+				onRedeemRepFromVault={onRedeemRepFromVault}
+				onWithdrawRep={() => onWithdrawRep(withdrawPrice.proposedRepPerEthPrice)}
+				repExitActionLabel={repExitActionLabel}
+				repExitEnabled={repExitEnabled}
+				repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
+				disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined && withdrawInitialPrice.price !== '' ? `${withdrawPriceFieldId}-error` : undefined}
+				repExitMode={effectiveRepExitMode}
+				securityVaultActiveAction={securityVaultActiveAction}
+				walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
+			/>
+		)
 	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, poolEnded, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
@@ -456,6 +493,8 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 			<OperationModal
+				embedTransactionSteps={false}
+				closeDisabled={preparedWithdrawal.workflow?.steps.some(step => step.phase === 'wallet') === true}
 				confirmSingleStepFromForm
 				closeOnSuccessKey={(securityVaultResult?.action === 'queueWithdrawRep' || securityVaultResult?.action === 'redeemRepFromVault') && securityVaultResult.stagedExecution?.success !== false ? securityVaultResult.hash : undefined}
 				context={vaultTransactionContext}
@@ -493,16 +532,11 @@ export function SecurityVaultSection({
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						{withdrawPriceFields}
-						<div className='actions'>
-							{repExitActionButton}
-							<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
-								{commonCopy.cancel}
-							</button>
-						</div>
+						{repExitActionButton}
 					</>
 				)}
 			</OperationModal>
-			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
+			<VaultBackingFactorModal embedTransactionSteps={commitmentChangeIsDirect} context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
 			</VaultBackingFactorModal>
 		</>
