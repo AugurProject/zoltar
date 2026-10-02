@@ -55,7 +55,12 @@ function walletHolding(label: string) {
 	return document.querySelector(`.market-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
 }
 
-async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services'], initialRoute = 'portfolio', onRender?: (route: string, discovery: ReturnType<typeof useLiveTradingController>['discovery']) => void, onUniversesChange: Parameters<typeof useLiveTradingController>[0]['onUniversesChange'] = () => undefined) {
+async function renderDiscoveryController(
+	services: Parameters<typeof useLiveTradingController>[0]['services'],
+	initialRoute = 'portfolio',
+	onRender?: (route: string, discovery: ReturnType<typeof useLiveTradingController>['discovery']) => void,
+	onUniversesChange: Parameters<typeof useLiveTradingController>[0]['onUniversesChange'] = () => undefined,
+) {
 	let controller: ReturnType<typeof useLiveTradingController> | undefined
 	function Harness({ route = initialRoute }: { route?: string }) {
 		controller = useLiveTradingController({
@@ -378,7 +383,7 @@ describe('live market refresh', () => {
 			refresh = controller?.discovery.refresh()
 		})
 		try {
-			expect(reads).toBe(2)
+			await waitForDom(() => reads === 2, 'partial refresh after deployment validation')
 			expect(document.body.textContent).toContain('Slow market')
 			await act(async () => {
 				timeout.resolve()

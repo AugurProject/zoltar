@@ -1,3 +1,4 @@
+import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -85,7 +86,7 @@ export type SavedPortfolioPool = Readonly<{ pool: Address; universeId: bigint | 
 
 /** Refresh only saved addresses; cached summaries identify scope and error rows, never current balances or prices. */
 export async function discoverSavedMarkets(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, savedMarkets: readonly SavedPortfolioPool[], onProgress?: MarketDiscoveryProgress, isCurrent = () => true) {
-	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
+	const universeIds = await runReadOperation(operation => loadUniverseIds(readOperationClient(client, operation), configuration, isCurrent), { isCurrent })
 	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
 	const saved = [...new Map(savedMarkets.filter(market => market.universeId === undefined || market.universeId === selectedUniverseId).map(market => [market.pool.toLowerCase(), market])).values()]
 	const total = BigInt(saved.length)
@@ -98,11 +99,12 @@ export async function discoverSavedMarkets(client: PublicClient, configuration: 
 			if (index > 0) await new Promise(resolve => setTimeout(resolve, 1_000))
 			if (!isCurrent()) throw new Error('Portfolio refresh cancelled')
 			try {
-				const discovered = await discoverAddressedMarket(client, configuration, cached.pool)
+				const discovered = await runReadOperation(operation => discoverAddressedMarket(readOperationClient(client, operation), configuration, cached.pool), { isCurrent })
 				const market = discovered.markets[0]
 				if (market === undefined) throw new Error('Saved pool is unavailable')
 				return market.universeId === selectedUniverseId ? market : undefined
 			} catch (error) {
+				if (!isCurrent()) throw error
 				const market = cached.market ?? unavailableMarket({ securityPool: cached.pool, universeId: selectedUniverseId ?? 0n, shareToken: zeroAddress, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps)
 				return { ...market, loadError: publicErrorMessage(error, 'Saved pool refresh failed') }
 			}

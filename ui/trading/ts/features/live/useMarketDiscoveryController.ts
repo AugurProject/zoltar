@@ -1,7 +1,7 @@
 import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore, selectPortfolioMarkets } from '../../lib/favoriteMarkets.js'
 import { isSecurityPoolNotFoundError } from '../../protocol/marketDiscovery.js'
-import { readOperationClient, runReadOperation, type ReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
+import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import type { MarketDiscoveryProgress } from '../../protocol/live.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -76,15 +76,24 @@ export function useMarketDiscoveryController({
 	const foregroundDiscovery = useRef<{ request: RequestIdentity; args: [DeploymentConfiguration, bigint, WorkflowOwner | undefined, RefreshOptions] }>()
 	const partialSnapshot = useRef<{ markets: typeof market.markets; page: typeof market.marketPage; rows: typeof market.discoveryRows }>()
 
-	async function discover(nextConfiguration: DeploymentConfiguration, isCurrent: () => boolean, operation: ReadOperation, onProgress: MarketDiscoveryProgress) {
-		const client = readOperationClient(services.createTradingPublicClient(nextConfiguration), operation)
-		await services.validateLiveDeployment(client, nextConfiguration)
-		if (!isCurrent()) return undefined
+	async function discover(nextConfiguration: DeploymentConfiguration, isCurrent: () => boolean, onProgress: MarketDiscoveryProgress) {
+		const client = services.createTradingPublicClient(nextConfiguration)
 		const requestedUniverseId = parsedUniverseId(selectedUniverseId)
-		if (routePool !== undefined) return await services.discoverAddressedMarket(client, nextConfiguration, routePool)
-		if (route === 'portfolio') return await services.discoverSavedMarkets(client, nextConfiguration, requestedUniverseId, savedMarkets, onProgress, isCurrent)
-		// Lookup lists use browser-local favorites; only an addressed route reads a pool.
-		return await services.discoverUniverses(client, nextConfiguration, requestedUniverseId, isCurrent)
+		const discovered = await runReadOperation(
+			async operation => {
+				const boundedClient = readOperationClient(client, operation)
+				await services.validateLiveDeployment(boundedClient, nextConfiguration)
+				if (!isCurrent()) return undefined
+				if (routePool !== undefined) return await services.discoverAddressedMarket(boundedClient, nextConfiguration, routePool)
+				if (route === 'portfolio') return undefined
+				// Lookup lists use browser-local favorites; only an addressed route reads a pool.
+				return await services.discoverUniverses(boundedClient, nextConfiguration, requestedUniverseId, isCurrent)
+			},
+			{ isCurrent },
+		)
+		// Saved pools own separate deadlines so one stalled pool cannot cancel the remaining queue.
+		if (route === 'portfolio' && routePool === undefined && isCurrent()) return await services.discoverSavedMarkets(client, nextConfiguration, requestedUniverseId, savedMarkets, onProgress, isCurrent)
+		return discovered
 	}
 
 	/**
@@ -168,7 +177,7 @@ export function useMarketDiscoveryController({
 				onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 				market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			}
-			const discovered = await runReadOperation(async operation => await discover(nextConfiguration, () => discoveryRequests.isCurrent(request), operation, onProgress), { isCurrent: () => discoveryRequests.isCurrent(request) }).finally(() => {
+			const discovered = await discover(nextConfiguration, () => discoveryRequests.isCurrent(request), onProgress).finally(() => {
 				acceptingProgress = false
 			})
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
@@ -233,10 +242,8 @@ export function useMarketDiscoveryController({
 		}
 		if (route === 'portfolio') {
 			const savedIds = new Set(savedMarkets.map(pool => pool.pool.toLowerCase()))
-			market.setMarkets(current => {
-				const retained = current.filter(pool => savedIds.has(pool.pool.toLowerCase()))
-				return retained.length === current.length ? current : retained
-			})
+			const retained = market.markets.filter(pool => savedIds.has(pool.pool.toLowerCase()))
+			if (retained.length !== market.markets.length) market.setMarkets(retained)
 		}
 		void refresh(configuration, 0n)
 	}, [configuration, configurationError, routePool === undefined ? selectedUniverseId : undefined, savedScope])

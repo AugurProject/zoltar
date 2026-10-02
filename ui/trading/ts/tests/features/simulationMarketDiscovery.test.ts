@@ -1,5 +1,8 @@
 /// <reference types='bun-types' />
 
+import { setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
 import { h } from 'preact'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -10,7 +13,7 @@ import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, ge
 import { latestBlockIdentity } from '../../protocol/tradeQuote.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
@@ -69,6 +72,68 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			await backend.setTransactionDelayMilliseconds(0)
 			await backend.setQueryDelayMilliseconds(0)
 		}, 180_000)
+
+		if (scenario === FUNDED_TRADING_SIMULATION_SCENARIO)
+			test('a timed-out saved pool does not prevent loading the following healthy pool', async () => {
+				activateSimulationBackendProfile(backend)
+				const addresses = getInfraContractAddresses(backend.profile)
+				const plan = getTradingDeploymentPlan({ chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30)
+				const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
+				const seeded = (await discoverLiveUniverseMarketPage(backend.createReadClient(), configuration, 0n)).markets[0]
+				if (seeded === undefined) throw new Error('Missing seeded market')
+				const stalledPool = getAddress('0x1111111111111111111111111111111111111111')
+				const dom = installDomEnvironment()
+				const restore = installActiveEnvironmentForTesting(backend, backend)
+				const originalTimeout = globalThis.setTimeout
+				const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalTimeout(handler, delay === 30_000 ? 3_000 : delay, ...args))
+				let result: Awaited<ReturnType<typeof discoverSavedMarkets>> | undefined
+				try {
+					const scope = getLocalEntityScope('trading', 'pool')
+					marketDownloadStore.record(scope, [
+						{ id: seeded.pool, data: seeded },
+						{ id: stalledPool, data: { ...seeded, pool: stalledPool } },
+					])
+					setEntityFavorite(scope, seeded.pool, true)
+					setEntityFavorite(scope, stalledPool, true)
+					const client = backend.createReadClient()
+					const readContract: typeof client.readContract = async parameters => {
+						if (parameters.address === stalledPool) return await new Promise<never>(() => undefined)
+						return await client.readContract(parameters)
+					}
+					const rendered = await renderIntoDocument(
+						h(LiveTrading, {
+							route: 'portfolio',
+							configuration,
+							configurationError: undefined,
+							selectedUniverseId: '0',
+							onWorkflowLockChange: () => undefined,
+							controllerServices: {
+								...liveTradingControllerServices,
+								createTradingPublicClient: () => ({ ...client, readContract }),
+								discoverSavedMarkets: async (...args) => {
+									result = await discoverSavedMarkets(...args)
+									return result
+								},
+							},
+						}),
+					)
+					try {
+						await waitFor(() => expect([...rendered.container.querySelectorAll('button')].find(button => button.textContent === 'Refresh portfolio')?.disabled).toBe(false), { timeout: 8_000 })
+						expect(result?.markets).toHaveLength(2)
+						expect(result?.markets.find(market => market.pool === stalledPool)?.loadError).toContain('timed out')
+						expect(result?.markets.find(market => market.pool === seeded.pool)?.loadError).toBeUndefined()
+						expect(result?.markets.find(market => market.pool === seeded.pool)?.pair).toBe(seeded.pair)
+						await waitFor(() => expect(rendered.container.querySelector(`[data-portfolio-pool="${stalledPool}"]`)?.textContent).toContain('timed out'))
+						expect(rendered.container.querySelector(`[data-portfolio-pool="${seeded.pool}"]`)?.textContent).not.toContain('timed out')
+					} finally {
+						await rendered.cleanup()
+					}
+				} finally {
+					timer.mockRestore()
+					restore()
+					dom.cleanup()
+				}
+			}, 180_000)
 
 		test('shows a missing pool without retry and offers a way back on addressed routes', async () => {
 			const addresses = getInfraContractAddresses(backend.profile)
