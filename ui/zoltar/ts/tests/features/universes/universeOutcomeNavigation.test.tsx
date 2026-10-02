@@ -36,7 +36,9 @@ describe('outcome-based universe traversal', () => {
 		const starts: bigint[] = []
 		const loader: LoadUniverseOutcomes = async (_address, _id, start) => {
 			starts.push(start)
-			return starts.length === 1 ? { ...page, hasNextPage: true } : starts.length === 2 ? page : await pending.promise
+			if (starts.length === 1) return { ...page, hasNextPage: true }
+			if (starts.length === 2) return page
+			return await pending.promise
 		}
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
 		const q = within(view.container)
