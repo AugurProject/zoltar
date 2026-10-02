@@ -246,6 +246,17 @@ describe('security vault guards', () => {
 })
 
 describe('vault deposit minimum availability', () => {
+	test('explains the first-deposit minimum before an amount or approval is supplied', () => {
+		const base = { approvalSatisfied: false, currentVaultRepBackingAttoRep: 0n, depositAmount: 0n, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: 110n * ATTO_ETH_PER_ETH, walletRepShortfallAttoRep: undefined }
+		expect(getVaultDepositGuardMessage(base)).toBe('New vaults require at least 110\u00a0REP in the first deposit.')
+		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: ATTO_ETH_PER_ETH })).toBeUndefined()
+		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: undefined })).toBeUndefined()
+		expect(getVaultDepositGuardMessage({ ...base, depositAmount: undefined })).toBe('Enter a valid REP deposit amount.')
+		expect(getVaultDepositGuardMessage({ ...base, depositAmount: -ATTO_ETH_PER_ETH })).toBeUndefined()
+		expect(getVaultDepositGuardMessage({ ...base, minimumVaultRepDepositAttoRep: 0n })).toBeUndefined()
+		expect(getVaultDepositGuardMessage({ ...base, minimumVaultRepDepositAttoRep: undefined })).toBe(securityPoolCopy.vaultMinimumLoading)
+	})
+
 	// SecurityPool derives its minimum from theoretical supply when unconfigured, so an unloaded minimum must not be guessed.
 	test('blocks a deposit while the pool minimum vault REP is unknown', () => {
 		expect(getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount: 5n * ATTO_ETH_PER_ETH, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: undefined, walletRepShortfallAttoRep: undefined })).toBe(securityPoolCopy.vaultMinimumLoading)
