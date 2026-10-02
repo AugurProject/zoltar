@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMulticallStub, createReadContractStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
-import { loadUniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
+import { loadUniverseOutcomePage, loadScalarUniverseOutcome } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
 
 const address = getAddress('0x00000000000000000000000000000000000000f1')
 const scalar = { numTicks: 10n ** 25n, displayValueMin: 0n, displayValueMax: 10n ** 43n, answerUnit: 'units' }
@@ -94,19 +94,26 @@ describe('bounded child universe navigation', () => {
 		expect(empty.scalarQuestion).toBeUndefined()
 	})
 
-	test('scalar navigation includes both endpoints and uses bigint tick encoding without enumerating the range', async () => {
+	test('scalar forks return only picker metadata without enumerating or checking child outcomes', async () => {
 		const f = fixture({ scalarQuestion: true })
-		const first = await loadUniverseOutcomePage(f.client, address, 0n, 0n)
-		expect(first.choices.map(choice => choice.label)).toEqual(['Invalid', ...Array.from({ length: 9 }, (_, i) => `${i} units`)])
-		expect(first.scalarQuestion).toEqual(scalar)
-		expect(first.hasNextPage).toBe(true)
-		expect(f.outcomeIndexes[1]).toBe(getScalarOutcomeIndex(scalar, 0n))
-		const last = await loadUniverseOutcomePage(f.client, address, 0n, scalar.numTicks)
-		expect(last.choices).toHaveLength(2)
-		expect(last.hasNextPage).toBe(false)
-		expect(f.outcomeIndexes.at(-1)).toBe(getScalarOutcomeIndex(scalar, scalar.numTicks))
+		const page = await loadUniverseOutcomePage(f.client, address, 0n, 0n)
+		expect(page.choices).toEqual([])
+		expect(page.scalarQuestion).toEqual(scalar)
+		expect(page.hasNextPage).toBe(false)
+		expect(f.outcomeIndexes).toEqual([])
+		expect(f.batches.map(batch => batch.length)).toEqual([2, 2])
 		expect(f.labelReads).toEqual([])
-		expect(f.batches.every(batch => batch.length <= 10)).toBe(true)
+	})
+
+	test('resolves only the selected scalar child, including Invalid and both endpoints', async () => {
+		const f = fixture({ scalarQuestion: true })
+		for (const index of [0n, getScalarOutcomeIndex(scalar, 0n), getScalarOutcomeIndex(scalar, scalar.numTicks)]) {
+			const child = await loadScalarUniverseOutcome(f.client, address, 0n, index)
+			expect(child).toEqual({ universeId: index + 100n, exists: index !== 0n })
+		}
+		expect(f.outcomeIndexes).toEqual([0n, getScalarOutcomeIndex(scalar, 0n), getScalarOutcomeIndex(scalar, scalar.numTicks)])
+		expect(f.batches.map(batch => batch.length)).toEqual([1, 1, 1, 1, 1, 1])
+		expect(f.labelReads).toEqual([])
 	})
 
 	test('unforked universes and invalid page offsets perform no outcome or registry scans', async () => {

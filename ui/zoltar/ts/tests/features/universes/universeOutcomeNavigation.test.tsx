@@ -9,6 +9,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { UniverseOutcomeNavigation, type LoadUniverseOutcomes } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
+import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { UniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 
@@ -143,31 +144,100 @@ describe('outcome-based universe traversal', () => {
 		expect(view.container.textContent).not.toContain('Alpha')
 	})
 
-	test('scalar value lookup jumps directly to a distant bounded page and validates exact values', async () => {
-		const starts: bigint[] = []
-		const loader: LoadUniverseOutcomes = async (_address, _id, start) => {
-			starts.push(start)
-			return { ...page, hasNextPage: true, scalarQuestion: { answerUnit: 'units', numTicks: 10n ** 25n, displayValueMin: 0n, displayValueMax: 10n ** 43n } }
-		}
-		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+	test('scalar forks use an exact picker and resolve only its selected child, even with huge tick counts', async () => {
+		const question = { answerUnit: 'units', numTicks: 10n ** 25n, displayValueMin: 0n, displayValueMax: 10n ** 43n }
+		const indexes: bigint[] = []
+		const view = lifecycle.trackRendered(
+			await renderIntoDocument(
+				<UniverseOutcomeNavigation
+					universe={universe}
+					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, scalarQuestion: question })}
+					loadOutcome={async (_address, _id, index) => {
+						indexes.push(index)
+						return { universeId: 30n, exists: true }
+					}}
+				/>,
+			),
+		)
 		const q = within(view.container)
-		await waitFor(() => expect(q.queryByRole('textbox', { name: 'Find outcome by value' })).not.toBeNull())
-		const input = q.getByRole('textbox', { name: 'Find outcome by value' })
-		fireEvent.input(input, { target: { value: '10000000000000000000000000' } })
-		await act(() => {
-			const form = view.container.querySelector('form')
-			if (form === null) throw new Error('Missing scalar form')
-			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		await waitFor(() => expect(q.queryByRole('textbox', { name: 'Scalar value' })).not.toBeNull())
+		await waitFor(() => expect(indexes).toHaveLength(1))
+		expect(view.container.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
+		expect(q.queryByRole('button', { name: 'Next page' })).toBeNull()
+		expect(q.queryByRole('button', { name: 'Find outcome' })).toBeNull()
+		fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '10000000000000000000000000' } })
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open 10000000000000000000000000 units universe' }).hasAttribute('disabled')).toBe(false))
+		expect(indexes).toEqual([getScalarOutcomeIndex(question, 0n), getScalarOutcomeIndex(question, question.numTicks)])
+		fireEvent.input(q.getByRole('textbox', { name: 'Select outcome' }), { target: { value: (question.numTicks + 1n).toString() } })
+		await waitFor(() => expect(q.queryByText('Enter an exact tick within the question’s range.')).not.toBeNull())
+		expect(indexes).toHaveLength(2)
+		expect(q.getByRole('button', { name: 'Open None universe' }).hasAttribute('disabled')).toBe(true)
+		fireEvent.input(q.getByRole('textbox', { name: 'Select outcome' }), { target: { value: question.numTicks.toString() } })
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open 10000000000000000000000000 units universe' }).hasAttribute('disabled')).toBe(false))
+		fireEvent.click(q.getByRole('button', { name: 'Open 10000000000000000000000000 units universe' }))
+		expect(window.location.hash).toContain('universe=30')
+	})
+
+	test('scalar selection guards late replies, supports Invalid, and refreshes undeployed children', async () => {
+		const question = { answerUnit: '°C', numTicks: 20n, displayValueMin: 0n, displayValueMax: 100n * 10n ** 18n }
+		const pending = createDeferred<{ universeId: bigint; exists: boolean }>()
+		let deployed = false
+		const indexes: bigint[] = []
+		const view = lifecycle.trackRendered(
+			await renderIntoDocument(
+				<UniverseOutcomeNavigation
+					universe={universe}
+					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, scalarQuestion: question })}
+					loadOutcome={async (_address, _id, index) => {
+						indexes.push(index)
+						return index === getScalarOutcomeIndex(question, 0n) ? await pending.promise : { universeId: 40n, exists: deployed }
+					}}
+				/>,
+			),
+		)
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByRole('slider', { name: 'Select outcome' })).not.toBeNull())
+		await waitFor(() => expect(indexes).toHaveLength(1))
+		fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } })
+		await waitFor(() => expect(q.queryByText('Not deployed')).not.toBeNull())
+		expect(q.getByRole('button', { name: 'Open 50 °C universe' }).hasAttribute('disabled')).toBe(true)
+		await act(async () => {
+			pending.resolve({ universeId: 99n, exists: true })
+			await pending.promise
 		})
-		await waitFor(() => expect(starts).toEqual([0n, 10n ** 25n]))
-		fireEvent.input(input, { target: { value: '1.5' } })
-		await act(() => {
-			const form = view.container.querySelector('form')
-			if (form === null) throw new Error('Missing scalar form')
-			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-		})
-		await waitFor(() => expect(q.queryByText('Enter an exact outcome value within the question’s range.')).not.toBeNull())
-		expect(starts).toHaveLength(2)
+		expect(q.getByRole('button', { name: 'Open 50 °C universe' }).hasAttribute('disabled')).toBe(true)
+		deployed = true
+		await act(() => appBlockWatcher.invalidate())
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open 50 °C universe' }).hasAttribute('disabled')).toBe(false))
+		fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' }))
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open Invalid universe' }).hasAttribute('disabled')).toBe(false))
+		expect(indexes.at(-1)).toBe(0n)
+	})
+
+	test('moving the scalar slider reads only the final selection after it settles', async () => {
+		const question = { answerUnit: '°C', numTicks: 20n, displayValueMin: 0n, displayValueMax: 100n * 10n ** 18n }
+		const indexes: bigint[] = []
+		const view = lifecycle.trackRendered(
+			await renderIntoDocument(
+				<UniverseOutcomeNavigation
+					universe={universe}
+					loadPage={async () => ({ ...page, choices: [], hasNextPage: false, scalarQuestion: question })}
+					loadOutcome={async (_address, _id, index) => {
+						indexes.push(index)
+						return { universeId: 40n, exists: true }
+					}}
+				/>,
+			),
+		)
+		const q = within(view.container)
+		await waitFor(() => expect(indexes).toHaveLength(1))
+		const slider = q.getByRole('slider', { name: 'Select outcome' })
+		for (const value of ['1', '2', '3']) {
+			fireEvent.input(slider, { target: { value } })
+			await act(async () => await Bun.sleep(30))
+		}
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open 15 °C universe' }).hasAttribute('disabled')).toBe(false))
+		expect(indexes).toEqual([getScalarOutcomeIndex(question, 0n), getScalarOutcomeIndex(question, 3n)])
 	})
 
 	test('unforked universes never request outcomes', async () => {

@@ -1,6 +1,5 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { readRequiredMulticall } from './core.js'
@@ -29,23 +28,13 @@ export async function loadUniverseOutcomePage(client: Pick<ReadClient, 'readCont
 	])
 	const [title, , , , numTicks, displayValueMin, displayValueMax, answerUnit] = question
 	const scalarQuestion = firstLabels.length === 0 && numTicks > 0n ? { numTicks, displayValueMin, displayValueMax, answerUnit } : undefined
-	let outcomes: { label: string; outcomeIndex: bigint }[]
-	let hasNextPage: boolean
-	if (scalarQuestion !== undefined) {
-		const total = numTicks + 2n // Invalid, then ticks zero through numTicks inclusive.
-		outcomes = []
-		for (let ordinal = start; ordinal < total && ordinal < start + UNIVERSE_OUTCOME_PAGE_SIZE; ordinal++) {
-			outcomes.push(ordinal === 0n ? { label: 'Invalid', outcomeIndex: 0n } : { label: formatScalarOutcomeLabel(scalarQuestion, ordinal - 1n), outcomeIndex: getScalarOutcomeIndex(scalarQuestion, ordinal - 1n) })
-		}
-		hasNextPage = start + UNIVERSE_OUTCOME_PAGE_SIZE < total
-	} else {
-		const labelStart = start === 0n ? 0n : start - 1n
-		const labels = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionDataAddress, functionName: 'getOutcomeLabels', args: [questionId, labelStart, UNIVERSE_OUTCOME_PAGE_SIZE + 1n] })
-		const candidates = labels.map((label, index) => ({ label, outcomeIndex: labelStart + BigInt(index) + 1n }))
-		if (start === 0n) candidates.unshift({ label: 'Invalid', outcomeIndex: 0n })
-		hasNextPage = candidates.length > Number(UNIVERSE_OUTCOME_PAGE_SIZE)
-		outcomes = candidates.slice(0, Number(UNIVERSE_OUTCOME_PAGE_SIZE))
-	}
+	if (scalarQuestion !== undefined) return { choices: [], hasNextPage: false, scalarQuestion, title }
+	const labelStart = start === 0n ? 0n : start - 1n
+	const labels = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionDataAddress, functionName: 'getOutcomeLabels', args: [questionId, labelStart, UNIVERSE_OUTCOME_PAGE_SIZE + 1n] })
+	const candidates = labels.map((label, index) => ({ label, outcomeIndex: labelStart + BigInt(index) + 1n }))
+	if (start === 0n) candidates.unshift({ label: 'Invalid', outcomeIndex: 0n })
+	const hasNextPage = candidates.length > Number(UNIVERSE_OUTCOME_PAGE_SIZE)
+	const outcomes = candidates.slice(0, Number(UNIVERSE_OUTCOME_PAGE_SIZE))
 	if (outcomes.length === 0) return { choices: [], hasNextPage, scalarQuestion, title }
 	const childIds = await readRequiredMulticall(
 		client,
@@ -62,4 +51,13 @@ export async function loadUniverseOutcomePage(client: Pick<ReadClient, 'readCont
 		return { label: outcome.label, universeId: childId, exists: token !== zeroAddress }
 	})
 	return { choices, hasNextPage, scalarQuestion, title }
+}
+
+export type UniverseOutcome = { universeId: bigint; exists: boolean }
+
+/** Resolves only the selected scalar outcome, including Invalid, without enumerating any ticks. */
+export async function loadScalarUniverseOutcome(client: Pick<ReadClient, 'readContract' | 'multicall'>, zoltarAddress: Address, universeId: bigint, outcomeIndex: bigint): Promise<UniverseOutcome> {
+	const [childId] = await readRequiredMulticall(client, [{ abi: Zoltar_Zoltar.abi, address: zoltarAddress, functionName: 'getChildUniverseId', args: [universeId, outcomeIndex] }])
+	const [token] = await readRequiredMulticall(client, [{ abi: Zoltar_Zoltar.abi, address: zoltarAddress, functionName: 'getRepToken', args: [childId] }])
+	return { universeId: childId, exists: token !== zeroAddress }
 }
