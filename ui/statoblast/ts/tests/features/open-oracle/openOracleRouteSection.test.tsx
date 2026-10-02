@@ -1436,6 +1436,20 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
+	test('does not claim oracle balances are empty before their lookup completes', async () => {
+		const props = createOpenOracleSectionProps({ activeView: 'selected-report', openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', isDistributed: true, reportTimestamp: 100n, settlementTimestamp: 160n }) })
+		const rendered = await renderIntoDocument(<OpenOracleSection {...props} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		expect(queries.queryByText(openOracleCopy.noOracleBalances) === null).toBe(true)
+		expect(queries.getByText(openOracleCopy.loadingOracleBalances)).not.toBeNull()
+		await act(() => render(<OpenOracleSection {...props} openOracleWithdrawableBalancesLoading />, rendered.container))
+		expect(queries.queryByText(openOracleCopy.noOracleBalances) === null).toBe(true)
+		await act(() => render(<OpenOracleSection {...props} openOracleWithdrawableBalances={{ ethAttoEth: 0n, token1: 0n, token2: 0n }} />, rendered.container))
+		expect(queries.getByText(openOracleCopy.noOracleBalances)).not.toBeNull()
+		expect(queries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
+	})
+
 	test('shows independent credited-balance withdrawals after settlement', async () => {
 		const withdrawnBalances: string[] = []
 		const reportDetails = createOpenOracleReportDetails({

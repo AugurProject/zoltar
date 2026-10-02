@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { useUniverseSummary, type LoadUniverseSummary } from '../../features/useUniverseSummary.js'
 import { UniverseDirectory } from '../../features/UniverseDirectory.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { render } from 'preact'
@@ -58,6 +60,26 @@ describe('universe directory', () => {
 		const missing = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => undefined} universeId={9n} />)
 		cleanupRendered = missing.cleanup
 		await waitFor(() => expect(missing.container.textContent).toContain('Universe 0x9 is not deployed on this network.'))
+	})
+
+	test.each(['universe', 'configuration', 'loader'] as const)('does not carry a missing universe into a new %s lookup', async change => {
+		const pending = createDeferred<Awaited<ReturnType<LoadUniverseSummary>>>()
+		const loadUniverse: LoadUniverseSummary = async (config, universeId) => (universeId === 9n && config === configuration ? undefined : await pending.promise)
+		const states: string[] = []
+		function Harness({ config = configuration, id = 9n, loader = loadUniverse }: { config?: DeploymentConfiguration; id?: bigint; loader?: LoadUniverseSummary }) {
+			const { state } = useUniverseSummary(config, id, loader)
+			states.push(state.kind === 'ready' && state.universe === undefined ? 'missing' : state.kind)
+			return <div>{state.kind}</div>
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(states.at(-1)).toBe('missing'))
+		states.length = 0
+		await act(() => render(<Harness config={change === 'configuration' ? { ...configuration, rpcUrl: 'http://other-rpc' } : configuration} id={change === 'universe' ? 2n : 9n} loader={change === 'loader' ? async () => await pending.promise : loadUniverse} />, rendered.container))
+		expect(states[0]).toBe('loading')
+		expect(states).not.toContain('missing')
+		await act(async () => pending.resolve(createForkedUniverseSummary({ universeId: 2n })))
+		await waitFor(() => expect(states.at(-1)).toBe('ready'))
 	})
 
 	test('recovers a failed universe read with a retry', async () => {

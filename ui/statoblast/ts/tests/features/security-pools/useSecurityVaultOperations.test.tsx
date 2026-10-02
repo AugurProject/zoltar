@@ -12,7 +12,7 @@ import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-stat
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { signal } from '@preact/signals'
 import { act } from 'preact/test-utils'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
@@ -118,7 +118,7 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 }
 
 function createHarness(dependencies: UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient>, onRender: (state: UseSecurityVaultOperationsState) => void, overrides: Partial<Parameters<typeof useSecurityVaultOperations>[0]> = {}) {
-	return function SecurityVaultOperationsHarness() {
+	return function SecurityVaultOperationsHarness(parameters: Partial<Parameters<typeof useSecurityVaultOperations>[0]>) {
 		const state = useSecurityVaultOperations(
 			{
 				accountAddress: WALLET_ADDRESS,
@@ -130,6 +130,7 @@ function createHarness(dependencies: UseSecurityVaultOperationsDependencies<Test
 				refreshState: async () => undefined,
 				selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
 				...overrides,
+				...parameters,
 			},
 			dependencies,
 		)
@@ -140,6 +141,33 @@ function createHarness(dependencies: UseSecurityVaultOperationsDependencies<Test
 
 describe('useSecurityVaultOperations', () => {
 	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
+
+	test.each(['owner', 'pool'] as const)('does not carry a missing vault result into another %s selection', async selection => {
+		const dependencies = createSecurityVaultOperationsDependencies({ loadSecurityVaultDetails: async () => undefined })
+		let state: UseSecurityVaultOperationsState | undefined
+		const observations: boolean[] = []
+		const nextAddress = getAddress('0x00000000000000000000000000000000000000a2')
+		let switched = false
+		const Harness = createHarness(dependencies, next => {
+			state = next
+			if (switched) observations.push(next.securityVaultMissing)
+		})
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(rendered.cleanup)
+		await act(async () => await requireHookState(state).loadSecurityVault())
+		expect(requireHookState(state).securityVaultMissing).toBe(true)
+		switched = true
+		await act(() => {
+			if (selection === 'owner') requireHookState(state).setSecurityVaultForm(current => ({ ...current, selectedVaultOwner: nextAddress }))
+			else {
+				render(h(Harness, { selectedSecurityPoolAddress: nextAddress }), rendered.container)
+			}
+		})
+		expect(observations.length).toBeGreaterThan(0)
+		expect(observations).not.toContain(true)
+		await act(async () => await requireHookState(state).loadSecurityVault())
+		expect(requireHookState(state).securityVaultMissing).toBe(true)
+	})
 
 	test.each(['setVaultUnderwritingLimit', 'withdrawRep'] as const)('passes a manual initial price through funding and queuing without automatic pricing: %s', async operation => {
 		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))

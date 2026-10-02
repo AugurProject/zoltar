@@ -7,6 +7,7 @@ import { useLiveTradingController } from '../../features/liveTradingController.j
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -54,9 +55,9 @@ function walletHolding(label: string) {
 	return document.querySelector(`.market-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
 }
 
-async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services']) {
+async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services'], initialRoute = 'portfolio', onRender?: (route: string, discovery: ReturnType<typeof useLiveTradingController>['discovery']) => void) {
 	let controller: ReturnType<typeof useLiveTradingController> | undefined
-	function Harness({ route = 'portfolio' }: { route?: string }) {
+	function Harness({ route = initialRoute }: { route?: string }) {
 		controller = useLiveTradingController({
 			route,
 			configuration,
@@ -70,6 +71,7 @@ async function renderDiscoveryController(services: Parameters<typeof useLiveTrad
 			defaultValidityMinutes: '20',
 			services,
 		})
+		onRender?.(route, controller.discovery)
 		return (
 			<div>
 				{controller.discovery.visibleMarkets.map(market => (
@@ -101,6 +103,34 @@ describe('live market refresh', () => {
 			cleanupRendered = undefined
 		},
 		url: `http://localhost/?demo=0#/market/${pool}`,
+	})
+
+	test('does not carry a missing pool result into another addressed route', async () => {
+		const nextPool = getAddress('0x00000000000000000000000000000000000000a2')
+		const pending = createDeferred<ReturnType<typeof discoveryPage>>()
+		const oldRoute = `security-pool/${pool}`
+		const nextRoute = `market/${nextPool}`
+		const observations: string[] = []
+		const harness = await renderDiscoveryController(
+			{
+				...offlineControllerServices,
+				discoverAddressedMarket: async (_client, _config, address) => {
+					if (address === pool) throw Object.assign(new Error('Security pool does not exist.'), { name: 'SecurityPoolNotFoundError' })
+					return await pending.promise
+				},
+			},
+			oldRoute,
+			(route, discovery) => {
+				if (route === nextRoute) observations.push(discovery.discoveryState)
+			},
+		)
+		cleanupRendered = harness.cleanup
+		await waitForDom(() => harness.state().discovery.discoveryState === 'not-found')
+		await harness.navigate(nextRoute)
+		expect(observations[0]).toBe('loading')
+		expect(observations).not.toContain('not-found')
+		await act(async () => pending.resolve(discoveryPage([{ ...market, pool: nextPool }])))
+		await waitForDom(() => harness.state().discovery.selected?.pool === nextPool)
 	})
 
 	test('explicit invalidation retains first-load rows and reruns foreground progress', async () => {

@@ -573,7 +573,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		securityVaultDetails: securityVaultDetails.value,
 		securityVaultError: securityVaultError.value,
 		securityVaultForm: securityVaultForm.value,
-		securityVaultMissing: securityVaultMissing.value,
+		securityVaultMissing: lastEffectiveVaultSelectionKey.current === effectiveVaultSelectionKey && securityVaultMissing.value,
 		walletRepBalanceAttoRep: repBalanceLoader.signal.value.value,
 		walletRepBalanceError: repBalanceLoader.signal.value.error,
 		walletRepBalanceLoading: repBalanceLoader.signal.value.loading,

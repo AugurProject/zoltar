@@ -230,7 +230,7 @@ export function OpenOracleReportDetailsCard({
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
 	let withdrawableBalancesContent: ComponentChildren
 	if (openOracleWithdrawableBalances === undefined) {
-		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading ? <UserMessage className='detail' loading detail={openOracleCopy.loadingOracleBalances} /> : undefined
+		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError === undefined ? <UserMessage className='detail' loading detail={openOracleCopy.loadingOracleBalances} /> : undefined
 	} else {
 		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>
 	}
@@ -293,7 +293,7 @@ export function OpenOracleReportDetailsCard({
 					<ErrorNotice message={openOracleWithdrawableBalancesError} />
 					<ErrorNotice message={openOracleWithdrawalReviewMessage?.message} />
 					{withdrawableBalancesContent}
-					{!hasWithdrawableBalance && !openOracleWithdrawableBalancesLoading && openOracleWithdrawableBalancesError === undefined ? <UserMessage className='detail' detail={openOracleCopy.noOracleBalances} /> : undefined}
+					{openOracleWithdrawableBalances !== undefined && !hasWithdrawableBalance && !openOracleWithdrawableBalancesLoading && openOracleWithdrawableBalancesError === undefined ? <UserMessage className='detail' detail={openOracleCopy.noOracleBalances} /> : undefined}
 					{!hasWithdrawableBalance ? undefined : (
 						<div className='actions'>
 							{withdrawableBalanceItems
