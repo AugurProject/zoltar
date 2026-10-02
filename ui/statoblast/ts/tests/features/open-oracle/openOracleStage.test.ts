@@ -4,6 +4,15 @@ import { describe, expect, test } from 'bun:test'
 import { getOpenOracleStagePresentation } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleStage.js'
 
 describe('open oracle stage presentation', () => {
+	test('marks the price expired at equality and preserves delayed-settlement context', () => {
+		const report = { currentBlockNumber: 1n, currentTime: 460n, disputeDelay: 10n, reportTimestamp: 100n, timeType: true, coordinatorPriceValidUntilTimestamp: 460n, settlementTimestamp: 0n }
+		expect(getOpenOracleStagePresentation('settle', { ...report, currentTime: 459n }).label).toBe('Ready to settle')
+		expect(getOpenOracleStagePresentation('settle', report)).toMatchObject({ label: 'Price expired', tone: 'warning' })
+		expect(getOpenOracleStagePresentation('read-only', { ...report, settlementTimestamp: 460n })).toMatchObject({ label: 'Settled after price expired', tone: 'warning' })
+		expect(getOpenOracleStagePresentation('read-only', { ...report, settlementTimestamp: 459n })).toMatchObject({ label: 'Price expired', tone: 'warning' })
+		expect(getOpenOracleStagePresentation('settle', { ...report, coordinatorPriceValidUntilTimestamp: undefined }).label).toBe('Ready to settle')
+	})
+
 	test('maps every action mode to its lifecycle presentation', () => {
 		expect(getOpenOracleStagePresentation('dispute')).toEqual({
 			availableActions: [],
