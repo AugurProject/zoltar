@@ -2,7 +2,7 @@ import { usePreparedOracleOperation } from '../hooks/usePreparedOracleOperation.
 import { OracleOperationActions } from './OracleOperationActions.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
-import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
+import { getOracleOperationExecutionMessage, getOracleOperationTimingReason, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
@@ -23,7 +23,7 @@ import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
@@ -113,7 +113,7 @@ export function SecurityVaultSection({
 	const isOnActiveAppChain = isActiveAppChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '',
-		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '0',
+		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '',
 		targetHealthFactor: securityVaultForm.targetHealthFactor ?? '0',
 		securityPoolAddress: securityVaultForm.securityPoolAddress ?? '',
 		selectedVaultOwner: securityVaultForm.selectedVaultOwner ?? '',
@@ -140,7 +140,8 @@ export function SecurityVaultSection({
 	]
 	// An empty deposit field means no amount yet rather than an invalid one.
 	const depositAmount = normalizedSecurityVaultForm.depositAmount.trim() === '' ? 0n : tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
-	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
+	// Like the deposit field, an empty withdrawal field means no amount yet.
+	const withdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() === '' ? 0n : tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
 	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
 	const underwritingLimitAttoEth = currentSelectedVaultDetails?.underwritingLimitAttoEth ?? 0n
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
@@ -209,12 +210,12 @@ export function SecurityVaultSection({
 	})
 	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor, selectedPoolStatoblastSecurityMultiplierBps) : undefined
 	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
-	const depositAmountNotice = getVaultDepositAmountNotice({ currentVaultRepBackingAttoRep: currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep })
+	const depositAmountNotice = getVaultDepositAmountNotice({ currentVaultRepBackingAttoRep: currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, repTokenSymbol, walletRepShortfallAttoRep })
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 		priceUsable: hasValidOraclePrice,
 	})
-	const oracleOperationTimingGuard = getOracleOperationTimingGuard(oracleManagerDetails, currentTimestamp, hasValidOraclePrice)
+	const oracleOperationTimingGuard = getOracleOperationTimingReason(oracleManagerDetails, currentTimestamp, hasValidOraclePrice)
 	const withdrawRepGuardMessage =
 		oracleOperationTimingGuard ??
 		getVaultWithdrawGuardMessage({
@@ -381,7 +382,7 @@ export function SecurityVaultSection({
 	useEffect(() => setWithdrawInitialPrice({ price: '' }), [autoLoadKey])
 	const needsWithdrawPrice = effectiveRepExitMode === 'withdraw' && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice)
 	const withdrawPrice = parseOracleInitialPrice(needsWithdrawPrice ? withdrawInitialPrice : undefined)
-	const withdrawReason = repExitGuardMessage ?? withdrawPrice.error ?? repExitLauncherBlocker
+	const withdrawReason = repExitGuardMessage ?? withdrawPrice.error ?? repExitLauncherBlocker ?? (!hasPositiveWithdrawAmount ? commonCopy.positiveAmountRequired : undefined)
 	const withdrawKey = `${autoLoadKey}:${normalizedSecurityVaultForm.repWithdrawAmount}:${normalizedSecurityVaultForm.stagedOperationTimeoutMinutes}:${withdrawPrice.proposedRepPerEthPrice}`
 	const preparedWithdrawal = usePreparedOracleOperation({
 		key: withdrawKey,
@@ -418,7 +419,7 @@ export function SecurityVaultSection({
 				prepared={preparedWithdrawal}
 				operationKey={withdrawKey}
 				actionLabel={repExitActionLabel}
-				pendingLabel={securityPoolCopy.withdrawingRep}
+				pendingLabel={securityPoolCopy.formatWithdrawingRep(repTokenSymbol)}
 				requiresReportFunding={needsWithdrawPrice}
 				busy={securityVaultActiveAction !== undefined}
 				pending={securityVaultActiveAction === 'queueWithdrawRep'}
@@ -441,6 +442,7 @@ export function SecurityVaultSection({
 				repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
 				disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined && withdrawInitialPrice.price !== '' ? `${withdrawPriceFieldId}-error` : undefined}
 				repExitMode={effectiveRepExitMode}
+				repTokenSymbol={repTokenSymbol}
 				securityVaultActiveAction={securityVaultActiveAction}
 				walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 			/>
@@ -502,7 +504,7 @@ export function SecurityVaultSection({
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
 						<SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={currentSelectedVaultDetails.underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
-						<VaultWithdrawalSummaryMetrics amountLabel={repExitAmountLabel} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} isEstimate={withdrawalPrice.isEstimate} priceValidUntil={oraclePriceValidUntilTimestamp} />
+						<VaultWithdrawalSummaryMetrics repTokenSymbol={repTokenSymbol} amountLabel={repExitAmountLabel} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} isEstimate={withdrawalPrice.isEstimate} priceValidUntil={oraclePriceValidUntilTimestamp} />
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						{withdrawPriceFields}
@@ -537,6 +539,7 @@ export function SecurityVaultSection({
 				</>
 			}
 			repExitMode={effectiveRepExitMode}
+			repTokenSymbol={repTokenSymbol}
 			securityVaultError={securityVaultError}
 			showRepPriceEstimate={effectiveRepExitMode === 'withdraw' && withdrawalPrice.isEstimate}
 			walletRepBalanceError={walletRepBalanceError}

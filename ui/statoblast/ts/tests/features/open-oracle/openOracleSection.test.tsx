@@ -339,7 +339,6 @@ function createOpenOracleDisputeSubmission({
 		approvedToken2Amount: openOracleTokenAccessState.token2Approval.value,
 		disputeNewAmount1Input: openOracleForm.disputeNewAmount1,
 		disputeNewAmount2Input: openOracleForm.disputeNewAmount2,
-		disputeTokenToSwap: openOracleForm.disputeTokenToSwap,
 		reportDetails: openOracleReportDetails,
 		token1AllowanceError: openOracleTokenAccessState.token1Approval.error,
 		token1Balance: openOracleTokenAccessState.token1Balance,
@@ -578,7 +577,7 @@ void describe('OpenOracleSection', () => {
 			expect(documentQueries.queryByText(/reports shown/)).toBeNull()
 			expect(documentQueries.getByText('No favorite reports match the current search and status filters.')).not.toBeNull()
 			await typeSearch('')
-			await selectStatus('Settled')
+			await selectStatus('settled')
 			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #2'])
 			expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'oracleReport'))).toHaveLength(12)
 		} finally {
@@ -756,25 +755,42 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabled(requireButton(section, 'Dispute & swap'))).toBe(true)
 	})
 
-	void test('shows a price-direction blocker before rendering dispute approval controls', () => {
+	void test('derives the swapped token from the proposed price instead of asking for it', () => {
+		const disputeSubmission = createOpenOracleDisputeSubmission({
+			openOracleForm: createOpenOracleForm({ disputeNewAmount2: '3' }),
+			openOracleReportDetails: createDisputableReportDetails(),
+			openOracleTokenAccessState: createApprovedTokenAccessState(100n * TOKEN_UNITS),
+		})
+		// A lower price swaps out the base token: the disputer posts 20 REPv2 plus the 10 REPv2 it buys out and gets 2 WETH back.
+		expect(disputeSubmission.swapTokenKey).toBe('token1')
+		expect(disputeSubmission.newAmount1).toBe(20n * TOKEN_UNITS)
+		expect(disputeSubmission.token1ContributionAmount).toBe(30n * TOKEN_UNITS)
+		expect(disputeSubmission.token2ContributionAmount).toBe(0n)
+		expect(disputeSubmission.token2CreditAmount).toBe(2n * TOKEN_UNITS)
+		expect(disputeSubmission.proposedPrice).toBe(15n * 10n ** 28n)
+		expect(disputeSubmission.canSubmit).toBe(true)
+
+		const higherPrice = createOpenOracleDisputeSubmission({
+			openOracleForm: createOpenOracleForm({ disputeNewAmount2: '30' }),
+			openOracleReportDetails: createDisputableReportDetails(),
+			openOracleTokenAccessState: createApprovedTokenAccessState(100n * TOKEN_UNITS),
+		})
+		expect(higherPrice.swapTokenKey).toBe('token2')
+		expect(higherPrice.token1ContributionAmount).toBe(10n * TOKEN_UNITS)
+		expect(higherPrice.token2ContributionAmount).toBe(35n * TOKEN_UNITS)
+	})
+
+	void test('keeps dispute approval steps in place while the amounts are invalid', () => {
 		const section = renderDisputeActionSection({
-			openOracleForm: createOpenOracleForm({
-				disputeNewAmount1: '20',
-				disputeNewAmount2: '7',
-				disputeTokenToSwap: 'token2',
-			}),
-			// Keeps the default report fee, unlike the fee-free disputable report.
-			openOracleReportDetails: createDisputableReportDetails({ feePercentage: createOpenOracleReportDetails().feePercentage }),
+			openOracleForm: createOpenOracleForm({ disputeNewAmount2: '' }),
+			openOracleReportDetails: createDisputableReportDetails(),
 		})
 
-		const directionMessage = 'These amounts would swap out REPv2, not WETH. Select REPv2 or change the proposed price.'
-		expect(getTextContent(section).split(directionMessage)).toHaveLength(2)
-		expect(getSectionTitles(section)).not.toContain('REPv2 approval')
-		expect(getSectionTitles(section)).not.toContain('WETH approval')
-		const disputeButton = requireButton(section, 'Dispute & swap')
-		expect(getButtonDisabledReason(disputeButton)).toBe(directionMessage)
-		expect(disputeButton.props['disabledReasonElementId']).toBe('open-oracle-dispute-token-to-swap-error-7')
-		expect(disputeButton.props['showDisabledReason']).toBe(false)
+		expect(getSectionTitles(section)).toContain('Dispute summary')
+		expect(getSectionTitles(section)).toContain('REPv2 approval')
+		expect(getSectionTitles(section)).toContain('WETH approval')
+		expect(getTextContent(section)).toContain('Enter the new amounts to preview what you pay and receive.')
+		expect(getButtonDisabled(requireButton(section, 'Dispute & swap'))).toBe(true)
 	})
 
 	void test('accepts human-readable token decimals for dispute amounts', () => {

@@ -15,14 +15,15 @@ export const escalationStarted = 'Escalation started'
 export const chooseDepositsToSettle = 'Choose deposits to settle'
 export const forkAlreadyTriggeredReportReason = 'Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork & migration.'
 export const forkAlreadyTriggeredSettlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork & migration.'
-export const forkTriggerInstruction = 'Escalation ended without a decision. Trigger the universe fork here if this pool should fork.'
-export const forkRequiredSettlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. Trigger the universe fork here if this pool should fork.'
+export const forkTriggerInstruction = 'Escalation ended without a decision, so this question can only resolve through a universe fork. Trigger it unless someone else already has; until then, all escalation deposits stay locked. Triggering is permanent.'
+export const forkRequiredSettlementReason = 'Escalation ended without a decision, so deposits stay locked until someone triggers the universe fork. Settle them in Fork & migration afterwards.'
 export const initiallyDeposited = 'Initially deposited:'
 export const leadHoldingCapital = 'Amount needed to hold the lead'
 export const loadingPoolHeldVaultRepBacking = 'Loading pool-held vault REP backing.'
 export const loadingWalletRepBalance = 'Loading wallet REP balance.'
 export const presetDetailsRequired = 'Loading reporting details.'
 export const maxProfitPrestartReason = 'Max reward becomes available after the escalation game starts.'
+export const maxProfitForkReason = 'Max reward is unavailable because matching the other side would trigger the universe fork.'
 export const maxProfitWindowFilledReason = 'Max reward preset unavailable because the reward window is already filled on the selected side.'
 export const selectedSideLeadsReason = 'Selected side already leads.'
 export const loadingEscalation = 'Loading escalation…'
@@ -83,10 +84,12 @@ export const pendingStartNext = ({ end, outcome }: { end: string; outcome: strin
 export const activeNext = (end: string, leader: string) => `If nobody outbids ${leader} by ${end}, ${leader} wins.`
 export const resolvedNext = 'Settle your deposits below.'
 export const startsWithFirstReport = 'starts with first report'
-export const progressToFork = (largest: string, threshold: string, percent: string) => `Progress to fork: ${largest} / ${threshold} REP (${percent}%)`
-export const forkProgressHelp = 'A fork requires two sides to reach this threshold.'
+export const progressToFork = (secondLargest: string, threshold: string, percent: string) => `Progress to fork: second side at ${secondLargest} / ${threshold} REP (${percent}%)`
+export const forkProgressHelp = 'A fork needs two sides at this threshold, so progress follows the second-largest side.'
 export const bindingCapitalHelp = 'The second-largest side balance; exceed it to hold the lead.'
-export const minimumPreset = (started: boolean, amount?: string) => `${started ? 'Min to lead' : 'Start bond'}${amount === undefined ? '' : ` (${amount} REP)`}`
+const minimumPresetLabels = { fork: 'Fill side & trigger fork', lead: 'Min to lead', start: 'Start bond' } as const
+/** The minimum preset fills the start bond before the game starts, the smallest lead afterwards, or, when no lead is possible, the amount that triggers the fork. */
+export const minimumPreset = (kind: keyof typeof minimumPresetLabels, amount?: string) => `${minimumPresetLabels[kind]}${amount === undefined ? '' : ` (${amount} REP)`}`
 export const rewardPreset = (amount?: string) => `Max reward${amount === undefined ? '' : ` (${amount} REP)`}`
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
@@ -100,6 +103,8 @@ export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string, amount?: string) => `Resolved as ${outcome}.${amount === undefined ? '' : ` You can claim ${amount} REP.`}`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
 export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
+export const clearLosingDepositsDetail = 'Losing deposits return no REP. Clearing them costs gas and is only needed before you redeem your vault REP from this pool: until then they still count as your dispute stake, which blocks redemption.'
+export const clearLosingDepositsReviewDescription = 'Returns no REP. Removes these losing deposits from your vault’s dispute stake so you can redeem your vault REP from this pool.'
 export const results = 'Results'
 
 function formatPriceWindow(seconds: bigint) {
@@ -173,6 +178,20 @@ export const insufficientVaultRepSelectWallet = (balance: string) => `Only ${bal
 export const loadingVaultFunding = 'Loading vault funding requirements.'
 
 export const depositTriggersFork = 'This deposit reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
+export const forkTriggerWarningTitle = 'This report triggers a universe fork'
+export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold ends escalation without a decision: deposits lock, and the question can only resolve by forking the universe into Invalid, Yes and No. This can’t be undone.`
+export const forkTriggerConfirmation = 'I understand this report ends escalation and leads to a universe fork.'
+export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
+export const reportingRepApprovalRequired = 'Approve REP for this security pool before reporting.'
+export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.'
+export const maxBelowForkHint = (amount: string) => `Max stops at ${amount} REP, just below the fork threshold. Confirm the fork warning to fill the side.`
+export const maxBelowForkReason = 'Max stops below the fork threshold, which leaves less than the start bond. Enter an amount to fill the side and trigger the fork.'
+export const reportAndTriggerForkLabel = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount} REP`
+export const reportingAndTriggeringFork = (outcome: string, amount: string) => `Reporting ${outcome} & triggering fork · ${amount} REP…`
+export const reportForkReviewTitle = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount}\u00a0REP`
+export const reportForkReviewDescription = (outcome: string) => `Fills ${outcome} to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.`
+export const reportReviewDescription = (outcome: string) => `Stakes REP on ${outcome}. If ${outcome} loses, this REP is lost; if it wins, it returns with any earned reward.`
+export const forkTriggerChangedSinceReview = 'This report would now trigger the universe fork. Review the fork warning and confirm before reporting.'
 export const depositDeadlinePreview = (deadline: string, extension: string, unchanged: boolean) => `After this deposit, check back before ${deadline}. ${unchanged ? 'This deposit does not extend the timer.' : `Timer extended by ${extension}.`} Other reports can change this deadline.`
 
 export const dismissReminderUpdate = 'Dismiss'

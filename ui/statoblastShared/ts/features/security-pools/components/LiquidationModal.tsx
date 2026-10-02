@@ -3,7 +3,7 @@ import { usePreparedOracleOperation } from '../hooks/usePreparedOracleOperation.
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
-import { needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
+import { getOracleOperationTimingReason, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
 import { useEffect, useId, useState } from 'preact/hooks'
@@ -20,9 +20,9 @@ import { formatCurrencyBalanceWithUnit, formatDuration } from '@zoltar/ui-core-s
 import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import type { UiRepPriceSource } from '../lib/repPriceSource.js'
-import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
+import { getStagedOperationTimeoutFieldError, getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import {
 	ZERO_LIQUIDATION_APPROVAL_ID,
 	getApprovalClampedLiquidationAmount,
@@ -50,7 +50,6 @@ type LiquidationModalProps = {
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	isOnActiveAppChain: boolean
 	liquidationDebtEthAmount: string
-	maximumLiquidationDebtAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -100,7 +99,6 @@ export function LiquidationModal({
 	currentPoolOracleManagerDetails,
 	isOnActiveAppChain,
 	liquidationDebtEthAmount,
-	maximumLiquidationDebtAttoEth,
 	liquidationManagerAddress,
 	liquidationFundingPreview,
 	liquidationFundingPreviewError,
@@ -155,7 +153,8 @@ export function LiquidationModal({
 		const parsed = parseOracleInitialPrice(value)
 		if (liquidationManagerAddress !== undefined && parsed.error === undefined) onLoadLiquidationFundingPreview(liquidationManagerAddress, parsed.proposedRepPerEthPrice)
 	}
-	const showLiquidationModal = liquidationModalOpen || securityPoolOverviewActiveAction === 'queueLiquidation' || securityPoolOverviewResult?.action === 'queueLiquidation' || securityPoolLiquidationError !== undefined
+	const timeoutErrorId = useId()
+	const showLiquidationModal = liquidationModalOpen
 
 	useEffect(() => {
 		if (!showLiquidationModal) return
@@ -174,6 +173,7 @@ export function LiquidationModal({
 		onLoadLiquidationApproval()
 	}, [delegatedReceiver, hasValidApprovalId, liquidationApprovalDetails, liquidationApprovalError, loadingLiquidationApproval, onLoadLiquidationApproval, showLiquidationModal])
 	const hasValidReceiverVault = tryParseAddressInput(liquidationReceiverVault) !== undefined
+	const receiverVaultAddressError = liquidationReceiverVault.trim() === '' || hasValidReceiverVault ? undefined : liquidationCopy.receiverVaultAddressInvalid
 	useEffect(() => {
 		if (!showLiquidationModal || !delegatedReceiver || !hasValidReceiverVault || liquidationReceiverVaultSummaryResolved || liquidationReceiverVaultSummaryError !== undefined || loadingLiquidationReceiverVaultSummary) return
 		onLoadLiquidationReceiverVaultSummary()
@@ -191,7 +191,8 @@ export function LiquidationModal({
 	const trimmedLiquidationReceiverVault = liquidationReceiverVault.trim()
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
-	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined ? liquidationCopy.stagedOperationTimeoutHelpText : liquidationCopy.formatTimeoutHelpTextResolved(formatDuration(liquidationTimeoutSeconds))
+	const liquidationTimeoutError = getStagedOperationTimeoutFieldError(liquidationTimeoutDisplayValue)
+	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined || liquidationTimeoutError !== undefined ? liquidationCopy.stagedOperationTimeoutHelpText : liquidationCopy.formatTimeoutHelpTextResolved(formatDuration(liquidationTimeoutSeconds))
 	const sameVaultWarning = trimmedLiquidationReceiverVault === '' || trimmedLiquidationTargetVault === '' || !sameAddress(trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
 	const approvalRouteMismatch = isLiquidationApprovalRouteMismatch({ accountAddress, liquidationApprovalDetails, liquidationSecurityPoolAddress, trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault })
 	const approvalLatestExecutionTimestamp = currentTimestamp === undefined || liquidationTimeoutSeconds === undefined || currentPoolOracleManagerDetails?.settlementTime === undefined ? undefined : currentTimestamp + currentPoolOracleManagerDetails.settlementTime + liquidationTimeoutSeconds
@@ -224,7 +225,14 @@ export function LiquidationModal({
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
-	const liquidationMaxActionAmount = computedLiquidationMaxAmount ?? (uiPriceOracle === undefined ? maximumLiquidationDebtAttoEth : undefined)
+	// With a usable pool oracle price, Max uses the same price as the protocol guard; a queued liquidation can only estimate it with the UI price.
+	const liquidationMaxActionAmount = hasUsableOraclePrice ? protocolLiquidationMaxAmount : computedLiquidationMaxAmount
+	const liquidationMaxUnavailableReason = (() => {
+		if (liquidationMaxActionAmount !== undefined) return liquidationCopy.maxTransferableNone
+		return liquidationExecutionMode === 'queue' ? liquidationCopy.maxTransferableQueuedNeedsPrice : liquidationCopy.maxTransferableNeedsPrice
+	})()
+	const liquidationMaxUnavailable = liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n
+	const liquidationMaximumAmount = protocolLiquidationMaxAmount !== undefined && protocolLiquidationMaxAmount > 0n ? protocolLiquidationMaxAmount : undefined
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
 		requestedDebtAttoEth: simulatedLiquidationAmount,
@@ -294,7 +302,7 @@ export function LiquidationModal({
 	// The wallet prerequisite comes before every other blocker, so a disconnected wallet or wrong network offers its connect or switch fix.
 	let disabledReasonElementId = !walletGuard.blocked && delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
 	if (!walletGuard.blocked && initialPriceError !== undefined && initialPrice.price !== '') disabledReasonElementId = `${initialPriceFieldId}-error`
-	const liquidationActionReason = getOracleOperationTimingGuard(currentPoolOracleManagerDetails, currentTimestamp, hasUsableOraclePrice) ?? initialPriceError ?? liquidationBlocker?.reason
+	const liquidationActionReason = getOracleOperationTimingReason(currentPoolOracleManagerDetails, currentTimestamp, hasUsableOraclePrice) ?? initialPriceError ?? liquidationBlocker?.reason
 	const liquidationButtonDisabledReason = walletGuard.reason ?? liquidationLifecycleBlocker ?? liquidationActionReason
 	const liquidationKey = `${priceContextKey}:${liquidationDebtEthAmount}:${liquidationReceiverVault}:${liquidationApprovalId}:${liquidationTimeoutMinutes}:${proposedRepPerEthPrice}`
 	const sendLiquidation = () => (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? undefined : onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress, proposedRepPerEthPrice))
@@ -353,7 +361,7 @@ export function LiquidationModal({
 				<div className='form-grid'>
 					<label className='field'>
 						<span>{liquidationCopy.receiverVault}</span>
-						<FormInput value={liquidationReceiverVault} onInput={event => onLiquidationReceiverVaultChange(event.currentTarget.value)} />
+						<FormInput error={receiverVaultAddressError} placeholder={commonCopy.hexValuePlaceholder} spellcheck={false} value={liquidationReceiverVault} onInput={event => onLiquidationReceiverVaultChange(event.currentTarget.value)} />
 					</label>
 					{delegatedReceiver && loadingLiquidationReceiverVaultSummary ? <UserMessage className='detail' id='liquidation-receiver-loading-status' announcement='polite' detail={liquidationCopy.loadingReceiverVault} /> : null}
 					{delegatedReceiver && liquidationReceiverVaultSummaryError !== undefined ? (
@@ -367,7 +375,14 @@ export function LiquidationModal({
 						<>
 							<label className='field'>
 								<span>{liquidationCopy.boundedApprovalId}</span>
-								<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
+								{/* The unset approval ID is the zero ID; showing it would read as a filled-in value, so the field stays empty with a short placeholder. */}
+								<FormInput
+									hint={liquidationCopy.boundedApprovalIdHelp}
+									placeholder={commonCopy.hexValuePlaceholder}
+									spellcheck={false}
+									value={liquidationApprovalId === ZERO_LIQUIDATION_APPROVAL_ID ? '' : liquidationApprovalId}
+									onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value.trim() === '' ? ZERO_LIQUIDATION_APPROVAL_ID : event.currentTarget.value)}
+								/>
 								<UserMessage placement='field' as='span' detail={liquidationCopy.receiverOperatorEconomics} />
 							</label>
 							{loadingLiquidationApproval ? <UserMessage className='detail' announcement='polite' detail={liquidationCopy.loadingBoundedApproval} /> : null}
@@ -380,14 +395,39 @@ export function LiquidationModal({
 							)}
 						</>
 					) : null}
-					<AmountField fillMax={{ amount: liquidationMaxActionAmount }} label={liquidationCopy.requestedLiquidationDebt} onChange={onLiquidationAmountChange} placeholder={commonCopy.zeroDecimalPlaceholder} unit={commonCopy.eth} value={liquidationDebtEthAmount} />
+					<AmountField
+						fillMax={{ amount: liquidationMaxActionAmount, unavailableReason: liquidationMaxUnavailableReason }}
+						hint={(() => {
+							if (liquidationMaximumAmount !== undefined) return liquidationCopy.formatMaxTransferableHint(formatCurrencyBalanceWithUnit(liquidationMaximumAmount, commonCopy.eth))
+							// A disabled Max explains itself in visible text, not only in its tooltip.
+							return liquidationMaxUnavailable ? liquidationMaxUnavailableReason : undefined
+						})()}
+						label={liquidationCopy.requestedLiquidationDebt}
+						maximum={liquidationMaximumAmount}
+						onChange={onLiquidationAmountChange}
+						placeholder={commonCopy.zeroDecimalPlaceholder}
+						unit={commonCopy.eth}
+						value={liquidationDebtEthAmount}
+					/>
 					{liquidationExecutionMode === 'execute' ? null : (
 						<label className='field'>
 							<span>{commonCopy.manualExecutionTimeout}</span>
 							<div className='field-inline'>
-								<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={liquidationTimeoutDisplayValue} onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)} />
+								<FormInput
+									aria-describedby={liquidationTimeoutError === undefined ? undefined : timeoutErrorId}
+									className='field-inline-input'
+									inputMode='numeric'
+									invalid={liquidationTimeoutError !== undefined}
+									max={MAX_STAGED_OPERATION_TIMEOUT_MINUTES.toString()}
+									min={MIN_STAGED_OPERATION_TIMEOUT_MINUTES.toString()}
+									pattern='[0-9]*'
+									step='1'
+									value={liquidationTimeoutDisplayValue}
+									onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)}
+								/>
 								<span className='field-inline-action'>{commonCopy.minutes}</span>
 							</div>
+							{liquidationTimeoutError === undefined ? undefined : <UserMessage placement='field' tone='error' id={timeoutErrorId} detail={liquidationTimeoutError} />}
 						</label>
 					)}
 				</div>

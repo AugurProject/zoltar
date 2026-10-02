@@ -35,14 +35,18 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		action: 'submitBid',
 		availability: createActionAvailability(model.submitBidGuardMessage),
 		forceEnabled: model.hasSelectedAuctionChildPool,
-		idleLabel: forkAuctionCopy.submitBid,
+		idleLabel: model.submitBidLabel,
 		onClick: model.onSubmitBidForSelectedAuction,
 		pending: model.isTruthAuctionDetailsLoading || model.forkAuctionActiveAction === 'submitBid',
 		pendingLabel: model.isTruthAuctionDetailsLoading ? forkAuctionCopy.loadingTruthAuction : forkAuctionCopy.submittingBidTruncated,
+		tone: 'primary',
 	})
 	const submitBidSection = (
 		<ForkAuctionSubmitBidSection
+			bidAmountHint={model.bidAmountHint}
+			bidAmountMax={model.bidAmountMax}
 			bidPricePosition={model.liveBidGuidance?.bidPricePosition}
+			bidPriceRounding={model.bidPriceRounding}
 			clearingPrice={model.liveBidGuidance?.clearingPrice}
 			minimumWinningPriceInput={model.liveBidGuidance?.minimumWinningPriceInput}
 			onBidAmountChange={submitBidAmount => model.onForkAuctionFormChange({ submitBidAmount })}
@@ -86,7 +90,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		return undefined
 	})()
 	const migrationRepAtForkDisplay = model.forkAuctionDetails === undefined ? model.forkOnlyFallbackText : <CurrencyValue value={model.forkAuctionDetails.auctionableAttoRepAtFork} suffix={commonCopy.rep} />
-	const migrationRepDisplay = renderMetricValue(model.forkAuctionDetails?.migratedAttoRep ?? model.previewPool?.migratedAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
+	// Vault migrations credit the selected outcome's child pool, so the parent pool's own migrated amount stays zero while REP moves.
+	const selectedOutcomeMigratedAttoRep = (() => {
+		const childMigratedAttoRep = model.selectedAuctionContext?.migratedAttoRep ?? model.selectedAuctionChildPool?.migratedAttoRep
+		if (childMigratedAttoRep !== undefined) return childMigratedAttoRep
+		// Until the outcome's child pool exists, nothing has migrated to it.
+		return model.forkAuctionDetails === undefined ? undefined : 0n
+	})()
+	const migrationRepDisplay = renderMetricValue(selectedOutcomeMigratedAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
 	const migrationSettlementCollateralDisplay = renderMetricValue(model.forkAuctionDetails?.settlementCollateralAttoEth ?? model.previewPool?.settlementCollateralAttoEth, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
 	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
 	const migrationEndsDisplay = (() => {
@@ -180,6 +191,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			forkAuctionDetails={model.forkAuctionDetails}
 			forkTypeDisplay={model.resolvedForkTypeLabel}
 			migratedRepDisplay={migrationRepDisplay}
+			migratedRepLabel={forkAuctionCopy.formatMigratedAttoRepToOutcome(model.selectedOutcomeLabel)}
 			migrationEndsDisplay={migrationEndsDisplay}
 			migrationStartedDisplay={migrationStartedDisplay}
 			repAtForkDisplay={migrationRepAtForkDisplay}
@@ -346,21 +358,17 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					activeReportingDetails={model.activeReportingDetails}
 					claimParentDepositsGuardMessage={model.claimSelectedParentEscalationDepositsGuardMessage}
 					claimSelectionDisabled={model.forkAuctionActiveAction === 'claimParentEscalationDeposits'}
-					connectedWalletVaultSummary={model.connectedWalletVaultSummary}
 					disabled={model.disabled}
 					hasSelectedParentEscalationClaimDeposits={model.hasSelectedParentEscalationClaimDeposits}
 					hasStoredEscalationMigrationEntitlement={model.hasStoredEscalationMigrationEntitlement}
 					hasUnresolvedMigrationDeposits={model.hasUnresolvedMigrationDeposits}
 					hasUnresolvedMigrationState={model.hasUnresolvedMigrationState}
-					hasWalletParentEscalationClaimBalance={model.hasWalletParentEscalationClaimBalance}
-					hasWalletVaultMigrationBalance={model.hasWalletVaultMigrationBalance}
 					isMigrationExpired={model.isMigrationExpired}
-					isVaultMigrationComplete={model.isVaultMigrationComplete}
 					loadingReportingDetails={model.loadingReportingDetails}
 					loadingSelectedOutcomeMigrationSeedStatus={model.loadingSelectedOutcomeMigrationSeedStatus}
-					migratePoolGuardMessage={model.migratePoolToUniverseGuardMessage}
+					migratePoolAvailability={model.migratePoolToUniverseAvailability}
 					migrateUnresolvedGuardMessage={model.migrateUnresolvedEscalationGuardMessage}
-					migrateVaultGuardMessage={model.migrateVaultGuardMessage}
+					migrateVaultAvailability={model.migrateVaultAvailability}
 					migrationBalancesContent={displays.migrationBalancesContent}
 					migrationSummaryCard={migrationSummaryCard}
 					onClaimParentDeposits={model.onClaimSelectedParentEscalationDeposits}
@@ -373,7 +381,6 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					retrySelectedOutcomeMigrationSeedStatus={model.retrySelectedOutcomeMigrationSeedStatus}
 					selectedOutcome={model.forkAuctionForm.selectedOutcome}
 					selectedOutcomeLabel={model.selectedOutcomeLabel}
-					selectedOutcomeMigrationSeedStatus={model.selectedOutcomeMigrationSeedStatus}
 					selectedOutcomeMigrationSeedStatusError={model.selectedOutcomeMigrationSeedStatusError}
 					selectedParentEscalationClaimDeposits={model.selectedParentEscalationClaimDeposits}
 					selectedParentEscalationClaimDepositIndexes={model.selectedParentEscalationClaimDepositIndexes}

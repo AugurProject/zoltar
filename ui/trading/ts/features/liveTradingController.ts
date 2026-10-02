@@ -52,7 +52,7 @@ export function useLiveTradingController({
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	// The trade workflow is keyed by the addressed market, so its inputs and state follow the route before discovery loads the market.
 	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: routePool, marketTitle: selected?.title, walletClient })
-	const { mode, side, amount, acknowledgedImpactBps, resetUnlocked, state, positionHash, message, positionReceiptWarning, workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
+	const { mode, side, amount, acknowledgedImpactBps, requoteNotice, resetUnlocked, state, positionHash, message, positionReceiptWarning, workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const nowSeconds = useQuestionClock(configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined || discoveryState === 'not-found' ? selectedUniverseId : selected?.universeId.toString()
@@ -213,6 +213,7 @@ export function useLiveTradingController({
 			positionHash,
 			message,
 			positionReceiptWarning,
+			requoteNotice,
 			...positionActions,
 		},
 		workflow: {

@@ -186,3 +186,50 @@ test('stops a stalled simulation control and clears its loading state', async ()
 		timer.mockRestore()
 	}
 })
+
+test('keeps a scenario bootstrap alive while the worker reports progress beyond the request timeout', async () => {
+	const originalSetTimeout = globalThis.setTimeout
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 30 : delay, ...args))
+	const worker = createWorkerHarness()
+	const pendingBackend = createSimulationBackend({ scenario: 'baseline' }, { createWorkerConnection: () => worker.connection })
+	worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+	const backend = await pendingBackend
+	try {
+		const bootstrap = backend.bootstrap().then(
+			() => 'bootstrapped',
+			error => (error instanceof Error ? error.message : 'unexpected error'),
+		)
+		// Ten progress reports 15 ms apart outlast the 30 ms stand-in for the request timeout several times over.
+		for (let step = 1; step <= 10; step += 1) {
+			await new Promise(resolve => originalSetTimeout(resolve, 15))
+			worker.emitMessage({ state: { ...createReadyState(), bootstrapLabel: `Seeding step ${step.toString()}`, bootstrapProgress: step / 10, isBootstrapped: false, isBootstrapping: true }, type: 'state' })
+		}
+		worker.emitMessage({ id: 1, type: 'result', value: undefined })
+		expect(await bootstrap).toBe('bootstrapped')
+		expect(worker.terminate).not.toHaveBeenCalled()
+	} finally {
+		await backend.dispose()
+		timer.mockRestore()
+	}
+})
+
+test('stops a scenario bootstrap that stops reporting progress', async () => {
+	const originalSetTimeout = globalThis.setTimeout
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 10 : delay, ...args))
+	const worker = createWorkerHarness()
+	const pendingBackend = createSimulationBackend({ scenario: 'baseline' }, { createWorkerConnection: () => worker.connection })
+	worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+	const backend = await pendingBackend
+	try {
+		const bootstrap = backend.bootstrap().then(
+			() => 'unexpected success',
+			error => (error instanceof Error ? error.message : 'unexpected error'),
+		)
+		expect(await Promise.race([bootstrap, new Promise(resolve => originalSetTimeout(() => resolve('still waiting'), 100))])).toContain('timed out')
+		expect(backend.bootstrapError).toContain('Reload')
+		expect(worker.terminate).toHaveBeenCalledTimes(1)
+	} finally {
+		await backend.dispose()
+		timer.mockRestore()
+	}
+})

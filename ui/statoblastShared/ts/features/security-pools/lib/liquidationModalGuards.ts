@@ -1,8 +1,10 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
@@ -72,8 +74,10 @@ export function isValidLiquidationApprovalId(liquidationApprovalId: string) {
 	return /^0x[0-9a-fA-F]{64}$/.test(liquidationApprovalId) && liquidationApprovalId !== ZERO_LIQUIDATION_APPROVAL_ID
 }
 
+/** Only a valid address other than the connected account delegates the liquidation; unfinished or invalid text stays an input error instead. */
 export function isDelegatedLiquidationReceiver(accountAddress: Address | undefined, liquidationReceiverVault: string) {
-	return accountAddress !== undefined && liquidationReceiverVault.trim() !== '' && !sameAddress(accountAddress, liquidationReceiverVault.trim())
+	const receiverVault = tryParseAddressInput(liquidationReceiverVault)
+	return accountAddress !== undefined && receiverVault !== undefined && !sameAddress(accountAddress, receiverVault)
 }
 
 export function isLiquidationApprovalRouteMismatch({
@@ -215,6 +219,7 @@ export function getLiquidationBlockers({
 		{ loading: true, reason: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined },
 		{ reason: trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined },
 		{ reason: trimmedLiquidationReceiverVault === '' ? liquidationCopy.receiverVaultRequired : undefined },
+		{ reason: trimmedLiquidationReceiverVault !== '' && tryParseAddressInput(trimmedLiquidationReceiverVault) === undefined ? liquidationCopy.receiverVaultAddressInvalid : undefined },
 		{ loading: delegatedReceiver && loadingLiquidationApproval, reason: delegatedApprovalReason },
 		{ loading: true, reason: delegatedReceiver && loadingLiquidationReceiverVaultSummary ? liquidationCopy.loadingReceiverVault : undefined },
 		{ reason: delegatedReceiver ? liquidationReceiverVaultSummaryError : undefined },
@@ -275,4 +280,30 @@ export function getQueuedLiquidationStatus({
 	if (queuedLiquidationOperation !== undefined) return queuedLiquidationOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 	return isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp) ? 'executed' : 'missing'
+}
+
+/** Why the Liquidate vault launcher is unavailable for a vault the connected wallet does not own; the owned vault never offers it. */
+export function getVaultLiquidationLauncherBlocker({
+	hasWallet,
+	isOnActiveAppChain,
+	liquidationEnabled,
+	notLiquidatableReason,
+	vaultExistsOnchain,
+	vaultLoaded,
+	wrongNetworkReason,
+}: {
+	hasWallet: boolean
+	isOnActiveAppChain: boolean
+	liquidationEnabled: boolean
+	notLiquidatableReason: string | undefined
+	vaultExistsOnchain: boolean
+	vaultLoaded: boolean
+	wrongNetworkReason: string
+}) {
+	if (!hasWallet) return securityPoolCopy.liquidationWalletRequiredReason
+	if (!isOnActiveAppChain) return wrongNetworkReason
+	if (!vaultLoaded) return securityPoolCopy.loadingVault
+	if (!vaultExistsOnchain) return securityPoolCopy.missingVaultDetail
+	if (!liquidationEnabled) return securityPoolCopy.liquidationUnavailableReason
+	return notLiquidatableReason
 }

@@ -35,6 +35,7 @@ export function SelectedVaultSummarySection({
 	const requiredBaseAttoRep = repPerEthPrice === undefined || repPerEthPrice <= 0n ? undefined : ceilDiv(underwritingLimitAttoEth * repPerEthPrice, 10n ** 18n)
 	const associatedRepPerCapacityBps = requiredBaseAttoRep === undefined || requiredBaseAttoRep === 0n ? undefined : ((securityVaultDetails.vaultAttoRepBacking + securityVaultDetails.disputeStakedAttoRep) * 10_000n) / requiredBaseAttoRep
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
+	const repTokenSymbol = securityVaultDetails.repTokenSymbol ?? commonCopy.rep
 	const embeddedContent = (
 		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
 			<div className='security-pool-browse-vault-row'>
@@ -55,13 +56,13 @@ export function SelectedVaultSummarySection({
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{commonCopy.poolHeldVaultRepBackingAttoRep}</span>
 						<strong>
-							<CurrencyValue value={securityVaultDetails.vaultAttoRepBacking} suffix={commonCopy.rep} />
+							<CurrencyValue value={securityVaultDetails.vaultAttoRepBacking} suffix={repTokenSymbol} />
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{commonCopy.disputeStakedAttoRep}</span>
 						<strong>
-							<CurrencyValue value={securityVaultDetails.disputeStakedAttoRep} suffix={commonCopy.rep} />
+							<CurrencyValue value={securityVaultDetails.disputeStakedAttoRep} suffix={repTokenSymbol} />
 						</strong>
 					</div>
 					{securityVaultDetails.badDebtAttoEth > 0n ? (
@@ -103,7 +104,9 @@ export function SelectedVaultSummarySection({
 		)
 	return (
 		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} surface='flat' title={selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails} variant='record'>
-			<AddressValue address={securityVaultDetails.vaultAddress} responsiveAbbreviation />
+			<span className='selected-vault-address'>
+				<AddressValue address={securityVaultDetails.vaultAddress} responsiveAbbreviation />
+			</span>
 			{gridContent}
 		</EntityCard>
 	)

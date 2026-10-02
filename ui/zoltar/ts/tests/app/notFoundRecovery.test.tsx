@@ -5,30 +5,35 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { AppRouteContent } from '../../app/components/AppRouteContent.js'
 
 installTestRouting()
+
+async function renderNotFound() {
+	return await renderIntoDocument(
+		<AppRouteContent
+			route='not-found'
+			zoltarView='overview'
+			readBackendMessage={undefined}
+			deploy={{
+				accountAddress: undefined,
+				busyStepId: undefined,
+				deploymentStateReady: false,
+				deploymentStatusError: undefined,
+				deploymentSections: [],
+				deploymentStatuses: [],
+				isLoadingDeploymentStatuses: false,
+				isOnActiveAppChain: false,
+				deployNextMissingPending: false,
+				onDeploy: async () => undefined,
+				onDeployNextMissing: () => undefined,
+				onRetryDeploymentStatus: () => undefined,
+			}}
+		/>,
+	)
+}
+
 describe('not-found recovery', () => {
 	installDomTestLifecycle({ url: 'http://localhost/?network=sepolia&rpcUrl=https%3A%2F%2Frpc.example#/missing?universe=42' })
 	test('keeps the selected universe and read environment in every recovery link', async () => {
-		const rendered = await renderIntoDocument(
-			<AppRouteContent
-				route='not-found'
-				zoltarView='overview'
-				readBackendMessage={undefined}
-				deploy={{
-					accountAddress: undefined,
-					busyStepId: undefined,
-					deploymentStateReady: false,
-					deploymentStatusError: undefined,
-					deploymentSections: [],
-					deploymentStatuses: [],
-					isLoadingDeploymentStatuses: false,
-					isOnActiveAppChain: false,
-					deployNextMissingPending: false,
-					onDeploy: async () => undefined,
-					onDeployNextMissing: () => undefined,
-					onRetryDeploymentStatus: () => undefined,
-				}}
-			/>,
-		)
+		const rendered = await renderNotFound()
 		try {
 			const links = [...rendered.container.querySelectorAll('a')]
 			expect(links).toHaveLength(3)
@@ -37,6 +42,24 @@ describe('not-found recovery', () => {
 				expect(new URLSearchParams(url.hash.split('?')[1]).get('universe')).toBe('42')
 				expect(url.searchParams.get('network')).toBe('sepolia')
 				expect(url.searchParams.get('rpcUrl')).toBe('https://rpc.example')
+			}
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+})
+
+describe('not-found recovery from a malformed universe', () => {
+	installDomTestLifecycle({ url: 'http://localhost/?network=sepolia#/zoltar?universe=abc&zoltarView=questions' })
+	test('drops the malformed universe so every recovery link opens a valid route', async () => {
+		const rendered = await renderNotFound()
+		try {
+			const links = [...rendered.container.querySelectorAll('a')]
+			expect(links).toHaveLength(3)
+			for (const link of links) {
+				const url = new URL(link.href)
+				expect(new URLSearchParams(url.hash.split('?')[1]).has('universe')).toBe(false)
+				expect(url.searchParams.get('network')).toBe('sepolia')
 			}
 		} finally {
 			await rendered.cleanup()

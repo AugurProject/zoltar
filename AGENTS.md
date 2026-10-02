@@ -130,6 +130,7 @@ Choose the smallest relevant scenario:
 - `simScenario=security-pool`
 - `simScenario=securitypoolx2`
 - `simScenario=trading-funded`
+- `simScenario=trading-forked`
 
 When the change alters a screen that documentation screenshots show, run `bun run docs:screenshots -- --app <app>` and review the recaptured images and the page text that quotes their labels (`bun run test:plan` suggests this).
 

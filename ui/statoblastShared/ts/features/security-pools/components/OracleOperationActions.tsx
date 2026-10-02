@@ -76,7 +76,7 @@ export function OracleOperationActions({
 								/>
 								{onCancel === undefined ? undefined : (
 									<div className='actions transaction-step-close'>
-										<button type='button' className='secondary' disabled={prepared.sending || (directExecution && pending)} onClick={onCancel}>
+										<button type='button' className='secondary' disabled={prepared.sending || (pending && !prepared.preparing)} onClick={onCancel}>
 											{commonCopy.cancel}
 										</button>
 									</div>

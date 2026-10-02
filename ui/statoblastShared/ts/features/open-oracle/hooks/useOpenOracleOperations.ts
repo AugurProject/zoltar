@@ -15,7 +15,7 @@ import {
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
-import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
+import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from '../lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../lib/openOracleDispute.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getDefaultOpenOracleCreateFormState } from '../lib/formDefaults.js'
@@ -118,7 +118,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			approvedToken2Amount: openOracleToken2Approval.value.value,
 			disputeNewAmount1Input: form.disputeNewAmount1,
 			disputeNewAmount2Input: form.disputeNewAmount2,
-			disputeTokenToSwap: form.disputeTokenToSwap,
 			reportDetails,
 			token1AllowanceError: openOracleToken1Approval.value.error,
 			token1Balance: openOracleToken1Balance.value,
@@ -129,6 +128,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			token2BalanceError: openOracleToken2BalanceError.value,
 			token2Decimals: reportDetails.token2Decimals,
 		})
+
+	// The proposed price picks the swapped token, so a refreshed report that flips it must be reviewed before any write.
+	const assertDisputeSwapTokenUnchanged = (reviewed: OpenOracleDisputeSubmissionDetails, refreshed: OpenOracleDisputeSubmissionDetails, reportDetails: OpenOracleReportDetails) => {
+		if (reviewed.swapTokenKey === undefined || refreshed.swapTokenKey === undefined || reviewed.swapTokenKey === refreshed.swapTokenKey) return
+		const symbolOf = (token: 'token1' | 'token2') => (token === 'token1' ? reportDetails.token1Symbol : reportDetails.token2Symbol)
+		throw new Error(openOracleCopy.formatDisputeSwapTokenChanged(symbolOf(refreshed.swapTokenKey), symbolOf(reviewed.swapTokenKey)))
+	}
 
 	const runOracleAction = async (
 		actionName: OpenOracleActionResult['action'],
@@ -228,7 +234,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		await (() => {
 			const submittedOpenOracleForm = openOracleForm.value
 			const action = token === 'token1' ? 'approveToken1' : 'approveToken2'
-			const tokenLabel = token === 'token1' ? 'base token' : 'quote token'
+			const reportDetailsSnapshot = openOracleReportDetails.value
+			const tokenLabel = (token === 'token1' ? reportDetailsSnapshot?.token1Symbol : reportDetailsSnapshot?.token2Symbol) ?? (token === 'token1' ? 'base token' : 'quote token')
 			return runOracleAction(
 				action,
 				async (walletAddress, context) => {
@@ -242,6 +249,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
 					if (refreshedDisputeSubmission.inputBlockMessage !== undefined) throw new Error(refreshedDisputeSubmission.inputBlockMessage.message)
+					assertDisputeSwapTokenUnchanged(cachedDisputeSubmission, refreshedDisputeSubmission, reportDetails)
 					const contributionAmount = (submission: typeof refreshedDisputeSubmission) => (token === 'token1' ? submission.token1ContributionAmount : submission.token2ContributionAmount)
 					if (amount !== undefined && contributionAmount(refreshedDisputeSubmission) !== contributionAmount(cachedDisputeSubmission)) {
 						throw new Error(`The required ${tokenLabel} approval changed. Review the refreshed report and try again.`)
@@ -301,7 +309,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				async (walletAddress, context) => {
 					const walletBalanceAttoEth = await readClient.getBalance({ address: walletAddress })
 					const createGuardMessage = getOpenOracleCreateGuardMessage({
-						ethValueInput: submittedOpenOracleCreateForm.ethValue,
 						isOnActiveAppChain: true,
 						settlerRewardInput: submittedOpenOracleCreateForm.settlerRewardEthAmount,
 						walletConnected: true,
@@ -420,14 +427,17 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				'dispute',
 				async (walletAddress, context) => {
 					const submittedReportIdInput = submittedOpenOracleForm.reportId.trim()
+					const cachedReportDetails = openOracleReportDetails.value
+					const cachedDisputeSubmission = cachedReportDetails === undefined ? undefined : getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
 					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedReportIdInput, requireCurrentSelection: true })
 					const disputeInputPreflight = getDisputeSubmission(details, submittedOpenOracleForm)
 					if (disputeInputPreflight.inputBlockMessage !== undefined) throw new Error(disputeInputPreflight.inputBlockMessage.message)
+					if (cachedDisputeSubmission !== undefined) assertDisputeSwapTokenUnchanged(cachedDisputeSubmission, disputeInputPreflight, details)
 					await refreshOpenOracleTokenAccess(details, { preserveExisting: true })
 					assertSelectedReportCurrent(details.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)
-					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
-					const tokenToSwap = submittedOpenOracleForm.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
+					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined || disputeSubmission.swapTokenKey === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
+					const tokenToSwap = disputeSubmission.swapTokenKey === 'token1' ? details.token1 : details.token2
 					return await dependencies.disputeOracleReport(
 						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
 						getOpenOracleAddress(),

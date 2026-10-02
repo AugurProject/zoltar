@@ -1027,6 +1027,15 @@
 	}
 }
 
+/* Reporting fork confirmation: the global input touch-target height would centre the checkbox about 15px below the first label line. The whole label stays the click target, so the box shrinks to one label line and sits on it. */
+.reporting-fork-trigger-warning .escalation-selection-control input {
+	min-height: 0;
+	height: 1lh;
+	margin: 0;
+	font-size: inherit;
+	line-height: inherit;
+}
+
 .withdraw-deposit-list {
 	display: grid;
 	gap: var(--space-3);
@@ -1189,6 +1198,11 @@
 
 .action-launcher-card.compact {
 	padding-block: var(--space-2);
+}
+
+/* A wrapped sum breaks before its plus sign, never between the sign and its amount. */
+.open-oracle-token-amount {
+	white-space: nowrap;
 }
 
 .open-oracle-report-actions .action-launcher-card {
@@ -3079,7 +3093,6 @@ span.rep-price-status.stale,
 	font-weight: 700;
 }
 
-.vault-more-actions summary,
 .vault-backing-details summary {
 	cursor: pointer;
 	padding: var(--space-3) 0;
@@ -3330,6 +3343,10 @@ span.rep-price-status.stale,
 .liquidation-outcome-review .transaction-review-primary {
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 	gap: var(--space-4);
+}
+
+.liquidation-party .decision-heading {
+	min-height: calc(var(--touch-target-min) - 0.4rem);
 }
 
 .pool-attention-item .link {
@@ -3720,9 +3737,9 @@ span.rep-price-status.stale,
 .pool-action-current {
 	display: inline-flex;
 	align-items: center;
-	min-height: 2.75rem;
+	min-height: 2.25rem;
 	padding: 0 var(--space-3);
-	border: 1px dashed var(--divider-subtle);
+	border: 0;
 	border-radius: var(--radius-control);
 	color: var(--muted);
 	font-size: var(--font-caption);
@@ -3849,8 +3866,8 @@ span.rep-price-status.stale,
 	}
 }
 
-/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. */
-:is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *) {
+/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. Addresses inline in running text have no hover padding to offset. */
+:is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *, .global-transaction-detail-text *) {
 	margin-inline-start: -0.25rem;
 }
 
@@ -3863,4 +3880,24 @@ span.rep-price-status.stale,
 	background: var(--notice-warning-gradient);
 	color: var(--text);
 	font-size: 0.875rem;
+}
+
+/* Security pool UX fixes: next-action buttons, vault liquidation reasons, and the abbreviated vault address. */
+.pool-action-open {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-height: 2.25rem;
+	padding: var(--space-1) var(--space-3);
+	font-size: var(--font-caption);
+	white-space: nowrap;
+}
+
+.vault-position-strip-actions .vault-liquidation-reason {
+	margin-top: var(--space-2);
+}
+
+/* The record names the vault by its abbreviated address; the copy button still copies the full address. */
+.selected-vault-address .address-value {
+	max-width: min(100%, 12rem);
 }

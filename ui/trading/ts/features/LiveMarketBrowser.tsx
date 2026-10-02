@@ -1,3 +1,4 @@
+import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -12,11 +13,10 @@ import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
 import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
+import { DEFAULT_MARKET_LIST_OPTIONS, readMarketListParams, replaceRouteHashSearch, writeMarketListParams } from '../lib/routeState.js'
 import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import type { LiveMarket } from '../protocol/live.js'
 import { MarketCard } from './MarketCard.js'
-
-const DEFAULT_LIST_OPTIONS: MarketListOptions = { filter: 'all', query: '', sort: 'recent' }
 
 const FILTER_OPTIONS: readonly { value: MarketFilter; label: string }[] = [
 	{ value: 'all', label: marketsCopy.filterAll },
@@ -112,8 +112,14 @@ export function LiveMarketBrowser({
 	nowSeconds: bigint
 	retry(): void
 }) {
-	const [listOptions, setListOptions] = useState(DEFAULT_LIST_OPTIONS)
 	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
+	const persistsListOptions = listKind === 'markets'
+	// The market list's search, filter, and sort live in the hash query, so Back and refresh restore them.
+	const [listOptions, setStoredListOptions] = useState(() => (persistsListOptions ? readMarketListParams(parseRouteHash(window.location.hash).search) : DEFAULT_MARKET_LIST_OPTIONS))
+	const setListOptions = (next: MarketListOptions) => {
+		setStoredListOptions(next)
+		if (persistsListOptions) replaceRouteHashSearch(search => writeMarketListParams(search, next), `#/${lookupRoute}`)
+	}
 	const presentation = listPresentation(listKind)
 	const shownMarkets = arrangeMarkets(markets, listOptions, nowSeconds)
 	let list: ComponentChildren
@@ -123,7 +129,7 @@ export function LiveMarketBrowser({
 			<EmptyState
 				title={marketsCopy.noMatches}
 				actions={
-					<button type='button' onClick={() => setListOptions(DEFAULT_LIST_OPTIONS)}>
+					<button type='button' onClick={() => setListOptions(DEFAULT_MARKET_LIST_OPTIONS)}>
 						{marketsCopy.clearFilters}
 					</button>
 				}

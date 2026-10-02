@@ -516,9 +516,11 @@ describe('live market refresh', () => {
 		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
 		const discoveriesBeforeSubmit = discoveries
 		await act(async () => buttonByLabel('Sell Yes').click())
-		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error') !== null, 'price-moved notice')
+		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.warning') !== null, 'price-moved notice')
 		expect(exitRequests).toEqual([expectedCompleteSets])
-		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('The price moved since your estimate')
+		// A re-quote is a prompt to review, not a failure.
+		expect(document.querySelector('[role="tabpanel"] .notice.warning')?.textContent).toContain('The price moved since your estimate')
+		expect(document.querySelector('[role="tabpanel"] .notice.error')).toBeNull()
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
 		await typeAmount('0.0000000000000000001')
 		expect(actionFeedback()).toContain('Enter a share amount with at most 18 decimal places.')
@@ -754,8 +756,8 @@ describe('live market refresh', () => {
 		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently saved')
 	})
 
-	test('a market-card outcome link opens the ticket on that side and drops the one-shot side from the hash', async () => {
-		window.location.hash = `#/market/${pool}?simulate=1&side=no`
+	test('a ticket link opens the ticket on its direction and side and keeps them in the hash', async () => {
+		window.location.hash = `#/market/${pool}?simulate=1&ticket=sell-no`
 		const services = {
 			...offlineControllerServices,
 			discoverAddressedMarket: async () => discoveryPage([{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }]),
@@ -773,6 +775,12 @@ describe('live market refresh', () => {
 		}
 		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
 		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('No')
+		expect(document.querySelector('.trade-ticket-switchers .view-tabs:not(.outcome-picker) button[aria-pressed="true"]')?.textContent).toBe('Sell')
+		// The selection stays in the hash, so a refresh restores it.
+		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-no`)
+		await act(async () => buttonByLabel('Yes').click())
+		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-yes`)
+		await act(async () => buttonByLabel('Buy').click())
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)
 		// The reading column carries the question description as text, with contract addresses behind a disclosure.
 		expect(document.querySelector('.market-description__text')?.textContent).toBe('Resolves YES when the bridge opens.\n<b>not markup</b>')
@@ -781,12 +789,30 @@ describe('live market refresh', () => {
 		expect(document.querySelector('.market-ticket__panel')?.getAttribute('aria-label')).toBe('Trade ticket')
 	})
 
+	test('a closed market restores its chosen view from the hash and its ticket points to Settlement', async () => {
+		window.location.hash = `#/market/${pool}?simulate=1&view=trade`
+		const services = { ...offlineControllerServices, discoverAddressedMarket: async () => discoveryPage([{ ...market, endTime: 1n }]) }
+		const originalMatchMedia = window.matchMedia
+		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = async () => {
+			await rendered.cleanup()
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
+		await waitForDom(() => document.querySelector('.trade-ticket-closed') !== null, 'closed trade ticket')
+		expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Trade')
+		expect(document.querySelector('.trade-ticket-closed')?.textContent).toContain('Trading has ended for this market.')
+		await act(async () => buttonByLabel('Open settlement').click())
+		expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Settlement')
+		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&view=settlement`)
+	})
+
 	test('a side request for a market that never loads does not open the sheet on the next market', async () => {
 		const originalMatchMedia = window.matchMedia
 		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
 		try {
 			const unavailablePool = `0x${'88'.repeat(20)}` as Address
-			window.location.hash = `#/market/${unavailablePool}?side=yes`
+			window.location.hash = `#/market/${unavailablePool}?ticket=buy-yes`
 			const addressedMarket = (address: Address) => (address.toLowerCase() === unavailablePool ? { ...market, pool: unavailablePool, loadError: 'market RPC unavailable' } : { ...market })
 			const services = {
 				...offlineControllerServices,

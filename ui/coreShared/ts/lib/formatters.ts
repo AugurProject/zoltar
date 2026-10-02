@@ -3,7 +3,8 @@
  *
  * | Kind            | Helper                                   | Output                                                                  |
  * | --------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
- * | Token amount    | `formatAmount` / `formatAmountDisplay`   | `1 234.57`: space-grouped, 2 decimals, tiny values keep 2 significant   |
+ * | Token amount    | `formatAmount` / `formatAmountDisplay`   | `1 234.57`: grouped with no-break spaces, 2 decimals, tiny values keep  |
+ * |                 |                                          | 2 significant digits.                                                   |
  * |                 |                                          | digits. `≈ ` is prefixed only when rounding dropped non-zero digits,    |
  * |                 |                                          | so `2.00`, `0.00` and `10k` stay unmarked.                              |
  * | Compact amount  | `formatAmount(..., notation: 'compact')` | Below 1 000 the standard form; from 1 000 an SI suffix with 1 decimal   |
@@ -14,6 +15,7 @@
  * | Date and time   | `formatTimestamp`                        | `2026-01-01 00:00:21 UTC`; `formatTimestampWithRelative` appends        |
  * |                 |                                          | `(in 3d 2h 1m)` / `(5m ago)`; durations use `formatDuration` (`1d 2h 3m`). |
  *
+ * Digit groups are separated by a no-break space so a number never wraps across lines; `toPlainGrouping` restores ordinary spaces for copied values.
  * Units follow the amount after a space (`formatUnitSuffix`, or a non-breaking space in plain strings via `formatValueWithUnit`); `%` and `×` attach directly.
  */
 import { bigintToSafeNumber, formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
@@ -29,8 +31,16 @@ const COMPACT_NOTATION_DECIMALS = 1
 const APPROXIMATE_MARKER = '≈ '
 const MULTIPLIER_SIGN = '×'
 
+/** Separates digit groups without allowing a line break inside a number. */
+const GROUPING_SEPARATOR = '\u00a0'
+
 function formatGroupedInteger(value: bigint) {
-	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, GROUPING_SEPARATOR)
+}
+
+/** Replaces the no-break digit-group separators with ordinary spaces, for text leaving the page such as copied values. */
+export function toPlainGrouping(value: string) {
+	return value.replaceAll(GROUPING_SEPARATOR, ' ')
 }
 
 function formatDecimalString(value: string) {
@@ -201,7 +211,7 @@ export type AmountNotation = 'standard' | 'compact'
 export type FormattedAmount = {
 	/** True when the displayed text dropped non-zero digits of the exact value. */
 	approximate: boolean
-	/** Every significant digit, space-grouped, for titles, copy, and accessible descriptions. */
+	/** Every significant digit, grouped like `text`, for titles, copy, and accessible descriptions. */
 	exact: string
 	/** The rounded display text without the approximation marker. */
 	text: string
@@ -239,6 +249,25 @@ export function formatCeilingAmount(value: bigint, units = 18): FormattedAmount 
 	if (formatRoundedScaledValue(value, largestDivisor, 2, 'up').integerPart >= 1000n) return undefined
 	const compact = formatCompactScaledValue(value, units, 2, 'up')
 	return { approximate: compact.approximate, exact, text: compact.text }
+}
+
+/**
+ * Upward-rounded amount in the standard grouped two-decimal form that displayed balances use, with its `≈ ` marker when
+ * rounding changed it. Requirements, shortfalls and payments share it so they never read below what the approval button
+ * (which rounds up the same way, in compact form) approves, and line up with the approved balance shown beside them.
+ */
+export function formatCeilingAmountDisplay(value: bigint, units = 18) {
+	assertNonNegativeInteger(units, 'Units')
+	if (value < 0n) throw new RangeError('Approval amount must be non-negative')
+	const base = 10n ** BigInt(units)
+	const scale = 100n
+	const rounded = (value * scale + base - 1n) / base
+	const text = `${formatGroupedInteger(rounded / scale)}.${(rounded % scale).toString().padStart(2, '0')}`
+	return (value * scale) % base === 0n ? text : `${APPROXIMATE_MARKER}${text}`
+}
+
+export function formatAdditionalCeilingAmount(value: bigint, unit: string, units = 18) {
+	return `${formatCeilingAmountDisplay(value, units)}\u00a0more\u00a0${unit}`
 }
 
 /** Marks rounded text with `≈ ` only when rounding dropped digits. */

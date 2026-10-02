@@ -10,6 +10,7 @@ import { formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, forma
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -21,6 +22,7 @@ import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingType
 import { liveCopy } from '../copy/live.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
+import { marketsCopy } from '../copy/markets.js'
 import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
 import { PortfolioActionItems, PortfolioRowActions, PortfolioRowValue, PortfolioSummary } from './PortfolioOverview.js'
 
@@ -119,6 +121,7 @@ export function LivePortfolio({
 	discoveryComplete = true,
 	nowSeconds,
 	walletAction,
+	universeId,
 }: {
 	entries: readonly PortfolioBalanceEntry[]
 	balanceState: BalanceState
@@ -128,7 +131,10 @@ export function LivePortfolio({
 	nowSeconds: bigint
 	/** Inline connect or switch-network control for the disconnected state. */
 	walletAction?: PortfolioWalletAction | undefined
+	/** The universe the positions were read from; the empty state names it and offers to switch. */
+	universeId?: bigint | undefined
 }) {
+	// Saved pools are listed while their balances load; once every read has answered, only pools with a balance or an error remain.
 	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
 	const overview = portfolioOverview(visibleEntries, nowSeconds)
 	const showSummary = discoveryComplete && balanceState === 'ready' && visibleEntries.length > 0
@@ -144,7 +150,19 @@ export function LivePortfolio({
 			) : null}
 			{balanceState === 'loading' ? <EmptyState live title={portfolioCopy.loadingPoolBalances} /> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
-			{balanceState === 'ready' && visibleEntries.length === 0 ? <EmptyState title={portfolioCopy.noPortfolioBalances} /> : null}
+			{balanceState === 'ready' && visibleEntries.length === 0 ? (
+				<EmptyState
+					title={universeId === undefined ? portfolioCopy.noPortfolioBalances : portfolioCopy.noPositionsInUniverse(formatUniverseDisplayLabel(universeId))}
+					detail={universeId === undefined ? undefined : portfolioCopy.noPortfolioBalances}
+					actions={
+						universeId === undefined ? undefined : (
+							<a className='button-link secondary-link' href={getTradingRouteHref('#/universe')}>
+								{marketsCopy.switchUniverse}
+							</a>
+						)
+					}
+				/>
+			) : null}
 			{showSummary ? <PortfolioSummary overview={overview} /> : null}
 			{showSummary ? <PortfolioActionItems items={overview.actionItems} nowSeconds={nowSeconds} /> : null}
 			{visibleEntries.length === 0 ? null : (

@@ -107,6 +107,14 @@
 	color: var(--text-secondary);
 }
 
+/* Unavailable options read as unavailable at a glance: muted text, a dashed outline, and a not-allowed cursor. */
+.view-tabs.segmented .view-tab:disabled:not(.active),
+.view-tabs.segmented .view-tab[aria-disabled="true"]:not(.active) {
+	border: 1px dashed var(--disabled-control-border);
+	color: var(--disabled-control-text);
+	cursor: not-allowed;
+}
+
 .view-tabs.segmented .view-tab.active {
 	background: var(--interactive-bg-active);
 	border-color: var(--border-active);
@@ -1025,6 +1033,12 @@ button.tx-action-wallet-fix {
 	min-height: 2.4rem;
 	border: 0;
 	background: transparent;
+}
+
+/* The toolbar names the account by its abbreviated address at every width, as the popover holds the full address.
+ * Capping the slot makes the responsive address measurement abbreviate even when the toolbar has room to spare. */
+.header-toolbar-controls .account-menu {
+	max-width: 14rem;
 }
 
 .account-menu-trigger:hover,

@@ -60,4 +60,18 @@ export const shareBalancesUnavailable = 'Share balances unavailable. Refresh poo
 export const shareBackingDetail = 'ETH values assume the outcome wins; they are not sale quotes.'
 
 export const actionUnavailableReason = 'This action is unavailable in the current pool state.'
-export const maxUsesWalletBalanceHint = 'Max uses your entire ETH balance. Leave ETH for gas.'
+export const formatMaxKeepsGasReserveHint = (gasReserve: string) => `Max keeps ${gasReserve} in your wallet for gas.`
+export const mintingPausedDuringDispute = 'Minting is paused while the outcome is disputed.'
+export const formatNoWinningSharesReason = (outcomeLabel: string) => `No winning ${outcomeLabel} shares to redeem.`
+export const formatWinningOutcomeShares = (outcomeLabel: string) => `Winning ${outcomeLabel} shares`
+export const expectedEthPayout = 'Expected ETH payout'
+export const resolvedShareRedemptionFeeDetail = 'Burns every winning share you hold. The pool deducts accrued holding fees first, so the payout may be slightly lower.'
+export const availableToRedeem = 'Available to redeem'
+export const setsUnit = 'sets'
+export const sharesUnit = 'shares'
+export const formatShareOutcomeOption = (outcomeLabel: string, amount: string) => `${outcomeLabel} (${amount} shares)`
+export const formatMigratingShares = (amount: string, outcomeLabel: string) => `Migrating ${amount} ${outcomeLabel} shares`
+export const shareMigrationIrreversible = 'Migration cannot be undone.'
+export const formatMigrateSharesReviewTitle = (outcomeLabel: string) => `Migrate ${outcomeLabel} shares`
+export const formatMigrateSharesReviewUnit = (outcomeLabel: string) => `${outcomeLabel} shares`
+export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Moves your whole ${outcomeLabel} balance into the selected child universes. ${shareMigrationIrreversible}`

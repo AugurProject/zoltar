@@ -14,7 +14,7 @@ const depositRep: readonly UiScreenshotStep[] = [...approveRep, { click: 'Deposi
 const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'OpenOracle REP per ETH starting price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }, { waitForEnabled: 'Approve ≈ 1.62 WETH' }]
 const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Approve ≈ 1.62 WETH' }, { waitForText: 'WETH approved' }, { click: 'Approve ≈ 4.85 REP' }, { waitForText: 'REP approved' }, { click: 'Set commitment limit', nth: -1 }, { waitForText: 'View in staged operations' }]
 // The report settles after eight minutes; ten keeps the staged operation inside its validity window.
-const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForText: 'Ready to settle' }]
+const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForEnabled: 'Settle report' }]
 const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Settled report' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Commitment limit changed' }, { waitForText: '10.00 ETH' }]
 
 const fillMint: readonly UiScreenshotStep[] = [...settleAndReturn, { click: 'Open shares' }, { click: 'Mint complete sets', nth: -1 }, { waitForText: 'Wallet ETH' }, { fill: 'Mint complete sets amount', value: '1' }, { waitForEnabled: 'Mint complete sets' }]
@@ -65,7 +65,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: openReport,
-		expectText: ['Ready to settle', 'Settle report'],
+		expectText: ['Report #1', 'Settle report'],
 		viewport: pageViewport,
 		crop: { selector: '.open-oracle-report-stack', padding: 6 },
 		usedBy: tutorial,
@@ -95,7 +95,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: [...fillMint, { click: 'Mint complete sets', nth: -1 }, { waitForNoText: 'Wallet ETH' }, { waitForText: '1.00 ETH' }],
-		expectText: ['Collateral in use / capacity', '1.00 ETH', '10.00 ETH', 'Redeemable complete sets'],
+		expectText: ['Open interest / commitment', '1.00 ETH', '10.00 ETH', 'Redeemable complete sets'],
 		viewport: pageViewport,
 		crop: { selector: 'section', containing: 'Pool stage' },
 		usedBy: tutorial,

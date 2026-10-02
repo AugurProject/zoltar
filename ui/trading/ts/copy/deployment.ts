@@ -30,7 +30,29 @@ export function walletMustUseNetwork(networkName: string) {
 }
 
 export function connectedWalletMustUseNetwork(networkName: string) {
-	return `The connected wallet must use ${networkName}. Reconnect to switch networks.`
+	return `The connected wallet must use ${networkName}.`
+}
+
+export function switchToNetwork(networkName: string) {
+	return `Switch to ${networkName}`
+}
+
+export function switchingToNetwork(networkName: string) {
+	return `Switching to ${networkName}…`
+}
+
+export const deployingTo = 'Deploying to'
+
+export function deploymentSequence(firstLabel: string, secondLabel: string) {
+	return `Deployment takes two wallet transactions: ${firstLabel}, then ${secondLabel}.`
+}
+
+export function networkFallback(requestedNetwork: string, deploymentNetwork: string) {
+	return `${requestedNetwork} has no core deployment, so this deploys to ${deploymentNetwork} instead.`
+}
+
+export function chainLabel(chainId: string) {
+	return `Chain ${chainId}`
 }
 
 export function contractDeployedContinue(label: string, nextLabel: string) {

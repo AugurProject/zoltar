@@ -4,7 +4,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
-import { createAccountState, createSelectedPool, createSecurityPoolWorkflowProps, createSecurityVaultProps, createSecurityVaultDetails } from './workflow/builders.js'
+import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createSecurityVaultProps, createSecurityVaultDetails } from './workflow/builders.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 installTestRouting()
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -157,4 +157,54 @@ test('follows URL-controlled vault views instead of resetting them to the wallet
 	expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
 	await act(() => render(<SecurityPoolWorkflowSection {...props} controlledVaultView='vault-by-address' />, rendered.container))
 	expect(within(document.body).getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
+})
+
+test('offers directory liquidation only for other vaults and shows why a healthy vault cannot be liquidated', async () => {
+	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
+	const walletOwner = getAddress('0x0000000000000000000000000000000000000003')
+	const opened: Address[] = []
+	await renderHarness(
+		<SecurityPoolWorkflowSection
+			{...createSecurityPoolWorkflowProps({
+				accountState: createAccountState({ address: walletOwner }),
+				onOpenLiquidationModal: (_manager, _pool, vaultAddress) => opened.push(vaultAddress),
+				poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n }),
+				securityPoolAddress: zeroAddress,
+				securityPools: [
+					createSelectedPool({
+						hasLoadedVaults: true,
+						statoblastSecurityMultiplierBps: 20_000n,
+						vaultCount: 3n,
+						vaults: [createSecurityVaultDetails({ vaultAddress: walletOwner }), createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
+					}),
+				],
+				selectedPoolView: 'vaults',
+			})}
+		/>,
+	)
+	const getRow = (address: Address) => {
+		const row = within(document.body)
+			.getByRole('button', { name: 'Copy address ' + address })
+			.closest('.vault-position-strip')
+		if (!(row instanceof HTMLElement)) throw new Error('Expected vault record')
+		return within(row)
+	}
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	expect(document.querySelector('.vault-more-actions')).toBeNull()
+	expect(getRow(walletOwner).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
+	const healthyButton = getRow(otherOwner).getByRole('button', { name: 'Liquidate vault' })
+	expect(healthyButton.hasAttribute('disabled')).toBe(true)
+	const reason = document.getElementById(healthyButton.getAttribute('aria-describedby') ?? '')
+	expect(reason?.textContent).toBe('This vault is not undercollateralized at the current OpenOracle price.')
+	const unhealthyButton = getRow(unhealthyOwner).getByRole('button', { name: 'Liquidate vault' })
+	expect(unhealthyButton.hasAttribute('disabled')).toBe(false)
+	await act(() => fireEvent.click(unhealthyButton))
+	expect(opened).toEqual([unhealthyOwner])
+})
+
+test('removes the liquidation launcher from the connected wallet’s own vault', async () => {
+	await renderHarness(<VaultSelectionHarness />)
+	expect(within(document.body).getByRole('button', { name: 'My vault' }).getAttribute('aria-pressed')).toBe('true')
+	expect(within(document.body).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
+	expect(document.body.textContent).not.toContain('Choose another vault to liquidate.')
 })

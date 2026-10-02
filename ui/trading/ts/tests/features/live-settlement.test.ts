@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { simulateSettlement, submitFreshSettlement } from '../../protocol/live.js'
+import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
 import { receiveBasedExitArguments } from '../../protocol/authorization.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
@@ -172,7 +173,7 @@ describe('live settlement contract encoding', () => {
 			valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit },
 		}
 		const { client, counts } = recordingSettlementClient(child)
-		await expect(simulateSettlement(client, configuration, child, account, 'redeem-complete-set', { amount: unit, slippageBps: 0n })).rejects.toThrow(holdingFeesBoundsReason)
+		await expect(simulateSettlement(client, configuration, child, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })).rejects.toThrow(holdingFeesBoundsReason)
 		expect(counts.sends).toBe(0)
 	})
 
@@ -180,16 +181,16 @@ describe('live settlement contract encoding', () => {
 		const cached = { ...market, pair: account, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
 		const fresh = { ...cached, shareTokenSupplyAttoShares: 200n, settlementCollateralAttoEth: 300n }
 		const { client } = recordingSettlementClient(fresh)
-		const quote = await simulateSettlement(client, configuration, cached, account, 'redeem-complete-set', { amount: 10n, slippageBps: 0n })
+		const quote = await simulateSettlement(client, configuration, cached, account, 'redeem-complete-set', { amount: 10n, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		expect(quote.expectedAttoEth).toBe(15n)
 	})
 
-	test('allows zero slippage after fee end but blocks new accrual before submission', async () => {
+	test('allows the minimum slippage after fee end but blocks new accrual before submission', async () => {
 		const unit = 10n ** 18n
 		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
 		const { client, chain, counts } = recordingSettlementClient(ended)
-		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 0n })
+		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
 		await expect(submitFreshSettlement(client, configuration, account, quote, async write => await write())).rejects.toThrow(holdingFeesBoundsReason)
@@ -211,7 +212,7 @@ describe('live settlement contract encoding', () => {
 		const unit = 10n ** 18n
 		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
 		const { client, chain, counts } = recordingSettlementClient(ended)
-		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 0n })
+		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: MINIMUM_SLIPPAGE_BPS })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		await expect(
 			submitFreshSettlement(client, configuration, account, quote, async write => {

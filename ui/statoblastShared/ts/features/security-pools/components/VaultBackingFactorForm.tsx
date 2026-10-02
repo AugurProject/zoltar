@@ -142,7 +142,7 @@ export function VaultBackingFactorForm({
 				prepared={prepared}
 				operationKey={preparationKey}
 				actionLabel={securityPoolCopy.setVaultUnderwritingLimit}
-				pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
+				pendingLabel={securityPoolCopy.settingCommitmentLimitPending}
 				requiresReportFunding={needsInitialPrice}
 				directExecution={directExecution}
 				busy={busy}

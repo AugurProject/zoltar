@@ -13,7 +13,17 @@ import { parseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs
 import { getDefaultTradingFormState } from '../lib/marketForm.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { estimateMintCheckpoint, getCompleteSetRedeemAttoShares, getDefaultShareMigrationTargetOutcomeIndexes, getTradingMigrateSharesGuardMessage, getTradingMintGuardMessage, getTradingRedeemCompleteSetGuardMessage, getTradingRedeemSharesGuardMessage, isTradingSystemDeployed } from '../lib/trading.js'
+import {
+	estimateMintCheckpoint,
+	getCompleteSetRedeemAttoShares,
+	getDefaultShareMigrationTargetOutcomeIndexes,
+	getSelectedOutcomeShareBalance,
+	getTradingMigrateSharesGuardMessage,
+	getTradingMintGuardMessage,
+	getTradingRedeemCompleteSetGuardMessage,
+	getTradingRedeemSharesGuardMessage,
+	isTradingSystemDeployed,
+} from '../lib/trading.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createTradingSuccessPresentation, createTradingTransactionIntent, createTradingWarningPresentation } from '../../transactionPresentations.js'
@@ -36,7 +46,7 @@ export type UseTradingOperationsDependencies = {
 	loadSecurityPoolMintCapacity: (securityPoolAddress: Address) => ReturnType<typeof loadSecurityPoolMintCapacity>
 	loadTradingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadTradingDetailsForPool>
 	loadZoltarUniverseSummary: (universeId: bigint) => ReturnType<typeof loadZoltarUniverseSummary>
-	migrateSharesFromUniverse: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof migrateSharesFromUniverse>[2], targetOutcomeIndexes: bigint[]) => ReturnType<typeof migrateSharesFromUniverse>
+	migrateSharesFromUniverse: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof migrateSharesFromUniverse>[2], targetOutcomeIndexes: bigint[], migratedAttoShares?: bigint) => ReturnType<typeof migrateSharesFromUniverse>
 	redeemCompleteSetInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, amount: bigint) => ReturnType<typeof redeemCompleteSetInSecurityPool>
 	redeemSharesInSecurityPool: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address) => ReturnType<typeof redeemSharesInSecurityPool>
 }
@@ -47,7 +57,7 @@ const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies 
 	loadSecurityPoolMintCapacity: async securityPoolAddress => await loadSecurityPoolMintCapacity(createConnectedReadClient(), securityPoolAddress),
 	loadTradingDetails: async (securityPoolAddress, accountAddress) => await loadTradingDetailsForPool(createConnectedReadClient(), securityPoolAddress, accountAddress),
 	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createConnectedReadClient(), universeId),
-	migrateSharesFromUniverse: async (accountAddress, callbacks, securityPoolAddress, outcome, targetOutcomeIndexes) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, targetOutcomeIndexes),
+	migrateSharesFromUniverse: async (accountAddress, callbacks, securityPoolAddress, outcome, targetOutcomeIndexes, migratedAttoShares) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, targetOutcomeIndexes, migratedAttoShares),
 	redeemCompleteSetInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, amount) => await redeemCompleteSetInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, amount),
 	redeemSharesInSecurityPool: async (accountAddress, callbacks, securityPoolAddress) => await redeemSharesInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress),
 }
@@ -160,6 +170,12 @@ export function useTradingOperations(
 		await tradingDetailsLoad.run(isCurrent === undefined ? loadOptions : { ...loadOptions, isCurrent })
 	}
 
+	// A confirmed write consumes its amount; a value the user typed since submitting stays.
+	const clearSubmittedAmount = (actionName: TradingActionResult['action'], submittedForm: TradingFormState) => {
+		if (actionName === 'createCompleteSet' && tradingForm.value.completeSetAmount === submittedForm.completeSetAmount) tradingForm.value = { ...tradingForm.value, completeSetAmount: '' }
+		if (actionName === 'redeemCompleteSet' && tradingForm.value.redeemAmount === submittedForm.redeemAmount) tradingForm.value = { ...tradingForm.value, redeemAmount: '' }
+	}
+
 	const runTradingAction = async (actionName: TradingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: TradingFormState, isCurrentSelection: () => boolean, context: WriteActionContext) => Promise<TradingActionResult | undefined>, errorFallback: string) => {
 		const currentForm = tradingForm.value
 		const actionSelectionKey = currentTradingSelectionKey
@@ -221,6 +237,7 @@ export function useTradingOperations(
 						})
 						const guardMessage = getTradingMintGuardMessage({
 							accountAddress: walletAddress,
+							escalationGameActive: latestMintCapacity.escalationGameActive === true,
 							settlementCollateralAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? latestMintCapacity.settlementCollateralAttoEth,
 							ethBalanceAttoEth: walletBalanceAttoEth,
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
@@ -272,6 +289,7 @@ export function useTradingOperations(
 				errorFallback,
 				async (result, walletAddress) => {
 					tradingResult.value = result
+					clearSubmittedAmount(actionName, currentForm)
 					tradingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createTradingSuccessPresentation(result))
 					if (!isActionSelectionCurrent()) return
@@ -328,12 +346,14 @@ export function useTradingOperations(
 			'migrateShares',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
+				const shareOutcome = parseReportingOutcomeInput(currentForm.selectedShareOutcome)
 				return await dependencies.migrateSharesFromUniverse(
 					walletAddress,
 					{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
 					securityPoolAddress,
-					parseReportingOutcomeInput(currentForm.selectedShareOutcome),
+					shareOutcome,
 					parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'),
+					getSelectedOutcomeShareBalance(tradingDetails.value?.shareBalances, shareOutcome),
 				)
 			},
 			'Failed to migrate shares',

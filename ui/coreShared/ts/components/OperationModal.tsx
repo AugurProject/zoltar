@@ -2,6 +2,7 @@ import { registerTransactionReviewScope } from '../transactions/transactionRevie
 import * as transactionStepsCopy from '../copy/transactionSteps.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
+import { TransactionObjectContext } from './TransactionObjectContext.js'
 import { ModalFrame } from './ModalFrame.js'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { TransactionReviewActiveContext } from './TransactionActionButton.js'
@@ -151,6 +152,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 						{description}
 					</p>
 				)}
+				<TransactionObjectContext className='operation-modal-context' items={context} />
 				{/* Keep the form and its disabled action row in place while the transaction buttons run below. */}
 				<div className='operation-modal-body' inert={runningReview || undefined}>
 					<TransactionReviewActiveContext.Provider value={runningReview}>{children}</TransactionReviewActiveContext.Provider>

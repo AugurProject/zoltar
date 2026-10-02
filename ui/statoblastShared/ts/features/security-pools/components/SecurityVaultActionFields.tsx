@@ -45,8 +45,9 @@ export function VaultDepositAmountField({
 }
 
 export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoRep, onChange, repTokenSymbol, value }: { disabled: boolean; maximumWithdrawableAttoRep: bigint | undefined; onChange: (repWithdrawAmount: string) => void; repTokenSymbol: string; value: string }) {
-	// The withdraw action guard owns the over-maximum reason, so the field only offers Max.
-	return <AmountField disabled={disabled} label={securityPoolCopy.repWithdrawAmount} fillMax={{ amount: maximumWithdrawableAttoRep }} onChange={onChange} unit={repTokenSymbol} value={value} />
+	// The field flags an amount above the withdrawable maximum inline; the action guard repeats it beside the disabled button.
+	const maximum = maximumWithdrawableAttoRep !== undefined && maximumWithdrawableAttoRep > 0n ? maximumWithdrawableAttoRep : undefined
+	return <AmountField disabled={disabled} label={securityPoolCopy.formatRepWithdrawAmount(repTokenSymbol)} fillMax={{ amount: maximumWithdrawableAttoRep }} maximum={maximum} onChange={onChange} unit={repTokenSymbol} value={value} />
 }
 
 export function VaultRepExitActionButton({
@@ -60,6 +61,7 @@ export function VaultRepExitActionButton({
 	repExitEnabled,
 	repExitGuardMessage,
 	repExitMode,
+	repTokenSymbol,
 	securityVaultActiveAction,
 	walletGuard,
 }: {
@@ -73,6 +75,7 @@ export function VaultRepExitActionButton({
 	repExitEnabled: boolean
 	repExitGuardMessage: string | undefined
 	repExitMode: VaultRepExitMode
+	repTokenSymbol: string
 	securityVaultActiveAction: SecurityVaultSectionProps['securityVaultActiveAction']
 	walletGuard: WalletGuard
 }) {
@@ -91,7 +94,7 @@ export function VaultRepExitActionButton({
 			disabledReasonElementId={describedByElementId}
 			showDisabledReason={describedByElementId === undefined}
 			idleLabel={repExitActionLabel}
-			pendingLabel={repExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
+			pendingLabel={repExitMode === 'redeem' ? securityPoolCopy.formatRedeemingRep(repTokenSymbol) : securityPoolCopy.formatWithdrawingRep(repTokenSymbol)}
 			onClick={repExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}
 			pending={repExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRepFromVault' : securityVaultActiveAction === 'queueWithdrawRep'}
 			availability={withWalletGuardFirst(
@@ -243,11 +246,11 @@ export function VaultActionLaunchers({
 	)
 }
 
-export function VaultWithdrawalSummaryMetrics({ amountLabel, maximumWithdrawableAttoRep, isEstimate, priceValidUntil }: { amountLabel: string; maximumWithdrawableAttoRep: bigint | undefined; isEstimate: boolean; priceValidUntil: bigint | undefined }) {
+export function VaultWithdrawalSummaryMetrics({ repTokenSymbol, amountLabel, maximumWithdrawableAttoRep, isEstimate, priceValidUntil }: { repTokenSymbol: string; amountLabel: string; maximumWithdrawableAttoRep: bigint | undefined; isEstimate: boolean; priceValidUntil: bigint | undefined }) {
 	return (
 		<MetricGrid>
 			<MetricField label={amountLabel}>
-				<CurrencyValue value={maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
+				<CurrencyValue value={maximumWithdrawableAttoRep} suffix={repTokenSymbol} />
 				{isEstimate ? <RepPriceStatusLabel /> : undefined}
 			</MetricField>
 			<MetricField label={securityPoolCopy.priceValidUntil}>{priceValidUntil === undefined ? commonCopy.unavailable : <TimestampValue timestamp={priceValidUntil} />}</MetricField>

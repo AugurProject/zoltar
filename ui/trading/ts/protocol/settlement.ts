@@ -1,5 +1,6 @@
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
 import { latestBlockIdentity, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, simulateWithDeadline, stableSimulation, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
@@ -31,21 +32,57 @@ function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
 	return normalized
 }
 
-export function settlementAvailability(market: MarketLifecycle, balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined) {
-	const completeSets = balances === undefined ? 0n : [balances.invalid, balances.yes, balances.no].reduce((minimum, balance) => (balance < minimum ? balance : minimum))
+type SettlementLifecycle = Pick<MarketLifecycle, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>
+type SettlementBalances = Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined
+
+export type SettlementUnavailableReason = Readonly<{ code: 'market-data-unavailable' | 'universe-not-forked' | 'no-shares-to-migrate' | 'universe-forked' | 'pool-not-operational' | 'no-complete-sets' | 'question-not-resolved' }> | Readonly<{ code: 'no-winning-shares'; outcome: ShareOutcome }>
+
+const SHARE_OUTCOME_BY_KEY = { invalid: 'INVALID', yes: 'YES', no: 'NO' } as const satisfies Record<'invalid' | 'yes' | 'no', ShareOutcome>
+
+/** The winning share for a resolved question, or undefined while the question is unresolved. */
+export function resolvedShareOutcome(questionOutcome: number): ShareOutcome | undefined {
+	const key = getReportingOutcomeKey(questionOutcome)
+	return key === 'none' ? undefined : SHARE_OUTCOME_BY_KEY[key]
+}
+
+function settlementHoldings(market: SettlementLifecycle, balances: SettlementBalances) {
+	if (balances === undefined) return { completeSets: 0n, winningBalance: 0n, directionalBalance: 0n }
+	const completeSets = [balances.invalid, balances.yes, balances.no].reduce((minimum, balance) => (balance < minimum ? balance : minimum))
+	const outcome = resolvedShareOutcome(market.questionOutcome)
 	let winningBalance = 0n
-	if (balances !== undefined) {
-		if (market.questionOutcome === 0) winningBalance = balances.invalid
-		else if (market.questionOutcome === 1) winningBalance = balances.yes
-		else if (market.questionOutcome === 2) winningBalance = balances.no
+	if (outcome === 'INVALID') winningBalance = balances.invalid
+	else if (outcome === 'YES') winningBalance = balances.yes
+	else if (outcome === 'NO') winningBalance = balances.no
+	return { completeSets, winningBalance, directionalBalance: balances.invalid + balances.yes + balances.no }
+}
+
+/** The canonical reason a settlement operation cannot run for this market and wallet, or undefined when it can. */
+export function settlementUnavailability(operation: SettlementOperation, market: SettlementLifecycle, balances: SettlementBalances): SettlementUnavailableReason | undefined {
+	const holdings = settlementHoldings(market, balances)
+	if (market.loadError !== undefined) return { code: 'market-data-unavailable' }
+	if (operation === 'migrate-shares') {
+		if (market.universeForkTime === 0n) return { code: 'universe-not-forked' }
+		return holdings.directionalBalance === 0n ? { code: 'no-shares-to-migrate' } : undefined
 	}
-	const directionalBalance = balances === undefined ? 0n : balances.invalid + balances.yes + balances.no
+	if (operation === 'redeem-complete-set') {
+		if (market.universeForkTime !== 0n) return { code: 'universe-forked' }
+		if (market.systemState !== 0) return { code: 'pool-not-operational' }
+		return holdings.completeSets === 0n ? { code: 'no-complete-sets' } : undefined
+	}
+	if (market.systemState !== 0) return { code: 'pool-not-operational' }
+	const outcome = resolvedShareOutcome(market.questionOutcome)
+	if (outcome === undefined) return { code: 'question-not-resolved' }
+	return holdings.winningBalance === 0n ? { code: 'no-winning-shares', outcome } : undefined
+}
+
+export function settlementAvailability(market: SettlementLifecycle, balances: SettlementBalances) {
+	const { completeSets, winningBalance } = settlementHoldings(market, balances)
 	return {
 		completeSets,
 		winningBalance,
-		canRedeemCompleteSets: market.loadError === undefined && market.systemState === 0 && market.universeForkTime === 0n && completeSets > 0n,
-		canRedeemWinningShares: market.loadError === undefined && market.systemState === 0 && market.questionOutcome !== 3 && winningBalance > 0n,
-		canMigrateShares: market.loadError === undefined && market.universeForkTime !== 0n && directionalBalance > 0n,
+		canRedeemCompleteSets: settlementUnavailability('redeem-complete-set', market, balances) === undefined,
+		canRedeemWinningShares: settlementUnavailability('redeem-winning-shares', market, balances) === undefined,
+		canMigrateShares: settlementUnavailability('migrate-shares', market, balances) === undefined,
 	}
 }
 
