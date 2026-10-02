@@ -365,6 +365,9 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		await settle()
 		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
 		expect(within(statusDialog).getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
+		const notSent = within(queries.getByRole('dialog', { name: 'Request new price' })).getByRole('alert')
+		expect(notSent.textContent).toContain('Price request not sent')
+		expect(notSent.textContent).toContain('Uniswap quote unavailable.')
 		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
 		expect(document.querySelector('.price-request-preview')?.textContent).not.toContain('Uniswap quote unavailable.')
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
@@ -413,7 +416,8 @@ test.each(['edit', 'button'] as const)('allows another price request after a fai
 			expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(true)
 			expect(attempts).toBe(1)
 			await act(() => render(<RequestPriceModal {...props} onConfirm={onConfirm} />, rendered.container))
-			const retryButton = queries.getByRole('button', { name: /^Request new price/ })
+			expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(true)
+			const retryButton = queries.getByRole('button', { name: 'Retry' })
 			expect(retryButton.hasAttribute('disabled')).toBe(false)
 			await act(() => fireEvent.click(retryButton))
 		}
@@ -720,7 +724,9 @@ test('keeps submitted funding and pool details beside the original action after 
 		await settle()
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
 		await settle()
-		expect(queries.getByRole('alert').textContent).toContain('nonce too low')
+		const notSent = within(queries.getByRole('dialog', { name: 'Request new price' })).getByRole('alert')
+		expect(notSent.textContent).toContain('Price request not sent')
+		expect(notSent.textContent).toContain('nonce too low')
 		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
 		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
 		expect(within(statusDialog).getByText('Failed')).not.toBeNull()
@@ -795,12 +801,22 @@ test.each(['reverted', 'rejected'] as const)('keeps approvals in place after a %
 		await act(() => fireEvent.click(within(form).getByRole('button', { name: /^Request new price/ })))
 		await settle()
 		expect(transactionSteps.value).toBeUndefined()
+		if (outcome === 'rejected') {
+			const alert = within(form).getByRole('alert')
+			expect(alert.textContent).toContain('Price request not sent')
+			expect(alert.textContent).toContain('User rejected the request.')
+		} else expect(form.textContent).not.toContain('Price request not sent')
 		for (const [index, row] of actionRows.entries()) expect(form.querySelectorAll('.transaction-plan-action')[index] === row).toBe(true)
 		for (const approval of approvals) {
 			expect(form.contains(approval)).toBe(true)
 			expect(approval.hasAttribute('disabled')).toBe(true)
 		}
-		await act(() => fireEvent.click(within(form).getByRole('button', { name: /^Request new price/ })))
+		expect(
+			within(form)
+				.getByRole('button', { name: /^Request new price/ })
+				.hasAttribute('disabled'),
+		).toBe(true)
+		await act(() => fireEvent.click(within(form).getByRole('button', { name: 'Retry' })))
 		await settle()
 		expect(attempts).toBe(2)
 		for (const symbol of ['REP', 'WETH'])
@@ -1204,7 +1220,7 @@ test('offers the switch fix in place of a wrong-network confirmation guard', asy
 	}
 })
 
-test('prepares retries inline without a review action and requests the wallet only on submit', async () => {
+test('disables price submission after failure and retries separately before requesting the wallet', async () => {
 	const dom = installDomEnvironment()
 	let attempts = 0
 	let walletRequests = 0
@@ -1230,13 +1246,18 @@ test('prepares retries inline without a review action and requests the wallet on
 		await act(() => fireEvent.click(page.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(page.queryByRole('button', { name: /^Review request/ })).toBeNull()
-		const retryButton = page.getByRole('button', { name: /^Request new price/ })
+		const alert = within(page.getByRole('dialog', { name: 'Request new price' })).getByRole('alert')
+		expect(alert.textContent).toContain('Price request not sent')
+		expect(alert.textContent).toContain('Preparation failed')
+		expect(page.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(true)
+		const retryButton = page.getByRole('button', { name: 'Retry' })
 		expect(retryButton.hasAttribute('disabled')).toBe(false)
 		await act(() => {
 			fireEvent.click(retryButton)
 			fireEvent.click(retryButton)
 		})
 		await settle()
+		expect(within(page.getByRole('dialog', { name: 'Request new price' })).queryByRole('alert')).toBeNull()
 		expect(walletRequests).toBe(0)
 		expect(attempts).toBe(2)
 		await act(() => fireEvent.click(page.getByRole('button', { name: /^Request new price/ })))
@@ -1308,9 +1329,42 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 				within(form)
 					.getByRole('button', { name: /^Request new price/ })
 					.hasAttribute('disabled'),
-			).toBe(false)
+			).toBe(true)
+			expect(within(form).getByRole('button', { name: 'Retry' }).hasAttribute('disabled')).toBe(false)
+			expect(form.textContent).not.toContain('Price request not sent')
 			expect(form.textContent).toContain('2\u00a0REP')
 		}
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps the preview submission disabled while offering a separate preparation retry', async () => {
+	const dom = installDomEnvironment()
+	let retries = 0
+	const rendered = await renderIntoDocument(
+		<PriceRequestPreview
+			requestValue={12n}
+			prompt={undefined}
+			reason='Preparation failed'
+			error={undefined}
+			preparing={false}
+			hideReason={false}
+			onClose={() => undefined}
+			onRetry={() => {
+				retries += 1
+			}}
+		/>,
+	)
+	try {
+		const page = within(document.body)
+		const request = page.getByRole('button', { name: /^Request new price/ })
+		expect(request.hasAttribute('disabled')).toBe(true)
+		await act(() => fireEvent.click(request))
+		expect(retries).toBe(0)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Retry' })))
+		expect(retries).toBe(1)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -1338,12 +1392,14 @@ test('keeps preparation paused when a retry quote fails', async () => {
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '2' } }))
 		await settle()
 		expect(attempts).toBe(1)
-		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: 'Retry' }).hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(attempts).toBe(1)
-		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(false)
-		expect(queries.getByRole('alert').textContent).toContain('Quote unavailable')
+		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: 'Retry' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getAllByRole('alert').some(alert => alert.textContent?.includes('Quote unavailable'))).toBe(true)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -1481,7 +1537,8 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 				within(queries.getByRole('dialog', { name: 'Request new price' }))
 					.getByRole('button', { name: /^Request new price/ })
 					.hasAttribute('disabled'),
-			).toBe(false)
+			).toBe(true)
+			expect(queries.getByRole('button', { name: 'Retry' }).hasAttribute('disabled')).toBe(false)
 			expect(prices).toHaveLength(1)
 			if (presentationChange !== 'unchanged') {
 				await act(() => {
@@ -1492,7 +1549,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 			}
 			if (retryAction === 'edit') await act(() => fireEvent.input(priceInput, { target: { value: '5' } }))
 			else if (retryAction === 'fetch') await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
-			else await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
+			else await act(() => fireEvent.click(queries.getByRole('button', { name: 'Retry' })))
 			await settle()
 			const currentPrice = detached ? 4n : 2n
 			const retriedPrice = retryAction === 'button' ? currentPrice : 5n
