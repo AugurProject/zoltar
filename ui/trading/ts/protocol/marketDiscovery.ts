@@ -1,4 +1,5 @@
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -7,6 +8,8 @@ import { shareTokenAbi } from './authorization.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import {
 	type MarketDiscoveryProgress,
+	type LiveMarket,
+	publicErrorMessage,
 	createSecurityPoolDeploymentIndex,
 	loadSecurityPoolRegistry,
 	mapWithConcurrency,
@@ -82,6 +85,38 @@ export async function discoverUniverses(client: PublicClient, configuration: Dep
 	if (reputationToken === zeroAddress) throw new Error('Universe does not exist')
 	const universeIds = selectedUniverseId === 0n ? [0n] : [0n, selectedUniverseId]
 	return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
+}
+
+export type SavedPortfolioPool = Readonly<{ pool: Address; universeId: bigint | undefined; market: LiveMarket | undefined }>
+
+/** Refresh only saved addresses; cached summaries identify scope and error rows, never current balances or prices. */
+export async function discoverSavedMarkets(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, savedMarkets: readonly SavedPortfolioPool[], onProgress?: MarketDiscoveryProgress, isCurrent = () => true) {
+	const universeIds = await runReadOperation(operation => loadUniverseIds(readOperationClient(client, operation), configuration, isCurrent), { isCurrent })
+	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	const saved = [...new Map(savedMarkets.filter(market => market.universeId === undefined || market.universeId === selectedUniverseId).map(market => [market.pool.toLowerCase(), market])).values()]
+	const total = BigInt(saved.length)
+	const result = { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, universeIds, selectedUniverseId }
+	const markets = await mapWithConcurrency(
+		saved,
+		1,
+		async (cached, index) => {
+			if (!isCurrent()) throw new Error('Portfolio refresh cancelled')
+			if (index > 0) await new Promise(resolve => setTimeout(resolve, 1_000))
+			if (!isCurrent()) throw new Error('Portfolio refresh cancelled')
+			try {
+				const discovered = await runReadOperation(operation => discoverAddressedMarket(readOperationClient(client, operation), configuration, cached.pool), { isCurrent })
+				const market = discovered.markets[0]
+				if (market === undefined) throw new Error('Saved pool is unavailable')
+				return market.universeId === selectedUniverseId ? market : undefined
+			} catch (error) {
+				if (!isCurrent()) throw error
+				const market = cached.market ?? unavailableMarket({ securityPool: cached.pool, universeId: selectedUniverseId ?? 0n, shareToken: zeroAddress, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps)
+				return { ...market, loadError: publicErrorMessage(error, 'Saved pool refresh failed') }
+			}
+		},
+		markets => onProgress?.({ ...result, markets }),
+	)
+	return { ...result, markets: markets.filter(market => market !== undefined) }
 }
 
 export async function discoverTradingMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createTradingPairIndex(), isCurrent = () => true, onProgress?: MarketDiscoveryProgress) {
