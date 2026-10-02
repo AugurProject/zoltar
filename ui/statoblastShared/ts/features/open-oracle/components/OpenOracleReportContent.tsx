@@ -1,3 +1,4 @@
+import { getOpenOraclePriceExpiryPresentation } from '../lib/openOracleStage.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
@@ -335,6 +336,7 @@ export function renderSelectedReportActionSection({
 			)
 		}
 		case 'settle': {
+			const priceExpiry = openOracleReportDetails === undefined ? undefined : getOpenOraclePriceExpiryPresentation(openOracleReportDetails)
 			const settleDisabledMessage = (() => {
 				if (openOracleForm.reportId.trim() === '') return openOracleCopy.reportLoadRequired
 
@@ -363,6 +365,7 @@ export function renderSelectedReportActionSection({
 											),
 									},
 								])}
+						{priceExpiry === undefined ? undefined : <UserMessage tone='warning' detail={priceExpiry.detail} />}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel={openOracleCopy.settleReportTitle(openOracleReportDetails?.reportId ?? 0n)}
