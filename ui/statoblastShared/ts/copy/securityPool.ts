@@ -80,6 +80,7 @@ export const vaultRegistryScanEmpty = 'No current positions found within the sca
 export const formatNoCurrentVaultPositions = (knownVaultCount: bigint) => `No current positions among ${knownVaultCount.toString()} known ${knownVaultCount === 1n ? 'vault' : 'vaults'}.`
 export const poolVaultsEmpty = 'No known vaults in this pool.'
 export const autoExecPending = 'Auto-exec pending'
+export const autoExecAfterSettlement = 'Auto-executes after oracle settlement.'
 export const executeStagedOperation = 'Execute staged operation'
 export const executingStagedOperationLabel = 'Executing staged operation…'
 export const operationalForkReadOnlyDetail = 'This pool is currently operational, so fork and truth auction actions are read only.'
@@ -247,7 +248,6 @@ export const queuedVaultOperationManualRefreshDetail = 'If this operation is sti
 export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
 
 export const operationDetails = 'Operation details'
-export const selectOperation = 'Select operation'
 export const openOperationById = 'Open operation by ID'
 
 export function universePoolCount(count: bigint) {

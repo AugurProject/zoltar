@@ -129,6 +129,7 @@ export function SelectedPoolStagedOperationsPanel({
 	currentPoolOracleManagerDetails,
 	currentPoolOracleManagerError,
 	executePendingOperationGuardMessage,
+	stagedOperationGuardMessages,
 	loadedSelectedPool,
 	loadingPoolOracleManager,
 	manualPendingOperationId,
@@ -146,6 +147,7 @@ export function SelectedPoolStagedOperationsPanel({
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	currentPoolOracleManagerError: string | undefined
 	executePendingOperationGuardMessage: string | undefined
+	stagedOperationGuardMessages: ReadonlyMap<bigint, string | undefined>
 	loadedSelectedPool: ListedSecurityPool
 	loadingPoolOracleManager: boolean
 	manualPendingOperationId: string
@@ -164,6 +166,7 @@ export function SelectedPoolStagedOperationsPanel({
 			activeOperationCount={activeStagedOperationCount}
 			canExecute={poolState.actions.executeStagedOperation.enabled}
 			executeGuardMessage={executePendingOperationGuardMessage}
+			operationGuardMessages={stagedOperationGuardMessages}
 			executionPending={poolOracleActiveAction === 'executeStagedOperation'}
 			loadingManager={loadingPoolOracleManager}
 			managerAddress={loadedSelectedPool.managerAddress}
