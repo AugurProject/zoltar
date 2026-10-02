@@ -118,7 +118,7 @@ export function LiveMarketBrowser({
 	const [listOptions, setStoredListOptions] = useState(() => (persistsListOptions ? readMarketListParams(parseRouteHash(window.location.hash).search) : DEFAULT_MARKET_LIST_OPTIONS))
 	const setListOptions = (next: MarketListOptions) => {
 		setStoredListOptions(next)
-		if (persistsListOptions) replaceRouteHashSearch(search => writeMarketListParams(search, next))
+		if (persistsListOptions) replaceRouteHashSearch(search => writeMarketListParams(search, next), `#/${lookupRoute}`)
 	}
 	const presentation = listPresentation(listKind)
 	const shownMarkets = arrangeMarkets(markets, listOptions, nowSeconds)

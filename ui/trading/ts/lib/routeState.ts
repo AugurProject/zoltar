@@ -92,10 +92,16 @@ export function withoutRouteStateParams(search: string) {
 	})
 }
 
-/** Rewrites the current hash's query in place; replacing the history entry keeps Back on the previous page and fires no route change. */
-export function replaceRouteHashSearch(update: (search: string) => string) {
-	const { routeHash, search } = parseRouteHash(window.location.hash)
-	const next = buildRouteHref(routeHash, update(search))
+/**
+ * Rewrites the current hash's query in place; replacing the history entry keeps Back on the previous page and fires no route change.
+ * Before the app writes a route hash, a bare `?…` would replace the page query that selects the environment, so the
+ * write names `routeHashWhenUnset` instead, or is skipped when the caller has no route to name.
+ */
+export function replaceRouteHashSearch(update: (search: string) => string, routeHashWhenUnset?: string) {
+	const parsed = parseRouteHash(window.location.hash)
+	const routeHash = parsed.routeHash === '' ? routeHashWhenUnset : parsed.routeHash
+	if (routeHash === undefined || routeHash === '') return
+	const next = buildRouteHref(routeHash, update(parsed.search))
 	if (next !== window.location.hash) window.history.replaceState(window.history.state, '', next)
 }
 

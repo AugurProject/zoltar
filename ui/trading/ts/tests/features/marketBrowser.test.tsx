@@ -109,6 +109,19 @@ test('search, status filter, and sort live in the hash query, so Back and refres
 	}
 })
 
+test('list options written before the app has a route hash keep the page query that selects the simulation', async () => {
+	const dom = installDomEnvironment('http://localhost/?simulate=1&simScenario=trading-funded')
+	const rendered = await renderBrowser('market')
+	try {
+		await typeSearch(rendered.container, 'bridge')
+		expect(window.location.search).toBe('?simulate=1&simScenario=trading-funded')
+		expect(window.location.hash).toBe('#/market?q=bridge')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('the liquidity landing keeps liquidity as the primary action instead of outcome buttons', async () => {
 	const dom = installDomEnvironment('http://localhost/#/liquidity')
 	const rendered = await renderBrowser('liquidity')
