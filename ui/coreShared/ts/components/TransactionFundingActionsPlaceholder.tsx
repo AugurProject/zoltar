@@ -10,7 +10,7 @@ export function TransactionFundingActionsPlaceholder({ actionLabel, loading, res
 			<div className='transaction-plan-action transaction-plan-action-wide'>
 				<TransactionActionButton idleLabel={transactionCopy.wrapEthIntoWeth} pendingLabel={commonCopy.loading} availability={{ disabled: true, reason: transactionCopy.prerequisitesRequired }} onClick={() => undefined} />
 			</div>
-			{['WETH', commonCopy.rep].map(tokenSymbol => (
+			{[commonCopy.weth, commonCopy.rep].map(tokenSymbol => (
 				<div key={tokenSymbol} className='transaction-plan-action'>
 					<TokenApprovalControl
 						compact

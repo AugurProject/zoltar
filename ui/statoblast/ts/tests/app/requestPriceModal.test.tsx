@@ -270,7 +270,7 @@ test('prepares approval and request actions alongside editable price controls in
 		expect(queries.queryByRole('button', { name: 'Review funding and steps' })).toBeNull()
 		expect(submitted).toBe(0)
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '' } }))
-		expect(queries.queryByRole('button', { name: /Approve.*REP/ })).toBeNull()
+		expect(queries.getByRole('button', { name: /Approve.*REP/ }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelector('.transaction-funding')).toBeNull()
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value } }))
@@ -1084,7 +1084,7 @@ test('ignores a quote completed after the dialog closes and reopens', async () =
 	}
 })
 
-test('keeps the empty price form compact until an estimate is entered', async () => {
+test('keeps funding controls visible and disabled until a price estimate is entered', async () => {
 	const dom = installDomEnvironment()
 	let preparations = 0
 	const rendered = await renderIntoDocument(
@@ -1100,7 +1100,9 @@ test('keeps the empty price form compact until an estimate is entered', async ()
 		const queries = within(document.body)
 		expect(queries.getByText('Enter a starting price.')).not.toBeNull()
 		expect(document.querySelector('.transaction-funding')).toBeNull()
-		expect(queries.queryByRole('button', { name: /Approve.*(REP|WETH)/ })).toBeNull()
+		const approvals = queries.getAllByRole('button', { name: /Approve.*(REP|WETH)/ })
+		expect(approvals).toHaveLength(2)
+		expect(approvals.every(button => button.hasAttribute('disabled'))).toBe(true)
 		const button = queries.getByRole('button', { name: /^Request new price/ })
 		expect(button.hasAttribute('disabled')).toBe(true)
 		const reasonId = button.getAttribute('aria-describedby')
@@ -1146,7 +1148,7 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '1.25' } }))
 		await settle()
 		expect(transactionSteps.value?.activeIndex).toBe(-1)
-		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
+		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
 		expect(queries.getByRole('button', { name: /Preparing funding and approvals/ }).hasAttribute('disabled')).toBe(true)
 		// The busy button carries the preparing state; the prompt paragraph does not repeat it.
 		expect(rendered.container.querySelector('.price-request-estimate-prompt')?.textContent).toBe('')

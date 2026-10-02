@@ -10,17 +10,13 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatCurrencyBalanceWithUnit, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
@@ -63,9 +59,8 @@ import {
 import type { SecurityVaultSectionProps } from '../../types.js'
 import { VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
-import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
-import { VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
+import { VaultWithdrawalSummaryMetrics, VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
 import { SecurityVaultInlineActionSections } from './SecurityVaultInlineActionSections.js'
 
 export function SecurityVaultSection({
@@ -507,28 +502,7 @@ export function SecurityVaultSection({
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
 						<SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={currentSelectedVaultDetails.underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
-						<MetricGrid>
-							<MetricField label={repExitAmountLabel}>
-								{(() => {
-									if (effectiveRepExitMode === 'redeem') {
-										if (redeemableRepAmountAttoRep === undefined) return '—'
-
-										return <CurrencyValue value={redeemableRepAmountAttoRep} suffix={commonCopy.rep} />
-									}
-									if (maximumWithdrawableAttoRep === undefined) return '—'
-
-									return <CurrencyValue value={maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
-								})()}
-								{effectiveRepExitMode === 'redeem' || !withdrawalPrice.isEstimate ? undefined : <RepPriceStatusLabel />}
-							</MetricField>
-							{effectiveRepExitMode === 'redeem' ? (
-								<MetricField label={commonCopy.disputeStakedAttoRep}>
-									<CurrencyValue value={currentSelectedVaultDetails.disputeStakedAttoRep} suffix={commonCopy.rep} />
-								</MetricField>
-							) : (
-								<MetricField label={securityPoolCopy.priceValidUntil}>{oraclePriceValidUntilTimestamp === undefined ? commonCopy.unavailable : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
-							)}
-						</MetricGrid>
+						<VaultWithdrawalSummaryMetrics amountLabel={repExitAmountLabel} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} isEstimate={withdrawalPrice.isEstimate} priceValidUntil={oraclePriceValidUntilTimestamp} />
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						{withdrawPriceFields}
