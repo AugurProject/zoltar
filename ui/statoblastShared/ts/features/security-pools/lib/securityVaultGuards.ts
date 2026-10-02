@@ -36,6 +36,8 @@ export function getVaultDepositGuardMessage({
 	walletRepShortfallAttoRep: bigint | undefined
 }) {
 	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
+	const firstDepositMinimumMessage = minimumVaultRepDepositAttoRep === undefined ? securityPoolCopy.vaultMinimumLoading : `New vaults require at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} in the first deposit.`
+	if (depositAmount === 0n && currentVaultRepBackingAttoRep === 0n && minimumVaultRepDepositAttoRep !== 0n) return firstDepositMinimumMessage
 	if (depositAmount <= 0n) return undefined
 	const targetHealthFactorGuardMessage = getTargetHealthFactorGuardMessage(targetHealthFactor, minimumBackingRatioBps)
 	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
@@ -46,7 +48,7 @@ export function getVaultDepositGuardMessage({
 		// Pool-held REP-per-unit rounding can credit slightly less than the deposit, so an exact minimum can still fall short.
 		if (currentVaultRepBackingAttoRep !== undefined && currentVaultRepBackingAttoRep > 0n) return `This vault must hold at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} after the deposit. Deposit more REP.`
 		if (depositAmount >= minimumVaultRepDepositAttoRep) return `Pool rounding would credit this vault slightly less than the ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} minimum. Deposit a little more.`
-		return `New vaults require at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} in the first deposit.`
+		return firstDepositMinimumMessage
 	}
 	return undefined
 }
