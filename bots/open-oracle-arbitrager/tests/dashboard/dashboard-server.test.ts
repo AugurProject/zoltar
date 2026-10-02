@@ -4,7 +4,7 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, queuedSignerChange, type MutableStrategy, type QueuedSigner } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
-import { EndpointCheckFailure } from '#monitoring/connectivity'
+import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 import { operatorStateFixture } from '../support/operator-state.ts'
 import { openPositionFixture } from '../support/position-record.ts'
 
@@ -22,7 +22,6 @@ function strategyFixture(): MutableStrategy {
 		minimumProfitAttoWeth: 10n ** 16n,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
-		pollMilliseconds: 12_000,
 		twapSeconds: 1_800,
 	}
 }
@@ -291,11 +290,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(state.paused).toBe(true)
 	const update = await jsonRequest(origin, '/api/settings', 'PUT', {
 		maxSpotTwapTicks: '75',
-		minimumProfitBps: '200',
+		minimumProfitBps: 200,
 		minimumProfitWeth: '0.025',
 		minimumRemainingBlocks: '4',
 		minimumRemainingSeconds: '48',
-		pollMilliseconds: 15_000,
 		twapSeconds: 2_400,
 	})
 	expect(update.status).toBe(200)
@@ -427,7 +425,6 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	]
 	connectivity = { publicRpcUrls: [credentialEndpoint], readRpcUrl: credentialEndpoint }
 	submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [credentialEndpoint] }
-	deployment = { ...deployment, quorumRpcUrls: [credentialEndpoint] }
 	state.lastError = rawRpcFailure
 	state.lastPollFailureAt = new Date(1_000).toISOString()
 	state.lastRetryAt = new Date(2_000).toISOString()
@@ -650,11 +647,10 @@ test('rejects every chain-specific mutation until network connectivity is config
 			chainSpecificMutations += 1
 			return {
 				maxSpotTwapTicks: strategy.maxSpotTwapTicks.toString(),
-				minimumProfitBps: strategy.minimumProfitBps.toString(),
+				minimumProfitBps: Number(strategy.minimumProfitBps),
 				minimumProfitWeth: '0.01',
 				minimumRemainingBlocks: strategy.minimumRemainingBlocks.toString(),
 				minimumRemainingSeconds: strategy.minimumRemainingSeconds.toString(),
-				pollMilliseconds: strategy.pollMilliseconds,
 				twapSeconds: strategy.twapSeconds,
 			}
 		},

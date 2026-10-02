@@ -23,12 +23,12 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		return keccak256(abi.encode(factory, originId, outcomeIndex, parentDepositIndex));
 	}
 
-	function attoRepToBackingUnits(ISecurityPool securityPool, uint256 attoRepAmount) public view returns (uint256) {
+	function attoRepToBackingUnits(ISecurityPool securityPool, uint256 amountAttoRep) public view returns (uint256) {
 		uint256 totalRepBackingUnits = securityPool.totalRepBackingUnits();
 		uint256 childRepBalanceAttoRep = securityPool.repToken().balanceOf(address(securityPool));
 		if (totalRepBackingUnits == 0 || childRepBalanceAttoRep == 0)
-			return Math.mulDiv(attoRepAmount, SecurityPoolUtils.PRICE_PRECISION, 1);
-		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, childRepBalanceAttoRep);
+			return Math.mulDiv(amountAttoRep, SecurityPoolUtils.PRICE_PRECISION, 1);
+		return Math.mulDiv(amountAttoRep, totalRepBackingUnits, childRepBalanceAttoRep);
 	}
 
 	function backingUnitsToAttoRep(ISecurityPool securityPool, uint256 repBackingUnits) public view returns (uint256) {

@@ -190,7 +190,7 @@ describe('useStatoblastUrlState', () => {
 		}
 	})
 
-	test('keeps Open Oracle state in the query of the current route', async () => {
+	test('keeps OpenOracle state in the query of the current route', async () => {
 		const state = await renderHarness()
 		window.location.hash = '#/open-oracle'
 		await act(() => window.dispatchEvent(new Event('hashchange')))

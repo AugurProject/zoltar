@@ -474,7 +474,7 @@ void describe('market creation helpers', () => {
 	})
 
 	test('security pool creation revalidates the maximum priority fee before submission', () => {
-		expect(() => createSecurityPoolParameters({ marketId: '0x2a', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeNanoEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 9) })).toThrow('Initial-report priority fee is too large for Open Oracle report limits.')
+		expect(() => createSecurityPoolParameters({ marketId: '0x2a', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeNanoEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 9) })).toThrow('Initial-report priority fee is too large for OpenOracle report limits.')
 	})
 })
 

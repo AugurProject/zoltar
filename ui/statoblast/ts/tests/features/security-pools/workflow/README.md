@@ -1,6 +1,6 @@
 # Security Pool Workflow Section Test Slices
 
-Run every split workflow-section suite:
+Run every split workflow-section suite from the repository root:
 
 ```bash
 bun run test:security-pool-workflow

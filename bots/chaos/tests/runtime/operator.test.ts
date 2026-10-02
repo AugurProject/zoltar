@@ -503,7 +503,7 @@ describe('chaos operator runtime', () => {
 			networkConfigured: true,
 			runtime: { ...base.runtime, execute: false },
 		}
-		const refresh = Math.max(publicSettings.runtime.lifecyclePollMilliseconds * 2, publicSettings.network.maximumBlockIntervalSeconds * 2_000)
+		const refresh = Math.max(publicSettings.runtime.pollMilliseconds * 2, publicSettings.network.maximumBlockIntervalSeconds * 2_000)
 		const healthyPublic = (at: number): EndpointCheck[] => [{ chainId: publicSettings.network.chainId, checkedAt: new Date(at).toISOString(), error: undefined, kind: 'public-rpc', status: 'healthy', target: 'https://submit-one.example' }]
 		const failedPublic = (at: number): EndpointCheck[] => [{ chainId: undefined, checkedAt: new Date(at).toISOString(), error: 'connection refused', failureDisposition: 'connectivity-degraded', kind: 'public-rpc', status: 'failed', target: 'https://submit-one.example' }]
 		// A configured dry-run restart starts without evidence, which used to leave the go-live checklist unsatisfiable.

@@ -16,19 +16,28 @@ import { isOracleRequestFundingError, oracleRequestFundingEnvelope, oracleReques
 
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 
+import { SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
+
 export const BINARY_OUTCOME_NONE = 3
 
 export const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n
 
 const LIFECYCLE_BATCH_LIMIT = 16
 
-export const ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
+const ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
+
+const SEPOLIA_ORACLE_PRICE_VALIDITY_SECONDS = 60n * 60n
+
+/** Mirrors `OpenOraclePriceCoordinator._isFreshPriceTimestamp`: Sepolia prices stay valid for one hour, every other chain for five minutes. */
+const oraclePriceValiditySeconds = (chainId: number) => (chainId === SEPOLIA_CHAIN_ID ? SEPOLIA_ORACLE_PRICE_VALIDITY_SECONDS : ORACLE_PRICE_VALIDITY_SECONDS)
+
+export const oraclePriceValidUntil = (snapshot: Pick<EcosystemSnapshot, 'chainId'>, pool: Pick<PoolSnapshot, 'lastOracleSettlementTimestamp'>) => amount(pool.lastOracleSettlementTimestamp) + oraclePriceValiditySeconds(snapshot.chainId)
 
 export const STAGED_WITHDRAWAL_VALIDITY_SECONDS = 5n * 60n
 
 export const CARRY_DEPOSIT_CONSUMED_SIGNATURE = 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)'
 
-export const CARRY_DEPOSIT_CONSUMED_ABI = 'event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, uint8 outcome, uint256 attoRepAmount, uint8 reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot)'
+export const CARRY_DEPOSIT_CONSUMED_ABI = 'event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, uint8 outcome, uint256 amountAttoRep, uint8 reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot)'
 
 export const CLAIM_DEPOSIT_SIGNATURE = 'ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)'
 
@@ -40,11 +49,11 @@ const CHILD_REP_SPLIT_ABI = 'event ChildRepSplit(address indexed parent, uint256
 
 export const DEPOSIT_ON_OUTCOME_SIGNATURE = 'DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)'
 
-export const DEPOSIT_ON_OUTCOME_ABI = 'event DepositOnOutcome(address indexed depositor, uint8 indexed outcome, uint256 attoRepAmount, uint256 depositIndex, uint256 cumulativeRepAmountAttoRep, uint256 resultingVaultDisputeStakedAttoRep, uint256 resultingTotalDisputeStakedAttoRep)'
+export const DEPOSIT_ON_OUTCOME_ABI = 'event DepositOnOutcome(address indexed depositor, uint8 indexed outcome, uint256 amountAttoRep, uint256 depositIndex, uint256 cumulativeRepAmountAttoRep, uint256 resultingVaultDisputeStakedAttoRep, uint256 resultingTotalDisputeStakedAttoRep)'
 
 export const LOCAL_DEPOSIT_APPENDED_SIGNATURE = 'LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)'
 
-export const LOCAL_DEPOSIT_APPENDED_ABI = 'event LocalDepositAppended(uint256 indexed nodeId, uint8 indexed outcome, address indexed depositor, uint256 attoRepAmount, uint256 parentDepositIndex, uint256 cumulativeRepAmountAttoRep)'
+export const LOCAL_DEPOSIT_APPENDED_ABI = 'event LocalDepositAppended(uint256 indexed nodeId, uint8 indexed outcome, address indexed depositor, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 cumulativeRepAmountAttoRep)'
 
 export const ERC20_TRANSFER_SIGNATURE = 'Transfer(address,address,uint256)'
 
@@ -115,7 +124,7 @@ export const canDeployOriginPool = (universe: EcosystemSnapshot['universes'][num
 
 export function safeOraclePriceDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, prerequisiteCount = 0) {
 	if (!pool.oraclePriceValid) return undefined
-	const deadline = amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS
+	const deadline = oraclePriceValidUntil(snapshot, pool)
 	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options, prerequisiteCount) ? deadline : undefined
 }
 

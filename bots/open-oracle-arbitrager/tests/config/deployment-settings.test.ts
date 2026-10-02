@@ -20,25 +20,6 @@ test('replaces the configured REP in both active and persisted live deployment s
 	expect(transition.persisted).toEqual([restartRep, explicitToken])
 })
 
-test('rejects insecure or credential-bearing quorum RPC URLs', () => {
-	const base = {
-		coordinatorAddresses: [],
-		executor: undefined,
-		openOracle: address('1'),
-		quorumRpcUrls: ['https://quorum.example'],
-		rep: address('2'),
-		uniswapFactory: address('3'),
-		uniswapQuoter: address('4'),
-		uniswapRouter: undefined,
-		uniswapV2Router: undefined,
-		uniswapV4PoolManager: undefined,
-		uniswapV4Quoter: undefined,
-		weth: address('5'),
-	}
-	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['http://quorum.example'] })).toThrow('HTTPS or HTTP on loopback, anvil, or reth')
-	expect(() => validateDeploymentSettings({ ...base, quorumRpcUrls: ['https://user:secret@quorum.example'] })).toThrow('embedded credentials')
-})
-
 test('rejects a focused REP update that leaves centralized-market identity stale', () => {
 	const currentAsset = address('1')
 	expect(() => assertFocusedDeploymentCompatible(address('2'), { assetAddress: currentAsset })).toThrow('centralized market configuration')
@@ -77,7 +58,6 @@ for (const network of ['mainnet', 'sepolia'] as const) {
 			const settings = validateDeploymentSettings(
 				{
 					coordinatorAddresses: [],
-					quorumRpcUrls: [],
 					uniswapV2Enabled: true,
 					uniswapV3Enabled: true,
 					uniswapV4Enabled: true,
@@ -98,7 +78,7 @@ for (const network of ['mainnet', 'sepolia'] as const) {
 }
 
 test('restores all enabled venues through a serialized network round trip', () => {
-	const mainnet = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true }, 'mainnet')
+	const mainnet = validateDeploymentSettings({ coordinatorAddresses: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true }, 'mainnet')
 	const sepolia = validateDeploymentSettings(JSON.parse(JSON.stringify(mainnet)), 'sepolia')
 	expect(sepolia.uniswapV2Router).toBeUndefined()
 	expect(sepolia).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
@@ -106,7 +86,7 @@ test('restores all enabled venues through a serialized network round trip', () =
 })
 
 test('keeps disabled optional venues disabled across networks', () => {
-	const original = { coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false }
+	const original = { coordinatorAddresses: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false }
 	const mainnet = validateDeploymentSettings(original, 'mainnet')
 	const sepolia = validateDeploymentSettings(JSON.parse(JSON.stringify(mainnet)), 'sepolia')
 	const restored = validateDeploymentSettings(JSON.parse(JSON.stringify(sepolia)), 'mainnet')
@@ -125,12 +105,12 @@ test('rejects invalid venue switches', () => {
 })
 
 test('can disable V3 independently while keeping V4 enabled', () => {
-	const settings = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, 'sepolia')
+	const settings = validateDeploymentSettings({ coordinatorAddresses: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, 'sepolia')
 	expect(settings.uniswapRouter).toBeUndefined()
 	expect(settings.uniswapV4PoolManager).toBeDefined()
 	expect(validateDeploymentSettings(JSON.parse(JSON.stringify(settings)), 'mainnet').uniswapRouter).toBeUndefined()
 })
 
 test('rejects removed operator-supplied bytecode pins', () => {
-	expect(() => validateDeploymentSettings({ quorumRpcUrls: [], deploymentManifest: { version: 1 } })).toThrow('supported core deployment fields')
+	expect(() => validateDeploymentSettings({ deploymentManifest: { version: 1 } })).toThrow('supported core deployment fields')
 })

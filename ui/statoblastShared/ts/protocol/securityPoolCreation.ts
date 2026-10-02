@@ -123,7 +123,7 @@ export async function createSecurityPool(
 	const poolCall = {
 		address: getDeploymentStepAddress('securityPoolFactory'),
 		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		contractLabel: 'Security Pool Factory',
+		contractLabel: 'SecurityPoolFactory',
 		functionName: 'deployOriginSecurityPool',
 		args: [0n, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
 	} as const

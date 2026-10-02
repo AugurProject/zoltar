@@ -134,7 +134,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		},
 		{
 			id: 'securityPoolFactory',
-			label: 'Security Pool Factory',
+			label: 'SecurityPoolFactory',
 			address: getAddress('0x00000000000000000000000000000000000000a2'),
 			deployed: false,
 		},

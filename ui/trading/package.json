@@ -26,7 +26,7 @@
 		"vendor": "bun ../../tooling/ui/vendor.mts trading",
 		"build:workers": "bun ../../tooling/ui/workers.mts trading",
 		"build:tests": "bun ../../tooling/ui/tests.mts trading",
-		"test": "bun run generate && bun test --isolate ./ts/tests",
+		"test": "bun run generate && bun ../../tooling/testing/bun-test.mts --preload ../../bun-test-setup-ui.ts --isolate ./ts/tests",
 		"build": "bun ../../tooling/ui/apps.mts trading",
 		"build:prod": "bun run build && bun ../../tooling/ui/production.mts trading",
 		"watch": "bun run generate && bun ../../tooling/ui/watch.mts trading",

@@ -130,7 +130,7 @@ describe('UI configuration restart', () => {
 		await withController(async ({ controller, configuration, settings, state, revision }) => {
 			state.activities.push({ at: new Date().toISOString(), message: 'existing history', status: 'info', type: 'configuration' })
 			const document = editableSettings(settings)
-			document.runtime.lifecyclePollMilliseconds = 13000
+			document.runtime.pollMilliseconds = 13000
 			await controller.setConfigurationDocument({ settings: document, revision })
 			const saved = (await loadSettings(configuration.path)).settings
 			expect(saved.runtime.stateFile).toBe(settings.runtime.stateFile)

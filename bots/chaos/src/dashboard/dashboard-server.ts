@@ -310,8 +310,8 @@ function publicSubmissionHealthMaximumAgeSeconds(configurationValue: unknown) {
 	const runtime = record(settings?.['runtime']) ?? settings
 	const network = record(settings?.['network']) ?? settings
 	const maximumBlockIntervalSeconds = typeof network?.['maximumBlockIntervalSeconds'] === 'number' && Number.isSafeInteger(network['maximumBlockIntervalSeconds']) ? network['maximumBlockIntervalSeconds'] : 60
-	const lifecyclePollMilliseconds = typeof runtime?.['lifecyclePollMilliseconds'] === 'number' && Number.isSafeInteger(runtime['lifecyclePollMilliseconds']) ? runtime['lifecyclePollMilliseconds'] : 12_000
-	return Math.ceil((lifecyclePollMilliseconds * 3) / 1_000) + maximumBlockIntervalSeconds * 2
+	const pollMilliseconds = typeof runtime?.['pollMilliseconds'] === 'number' && Number.isSafeInteger(runtime['pollMilliseconds']) ? runtime['pollMilliseconds'] : 12_000
+	return Math.ceil((pollMilliseconds * 3) / 1_000) + maximumBlockIntervalSeconds * 2
 }
 
 function publicSubmissionHealth(value: unknown, configurationValue: unknown, nowMilliseconds: number, maximumAgeSeconds: number) {

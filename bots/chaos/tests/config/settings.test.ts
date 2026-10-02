@@ -260,6 +260,37 @@ describe('chaos-bot settings', () => {
 		expect(serializedSettings(settings).strategy.selectableOperationAllowlist).toEqual([])
 	})
 
+	test('migrates a version 1 file whose main loop interval is runtime.lifecyclePollMilliseconds to the version 2 shape', async () => {
+		const example = await storedExample()
+		const { pollMilliseconds, ...runtime } = record(example['runtime'])
+		const version1 = { ...example, runtime: { ...runtime, lifecyclePollMilliseconds: 15_000 }, version: 1 }
+		expect(pollMilliseconds).toBe(12_000)
+		const settings = parseSettings(version1)
+		expect(settings.version).toBe(2)
+		expect(settings.runtime.pollMilliseconds).toBe(15_000)
+		const serialized = serializedSettings(settings)
+		expect(serialized.version).toBe(2)
+		expect(serialized.runtime.pollMilliseconds).toBe(15_000)
+		expect(serialized.runtime).not.toHaveProperty('lifecyclePollMilliseconds')
+		const directory = await temporaryDirectory()
+		const path = join(directory, 'operator.json')
+		await writeFile(path, JSON.stringify(version1), { mode: 0o600 })
+		expect((await loadSettings(path)).settings.runtime.pollMilliseconds).toBe(15_000)
+	})
+
+	test('rejects the version 1 poll key in a version 2 file and unknown versions', async () => {
+		const example = await storedExample()
+		const { pollMilliseconds: _pollMilliseconds, ...runtime } = record(example['runtime'])
+		expect(() => parseSettings({ ...example, runtime: { ...runtime, lifecyclePollMilliseconds: 12_000 } })).toThrow('runtime contains unsupported field lifecyclePollMilliseconds')
+		expect(() => parseSettings({ ...example, runtime: { ...runtime, lifecyclePollMilliseconds: 12_000, pollMilliseconds: 12_000 }, version: 1 })).toThrow('runtime contains unsupported field lifecyclePollMilliseconds')
+		for (const version of [0, 3, '2', undefined]) expect(() => parseSettings({ ...example, version })).toThrow('operator settings version must be 1 or 2')
+	})
+
+	test('bounds the main loop poll interval from one second through one minute', async () => {
+		const example = await storedExample()
+		for (const pollMilliseconds of [999, 60_001]) expect(() => parseSettings({ ...example, runtime: { ...record(example['runtime']), pollMilliseconds } })).toThrow('runtime.pollMilliseconds must be an integer from 1000 through 60000')
+	})
+
 	test('bounds every canonical discovery collection', async () => {
 		const example = await storedExample()
 		const discovery = record(example['discovery'])

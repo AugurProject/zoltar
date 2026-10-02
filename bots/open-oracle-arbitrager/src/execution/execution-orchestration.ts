@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, rpcFailureWithContext, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/bot-shared/ethereum'
-import { endpointLabel } from '#monitoring/connectivity'
+import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { OpportunityDecision } from '#state/opportunity-snapshot'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'

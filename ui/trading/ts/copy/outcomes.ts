@@ -1,7 +1,14 @@
 import { eth, percent } from '@zoltar/ui-core-shared/copy/common.js'
 
-/** Share outcome labels are upper-case symbols in the trading surface, matching the on-chain share names. */
-export const yes = 'YES'
-export const no = 'NO'
-export const invalid = 'INVALID'
+/** Outcome labels match the rest of the UI; badges may upper-case them in CSS. */
+export const yes = 'Yes'
+export const no = 'No'
+export const invalid = 'Invalid'
+
+/** The display label for a share outcome key. */
+export function outcomeLabel(outcome: 'INVALID' | 'YES' | 'NO') {
+	if (outcome === 'YES') return yes
+	if (outcome === 'NO') return no
+	return invalid
+}
 export { eth, percent }

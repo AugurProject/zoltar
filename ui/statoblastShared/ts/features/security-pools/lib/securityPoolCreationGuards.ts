@@ -25,7 +25,7 @@ export function getInitialReportPriorityFeeValidationMessage(initialReportPriori
 	const priorityFeeAttoEthPerGas = tryParseInitialReportPriorityFeeInput(input)
 	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a nanoETH value with at most 9 decimal places.'
 	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.'
-	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for Open Oracle report limits.'
+	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for OpenOracle report limits.'
 	return undefined
 }
 

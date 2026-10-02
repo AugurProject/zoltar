@@ -1,13 +1,12 @@
 import type { StrategySettings } from '#state/operator-state'
 import type { SubmissionSettings } from '#execution/transaction-submission'
-import type { ConnectivitySettings } from '#monitoring/connectivity'
+import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { StoredRuntimeLimits } from '#config/settings-store'
 import type { SettlementSettings } from '#state/settlement-store'
 import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue } from '@zoltar/bot-shared/dashboard/response-validation'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type DashboardDeployment = {
-	quorumRpcUrls: readonly string[]
 	uniswapV2Enabled: boolean
 	uniswapV3Enabled: boolean
 	uniswapV4Enabled: boolean
@@ -21,11 +20,10 @@ export function isStrategySettings(value: unknown): value is StrategySettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
 	return (
 		typeof Reflect.get(value, 'maxSpotTwapTicks') === 'string' &&
-		typeof Reflect.get(value, 'minimumProfitBps') === 'string' &&
+		numberValue(Reflect.get(value, 'minimumProfitBps')) &&
 		typeof Reflect.get(value, 'minimumProfitWeth') === 'string' &&
 		typeof Reflect.get(value, 'minimumRemainingBlocks') === 'string' &&
 		typeof Reflect.get(value, 'minimumRemainingSeconds') === 'string' &&
-		numberValue(Reflect.get(value, 'pollMilliseconds')) &&
 		numberValue(Reflect.get(value, 'twapSeconds'))
 	)
 }
@@ -37,7 +35,6 @@ export function isSubmissionSettings(value: unknown): value is SubmissionSetting
 }
 
 export const isDeploymentSettings = object<DashboardDeployment>({
-	quorumRpcUrls: array(stringValue),
 	uniswapV2Enabled: booleanValue,
 	uniswapV3Enabled: booleanValue,
 	uniswapV4Enabled: booleanValue,
@@ -45,8 +42,9 @@ export const isDeploymentSettings = object<DashboardDeployment>({
 
 export const isSettlementSettings = object<SettlementSettings>({ enabled: booleanValue, maxGasPriceNanoEth: stringValue, minimumProfitWeth: stringValue, rewardWithdrawThresholdEth: stringValue })
 export const isRuntimeLimits = object<StoredRuntimeLimits>({
-	lookbackBlocks: stringValue,
-	maxHedgeSlippageBps: stringValue,
+	logLookbackBlocks: numberValue,
+	maxHedgeSlippageBps: numberValue,
+	pollMilliseconds: numberValue,
 	riskLimits: object<StoredRuntimeLimits['riskLimits']>({ lifecycleGasReserveWeth: stringValue, maxConcurrentPositions: numberValue, maxDailyGasSpendWeth: stringValue, maxPositionNotionalWeth: stringValue, maxTotalLockedWeth: stringValue }),
 })
 const isExecutionMode = object<{ execute: boolean }>({ execute: booleanValue })

@@ -77,7 +77,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 		privateKey: CHAOS_TEST_PRIVATE_KEY,
 		runtime: {
 			execute: true,
-			lifecyclePollMilliseconds: 1_000,
+			pollMilliseconds: 1_000,
 			once: false,
 			protocolLogBlockSpan: 50_000,
 			protocolStartBlock: 0n,
@@ -104,7 +104,7 @@ function settingsFor(current: ChaosAnvilFixture, proxy: ChaosRpcProxy, stateFile
 			mode: 'public',
 			relayUrls: [],
 		},
-		version: 1,
+		version: 2,
 	}
 }
 

@@ -1,4 +1,4 @@
-import { ceilDiv } from '../../shared/core/ts/math/bigint.ts'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 
 const BPS_DENOMINATOR = 10_000n
 

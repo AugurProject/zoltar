@@ -1,3 +1,4 @@
+import { shareOutcome } from '../lib/shareValue.js'
 import { probabilityCopy } from '../copy/probability.js'
 
 function roundedProbabilityLabels(yesPercent: number) {
@@ -13,8 +14,8 @@ export function ProbabilityBar({ yesPercent, beforePercent }: { yesPercent: numb
 	return (
 		<figure className={`probability${moved ? ' probability--preview' : ''}`} aria-label={moved ? probabilityCopy.conditionalYesMoveLabel(before.yes, labels.yes) : probabilityCopy.conditionalYesPriceLabel(labels.yes)}>
 			<div className='probability__labels'>
-				<span>{moved ? probabilityCopy.probabilityMoveLabel(probabilityCopy.yes, before.yes, labels.yes) : probabilityCopy.probabilityLabel(probabilityCopy.yes, labels.yes)}</span>
-				<span>{moved ? probabilityCopy.probabilityMoveLabel(probabilityCopy.no, before.no, labels.no) : probabilityCopy.probabilityLabel(probabilityCopy.no, labels.no)}</span>
+				<span>{moved ? probabilityCopy.probabilityMoveLabel(shareOutcome.yes, before.yes, labels.yes) : probabilityCopy.probabilityLabel(shareOutcome.yes, labels.yes)}</span>
+				<span>{moved ? probabilityCopy.probabilityMoveLabel(shareOutcome.no, before.no, labels.no) : probabilityCopy.probabilityLabel(shareOutcome.no, labels.no)}</span>
 			</div>
 			<div className='probability__track'>
 				<div className='probability__yes' style={{ width: `${yesPercent}%` }} />

@@ -1,7 +1,7 @@
 import { readOwnerFileIfPresent, writeFileAtomically, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { hash32, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { formatDecimalAmount, hash32, parseDecimalAmount, parseSignedDecimalAmount, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
 
 /** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
@@ -128,23 +128,9 @@ function decimalField(record: Record<string, unknown>, key: string) {
 	return value
 }
 
-function decimalAmountAttoEth(value: string) {
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
-}
+const decimalAmountAttoEth = (value: string) => parseDecimalAmount(value, 'Position journal decimal')
 
-function signedDecimalAmountAttoEth(value: string) {
-	if (!signedDecimal.test(value)) throw new Error('Position journal signed decimal is invalid')
-	return value.startsWith('-') ? -decimalAmountAttoEth(value.slice(1)) : decimalAmountAttoEth(value)
-}
-
-function formatAttoEth(value: bigint) {
-	const negative = value < 0n
-	const magnitude = negative ? -value : value
-	const whole = magnitude / 10n ** 18n
-	const fraction = (magnitude % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '')
-	return `${negative ? '-' : ''}${whole.toString()}${fraction === '' ? '' : `.${fraction}`}`
-}
+const signedDecimalAmountAttoEth = (value: string) => parseSignedDecimalAmount(value, 'Position journal signed decimal')
 
 function optionalIntegerField(record: Record<string, unknown>, key: string) {
 	const value = record[key]
@@ -494,16 +480,16 @@ function archivePosition(archive: PositionJournalArchive, position: PositionReco
 	const gasSpentByUtcDay = { ...archive.gasSpentByUtcDay }
 	for (const expenditure of position.gasExpenditures) {
 		const day = expenditure.minedAt.slice(0, 10)
-		gasSpentByUtcDay[day] = formatAttoEth(decimalAmountAttoEth(gasSpentByUtcDay[day] ?? '0') + decimalAmountAttoEth(expenditure.costEth))
+		gasSpentByUtcDay[day] = formatDecimalAmount(decimalAmountAttoEth(gasSpentByUtcDay[day] ?? '0') + decimalAmountAttoEth(expenditure.costEth))
 	}
 	const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
 	const hedgedProfit = position.actualEntryGasCostEth === '0' || awaitingLifecycleEvidence ? 0n : signedDecimalAmountAttoEth(position.hedgedProfitBeforeGasEth)
 	const realizedProfit = position.status === 'closed' && position.realizedNetProfitEth !== undefined ? signedDecimalAmountAttoEth(position.realizedNetProfitEth) : 0n
 	return {
 		gasSpentByUtcDay: boundedGasSpentByUtcDay(gasSpentByUtcDay),
-		hedgedProfitBeforeGasEth: formatAttoEth(signedDecimalAmountAttoEth(archive.hedgedProfitBeforeGasEth) + hedgedProfit),
+		hedgedProfitBeforeGasEth: formatDecimalAmount(signedDecimalAmountAttoEth(archive.hedgedProfitBeforeGasEth) + hedgedProfit),
 		positionCount: archive.positionCount + 1,
-		realizedNetProfitEth: formatAttoEth(signedDecimalAmountAttoEth(archive.realizedNetProfitEth) + realizedProfit),
+		realizedNetProfitEth: formatDecimalAmount(signedDecimalAmountAttoEth(archive.realizedNetProfitEth) + realizedProfit),
 	}
 }
 

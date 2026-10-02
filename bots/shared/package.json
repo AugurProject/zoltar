@@ -52,6 +52,7 @@
 		"./monitoring/universe-policy": "./src/monitoring/universe-policy.ts",
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
+		"./monitoring/quorum-connectivity": "./src/monitoring/quorum-connectivity.ts",
 		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
 		"./monitoring/constant-product-markets": "./src/monitoring/constant-product-markets.ts",
 		"./monitoring/deployed-contracts": "./src/monitoring/deployed-contracts.ts",

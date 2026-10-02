@@ -41,7 +41,7 @@ export function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp
 
 export function hasReportingOpened(endTime: bigint, currentTimestamp: bigint | undefined) {
 	if (currentTimestamp === undefined) return undefined
-	return currentTimestamp > endTime
+	return currentTimestamp >= endTime
 }
 
 export type ReportingStage = 'preOpen' | 'notStarted' | 'activeLocked' | 'activeWithdrawable' | 'resolved' | 'forkTriggered' | 'timedOut'

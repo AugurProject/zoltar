@@ -7,7 +7,6 @@ const SETTING_LABELS = {
 	minimumProfitWeth: 'Minimum profit',
 	minimumRemainingBlocks: 'Minimum remaining blocks',
 	minimumRemainingSeconds: 'Minimum remaining seconds',
-	pollMilliseconds: 'Poll interval',
 	twapSeconds: 'TWAP window',
 } satisfies Record<keyof StrategySettings, string>
 
@@ -36,7 +35,7 @@ function requiredBigInt(record: Record<string, unknown>, key: keyof StrategySett
 
 export function updateStrategyFromRequest(strategy: MutableStrategy, value: unknown) {
 	const record = requiredRecord(value)
-	const allowed = new Set<keyof StrategySettings>(['maxSpotTwapTicks', 'minimumProfitBps', 'minimumProfitWeth', 'minimumRemainingBlocks', 'minimumRemainingSeconds', 'pollMilliseconds', 'twapSeconds'])
+	const allowed = new Set<keyof StrategySettings>(['maxSpotTwapTicks', 'minimumProfitBps', 'minimumProfitWeth', 'minimumRemainingBlocks', 'minimumRemainingSeconds', 'twapSeconds'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key as keyof StrategySettings)) throw new Error(`Unknown strategy setting: ${key}`)
 	}
@@ -45,17 +44,15 @@ export function updateStrategyFromRequest(strategy: MutableStrategy, value: unkn
 	const minimumProfitAttoWeth = parseDecimalWeth(requiredDecimal(record, 'minimumProfitWeth'))
 	if (minimumProfitAttoWeth > 1_000n * 10n ** 18n) throw new Error('Minimum profit must not exceed 1000 WETH')
 	const maxSpotTwapTicks = requiredBigInt(record, 'maxSpotTwapTicks', 0n, 100_000n)
-	const minimumProfitBps = requiredBigInt(record, 'minimumProfitBps', 0n, 100_000n)
+	const minimumProfitBps = BigInt(requiredInteger(record, 'minimumProfitBps', 0, 100_000))
 	const minimumRemainingBlocks = requiredBigInt(record, 'minimumRemainingBlocks', 1n, 1_000n)
 	const minimumRemainingSeconds = requiredBigInt(record, 'minimumRemainingSeconds', 1n, 86_400n)
-	const pollMilliseconds = requiredInteger(record, 'pollMilliseconds', 1_000, 3_600_000)
 	const twapSeconds = requiredInteger(record, 'twapSeconds', 60, 86_400)
 	strategy.maxSpotTwapTicks = maxSpotTwapTicks
 	strategy.minimumProfitBps = minimumProfitBps
 	strategy.minimumProfitAttoWeth = minimumProfitAttoWeth
 	strategy.minimumRemainingBlocks = minimumRemainingBlocks
 	strategy.minimumRemainingSeconds = minimumRemainingSeconds
-	strategy.pollMilliseconds = pollMilliseconds
 	strategy.twapSeconds = twapSeconds
 	return strategySettings(strategy)
 }

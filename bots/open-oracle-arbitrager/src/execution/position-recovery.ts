@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, formatUnits, parseUnits, type Hex } from '@zoltar/bot-shared/ethereum'
-import { endpointLabel } from '#monitoring/connectivity'
+import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { attemptHasFinality, assertReceiptSnapshotBlockHash, canonicalBlockHashWithQuorum, REORG_OVERLAP_BLOCKS, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
 import { decimalSignedEth, decimalWeth, parseDecimalWeth, parseSignedDecimalEth } from '#state/operator-state'
 import type { ExecutionRecord } from '#state/execution-record'

@@ -180,7 +180,7 @@ void describe('active environment', () => {
 
 	void test('labels common EVM chains and falls back to a decimal chain ID', () => {
 		const commonChains = [
-			['0x1', 'Ethereum'],
+			['0x1', 'Ethereum mainnet'],
 			['0xa', 'Optimism'],
 			['0x19', 'Cronos'],
 			['0x38', 'BNB Smart Chain'],

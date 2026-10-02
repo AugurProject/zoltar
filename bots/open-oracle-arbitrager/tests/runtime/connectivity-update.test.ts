@@ -3,8 +3,8 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
-import { checkIndependentRpcChains, splitQuorumRpcUrls, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
-import { EndpointCheckFailure, type EndpointCheck } from '#monitoring/connectivity'
+import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
+import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { deploymentUpdateMustWait, requireSafeDeploymentTransition } from '../../src/runtime/deployment-transition.ts'
 
 async function exampleSettings() {
@@ -22,24 +22,20 @@ function relayCheck(): EndpointCheck {
 }
 
 describe('operator connectivity updates', () => {
-	test('splits quorum RPC URLs off the RPC endpoints request into a same-identity deployment update', async () => {
-		const settings = await exampleSettings()
-		const untouched = splitQuorumRpcUrls(request('mainnet'), settings.deployment, 'mainnet')
-		expect(untouched.deploymentChanged).toBe(false)
-		expect(untouched.deployment).toBe(settings.deployment)
-		expect(untouched.value).toEqual(request('mainnet'))
-		const same = splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: [] }, settings.deployment, 'mainnet')
-		expect(same.deploymentChanged).toBe(false)
-		expect(same.value).toEqual(request('mainnet'))
-		const changed = splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] }, settings.deployment, 'mainnet')
-		expect(changed.deploymentChanged).toBe(true)
-		expect(changed.deployment.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-two.example/'])
-		expect(changed.deployment.openOracle).toBe(settings.deployment.openOracle)
-		expect(changed.deployment.uniswapV3Enabled).toBe(settings.deployment.uniswapV3Enabled)
-		expect(deploymentUpdateMustWait(settings.deployment, changed.deployment, [{ status: 'open' }])).toBe(false)
-		expect(changed.value).toEqual(request('mainnet'))
-		expect(() => splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: 'https://quorum.example/' }, settings.deployment, 'mainnet')).toThrow('Quorum RPC URLs must be an array of URLs')
-		expect(() => splitQuorumRpcUrls({ ...request('mainnet'), quorumRpcUrls: ['not a url'] }, settings.deployment, 'mainnet')).toThrow()
+	test('saves the requested quorum readers and agreement requirement under connectivity and keeps saved readers when the request omits them', async () => {
+		let settings = await exampleSettings()
+		const persist = async (update: (current: PersistedOperatorSettings) => PersistedOperatorSettings) => {
+			settings = update(settings)
+		}
+		const check = async (): Promise<[EndpointCheck]> => [{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }]
+		const parameters = { activeNetwork: 'mainnet' as const, activeRpcQuorum: 1 as const, check, endpointState: { endpointChecks: [] }, execute: false, persist, readChainId: async () => 1 }
+		const saved = await updateOperatorConnectivity({ ...parameters, savedQuorumRpcUrls: [], submission: settings.submission, value: { ...request('mainnet'), quorumRpcUrls: ['https://quorum-one.example', 'https://quorum-two.example'] } })
+		expect(saved.connectivity).toEqual({ publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'], readRpcUrl: 'https://rpc.example/', rpcQuorum: 2 })
+		expect(settings.connectivity).toEqual(saved.connectivity)
+		const kept = await updateOperatorConnectivity({ ...parameters, savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls, submission: settings.submission, value: request('mainnet') })
+		expect(kept.connectivity.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-two.example/'])
+		await expect(updateOperatorConnectivity({ ...parameters, savedQuorumRpcUrls: [], submission: settings.submission, value: { ...request('mainnet'), quorumRpcUrls: 'https://quorum.example/' } })).rejects.toThrow('connectivity.quorumRpcUrls must contain only RPC URLs')
+		await expect(updateOperatorConnectivity({ ...parameters, savedQuorumRpcUrls: [], submission: settings.submission, value: { ...request('mainnet'), extra: true } })).rejects.toThrow('Network, RPC, and quorum settings are required')
 	})
 
 	test('distinguishes deployment identity switches from same-identity routing updates', async () => {
@@ -61,7 +57,7 @@ describe('operator connectivity updates', () => {
 			activeNetwork: 'mainnet',
 			activeRpcQuorum: 2,
 			check: async () => [{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
-			deployment: settings.deployment,
+			savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 			endpointState: state,
 			execute: false,
 			persist: async update => {
@@ -71,7 +67,7 @@ describe('operator connectivity updates', () => {
 			value: request('mainnet', 'https://rpc.example/', 1),
 		})
 		expect(result).toMatchObject({ rpcQuorum: 1, rpcQuorumChanged: true })
-		expect(settings.rpcQuorum).toBe(1)
+		expect(settings.connectivity.rpcQuorum).toBe(1)
 		expect(state.endpointChecks).toEqual([relayCheck()])
 	})
 
@@ -81,7 +77,7 @@ describe('operator connectivity updates', () => {
 			activeNetwork: undefined,
 			activeRpcQuorum: 1,
 			check: async () => [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
-			deployment: settings.deployment,
+			savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 			endpointState: { endpointChecks: [] },
 			execute: false,
 			persist: async update => {
@@ -106,7 +102,7 @@ describe('operator connectivity updates', () => {
 				activeNetwork: 'mainnet',
 				activeRpcQuorum: 2,
 				check: () => Promise.reject(new EndpointCheckFailure('saved RPC failed', [failedCheck])),
-				deployment: settings.deployment,
+				savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 				endpointState: state,
 				execute: false,
 				persist: async () => {
@@ -130,7 +126,7 @@ describe('operator connectivity updates', () => {
 				{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' },
 				{ chainId: 1, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'public-rpc', status: 'healthy', target: 'rpc.example' },
 			],
-			deployment: settings.deployment,
+			savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 			endpointState: state,
 			execute: false,
 			persist: async update => {
@@ -161,7 +157,7 @@ describe('operator connectivity updates', () => {
 				updateOperatorConnectivity({
 					activeNetwork: 'mainnet',
 					activeRpcQuorum: 2,
-					deployment: settings.deployment,
+					savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 					endpointState: state,
 					execute: false,
 					persist: async () => {
@@ -192,7 +188,7 @@ describe('operator connectivity updates', () => {
 					checked = true
 					return [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }]
 				},
-				deployment: settings.deployment,
+				savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 				endpointState: { endpointChecks: [relayCheck()] },
 				execute: true,
 				persist: async update => {
@@ -209,14 +205,14 @@ describe('operator connectivity updates', () => {
 
 	test('rejects a dry-run chain switch before checking independent RPCs', async () => {
 		const settings = await exampleSettings()
-		settings.deployment.quorumRpcUrls = ['https://quorum.example/']
+		settings.connectivity = { ...settings.connectivity, quorumRpcUrls: ['https://quorum.example/'] }
 		let persisted = false
 		await expect(
 			updateOperatorConnectivity({
 				activeNetwork: 'mainnet',
 				activeRpcQuorum: 2,
 				check: async () => [{ chainId: 11_155_111, checkedAt: '2026-08-12T00:00:01.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'rpc.example' }],
-				deployment: settings.deployment,
+				savedQuorumRpcUrls: settings.connectivity.quorumRpcUrls,
 				endpointState: { endpointChecks: [relayCheck()] },
 				execute: false,
 				persist: async () => {

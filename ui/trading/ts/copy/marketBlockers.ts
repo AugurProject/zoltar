@@ -1,4 +1,4 @@
-import { invalid, no, yes } from './outcomes.js'
+import { outcomeLabel } from './outcomes.js'
 
 /** Reasons a market cannot accept new risk; shown as badges and blockers, so keep them short. */
 export const marketDataUnavailable = 'Market data unavailable'
@@ -8,8 +8,6 @@ export const awaitingForkContinuation = 'Awaiting fork continuation'
 export const universeForked = 'Universe forked'
 export const questionResolved = 'Question resolved'
 
-const outcomeLabels = { INVALID: invalid, NO: no, YES: yes } as const
-
-export function resolvedOutcome(outcome: keyof typeof outcomeLabels) {
-	return `Resolved ${outcomeLabels[outcome]}`
+export function resolvedOutcome(outcome: 'INVALID' | 'YES' | 'NO') {
+	return `Resolved ${outcomeLabel(outcome)}`
 }

@@ -206,7 +206,7 @@ export function readMarketConfiguration() {
 		desiredPools: currentDraft.desiredPools.map(pool => ({
 			universeId: uintString(pool['universeId'], 'Universe ID'),
 			questionId: uintString(pool['questionId'], 'Question ID'),
-			statoblastSecurityMultiplierBps: uintString(pool['statoblastSecurityMultiplierBps'], 'Security multiplier (bps)', 10001n),
+			statoblastSecurityMultiplierBps: integer(pool['statoblastSecurityMultiplierBps'], 'Security multiplier (bps)', 10_001, Number.MAX_SAFE_INTEGER),
 			initialReportPriorityFeeAttoEthPerGas: uintString(pool['initialReportPriorityFeeAttoEthPerGas'], 'Initial report priority fee (attoETH/gas)'),
 		})),
 	}
@@ -259,7 +259,7 @@ export function renderMarketConfiguration(target: HTMLElement, configuration: { 
 				<section>
 					<div className='panel-heading'>
 						<h3>Desired security pools</h3>
-						<button type='button' className='secondary' onClick={() => update({ ...draft, desiredPools: [...draft.desiredPools, { universeId: '', questionId: '', statoblastSecurityMultiplierBps: '12500', initialReportPriorityFeeAttoEthPerGas: String(0n) }] })}>
+						<button type='button' className='secondary' onClick={() => update({ ...draft, desiredPools: [...draft.desiredPools, { universeId: '', questionId: '', statoblastSecurityMultiplierBps: 12_500, initialReportPriorityFeeAttoEthPerGas: String(0n) }] })}>
 							Add pool
 						</button>
 					</div>

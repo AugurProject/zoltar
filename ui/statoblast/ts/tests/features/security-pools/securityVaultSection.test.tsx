@@ -33,6 +33,7 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		currentRetentionRate: 10n,
 		disputeStakedAttoRep: 3n * 10n ** 18n,
 		managerAddress: zeroAddress,
+		minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 		openInterestAttoEth: 1n * 10n ** 18n,
 		poolHeldRepPerCapacityBps: 60_000n,
 		totalRepBackingUnits: 1n,
@@ -321,10 +322,10 @@ describe('SecurityVaultSection', () => {
 		})
 		cleanupRenderedComponent = (await renderIntoDocument(<SecurityVaultSection {...props} />)).cleanup
 		const page = within(document.body)
-		expect(page.queryByText('A new Open Oracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.')).toBeNull()
+		expect(page.queryByText('A new OpenOracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.')).toBeNull()
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
-		expect(dialog.queryByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })).toBeNull()
+		expect(dialog.queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })).toBeNull()
 		expect(dialog.getByText('The question has resolved, so this change goes straight to the pool without an oracle price. Commitments can only be lowered now; set 0 ETH to unlock REP redemption.')).toBeDefined()
 		// Commitments can only be lowered here, so nothing offers or reports a higher maximum.
 		expect(dialog.queryByRole('button', { name: 'Max' })).toBeNull()
@@ -479,15 +480,15 @@ describe('SecurityVaultSection', () => {
 		const openOracle = page.queryByRole('button', { name: 'Open price oracle' })
 		expect(openOracle !== null).toBe(!fresh)
 		if (openOracle !== null) {
-			expect(document.body.textContent).toContain('A valid Open Oracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.')
+			expect(document.body.textContent).toContain('A valid OpenOracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.')
 			fireEvent.click(openOracle)
 			expect(openedOracle).toBe(true)
 		}
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const fields = [...dialog.querySelectorAll('input')]
-		if (!fresh) expect(dialog.textContent).toContain('A new Open Oracle report is needed to change the commitment limit.')
-		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }).id)
+		if (!fresh) expect(dialog.textContent).toContain('A new OpenOracle report is needed to change the commitment limit.')
+		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }).id)
 	})
 
 	test.each([
@@ -517,7 +518,7 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		expect(dialog.getByText(message)).not.toBeNull()
-		if (fresh || full) expect(dialog.queryByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })).toBeNull()
+		if (fresh || full) expect(dialog.queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })).toBeNull()
 	})
 
 	test('rounds the displayed commitment maximum down so its figure never exceeds the true maximum', async () => {
@@ -628,7 +629,7 @@ describe('SecurityVaultSection', () => {
 		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull()
 		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '1' } })
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
-		const input = queries.getByLabelText('Open Oracle REP per ETH starting price')
+		const input = queries.getByLabelText('OpenOracle REP per ETH starting price')
 		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
 			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
@@ -713,7 +714,7 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
 		fireEvent.input(within(dialog).getByLabelText('Commitment limit'), { target: { value: '3' } })
-		const startingPrice = within(dialog).queryByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })
+		const startingPrice = within(dialog).queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
 		if (startingPrice !== null) fireEvent.input(startingPrice, { target: { value: '3' } })
 		const acknowledgement = within(dialog).queryByRole('checkbox', { name: /I understand/ })
 		if (acknowledgement !== null) {
@@ -1540,7 +1541,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
 		if (withdrawal === null) throw new Error('Expected withdrawal section')
-		fireEvent.input(within(withdrawal).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(withdrawal).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
@@ -1566,7 +1567,7 @@ describe('SecurityVaultSection', () => {
 		if (withdrawal === null) throw new Error('Expected withdrawal section')
 		const page = within(withdrawal)
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
-		fireEvent.input(page.getByLabelText('Open Oracle REP per ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		fireEvent.click(page.getByRole('button', { name: 'Withdraw REP' }))
 		expect(submitted).toBe(3n * 10n ** 18n)

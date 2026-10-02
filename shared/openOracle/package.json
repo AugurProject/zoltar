@@ -1,5 +1,6 @@
 {
 	"name": "@zoltar/open-oracle-shared",
+	"private": true,
 	"version": "1.0.0",
 	"type": "module",
 	"exports": {
