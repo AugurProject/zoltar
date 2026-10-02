@@ -1201,6 +1201,23 @@ describe('Open Oracle helpers', () => {
 		expect(reportDetails.currentAmount2).toBe(requestedInitialAttoWeth)
 	})
 
+	test('late settlement exposes the stale rejection and preserves expiry on a reloaded report', async () => {
+		const bounty = await getRequestPriceCostAttoEth(client, managerAddress)
+		await requestPriceWithValue(client, managerAddress, bounty, 2n * 10n ** 18n)
+		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
+		const pending = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		expect(pending.coordinatorPriceValidUntilTimestamp).toBeDefined()
+		await mockWindow.advanceTime(pending.settlementTime + 24n * 60n * 60n)
+		const result = await settleOracleReport(uiWriteClient, getOpenOracleAddress(), reportId)
+		expect(result.priceSettlement).toEqual({ status: 'rejected', reason: 'Report stale' })
+		const settled = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		expect(settled.isDistributed).toBe(true)
+		expect(settled.coordinatorPriceValidUntilTimestamp).toBe(pending.coordinatorPriceValidUntilTimestamp)
+		const manager = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(manager.isPriceValid).toBe(false)
+		expect(manager.pendingReportId).toBe(0n)
+	})
+
 	test('requestOraclePrice rejects a stale cached price when a fresh Uniswap quote is unavailable', async () => {
 		const seededRepEthPrice = 2n * 10n ** 18n
 		const seededRequestEthCost = await getRequestPriceCostAttoEth(client, managerAddress)

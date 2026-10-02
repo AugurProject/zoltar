@@ -147,3 +147,19 @@ export const settleReportTitle = (id: bigint) => `Settle report #${id}`
 export const settledReportNumber = (id: string) => `Settled report #${id}`
 
 export const settleReport = 'Settle report'
+
+export const priceExpired = 'Price expired'
+export const settledAfterPriceExpired = 'Settled after price expired'
+export const staleSettlementWarning = 'Settlement will clear this report, but the pool will reject its price.'
+export const staleSettledReportWarning = 'Request a new price.'
+export const expiredReportPrice = 'This report’s price has expired.'
+export const reportPriceRejected = 'Report settled; price rejected'
+export const poolPriceAccepted = 'Pool accepted this price.'
+
+export function formatPriceSettlementRejection(reason: string) {
+	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Pool rejected this price: ${reason}. Request a new price.`
+}
+
+export const priceExpiredDuringReview = 'Price expired while reviewing. Review settlement again; the pool will reject this price.'
+export const priceSettlementUnconfirmed = 'Report settled; price acceptance unconfirmed'
+export const priceSettlementUnconfirmedDetail = 'The pool did not confirm accepting this price. Check the pool oracle before using it.'

@@ -195,7 +195,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				errorFallback,
 				async result => {
 					openOracleResult.value = result
-					openOracleFeedback.value = createSuccessActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), result.hash)
+					if (result.priceSettlement?.status === 'unconfirmed') {
+						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.priceSettlementUnconfirmed, openOracleCopy.priceSettlementUnconfirmedDetail, result.hash)
+					} else if (result.priceSettlement?.status === 'rejected') {
+						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.reportPriceRejected, openOracleCopy.formatPriceSettlementRejection(result.priceSettlement.reason), result.hash)
+					} else {
+						openOracleFeedback.value = createSuccessActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), result.hash)
+					}
 					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
 					if (result.action === 'createReportInstance') {
 						openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
