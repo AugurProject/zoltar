@@ -1,3 +1,4 @@
+import { isSecurityPoolNotFoundError } from '../../protocol/marketDiscovery.js'
 import { readOperationClient, runReadOperation, type ReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import type { MarketDiscoveryProgress } from '../../protocol/live.js'
 import { useEffect, useRef } from 'preact/hooks'
@@ -173,6 +174,12 @@ export function useMarketDiscoveryController({
 			}
 			const detail = publicErrorMessage(error, liveCopy.discoveryFailureLead(route))
 			market.setDiscoveryError(detail)
+			if (routePool !== undefined && isSecurityPoolNotFoundError(error)) {
+				market.setMarkets([])
+				market.setDiscoveryRows(undefined)
+				market.setDiscoveryState('not-found')
+				return
+			}
 			market.setDiscoveryState('error')
 			if (background) return
 			if (route === 'portfolio') {
@@ -234,7 +241,7 @@ export function useMarketDiscoveryController({
 	}, [nowSeconds, selected])
 
 	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
-	const blockRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
+	const blockRefreshActive = configuration !== undefined && market.discoveryState !== 'not-found' && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
 	useBlockRefresh(event => {
 		const foreground = foregroundDiscovery.current
 		if (event.reason === 'invalidate' && foreground !== undefined && discoveryRequests.isCurrent(foreground.request)) {

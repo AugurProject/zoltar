@@ -55,7 +55,7 @@ export function useLiveTradingController({
 	const { mode, side, amount, acknowledgedImpactBps, resetUnlocked, state, positionHash, message, positionReceiptWarning, workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const nowSeconds = useQuestionClock(configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
-	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
+	const walletUniverseId = routePool === undefined || discoveryState === 'not-found' ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'

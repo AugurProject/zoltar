@@ -17,7 +17,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
-import { offlineControllerServices } from '../support/liveTradingServices.js'
+import { connectedWalletServices, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -393,6 +393,43 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('REP balance RPC failed')
 		await act(() => rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-error button')?.click())
 		expect(retries).toBe(1)
+	})
+
+	test('settles wallet balances on a missing pool route with a requested universe', async () => {
+		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
+		const walletServices = connectedWalletServices(account, configuration.chainId)
+		const loadedUniverseIds: bigint[] = []
+		window.history.replaceState(undefined, '', `/#/market/0x${'44'.repeat(20)}?universe=0`)
+		installSilentInjectedWallet()
+		const rendered = await renderConfiguredApp({
+			...walletServices,
+			loadWalletHeaderBalances: async (_client, market) => {
+				if ('universeId' in market) loadedUniverseIds.push(market.universeId)
+				return await walletServices.loadWalletHeaderBalances()
+			},
+			createTradingWalletClient: () => ({}),
+			discoverAddressedMarket: async () => {
+				throw Object.assign(new Error('Security pool does not exist.'), { name: 'SecurityPoolNotFoundError' })
+			},
+		})
+		await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'))
+		await clickConnectWallet(rendered.container)
+		await waitFor(() => expect(rendered.container.querySelector('.account-menu-trigger')).not.toBeNull())
+		await waitFor(() => expect(rendered.container.textContent).not.toContain('Loading wallet ETH balance'))
+		expect(rendered.container.querySelector('.trading-wallet-error')).toBeNull()
+		expect(loadedUniverseIds).toContain(0n)
+		await act(() => {
+			window.history.replaceState(undefined, '', `/#/market/0x${'44'.repeat(20)}?universe=1`)
+			window.dispatchEvent(new Event('popstate'))
+		})
+		await waitFor(() => expect(loadedUniverseIds).toContain(1n))
+		await waitFor(() => expect(rendered.container.textContent).not.toContain('Loading wallet ETH balance'))
+		expect(rendered.container.querySelector('.trading-wallet-error')).toBeNull()
+	})
+
+	test('does not treat a missing addressed pool as a retryable wallet failure', () => {
+		expect(walletSummaryAvailability(true, undefined, 'not-found', 'Security pool does not exist', false, 'Security pool discovery failed')).toBeUndefined()
+		expect(walletSummaryDiscoveryRetryStart('not-found', false, undefined, 0n)).toBeUndefined()
 	})
 
 	test('ends wallet balance loading when selected-universe discovery fails', async () => {
