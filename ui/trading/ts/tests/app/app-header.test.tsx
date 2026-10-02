@@ -190,7 +190,7 @@ describe('trading header', () => {
 		expect(document.activeElement?.querySelector('.tab-nav')).toBeNull()
 		expect(document.activeElement?.textContent).toContain('Page not found')
 		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
-		expect(document.title).toBe('Not found · Augur Trading')
+		expect(document.title).toBe('Not found · Statoblast Trading')
 	})
 
 	test('accepts only addressed security-pool routes', () => {
@@ -208,10 +208,10 @@ describe('trading header', () => {
 		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 	})
 
-	test('uses Augur Trading branding without the removed footer disclaimers', async () => {
+	test('uses Statoblast Trading branding without the removed footer disclaimers', async () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.application-brand')?.textContent).toContain('Augur Trading')
+		expect(rendered.container.querySelector('.application-brand')?.textContent).toContain('Statoblast Trading')
 		expect(rendered.container.querySelector('footer')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('unaudited MVP')
 		expect(rendered.container.textContent).not.toContain('Spot prices are not manipulation-resistant oracles.')
@@ -317,7 +317,7 @@ describe('trading header', () => {
 	test('uses the shared top bar with three trader tabs and secondary sections under More', async () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.app-chrome .header-toolbar .application-brand')?.textContent).toBe('Augur Trading')
+		expect(rendered.container.querySelector('.app-chrome .header-toolbar .application-brand')?.textContent).toBe('Statoblast Trading')
 		expect(rendered.container.querySelector('.header-toolbar-navigation .tab-nav')).not.toBeNull()
 		expect(rendered.container.querySelector('.header-toolbar-navigation select')).toBeNull()
 		expect(Array.from(rendered.container.querySelectorAll('.tab-nav .view-tabs a')).map(anchor => anchor.textContent)).toEqual(['Markets', 'Portfolio', 'Create'])

@@ -118,7 +118,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/market`,
-		assertExpression: `(async () => { await (${waitForLookup}); return ${commonAssertion} && document.title === 'Markets · Augur Trading' && document.querySelector('.market-lookup a[href^="#/markets"]') !== null && document.querySelector('.market-row') === null })()`,
+		assertExpression: `(async () => { await (${waitForLookup}); return ${commonAssertion} && document.title === 'Markets · Statoblast Trading' && document.querySelector('.market-lookup a[href^="#/markets"]') !== null && document.querySelector('.market-row') === null })()`,
 	})),
 	...(
 		[
@@ -130,7 +130,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/markets`,
-		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && document.title === 'Browse markets · Augur Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Markets' && document.querySelectorAll('.market-row').length > 0 })()`,
+		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && document.title === 'Browse markets · Statoblast Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Markets' && document.querySelectorAll('.market-row').length > 0 })()`,
 	})),
 	...(
 		[
@@ -143,7 +143,7 @@ const scenarios = [
 		height,
 		path: `${simulationPath}#/markets`,
 		evaluate: `(async () => { if (!(await (${openSeededPool}))) return false; return await (${waitForWalletBalances}) })()`,
-		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/market/') && document.title === 'Market · Augur Trading' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && !document.body.textContent?.includes('Loading balances')`,
+		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/market/') && document.title === 'Market · Statoblast Trading' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && !document.body.textContent?.includes('Loading balances')`,
 	})),
 	...(
 		[
@@ -156,7 +156,7 @@ const scenarios = [
 		height,
 		path: `${simulationPath}#/markets`,
 		evaluate: `(async () => { if (!(await (${openSeededPool}))) return false; document.querySelector('.tab-nav-more-trigger')?.click(); await new Promise(resolve => setTimeout(resolve, 100)); const link = [...document.querySelectorAll('.tab-nav-more-menu a')].find(anchor => anchor.textContent?.trim() === 'Liquidity'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); for (let attempt = 0; attempt < 100; attempt++) { if (location.hash.startsWith('#/liquidity/') && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')) return true; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
-		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/liquidity/') && document.title === 'Liquidity · Augur Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
+		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/liquidity/') && document.title === 'Liquidity · Statoblast Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
 	})),
 	...(
 		[
@@ -168,7 +168,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${deployedSimulationPath}#/security-pools`,
-		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && document.title === 'Browse SecurityPools · Augur Trading' && document.querySelectorAll('.market-row').length > 0 })()`,
+		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && document.title === 'Browse SecurityPools · Statoblast Trading' && document.querySelectorAll('.market-row').length > 0 })()`,
 	})),
 	...(
 		[
@@ -181,7 +181,7 @@ const scenarios = [
 		height,
 		path: `${deployedSimulationPath}#/security-pools`,
 		evaluate: openSeededPool,
-		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/create-market/') && document.title === 'Create new market · Augur Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Create' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
+		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/create-market/') && document.title === 'Create new market · Statoblast Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Create' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
 	})),
 	...(
 		[
@@ -193,7 +193,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/liquidity`,
-		assertExpression: `(async () => { await (${waitForLookup}); return ${commonAssertion} && document.title === 'Liquidity · Augur Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelector('.market-lookup form.open-pool-form') !== null })()`,
+		assertExpression: `(async () => { await (${waitForLookup}); return ${commonAssertion} && document.title === 'Liquidity · Statoblast Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelector('.market-lookup form.open-pool-form') !== null })()`,
 	})),
 	...(
 		[
@@ -205,7 +205,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/portfolio`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('Portfolio')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Discovering SecurityPools') && document.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent?.includes('Genesis (0x0)') === true) return document.title === 'Portfolio · Augur Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Portfolio' && document.querySelector('#app-content .portfolio-section > .section-heading h2')?.textContent === 'Positions' && document.querySelector('.section .portfolio-groups > .operation-block') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Portfolio')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Discovering SecurityPools') && document.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent?.includes('Genesis (0x0)') === true) return document.title === 'Portfolio · Statoblast Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Portfolio' && document.querySelector('#app-content .portfolio-section > .section-heading h2')?.textContent === 'Positions' && document.querySelector('.section .portfolio-groups > .operation-block') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 	})),
 	...(
 		[
@@ -217,7 +217,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/universe`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('Universe')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Loading universe details') && document.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent?.includes('Genesis (0x0)') === true) return document.title === 'Universe · Augur Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelector('.header-toolbar-controls select') === null && document.body.textContent?.includes('Child universes') === true; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Universe')}); for (let attempt = 0; attempt < 100; attempt++) { if (!document.body.textContent?.includes('Loading universe details') && document.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent?.includes('Genesis (0x0)') === true) return document.title === 'Universe · Statoblast Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelector('.header-toolbar-controls select') === null && document.body.textContent?.includes('Child universes') === true; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 	})),
 	...(
 		[
@@ -229,7 +229,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/help`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('How the market works')}); return document.title === 'Help · Augur Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelectorAll('.explanation-flow article').length === 4 })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('How the market works')}); return document.title === 'Help · Statoblast Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelectorAll('.explanation-flow article').length === 4 })()`,
 	})),
 	...(
 		[
@@ -241,7 +241,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/deploy`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('Deploy')}); for (let attempt = 0; attempt < 100; attempt++) { if (document.querySelector('.deployment-setup__status')?.textContent?.includes('Deployment complete') === true) return document.title === 'Deploy · Augur Trading' && document.querySelector('.deployment-settings') === null && document.querySelector('.deployment-setup input[type="url"]') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Deploy')}); for (let attempt = 0; attempt < 100; attempt++) { if (document.querySelector('.deployment-setup__status')?.textContent?.includes('Deployment complete') === true) return document.title === 'Deploy · Statoblast Trading' && document.querySelector('.deployment-settings') === null && document.querySelector('.deployment-setup input[type="url"]') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 	})),
 	{
 		name: 'simulation-scenario-navigation-desktop',
