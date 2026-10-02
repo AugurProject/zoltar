@@ -213,6 +213,16 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 			? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage, requestWalletBlocker: requestPriceOpenWalletBlocker }
 			: undefined
 
+	const getOperationGuardMessage = (resolvedPendingOperationId: bigint | undefined) =>
+		getVaultExecutePendingOperationGuardMessage({
+			accountAddress: accountState.address,
+			hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined,
+			isOnActiveAppChain,
+			isPriceValid: currentPoolOraclePriceUsable,
+			pendingSettlementOperationIds: currentPoolOracleManagerDetails?.pendingSettlementOperationIds,
+			resolvedPendingOperationId,
+		})
+
 	return {
 		accountVault,
 		actionItems,
@@ -228,7 +238,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		currentReportingDetails,
 		currentTimestamp,
 		effectiveSelectedPool,
-		executePendingOperationGuardMessage: getVaultExecutePendingOperationGuardMessage({ accountAddress: accountState.address, hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined, isOnActiveAppChain, isPriceValid: currentPoolOraclePriceUsable, resolvedPendingOperationId }),
+		executePendingOperationGuardMessage: getOperationGuardMessage(resolvedPendingOperationId),
+		stagedOperationGuardMessages: new Map(stagedOperations.map(operation => [operation.operationId, getOperationGuardMessage(operation.operationId)])),
 		forkWorkflowDisabled: isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity),
 		forkWorkflowPrimary: isForkWorkflowPrimary(lifecycleStep, selectedPoolHasForkActivity),
 		hasLoadedCurrentVault,
