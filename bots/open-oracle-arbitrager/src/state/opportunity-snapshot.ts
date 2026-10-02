@@ -1,3 +1,4 @@
+import { publicInformationalOperationValue } from '#state/public-operation-value'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { Venue } from '#core/venue-strategy'
 
@@ -27,6 +28,7 @@ export type EvaluatedOpportunitySnapshot = {
 export type SkippedOpportunitySnapshot = {
 	decision: 'skipped'
 	reason: string
+	reasonDetails?: string | undefined
 	reportId: string
 	token: Address
 	tokenSymbol: string
@@ -42,6 +44,7 @@ export function publicOpportunity(opportunity: OpportunitySnapshot): Opportunity
 		return {
 			decision: opportunity.decision,
 			reason: opportunity.reason,
+			...(opportunity.reasonDetails === undefined ? {} : { reasonDetails: publicInformationalOperationValue(opportunity.reasonDetails) }),
 			reportId: opportunity.reportId,
 			token: opportunity.token,
 			tokenSymbol: opportunity.tokenSymbol,

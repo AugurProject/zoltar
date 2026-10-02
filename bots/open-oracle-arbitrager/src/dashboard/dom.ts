@@ -48,3 +48,22 @@ export function decisionBadge(decision: string) {
 	badge.textContent = decision.replaceAll('-', ' ')
 	return badge
 }
+
+/** Native disclosure works with keyboard and touch, and leaves the full diagnostic selectable. */
+export function diagnosticDisclosure(summaryText: string, detailText: string | undefined, key: string) {
+	if (detailText === undefined || detailText === summaryText) return summaryText
+	const container = document.createElement('div')
+	const label = document.createElement('span')
+	label.textContent = summaryText
+	const details = document.createElement('details')
+	details.className = 'diagnostic-details'
+	details.dataset['disclosureKey'] = key
+	const summary = document.createElement('summary')
+	summary.textContent = 'Details'
+	summary.dataset['focusKey'] = `diagnostic:${key}`
+	const content = document.createElement('pre')
+	content.textContent = detailText
+	details.append(summary, content)
+	container.append(label, details)
+	return container
+}

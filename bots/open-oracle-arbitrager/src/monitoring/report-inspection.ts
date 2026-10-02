@@ -35,7 +35,7 @@ export async function inspectReport(
 	executionReady: boolean,
 	paused: boolean,
 	coordinatorPolicies: readonly CoordinatorGamePolicy[],
-	recordDecision: (message: string, reason: string) => void,
+	recordDecision: (message: string, reason: string, details?: string | undefined) => void,
 ): Promise<ReportInspection | undefined> {
 	const game = report.game
 	const reportId = report.helper.reportId.toString()
@@ -59,9 +59,9 @@ export async function inspectReport(
 	}
 	const timeRemaining = settlementDeadline - currentTime
 	// Every later skip is a live WETH/token report; it stays visible in the scan with its reason instead of surviving only in the operation log.
-	const skipped = (reason: string): SkippedReport => {
-		recordDecision('Skipped report', reason)
-		return { candidate: undefined, dexObservations: [], opportunity: { decision: 'skipped', reason, reportId, token: game.token2, tokenSymbol: tokenMetadata.symbol, timeRemaining: timeRemaining.toString(), windowUnit } }
+	const skipped = (reason: string, reasonDetails?: string | undefined): SkippedReport => {
+		recordDecision('Skipped report', reason, reasonDetails)
+		return { candidate: undefined, dexObservations: [], opportunity: { decision: 'skipped', reason, ...(reasonDetails === undefined ? {} : { reasonDetails }), reportId, token: game.token2, tokenSymbol: tokenMetadata.symbol, timeRemaining: timeRemaining.toString(), windowUnit } }
 	}
 	const tokenPools = pools.filter(pool => pool.token.toLowerCase() === game.token2.toLowerCase())
 	if (tokenPools.length === 0) return skipped(`No configured pool can price ${tokenMetadata.symbol}`)
@@ -85,7 +85,8 @@ export async function inspectReport(
 	}
 	if (best === undefined) {
 		console.log(`report=${reportId} skipped=no-trusted-liquid-pool`)
-		return skipped(noVenueReason(tokenPools.length, evaluations, config.maxSpotTwapTicks))
+		const failure = noVenueReason(tokenPools.length, evaluations, config.maxSpotTwapTicks)
+		return skipped(failure.reason, failure.details)
 	}
 	const newAmount1 = calculateNextAmount1(game)
 	const replacementAmount2 = best.replacementAmount2
@@ -147,6 +148,10 @@ export async function inspectReport(
 function noVenueReason(tokenPoolCount: number, evaluations: readonly { evaluation: Awaited<ReturnType<typeof evaluate>>; pool: Pool }[], maxSpotTwapTicks: bigint) {
 	const drifted = tokenPoolCount - evaluations.length
 	const driftedReason = drifted === 0 ? [] : [`${drifted.toString()} ${drifted === 1 ? 'pool exceeds' : 'pools exceed'} the ${maxSpotTwapTicks.toString()} tick spot/TWAP limit`]
-	const failures = evaluations.map(({ evaluation, pool }) => `${venueLabel(pool.venue)} ${pool.address}: ${evaluation.replacementQuoteFailure ?? 'no executable quote'}`)
-	return [...(failures.length === 0 ? [] : [`Venue quotes failed: ${failures.join('; ')}`]), ...driftedReason].join('; ')
+	const failures = evaluations.map(({ evaluation, pool }) => `${venueLabel(pool.venue)} ${pool.address} (fee ${pool.fee.toString()}): ${evaluation.replacementQuoteFailure ?? 'no executable quote'}`)
+	const summaries = [...new Set(evaluations.map(({ evaluation, pool }) => `${venueLabel(pool.venue)}: ${evaluation.quoteFailureSummary ?? 'No executable quote'}`))]
+	return {
+		reason: [...summaries, ...driftedReason].join('; '),
+		details: failures.length === 0 ? undefined : failures.join('\n'),
+	}
 }

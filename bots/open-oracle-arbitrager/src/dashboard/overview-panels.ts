@@ -43,7 +43,9 @@ export function renderTransactions(transactions: readonly PublicTransactionActiv
 	const rows = visible.map(transaction => {
 		const accepted = transaction.acceptedTargets.map(target => `accepted: ${target}`)
 		const failed = transaction.failedTargets.map(target => `failed: ${target.target}${target.error === undefined ? '' : ` (${target.error})`}`)
-		const targets = [...accepted, ...failed].join(', ') || '—'
+		const targetDetails = [...accepted, ...failed].join('\n')
+		const targets =
+			targetDetails === '' ? '—' : h('details', { class: 'diagnostic-details', 'data-disclosure-key': `targets:${transaction.hash}` }, h('summary', { 'data-focus-key': `targets:${transaction.hash}` }, `${accepted.length.toString()} accepted · ${failed.length.toString()} failed`), h('pre', null, targetDetails))
 		const link = h('a', { href: `${explorerUrl}/tx/${transaction.hash}`, 'data-focus-key': `transaction:${transaction.reportId ?? 'wallet'}:${transaction.hash}`, target: '_blank', rel: 'noreferrer', title: transaction.hash }, shorten(transaction.hash))
 		const cells = [
 			new Date(transaction.updatedAt).toLocaleString(),

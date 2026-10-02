@@ -56,9 +56,9 @@ test('reads inventory in one batch, tolerates a reverting token, and values REP 
 		const balances = await loadBalances(client, wallet, config, [healthyToken, revertingToken], pools, 100n)
 		expect(balances?.raw).toEqual({ attoWeth: 10n ** 18n, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 100n * 10n ** 18n, tokens: new Map([[healthyToken.toLowerCase(), 42n]]) })
 		expect(balances?.snapshot).toEqual({ availableEth: '5', availableRep: '100', availableWeth: '1', repValueWeth: '3', totalValueWeth: '9' })
-		// One batch for the five balances, one per enabled REP valuation tier.
-		expect(batches).toBe(5)
-		expect(blockTags).toHaveLength(17)
+		// One inventory batch, four quote batches, and four pool-balance diagnostics for failed buy quotes.
+		expect(batches).toBe(9)
+		expect(blockTags).toHaveLength(21)
 		expect(blockTags.every(blockTag => blockTag === '0x64')).toBeTrue()
 		expect(logged).toHaveBeenCalledTimes(1)
 		expect(String(logged.mock.calls[0]?.[0])).toContain(`token=${revertingToken} balanceUnavailable=`)

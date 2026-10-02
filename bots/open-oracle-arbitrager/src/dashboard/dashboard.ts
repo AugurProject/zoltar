@@ -2,6 +2,7 @@ import { trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
 import { createConfigurationLoader } from './dashboard-configuration.ts'
+import { createActivityNavigation } from './activity-navigation.ts'
 import { createDashboardControls } from './dashboard-controls.ts'
 import { createDashboardElements } from './dashboard-elements.ts'
 import { createStateRefresh } from './dashboard-refresh.ts'
@@ -18,12 +19,14 @@ const dashboardPaths = new Set(['/overview', '/operations', '/games', '/markets'
 const elements = createDashboardElements()
 const state = createDashboardState()
 const controls = createDashboardControls(state, elements)
+const activityNavigation = createActivityNavigation()
 // The first snapshot renders only after the state request resolves, by which time this module has created the section navigation.
 const view = createSnapshotView({
 	state,
 	elements,
 	controls,
 	applyInitialFragment: fragment => {
+		activityNavigation.revealFragment(fragment)
 		sectionNavigation.syncSectionNavigation()
 		sectionNavigation.scrollToSection(fragment)
 	},
