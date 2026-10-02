@@ -10,7 +10,6 @@ import { formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, forma
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
 import { formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -135,12 +134,8 @@ export function LivePortfolio({
 	/** The universe the positions were read from; the empty state names it and offers to switch. */
 	universeId?: bigint | undefined
 }) {
-	// Without a wallet the rows list the pools a connection would read. Once a wallet is known, only pools whose own
-	// read has answered are listed (each pool's balance arrives separately while loading), so a pool still waiting for
-	// its balance, or one left unread by a failed refresh, never reads as a holding.
-	let visibleEntries: readonly PortfolioBalanceEntry[] = []
-	if (balanceState === 'ready' || balanceState === 'loading') visibleEntries = entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances)))
-	else if (balanceState === 'disconnected') visibleEntries = entries
+	// Saved pools are listed while their balances load; once every read has answered, only pools with a balance or an error remain.
+	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
 	const overview = portfolioOverview(visibleEntries, nowSeconds)
 	const showSummary = discoveryComplete && balanceState === 'ready' && visibleEntries.length > 0
 	return (
@@ -153,7 +148,7 @@ export function LivePortfolio({
 					}
 				/>
 			) : null}
-			{balanceState === 'loading' ? <SkeletonList label={portfolioCopy.loadingPoolBalances} rows={visibleEntries.length === 0 ? 2 : 1} /> : null}
+			{balanceState === 'loading' ? <EmptyState live title={portfolioCopy.loadingPoolBalances} /> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? (
 				<EmptyState

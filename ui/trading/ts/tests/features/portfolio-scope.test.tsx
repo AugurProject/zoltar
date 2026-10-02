@@ -57,52 +57,19 @@ describe('live portfolio scope', () => {
 		expect(button?.getAttribute('aria-describedby')).toBeTruthy()
 	})
 
-	test('links to pool details without exposing token identity while disconnected', async () => {
-		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: undefined }]} balanceState='disconnected' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
-		cleanupRendered = rendered.cleanup
-		expect(rendered.container.textContent).toContain(pool)
-		expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
-		expect(rendered.container.textContent).not.toContain(shareToken)
-		expect(rendered.container.textContent).not.toContain('Question ID')
-		expect(rendered.container.textContent).not.toContain('Outcome token IDs')
-		expect(rendered.container.textContent).not.toContain('0 shares')
-	})
-
-	for (const state of ['loading', 'error'] as const) {
-		test(`lists no position rows and no token identity while balances are ${state}`, async () => {
-			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
+	for (const state of ['disconnected', 'loading', 'error'] as const) {
+		test(`links to pool details without exposing token identity while balances are ${state}`, async () => {
+			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: state === 'error' ? 'RPC unavailable' : undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
 			cleanupRendered = rendered.cleanup
-			// Until the balances are known, no market is presented as a holding.
-			expect(rendered.container.querySelector('.portfolio-position-row')).toBeNull()
-			expect(rendered.container.textContent).not.toContain(pool)
+			expect(rendered.container.textContent).toContain(pool)
+			expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
 			expect(rendered.container.textContent).not.toContain(shareToken)
 			expect(rendered.container.textContent).not.toContain('Question ID')
 			expect(rendered.container.textContent).not.toContain('Outcome token IDs')
 			expect(rendered.container.textContent).not.toContain('0 shares')
-			if (state === 'loading') expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Loading balances')
 			if (state === 'error') expect(rendered.container.textContent).toContain('RPC unavailable')
 		})
 	}
-
-	test('lists each pool as its balance arrives while the rest still load', async () => {
-		const held = { scope: shareBalanceScope(market), yes: 10n ** 18n, no: 0n, invalid: 0n, lp: 0n }
-		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, title: 'Second scoped portfolio' }
-		const rendered = await renderIntoDocument(
-			<LivePortfolio
-				entries={[
-					{ market, balances: held, error: undefined },
-					{ market: secondMarket, balances: undefined, error: undefined },
-				]}
-				balanceState='loading'
-				balanceError={undefined}
-				retryBalances={async () => undefined}
-				nowSeconds={0n}
-			/>,
-		)
-		cleanupRendered = rendered.cleanup
-		expect(Array.from(rendered.container.querySelectorAll('[data-portfolio-pool]')).map(row => row.getAttribute('data-portfolio-pool'))).toEqual([pool])
-		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Loading balances')
-	})
 
 	test('links a pool whose own balance read failed to its details without exposing token identity', async () => {
 		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: 'RPC unavailable' }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
