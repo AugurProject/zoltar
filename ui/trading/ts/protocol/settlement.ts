@@ -69,7 +69,7 @@ async function simulateSettlementWithExpiryParameters(
 			deadline,
 			result: simulation,
 		} = await simulateWithDeadline(client, expiry, async (block, deadline) => {
-			const feeMarket = await loadTransactionFeeMarket(client, market, block.blockHash, block.blockTimestamp)
+			const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
 			const invalidTokenId = market.universeId << 8n
 			const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (amount * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
@@ -82,7 +82,7 @@ async function simulateSettlementWithExpiryParameters(
 				functionName: 'safeBatchTransferFrom',
 				account,
 				args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [amount, amount, amount], data],
-				blockHash: block.blockHash,
+				blockNumber: block.blockNumber,
 			})
 			void simulation
 			return { result: estimatedEthOut, feeMarket }
@@ -91,14 +91,14 @@ async function simulateSettlementWithExpiryParameters(
 		return { blockNumber, blockHash, operation, market: simulation.feeMarket, amount, deadline, slippageBps, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
 	}
 	if (operation === 'redeem-winning-shares') {
-		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockHash: block.blockHash }))
+		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockNumber: block.blockNumber }))
 		return { blockNumber, blockHash, operation, market }
 	}
 	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a source share and at least one fork target')
 	const sourceOutcome = parameters.sourceOutcome
 	const targetOutcomeIndexes = normalizeForkOutcomeIndexes(parameters.targetOutcomeIndexes)
 	const sourceTokenId = (market.universeId << 8n) | outcomeValue(sourceOutcome)
-	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, targetOutcomeIndexes], blockHash: block.blockHash }))
+	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, targetOutcomeIndexes], blockNumber: block.blockNumber }))
 	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndexes }
 }
 
@@ -138,7 +138,7 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 		return await guardedWrite(async () => {
 			const block = await latestBlockIdentity(client)
 			if (block.blockTimestamp >= quote.deadline) throw new Error('Transaction deadline has passed; simulate again')
-			const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockHash, block.blockTimestamp)
+			const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
 			const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.amount, minimumEth, quote.deadline)
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)
 			return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] })

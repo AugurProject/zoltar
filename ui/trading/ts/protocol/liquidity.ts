@@ -24,8 +24,8 @@ async function simulateLiquidityWithExpiry(client: WalletClient, configuration: 
 			expiry,
 			async (block, deadline) =>
 				pairAddress === undefined
-					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash }),
+					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber }),
 			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
 		)
 		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
@@ -41,8 +41,8 @@ async function simulateLiquidityWithExpiry(client: WalletClient, configuration: 
 			client,
 			expiry,
 			async (block, deadline) => {
-				const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-				const feeMarket = await loadTransactionFeeMarket(client, market, block.blockHash, block.blockTimestamp)
+				const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+				const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
 				const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, amount, maximumAfterSlippage(simulation.result.yesUsed, slippageBps), maximumAfterSlippage(simulation.result.noUsed, slippageBps), deadline, simulation.result)
 				if (feeBlocker !== undefined) throw new Error(feeBlocker)
 				return simulation
@@ -56,7 +56,7 @@ async function simulateLiquidityWithExpiry(client: WalletClient, configuration: 
 		blockHash,
 		deadline,
 		result: simulation,
-	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockHash: block.blockHash }))
+	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockNumber: block.blockNumber }))
 	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1], expectedYesDeposit: 0n, expectedNoDeposit: 0n }
 }
 
@@ -89,7 +89,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		const maximumYes = retainApprovedMaximum(maximumAfterSlippage(quote.expectedYesDeposit, quote.slippageBps), refreshed.expectedYesDeposit, 'YES deposit')
 		const maximumNo = retainApprovedMaximum(maximumAfterSlippage(quote.expectedNoDeposit, quote.slippageBps), refreshed.expectedNoDeposit, 'NO deposit')
 		const block = await latestBlockIdentity(client)
-		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockHash, block.blockTimestamp)
+		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
 		const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, quote.amount, maximumYes, maximumNo, quote.deadline, refreshed.result)
 		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		return await guardedWrite(async () => {
