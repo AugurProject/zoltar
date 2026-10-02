@@ -161,6 +161,7 @@ The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4
 
 ```sh
 docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
+docker volume create zoltar-bot-signer-locks >/dev/null
 docker compose up --build -d
 docker compose logs --tail 100 chaos
 ```
