@@ -262,22 +262,14 @@ describe.serial('OpenOracleSection integration', () => {
 			const createdReport = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 			expect(createdReport.reportId).toBe(reportId)
 		})
+
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 
 		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
-		// Browsing opens on favorites; the created report was downloaded after creation but is not a favorite until it is opened.
-		await waitFor(() => {
-			expect(within(document.body).getByRole('button', { name: 'Show downloaded reports' })).not.toBeNull()
-		})
-		await clickElement(within(document.body).getByRole('button', { name: 'Show downloaded reports' }))
-		await waitFor(() => {
-			expect(
-				within(document.body).getByRole('heading', {
-					name: `${reportDetails.token1Symbol} / ${reportDetails.token2Symbol} · report #${reportId.toString()}`,
-				}),
-			).not.toBeNull()
-		})
-		await clickElement(within(document.body).getByRole('button', { name: /^Open report:/ }))
+		// A created report joins favorites when opened directly by ID, just like a pool opened by address.
+		expect(within(document.body).queryByRole('button', { name: 'Show downloaded reports' })).toBeNull()
+		await setInputValue('Search reports', reportId.toString())
+		await clickElement(within(document.body).getByRole('button', { name: `Open report #${reportId.toString()}` }))
 
 		await waitFor(() => {
 			const context = document.body.querySelector('.sticky-object-context')
