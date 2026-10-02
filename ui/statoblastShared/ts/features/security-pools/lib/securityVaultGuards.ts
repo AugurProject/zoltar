@@ -137,18 +137,23 @@ export function getVaultExecutePendingOperationGuardMessage({
 	hasLoadedOracleManager,
 	isOnActiveAppChain,
 	isPriceValid,
+	pendingSettlementOperationIds = [],
 	resolvedPendingOperationId,
 }: {
 	accountAddress: Address | undefined
 	hasLoadedOracleManager: boolean
 	isOnActiveAppChain: boolean
 	isPriceValid: boolean | undefined
+	pendingSettlementOperationIds?: readonly bigint[] | undefined
 	resolvedPendingOperationId: bigint | undefined
 }) {
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('executing a staged operation') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
-	if (isPriceValid === false) return 'Request a new price in Price oracle before executing this operation.'
+	if (isPriceValid === false) {
+		if (resolvedPendingOperationId !== undefined && pendingSettlementOperationIds.includes(resolvedPendingOperationId)) return securityPoolCopy.autoExecAfterSettlement
+		return 'Request a new price in Price oracle before executing this operation.'
+	}
 	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation ID.'
 	return undefined
 }
