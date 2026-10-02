@@ -31,15 +31,16 @@ export function walletSummaryRefreshState(account: Address | undefined, universe
 	return { account, ethAttoEth: undefined, repAttoRep: undefined, status: account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId }
 }
 
-export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 'ready' | 'error', selectedPoolAvailable: boolean, selectedPoolLoadError: string | undefined, currentPageStart: bigint) {
+export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 'ready' | 'error' | 'not-found', selectedPoolAvailable: boolean, selectedPoolLoadError: string | undefined, currentPageStart: bigint) {
+	if (discoveryState === 'not-found') return undefined
 	return discoveryState === 'error' || !selectedPoolAvailable || selectedPoolLoadError !== undefined ? currentPageStart : undefined
 }
 
-export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error', discoveryError: string | undefined, selectedPoolAvailable: boolean, discoveryLead: string) {
+export function walletSummaryAvailability(configurationAvailable: boolean, configurationError: string | undefined, discoveryState: 'loading' | 'ready' | 'error' | 'not-found', discoveryError: string | undefined, selectedPoolAvailable: boolean, discoveryLead: string) {
 	if (!configurationAvailable) return configurationError === undefined ? { status: 'loading' as const, error: undefined, errorLabel: undefined } : { status: 'error' as const, error: configurationError, errorLabel: 'Deployment unavailable' }
 	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
 	if (discoveryState === 'error') return { status: 'error' as const, error: liveCopy.describeDiscoveryFailure(discoveryLead, discoveryError), errorLabel: discoveryLead }
-	if (selectedPoolAvailable) return undefined
+	if (discoveryState === 'not-found' || selectedPoolAvailable) return undefined
 	return { status: 'error' as const, error: 'No security pool is available in the selected universe', errorLabel: 'No security pool in this universe' }
 }
 
