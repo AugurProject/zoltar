@@ -54,6 +54,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 0n,
+		minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 		hasForkContinuationEscalationGame: false,
 		ordinaryEscalationGameStarted: false,
 		parent: zeroAddress,
@@ -218,9 +219,9 @@ describe('LiquidationModal', () => {
 		).cleanup
 		const page = within(document.body)
 		expect(loadFunding).not.toHaveBeenCalled()
-		fireEvent.input(page.getByLabelText('Open Oracle REP per ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
 		expect(loadFunding).toHaveBeenCalledWith(zeroAddress, 3n * ATTO_ETH_PER_ETH)
-		fireEvent.input(page.getByLabelText('Open Oracle REP per ETH starting price'), { target: { value: '' } })
+		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '' } })
 		expect(loadFunding).toHaveBeenCalledTimes(1)
 	})
 
@@ -236,7 +237,7 @@ describe('LiquidationModal', () => {
 		).cleanup
 		const page = within(document.body)
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
-		fireEvent.input(page.getByLabelText('Open Oracle REP per ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
 		fireEvent.click(page.getByRole('button', { name: 'Queue liquidation' }))
 		expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH)
 	})
@@ -256,7 +257,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
 		expect(within(document.body).queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Queue liquidation' })).not.toBeNull()
@@ -290,7 +291,7 @@ describe('LiquidationModal', () => {
 			liquidationTimeoutMinutes: '0',
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of at least 1 minute.')
 	})
@@ -815,7 +816,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')
 		expect(within(document.body).getByText('Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')).not.toBeNull()
@@ -853,7 +854,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
 		const queueButton = within(document.body).getByRole('button', { name: 'Queue liquidation' }) as HTMLButtonElement
 		expect(queueButton.disabled).toBe(false)
@@ -1183,7 +1184,7 @@ describe('LiquidationModal', () => {
 		expect(amountChanges).toEqual(['50'])
 	})
 
-	test('uses the configured Uniswap price for Max when the Open Oracle is invalid', async () => {
+	test('uses the configured Uniswap price for Max when the OpenOracle is invalid', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n }),
@@ -1254,7 +1255,7 @@ describe('LiquidationModal', () => {
 		expect(amountChanges).toEqual(['1.4'])
 	})
 
-	test('disables direct liquidation when the current Open Oracle price does not make the vault liquidatable', async () => {
+	test('disables direct liquidation when the current OpenOracle price does not make the vault liquidatable', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
 				vaultAttoRepBacking: 100n * 10n ** 18n,
@@ -1278,17 +1279,17 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
-		expect(documentQueries.getByText(/^Open Oracle price$/)).not.toBeNull()
+		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
+		expect(documentQueries.getByText(/^OpenOracle price$/)).not.toBeNull()
 	})
 
-	test('shows the pending first Open Oracle price in liquidation context', async () => {
+	test('shows the pending first OpenOracle price in liquidation context', async () => {
 		const renderedComponent = await renderLiquidationModalAt(100n, {
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 154n }),
 			selectedPool: createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n }),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const label = Array.from(document.querySelectorAll('.metric-label')).find(element => element.textContent === 'Open Oracle price')
+		const label = Array.from(document.querySelectorAll('.metric-label')).find(element => element.textContent === 'OpenOracle price')
 		expect(label?.nextElementSibling?.textContent?.trim()).toBe('Available in 54s')
 	})
 
@@ -1345,7 +1346,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
@@ -1476,6 +1477,7 @@ describe('LiquidationModal', () => {
 			totalPoolHeldRepBalanceAttoRep,
 		})
 		const simulation = simulateLiquidation({
+			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			requestedDebtAttoEth: 1n * ATTO_ETH_PER_ETH,
 			totalUnderwritingLimitAttoEth: 102n * ATTO_ETH_PER_ETH,
@@ -1530,6 +1532,7 @@ describe('LiquidationModal', () => {
 			underwritingLimitAttoEth: 900n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
+			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 3000n * ATTO_ETH_PER_ETH }),
 			requestedDebtAttoEth: 900n * ATTO_ETH_PER_ETH,
 			totalUnderwritingLimitAttoEth: 902n * ATTO_ETH_PER_ETH,
@@ -1613,6 +1616,7 @@ describe('LiquidationModal', () => {
 		delete targetVaultSummary.openInterestAttoEth
 		expect(() =>
 			simulateLiquidation({
+				minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 				callerVaultSummary: createTargetVaultSummary(),
 				requestedDebtAttoEth: 1n,
 				totalUnderwritingLimitAttoEth: 4n * ATTO_ETH_PER_ETH,
@@ -1631,6 +1635,7 @@ describe('LiquidationModal', () => {
 		})
 		const callerVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 400n * ATTO_ETH_PER_ETH, underwritingLimitAttoEth: 0n })
 		const partial = simulateLiquidation({
+			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			callerVaultSummary,
 			requestedDebtAttoEth: ATTO_ETH_PER_ETH / 4n,
 			totalUnderwritingLimitAttoEth: ATTO_ETH_PER_ETH / 2n,
@@ -1640,6 +1645,7 @@ describe('LiquidationModal', () => {
 			targetVaultSummary,
 		})
 		const maximum = simulateLiquidation({
+			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			callerVaultSummary,
 			requestedDebtAttoEth: ATTO_ETH_PER_ETH / 2n,
 			totalUnderwritingLimitAttoEth: ATTO_ETH_PER_ETH / 2n,
@@ -1664,6 +1670,7 @@ describe('LiquidationModal', () => {
 			underwritingLimitAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		const simulation = simulateLiquidation({
+			minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH,
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH }),
 			requestedDebtAttoEth: 50n * ATTO_ETH_PER_ETH,
 			totalUnderwritingLimitAttoEth: 102n * ATTO_ETH_PER_ETH,
@@ -2020,7 +2027,7 @@ describe('LiquidationModal', () => {
 		const receiverAfter = {
 			disputeStakedAttoRep: 0n,
 			healthFactorBps: 10_000n,
-			openInterestAttoEth: 3n * ATTO_ETH_PER_ETH,
+			underwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
 			poolHeldVaultRepBackingAttoRep: 6_050_000_000_000_000_000n,
 			poolSecurityMultiplierBps: 20_000n,
 			repPerEthPrice: ATTO_ETH_PER_ETH,
@@ -2127,7 +2134,7 @@ describe('LiquidationModal', () => {
 			loadingLiquidationReceiverVaultSummary: true,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		if (!isPriceValid) fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
+		if (!isPriceValid) fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
 		const documentQueries = within(document.body)
 		const status = documentQueries.getByRole('status')
@@ -2362,7 +2369,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
-		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
 		expect(documentQueries.getByText('Target underwriting commitments')).not.toBeNull()
 		expect(documentQueries.getByText('Target vault REP backing')).not.toBeNull()
 		expect(documentQueries.getByText('Target dispute-staked REP')).not.toBeNull()
@@ -2370,7 +2377,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByText('Below target')).toBeNull()
 	})
 
-	test('shows refreshing status while the modal is loading Open Oracle validity', async () => {
+	test('shows refreshing status while the modal is loading OpenOracle validity', async () => {
 		const loadRequests: string[] = []
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: undefined,

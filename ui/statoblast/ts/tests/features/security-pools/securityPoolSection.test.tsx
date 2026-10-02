@@ -308,7 +308,7 @@ describe('SecurityPoolSection', () => {
 		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Up to four decimal places; higher values require more REP.', 'times'])
 		expect((statoblastSecurityMultiplierBpsInput as HTMLInputElement).inputMode).toBe('decimal')
 		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial report priority fee' })
-		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'nanoETH per gas'])
+		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to OpenOracle report security.', 'nanoETH per gas'])
 		expect((priorityFeeInput as HTMLInputElement).value).toBe('10')
 	})
 

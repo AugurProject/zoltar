@@ -12,11 +12,10 @@ import {
 	updateConnectivityEndpointChecks,
 	updateSubmissionEndpointChecks,
 	validateConnectivitySettings,
-	validateConnectivitySettingsForQuorum,
 	validateIndependentReadRpcUrls,
-	validateReadRpcUrls,
 	type EndpointCheck,
-} from '#monitoring/connectivity'
+} from '@zoltar/bot-shared/monitoring/connectivity'
+import { parseQuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 // The fixed, non-broadcastable signed envelope that capability probes send to public RPCs.
@@ -121,8 +120,8 @@ describe('operator connectivity', () => {
 		expect(validateIndependentReadRpcUrls('https://one.example', ['https://two.example'])).toEqual(['https://two.example/'])
 	})
 
-	test('rejects live connectivity updates that duplicate the deployment quorum origin', () => {
-		expect(() => validateConnectivitySettingsForQuorum({ publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://quorum.example/read' }, ['https://quorum.example/independent'])).toThrow('independent origins')
+	test('rejects saved connectivity whose quorum reader duplicates the primary read origin', () => {
+		expect(() => parseQuorumConnectivitySettings({ publicRpcUrls: ['https://public.example'], quorumRpcUrls: ['https://quorum.example/independent'], readRpcUrl: 'https://quorum.example/read', rpcQuorum: 2 })).toThrow('independent origins')
 	})
 
 	test('redacts RPC path and query credentials from endpoint labels', () => {
@@ -136,8 +135,7 @@ describe('operator connectivity', () => {
 		expect(() => validateConnectivitySettings({ publicRpcUrls: [], readRpcUrl: 'https://read.example' })).toThrow('At least one')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://rpc.example'], readRpcUrl: 'https://read.example' })).toThrow('HTTPS')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://user:secret@read.example' })).toThrow('credentials')
-		expect(validateReadRpcUrls(['https://one.example', 'https://one.example/'])).toEqual(['https://one.example/'])
-		expect(() => validateReadRpcUrls(['http://unsafe.example'])).toThrow('HTTPS')
+		expect(() => validateIndependentReadRpcUrls('https://read.example', ['http://unsafe.example'])).toThrow('HTTPS')
 	})
 
 	test('accepts the local Reth Docker service over HTTP', () => {
@@ -148,8 +146,8 @@ describe('operator connectivity', () => {
 	})
 
 	test('does not include rejected RPC endpoint secrets in validation errors', () => {
-		expect(() => validateReadRpcUrls(['not-a-url?token=RPC_SECRET'])).toThrow(/^Invalid RPC URL$/)
-		expect(() => validateReadRpcUrls(['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS or HTTP on loopback, anvil, or reth$/)
+		expect(() => validateIndependentReadRpcUrls('https://read.example', ['not-a-url?token=RPC_SECRET'])).toThrow(/^Invalid RPC URL$/)
+		expect(() => validateIndependentReadRpcUrls('https://read.example', ['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS or HTTP on loopback, anvil, or reth$/)
 	})
 
 	test('checks the configured chain and sends raw transactions', async () => {

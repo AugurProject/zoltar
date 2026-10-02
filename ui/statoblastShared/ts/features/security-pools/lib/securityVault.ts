@@ -1,3 +1,4 @@
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -5,7 +6,6 @@ import type { OracleManagerDetails, SecurityVaultDetails } from '../../../types/
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 
-export const MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
@@ -62,8 +62,9 @@ function getCreditedVaultDepositAttoRep(depositAmount: bigint, vault: SecurityVa
 	return (creditedBackingUnits * (totalPoolHeldAttoRep + depositAmount)) / (totalRepBackingUnits + creditedBackingUnits)
 }
 
-export function isSecurityVaultDepositBelowMinimum(vault: SecurityVaultDepositState | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP) {
-	if (depositAmount === undefined || depositAmount <= 0n) return false
+/** The pool stores its effective minimum (theoretical supply / 100_000 when unconfigured); an unloaded minimum is unknown, so it never flags a deposit. */
+export function isSecurityVaultDepositBelowMinimum(vault: SecurityVaultDepositState | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep: bigint | undefined) {
+	if (depositAmount === undefined || depositAmount <= 0n || minimumVaultRepDepositAttoRep === undefined) return false
 	// The contract checks the whole vault after every deposit, so an existing vault below the minimum must also reach it.
 	return (vault?.vaultAttoRepBacking ?? 0n) + getCreditedVaultDepositAttoRep(depositAmount, vault) < minimumVaultRepDepositAttoRep
 }
@@ -73,16 +74,11 @@ export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaul
 	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.underwritingLimitAttoEth > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n || securityVaultDetails.badDebtAttoEth > 0n
 }
 
-function divideBigintRoundUp(value: bigint, divisor: bigint) {
-	if (divisor <= 0n) throw new Error('Divisor must be greater than zero')
-	return (value + divisor - 1n) / divisor
-}
-
 function getCapacityOwnershipBackedRepFloor(underwritingLimitAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (underwritingLimitAttoEth === undefined || underwritingLimitAttoEth <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
 	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
-	return divideBigintRoundUp(divideBigintRoundUp(underwritingLimitAttoEth * repPerEthPrice, PRICE_PRECISION) * statoblastSecurityMultiplierBps, BPS_DENOMINATOR)
+	return ceilDiv(ceilDiv(underwritingLimitAttoEth * repPerEthPrice, PRICE_PRECISION) * statoblastSecurityMultiplierBps, BPS_DENOMINATOR)
 }
 
 export function getSecurityVaultWithdrawableRepAmount({
@@ -118,8 +114,13 @@ export function getSecurityVaultWithdrawableRepAmount({
 	let maxWithdrawableAttoRep = maxLocalWithdrawal
 	if (migrationHeadroom < maxWithdrawableAttoRep) maxWithdrawableAttoRep = migrationHeadroom
 	if (totalPoolHeldAttoRep !== undefined && totalPoolHeldAttoRep > 0n) {
-		const requiredPoolRep = getCapacityOwnershipBackedRepFloor(totalUnderwritingLimitAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps)
-		if (requiredPoolRep === undefined) return undefined
+		// SecurityPool._requirePoolCoverage applies isVaultHealthy to the pool totals, so the pool keeps both the
+		// associated reserve and the migration reserve. Pool-wide dispute stake is not loaded here, so the associated
+		// check conservatively counts only pool-held REP.
+		const associatedRequiredPoolRep = getCapacityOwnershipBackedRepFloor(totalUnderwritingLimitAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps)
+		const migrationRequiredPoolRep = getCapacityOwnershipBackedRepFloor(totalUnderwritingLimitAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
+		if (associatedRequiredPoolRep === undefined || migrationRequiredPoolRep === undefined) return undefined
+		const requiredPoolRep = associatedRequiredPoolRep > migrationRequiredPoolRep ? associatedRequiredPoolRep : migrationRequiredPoolRep
 		const maxGlobalWithdrawal = totalPoolHeldAttoRep > requiredPoolRep ? totalPoolHeldAttoRep - requiredPoolRep : 0n
 		maxWithdrawableAttoRep = maxWithdrawableAttoRep < maxGlobalWithdrawal ? maxWithdrawableAttoRep : maxGlobalWithdrawal
 	}
@@ -178,7 +179,8 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	const total = details.totalUnderwritingLimitAttoEth - details.underwritingLimitAttoEth + limitAttoEth
 	if (limitAttoEth < details.underwritingLimitAttoEth && total < details.settlementCollateralAttoEth) return 'Total commitments must cover outstanding settlement collateral.'
 	if (limitAttoEth > details.underwritingLimitAttoEth && repPerEthPrice !== undefined && poolSecurityMultiplierBps !== undefined) {
-		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, openInterestAttoEth: limitAttoEth, disputeStakedAttoRep: details.disputeStakedAttoRep, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps })) return 'Deposit more REP before increasing this commitment limit.'
+		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, underwritingLimitAttoEth: limitAttoEth, disputeStakedAttoRep: details.disputeStakedAttoRep, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps }))
+			return 'Deposit more REP before increasing this commitment limit.'
 	}
 	return undefined
 }

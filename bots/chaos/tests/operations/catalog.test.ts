@@ -637,7 +637,7 @@ describe('chaos operation catalog', () => {
 		expect(decodeFunctionData({ abi: escalationGameAbi, data: action.data })).toMatchObject({ args: [BigInt(outcome), 1000n], functionName: 'depositRepOnOutcome' })
 		expect(action.walletAssetDebits).toEqual([{ amount: '1000', asset: pool.repToken, category: 'rep', kind: 'erc20' }])
 		expect(action.preflightCalls).toEqual([expect.objectContaining({ caller: snapshot.wallet.address, expectedResult: '0x', to: pool.escalationGame })])
-		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.escalationGame, equals: '1000', field: 'attoRepAmount', indexed: expect.objectContaining({ depositor: snapshot.wallet.address }), signature: 'DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)' }))
+		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.escalationGame, equals: '1000', field: 'amountAttoRep', indexed: expect.objectContaining({ depositor: snapshot.wallet.address }), signature: 'DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)' }))
 		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.escalationGame, equals: '1000', field: 'cumulativeRepAmountAttoRep', signature: 'LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)' }))
 		expect(action.evidence).toContainEqual(expect.objectContaining({ emitter: pool.repToken, equals: '1000', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.escalationGame }, signature: 'Transfer(address,address,uint256)' }))
 		expect(plan.maximumCleanupTransactionCount).toBe(1)

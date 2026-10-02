@@ -14,7 +14,7 @@ describe('statoblast route validation', () => {
 		}
 	})
 
-	test('rejects empty and unknown Open Oracle views', () => {
+	test('rejects empty and unknown OpenOracle views', () => {
 		expect(getInvalidStatoblastRouteState({ openOracleView: '', resolvedRoute: 'open-oracle', search: '?openOracleView=', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(true)
 		expect(getInvalidStatoblastRouteState({ openOracleView: 'browse', resolvedRoute: 'pools', search: '?openOracleView=browse', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(false)
 		expect(getInvalidStatoblastRouteState({ openOracleView: 'invalid', resolvedRoute: 'open-oracle', search: '?openOracleView=invalid', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(true)

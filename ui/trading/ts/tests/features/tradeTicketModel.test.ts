@@ -172,9 +172,9 @@ describe('trade ticket model', () => {
 		expect(tradeTicketModel({ ...ready, networkMismatchReason: 'Switch to Local.' }).primaryStep).toBe('switch-network')
 		const connected = tradeTicketModel(ready)
 		expect(connected.primaryStep).toBe('submit')
-		expect(connected.actionLabel).toBe('Buy YES')
+		expect(connected.actionLabel).toBe('Buy Yes')
 		expect(connected.availability).toEqual({ disabled: false, reason: undefined })
-		expect(tradeTicketModel({ ...ready, mode: 'exit', amount: '1' }).actionLabel).toBe('Sell YES')
+		expect(tradeTicketModel({ ...ready, mode: 'exit', amount: '1' }).actionLabel).toBe('Sell Yes')
 	})
 
 	test('waits for typing to settle and explains blockers in order', () => {

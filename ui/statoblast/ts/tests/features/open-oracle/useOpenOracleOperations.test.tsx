@@ -195,7 +195,7 @@ async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, act
 describe('useOpenOracleOperations', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
-	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {
+	test('uses consistent OpenOracle capitalization in disconnected-wallet recovery', async () => {
 		const dependencies = createOpenOracleOperationsDependencies()
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(
@@ -212,7 +212,7 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).approveToken1(1n)
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle.')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating OpenOracle.')
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {
@@ -874,6 +874,39 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).approveToken2(1n)
 		})
 		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Quote token approval failed')
+	})
+
+	test('retains the stale-price rejection in hook feedback and the transaction presentation', async () => {
+		const report = createOpenOracleReportDetails({ currentTime: 400n, currentReporter: WALLET_ADDRESS, reportTimestamp: 1n, settlementTime: 10n })
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: async () => report,
+			settleOracleReport: async () => ({ action: 'settle', hash: STATE_HASH, priceSettlement: { status: 'rejected', reason: 'Report stale' } }),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		let presentedTone: string | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{
+				onTransactionPresented: presentation => {
+					presentedTone = presentation.tone
+				},
+			},
+		)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(rendered.cleanup)
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await act(async () => {
+			await requireHookState(hookState).settleReport()
+		})
+		expect(presentedTone).toBe('warning')
+		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('warning')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Price expired before settlement. Request a new price.')
 	})
 
 	test('settleReport ignores a stale post-success refresh after the selected report changes', async () => {

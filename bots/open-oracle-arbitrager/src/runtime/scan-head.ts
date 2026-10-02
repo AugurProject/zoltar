@@ -1,6 +1,6 @@
 import { authenticateConfiguredDeployments, refreshIncompleteCanonicalDeployments } from '#config/runtime-deployment'
 import { REORG_OVERLAP_BLOCKS } from '#execution/execution-orchestration'
-import { checkConnectivity, checkSubmissionEndpoints } from '#monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints } from '@zoltar/bot-shared/monitoring/connectivity'
 import { recordOperation } from '#state/operator-state'
 import { finalityAnchorRequiresReset, initialCursor, latestLogRange } from '@zoltar/bot-shared/monitoring/block-sync'
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -83,7 +83,7 @@ export async function resetAfterFinalityAnchorReorg(runtime: OperatorRuntime, co
 	if (anchorNumber <= blockNumber) observedAnchorHash = (await canonicalAnchorBlock(context, anchorNumber)).hash
 	if (!finalityAnchorRequiresReset(cursor, blockNumber, observedAnchorHash)) return false
 	clearReportCaches(runtime, context)
-	runtime.cursor = config.coordinatorAddresses.length !== 0 || config.lookbackBlocks === 0n ? initialCursor(blockNumber, 0n) : { ...initialCursor(blockNumber, 0n), nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock }
+	runtime.cursor = config.coordinatorAddresses.length !== 0 || config.logLookbackBlocks === 0n ? initialCursor(blockNumber, 0n) : { ...initialCursor(blockNumber, 0n), nextBlock: latestLogRange(blockNumber, config.logLookbackBlocks).fromBlock }
 	state.status = 'syncing'
 	recordOperation(state, {
 		category: 'scan',

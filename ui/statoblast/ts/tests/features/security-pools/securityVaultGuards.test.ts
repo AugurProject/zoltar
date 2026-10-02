@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRedeemRepGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
@@ -16,6 +17,7 @@ describe('security vault guards', () => {
 	test('blocks deposit until deterministic deposit prerequisites are met', () => {
 		expect(
 			getVaultDepositGuardMessage({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				approvalSatisfied: true,
 				depositAmount: 1n,
 				isDepositBelowMinimum: false,
@@ -25,6 +27,7 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultDepositGuardMessage({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				approvalSatisfied: false,
 				depositAmount: 0n,
 				isDepositBelowMinimum: false,
@@ -34,6 +37,7 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultDepositGuardMessage({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				approvalSatisfied: false,
 				depositAmount: 1n,
 				isDepositBelowMinimum: false,
@@ -43,6 +47,7 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultDepositGuardMessage({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				approvalSatisfied: true,
 				depositAmount: 3n * 10n ** 18n,
 				isDepositBelowMinimum: false,
@@ -52,6 +57,7 @@ describe('security vault guards', () => {
 
 		expect(
 			getVaultDepositGuardMessage({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				approvalSatisfied: true,
 				depositAmount: 3n * 10n ** 18n,
 				isDepositBelowMinimum: false,
@@ -63,6 +69,7 @@ describe('security vault guards', () => {
 	test('blocks positive deposits until the deposit target factor is valid', () => {
 		const guard = (targetHealthFactor: string) =>
 			getVaultDepositGuardMessage({
+				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 				approvalSatisfied: true,
 				depositAmount: 1n,
 				isDepositBelowMinimum: false,
@@ -235,5 +242,12 @@ describe('security vault guards', () => {
 		const base = { approvalSatisfied: true, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH, walletRepShortfallAttoRep: undefined }
 		expect(getVaultDepositGuardMessage({ ...base, depositAmount: 10n * ATTO_ETH_PER_ETH })).toBe('Pool rounding would credit this vault slightly less than the 10\u00a0REP minimum. Deposit a little more.')
 		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: 4n * ATTO_ETH_PER_ETH, depositAmount: ATTO_ETH_PER_ETH })).toBe('This vault must hold at least 10\u00a0REP after the deposit. Deposit more REP.')
+	})
+})
+
+describe('vault deposit minimum availability', () => {
+	// SecurityPool derives its minimum from theoretical supply when unconfigured, so an unloaded minimum must not be guessed.
+	test('blocks a deposit while the pool minimum vault REP is unknown', () => {
+		expect(getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount: 5n * ATTO_ETH_PER_ETH, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: undefined, walletRepShortfallAttoRep: undefined })).toBe(securityPoolCopy.vaultMinimumLoading)
 	})
 })

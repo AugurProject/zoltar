@@ -169,7 +169,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						openOracleError,
-						commonCopy.formatConnectWalletBefore('operating Open Oracle'),
+						commonCopy.formatConnectWalletBefore('operating OpenOracle'),
 						createOpenOracleTransactionIntent(actionName, transactionContext),
 					),
 					formatErrorMessage: options?.formatErrorMessage,
@@ -195,7 +195,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				errorFallback,
 				async result => {
 					openOracleResult.value = result
-					openOracleFeedback.value = createSuccessActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), result.hash)
+					if (result.priceSettlement?.status === 'unconfirmed') {
+						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.priceSettlementUnconfirmed, openOracleCopy.priceSettlementUnconfirmedDetail, result.hash)
+					} else if (result.priceSettlement?.status === 'rejected') {
+						openOracleFeedback.value = createWarningActionFeedback(actionName, openOracleCopy.reportPriceRejected, openOracleCopy.formatPriceSettlementRejection(result.priceSettlement.reason), result.hash)
+					} else {
+						openOracleFeedback.value = createSuccessActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), result.hash)
+					}
 					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
 					if (result.action === 'createReportInstance') {
 						openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
@@ -307,7 +313,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 
 					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
 				},
-				'Failed to create standalone Open Oracle report',
+				'Failed to create standalone OpenOracle report',
 			)
 		} finally {
 			loadingOpenOracleCreate.value = false
@@ -355,7 +361,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		let token = zeroAddress
 		let preflightCanSubmit = false
 		try {
-			const holder = requireDefined(accountAddress, commonCopy.formatConnectWalletBefore('withdrawing an Open Oracle balance'))
+			const holder = requireDefined(accountAddress, commonCopy.formatConnectWalletBefore('withdrawing an OpenOracle balance'))
 			const details = requireLoadedCurrentSelectedReport()
 			const currentReportIdInput = details.reportId.toString()
 			const balances = await dependencies.loadOpenOracleWithdrawableBalances(attemptOpenOracleAddress, holder, details.token1, details.token2)
@@ -400,7 +406,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			await runOracleAction(
 				'withdrawBalance',
 				async (walletAddress, context) => await dependencies.withdrawOpenOracleBalance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), attemptOpenOracleAddress, token, currentAmount, walletAddress),
-				'Failed to withdraw Open Oracle balance',
+				'Failed to withdraw OpenOracle balance',
 			)
 		} finally {
 			openOracleActiveWithdrawalBalance.value = undefined

@@ -41,7 +41,7 @@ function settings() {
 		networkConfigured: true,
 		paused,
 		privateKey: hasSigner ? '__PRESERVE_SAVED_PRIVATE_KEY__' : null,
-		runtime: { execute: privateRelayScenario, lifecyclePollMilliseconds: 12_000 },
+		runtime: { execute: privateRelayScenario, pollMilliseconds: 12_000 },
 		scheduler: { maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 },
 		strategy: {
 			allowHighRiskOperations: false,

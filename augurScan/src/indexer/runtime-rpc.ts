@@ -1,5 +1,5 @@
 import { traceParticipants } from './transaction-selection.ts'
-import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { findEarliestAvailableBlock } from '@zoltar/core-shared/evm/availability'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
 import { type Address, createPublicClient, getAddress, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'

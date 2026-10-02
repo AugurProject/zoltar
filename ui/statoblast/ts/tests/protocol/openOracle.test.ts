@@ -3,15 +3,16 @@ import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactio
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, publicActions, decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
-import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createMulticallStub, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { getOpenOracleDisputeSwapTokenKey } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
@@ -402,6 +403,68 @@ describe('openOracle protocol client', () => {
 		expect(details.stagedOperations).toHaveLength(26)
 	})
 
+	for (const association of ['verified', 'different oracle', 'different coordinator', 'generic callback'] as const) {
+		test(`report freshness is attached only to a verified pool coordinator: ${association}`, async () => {
+			const preimage = createOpenOraclePreimage()
+			preimage.game.callbackContract = vaultAddress
+			const client = createMockLoaderClient({
+				getBlock: async () => ({ number: 1n, timestamp: 12n }),
+				readContract: async request => readStoredOracleFixture(request.functionName, preimage),
+				multicall: async request => {
+					const first = getContractFunctionName(request.contracts[0])
+					if (first === 'decimals') return [18n, 18n, 'ONE', 'TWO']
+					if (first === 'openOracle')
+						return association === 'generic callback'
+							? [
+									{ status: 'failure', error: new Error('No such getter') },
+									{ status: 'failure', error: new Error('No such getter') },
+								]
+							: [
+									{ status: 'success', result: association === 'different oracle' ? token1Address : getOpenOracleAddress() },
+									{ status: 'success', result: alternateSecurityPoolAddress },
+								]
+					if (first === 'openOraclePriceCoordinator') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
+					throw new Error(`Unexpected multicall ${first}`)
+				},
+			})
+			const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+			if (association === 'verified') expect(report.coordinatorPriceValidUntilTimestamp).toBe(getOracleManagerPriceValidUntilTimestamp(11n))
+			else expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
+		})
+	}
+
+	for (const status of ['accepted', 'rejected'] as const) {
+		test(`settlement filters unrelated logs before the ${status} coordinator outcome`, async () => {
+			const preimage = createOpenOraclePreimage(7n)
+			preimage.game.callbackContract = vaultAddress
+			const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+			const data = status === 'accepted' ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Base fee too high', 0n, 0n, 0n, 0n])
+			const eventName = status === 'accepted' ? ('PriceReported' as const) : ('PriceReportRejected' as const)
+			const log = { address: vaultAddress, data, topics: encodeEventTopics({ abi, eventName, args: { reportId: 7n } }) }
+			const logs = [{ ...log, address: token1Address }, { ...log, topics: encodeEventTopics({ abi, eventName, args: { reportId: 8n } }) }, { ...log, topics: [] }, log]
+			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
+			const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
+			expect(result.priceSettlement).toEqual(status === 'accepted' ? { status } : { status, reason: 'Base fee too high' })
+		})
+	}
+
+	test('settlement returns the coordinator rejection even when the transaction succeeds', async () => {
+		const preimage = createOpenOraclePreimage(7n)
+		preimage.game.callbackContract = vaultAddress
+		const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const rejection = {
+			address: vaultAddress,
+			data: encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
+			topics: encodeEventTopics({ abi, eventName: 'PriceReportRejected', args: { reportId: 7n } }),
+		}
+		const client = {
+			...createMockWriteClient(() => {}),
+			waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [rejection] }),
+		}
+		const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
+		expect(result.priceSettlement).toEqual({ status: 'rejected', reason: 'Report stale' })
+	})
+
 	test('settleOracleReport sends settle with an explicit gas limit', async () => {
 		const reporter = getAddress('0x00000000000000000000000000000000000000e1')
 		let capturedData: Hex | undefined
@@ -557,9 +620,11 @@ describe('openOracle protocol client', () => {
 	})
 })
 
-for (const change of ['settlement preimage', 'settled report', 'withdraw balance', 'create ETH', 'settlement unchanged', 'withdraw unchanged', 'create unchanged'] as const) {
+for (const change of ['settlement preimage', 'settled report', 'withdraw balance', 'create ETH', 'settlement unchanged', 'settlement price expiry', 'settlement stale unchanged', 'withdraw unchanged', 'create unchanged'] as const) {
 	test(`refreshes OpenOracle ${change} after application review`, async () => {
 		const preimage = createOpenOraclePreimage()
+		const coordinatorReport = change === 'settlement price expiry' || change === 'settlement stale unchanged'
+		if (coordinatorReport) preimage.game.callbackContract = vaultAddress
 		let changed = false
 		let submitted = 0
 		const writer = createMockWriteClient(
@@ -585,7 +650,26 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 		}).extend(publicActions)
 		const scope = new AbortController()
 		const unregister = registerTransactionPreparationScope(scope.signal)
-		const reviewed = createReviewedClient({ ...wallet, ...asWriteClient(writer), account: wallet.account, getBlock: async () => createBlockWithTimestamp(1000n), getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n) }, undefined, scope.signal)
+		const reviewed = createReviewedClient(
+			{
+				...wallet,
+				...asWriteClient(writer),
+				account: wallet.account,
+				call: async () => ({ data: toHex(0n) }),
+				multicall: createMulticallStub(async request =>
+					getContractFunctionName(request.contracts[0]) === 'openOracle'
+						? [
+								{ status: 'success', result: getOpenOracleAddress() },
+								{ status: 'success', result: alternateSecurityPoolAddress },
+							]
+						: [{ status: 'success', result: vaultAddress }],
+				),
+				getBlock: async () => createBlockWithTimestamp(change === 'settlement stale unchanged' || (changed && change === 'settlement price expiry') ? 3611n : 1000n),
+				getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n),
+			},
+			undefined,
+			scope.signal,
+		)
 		try {
 			const execute = () => {
 				if (change.startsWith('withdraw')) return withdrawOpenOracleBalance(reviewed, getOpenOracleAddress(), token1Address, 7n, initialReporter)
@@ -609,6 +693,7 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 			const action = execute().catch(error => error)
 			for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
 			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
+			if (change === 'settlement stale unchanged') expect(transactionSteps.value?.steps.at(-1)?.description).toBe('Settlement will clear this report, but the pool will reject its price.')
 			changed = true
 			if (change === 'settlement preimage') preimage.game.currentAmount1 = 101n
 			if (change === 'settled report') preimage.game.settlementTimestamp = 1000n
@@ -617,9 +702,11 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 			if (change.endsWith('unchanged')) {
 				expect(result).toHaveProperty('hash')
 				expect(submitted).toBe(1)
+				if (change === 'settlement stale unchanged') expect(result).toHaveProperty('priceSettlement', { status: 'unconfirmed' })
 			} else {
 				expect(result).toBeInstanceOf(Error)
 				expect(submitted).toBe(0)
+				if (change === 'settlement price expiry') expect(result.message).toContain('Price expired while reviewing')
 			}
 		} finally {
 			scope.abort()

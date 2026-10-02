@@ -1,23 +1,26 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
+import { formatDecimalAmount, parseSignedDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import { countOpportunities, type EvaluatedOpportunitySnapshot, type OpportunityDecision, type OpportunitySnapshot, type SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
 import type { RewardWithdrawalDecision, SettlementCandidateSnapshot, SettlementDecision, SettlementSnapshot } from '#state/settlement-store'
 import { blockAge } from '@zoltar/bot-shared/dashboard/block-status'
 
-const DECIMAL_SCALE = 18
-
-export function persistedConnectivity(value: unknown): { connectivity: { publicRpcUrls: string[]; readRpcUrl: string }; network: 'mainnet' | 'sepolia' } | undefined {
+/** The saved `connectivity` section of a configured profile, split into the endpoints, quorum readers, and agreement requirement. */
+export function persistedConnectivity(value: unknown): { connectivity: { publicRpcUrls: string[]; readRpcUrl: string }; network: 'mainnet' | 'sepolia'; quorumRpcUrls: string[]; rpcQuorum: 1 | 2 } | undefined {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const network = Reflect.get(value, 'network')
 	const connectivity = Reflect.get(value, 'connectivity')
 	if ((network !== 'mainnet' && network !== 'sepolia') || typeof connectivity !== 'object' || connectivity === null || Array.isArray(connectivity)) return undefined
 	const readRpcUrl = Reflect.get(connectivity, 'readRpcUrl')
 	const publicRpcUrls = Reflect.get(connectivity, 'publicRpcUrls')
+	const quorumRpcUrls = Reflect.get(connectivity, 'quorumRpcUrls')
+	const rpcQuorum = Reflect.get(connectivity, 'rpcQuorum')
 	if (typeof readRpcUrl !== 'string' || !Array.isArray(publicRpcUrls) || publicRpcUrls.some(url => typeof url !== 'string')) return undefined
-	return { connectivity: { publicRpcUrls: publicRpcUrls.map(String), readRpcUrl }, network }
+	if (!Array.isArray(quorumRpcUrls) || quorumRpcUrls.some(url => typeof url !== 'string') || (rpcQuorum !== 1 && rpcQuorum !== 2)) return undefined
+	return { connectivity: { publicRpcUrls: publicRpcUrls.map(String), readRpcUrl }, network, quorumRpcUrls: quorumRpcUrls.map(String), rpcQuorum }
 }
 
 export function connectivityControlsDisabled(connected: boolean, requestPending: boolean) {
@@ -36,25 +39,6 @@ export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undef
 	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Applying ${savedNetwork}; the last snapshot was ${activeNetwork}.`
 }
 
-function parseSignedDecimal(value: string) {
-	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid decimal amount: ${value}`)
-	const negative = value.startsWith('-')
-	const unsigned = negative ? value.slice(1) : value
-	const [whole = '0', fraction = ''] = unsigned.split('.')
-	const scaled = BigInt(whole) * 10n ** BigInt(DECIMAL_SCALE) + BigInt(fraction.padEnd(DECIMAL_SCALE, '0'))
-	return negative ? -scaled : scaled
-}
-
-function decimalFromScaled(value: bigint) {
-	const negative = value < 0n
-	const unsigned = negative ? -value : value
-	const scale = 10n ** BigInt(DECIMAL_SCALE)
-	const whole = unsigned / scale
-	const fraction = (unsigned % scale).toString().padStart(DECIMAL_SCALE, '0').replace(/0+$/, '')
-	const decimal = fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
-	return negative ? `-${decimal}` : decimal
-}
-
 export function exactAmount(value: string | undefined, symbol: string) {
 	return formatAmount(value, symbol)
 }
@@ -63,8 +47,8 @@ export function amount(value: string | undefined, symbol: string) {
 	return formatAmount(value, symbol)
 }
 
-export function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; revision: string } {
-	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string'
+export function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; effectiveRpcQuorum: 1 | 2; revision: string } {
+	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string' && 'effectiveRpcQuorum' in value && (value.effectiveRpcQuorum === 1 || value.effectiveRpcQuorum === 2)
 }
 
 export function configurationNetwork(configuration: unknown) {
@@ -263,7 +247,7 @@ export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWa
 }
 
 export function sumSignedDecimals(values: readonly string[]) {
-	return decimalFromScaled(values.reduce((total, value) => total + parseSignedDecimal(value), 0n))
+	return formatDecimalAmount(values.reduce((total, value) => total + parseSignedDecimalAmount(value, 'Decimal amount'), 0n))
 }
 
 export function marketAvailabilityPresentation(notice: PublicOperatorSnapshot['marketAvailability']) {

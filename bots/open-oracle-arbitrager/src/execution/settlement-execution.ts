@@ -9,7 +9,7 @@ import { submitContractTransaction, trackedActivity, trackedNetProfitEth, waitFo
 import { decimalSignedEth, decimalWeth, parseDecimalWeth } from '#state/operator-state'
 import { settlementAttemptIsUnresolved, type SettlementRecord } from '#state/settlement-store'
 import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { endpointLabel } from '#monitoring/connectivity'
+import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 

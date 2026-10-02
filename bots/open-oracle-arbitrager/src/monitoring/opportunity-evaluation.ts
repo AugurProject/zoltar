@@ -7,7 +7,7 @@ import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGas
 import { calculateFee, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hedgeSlippageReserveAttoWeth, type ArbitrageQuote } from '#core/strategy'
 import type { Venue } from '#core/venue-strategy'
 import { selectBestExecution, settledExecutionSnapshotWithQuorum } from '#execution/execution-orchestration'
-import { endpointLabel } from '#monitoring/connectivity'
+import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { loadV3Pool } from '#monitoring/execution-pools'
 import { executableVenueQuotes, quoteVenue } from '#monitoring/venue-quotes'
 import type { PositionRecord } from '#state/position-store'

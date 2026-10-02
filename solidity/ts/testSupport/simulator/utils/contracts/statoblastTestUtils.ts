@@ -35,10 +35,10 @@ export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddres
 	const repToken = await getRepToken(client, securityPoolAddress)
 	const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / STATOBLAST_SECURITY_MULTIPLIER_BPS
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
-	const attoRepAmount = await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
-	assert.ok(attoRepAmount >= 2n * forkThresholdAttoRep, 'not enough rep in vault to fork')
+	const amountAttoRep = await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
+	assert.ok(amountAttoRep >= 2n * forkThresholdAttoRep, 'not enough rep in vault to fork')
 	const minRepDeposit = 10n * 10n ** 18n
-	const secondEscalationDeposit = attoRepAmount - 2n * forkThresholdAttoRep < minRepDeposit ? attoRepAmount - forkThresholdAttoRep : forkThresholdAttoRep
+	const secondEscalationDeposit = amountAttoRep - 2n * forkThresholdAttoRep < minRepDeposit ? amountAttoRep - forkThresholdAttoRep : forkThresholdAttoRep
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.Yes, forkThresholdAttoRep)
 	await depositToEscalationGame(client, securityPoolAddress, QuestionOutcome.No, secondEscalationDeposit)
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)

@@ -181,15 +181,15 @@ library SecurityPoolUtils {
 
 	/// @notice Tests vault health with pool-held vault REP backing and dispute-staked REP.
 	/// @dev The migration-safety branch intentionally excludes dispute-staked REP.
-	function isVaultHealthy(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 openInterestAttoEth, uint256 repEthPrice, uint256 poolSecurityMultiplierBps) external pure returns (bool) {
+	function isVaultHealthy(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 underwritingLimitAttoEth, uint256 repEthPrice, uint256 poolSecurityMultiplierBps) external pure returns (bool) {
 		return
-			isVaultHealthyAtFactor(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, repEthPrice, poolSecurityMultiplierBps, BPS_DENOMINATOR);
+			isVaultHealthyAtFactor(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, underwritingLimitAttoEth, repEthPrice, poolSecurityMultiplierBps, BPS_DENOMINATOR);
 	}
 
-	function isVaultHealthyAtFactor(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 openInterestAttoEth, uint256 repEthPrice, uint256 poolSecurityMultiplierBps, uint256 healthFactorBps) public pure returns (bool) {
+	function isVaultHealthyAtFactor(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 underwritingLimitAttoEth, uint256 repEthPrice, uint256 poolSecurityMultiplierBps, uint256 healthFactorBps) public pure returns (bool) {
 		if (healthFactorBps < BPS_DENOMINATOR) return false;
-		if (openInterestAttoEth == 0) return true;
-		uint256 baseRequiredRepAttoRep = Math.mulDiv(openInterestAttoEth, repEthPrice, PRICE_PRECISION, Math.Rounding.Ceil);
+		if (underwritingLimitAttoEth == 0) return true;
+		uint256 baseRequiredRepAttoRep = Math.mulDiv(underwritingLimitAttoEth, repEthPrice, PRICE_PRECISION, Math.Rounding.Ceil);
 		uint256 associatedRequiredRepAttoRep = Math.mulDiv(baseRequiredRepAttoRep, poolSecurityMultiplierBps, BPS_DENOMINATOR, Math.Rounding.Ceil);
 		associatedRequiredRepAttoRep = Math.mulDiv(associatedRequiredRepAttoRep, healthFactorBps, BPS_DENOMINATOR, Math.Rounding.Ceil);
 		if (poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep < associatedRequiredRepAttoRep) return false;
@@ -202,19 +202,19 @@ library SecurityPoolUtils {
 		return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep;
 	}
 
-	function _isLiquidationBeyondMinPriceDistance(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 openInterestAttoEth, uint256 poolSecurityMultiplierBps, uint256 currentPrice, uint256 minPriceDistanceBps) internal pure returns (bool) {
+	function _isLiquidationBeyondMinPriceDistance(uint256 poolHeldVaultRepBackingAttoRep, uint256 disputeStakedAttoRep, uint256 underwritingLimitAttoEth, uint256 poolSecurityMultiplierBps, uint256 currentPrice, uint256 minPriceDistanceBps) internal pure returns (bool) {
 		if (minPriceDistanceBps == 0) return true;
-		if (openInterestAttoEth == 0 || currentPrice == 0) return false;
+		if (underwritingLimitAttoEth == 0 || currentPrice == 0) return false;
 		uint256 valueScale = PRICE_PRECISION * BPS_DENOMINATOR;
 		uint256 associatedRepThreshold =
 			((poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) /
-				(openInterestAttoEth * poolSecurityMultiplierBps);
+				(underwritingLimitAttoEth * poolSecurityMultiplierBps);
 		uint256 migrationSecurityMultiplierBps = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2;
 		uint256 liquidationReserveMultiplierBps = BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS;
 		if (migrationSecurityMultiplierBps < liquidationReserveMultiplierBps)
 			migrationSecurityMultiplierBps = liquidationReserveMultiplierBps;
 		uint256 migrationThreshold =
-			(poolHeldVaultRepBackingAttoRep * valueScale) / (openInterestAttoEth * migrationSecurityMultiplierBps);
+			(poolHeldVaultRepBackingAttoRep * valueScale) / (underwritingLimitAttoEth * migrationSecurityMultiplierBps);
 		uint256 thresholdPrice =
 			associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold;
 		if (currentPrice <= thresholdPrice) return false;

@@ -284,7 +284,7 @@ describe('trading header', () => {
 		let switchRequests = 0
 		const wrongChain = await renderIntoDocument(<TradingWalletControls {...baseProps} account={undefined} simulation requiredNetworkName='Local' walletChainId={1} onSwitchNetwork={() => switchRequests++} />)
 		cleanupRendered = wrongChain.cleanup
-		expect(wrongChain.container.querySelector('.badge')?.textContent).toBe('Wrong network (Ethereum)')
+		expect(wrongChain.container.querySelector('.badge')?.textContent).toBe('Wrong network (Ethereum mainnet)')
 		const switchButton = wrongChain.container.querySelector<HTMLButtonElement>('.wallet-button')
 		expect(switchButton?.textContent).toBe('Switch to Local')
 		await act(() => switchButton?.click())

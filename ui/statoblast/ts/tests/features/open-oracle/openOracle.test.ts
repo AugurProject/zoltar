@@ -213,7 +213,7 @@ function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof der
 	})
 }
 
-describe('Open Oracle helpers', () => {
+describe('OpenOracle helpers', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -246,7 +246,7 @@ describe('Open Oracle helpers', () => {
 
 		const currentTimestamp = await mockWindow.getTime()
 		const questionData = {
-			title: 'Test question for Open Oracle',
+			title: 'Test question for OpenOracle',
 			description: '',
 			startTime: 0n,
 			endTime: currentTimestamp + 365n * DAY,
@@ -894,7 +894,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('selected report action mode follows the report lifecycle', () => {
-		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('Open Oracle report is missing its atomic initial report')
+		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('OpenOracle report is missing its atomic initial report')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n, disputeOccurred: true }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n }))).toBe('settle')
@@ -1199,6 +1199,23 @@ describe('Open Oracle helpers', () => {
 		expect(reportDetails.exactToken1Report).toBe(requestedInitialAttoWeth)
 		expect(reportDetails.currentAmount1).toBe(requestedInitialAttoWeth)
 		expect(reportDetails.currentAmount2).toBe(requestedInitialAttoWeth)
+	})
+
+	test('late settlement exposes the stale rejection and preserves expiry on a reloaded report', async () => {
+		const bounty = await getRequestPriceCostAttoEth(client, managerAddress)
+		await requestPriceWithValue(client, managerAddress, bounty, 2n * 10n ** 18n)
+		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
+		const pending = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		expect(pending.coordinatorPriceValidUntilTimestamp).toBeDefined()
+		await mockWindow.advanceTime(pending.settlementTime + 24n * 60n * 60n)
+		const result = await settleOracleReport(uiWriteClient, getOpenOracleAddress(), reportId)
+		expect(result.priceSettlement).toEqual({ status: 'rejected', reason: 'Report stale' })
+		const settled = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
+		expect(settled.isDistributed).toBe(true)
+		expect(settled.coordinatorPriceValidUntilTimestamp).toBe(pending.coordinatorPriceValidUntilTimestamp)
+		const manager = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(manager.isPriceValid).toBe(false)
+		expect(manager.pendingReportId).toBe(0n)
 	})
 
 	test('requestOraclePrice rejects a stale cached price when a fresh Uniswap quote is unavailable', async () => {

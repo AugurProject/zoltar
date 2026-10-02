@@ -1,9 +1,7 @@
+import { shorten } from './dom.ts'
 import { indexUniverseTree, universeApprovalSelection, universeLabel, universeLineage, visibleUniverseRows, type UniverseNode } from './universe-tree.ts'
 
 const PAGE_SIZE = 60
-function compact(value: string) {
-	return value.length > 22 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value
-}
 
 type ExplorerState = {
 	universes: readonly UniverseNode[]
@@ -198,7 +196,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			inspectButton.dataset['universeFocus'] = `inspect:${node.id}`
 			inspectButton.setAttribute('aria-label', `Inspect ${universeLabel(node)}, universe ${node.id}`)
 			inspectButton.append(make('span', 'ue-node-title', universeLabel(node)))
-			let description = `#${compact(node.id)}`
+			let description = `#${shorten(node.id)}`
 			if (visible.filtering || depth > 5) description = universeLineage(tree, node.id).map(universeLabel).join(' › ')
 			inspectButton.append(make('span', 'ue-node-id', description))
 			if (children.length > 0) inspectButton.append(make('span', 'ue-children-count', `${children.length.toLocaleString()} children`))

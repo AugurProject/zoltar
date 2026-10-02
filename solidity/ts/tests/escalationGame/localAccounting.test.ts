@@ -225,7 +225,7 @@ describe('Escalation Game: local accounting and exports', () => {
 		const yesState = await getEscalationGameOutcomeState(client, escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(depositLog.args.depositor, vault, 'deposit log should identify the depositing vault')
 		assert.strictEqual(depositLog.args.outcome, BigInt(QuestionOutcome.Yes), 'deposit log should identify the outcome')
-		assert.strictEqual(depositLog.args.attoRepAmount, amount, 'deposit log should expose the requested amount')
+		assert.strictEqual(depositLog.args.amountAttoRep, amount, 'deposit log should expose the requested amount')
 		assert.strictEqual(depositLog.args.depositIndex, 0n, 'deposit log should expose the new deposit index')
 		assert.strictEqual(depositLog.args.cumulativeRepAmountAttoRep, yesState.balanceAttoRep, 'deposit log should expose the updated outcome balance')
 		assert.strictEqual(depositLog.args.resultingVaultDisputeStakedAttoRep, vaultEscrow, 'deposit log should expose the updated vault escrow')

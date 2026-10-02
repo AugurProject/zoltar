@@ -55,7 +55,7 @@ export function setMarketConfiguration(runtime: LiquidatorRuntime, deps: Liquida
 				settings.desiredPools.map(pool => ({
 					initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 					questionId: pool.questionId.toString(),
-					statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
+					statoblastSecurityMultiplierBps: Number(pool.statoblastSecurityMultiplierBps),
 					universeId: pool.universeId.toString(),
 				})),
 		)

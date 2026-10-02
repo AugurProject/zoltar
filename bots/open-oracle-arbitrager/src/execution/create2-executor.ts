@@ -1,7 +1,7 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { createPublicClient, keccak256, privateKeyToAccount, type Address, type Chain, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import { executorArtifact } from '#contracts/artifacts.generated'
-import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '#monitoring/connectivity'
+import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'

@@ -880,7 +880,7 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	await driver.clickButton('Set commitment limit', 1)
 	await driver.waitForTransactionStatus('Confirmed', 'Set commitment limit')
 	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('setUnderwritingLimit')
-	expect(await readTechnicalTransactionRow(driver, 'Contract')).toStartWith('Security Pool (')
+	expect(await readTechnicalTransactionRow(driver, 'Contract')).toStartWith('SecurityPool (')
 	await driver.waitForBodyText('Commitment limit changed')
 	const exitedBody = await driver.waitForBodyText('Commitment limit\n0 ETH')
 	expect(exitedBody).not.toContain('Queued')

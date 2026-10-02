@@ -32,7 +32,9 @@ test('shared boundaries reject reverse edges, relative bypasses and type-only de
 	expect(findSharedBoundaryViolations('shared/zoltar/ts/example.ts', "import type { T } from '@zoltar/statoblast-shared/example'\n")).toHaveLength(1)
 	expect(findSharedBoundaryViolations('shared/core/ts/example.ts', "export { x } from '../../trading/ts/example'\n")).toHaveLength(1)
 	expect(findSharedBoundaryViolations('ui/zoltarShared/ts/example.ts', "const x = import('@zoltar/open-oracle-shared/example')\n")).toHaveLength(1)
-	expect(findSharedBoundaryViolations('shared/statoblast/ts/example.ts', "import { x } from '@zoltar/zoltar-shared/example'\n")).toHaveLength(0)
+	expect(findSharedBoundaryViolations('shared/statoblast/ts/example.ts', "import { x } from '@zoltar/zoltar-shared/example'\n")).toHaveLength(1)
+	expect(findSharedBoundaryViolations('shared/statoblast/ts/example.ts', "import { x } from '@zoltar/core-shared/example'\n")).toHaveLength(0)
+	expect(findSharedBoundaryViolations('ui/trading/ts/example.ts', "import { x } from '@zoltar/zoltar-shared/example'\n")).toHaveLength(0)
 })
 
 test('downstream contract changes do not invalidate upstream app builds', () => {

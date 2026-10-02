@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { boolean, integer, nonemptyString, optionalRecord, record } from '../src/infrastructure/json-validation.ts'
+import { boolean, formatDecimalAmount, integer, nonemptyString, optionalRecord, parseDecimalAmount, parseSignedDecimalAmount, record } from '../src/infrastructure/json-validation.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 test('JSON validators preserve values and reject invalid shapes and boundaries', () => {
@@ -23,4 +23,17 @@ test('errorMessage handles errors and non-error thrown values', () => {
 	expect(errorMessage(new Error('failed'))).toBe('failed')
 	expect(errorMessage(undefined)).toBe('undefined')
 	expect(errorMessage(42)).toBe('42')
+})
+
+test('strict 18-decimal amounts round-trip unsigned and signed values', () => {
+	expect(parseDecimalAmount('1.5', 'amount')).toBe(15n * 10n ** 17n)
+	expect(parseDecimalAmount('0.000000000000000001', 'amount')).toBe(1n)
+	for (const value of ['-1', '01', '1.', '.5', '1.0000000000000000001', ' 1', '1e3', 1]) expect(() => parseDecimalAmount(value, 'amount')).toThrow('amount must be a non-negative decimal with at most 18 places')
+	expect(parseSignedDecimalAmount('-0.0015', 'profit')).toBe(-15n * 10n ** 14n)
+	expect(parseSignedDecimalAmount('2', 'profit')).toBe(2n * 10n ** 18n)
+	for (const value of ['--1', '-01', '+1', '-1.', '-1.0000000000000000001']) expect(() => parseSignedDecimalAmount(value, 'profit')).toThrow('profit must be a decimal with at most 18 places')
+	expect(formatDecimalAmount(15n * 10n ** 17n)).toBe('1.5')
+	expect(formatDecimalAmount(0n)).toBe('0')
+	expect(formatDecimalAmount(-15n * 10n ** 14n)).toBe('-0.0015')
+	expect(formatDecimalAmount(-2n * 10n ** 18n)).toBe('-2')
 })
