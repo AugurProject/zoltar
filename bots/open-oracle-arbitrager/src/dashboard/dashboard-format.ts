@@ -206,7 +206,7 @@ export function settlementDecisionReason(decision: SettlementDecision) {
 		'risk-limit': 'The UTC-day gas-spend limit leaves no room for this settlement',
 		'signer-unavailable': 'Execution mode is locked until a local signer is set',
 		settled: 'Settled in this scan',
-		unprofitable: 'Reward does not cover projected gas plus the minimum net',
+		unprofitable: 'Reward is below the worst-case gas budget plus minimum net; checked again each scan',
 	}
 	return reasons[decision]
 }

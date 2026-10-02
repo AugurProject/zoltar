@@ -1,3 +1,4 @@
+import { publicOpportunity } from '#state/opportunity-snapshot'
 import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
@@ -94,7 +95,7 @@ function capabilityState(): OperatorState {
 test('publishes skipped reports beside evaluated opportunities with only their scan reason', () => {
 	const state = capabilityState()
 	state.opportunities = [
-		{ decision: 'skipped', reason: 'Venue quotes failed: uniswap-v3 0x1: Venue quote must be positive', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' },
+		{ decision: 'skipped', reason: 'Not enough token liquidity', reasonDetails: 'Pool holds 500 token base units; buy requires 501', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' },
 		{
 			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable',
@@ -712,5 +713,14 @@ test('publishes absent deployments without console errors, keeps execution block
 	} finally {
 		logged.mockRestore()
 		noticed.mockRestore()
+	}
+})
+
+test('keeps safe quote diagnostics but omits credential-bearing opportunity details', () => {
+	const skipped = { decision: 'skipped' as const, reason: 'Venue quote unavailable', reportId: '8', token: address, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' as const }
+	expect(publicOpportunity({ ...skipped, reasonDetails: 'PoolNotInitialized()' })).toMatchObject({ reasonDetails: 'PoolNotInitialized()' })
+	for (const reasonDetails of ['RPC https://operator:secret@rpc.example/key failed', 'api_key=private', '/home/operator/private.json']) {
+		const projected = publicOpportunity({ ...skipped, reasonDetails })
+		expect(projected.decision === 'skipped' ? projected.reasonDetails : undefined).toBeUndefined()
 	}
 })

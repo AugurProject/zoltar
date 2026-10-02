@@ -2,7 +2,7 @@ import type { PublicSettlementRecord, SettlementCandidateSnapshot, SettlementSna
 import { countLabel, exactAmount, rewardWithdrawalLabel, settlementDecisionReason, settlementQueueCountLabel } from './dashboard-format.js'
 import { decisionBadge, element, type ExplorerLink, row, setText } from './dom.js'
 
-const QUEUE_LABELS = ['Report', 'Decision', 'Reason', 'Reward', 'Projected gas', 'Projected net', 'Past deadline', 'Token', 'Coordinator']
+const QUEUE_LABELS = ['Report', 'Decision', 'Reason', 'Reward', 'Gas budget', 'Net at fee ceiling', 'Past deadline', 'Token', 'Coordinator']
 const HISTORY_LABELS = ['Submitted', 'Kind', 'Report', 'Status', 'Reward', 'Projected gas', 'Actual gas', 'Transaction']
 
 function queueRow(candidate: SettlementCandidateSnapshot, link: ExplorerLink) {

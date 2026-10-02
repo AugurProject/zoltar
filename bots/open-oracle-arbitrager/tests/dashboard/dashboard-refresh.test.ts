@@ -1183,3 +1183,65 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	if (!(universeSave instanceof window.HTMLButtonElement)) throw new Error('Missing universe save button')
 	expect(universeSave.disabled).toBe(true)
 })
+
+test('uses one activity view, groups repeats, and keeps diagnostics expanded across refreshes', async () => {
+	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const state = operatorState()
+	const diagnostic = `Venue quote failed: 0x${'a'.repeat(300)}`
+	state.opportunities = [{ decision: 'skipped', reason: 'Uniswap V3: Not enough token liquidity', reasonDetails: diagnostic, reportId: '8', token: address, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' }]
+	const operation = { category: 'decision' as const, level: 'info' as const, message: 'Skipped report', reason: 'Not enough token liquidity', details: diagnostic, reportId: '8', timestamp: '2026-10-02T06:50:00Z' }
+	state.operationLog = [operation, { ...operation, timestamp: '2026-10-02T06:49:00Z' }]
+	const snapshot = () =>
+		operatorSnapshot(state, settings.strategy, settings.submission, settings.connectivity, {
+			deployment: settings.deployment,
+			execute: false,
+			executor: undefined,
+			expectedChainId: 11_155_111,
+			explorerUrl: 'https://sepolia.etherscan.io',
+			network: 'sepolia',
+			networkConfigured: true,
+			openOracle: settings.deployment.openOracle,
+			queuedSigner: undefined,
+			savedWallet: undefined,
+			wallet: undefined,
+		})
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setPaused: () => undefined,
+		updateConnectivity: value => value,
+		updateSigner: () => ({ wallet: undefined }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const { window, triggerRefresh } = await mountDashboard(server, '/operations#transaction-tracking')
+	const views = () => [...window.document.querySelectorAll('[data-activity-view]')].filter(view => !view.hasAttribute('hidden')).map(view => view.id)
+	expect(views()).toEqual(['transaction-tracking'])
+	const select = element(window, 'activity-view', window.HTMLSelectElement)
+	select.value = 'operations-log'
+	select.dispatchEvent(new window.Event('change'))
+	expect(views()).toEqual(['operations-log'])
+	const body = element(window, 'operations-body', window.HTMLTableSectionElement)
+	expect(body.children).toHaveLength(1)
+	expect(body.children[0]?.lastElementChild?.textContent).toBe('2')
+	const details = body.querySelector('details')
+	if (!(details instanceof window.HTMLDetailsElement)) throw new Error('Missing operation details')
+	expect(details.open).toBe(false)
+	expect(details.querySelector('pre')?.textContent).toBe(diagnostic)
+	details.open = true
+	state.operationLog.unshift({ ...operation, timestamp: '2026-10-02T06:51:00Z' })
+	triggerRefresh()
+	for (let attempt = 0; attempt < 100 && body.children[0]?.lastElementChild?.textContent !== '3'; attempt++) await Bun.sleep(10)
+	expect(body.querySelector('details')?.hasAttribute('open')).toBe(true)
+	expect(body.children[0]?.lastElementChild?.textContent).toBe('3')
+	expect(views()).toEqual(['operations-log'])
+	const reason = element(window, 'opportunities-body', window.HTMLTableSectionElement).querySelector('details')
+	expect(reason?.hasAttribute('open')).toBe(false)
+	expect(reason?.querySelector('pre')?.textContent).toBe(diagnostic)
+	window.location.hash = '#position-lifecycle'
+	window.dispatchEvent(new window.HashChangeEvent('hashchange'))
+	expect(views()).toEqual(['position-lifecycle'])
+})
