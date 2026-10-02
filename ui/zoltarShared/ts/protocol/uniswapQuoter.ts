@@ -348,6 +348,6 @@ export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenI
 // Pool ID: 0x75d479eb83b7c9008ab854e74625a01841e5b3e06af40a89c10998ad2664f356
 const REP_USDC_V4_POOL: PoolConfig = { fee: 10001, tickSpacing: 200 }
 
-export async function quoteRepForUsdcV4WithSource(client: ReadClient, attoRepAmount: bigint) {
-	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), attoRepAmount, [REP_USDC_V4_POOL])
+export async function quoteRepForUsdcV4WithSource(client: ReadClient, amountAttoRep: bigint) {
+	return await quoteBestExactInputWithSource(client, getRepAddress(), getUsdcAddress(), amountAttoRep, [REP_USDC_V4_POOL])
 }

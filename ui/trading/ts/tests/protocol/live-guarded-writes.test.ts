@@ -122,7 +122,7 @@ describe('live guarded transaction writes', () => {
 		longBalance = 12n
 		await expect(submitFreshExit(client, configuration, account, largerApprovedQuote, async write => await write())).rejects.toThrow('approved exit transfer')
 		longBalance = 11n
-		await expect(simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)).rejects.toThrow('Insufficient YES balance for this exit')
+		await expect(simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)).rejects.toThrow('Insufficient Yes balance for this exit')
 	})
 
 	test('accepts improved YES and NO exit prices without relaxing the approved transfer cap', async () => {

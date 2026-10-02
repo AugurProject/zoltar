@@ -3,8 +3,9 @@ import { networkDeployment } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
-import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
-import { decimalWeth, parseDecimalWeth, type MutableStrategy, type StrategySettings } from '#state/operator-state'
+import { type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { parseQuorumConnectivitySettings, unconfiguredQuorumConnectivity, type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
+import { decimalWeth, parseDecimalWeth, strategySettings, type MutableStrategy, type StrategySettings } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { parseSettlementSettings, settlementJournalPath, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
 import { configurationRevisionConflict, contentRevision, parseJsonDocument, readOwnerFileIfPresent, writeRevisionedFile, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
@@ -13,7 +14,7 @@ import { PRESERVE_PRIVATE_KEY, signerCandidate } from '@zoltar/bot-shared/config
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { integer as validateInteger, record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -21,9 +22,11 @@ import { resolve } from 'node:path'
 type RuntimeSettings = {
 	execute: boolean
 	historyFile: string
-	lookbackBlocks: bigint
+	logLookbackBlocks: bigint
 	maxHedgeSlippageBps: bigint
 	once: boolean
+	/** The main loop interval between scans. */
+	pollMilliseconds: number
 	positionFile: string
 	priceHistoryFile: string
 	riskLimits: RiskLimits
@@ -35,13 +38,12 @@ type RuntimeSettings = {
 export type PersistedOperatorSettings = {
 	approvedUniverses: readonly bigint[]
 	centralizedMarkets: CentralizedMarketSettings
-	connectivity: ConnectivitySettings
+	connectivity: QuorumConnectivitySettings
 	deployment: DeploymentSettings
 	network: NetworkName
 	networkConfigured: boolean
 	paused: boolean
 	privateKey: Hex | undefined
-	rpcQuorum: RpcQuorumRequirement
 	runtime: RuntimeSettings
 	settlement: MutableSettlement
 	strategy: MutableStrategy
@@ -69,11 +71,12 @@ function defaultCentralizedMarkets(assetAddress: `0x${string}`, assetChainId: nu
 }
 
 /** The runtime fields the dashboard may change while the operator runs; the rest of `runtime` is fixed for the process. */
-export type RuntimeLimits = Pick<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeSlippageBps' | 'riskLimits'>
+export type RuntimeLimits = Pick<RuntimeSettings, 'logLookbackBlocks' | 'maxHedgeSlippageBps' | 'pollMilliseconds' | 'riskLimits'>
 
 export type StoredRuntimeLimits = {
-	lookbackBlocks: string
-	maxHedgeSlippageBps: string
+	logLookbackBlocks: number
+	maxHedgeSlippageBps: number
+	pollMilliseconds: number
 	riskLimits: {
 		lifecycleGasReserveWeth: string
 		maxConcurrentPositions: number
@@ -90,27 +93,32 @@ export type StoredCentralizedMarketSettings = Omit<ReturnType<typeof serializeCe
 export type StoredOperatorSettings = {
 	approvedUniverses: readonly string[]
 	centralizedMarkets: StoredCentralizedMarketSettings
-	connectivity?: ConnectivitySettings | undefined
+	connectivity?: QuorumConnectivitySettings | undefined
 	deployment: StoredDeploymentSettings
 	network?: NetworkName | undefined
 	networkConfigured?: boolean | undefined
 	paused: boolean
 	privateKey?: Hex | typeof PRESERVE_PRIVATE_KEY | undefined
-	rpcQuorum?: RpcQuorumRequirement | undefined
 	runtime: StoredRuntimeSettings
 	settlement: SettlementSettings
 	strategy: StrategySettings
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
-	version: 4
+	version: typeof SETTINGS_VERSION
 }
+
+/**
+ * Version 5 stores the RPC agreement requirement and quorum readers under `connectivity`, the main loop interval as
+ * `runtime.pollMilliseconds`, the log window as the number `runtime.logLookbackBlocks`, and basis points as numbers.
+ */
+const SETTINGS_VERSION = 5
 
 function requiredRecord(value: unknown, name = 'Operator configuration') {
 	return record(value, name, `${name} must be a JSON object`)
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'settlement', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'settlement', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -121,11 +129,6 @@ function validatedKeys(record: Record<string, unknown>) {
 
 function integer(value: unknown, name: string, minimum: number, maximum: number) {
 	return validateInteger(value, name, minimum, maximum, `${name} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
-}
-
-function nonnegativeBigInt(value: unknown, name: string) {
-	if (typeof value !== 'string' || !/^\d+$/.test(value)) throw new Error(`${name} must be a nonnegative integer string`)
-	return BigInt(value)
 }
 
 function weth(value: unknown, name: string) {
@@ -148,24 +151,21 @@ export function durableJournalPaths(runtime: Pick<RuntimeSettings, 'historyFile'
 
 const durableJournalPathsMustBeDistinct = 'Runtime historyFile, positionFile, priceHistoryFile, and the derived settlement journal must use distinct paths'
 
-const RUNTIME_LIMIT_KEYS = ['lookbackBlocks', 'maxHedgeSlippageBps', 'riskLimits']
+const RUNTIME_LIMIT_KEYS = ['logLookbackBlocks', 'maxHedgeSlippageBps', 'pollMilliseconds', 'riskLimits']
 
 /** Parses the runtime fields the dashboard's risk form edits; `runtime` must carry them and may carry nothing else. */
 function parseRuntimeLimits(runtime: Record<string, unknown>): RuntimeLimits {
-	if (RUNTIME_LIMIT_KEYS.some(key => !(key in runtime))) throw new Error('Runtime limits require lookbackBlocks, maxHedgeSlippageBps, and riskLimits')
+	if (RUNTIME_LIMIT_KEYS.some(key => !(key in runtime))) throw new Error('Runtime limits require logLookbackBlocks, maxHedgeSlippageBps, pollMilliseconds, and riskLimits')
 	const risk = requiredRecord(runtime['riskLimits'], 'Runtime risk limits')
 	const riskKeys = ['lifecycleGasReserveWeth', 'maxConcurrentPositions', 'maxDailyGasSpendWeth', 'maxPositionNotionalWeth', 'maxTotalLockedWeth']
 	if (Object.keys(risk).some(key => !riskKeys.includes(key)) || riskKeys.some(key => !(key in risk))) throw new Error('Runtime risk limits require exactly the supported risk fields')
 	const maxPositionNotionalAttoWeth = weth(risk['maxPositionNotionalWeth'], 'Runtime maxPositionNotionalWeth')
 	const maxTotalLockedAttoWeth = weth(risk['maxTotalLockedWeth'], 'Runtime maxTotalLockedWeth')
 	if (maxPositionNotionalAttoWeth > maxTotalLockedAttoWeth) throw new Error('Runtime maxPositionNotionalAttoWeth cannot exceed maxTotalLockedAttoWeth')
-	const maxHedgeSlippageBps = nonnegativeBigInt(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps')
-	if (maxHedgeSlippageBps > 1_000n) throw new Error('Runtime maxHedgeSlippageBps must be from 0 to 1000')
-	const lookbackBlocks = nonnegativeBigInt(runtime['lookbackBlocks'], 'Runtime lookbackBlocks')
-	if (lookbackBlocks > 256n) throw new Error('Runtime lookbackBlocks must be from 0 through 256')
 	return {
-		lookbackBlocks,
-		maxHedgeSlippageBps,
+		logLookbackBlocks: BigInt(integer(runtime['logLookbackBlocks'], 'Runtime logLookbackBlocks', 0, 256)),
+		maxHedgeSlippageBps: BigInt(integer(runtime['maxHedgeSlippageBps'], 'Runtime maxHedgeSlippageBps', 0, 1_000)),
+		pollMilliseconds: integer(runtime['pollMilliseconds'], 'Runtime pollMilliseconds', 1_000, 3_600_000),
 		riskLimits: {
 			lifecycleGasReserveAttoWeth: weth(risk['lifecycleGasReserveWeth'], 'Runtime lifecycleGasReserveWeth'),
 			maxConcurrentPositions: integer(risk['maxConcurrentPositions'], 'Runtime maxConcurrentPositions', 1, 1_000),
@@ -186,8 +186,9 @@ export function parseRuntimeLimitsRequest(value: unknown): RuntimeLimits {
 
 export function serializeRuntimeLimits(limits: RuntimeLimits): StoredRuntimeLimits {
 	return {
-		lookbackBlocks: limits.lookbackBlocks.toString(),
-		maxHedgeSlippageBps: limits.maxHedgeSlippageBps.toString(),
+		logLookbackBlocks: Number(limits.logLookbackBlocks),
+		maxHedgeSlippageBps: Number(limits.maxHedgeSlippageBps),
+		pollMilliseconds: limits.pollMilliseconds,
 		riskLimits: {
 			lifecycleGasReserveWeth: decimalWeth(limits.riskLimits.lifecycleGasReserveAttoWeth),
 			maxConcurrentPositions: limits.riskLimits.maxConcurrentPositions,
@@ -216,10 +217,7 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	if (Object.keys(runtime).some(key => !keys.includes(key)) || keys.some(key => !(key in runtime))) throw new Error('Runtime settings require exactly the supported runtime fields')
 	if (typeof runtime['execute'] !== 'boolean' || typeof runtime['once'] !== 'boolean' || typeof runtime['ui'] !== 'boolean') throw new Error('Runtime execute, once, and ui settings must be booleans')
 	if (runtime['uiHost'] !== '127.0.0.1' && runtime['uiHost'] !== '0.0.0.0') throw new Error('Runtime uiHost must be 127.0.0.1 or 0.0.0.0')
-	// Version 4 previously shipped 50000 as the Docker default. Migrate only that known value when a complete document is
-	// parsed (file load and the complete editor) so existing named volumes can start under the bounded scanner; the
-	// focused risk form submits limits alone and gets the ordinary range error instead.
-	const limits = parseRuntimeLimits(runtime['lookbackBlocks'] === '50000' ? { ...runtime, lookbackBlocks: '256' } : runtime)
+	const limits = parseRuntimeLimits(runtime)
 	if (runtime['once'] && runtime['ui']) throw new Error('Runtime once and ui cannot both be enabled')
 	const historyFile = filePath(runtime['historyFile'], 'Runtime historyFile')
 	const positionFile = filePath(runtime['positionFile'], 'Runtime positionFile')
@@ -239,10 +237,58 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	}
 }
 
+/** Converts a canonical decimal integer string from an older file to a JSON number; anything else is left for validation to reject. */
+function migratedInteger(value: unknown) {
+	return typeof value === 'string' && /^(?:0|[1-9]\d*)$/.test(value) ? Number(value) : value
+}
+
+function migratedRecord(value: unknown) {
+	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
+}
+
+/**
+ * Upgrades a version 4 document to version 5, so files and dashboard-saved settings written by earlier releases keep
+ * loading. Version 4 stored `rpcQuorum` at the top level, quorum readers in `deployment.quorumRpcUrls`, the main loop
+ * interval in `strategy.pollMilliseconds`, and `runtime.lookbackBlocks`, `runtime.maxHedgeSlippageBps`, and
+ * `strategy.minimumProfitBps` as strings. An unconfigured profile cannot retain RPC connectivity, so its quorum readers
+ * and policy are dropped. A shape the conversion does not recognize is passed through for validation to reject.
+ */
+function migrateVersion4(document: Record<string, unknown>): Record<string, unknown> {
+	const { rpcQuorum, ...root } = document
+	const deployment = migratedRecord(root['deployment'])
+	const runtime = migratedRecord(root['runtime'])
+	const strategy = migratedRecord(root['strategy'])
+	const connectivity = migratedRecord(root['connectivity'])
+	const migrated: Record<string, unknown> = { ...root, version: SETTINGS_VERSION }
+	const quorumRpcUrls = deployment?.['quorumRpcUrls']
+	if (deployment !== undefined) {
+		const { quorumRpcUrls: _quorumRpcUrls, ...venues } = deployment
+		migrated['deployment'] = venues
+	}
+	if (connectivity !== undefined) migrated['connectivity'] = { ...connectivity, quorumRpcUrls: quorumRpcUrls ?? [], ...(rpcQuorum === undefined ? {} : { rpcQuorum }) }
+	if (runtime !== undefined) {
+		const { lookbackBlocks, ...rest } = runtime
+		// Version 4 previously shipped 50000 as the Docker default; migrate only that known value so existing named volumes
+		// start under the bounded scanner.
+		migrated['runtime'] = {
+			...rest,
+			logLookbackBlocks: lookbackBlocks === '50000' ? 256 : migratedInteger(lookbackBlocks),
+			maxHedgeSlippageBps: migratedInteger(rest['maxHedgeSlippageBps']),
+			...(strategy !== undefined && 'pollMilliseconds' in strategy ? { pollMilliseconds: strategy['pollMilliseconds'] } : {}),
+		}
+	}
+	if (strategy !== undefined) {
+		const { pollMilliseconds: _pollMilliseconds, ...rest } = strategy
+		migrated['strategy'] = { ...rest, minimumProfitBps: migratedInteger(rest['minimumProfitBps']) }
+	}
+	return migrated
+}
+
 export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex): PersistedOperatorSettings {
-	const record = requiredRecord(value)
+	const document = requiredRecord(value)
+	const record = document['version'] === 4 ? migrateVersion4(document) : document
 	validatedKeys(record)
-	if (record['version'] !== 4) throw new Error('Operator configuration uses an unsupported version; expected version 4')
+	if (record['version'] !== SETTINGS_VERSION) throw new Error('Operator configuration uses an unsupported version; expected version 5, or version 4 to migrate')
 	const networkConfigured = record['networkConfigured'] === undefined ? record['connectivity'] !== undefined : record['networkConfigured'] === true
 	if (record['networkConfigured'] !== undefined && typeof record['networkConfigured'] !== 'boolean') throw new Error('Operator configuration networkConfigured must be a boolean')
 	if (record['network'] !== undefined && record['network'] !== 'mainnet' && record['network'] !== 'sepolia') throw new Error('Operator configuration network must be mainnet or sepolia')
@@ -255,25 +301,21 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 		minimumProfitAttoWeth: 0n,
 		minimumRemainingBlocks: 1n,
 		minimumRemainingSeconds: 1n,
-		pollMilliseconds: 1_000,
 		twapSeconds: 60,
 	}
 	updateStrategyFromRequest(strategy, record['strategy'])
 	const privateKeyValue = record['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : record['privateKey']
 	const candidate = signerCandidate(privateKeyValue ?? null)
-	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : rpcQuorumRequirement()
-	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Operator rpcQuorum must be 1 or 2')
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const network = record['network'] === 'sepolia' ? 'sepolia' : 'mainnet'
 	const deployment = validateDeploymentSettings(record['deployment'], network)
-	const connectivity = networkConfigured ? validateConnectivitySettings(record['connectivity']) : { publicRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
-	validateIndependentReadRpcUrls(connectivity.readRpcUrl, deployment.quorumRpcUrls)
+	const connectivity = networkConfigured ? parseQuorumConnectivitySettings(record['connectivity']) : unconfiguredQuorumConnectivity()
 	const centralizedMarkets = parseStoredCentralizedMarkets(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, networkDeployment(network).chainId), deployment.rep, network)
 	const submission = validateSubmissionSettings(record['submission'])
 	const settlement = parseSettlementSettings(record['settlement'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
-	if (runtime.execute && deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
+	if (runtime.execute && connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(connectivity.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 	return {
 		centralizedMarkets,
 		connectivity,
@@ -282,7 +324,6 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 		networkConfigured,
 		paused: record['paused'],
 		privateKey: candidate.privateKey,
-		rpcQuorum,
 		runtime,
 		settlement,
 		strategy,
@@ -293,8 +334,8 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 }
 
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
-	const { quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = settings.deployment
-	const deployment = { quorumRpcUrls, uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
+	const { uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled } = settings.deployment
+	const deployment = { uniswapV2Enabled, uniswapV3Enabled, uniswapV4Enabled }
 	return {
 		centralizedMarkets: serializeStoredCentralizedMarkets(settings.centralizedMarkets),
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
@@ -303,7 +344,6 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 		networkConfigured: settings.networkConfigured,
 		paused: settings.paused,
 		privateKey: redactPrivateKey && settings.privateKey !== undefined ? PRESERVE_PRIVATE_KEY : settings.privateKey,
-		rpcQuorum: settings.rpcQuorum,
 		runtime: {
 			...serializeRuntimeLimits(settings.runtime),
 			execute: settings.runtime.execute,
@@ -316,19 +356,11 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 			uiPort: settings.runtime.uiPort,
 		},
 		settlement: settlementSettings(settings.settlement),
-		strategy: {
-			maxSpotTwapTicks: settings.strategy.maxSpotTwapTicks.toString(),
-			minimumProfitBps: settings.strategy.minimumProfitBps.toString(),
-			minimumProfitWeth: decimalWeth(settings.strategy.minimumProfitAttoWeth),
-			minimumRemainingBlocks: settings.strategy.minimumRemainingBlocks.toString(),
-			minimumRemainingSeconds: settings.strategy.minimumRemainingSeconds.toString(),
-			pollMilliseconds: settings.strategy.pollMilliseconds,
-			twapSeconds: settings.strategy.twapSeconds,
-		},
+		strategy: strategySettings(settings.strategy),
 		submission: settings.submission,
 		approvedUniverses: settings.approvedUniverses.map(id => id.toString()),
 		tokenAddresses: settings.tokenAddresses,
-		version: 4,
+		version: SETTINGS_VERSION,
 	}
 }
 

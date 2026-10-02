@@ -20,13 +20,13 @@ describe('resolveRepPrice', () => {
 		expect(resolve('uniswap', { uniswapPrice: undefined })).toMatchObject({ price: undefined, reason: 'unavailable', source: undefined })
 	})
 
-	test('keeps the latest Open Oracle price when selected and marks it stale after expiry', () => {
+	test('keeps the latest OpenOracle price when selected and marks it stale after expiry', () => {
 		expect(resolve('open-oracle')).toEqual({ observedAt: settlementTimestamp, price: 20n, reason: 'selected', setting: 'open-oracle', source: 'open-oracle', stale: false, validUntil })
 		expect(resolve('open-oracle', { now: validUntil })).toMatchObject({ price: 20n, source: 'open-oracle', stale: true })
 		expect(resolve('open-oracle', { oracleManager: { isPriceValid: false, price: 20n, settlementTimestamp } })).toMatchObject({ price: 20n, stale: true })
 	})
 
-	test('treats a zero settlement timestamp as no Open Oracle report', () => {
+	test('treats a zero settlement timestamp as no OpenOracle report', () => {
 		const unreported = { price: 0n, settlementTimestamp: 0n }
 		expect(resolve('open-oracle', { poolOracle: unreported })).toMatchObject({ price: undefined, reason: 'unavailable' })
 		expect(resolve('open-oracle-fallback', { poolOracle: unreported })).toMatchObject({ price: 10n, reason: 'oracle-missing', source: 'uniswap' })
@@ -36,7 +36,7 @@ describe('resolveRepPrice', () => {
 		expect(resolve('open-oracle', { oracleManager: { isPriceValid: true, price: 30n, settlementTimestamp: settlementTimestamp + 60n } })).toMatchObject({ observedAt: settlementTimestamp + 60n, price: 30n })
 	})
 
-	test('uses a fresh Open Oracle price and otherwise falls back to Uniswap', () => {
+	test('uses a fresh OpenOracle price and otherwise falls back to Uniswap', () => {
 		expect(resolve('open-oracle-fallback')).toMatchObject({ price: 20n, reason: 'selected', source: 'open-oracle', stale: false })
 		expect(resolve('open-oracle-fallback', { oracleManager: { isPriceValid: false, price: 20n, settlementTimestamp } })).toMatchObject({ price: 10n, reason: 'oracle-expired', source: 'uniswap' })
 		expect(resolve('open-oracle-fallback', { poolOracle: undefined })).toMatchObject({ price: 10n, reason: 'oracle-missing' })
@@ -45,7 +45,7 @@ describe('resolveRepPrice', () => {
 		expect(resolve('open-oracle-fallback', { now: validUntil, uniswapPrice: undefined })).toMatchObject({ price: undefined, reason: 'unavailable' })
 	})
 
-	test('falls back at and after the canonical Open Oracle expiry boundary', () => {
+	test('falls back at and after the canonical OpenOracle expiry boundary', () => {
 		expect(resolve('open-oracle-fallback', { now: validUntil - 1n })).toMatchObject({ price: 20n, source: 'open-oracle' })
 		expect(resolve('open-oracle-fallback', { now: validUntil })).toMatchObject({ price: 10n, reason: 'oracle-expired' })
 		expect(resolve('open-oracle-fallback', { now: validUntil + 1n })).toMatchObject({ price: 10n, reason: 'oracle-expired' })
@@ -54,25 +54,25 @@ describe('resolveRepPrice', () => {
 
 describe('describeRepPriceStatus', () => {
 	test('names the source and age of a fresh price', () => {
-		expect(describeRepPriceStatus(resolve('open-oracle'), freshNow)).toEqual({ detail: '3m ago', state: 'fresh', title: 'via Open Oracle' })
-		expect(describeRepPriceStatus(resolve('open-oracle'), undefined)).toEqual({ detail: undefined, state: 'fresh', title: 'via Open Oracle' })
+		expect(describeRepPriceStatus(resolve('open-oracle'), freshNow)).toEqual({ detail: '3m ago', state: 'fresh', title: 'via OpenOracle' })
+		expect(describeRepPriceStatus(resolve('open-oracle'), undefined)).toEqual({ detail: undefined, state: 'fresh', title: 'via OpenOracle' })
 		expect(describeRepPriceStatus(resolve('uniswap'), freshNow)).toEqual({ detail: 'live', state: 'fresh', title: 'via Uniswap' })
 	})
 
 	test('explains why the fallback setting used Uniswap', () => {
-		expect(describeRepPriceStatus(resolve('open-oracle-fallback', { now: validUntil }), validUntil).detail).toBe('Open Oracle expired')
-		expect(describeRepPriceStatus(resolve('open-oracle-fallback', { poolOracle: undefined }), freshNow).detail).toBe('no Open Oracle price')
+		expect(describeRepPriceStatus(resolve('open-oracle-fallback', { now: validUntil }), validUntil).detail).toBe('OpenOracle expired')
+		expect(describeRepPriceStatus(resolve('open-oracle-fallback', { poolOracle: undefined }), freshNow).detail).toBe('no OpenOracle price')
 	})
 
 	test('marks an expired price as stale with how long ago it expired', () => {
 		const now = validUntil + 2n * 60n * 60n
-		expect(describeRepPriceStatus(resolve('open-oracle', { now }), now)).toEqual({ detail: 'Open Oracle price expired 2h 0m ago', state: 'stale', title: 'Stale' })
-		expect(describeRepPriceStatus(resolve('open-oracle', { oracleManager: { isPriceValid: false, price: 20n, settlementTimestamp } }), freshNow)).toEqual({ detail: 'Open Oracle price not valid', state: 'stale', title: 'Stale' })
+		expect(describeRepPriceStatus(resolve('open-oracle', { now }), now)).toEqual({ detail: 'OpenOracle price expired 2h 0m ago', state: 'stale', title: 'Stale' })
+		expect(describeRepPriceStatus(resolve('open-oracle', { oracleManager: { isPriceValid: false, price: 20n, settlementTimestamp } }), freshNow)).toEqual({ detail: 'OpenOracle price not valid', state: 'stale', title: 'Stale' })
 	})
 
 	test('names the missing price for each setting', () => {
 		expect(describeRepPriceStatus(resolve('uniswap', { uniswapPrice: undefined }), freshNow)).toEqual({ detail: undefined, state: 'unavailable', title: 'Uniswap price unavailable' })
-		expect(describeRepPriceStatus(resolve('open-oracle', { poolOracle: undefined }), freshNow).title).toBe('No Open Oracle price')
+		expect(describeRepPriceStatus(resolve('open-oracle', { poolOracle: undefined }), freshNow).title).toBe('No OpenOracle price')
 		expect(describeRepPriceStatus(resolve('open-oracle-fallback', { poolOracle: undefined, uniswapPrice: undefined }), freshNow).title).toBe('No REP price')
 	})
 })

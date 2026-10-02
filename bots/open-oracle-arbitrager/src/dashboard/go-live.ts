@@ -8,6 +8,7 @@ import { shorten } from './dom.js'
 export type GoLiveConfiguration = {
 	deployment: DashboardDeployment
 	execute: boolean
+	quorumRpcUrls: readonly string[]
 	relayUrls: readonly string[]
 	rpcQuorum: 1 | 2
 	submissionMode: 'private' | 'public'
@@ -56,7 +57,7 @@ function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveCo
 	const coordinators = snapshot.coordinatorAddresses.length
 	return [
 		signerRow(signer),
-		quorumRpcRow(configuration.deployment.quorumRpcUrls.length, configuration.rpcQuorum),
+		quorumRpcRow(configuration.quorumRpcUrls.length, configuration.rpcQuorum),
 		{ detail: venueEnabled ? 'Enabled' : 'Enable a Uniswap version under Venues and executor', label: 'Trading venue', ready: venueEnabled },
 		executorRow(snapshot),
 		canonicalContractsRow(snapshot, configuration.deployment),

@@ -105,7 +105,7 @@ describe('QuestionsView', () => {
 		expect(document.body.textContent).not.toContain('Search this page')
 		expect(documentQueries.getByText(question.title)).not.toBeNull()
 		expect(document.body.textContent).not.toContain('Statoblast')
-		expect(document.body.textContent).not.toContain('Open Oracle')
+		expect(document.body.textContent).not.toContain('OpenOracle')
 		expect(document.body.textContent).not.toContain('Security Pool')
 
 		await act(() => {

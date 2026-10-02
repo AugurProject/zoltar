@@ -37,7 +37,7 @@ export function renderBalances(snapshot: PublicOperatorSnapshot) {
 
 const transactionLabels = ['Updated', 'Report', 'Transaction', 'Kind', 'Delivery', 'Status', 'Target results', 'Estimated net', 'Tracked net', 'Actual gas']
 
-export function renderTransactions(transactions: readonly PublicTransactionActivity[], explorerUrl = 'https://etherscan.io') {
+export function renderTransactions(transactions: readonly PublicTransactionActivity[], explorerUrl: string) {
 	const filter = element('transaction-filter', HTMLSelectElement).value
 	const visible = transactions.filter(transaction => transactionMatchesFilter(transaction.status, filter))
 	const rows = visible.map(transaction => {

@@ -1,5 +1,4 @@
-import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
-import { compareBigint } from '@zoltar/core-shared/math/bigint'
+import { ceilDiv, compareBigint } from '@zoltar/core-shared/math/bigint'
 import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'
 import { plainRecord } from './record-serialization.ts'
 
@@ -170,11 +169,6 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 	if (typeof value !== 'string') throw new Error(`${name} must be a non-negative decimal integer`)
 	if (!/^\d+$/.test(value)) throw new Error(`${name} must be a non-negative integer`)
 	return BigInt(value)
-}
-
-const ceilDiv = (numerator: bigint, denominator: bigint): bigint => {
-	if (denominator <= 0n) throw new Error('Exact division requires a positive denominator')
-	return divideUp(numerator, denominator)
 }
 
 export type VaultRiskInput = {

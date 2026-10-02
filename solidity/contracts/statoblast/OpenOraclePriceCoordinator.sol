@@ -558,10 +558,10 @@ contract OpenOraclePriceCoordinator {
 		emit CoordinatorStateCheckpoint(reason, reportId, operationId, pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationIds.length);
 	}
 
-	function _previewWithdrawRep(address vault, uint256 attoRepAmount) private view returns (uint256 withdrawBackingUnits, uint256 withdrawRepAmountAttoRep) {
-		if (attoRepAmount == 0) return (0, 0);
+	function _previewWithdrawRep(address vault, uint256 amountAttoRep) private view returns (uint256 withdrawBackingUnits, uint256 withdrawRepAmountAttoRep) {
+		if (amountAttoRep == 0) return (0, 0);
 		(uint256 vaultBackingUnits, , , ) = securityPool.securityVaults(vault);
-		uint256 backingUnitsToWithdraw = securityPool.attoRepToBackingUnits(attoRepAmount);
+		uint256 backingUnitsToWithdraw = securityPool.attoRepToBackingUnits(amountAttoRep);
 		uint256 minimumRemainingBackingUnits = securityPool.attoRepToBackingUnits(securityPool.minimumVaultRepDepositAttoRep());
 		withdrawBackingUnits =
 			backingUnitsToWithdraw + minimumRemainingBackingUnits > vaultBackingUnits

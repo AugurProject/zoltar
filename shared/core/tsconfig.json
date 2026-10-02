@@ -4,7 +4,8 @@
 		"rootDir": "ts",
 		"outDir": "js",
 		"baseUrl": ".",
-		"paths": {}
+		"paths": {},
+		"types": ["bun-types"]
 	},
 	"include": ["./ts/**/*.ts"],
 	"exclude": ["./ts/**/*.test.ts"]

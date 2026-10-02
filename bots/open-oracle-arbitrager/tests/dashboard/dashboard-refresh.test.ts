@@ -50,7 +50,6 @@ function strategy(minimumProfitBps: bigint): MutableStrategy {
 		minimumProfitBps,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
-		pollMilliseconds: 12_000,
 		twapSeconds: 1_800,
 	}
 }
@@ -68,12 +67,11 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	let capable = false
 	let stateFailure = true
 	const submission = validateSubmissionSettings({ mode: 'public', relayUrls: [] })
-	const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
+	const connectivity = { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/', rpcQuorum: 1 }
 	const deployment = {
 		coordinatorAddresses: [],
 		executor: undefined,
 		openOracle: address,
-		quorumRpcUrls: [],
 		rep: address,
 		uniswapV2Enabled: false,
 		uniswapV3Enabled: true,
@@ -92,16 +90,14 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		deployment,
 		network,
 		networkConfigured,
-		rpcQuorum: 1,
 		runtime: example.runtime,
 		settlement: example.settlement,
 		strategy: {
 			maxSpotTwapTicks: currentStrategy.maxSpotTwapTicks.toString(),
-			minimumProfitBps: currentStrategy.minimumProfitBps.toString(),
+			minimumProfitBps: Number(currentStrategy.minimumProfitBps),
 			minimumProfitWeth: '0.01',
 			minimumRemainingBlocks: currentStrategy.minimumRemainingBlocks.toString(),
 			minimumRemainingSeconds: currentStrategy.minimumRemainingSeconds.toString(),
-			pollMilliseconds: currentStrategy.pollMilliseconds,
 			twapSeconds: currentStrategy.twapSeconds,
 		},
 		submission,
@@ -134,7 +130,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	}
 	const server = startDashboardServer(0, {
 		getConfiguration: async () => {
-			const captured = { configuration: configuration(), revision: `${network}-revision` }
+			const captured = { configuration: configuration(), effectiveRpcQuorum: connectivity.rpcQuorum, revision: `${network}-revision` }
 			const gate = configurationGate
 			if (gate !== undefined) await gate
 			return captured
@@ -390,7 +386,7 @@ async function mountDashboard(server: ReturnType<typeof startDashboardServer>, p
 test('pending executor deployment recovery owns the overview notice, the executor form, and the resume refusal until it is reconciled', async () => {
 	const settings = parseOperatorSettings({
 		...example,
-		connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' },
+		connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' },
 		network: 'sepolia',
 		networkConfigured: true,
 	})
@@ -416,7 +412,7 @@ test('pending executor deployment recovery owns the overview notice, the executo
 			wallet: address,
 		})
 	const server = startDashboardServer(0, {
-		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: settings.connectivity.rpcQuorum, revision: 'fixture' }),
 		getSnapshot: snapshot,
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
@@ -530,7 +526,7 @@ test('pending executor deployment recovery owns the overview notice, the executo
 })
 
 test('lists skipped reports beside priced ones with their scan reason and token', async () => {
-	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' } })
 	const state = operatorState()
 	state.opportunities = [
 		{ decision: 'skipped', reason: '2 pools exceed the 100 tick spot/TWAP limit', reportId: '11', token: address, tokenSymbol: 'REP', timeRemaining: '241', windowUnit: 'seconds' },
@@ -605,7 +601,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 			wallet: undefined,
 		})
 	const server = startDashboardServer(0, {
-		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: settings.connectivity.rpcQuorum, revision: 'fixture' }),
 		getSnapshot: snapshot,
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
@@ -639,8 +635,43 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 	expect(element(window, 'opportunities-empty', window.HTMLElement).hidden).toBe(true)
 })
 
+test('starts an unconfigured profile at the effective environment RPC agreement requirement', async () => {
+	const settings = parseOperatorSettings(example)
+	const snapshot = () =>
+		operatorSnapshot(operatorState(), settings.strategy, settings.submission, settings.connectivity, {
+			deployment: settings.deployment,
+			execute: false,
+			executor: undefined,
+			expectedChainId: 1,
+			explorerUrl: 'https://etherscan.io',
+			network: 'mainnet',
+			networkConfigured: false,
+			openOracle: settings.deployment.openOracle,
+			queuedSigner: undefined,
+			savedWallet: undefined,
+			wallet: undefined,
+		})
+	const server = startDashboardServer(0, {
+		// ZOLTAR_BOT_RPC_QUORUM=2 supplies the requirement because the unconfigured file stores no connectivity.
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: 2, revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => false,
+		setPaused: () => undefined,
+		updateConnectivity: value => value,
+		updateSigner: () => ({ wallet: undefined }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const { window } = await mountDashboard(server, '/settings')
+	const quorum = element(window, 'rpc-quorum', window.HTMLSelectElement)
+	for (let attempt = 0; attempt < 100 && quorum.value !== '2'; attempt++) await Bun.sleep(10)
+	expect(quorum.value).toBe('2')
+})
+
 test('deployment form saves venue switches without configurable Uniswap addresses', async () => {
-	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' } })
 	const venueRequests: unknown[] = []
 	const snapshot = () =>
 		operatorSnapshot(operatorState(), settings.strategy, settings.submission, settings.connectivity, {
@@ -657,7 +688,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 			wallet: undefined,
 		})
 	const server = startDashboardServer(0, {
-		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: settings.connectivity.rpcQuorum, revision: 'fixture' }),
 		getSnapshot: snapshot,
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
@@ -719,7 +750,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
 	expect(restored().uniswapRouter).toBeUndefined()
-	expect(serializeOperatorSettings(settings).deployment).toEqual({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
+	expect(serializeOperatorSettings(settings).deployment).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = true
 	await save()
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
@@ -727,7 +758,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 })
 
 test('focused risk, settlement, execution, and market forms load the saved configuration and save through their endpoints', async () => {
-	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' } })
 	const executionRequests: unknown[] = []
 	const queued: QueuedSettingsSection[] = []
 	let holdRuntimeSave: Promise<void> | undefined
@@ -754,7 +785,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 			queued,
 		)
 	const server = startDashboardServer(0, {
-		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: settings.connectivity.rpcQuorum, revision: 'fixture' }),
 		getSnapshot: snapshot,
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
@@ -803,7 +834,8 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(runtimeInput('maxDailyGasSpendWeth').value).toBe('0.05')
 	expect(runtimeInput('lifecycleGasReserveWeth').value).toBe('0.01')
 	expect(runtimeInput('maxHedgeSlippageBps').value).toBe('50')
-	expect(runtimeInput('lookbackBlocks').value).toBe('256')
+	expect(runtimeInput('logLookbackBlocks').value).toBe('256')
+	expect(runtimeInput('pollMilliseconds').value).toBe('1000')
 	expect(element(window, 'settlement-enabled', window.HTMLInputElement).checked).toBe(false)
 	expect(settlementInput('settlementMinimumProfitWeth').value).toBe('0.001')
 	expect(settlementInput('settlementMaxGasPriceNanoEth').value).toBe('50')
@@ -889,7 +921,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	}
 
 	runtimeInput('maxConcurrentPositions').value = '2'
-	runtimeInput('lookbackBlocks').value = '64'
+	runtimeInput('logLookbackBlocks').value = '64'
 	// While the save is in flight the form is still dirty, yet a re-evaluation (as every snapshot refresh performs) must not re-enable Save.
 	let releaseRuntimeSave: (() => void) | undefined
 	holdRuntimeSave = new Promise(resolve => {
@@ -910,13 +942,14 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(element(window, 'runtime-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(settings.runtime.riskLimits.maxTotalLockedAttoWeth).toBe(125n * 10n ** 17n)
 	expect(settings.runtime.riskLimits.maxConcurrentPositions).toBe(2)
-	expect(settings.runtime.lookbackBlocks).toBe(64n)
+	expect(settings.runtime.logLookbackBlocks).toBe(64n)
 	expect(settings.runtime.execute).toBe(false)
 	expect(saveButton('runtime-form').disabled).toBe(true)
 	expect(badges('runtime-form')).toEqual(['Queued · next scan'])
 	for (const [field, value, label] of [
 		['maxHedgeSlippageBps', '75', 'Maximum hedge slippage'],
-		['lookbackBlocks', '32', 'Lookback period'],
+		['logLookbackBlocks', '32', 'Lookback period'],
+		['pollMilliseconds', '5000', 'Poll interval'],
 	] as const) {
 		const previous = settings.runtime[field]
 		runtimeInput(field).value = value
@@ -928,7 +961,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 			review = window.document.querySelector('.operator-confirm-dialog')
 		}
 		expect(review?.textContent).toContain(label)
-		const unit = field === 'maxHedgeSlippageBps' ? 'bps' : 'blocks'
+		const unit = { logLookbackBlocks: 'blocks', maxHedgeSlippageBps: 'bps', pollMilliseconds: 'ms' }[field]
 		expect(review?.textContent).toContain(`${previous} ${unit}→${value} ${unit}`)
 		expect(settings.runtime[field]).toBe(previous)
 		await acceptOperatorDialog(window)
@@ -937,7 +970,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		// The pending status is set before the request, so once the server holds the new value, "saved" can only come from this save.
 		for (let attempt = 0; attempt < 100 && (settings.runtime[field] === previous || element(window, 'runtime-status', window.HTMLElement).textContent !== 'Risk limits saved.'); attempt++) await Bun.sleep(10)
 		expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Risk limits saved.')
-		expect(settings.runtime[field]).toBe(BigInt(value))
+		expect(settings.runtime[field]).toBe(field === 'pollMilliseconds' ? Number(value) : BigInt(value))
 	}
 	runtimeInput('maxHedgeSlippageBps').value = ''
 	element(window, 'runtime-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
@@ -1019,11 +1052,9 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 test('go-live checklist unlocks the switch once every prerequisite holds, reports the armed state, and the RPC form carries quorum URLs', async () => {
 	let settings = parseOperatorSettings({
 		...example,
-		connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' },
-		deployment: { ...example.deployment, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] },
+		connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'], readRpcUrl: 'https://rpc.example/', rpcQuorum: 2 },
 		network: 'sepolia',
 		networkConfigured: true,
-		rpcQuorum: 2,
 	})
 	const queued: QueuedSettingsSection[] = []
 	let execute = false
@@ -1057,7 +1088,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 			queued,
 		)
 	const server = startDashboardServer(0, {
-		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: settings.connectivity.rpcQuorum, revision: 'fixture' }),
 		getSnapshot: snapshot,
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => true,
@@ -1072,15 +1103,16 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 			connectivityRequests.push(value)
 			if (typeof value !== 'object' || value === null || !('quorumRpcUrls' in value) || !Array.isArray(value.quorumRpcUrls)) throw new Error('Expected quorum RPC URLs')
 			const quorumRpcUrls = value.quorumRpcUrls.map(String)
-			settings = { ...settings, deployment: { ...settings.deployment, quorumRpcUrls } }
-			queued.push('connectivity', 'deployment', 'universes')
+			settings = { ...settings, connectivity: { ...settings.connectivity, quorumRpcUrls } }
+			queued.push('connectivity', 'universes')
 			if (holdConnectivity !== undefined) await holdConnectivity
-			return { connectivity: settings.connectivity, network: 'sepolia', quorumRpcUrls, rpcQuorum: 2 }
+			return { connectivity: { publicRpcUrls: settings.connectivity.publicRpcUrls, readRpcUrl: settings.connectivity.readRpcUrl }, network: 'sepolia', quorumRpcUrls, rpcQuorum: 2 }
 		},
 		updateDeployment: async value => {
 			deploymentRequests.push(value)
 			if (holdConnectivity !== undefined) await holdConnectivity
 			settings = { ...settings, deployment: mergeStoredDeploymentUpdate(settings.deployment, value, 'sepolia') }
+			queued.push('deployment')
 			return settings.deployment
 		},
 		updateExecution: value => {
@@ -1144,12 +1176,12 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value = 'https://quorum-one.example/\nhttps://quorum-three.example/'
 	expect(await submit('connectivity-form', 'connectivity-status', 'Checking every endpoint')).toBe('Chain and RPCs passed validation and were saved.')
 	expect(connectivityRequests).toEqual([{ connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }, network: 'sepolia', quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-three.example/'], rpcQuorum: 2 }])
-	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-three.example/'])
+	expect(settings.connectivity.quorumRpcUrls).toEqual(['https://quorum-one.example/', 'https://quorum-three.example/'])
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-one.example/\nhttps://quorum-three.example/')
-	for (let attempt = 0; attempt < 100 && window.document.querySelectorAll('.settings-badges[data-form="deployment-form"] .settings-badge').length === 0; attempt++) await Bun.sleep(10)
+	for (let attempt = 0; attempt < 100 && window.document.querySelectorAll('.settings-badges[data-form="connectivity-form"] .settings-badge').length === 0; attempt++) await Bun.sleep(10)
 
 	// A venue save that overlaps a slow RPC save must not resurrect the previous quorum URLs:
-	// each form sends only its own fields and the bot merges them into the latest saved section.
+	// each form sends only its own fields.
 	let releaseConnectivity: (() => void) | undefined
 	holdConnectivity = new Promise(resolve => {
 		releaseConnectivity = resolve
@@ -1167,7 +1199,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.startsWith('Chain and RPCs passed'); attempt++) await Bun.sleep(10)
 	for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent !== 'Venues saved.'; attempt++) await Bun.sleep(10)
 	expect(element(window, 'deployment-status', window.HTMLElement).textContent).toBe('Venues saved.')
-	expect(settings.deployment.quorumRpcUrls).toEqual(['https://quorum-four.example/', 'https://quorum-five.example/'])
+	expect(settings.connectivity.quorumRpcUrls).toEqual(['https://quorum-four.example/', 'https://quorum-five.example/'])
 	expect(settings.deployment.uniswapV4Enabled).toBe(true)
 	expect(element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value).toBe('https://quorum-four.example/\nhttps://quorum-five.example/')
 	expect(element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked).toBe(true)

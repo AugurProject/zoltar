@@ -54,12 +54,11 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			requiredForExecution: false,
 			sources: [],
 		},
-		connectivity: { publicRpcUrls: [rpcUrl], readRpcUrl: rpcUrl },
+		connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl, rpcQuorum: 2 },
 		deployment: {
 			coordinatorAddresses: [],
 			executor: undefined,
 			openOracle: '0x0000000000000000000000000000000000000000',
-			quorumRpcUrls: [],
 			rep: address,
 			uniswapV2Enabled: false,
 			uniswapV3Enabled: true,
@@ -76,13 +75,13 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 		networkConfigured: true,
 		paused: false,
 		privateKey,
-		rpcQuorum: 2,
 		runtime: {
 			execute: false,
 			historyFile: '.state/history.jsonl',
-			lookbackBlocks: 0n,
+			logLookbackBlocks: 0n,
 			maxHedgeSlippageBps: 50n,
 			once: false,
+			pollMilliseconds: 1_000,
 			positionFile: '.state/positions.json',
 			priceHistoryFile: '.state/prices.jsonl',
 			riskLimits: {
@@ -103,7 +102,6 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			minimumProfitAttoWeth: 10n ** 16n,
 			minimumRemainingBlocks: 3n,
 			minimumRemainingSeconds: 36n,
-			pollMilliseconds: 1_000,
 			twapSeconds: 1_800,
 		},
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
@@ -212,7 +210,7 @@ describe('file-only startup configuration', () => {
 		expect(result.exitCode).toBe(1)
 		const summaries = result.output.split('\n').filter(line => line.includes('ProcessedMs='))
 		expect(summaries).toHaveLength(1)
-		expect(summaries[0]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} Mainnet unknown: ProcessedMs=\d+/)
+		expect(summaries[0]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} Ethereum mainnet unknown: ProcessedMs=\d+/)
 		expect(summaries[0]).toContain('status=failed')
 		expect(summaries[0]).not.toContain('activeReports=')
 	})
@@ -246,7 +244,8 @@ describe('file-only startup configuration', () => {
 			[2, '1'],
 		] as const) {
 			const path = join(directory, `operator-${rpcQuorum.toString()}.json`)
-			await saveOperatorSettings(path, { ...settings('https://saved.example/', 4173), rpcQuorum })
+			const saved = settings('https://saved.example/', 4173)
+			await saveOperatorSettings(path, { ...saved, connectivity: { ...saved.connectivity, rpcQuorum } })
 			const child = Bun.spawn([executable, '-e', "const { loadConfiguration } = await import('./src/config/configuration.ts'); const value = await loadConfiguration(); console.log(JSON.stringify({ environment: process.env['ZOLTAR_BOT_RPC_QUORUM'], rpcQuorum: value.rpcQuorum }))"], {
 				cwd: join(import.meta.dir, '..', '..'),
 				env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path, ZOLTAR_BOT_RPC_QUORUM: environmentQuorum },
@@ -266,11 +265,12 @@ describe('file-only startup configuration', () => {
 			[2, 1, '2'],
 		] as const) {
 			const path = join(directory, `deploy-${activeRpcQuorum.toString()}-${sepoliaRpcQuorum.toString()}.json`)
-			await saveOperatorSettings(path, { ...settings('http://127.0.0.1:1/', 4173), rpcQuorum: activeRpcQuorum })
+			const active = settings('http://127.0.0.1:1/', 4173)
+			await saveOperatorSettings(path, { ...active, connectivity: { ...active.connectivity, rpcQuorum: activeRpcQuorum } })
 			const sepoliaSettings = settings('http://127.0.0.1:1/', 4173)
 			sepoliaSettings.centralizedMarkets = { ...sepoliaSettings.centralizedMarkets, assetChainId: 11_155_111 }
 			sepoliaSettings.network = 'sepolia'
-			sepoliaSettings.rpcQuorum = sepoliaRpcQuorum
+			sepoliaSettings.connectivity = { ...sepoliaSettings.connectivity, rpcQuorum: sepoliaRpcQuorum }
 			await saveOperatorSettings(networkProfilePath(path, 'sepolia'), sepoliaSettings)
 			const child = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
 				env: {
@@ -323,12 +323,12 @@ describe('file-only startup configuration', () => {
 		const path = join(directory, 'operator.json')
 		const value = settings('http://127.0.0.1:1/', 4173)
 		await saveOperatorSettings(path, value)
-		const document = JSON.parse(await Bun.file(path).text()) as { runtime: { maxHedgeSlippageBps: string } }
-		document.runtime.maxHedgeSlippageBps = '1001'
+		const document = JSON.parse(await Bun.file(path).text()) as { runtime: { maxHedgeSlippageBps: number } }
+		document.runtime.maxHedgeSlippageBps = 1001
 		await writeFile(path, JSON.stringify(document), { encoding: 'utf8', mode: 0o600 })
 		const result = await runToExit(path)
 		expect(result.exitCode).toBe(1)
-		expect(result.output).toContain('maxHedgeSlippageBps must be from 0 to 1000')
+		expect(result.output).toContain('maxHedgeSlippageBps must be an integer from 0 to 1000')
 	})
 
 	test('keeps the dashboard running when the configured RPC is offline at startup', async () => {
@@ -374,18 +374,19 @@ describe('file-only startup configuration', () => {
 		Reflect.set(runtime, 'positionFile', join(directory, 'positions.json'))
 		Reflect.set(runtime, 'priceHistoryFile', join(directory, 'prices.jsonl'))
 		Reflect.set(runtime, 'uiPort', dashboardPort)
-		const strategy = Reflect.get(configuration, 'strategy')
-		if (typeof strategy !== 'object' || strategy === null || Array.isArray(strategy)) throw new Error('Example strategy is missing')
-		Reflect.set(strategy, 'pollMilliseconds', 1_000)
+		Reflect.set(runtime, 'pollMilliseconds', 1_000)
 		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
 		const path = join(directory, 'operator.json')
 		await writeFile(path, JSON.stringify(configuration), { encoding: 'utf8', mode: 0o600 })
-		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
+		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path, ZOLTAR_BOT_RPC_QUORUM: '2' }, stderr: 'pipe', stdout: 'pipe' })
 		children.push(child)
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
 		const initial = await waitForJson(origin, '/api/configuration')
 		const initialConfiguration = initial['configuration']
 		expect(initialConfiguration).toMatchObject({ network: 'mainnet', networkConfigured: false })
+		// The unconfigured file stores no connectivity, so the dashboard learns the environment-derived requirement from the envelope.
+		expect(initialConfiguration).not.toHaveProperty('connectivity')
+		expect(initial['effectiveRpcQuorum']).toBe(2)
 		expect(initialConfiguration).toMatchObject({ deployment: { uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false } })
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		for (const [endpoint, body] of [
@@ -456,7 +457,7 @@ describe('file-only startup configuration', () => {
 		})
 		expect(response.status, await response.clone().text()).toBe(200)
 		expect(await response.json()).toMatchObject({ network: 'sepolia', rpcQuorum: 1 })
-		expect(await loadOperatorSettings(path)).toMatchObject({ networkConfigured: true, rpcQuorum: 1 })
+		expect(await loadOperatorSettings(path)).toMatchObject({ connectivity: { rpcQuorum: 1 }, networkConfigured: true })
 		await waitForStateValue(origin, 'networkConfigured', true)
 		expect(await waitForJson(origin, '/api/state')).toMatchObject({ expectedChainId: 11_155_111, network: 'sepolia', networkConfigured: true })
 		let configuredState = await waitForJson(origin, '/api/state')
@@ -471,7 +472,7 @@ describe('file-only startup configuration', () => {
 		if (typeof configuredDocumentForStrategy !== 'object' || configuredDocumentForStrategy === null || Array.isArray(configuredDocumentForStrategy)) throw new Error('Configured strategy document is missing')
 		const configuredStrategy = Reflect.get(configuredDocumentForStrategy, 'strategy')
 		if (typeof configuredStrategy !== 'object' || configuredStrategy === null || Array.isArray(configuredStrategy)) throw new Error('Configured strategy settings are missing')
-		const sepoliaStrategy = { ...configuredStrategy, minimumProfitBps: '901' }
+		const sepoliaStrategy = { ...configuredStrategy, minimumProfitBps: 901 }
 		const savedSepoliaStrategy = await fetch(`${origin}/api/settings`, {
 			body: JSON.stringify(sepoliaStrategy),
 			headers: { 'content-type': 'application/json', origin },
@@ -740,15 +741,15 @@ describe('file-only startup configuration', () => {
 		const configured = settings(rpcUrl, dashboardPort, `0x${'11'.repeat(32)}`)
 		await saveOperatorSettings(path, {
 			...configured,
+			connectivity: { ...configured.connectivity, rpcQuorum: 1 },
 			paused: true,
-			rpcQuorum: 1,
 			runtime: {
 				...configured.runtime,
 				historyFile: join(directory, 'history.jsonl'),
+				pollMilliseconds: 60_000,
 				positionFile: join(directory, 'positions.json'),
 				priceHistoryFile: join(directory, 'prices.jsonl'),
 			},
-			strategy: { ...configured.strategy, pollMilliseconds: 60_000 },
 		})
 		const child = Bun.spawn([executable, runSource], {
 			env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path },
@@ -765,7 +766,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(saveResponse.status, await saveResponse.clone().text()).toBe(200)
-		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(2)
+		expect((await loadOperatorSettings(path))?.connectivity.rpcQuorum).toBe(2)
 		const deploymentResponse = await fetch(`${origin}/api/executor-deployment`, {
 			body: JSON.stringify({}),
 			headers: { 'content-type': 'application/json', origin },
@@ -837,14 +838,14 @@ describe('file-only startup configuration', () => {
 		})
 		expect(developmentQuorumResponse.status, await developmentQuorumResponse.clone().text()).toBe(200)
 		expect(await developmentQuorumResponse.json()).toEqual({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', quorumRpcUrls: [], rpcQuorum: 1 })
-		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(1)
+		expect((await loadOperatorSettings(path))?.connectivity.rpcQuorum).toBe(1)
 		const restoreProductionQuorumResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: [activeRpcUrl], readRpcUrl: activeRpcUrl }, network: 'mainnet', rpcQuorum: 2 }),
 			headers: { 'content-type': 'application/json', origin },
 			method: 'PUT',
 		})
 		expect(restoreProductionQuorumResponse.status, await restoreProductionQuorumResponse.clone().text()).toBe(200)
-		expect((await loadOperatorSettings(path))?.rpcQuorum).toBe(2)
+		expect((await loadOperatorSettings(path))?.connectivity.rpcQuorum).toBe(2)
 		const staleEnvelope = await waitForJson(origin, '/api/configuration')
 		const configuration = staleEnvelope['configuration']
 		if (typeof configuration !== 'object' || configuration === null || Array.isArray(configuration)) throw new Error('Configuration document is missing')
@@ -853,7 +854,7 @@ describe('file-only startup configuration', () => {
 		const runtime = Reflect.get(configuration, 'runtime')
 		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Configuration runtime is missing')
 		expect(Reflect.get(runtime, 'historyFile')).toBe('.state/history.jsonl')
-		Reflect.set(runtime, 'lookbackBlocks', '123')
+		Reflect.set(runtime, 'logLookbackBlocks', 123)
 		const pauseResponse = await fetch(`${origin}/api/paused`, {
 			body: JSON.stringify({ paused: true }),
 			headers: { 'content-type': 'application/json', origin },
@@ -892,9 +893,9 @@ describe('file-only startup configuration', () => {
 		const wrongChainEnvelope = structuredClone(currentEnvelope)
 		const wrongChainConfiguration = wrongChainEnvelope['configuration']
 		if (typeof wrongChainConfiguration !== 'object' || wrongChainConfiguration === null || Array.isArray(wrongChainConfiguration)) throw new Error('Wrong-chain configuration document is missing')
-		const wrongChainDeployment = Reflect.get(wrongChainConfiguration, 'deployment')
-		if (typeof wrongChainDeployment !== 'object' || wrongChainDeployment === null || Array.isArray(wrongChainDeployment)) throw new Error('Wrong-chain deployment document is missing')
-		Reflect.set(wrongChainDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`])
+		const wrongChainConnectivity = Reflect.get(wrongChainConfiguration, 'connectivity')
+		if (typeof wrongChainConnectivity !== 'object' || wrongChainConnectivity === null || Array.isArray(wrongChainConnectivity)) throw new Error('Wrong-chain connectivity document is missing')
+		Reflect.set(wrongChainConnectivity, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`])
 		const wrongChainResponse = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(wrongChainEnvelope),
 			headers: { 'content-type': 'application/json', origin },
@@ -924,7 +925,7 @@ describe('file-only startup configuration', () => {
 		Reflect.set(liveSwitchConfiguration, 'network', 'sepolia')
 		const liveSwitchMarkets = Reflect.get(liveSwitchConfiguration, 'centralizedMarkets')
 		const liveSwitchRuntime = Reflect.get(liveSwitchConfiguration, 'runtime')
-		const liveSwitchDeployment = Reflect.get(liveSwitchConfiguration, 'deployment')
+		const liveSwitchConnectivity = Reflect.get(liveSwitchConfiguration, 'connectivity')
 		if (
 			typeof liveSwitchMarkets !== 'object' ||
 			liveSwitchMarkets === null ||
@@ -932,14 +933,14 @@ describe('file-only startup configuration', () => {
 			typeof liveSwitchRuntime !== 'object' ||
 			liveSwitchRuntime === null ||
 			Array.isArray(liveSwitchRuntime) ||
-			typeof liveSwitchDeployment !== 'object' ||
-			liveSwitchDeployment === null ||
-			Array.isArray(liveSwitchDeployment)
+			typeof liveSwitchConnectivity !== 'object' ||
+			liveSwitchConnectivity === null ||
+			Array.isArray(liveSwitchConnectivity)
 		)
 			throw new Error('Live-switch dependent configuration is missing')
 		Reflect.set(liveSwitchMarkets, 'assetChainId', 11_155_111)
 		Reflect.set(liveSwitchRuntime, 'execute', true)
-		Reflect.set(liveSwitchDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
+		Reflect.set(liveSwitchConnectivity, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
 		const liveSwitchResponse = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(liveSwitchEnvelope),
 			headers: { 'content-type': 'application/json', origin },
@@ -954,10 +955,10 @@ describe('file-only startup configuration', () => {
 		const executeConfiguration = executeEnvelope['configuration']
 		if (typeof executeConfiguration !== 'object' || executeConfiguration === null || Array.isArray(executeConfiguration)) throw new Error('Execute configuration document is missing')
 		const executeRuntime = Reflect.get(executeConfiguration, 'runtime')
-		const executeDeployment = Reflect.get(executeConfiguration, 'deployment')
-		if (typeof executeRuntime !== 'object' || executeRuntime === null || Array.isArray(executeRuntime) || typeof executeDeployment !== 'object' || executeDeployment === null || Array.isArray(executeDeployment)) throw new Error('Execute runtime or deployment configuration is missing')
+		const executeConnectivity = Reflect.get(executeConfiguration, 'connectivity')
+		if (typeof executeRuntime !== 'object' || executeRuntime === null || Array.isArray(executeRuntime) || typeof executeConnectivity !== 'object' || executeConnectivity === null || Array.isArray(executeConnectivity)) throw new Error('Execute runtime or connectivity configuration is missing')
 		Reflect.set(executeRuntime, 'execute', true)
-		Reflect.set(executeDeployment, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
+		Reflect.set(executeConnectivity, 'quorumRpcUrls', [`http://127.0.0.1:${quorumRpc.port.toString()}/`, `http://127.0.0.1:${secondQuorumRpc.port.toString()}/`])
 		const noSignerEnvelope = structuredClone(executeEnvelope)
 		const noSignerConfiguration = noSignerEnvelope['configuration']
 		if (typeof noSignerConfiguration !== 'object' || noSignerConfiguration === null || Array.isArray(noSignerConfiguration)) throw new Error('No-signer configuration document is missing')
@@ -1001,10 +1002,11 @@ describe('file-only startup configuration', () => {
 		const executeSavedConfiguration = executeSavedEnvelope['configuration']
 		if (typeof executeSavedConfiguration !== 'object' || executeSavedConfiguration === null || Array.isArray(executeSavedConfiguration)) throw new Error('Saved execute configuration document is missing')
 		const savedExecuteRuntime = Reflect.get(executeSavedConfiguration, 'runtime')
-		const savedExecuteDeployment = Reflect.get(executeSavedConfiguration, 'deployment')
-		if (typeof savedExecuteRuntime !== 'object' || savedExecuteRuntime === null || Array.isArray(savedExecuteRuntime) || typeof savedExecuteDeployment !== 'object' || savedExecuteDeployment === null || Array.isArray(savedExecuteDeployment)) throw new Error('Saved execute runtime or deployment configuration is missing')
+		const savedExecuteConnectivity = Reflect.get(executeSavedConfiguration, 'connectivity')
+		if (typeof savedExecuteRuntime !== 'object' || savedExecuteRuntime === null || Array.isArray(savedExecuteRuntime) || typeof savedExecuteConnectivity !== 'object' || savedExecuteConnectivity === null || Array.isArray(savedExecuteConnectivity))
+			throw new Error('Saved execute runtime or connectivity configuration is missing')
 		Reflect.set(savedExecuteRuntime, 'execute', false)
-		Reflect.set(savedExecuteDeployment, 'quorumRpcUrls', [])
+		Reflect.set(savedExecuteConnectivity, 'quorumRpcUrls', [])
 		const restoreResponse = await fetch(`${origin}/api/configuration`, {
 			body: JSON.stringify(executeSavedEnvelope),
 			headers: { 'content-type': 'application/json', origin },
@@ -1017,7 +1019,7 @@ describe('file-only startup configuration', () => {
 		if (typeof currentConfiguration !== 'object' || currentConfiguration === null || Array.isArray(currentConfiguration)) throw new Error('Current configuration document is missing')
 		const currentRuntime = Reflect.get(currentConfiguration, 'runtime')
 		if (typeof currentRuntime !== 'object' || currentRuntime === null || Array.isArray(currentRuntime)) throw new Error('Current runtime configuration is missing')
-		Reflect.set(currentRuntime, 'lookbackBlocks', '123')
+		Reflect.set(currentRuntime, 'logLookbackBlocks', 123)
 		const currentRiskLimits = Reflect.get(currentRuntime, 'riskLimits')
 		if (typeof currentRiskLimits !== 'object' || currentRiskLimits === null || Array.isArray(currentRiskLimits)) throw new Error('Current risk limits are missing')
 		Reflect.set(currentRiskLimits, 'maxConcurrentPositions', 2)
@@ -1037,7 +1039,7 @@ describe('file-only startup configuration', () => {
 		if (typeof replacementConfiguration !== 'object' || replacementConfiguration === null || Array.isArray(replacementConfiguration)) throw new Error('Replacement configuration document is missing')
 		const replacementStrategy = Reflect.get(replacementConfiguration, 'strategy')
 		if (typeof replacementStrategy !== 'object' || replacementStrategy === null || Array.isArray(replacementStrategy)) throw new Error('Replacement strategy is missing')
-		Reflect.set(replacementStrategy, 'minimumProfitBps', '101')
+		Reflect.set(replacementStrategy, 'minimumProfitBps', 101)
 		const replacementStrategyBody = JSON.stringify(replacementStrategy)
 		if (replacementStrategyBody === undefined) throw new Error('Replacement strategy must serialize')
 		const strategyResponse = await fetch(`${origin}/api/settings`, {
@@ -1047,7 +1049,7 @@ describe('file-only startup configuration', () => {
 		})
 		expect(strategyResponse.status, await strategyResponse.clone().text()).toBe(200)
 		const saved = await loadOperatorSettings(path)
-		expect(saved?.runtime.lookbackBlocks).toBe(123n)
+		expect(saved?.runtime.logLookbackBlocks).toBe(123n)
 		expect(saved?.runtime.historyFile).toBe('.state/history.jsonl')
 		expect(saved?.privateKey).toBe(replacementPrivateKey)
 		expect(saved?.paused).toBe(false)

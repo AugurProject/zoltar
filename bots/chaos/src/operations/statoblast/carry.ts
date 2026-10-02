@@ -91,7 +91,7 @@ function carriedDepositEvidence(candidate: NonNullable<EcosystemSnapshot['forked
 	return [
 		carryField('reason', 0),
 		carryField('outcome', candidate.outcome),
-		carryField('attoRepAmount', candidate.amountAttoRep),
+		carryField('amountAttoRep', candidate.amountAttoRep),
 		carryField('resultingNullifierRoot', candidate.resultingNullifierRoot),
 		carryField('resultingCarryRoot', candidate.resultingCarryRoot),
 		claimField('transferredRep', true),

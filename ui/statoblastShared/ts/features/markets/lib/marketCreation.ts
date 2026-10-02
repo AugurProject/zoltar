@@ -16,7 +16,7 @@ export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	if (statoblastSecurityMultiplierBps <= 10_001n) throw new Error('Security multiplier must be at least 1.0002')
 	const initialReportPriorityFeeAttoEthPerGas = parseDecimalInput(form.initialReportPriorityFeeNanoEth, 'Initial report priority fee', NANO_ETH_DECIMALS)
 	if (initialReportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Initial report priority fee must be greater than 0')
-	if (initialReportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial-report priority fee is too large for Open Oracle report limits.')
+	if (initialReportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial-report priority fee is too large for OpenOracle report limits.')
 	return {
 		initialReportPriorityFeeAttoEthPerGas,
 		questionId,

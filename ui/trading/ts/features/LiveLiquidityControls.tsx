@@ -6,7 +6,7 @@ import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
+import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity } from '../protocol/live.js'
@@ -147,16 +147,16 @@ export function LiveLiquidityControls({
 								<p className='detail'>{liquidityCopy.youReceive}</p>
 								{quote.operation === 'remove' ? (
 									<ul className='portfolio-holdings'>
-										<li className='portfolio-holding-yes'>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</li>
-										<li className='portfolio-holding-no'>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</li>
+										<li className='portfolio-holding-yes'>{formatOutcomeQuantity(quote.expectedYes, shareOutcome.yes)}</li>
+										<li className='portfolio-holding-no'>{formatOutcomeQuantity(quote.expectedNo, shareOutcome.no)}</li>
 									</ul>
 								) : (
 									<>
 										<strong className='decision-amount'>{formatLpQuantity(quote.expectedLiquidity)}</strong>
 										<ul className='portfolio-holdings'>
-											<li>{formatOutcomeQuantity(quote.result.invalidInsurance, liquidityCopy.invalid)}</li>
-											{quote.result.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeQuantity(quote.result.yesReturned, liquidityCopy.yes)}</li>}
-											{quote.result.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeQuantity(quote.result.noReturned, liquidityCopy.no)}</li>}
+											<li>{formatOutcomeQuantity(quote.result.invalidInsurance, shareOutcome.invalid)}</li>
+											{quote.result.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeQuantity(quote.result.yesReturned, shareOutcome.yes)}</li>}
+											{quote.result.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeQuantity(quote.result.noReturned, shareOutcome.no)}</li>}
 										</ul>
 									</>
 								)}
@@ -168,7 +168,7 @@ export function LiveLiquidityControls({
 									<>
 										<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(quote.result.completeSetShares)}</MetricField>
 										<MetricField label={liquidityCopy.sharesDeposited}>
-											{formatOutcomeQuantity(quote.result.yesUsed, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noUsed, liquidityCopy.no)}
+											{formatOutcomeQuantity(quote.result.yesUsed, shareOutcome.yes)} / {formatOutcomeQuantity(quote.result.noUsed, shareOutcome.no)}
 										</MetricField>
 									</>
 								)}

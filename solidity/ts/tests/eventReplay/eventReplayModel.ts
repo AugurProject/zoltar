@@ -137,7 +137,7 @@ export type DisputeStakedRepDepositReplay = {
 	nodeId: bigint
 	depositor: Address
 	outcome: bigint
-	attoRepAmount: bigint
+	amountAttoRep: bigint
 	parentDepositIndex: bigint
 	cumulativeRepAmountAttoRep: bigint
 	carryLeafIndex: bigint
@@ -194,7 +194,7 @@ export type EscalationConsumptionReplay = {
 	sourceNodeId: bigint
 	depositor: Address
 	outcome: bigint
-	attoRepAmount: bigint
+	amountAttoRep: bigint
 	reason: bigint
 	resultingUnresolvedTotalAttoRep: bigint
 	resultingNullifierRoot: Hex
@@ -543,7 +543,7 @@ function getEmptyNullifierRoot() {
 }
 
 function hashCarryLeaf(deposit: DisputeStakedRepDepositReplay) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [deposit.depositor, deposit.outcome, deposit.attoRepAmount, deposit.parentDepositIndex, deposit.cumulativeRepAmountAttoRep, deposit.nodeId]))
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [deposit.depositor, deposit.outcome, deposit.amountAttoRep, deposit.parentDepositIndex, deposit.cumulativeRepAmountAttoRep, deposit.nodeId]))
 }
 
 function bagCarryPeaks(peaks: readonly Hex[], leafCount: bigint) {
@@ -1139,7 +1139,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			nodeId: requireBigInt(log.args, 'nodeId'),
 			depositor: requireAddress(log.args, 'depositor'),
 			outcome,
-			attoRepAmount: requireBigInt(log.args, 'attoRepAmount'),
+			amountAttoRep: requireBigInt(log.args, 'amountAttoRep'),
 			parentDepositIndex: requireBigInt(log.args, 'parentDepositIndex'),
 			cumulativeRepAmountAttoRep: requireBigInt(log.args, 'cumulativeRepAmountAttoRep'),
 			carryLeafIndex: state.escalationLeafCounts.get(log.emitter)?.[Number.parseInt(outcome.toString(), 10)] ?? 0n,
@@ -1151,12 +1151,12 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const outcomeIndex = Number.parseInt(outcome.toString(), 10)
 		const vaultOutcomeTotal = vaultTotals[outcomeIndex]
 		if (vaultOutcomeTotal === undefined) throw new Error('escalation deposit outcome is out of range')
-		vaultTotals[outcomeIndex] = vaultOutcomeTotal + deposit.attoRepAmount
+		vaultTotals[outcomeIndex] = vaultOutcomeTotal + deposit.amountAttoRep
 		unresolvedByVault.set(deposit.depositor, vaultTotals)
 		const unresolvedTotals = state.escalationUnresolvedTotals.get(log.emitter) ?? [0n, 0n, 0n]
 		const unresolvedOutcomeTotal = unresolvedTotals[outcomeIndex]
 		if (unresolvedOutcomeTotal === undefined) throw new Error('escalation deposit outcome is out of range')
-		unresolvedTotals[outcomeIndex] = unresolvedOutcomeTotal + deposit.attoRepAmount
+		unresolvedTotals[outcomeIndex] = unresolvedOutcomeTotal + deposit.amountAttoRep
 		state.escalationUnresolvedTotals.set(log.emitter, unresolvedTotals)
 		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
 		resolutionBalancesAttoRep[outcomeIndex] = deposit.cumulativeRepAmountAttoRep
@@ -1172,9 +1172,9 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			bundles.set(deposit.depositor, bundle)
 		}
 		const haircut = state.escalationHaircuts.get(log.emitter)
-		if (haircut === undefined) bundle.claimRepUnits += deposit.attoRepAmount
+		if (haircut === undefined) bundle.claimRepUnits += deposit.amountAttoRep
 		else {
-			const numerator = deposit.attoRepAmount * haircut.repBefore
+			const numerator = deposit.amountAttoRep * haircut.repBefore
 			bundle.claimRepUnits += (numerator + haircut.repRemaining - 1n) / haircut.repRemaining
 		}
 		return
@@ -1201,13 +1201,13 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const sourceNodeId = requireBigInt(log.args, 'sourceNodeId')
 		const reason = requireBigInt(log.args, 'reason')
 		const depositor = requireAddress(log.args, 'depositor')
-		const attoRepAmount = requireBigInt(log.args, 'attoRepAmount')
+		const amountAttoRep = requireBigInt(log.args, 'amountAttoRep')
 		const consumption: EscalationConsumptionReplay = {
 			parentDepositIndex,
 			sourceNodeId,
 			depositor,
 			outcome,
-			attoRepAmount,
+			amountAttoRep,
 			reason,
 			resultingUnresolvedTotalAttoRep: totals[index],
 			resultingNullifierRoot: requireHex(log.args, 'resultingNullifierRoot'),
@@ -1223,8 +1223,8 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			if (vaultTotals !== undefined) {
 				const vaultOutcomeTotal = vaultTotals[index]
 				if (vaultOutcomeTotal === undefined) throw new Error('carry consumption outcome is out of range')
-				if (vaultOutcomeTotal < attoRepAmount) throw new Error('vault unresolved REP cannot become negative')
-				vaultTotals[index] = vaultOutcomeTotal - attoRepAmount
+				if (vaultOutcomeTotal < amountAttoRep) throw new Error('vault unresolved REP cannot become negative')
+				vaultTotals[index] = vaultOutcomeTotal - amountAttoRep
 			}
 			const leaves = state.escalationCarryLeaves.get(log.emitter)?.[index]
 			if (leaves !== undefined) {

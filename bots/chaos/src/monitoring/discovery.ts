@@ -161,16 +161,16 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		queuedIds.delete(universeId.toString())
 		if (seen.has(universeId.toString())) continue
 		seen.add(universeId.toString())
-		const [raw, threshold, nonDecisionThreshold, migration] = await drainConcurrent([
+		const [raw, threshold, nonDecisionThreshold, migration, universeTheoreticalSupply] = await drainConcurrent([
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
 			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
+			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getUniverseTheoreticalSupplyAttoRep' }),
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
-		const theoreticalSupply = await client.readContract({ abi: abis.genesisReputationTokenAbi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
-		const supplyBasedDeposit = theoreticalSupply / 10_000_000n
+		const supplyBasedDeposit = universeTheoreticalSupply / 10_000_000n
 		const initialEscalationDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
 		const cachedChildren = topology.universeChildren[universeId.toString()]
 		const outcomes = (cachedChildren?.outcomeIndexes ?? []).map(outcome => BigInt(outcome))

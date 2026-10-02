@@ -1,4 +1,4 @@
-import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { BPS_DENOMINATOR } from '../oracle-request-funding.ts'
 import { amount } from '../planning.ts'
 import type { PairSnapshot, PoolSnapshot } from '../types.ts'
@@ -16,8 +16,6 @@ export function maximumAfterSlippage(value: bigint) {
 	if (value <= 0n) return 0n
 	return (value * (BPS_DENOMINATOR + TRADING_SLIPPAGE_BPS) + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
 }
-
-const ceilDivide = (numerator: bigint, denominator: bigint) => (denominator <= 0n ? undefined : divideUp(numerator, denominator))
 
 const feeIsValid = (pair: PairSnapshot) => pair.feeBps >= 0 && pair.feeBps < 10_000
 
@@ -38,9 +36,10 @@ export function quoteExactInput(pair: PairSnapshot, yesForNo: boolean, input: bi
 
 export function quoteExactOutput(pair: PairSnapshot, yesForNo: boolean, output: bigint) {
 	const { reserveIn, reserveOut } = directionalReserves(pair, yesForNo)
+	// An unquotable pair returns undefined; the guards keep both ceilDiv denominators positive.
 	if (output <= 0n || output >= reserveOut || reserveIn <= 0n || !feeIsValid(pair)) return undefined
-	const netInput = ceilDivide(reserveIn * output, reserveOut - output)
-	return netInput === undefined ? undefined : ceilDivide(netInput * BPS_DENOMINATOR, BPS_DENOMINATOR - BigInt(pair.feeBps))
+	const netInput = ceilDiv(reserveIn * output, reserveOut - output)
+	return ceilDiv(netInput * BPS_DENOMINATOR, BPS_DENOMINATOR - BigInt(pair.feeBps))
 }
 
 export function removableLiquidity(pair: PairSnapshot) {
@@ -75,7 +74,7 @@ export function proportionalLiquidity(pair: PairSnapshot, maxYes: bigint, maxNo:
 export function minimumPositivePayoutShares(pool: PoolSnapshot) {
 	const supply = amount(pool.shareTokenSupplyAttoShares)
 	const collateral = amount(pool.projectedSettlementCollateralAttoEth)
-	return supply === 0n || collateral === 0n ? undefined : ceilDivide(supply, collateral)
+	return supply <= 0n || collateral <= 0n ? undefined : ceilDiv(supply, collateral)
 }
 
 export const minimumOf = (values: readonly bigint[]) => values.reduce((minimum, value) => (value < minimum ? value : minimum))

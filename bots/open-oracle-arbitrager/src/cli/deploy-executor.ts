@@ -51,7 +51,7 @@ const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? def
 const activeSettings = await loadOperatorSettings(settingsFile)
 const selectedSettings = activeSettings?.network === networkName ? activeSettings : await loadOperatorSettings(networkProfilePath(settingsFile, networkName))
 if (selectedSettings !== undefined && selectedSettings.network !== networkName) throw new Error(`The ${networkName} profile contains ${selectedSettings.network} settings`)
-const rpcQuorum = selectedSettings?.rpcQuorum ?? rpcQuorumRequirement()
+const rpcQuorum = selectedSettings?.connectivity.rpcQuorum ?? rpcQuorumRequirement()
 if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)
 if (option('salt') !== undefined) throw new Error('Executor uses a fixed canonical salt; omit --salt')

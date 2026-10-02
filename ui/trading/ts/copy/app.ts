@@ -22,7 +22,7 @@ export const walletBalancesUnavailable = 'Wallet balances unavailable'
 const walletBalanceReadFailed = 'wallet balance read failed'
 export const loadingWalletBalances = 'Loading wallet ETH balance'
 export const loadingContracts = 'Loading trading contracts'
-export const marketRouteDescription = 'Trade conditional YES and NO shares backed by Statoblast security pools.'
+export const marketRouteDescription = 'Trade conditional Yes and No shares backed by Statoblast security pools.'
 export const liquidityRouteDescription = 'Open a market by security pool address to initialize, add, or remove liquidity.'
 export const createMarketRouteDescription = 'Open a security pool without a trading market to deploy its pair and seed liquidity.'
 export const securityPoolRouteDescription = 'Identity, lifecycle, and capacity of the security pool that backs this market.'
@@ -47,7 +47,7 @@ export const marketGuideSteps = [
 	{
 		number: '01',
 		title: 'Create a complete set',
-		description: 'Your ETH is sent to the selected Statoblast security pool, which creates equal amounts of INVALID, YES, and NO at its current exchange rate.',
+		description: 'Your ETH is sent to the selected Statoblast security pool, which creates equal amounts of Invalid, Yes, and No shares at its current exchange rate.',
 	},
 	{
 		number: '02',
@@ -56,8 +56,8 @@ export const marketGuideSteps = [
 	},
 	{
 		number: '03',
-		title: 'Retain INVALID',
-		description: 'Matching INVALID stays in your wallet and is required alongside YES and NO to redeem a complete set.',
+		title: 'Retain Invalid shares',
+		description: 'Matching Invalid shares stay in your wallet and are required alongside Yes and No to redeem a complete set.',
 	},
 	{
 		number: '04',
@@ -66,13 +66,13 @@ export const marketGuideSteps = [
 	},
 ] as const
 export const priceMeaningTitle = 'What the price means'
-export const priceMeaningDescription = 'Conditional YES and NO prices sum to 100% because the pair compares only valid outcomes. This does not say INVALID has zero probability; the AMM has no invalidity estimate at all.'
+export const priceMeaningDescription = 'Conditional Yes and No prices sum to 100% because the pair compares only valid outcomes. This does not say Invalid has zero probability; the AMM has no invalidity estimate at all.'
 export const shareValueTitle = 'How share amounts are shown'
 export const shareValueDescription =
-	'Token quantities stay unchanged as holding fees reduce their ETH backing. A complete set contains equal amounts of YES, NO, and INVALID and redeems at the current backing. An individual outcome pays that backing only if it wins, and pays 0 ETH otherwise. ETH values shown for outcomes are conditional payouts, not sale quotes. LP quantities represent a share of the pool; their underlying YES and NO claims are shown separately. Deposit and redemption inputs use ETH; LP removal inputs use LP quantities.'
+	'Token quantities stay unchanged as holding fees reduce their ETH backing. A complete set contains equal amounts of Yes, No, and Invalid and redeems at the current backing. An individual outcome pays that backing only if it wins, and pays 0 ETH otherwise. ETH values shown for outcomes are conditional payouts, not sale quotes. LP quantities represent a share of the pool; their underlying Yes and No claims are shown separately. Deposit and redemption inputs use ETH; LP removal inputs use LP quantities.'
 export const remainingSharesTitle = 'Why profit can remain as shares'
 export const remainingSharesDescription =
-	'An insured ETH exit requires one INVALID for every complete set redeemed. If a profitable position contains more directional shares than matching INVALID, the excess remains transferable but cannot be converted into complete sets without acquiring more INVALID. After resolution, those excess shares redeem collateral only if their outcome won.'
+	'An insured ETH exit requires one Invalid share for every complete set redeemed. If a profitable position contains more directional shares than matching Invalid shares, the excess remains transferable but cannot be converted into complete sets without acquiring more Invalid shares. After resolution, those excess shares redeem collateral only if their outcome won.'
 
 export function documentTitle(pageTitle: string) {
 	return `${pageTitle} · ${appName}`

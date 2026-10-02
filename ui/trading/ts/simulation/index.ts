@@ -11,7 +11,7 @@ export function registerTradingSimulationScenario() {
 		label: 'Deployed',
 	})
 	registerSimulationScenario(FUNDED_TRADING_SIMULATION_SCENARIO, {
-		description: 'A deployed trading market with liquidity and YES, NO, INVALID, and LP shares in the simulation wallet.',
+		description: 'A deployed trading market with liquidity and Yes, No, Invalid, and LP shares in the simulation wallet.',
 		label: 'Trading with liquidity',
 	})
 }

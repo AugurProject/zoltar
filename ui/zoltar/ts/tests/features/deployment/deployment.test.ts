@@ -99,10 +99,10 @@ void describe('deployment helpers', () => {
 				accountAddress: zeroAddress,
 				busyStepId: undefined,
 				isOnActiveAppChain: true,
-				prerequisiteLabel: 'Zoltar Question Data',
+				prerequisiteLabel: 'ZoltarQuestionData',
 				step: blockedStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Requires Zoltar Question Data' })
+		).toEqual({ disabled: true, reason: 'Requires ZoltarQuestionData' })
 
 		const readyStep = createStep('zoltarQuestionData', false)
 		expect(
@@ -122,7 +122,7 @@ void describe('deployment helpers', () => {
 				accountAddress: undefined,
 				busyStepId: undefined,
 				isOnActiveAppChain: true,
-				prerequisiteLabel: 'Zoltar Question Data',
+				prerequisiteLabel: 'ZoltarQuestionData',
 				step: createStep('zoltar', false, ['zoltarQuestionData']),
 			}),
 		).toEqual({ disabled: true, reason: 'Connect wallet to deploy this contract.' })
@@ -134,7 +134,7 @@ void describe('deployment helpers', () => {
 
 		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'reputationToken', 'multicall3', 'zoltarQuestionData', 'zoltar'])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
-		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
+		expect(deploymentStatusOracleStep?.label).toBe('DeploymentStatusOracle')
 		expect(deploymentSteps.find(step => step.id === 'zoltarQuestionData')?.dependencies).toEqual(['proxyDeployer'])
 	})
 

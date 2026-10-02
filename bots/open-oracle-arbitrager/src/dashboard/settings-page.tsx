@@ -18,7 +18,7 @@ function NumberField({ label, max, min, name, step }: NumberFieldProps) {
 
 function ConnectivityPanel() {
 	return (
-		<SettingsGroup formId='connectivity-form' id='network-connectivity' summary='Unknown network' summaryId='network-value' title='Chain and RPC endpoints'>
+		<SettingsGroup formId='connectivity-form' id='network-connectivity' summary='Unknown network' summaryId='network-value' title='Chain and RPC connectivity'>
 			<p id='network-target-status' class='muted' role='status' aria-live='polite' hidden />
 			<p class='section-note'>Changing Chain saves the current profile, safely pauses the bot, and loads that chain's separate settings and journals without restarting the process. Every endpoint is checked against the selected chain before it is accepted.</p>
 			<form id='connectivity-form'>
@@ -193,7 +193,7 @@ function MarketPanel() {
 
 function StrategyPanel() {
 	return (
-		<SettingsGroup formId='strategy-form' summary='Profit threshold, price safety, timing, and polling' title='Strategy'>
+		<SettingsGroup formId='strategy-form' summary='Profit threshold, price safety, and timing' title='Strategy'>
 			<form id='strategy-form'>
 				<fieldset id='strategy-fieldset' disabled>
 					<div class='field-grid'>
@@ -203,7 +203,6 @@ function StrategyPanel() {
 						<NumberField label='TWAP window (seconds)' name='twapSeconds' min='60' max='86400' />
 						<NumberField label='Minimum remaining blocks' name='minimumRemainingBlocks' min='1' max='1000' step='1' />
 						<NumberField label='Minimum remaining seconds' name='minimumRemainingSeconds' min='1' max='86400' step='1' />
-						<NumberField label='Poll interval (milliseconds)' name='pollMilliseconds' min='1000' max='3600000' />
 					</div>
 					<FormActions statusId='form-status' submitLabel='Save strategy' />
 				</fieldset>
@@ -223,7 +222,7 @@ function UsageMetric({ id, label }: { id: string; label: string }) {
 
 function RiskPanel() {
 	return (
-		<SettingsGroup formId='runtime-form' summary='Capital caps, gas budget, hedge slippage, and event lookback' title='Risk limits and scanning'>
+		<SettingsGroup formId='runtime-form' summary='Capital caps, gas budget, hedge slippage, event lookback, and polling' title='Risk limits and scanning'>
 			<div id='risk-usage' class='usage-row' aria-label='Current risk usage'>
 				<UsageMetric id='usage-locked' label='Locked now' />
 				<UsageMetric id='usage-positions' label='Open positions' />
@@ -238,7 +237,8 @@ function RiskPanel() {
 						<NumberField label='Maximum daily gas spend (WETH)' name='maxDailyGasSpendWeth' min='0' step='any' />
 						<NumberField label='Lifecycle gas reserve (WETH)' name='lifecycleGasReserveWeth' min='0' step='any' />
 						<NumberField label='Maximum hedge slippage (bps)' name='maxHedgeSlippageBps' min='0' max='1000' step='1' />
-						<NumberField label='Event lookback (blocks · 0 disables)' name='lookbackBlocks' min='0' max='256' step='1' />
+						<NumberField label='Event lookback (blocks · 0 disables)' name='logLookbackBlocks' min='0' max='256' step='1' />
+						<NumberField label='Poll interval (milliseconds)' name='pollMilliseconds' min='1000' max='3600000' step='1' />
 					</div>
 					<p class='section-note'>Caps are rechecked before every entry; changing the lookback rebuilds the coordinator-free report window.</p>
 					<FormActions statusId='runtime-status' submitLabel='Save risk limits' />

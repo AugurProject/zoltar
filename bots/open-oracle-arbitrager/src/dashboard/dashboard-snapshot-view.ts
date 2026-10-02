@@ -32,7 +32,11 @@ const LAUNCH_NOTICES = {
 
 /** Renders a state snapshot into every dashboard panel, re-rendering a table only when its inputs changed. */
 export function createSnapshotView({ state, elements, controls, applyInitialFragment }: SnapshotViewContext) {
-	const link: ExplorerLink = (value, kind, focusKey) => explorerLink(state.latestSnapshot?.explorerUrl ?? 'https://etherscan.io', value, kind, focusKey)
+	// Explorer links render only snapshot data, so the snapshot always supplies the configured explorer.
+	const link: ExplorerLink = (value, kind, focusKey) => {
+		if (state.latestSnapshot === undefined) throw new Error('Explorer links require a loaded operator snapshot')
+		return explorerLink(state.latestSnapshot.explorerUrl, value, kind, focusKey)
+	}
 	const header = createHeaderView(elements)
 	const activity = createActivityPanels(elements, link)
 	const markets = createMarketPanels(state, elements, link)
@@ -186,7 +190,9 @@ export function createSnapshotView({ state, elements, controls, applyInitialFrag
 
 	/** Re-renders the filtered tables and the price chart when the operator changes a filter or the charted token. */
 	function registerFilters() {
-		elements.transactionFilter.addEventListener('change', () => renderTransactions(state.latestSnapshot?.transactionActivity ?? [], state.latestSnapshot?.explorerUrl))
+		elements.transactionFilter.addEventListener('change', () => {
+			if (state.latestSnapshot !== undefined) renderTransactions(state.latestSnapshot.transactionActivity, state.latestSnapshot.explorerUrl)
+		})
 		elements.operationFilter.addEventListener('change', () => activity.renderOperations(state.latestSnapshot?.operationLog ?? []))
 		elements.priceToken.addEventListener('change', () => {
 			if (state.latestSnapshot !== undefined) renderMarketPriceChart(state.latestSnapshot)

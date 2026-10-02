@@ -38,6 +38,7 @@ for (const [name, v3, v4] of [
 		const path = join(directory, 'operator.json')
 
 		// Version 4 profiles stored optional addresses, with no enable switches. JSON omits disabled routers.
+		const { logLookbackBlocks: _logLookbackBlocks, pollMilliseconds, ...runtime } = example.runtime
 		await writeFile(
 			path,
 			JSON.stringify({
@@ -45,7 +46,9 @@ for (const [name, v3, v4] of [
 				network: 'mainnet',
 				networkConfigured: true,
 				connectivity: { readRpcUrl: 'https://primary.example', publicRpcUrls: ['https://submit.example'] },
-				runtime: { ...example.runtime, execute: true, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') },
+				runtime: { ...runtime, execute: true, historyFile: join(directory, 'history.jsonl'), lookbackBlocks: '256', maxHedgeSlippageBps: '50', positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') },
+				strategy: { ...example.strategy, minimumProfitBps: '100', pollMilliseconds },
+				version: 4,
 				deployment: {
 					coordinatorAddresses: [coordinator],
 					executor,
@@ -79,7 +82,9 @@ for (const [name, v3, v4] of [
 		expect(config.v4PoolManager).toBe(v4 ? uniswap.v4PoolManager : undefined)
 		await saveOperatorSettings(path, config.operatorSettings)
 		const stored = JSON.parse(await readFile(path, 'utf8'))
-		expect(stored.deployment).toEqual({ quorumRpcUrls: config.quorumRpcUrls, uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
+		expect(stored.deployment).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
+		expect(stored.connectivity.quorumRpcUrls).toEqual(['https://second.example/', 'https://third.example/'])
+		expect(stored.version).toBe(5)
 		expect((await loadOperatorSettings(path))?.deployment).toEqual(config.operatorSettings.deployment)
 		await authenticateConfiguredDeployments([client], await loadConfiguration(path), {})
 		// A new network profile gets template defaults; returning to the migrated profile restores its choices.
@@ -92,14 +97,14 @@ for (const [name, v3, v4] of [
 
 for (const empty of [undefined, null, '']) {
 	test(`preserves disabled legacy routers represented by ${String(empty)}`, () => {
-		const migrated = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapRouter: empty, uniswapV2Router: empty, uniswapV4PoolManager: empty, uniswapV4Quoter: empty })
+		const migrated = validateDeploymentSettings({ coordinatorAddresses: [], uniswapRouter: empty, uniswapV2Router: empty, uniswapV4PoolManager: empty, uniswapV4Quoter: empty })
 		expect(migrated).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false })
 	})
 }
 
 test('new-profile defaults remain explicit while omitted legacy routers remain disabled', () => {
 	expect(parseOperatorSettings(example).deployment).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false })
-	expect(validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [] })).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false })
+	expect(validateDeploymentSettings({ coordinatorAddresses: [] })).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false })
 })
 
 test('explicit switches take precedence over legacy addresses', () => {
@@ -111,5 +116,5 @@ test('explicit switches take precedence over legacy addresses', () => {
 })
 
 test('rejects incomplete legacy V4 enablement instead of silently disabling it', () => {
-	for (const pair of [{ uniswapV4PoolManager: uniswap.v4PoolManager }, { uniswapV4Quoter: uniswap.v4Quoter }]) expect(() => validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], ...pair })).toThrow('both PoolManager and Quoter')
+	for (const pair of [{ uniswapV4PoolManager: uniswap.v4PoolManager }, { uniswapV4Quoter: uniswap.v4Quoter }]) expect(() => validateDeploymentSettings({ coordinatorAddresses: [], ...pair })).toThrow('both PoolManager and Quoter')
 })

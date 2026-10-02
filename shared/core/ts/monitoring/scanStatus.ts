@@ -27,7 +27,7 @@ const singleLine = (value: string) => value.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' '
 
 function formatScanStatus(network: ScanNetwork, sample: ScanSample, elapsedMs: number, blockTimeMs: number | undefined, now = new Date(), processing = false): string {
 	let name = singleLine(network.name)
-	if (network.chainId === 1) name = 'Mainnet'
+	if (network.chainId === 1) name = 'Ethereum mainnet'
 	else if (network.chainId === 11_155_111) name = 'Sepolia'
 	const duration = Math.max(0, Math.round(elapsedMs))
 	const blocks = sample.block !== undefined && sample.fromBlock !== undefined && sample.block >= sample.fromBlock ? sample.block - sample.fromBlock + 1n : 1n

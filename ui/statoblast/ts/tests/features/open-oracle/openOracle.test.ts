@@ -213,7 +213,7 @@ function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof der
 	})
 }
 
-describe('Open Oracle helpers', () => {
+describe('OpenOracle helpers', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
@@ -246,7 +246,7 @@ describe('Open Oracle helpers', () => {
 
 		const currentTimestamp = await mockWindow.getTime()
 		const questionData = {
-			title: 'Test question for Open Oracle',
+			title: 'Test question for OpenOracle',
 			description: '',
 			startTime: 0n,
 			endTime: currentTimestamp + 365n * DAY,
@@ -894,7 +894,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('selected report action mode follows the report lifecycle', () => {
-		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('Open Oracle report is missing its atomic initial report')
+		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('OpenOracle report is missing its atomic initial report')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n, disputeOccurred: true }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n }))).toBe('settle')

@@ -267,6 +267,40 @@ describe('liquidator execution safety', () => {
 		expect(planVaultMaintenance(pool, strategy, wallet, true)).toEqual({ kind: 'fees' })
 	})
 
+	test('tops up the bot vault against its underwriting limit, as the contract measures health, not its smaller open interest', () => {
+		const wallet = getAddress('0x0000000000000000000000000000000000000020')
+		const pool = {
+			botVault: {
+				address: wallet,
+				badDebtAttoEth: 0n,
+				underwritingLimitAttoEth: 100n * 10n ** 18n,
+				openInterestAttoEth: 10n * 10n ** 18n,
+				backingUnits: 250n * 10n ** 18n,
+				vaultAttoRepBacking: 250n * 10n ** 18n,
+				claimableFeesAttoEth: 0n,
+				disputeStakedAttoRep: 0n,
+			},
+			isPriceValid: true,
+			lastPrice: 10n ** 18n,
+			minimumVaultRepDepositAttoRep: 1n,
+			multiplierBps: 20_000n,
+		}
+		const strategy = {
+			allowAutomaticWithdrawals: false,
+			minimumRepWithdrawalAttoRep: 1n,
+			redeemFeesAboveAttoEth: 1n,
+			vaultTargetHealthBps: 16_000n,
+			vaultTopUpHealthBps: 15_000n,
+			vaultWithdrawHealthBps: 20_000n,
+		}
+		expect(planVaultMaintenance(pool, strategy, wallet, true)).toEqual({ amountAttoRep: 70n * 10n ** 18n, kind: 'deposit' })
+	})
+
+	test('sizes a stale-price receiver top-up from the receiver underwriting limit plus the moved debt', () => {
+		const topUp = conservativeStaleTopUp({ callerAttoRep: 0n, callerUnderwritingLimitAttoEth: 10n, fallbackPrice: 10n ** 18n, minimumTopUp: 0n, multiplierBps: 20_000n, referencePrice: 10n ** 18n, requestedDebtAttoEth: 5n, safetyBps: 10_000n, targetHealthBps: 10_000n })
+		expect(topUp).toBe(30n)
+	})
+
 	test('does not redeem zero fees when the configured threshold is zero', () => {
 		const wallet = getAddress('0x0000000000000000000000000000000000000020')
 		const pool = {
@@ -300,7 +334,7 @@ describe('liquidator execution safety', () => {
 	test('pre-funds stale liquidations against the configured higher price bound', () => {
 		expect(
 			conservativeStaleTopUp({
-				callerOpenInterestAttoEth: 0n,
+				callerUnderwritingLimitAttoEth: 0n,
 				callerAttoRep: 0n,
 				requestedDebtAttoEth: 10n * 10n ** 18n,
 				fallbackPrice: 0n,
@@ -329,6 +363,24 @@ describe('liquidator execution safety', () => {
 				},
 			}),
 		).toThrow('cannot guarantee')
+	})
+
+	test('treats a stale liquidation below the target underwriting limit as partial even when it exceeds open interest', () => {
+		expect(() =>
+			assertStaleLiquidationExposureBound({
+				requestedDebtAttoEth: 5n,
+				target: {
+					address: getAddress('0x0000000000000000000000000000000000000030'),
+					badDebtAttoEth: 0n,
+					underwritingLimitAttoEth: 10n,
+					openInterestAttoEth: 2n,
+					backingUnits: 10n,
+					vaultAttoRepBacking: 10n,
+					claimableFeesAttoEth: 0n,
+					disputeStakedAttoRep: 0n,
+				},
+			}),
+		).not.toThrow()
 	})
 
 	test('applies the exact signed-transaction fee horizon to the gas-cap precheck', () => {

@@ -478,7 +478,7 @@ export async function runOperatorCycle(operator: OperatorState, deps: OperatorDe
 }
 
 export async function waitForNextCycle(operator: OperatorState, deps: OperatorDependencies, consecutiveFailures: number) {
-	const pollMilliseconds = operator.configuration.settings.runtime.lifecyclePollMilliseconds
+	const pollMilliseconds = operator.configuration.settings.runtime.pollMilliseconds
 	let milliseconds = operator.backfillIncomplete ? backfillWaitMilliseconds(pollMilliseconds, operator.consecutiveBackfillCycles) : retryDelayMilliseconds(pollMilliseconds, consecutiveFailures)
 	if (!operator.backfillIncomplete && consecutiveFailures === 0) milliseconds = operatorWaitMilliseconds(milliseconds, operator.runtime)
 	if (operator.backfillIncomplete) operator.consecutiveBackfillCycles += 1

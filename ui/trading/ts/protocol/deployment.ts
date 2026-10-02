@@ -63,9 +63,9 @@ export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number): 
 	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
 	return {
 		core,
-		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
+		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'TwoWayConstantProductFactory' },
 		feeBps: checkedFeeBps,
-		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
+		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'TwoWayConstantProductRouter' },
 	}
 }
 
@@ -101,13 +101,13 @@ async function requireCode(client: Pick<PublicClient, 'getCode'>, address: Addre
 
 async function validateTradingFactory(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
 	const [securityPoolFactory, feeBps] = await Promise.all([client.readContract({ abi: factoryContract.abi, address: plan.factory.address, functionName: 'securityPoolFactory' }), client.readContract({ abi: factoryContract.abi, address: plan.factory.address, functionName: 'feeBps' })])
-	if (getAddress(securityPoolFactory) !== plan.core.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
-	if (feeBps !== BigInt(plan.feeBps)) throw new Error('Trading factory fee does not match the selected fee')
+	if (getAddress(securityPoolFactory) !== plan.core.securityPoolFactory) throw new Error('TwoWayConstantProductFactory references a different SecurityPoolFactory')
+	if (feeBps !== BigInt(plan.feeBps)) throw new Error('TwoWayConstantProductFactory fee does not match the selected fee')
 }
 
 async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
 	const factory = await client.readContract({ abi: routerContract.abi, address: plan.router.address, functionName: 'factory' })
-	if (getAddress(factory) !== plan.factory.address) throw new Error('Trading router references a different factory')
+	if (getAddress(factory) !== plan.factory.address) throw new Error('TwoWayConstantProductRouter references a different TwoWayConstantProductFactory')
 }
 
 export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan) {
@@ -120,7 +120,7 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 	const routerCode = await client.getCode({ address: plan.router.address })
 	const routerDeployed = routerCode !== undefined && routerCode !== '0x'
 	if (routerDeployed) {
-		if (!factoryDeployed) throw new Error('Trading router exists without its expected factory')
+		if (!factoryDeployed) throw new Error('TwoWayConstantProductRouter exists without its expected TwoWayConstantProductFactory')
 		await validateTradingRouter(client, plan)
 	}
 	return { factory: factoryDeployed, router: routerDeployed }

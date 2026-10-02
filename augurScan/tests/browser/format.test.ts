@@ -1,4 +1,4 @@
-import { questionIdHex } from '../../browser/identifier-format.ts'
+import { questionIdHex, short, shortIdentifier } from '../../browser/identifier-format.ts'
 import { expect, test } from 'bun:test'
 import { exactNumber, exactUnit, percentFromBps, utcDateTime } from '../../browser/format.ts'
 
@@ -27,4 +27,17 @@ test('question IDs display in hex without numeric precision loss', () => {
 	expect(questionIdHex(id.toString())).toBe(`0x${id.toString(16)}`)
 	expect(questionIdHex('0x1a')).toBe('0x1a')
 	expect(questionIdHex(null)).toBe('—')
+})
+
+test('abbreviates identifiers like the UI and bots and leaves short values unchanged', () => {
+	const address = '0x1234567890123456789012345678901234567890'
+	expect(short(address)).toBe('0x123456…567890')
+	expect(shortIdentifier(address)).toBe('0x123456…567890')
+	expect(short(address, 10, 8)).toBe('0x12345678…34567890')
+	expect(short('0x1234567890123')).toBe('0x1234567890123')
+	expect(short('0x12345678901234')).toBe('0x123456…901234')
+	expect(shortIdentifier('unknown')).toBe('unknown')
+	expect(short('')).toBe('—')
+	expect(short(undefined)).toBe('—')
+	expect(shortIdentifier('')).toBe('—')
 })

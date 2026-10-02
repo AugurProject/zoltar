@@ -6,7 +6,7 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { formatRoundedUnits } from '../lib/format.js'
-import { averagePriceBps, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
+import { averagePriceBps, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveMarket } from '../protocol/live.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
@@ -88,7 +88,7 @@ export function TradeEstimatePanel({
 				details={[
 					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
 					{ label: ticketCopy.priceImpact, value: <span className={`trade-impact-value trade-impact-value--${impactTier}`}>{impact}</span> },
-					{ label: estimate.kind === 'entry' ? ticketCopy.invalidInsurance : ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.kind === 'entry' ? estimate.quote.invalidInsurance : estimate.quote.invalidRequired, 'INVALID') },
+					{ label: estimate.kind === 'entry' ? ticketCopy.invalidInsurance : ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.kind === 'entry' ? estimate.quote.invalidInsurance : estimate.quote.invalidRequired, shareOutcome.invalid) },
 					{ label: ticketCopy.poolFee, value: formatScaledPercentage(market.feeBps, 2) },
 				]}
 			/>

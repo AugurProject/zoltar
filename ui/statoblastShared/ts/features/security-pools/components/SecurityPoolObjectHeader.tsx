@@ -43,7 +43,7 @@ function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
 
 /**
  * The pool's identity with its next actions beside it, then one strip of the figures that decide what can happen next:
- * collateral in use against capacity, the Open Oracle price, and the lifecycle stage.
+ * collateral in use against capacity, the OpenOracle price, and the lifecycle stage.
  */
 export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & { actions?: ComponentChildren; lifecycle?: ComponentChildren; oracleStatus?: ComponentChildren }) {
 	const { actions, currentTimestamp, freshness, lifecycle, marketDetails, oracleStatus, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
@@ -79,7 +79,7 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & 
 	)
 }
 
-/** `showOraclePrice` is false while the page's price row already shows the Open Oracle price, so the details do not repeat it, and in ended pools, where no action reads the price. */
+/** `showOraclePrice` is false while the page's price row already shows the OpenOracle price, so the details do not repeat it, and in ended pools, where no action reads the price. */
 export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProps & { showOraclePrice: boolean }) {
 	const { currentPoolOracleManagerDetails, currentPoolOraclePrice, currentPoolOracleSettlementTimestamp, currentTimestamp, marketDetails, selectedPoolParentPool, selectedPoolView, showOraclePrice } = props
 	const summaryPool = getSummaryPool(props)

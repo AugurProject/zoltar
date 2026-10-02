@@ -370,7 +370,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 		? candidate.topUpAttoRep
 		: conservativeStaleTopUp({
 				callerDisputeStakedAttoRep: pool.botVault.disputeStakedAttoRep,
-				callerOpenInterestAttoEth: pool.botVault.openInterestAttoEth,
+				callerUnderwritingLimitAttoEth: pool.botVault.underwritingLimitAttoEth,
 				callerAttoRep: pool.botVault.vaultAttoRepBacking,
 				requestedDebtAttoEth: candidate.debtToMoveAttoEth,
 				fallbackPrice: settings.strategy.fallbackRepPerEthPrice,

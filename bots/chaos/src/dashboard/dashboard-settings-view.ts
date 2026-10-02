@@ -4,7 +4,7 @@ import { fullIdentifier, node, setBadge, statusLabel } from './dom.js'
 import { activeSchedulerWorkLabel } from './selection-controls.js'
 import { type Configuration } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { formatDuration, parsePositiveNumber } from './dashboard-format.ts'
+import { formatClockDuration, parsePositiveNumber } from './dashboard-format.ts'
 import type { DashboardState } from './dashboard-state.ts'
 
 type DashboardSettingsViewContext = {
@@ -125,7 +125,7 @@ export function createDashboardSettingsView(context: DashboardSettingsViewContex
 			return
 		}
 		const remainingSeconds = Math.max(0, Math.ceil((nextTimestamp - Date.now()) / 1_000))
-		elements.countdown.textContent = remainingSeconds === 0 ? 'Due now' : formatDuration(remainingSeconds)
+		elements.countdown.textContent = remainingSeconds === 0 ? 'Due now' : formatClockDuration(remainingSeconds)
 		const totalSeconds = parsePositiveNumber(value.scheduler.lastDelaySeconds)
 		let elapsedFraction = remainingSeconds === 0 ? 1 : 0
 		if (totalSeconds !== undefined && totalSeconds !== 0) elapsedFraction = Math.min(1, Math.max(0, 1 - remainingSeconds / totalSeconds))

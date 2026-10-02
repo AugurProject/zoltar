@@ -18,7 +18,7 @@ test('failed proof reads produce explicit unavailable evidence rather than claim
 	).rejects.toThrow('pruned state')
 })
 
-import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from '../../../shared/core/ts/evm/carryProof.ts'
+import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { type Hex, getAddress } from '../../src/ethereum.ts'
 import type { StateRead } from '../../src/snapshots.ts'
 

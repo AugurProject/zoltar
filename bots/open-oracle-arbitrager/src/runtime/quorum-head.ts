@@ -1,4 +1,4 @@
-import { endpointLabel } from '#monitoring/connectivity'
+import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { NetworkConfiguration } from '#config/network'
 import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'

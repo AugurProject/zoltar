@@ -80,7 +80,7 @@ function settings() {
 		privateKey: null,
 		runtime: {
 			execute: false,
-			lifecyclePollMilliseconds: 12000,
+			pollMilliseconds: 12000,
 			once: false,
 			protocolLogBlockSpan: 2000,
 			protocolStartBlock: '0',
@@ -102,7 +102,7 @@ function settings() {
 			workflowValidForBlocks: 288,
 		},
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
-		version: 1,
+		version: 2,
 	})
 }
 

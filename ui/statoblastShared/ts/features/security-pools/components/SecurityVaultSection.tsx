@@ -57,7 +57,6 @@ import {
 	hasValidSecurityVaultOraclePrice,
 	isSecurityVaultDepositBelowMinimum,
 	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
-	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
 import { VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
@@ -161,14 +160,14 @@ export function SecurityVaultSection({
 			: isVaultHealthyAtFactor({
 					disputeStakedAttoRep: currentSelectedVaultDetails.disputeStakedAttoRep,
 					healthFactorBps: 10_000n,
-					openInterestAttoEth: currentSelectedVaultDetails.underwritingLimitAttoEth,
+					underwritingLimitAttoEth: currentSelectedVaultDetails.underwritingLimitAttoEth,
 					poolHeldVaultRepBackingAttoRep: currentSelectedVaultDetails.vaultAttoRepBacking,
 					poolSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
 					repPerEthPrice,
 				})
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const walletRepShortfallAttoRep = balanceShortage(depositAmount, walletRepBalanceAttoRep)
-	const minimumVaultRepDepositAttoRep = currentSelectedVaultDetails?.minimumVaultRepDepositAttoRep ?? MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP
+	const minimumVaultRepDepositAttoRep = currentSelectedVaultDetails?.minimumVaultRepDepositAttoRep
 	const withdrawableRepAmountAttoRep = getSecurityVaultWithdrawableRepAmount({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
@@ -237,7 +236,7 @@ export function SecurityVaultSection({
 	})
 	// Only a withdrawal the guard accepts can exit the whole vault; a blocked amount must not promise that outcome.
 	const withdrawExitsEntireVault = effectiveRepExitMode === 'withdraw' && withdrawRepGuardMessage === undefined && doesVaultWithdrawalExitEntireVault(withdrawAmount, currentSelectedVaultDetails?.vaultAttoRepBacking, minimumVaultRepDepositAttoRep)
-	const withdrawEntireVaultNotice = withdrawExitsEntireVault ? securityPoolCopy.formatWithdrawEntireVaultNotice(formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, repTokenSymbol)) : undefined
+	const withdrawEntireVaultNotice = withdrawExitsEntireVault && minimumVaultRepDepositAttoRep !== undefined ? securityPoolCopy.formatWithdrawEntireVaultNotice(formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, repTokenSymbol)) : undefined
 	const repExitGuardMessage = effectiveRepExitMode === 'redeem' ? redeemRepFromVaultGuardMessage : withdrawRepGuardMessage
 	const hasConnectedWallet = accountState.address !== undefined
 	const canUseOwnedVaultActions = selectedVaultIsOwnedByAccount && hasConnectedWallet
