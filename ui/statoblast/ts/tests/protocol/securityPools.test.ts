@@ -401,6 +401,29 @@ describe('securityPools protocol client', () => {
 		expect(pool.questionId).toBe('0x1')
 	})
 
+	test('a superseded vault scan does not leave the eagerly started pool totals read as an unhandled rejection', async () => {
+		const supersededError = new Error('Read superseded by a changed selection or environment')
+		const unhandledRejections: unknown[] = []
+		const recordUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
+		process.on('unhandledRejection', recordUnhandledRejection)
+		try {
+			const client = createPoolLoaderClient({
+				deployments: [createDeployment(securityPoolAddress)],
+				read: {
+					getVaultCount: () => 5n,
+					// Every in-flight read observes the supersession, so the totals fail alongside the vault page.
+					getTotalPoolHeldAttoRep: () => Promise.reject(supersededError),
+					getVaults: () => Promise.reject(supersededError),
+				},
+			})
+			await expect(loadSecurityPoolPage(client, 0, 1)).rejects.toBe(supersededError)
+			await new Promise(resolve => setTimeout(resolve, 0))
+			expect(unhandledRejections).toEqual([])
+		} finally {
+			process.off('unhandledRejection', recordUnhandledRejection)
+		}
+	})
+
 	test('loadSecurityPoolPage scans past exited known vaults to fill actionable previews', async () => {
 		const knownVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3'), getAddress('0x00000000000000000000000000000000000000c4')]
 		const currentVaultAddress = knownVaultAddresses[3]
@@ -598,6 +621,7 @@ describe('securityPools protocol client', () => {
 		expect(capacity).toEqual({
 			currentRetentionRate: 88n,
 			currentTimestamp: 99n,
+			escalationGameActive: false,
 			feeEndTimestamp,
 			feeIndexRemainder: 0n,
 			lastUpdatedFeeAccumulator: 0n,

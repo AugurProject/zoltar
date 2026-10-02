@@ -1,4 +1,5 @@
 import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
+import { estimateLiquidity, type LiquidityPreview } from '../../../../ui/trading/ts/features/live/liquidityEstimate.js'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deployContract } from '../../testSupport/deployContract'
 import { beforeAll, describe, expect, test } from 'bun:test'
@@ -227,6 +228,62 @@ describe('factory, pair, and router integration', () => {
 		const [yesReserve, noReserve] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 		expect((noReserve * 10_000n) / (yesReserve + noReserve)).toBeGreaterThan(4_900n)
 		await expect(client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, maximumYes, maximumNo, minimumLiquidity, account, 10n ** 12n], value: deposit })).rejects.toThrow('Liquidity price slippage')
+	})
+
+	// The mock pool mints complete sets at a fixed share rate, so no holding fees accrue between the public read and the
+	// transaction. On a SecurityPool, fees accrued since its last update lower the share rate the router mints at, so the
+	// walletless estimate can overstate complete sets, deposits, and LP by those fees; the wallet simulation stays the quote of record.
+	test('the walletless liquidity estimate matches router and pair results while no holding fees accrue', async () => {
+		const deadline = 10n ** 12n
+		const readPoolState = async () => {
+			const [yesReserve, noReserve] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
+			return {
+				yesReserve,
+				noReserve,
+				lpTotalSupply: await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' }),
+				settlementCollateralAttoEth: await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'settlementCollateralAttoEth' }),
+				shareTokenSupplyAttoShares: await client.readContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
+			}
+		}
+		const expectDepositMatches = (estimate: LiquidityPreview | undefined, result: Readonly<{ completeSetShares: bigint; yesUsed: bigint; noUsed: bigint; yesReturned: bigint; noReturned: bigint; invalidInsurance: bigint; liquidity: bigint }>) => {
+			if (estimate === undefined || estimate.operation === 'remove') throw new Error('Expected a deposit estimate')
+			expect({ completeSets: estimate.completeSets, yesUsed: estimate.yesUsed, noUsed: estimate.noUsed, yesReturned: estimate.yesReturned, noReturned: estimate.noReturned, invalidReturned: estimate.invalidReturned, liquidity: estimate.liquidity }).toEqual({
+				completeSets: result.completeSetShares,
+				yesUsed: result.yesUsed,
+				noUsed: result.noUsed,
+				yesReturned: result.yesReturned,
+				noReturned: result.noReturned,
+				invalidReturned: result.invalidInsurance,
+				liquidity: result.liquidity,
+			})
+		}
+
+		// Existing complete sets give the pool a share rate; an empty SecurityPool mints 1:1, which this fixed-rate mock does not model.
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockSecurityPool.abi, address: pool, functionName: 'createCompleteSet', value: 7n }))
+		const initialAmount = 10_007n
+		const initialYesBps = 3_300n
+		const initialQuote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, initialYesBps, 0n, account, deadline], value: initialAmount })
+		expectDepositMatches(estimateLiquidity(await readPoolState(), 'initialize', initialAmount, initialYesBps), initialQuote.result)
+		await initialize(initialAmount, initialYesBps)
+
+		// A swap moves the reserves off the initial ratio so the proportional deposit rounds on both sides.
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		const swapYes = 1_234n * rate + 567n
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, swapYes] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, swapYes, 1n, account] }))
+		for (const deposit of [1n, 333n, 4_001n]) {
+			const state = await readPoolState()
+			const quote = await client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, unboundedShares, unboundedShares, 0n, account, deadline], value: deposit })
+			expectDepositMatches(estimateLiquidity(state, 'add', deposit, undefined), quote.result)
+			await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'addLiquidityWithEth', args: [pair, unboundedShares, unboundedShares, 0n, account, deadline], value: deposit }))
+		}
+
+		const lpBalance = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
+		const state = await readPoolState()
+		for (const liquidity of [lpBalance / 3n, lpBalance]) {
+			const quote = await client.simulateContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 0n, 0n, account, deadline] })
+			expect(estimateLiquidity(state, 'remove', liquidity, undefined)).toEqual({ operation: 'remove', amount: liquidity, yesOut: quote.result[0], noOut: quote.result[1] })
+		}
 	})
 
 	test('initializes at alternative odds, enters YES, and preserves forced ETH', async () => {

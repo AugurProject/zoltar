@@ -19,7 +19,7 @@
 				<h2>Choose a mode</h2>
 				<ul>
 					<li>With no mode parameter, the UI reads live RPC and wallet state.</li>
-					<li><code>?simulate=1</code> boots a browser-local simulator with seeded contracts and balances. Add <code>&amp;simScenario=deployed</code> for a <a href="../reference/glossary.html#security-pool">SecurityPool</a> with no <a href="../reference/glossary.html#trading-pool">trading pool</a>, <code>&amp;simScenario=baseline</code> for a chain without Statoblast or Trading contracts, or leave it out for the default <code>trading-funded</code> scenario with one funded market. A banner labels the page as a simulation.</li>
+					<li><code>?simulate=1</code> boots a browser-local simulator with seeded contracts and balances. Add <code>&amp;simScenario=deployed</code> for a <a href="../reference/glossary.html#security-pool">SecurityPool</a> with no <a href="../reference/glossary.html#trading-pool">trading pool</a>, <code>&amp;simScenario=baseline</code> for a chain without Statoblast or Trading contracts, <code>&amp;simScenario=trading-forked</code> for the funded market after its universe forks, or leave it out for the default <code>trading-funded</code> scenario with one funded market. A banner labels the page as a simulation.</li>
 				</ul>
 				<p><a href="./trading-set-up-development.html">Set up Trading development</a> lists the commands that serve the UI.</p>
 			</section>

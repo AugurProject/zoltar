@@ -6,6 +6,8 @@ import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { executeForkAuctionAction } from './securityPoolActions.js'
 import * as forkAuctionCopy from '../copy/forkAuction.js'
+import { formatTruthAuctionTickPriceInput } from './truthAuctionMath.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
@@ -40,6 +42,8 @@ export async function submitTruthAuctionBid(client: WriteClient, securityPoolAdd
 			functionName: 'submitBid',
 			args: [tick],
 			value: amount,
+			reviewTitle: forkAuctionCopy.formatSubmitBidReviewTitle(formatCurrencyBalance(amount), formatTruthAuctionTickPriceInput(tick)),
+			reviewDescription: forkAuctionCopy.submitBidReviewDescription,
 		}
 		client.onTransactionPlan?.([
 			{

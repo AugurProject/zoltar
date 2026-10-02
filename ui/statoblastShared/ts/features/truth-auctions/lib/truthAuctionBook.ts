@@ -4,11 +4,12 @@ import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
+import { getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
-import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
+import { formatTruthAuctionTickPriceInput, formatTruthAuctionValidationPrice, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
+export { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
 
 type TruthAuctionDisposition = {
 	label: string
@@ -389,12 +390,6 @@ function normalizeTruthAuctionPriceInput(value: string) {
 const TRUTH_AUCTION_MAX_PRICE = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK)
 const TRUTH_AUCTION_MIN_PRICE = getTruthAuctionPriceAtTick(findTruthAuctionMinSupportedTick())
 
-function formatTruthAuctionValidationPrice(price: bigint) {
-	const wholePart = (price / TRUTH_AUCTION_PRICE_PRECISION).toString()
-	const fractionalDigits = (price % TRUTH_AUCTION_PRICE_PRECISION).toString().padStart(18, '0').replace(/0+$/, '')
-	return fractionalDigits === '' ? wholePart : `${wholePart}.${fractionalDigits}`
-}
-
 const TRUTH_AUCTION_MAX_PRICE_INPUT = formatTruthAuctionValidationPrice(TRUTH_AUCTION_MAX_PRICE)
 const TRUTH_AUCTION_PRICE_RANGE_MESSAGE = `Bid price must be between ${formatTruthAuctionValidationPrice(TRUTH_AUCTION_MIN_PRICE)} and ${TRUTH_AUCTION_MAX_PRICE_INPUT} ETH per REP.`
 const truthAuctionMaxPriceParts = TRUTH_AUCTION_MAX_PRICE_INPUT.split('.')
@@ -490,19 +485,6 @@ export function getRepPerEthPrice(repPrice: bigint) {
 	return (TRUTH_AUCTION_PRICE_PRECISION * TRUTH_AUCTION_PRICE_PRECISION) / repPrice
 }
 
-const MIN_TICK_PRICE_INPUT_DECIMALS = 6
-
-/** The shortest bid-price input, with at least six decimals, that maps back to `tick`; it rounds up so it never falls to the tick below. */
-export function formatTruthAuctionTickPriceInput(tick: bigint) {
-	const price = getTruthAuctionPriceAtTick(tick)
-	for (let decimals = MIN_TICK_PRICE_INPUT_DECIMALS; decimals < 18; decimals += 1) {
-		const step = 10n ** BigInt(18 - decimals)
-		const roundedUpPrice = ceilDiv(price, step) * step
-		if (getTruthAuctionTickAtPrice(roundedUpPrice) === tick) return formatTruthAuctionValidationPrice(roundedUpPrice)
-	}
-	return formatTruthAuctionValidationPrice(price)
-}
-
 /** Bidding stops once the auction is finalized or its end time has passed on-chain. */
 export function isTruthAuctionBiddingClosed(truthAuction: TruthAuctionMetrics, currentTimestamp: bigint | undefined) {
 	if (truthAuction.finalized || truthAuction.timeRemaining === 0n) return true
@@ -517,4 +499,31 @@ export function getTruthAuctionLiveBidGuidance(truthAuction: TruthAuctionMetrics
 		clearingPrice: truthAuction.clearingPrice,
 		minimumWinningPriceInput: truthAuction.clearingTick < TRUTH_AUCTION_MAX_TICK ? formatTruthAuctionTickPriceInput(truthAuction.clearingTick + 1n) : undefined,
 	}
+}
+
+/** Bids snap down to the nearest valid tick. Describes that rounding, with the next tick up as the round-up input, unless the input already names its tick. */
+export function getTruthAuctionBidPriceRounding(submitBidPriceInput: string) {
+	const preview = getTruthAuctionBidPreview(submitBidPriceInput)
+	if (preview === undefined || preview.enteredPrice === preview.submittedPrice) return undefined
+	const tickPriceInput = formatTruthAuctionTickPriceInput(preview.tick)
+	const tickInputPrice = tryParseTruthAuctionPriceInput(tickPriceInput)
+	if (tickInputPrice === preview.enteredPrice) return undefined
+	return {
+		roundUpPriceInput: preview.tick < TRUTH_AUCTION_MAX_TICK ? formatTruthAuctionTickPriceInput(preview.tick + 1n) : undefined,
+		submittedPriceInput: tickInputPrice !== undefined && tickInputPrice <= preview.enteredPrice ? tickPriceInput : formatTruthAuctionValidationPrice(preview.submittedPrice),
+	}
+}
+
+/** Gas for a bid stays in the wallet, so Max offers only the balance above the shared gas reserve. */
+export function getTruthAuctionMaxBidAmount(walletBalanceAttoEth: bigint | undefined) {
+	if (walletBalanceAttoEth === undefined) return undefined
+	return getSpendableEthBalance(walletBalanceAttoEth)
+}
+
+/** The bid amount and the price it is submitted at, once both inputs are valid. */
+export function getTruthAuctionSubmitBidLabelParts(submitBidAmountInput: string, submitBidPriceInput: string) {
+	const amountAttoEth = tryParseTruthAuctionAmountInput(submitBidAmountInput.trim())
+	const preview = getTruthAuctionBidPreview(submitBidPriceInput)
+	if (amountAttoEth === undefined || amountAttoEth <= 0n || preview === undefined) return undefined
+	return { amountAttoEth, priceInput: getTruthAuctionBidPriceRounding(submitBidPriceInput)?.submittedPriceInput ?? formatTruthAuctionValidationPrice(preview.enteredPrice) }
 }

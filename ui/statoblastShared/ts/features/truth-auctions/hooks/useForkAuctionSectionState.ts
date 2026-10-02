@@ -5,12 +5,24 @@ import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getTimeRemaining } from '../lib/forkAuction.js'
-import { buildTruthAuctionDepthPoints, formatTruthAuctionTickPriceInput, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionLiveBidGuidance, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
+import { getForkVaultMigrationRepAttoRep, getTimeRemaining } from '../lib/forkAuction.js'
+import {
+	buildTruthAuctionDepthPoints,
+	formatTruthAuctionTickPriceInput,
+	getTruthAuctionBidGuardMessage,
+	getTruthAuctionBidPreview,
+	getTruthAuctionBidPriceRounding,
+	getTruthAuctionBidPriceValidationMessage,
+	getTruthAuctionLiveBidGuidance,
+	getTruthAuctionMaxBidAmount,
+	getTruthAuctionOverviewProgress,
+	getTruthAuctionSubmitBidLabelParts,
+	getTruthAuctionWinningThresholdPrice,
+} from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
-import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -72,7 +84,9 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		yes: [],
 		no: [],
 	})
-	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && (context.connectedWalletVaultSummary.vaultAttoRepBacking > 0n || context.connectedWalletVaultSummary.underwritingLimitAttoEth > 0n)
+	// After the fork the pool no longer holds its REP, so the vault's current REP backing reads zero; migration moves its share of the REP at fork instead.
+	const vaultMigrationRepAttoRep = getForkVaultMigrationRepAttoRep(context.forkAuctionDetails, context.connectedWalletVaultSummary)
+	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && ((context.connectedWalletVaultSummary.repBackingUnits ?? context.connectedWalletVaultSummary.vaultAttoRepBacking) > 0n || context.connectedWalletVaultSummary.underwritingLimitAttoEth > 0n)
 	const hasWalletParentEscalationClaimBalance = effectiveDisputeStakedAttoRep !== undefined && effectiveDisputeStakedAttoRep > 0n
 	const migrateVaultBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
 	const claimParentEscalationBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletDisputeStakedRepEmpty : undefined
@@ -294,13 +308,23 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (startTruthAuctionCountdown === 0n) return undefined
 		return forkAuctionCopy.formatTruthAuctionStartDelay(formatDuration(startTruthAuctionCountdown))
 	})()
-	const isVaultMigrationComplete = hasCompletedVaultMigration || (context.connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance)
 	const truthAuctionBypassReason = getTruthAuctionBypassReason({
 		migratedAttoRep: context.selectedAuctionContext?.migratedAttoRep ?? context.selectedAuctionChildPool?.migratedAttoRep ?? 0n,
 		parentSettlementCollateralAttoEth: context.forkAuctionDetails?.settlementCollateralAttoEth ?? context.previewPool?.settlementCollateralAttoEth,
 		auctionableAttoRepAtFork: context.forkAuctionDetails?.auctionableAttoRepAtFork,
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(context.forkAuctionForm.submitBidPrice)
+	const bidPriceRounding = getTruthAuctionBidPriceRounding(context.forkAuctionForm.submitBidPrice)
+	const submitBidLabelParts = getTruthAuctionSubmitBidLabelParts(context.forkAuctionForm.submitBidAmount, context.forkAuctionForm.submitBidPrice)
+	const submitBidLabel = submitBidLabelParts === undefined ? forkAuctionCopy.submitBid : forkAuctionCopy.formatSubmitBidLabel(formatCurrencyInputBalance(submitBidLabelParts.amountAttoEth), submitBidLabelParts.priceInput)
+	const walletBalanceAttoEth = context.accountState.ethBalanceAttoEth
+	const bidAmountHint = walletBalanceAttoEth === undefined || truthAuctionStatus === undefined ? undefined : { availableAttoEth: walletBalanceAttoEth, minimumBidAttoEth: truthAuctionStatus.minBidSizeAttoEth }
+	const maxBidAmountAttoEth = getTruthAuctionMaxBidAmount(walletBalanceAttoEth)
+	let maxBidUnavailableReason: string | undefined
+	if (context.accountState.address === undefined) maxBidUnavailableReason = forkAuctionCopy.forkActionWalletRequired
+	else if (maxBidAmountAttoEth === undefined) maxBidUnavailableReason = forkAuctionCopy.loadingWalletEthBalance
+	else if (maxBidAmountAttoEth === 0n) maxBidUnavailableReason = forkAuctionCopy.walletEthBelowGasReserve
+	const bidAmountMax = { amount: maxBidAmountAttoEth, unavailableReason: maxBidUnavailableReason }
 	const startTruthAuctionAvailabilityMessage = (() => {
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage
@@ -331,7 +355,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const migrateUnresolvedEscalationGuardMessage = (() => {
 		const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: context.effectiveCurrentTimestamp, migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt })
 		if (timingGuard !== undefined) return timingGuard
-		if (context.loadingReportingDetails) return forkAuctionCopy.unresolvedDepositsLoading
+		if (context.loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
 		if (selectedOutcomeEscalationEntitlementMaterialized) return forkAuctionCopy.formatEntitlementAlreadyMaterialized(context.selectedOutcomeLabel)
 		if (hasStoredEscalationMigrationEntitlement) return undefined
 		if (!isMigrationRequired) return forkAuctionCopy.unresolvedMigrationUnavailableReason
@@ -339,22 +363,31 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
 		return undefined
 	})()
-	const migratePoolToUniverseGuardMessage = (() => {
-		if (context.loadingSelectedOutcomeMigrationSeedStatus) return forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(context.selectedOutcomeLabel)
-		if (context.selectedOutcomeMigrationSeedStatusError !== undefined) return context.selectedOutcomeMigrationSeedStatusError
-		if (context.selectedOutcomeMigrationSeedStatus?.seeded) return forkAuctionCopy.formatPoolRepAlreadyMigrated(context.selectedOutcomeLabel)
-		return undefined
+	const seedStatusCheckingMessage = context.loadingSelectedOutcomeMigrationSeedStatus ? forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(context.selectedOutcomeLabel) : undefined
+	const migratePoolToUniverseAvailability = (() => {
+		if (seedStatusCheckingMessage !== undefined) return { disabled: true, loading: true, reason: seedStatusCheckingMessage }
+		const seedStatus = context.selectedOutcomeMigrationSeedStatus
+		// Pool-held REP that is split but not yet swept waits in the migration proxy until a vault migration deploys the child pool.
+		let reason = context.selectedOutcomeMigrationSeedStatusError
+		if (reason === undefined && seedStatus?.seeded === true) reason = seedStatus.childPoolRepBalanceAttoRep > 0n ? forkAuctionCopy.formatPoolRepAlreadyMigrated(context.selectedOutcomeLabel) : forkAuctionCopy.formatPoolRepStagedForVaultMigration(context.selectedOutcomeLabel)
+		return { disabled: reason !== undefined, reason }
 	})()
 	const selectedOutcomeMigrationSeedGuardMessage = (() => {
-		if (migrateVaultBalanceGuardMessage !== undefined) return undefined
-		if (context.loadingSelectedOutcomeMigrationSeedStatus) return forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(context.selectedOutcomeLabel)
 		if (context.selectedOutcomeMigrationSeedStatusError !== undefined) return context.selectedOutcomeMigrationSeedStatusError
 		if (context.selectedOutcomeMigrationSeedStatus === undefined || context.selectedOutcomeMigrationSeedStatus.seeded) return undefined
 		return forkAuctionCopy.formatPoolMigrationRequiredForVault(context.selectedOutcomeLabel)
 	})()
-	const migrateVaultCompletedMessage = isVaultMigrationComplete ? forkAuctionCopy.vaultMigrationCompleteReason : undefined
+	// A confirmed migration keeps its completed reason until refreshed balances arrive, so the action never offers a stale prerequisite meanwhile.
+	const migrateVaultCompletedMessage = hasCompletedVaultMigration ? forkAuctionCopy.vaultMigrationCompleteReason : undefined
 	const vaultMigrationInProgressMessage = isVaultMigrationPending ? forkAuctionCopy.migratingVault : undefined
-	const migrateVaultGuardMessage = isMigrationRequired ? forkAuctionCopy.combinedUnresolvedMigrationDetail : (migrationWindowClosedGuardMessage ?? migrateVaultBalanceGuardMessage ?? selectedOutcomeMigrationSeedGuardMessage ?? migrateVaultCompletedMessage ?? vaultMigrationInProgressMessage)
+	const migrateVaultAvailability = (() => {
+		if (isMigrationRequired) return { disabled: true, reason: forkAuctionCopy.combinedUnresolvedMigrationDetail }
+		const blockingReason = migrationWindowClosedGuardMessage ?? vaultMigrationInProgressMessage ?? migrateVaultCompletedMessage ?? migrateVaultBalanceGuardMessage
+		if (blockingReason !== undefined) return { disabled: true, reason: blockingReason }
+		if (seedStatusCheckingMessage !== undefined) return { disabled: true, loading: true, reason: seedStatusCheckingMessage }
+		const reason = selectedOutcomeMigrationSeedGuardMessage
+		return { disabled: reason !== undefined, reason }
+	})()
 	const submitBidGuardMessage = truthAuctionBidGuardMessage ?? bidPriceValidationMessage
 	const migrationStateBadge = getMigrationStateBadge({
 		currentTimestamp: context.effectiveCurrentTimestamp,
@@ -384,7 +417,8 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	}
 	const onMigrateVaultSubmit = () => {
 		beginVaultMigrationProgress()
-		context.onMigrateVault()
+		const vault = context.connectedWalletVaultSummary
+		context.onMigrateVault(vault === undefined ? undefined : { repAttoRep: vaultMigrationRepAttoRep, underwritingLimitAttoEth: vault.underwritingLimitAttoEth })
 	}
 	const onMigrateSelectedOutcomeRepToZoltar = () => {
 		context.onMigrateRepToZoltar([context.forkAuctionForm.selectedOutcome])
@@ -415,6 +449,10 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		stageActionContext,
 		truthAuctionEndsAt,
 		submitBidGuardMessage,
+		submitBidLabel,
+		bidAmountHint,
+		bidAmountMax,
+		bidPriceRounding,
 		onSubmitBidForSelectedAuction,
 		isTruthAuctionDetailsLoading,
 		isMigrationRequired,
@@ -492,13 +530,11 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		hasStoredEscalationMigrationEntitlement,
 		hasUnresolvedMigrationDeposits,
 		hasUnresolvedMigrationState,
-		hasWalletParentEscalationClaimBalance,
-		hasWalletVaultMigrationBalance,
 		isMigrationExpired,
-		isVaultMigrationComplete,
-		migratePoolToUniverseGuardMessage,
+		migratePoolToUniverseAvailability,
 		migrateUnresolvedEscalationGuardMessage,
-		migrateVaultGuardMessage,
+		migrateVaultAvailability,
+		vaultMigrationRepAttoRep,
 		onClaimSelectedParentEscalationDeposits,
 		onMigrateSelectedOutcomeRepToZoltar,
 		onMigrateUnresolvedEscalationSubmit,

@@ -440,6 +440,65 @@ describe('GlobalTransactionDialog', () => {
 		expect(details.open).toBe(true)
 	})
 
+	test('renders a labelled contract address with the abbreviating address component instead of raw wrapping text', async () => {
+		const contractAddress = '0xe6897C029507343091175096f7Cb74027F25A4D8'
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionDialog
+				transaction={{
+					dismissKey: '0xlabelled-contract',
+					technicalRows: [
+						{ label: 'Contract', value: `Truth Auction (${contractAddress})` },
+						{ label: 'Arguments', value: `(${contractAddress})` },
+					],
+					title: 'Submit bid',
+					tone: 'success',
+				}}
+			/>,
+		)
+		trackRendered(renderedComponent)
+
+		const contractValue = within(document.body).getByText('Contract').nextElementSibling
+		expect(contractValue?.querySelector('.global-transaction-identifier-label')?.textContent).toBe('Truth Auction')
+		expect(contractValue?.querySelector('.address-value')?.getAttribute('title')).toBe(contractAddress)
+		expect(contractValue?.querySelector('.address-value-abbreviated')).not.toBeNull()
+		// Only a label followed by one address is treated as a labelled address.
+		expect(within(document.body).getByText('Arguments').nextElementSibling?.querySelector('.global-transaction-identifier-label')).toBeNull()
+	})
+
+	test('abbreviates each address inside an argument list and lists call data in one full-width column', async () => {
+		const poolAddress = '0x11cBa4f7B4e4B66702FC3bF4d1cB5815AC030149'
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionDialog
+				transaction={{
+					dismissKey: '0xargument-list',
+					technicalRows: [
+						{ label: 'Function', value: 'migrateVault' },
+						{ label: 'Arguments', value: `${poolAddress}, 1` },
+						{ label: 'Arguments', value: '1, {title: Will this resolve?}' },
+					],
+					title: 'Migrate vault',
+					tone: 'success',
+				}}
+			/>,
+		)
+		trackRendered(renderedComponent)
+
+		const [addressArguments, plainArguments] = within(document.body)
+			.getAllByText('Arguments')
+			.map(label => label.nextElementSibling)
+		if (addressArguments === null || addressArguments === undefined) throw new Error('Missing argument list value')
+		// The address abbreviates in place, so the next argument follows it directly instead of after a reserved full-width gap.
+		expect(addressArguments.textContent).toBe('0x11cBa4…030149, 1')
+		const argumentAddress = addressArguments.querySelector('.address-value')
+		expect(argumentAddress?.getAttribute('title')).toBe(poolAddress)
+		expect(argumentAddress?.getAttribute('aria-label')).toBe(`Copy address ${poolAddress}`)
+		expect(argumentAddress?.querySelector('.address-value-full')).toBeNull()
+		expect(addressArguments.querySelector('.global-transaction-detail-text')).not.toBeNull()
+		expect(plainArguments?.textContent).toBe('1, {title: Will this resolve?}')
+		expect(plainArguments?.querySelector('.address-value')).toBeNull()
+		expect(addressArguments.closest('dl')?.classList.contains('global-transaction-technical-rows')).toBe(true)
+	})
+
 	test('renders complete copyable question identifiers across success notices', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		const presentations = [

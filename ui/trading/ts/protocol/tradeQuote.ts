@@ -5,8 +5,12 @@ export const UI_SLIPPAGE_BPS = 50n
 /** Runs a wallet write inside the caller's wallet-context guard, so a network or account change aborts the signature. */
 export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 
+/** Zero tolerance makes any price movement revert the transaction, so the smallest accepted setting is 0.01%. */
+export const MINIMUM_SLIPPAGE_BPS = 1n
+export const MAXIMUM_SLIPPAGE_BPS = 500n
+
 export function requireTransactionSlippageBps(slippageBps: bigint) {
-	if (slippageBps < 0n || slippageBps > 500n) throw new Error('Slippage must be between 0% and 5%')
+	if (slippageBps < MINIMUM_SLIPPAGE_BPS || slippageBps > MAXIMUM_SLIPPAGE_BPS) throw new Error('Slippage must be between 0.01% and 5%')
 }
 
 export function minimumAfterSlippage(amount: bigint, slippageBps = UI_SLIPPAGE_BPS) {

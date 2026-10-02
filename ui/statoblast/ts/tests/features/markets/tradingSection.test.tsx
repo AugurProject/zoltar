@@ -334,6 +334,13 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Redeemable complete sets')).not.toBeNull()
 		expect(documentQueries.queryByText('Max Complete Sets')).toBeNull()
+		const hero = document.querySelector('.trading-holdings-hero')
+		if (hero === null) throw new Error('Expected holdings hero')
+		expect(getExactValueTitles(hero, '2 sets')).toHaveLength(1)
+		const outcomeRows = document.querySelector('.ranked-bar-list')
+		if (outcomeRows === null) throw new Error('Expected per-outcome holdings')
+		// Each row is already labelled by its outcome, so share counts carry no unit there.
+		expect(Array.from(outcomeRows.querySelectorAll('.currency-value')).filter(element => element.getAttribute('title') === '3')).toHaveLength(1)
 	})
 
 	void test('renders trading content without the workflow strip and launches complete-set actions from the share summary', async () => {
@@ -454,7 +461,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('≈ 1.23').length).toBeGreaterThan(0)
 		expect(documentQueries.getAllByText('0.023').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('0.00041').length).toBeGreaterThanOrEqual(2)
+		expect(documentQueries.getAllByText(/^0\.00041( sets)?$/).length).toBeGreaterThanOrEqual(2)
 		expect(getExactValueTitles(document.body, '1.234').length).toBeGreaterThan(0)
 		expect(getExactValueTitles(document.body, '0.023').length).toBeGreaterThan(0)
 		expect(getExactValueTitles(document.body, '0.00041').length).toBeGreaterThanOrEqual(2)
@@ -486,7 +493,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.queryByText('Total across outcomes')).toBeNull()
 		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
-		expect(documentQueries.getAllByText('1.00').length).toBeGreaterThanOrEqual(4)
+		expect(documentQueries.getAllByText(/^1\.00( sets)?$/).length).toBeGreaterThanOrEqual(4)
 		expect(getExactValueTitles(document.body, '1').length).toBeGreaterThanOrEqual(4)
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 		expect(getExactValueTitles(document.body, '0.9 ETH')).toHaveLength(4)
@@ -567,11 +574,12 @@ void describe('TradingSection', () => {
 		const mintableMetric = modalQueries.getByText('Available to mint').parentElement
 		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
 		expect(getExactValueTitles(walletMetric, '1.25')).toHaveLength(1)
-		expect(getExactValueTitles(mintableMetric, '1.25')).toHaveLength(1)
+		// Available to mint leaves 0.01 ETH in the wallet for gas.
+		expect(getExactValueTitles(mintableMetric, '1.24')).toHaveLength(1)
 	})
 
 	void test.each([
-		{ capacity: 5n * 10n ** 18n, expected: '1.25' },
+		{ capacity: 5n * 10n ** 18n, expected: '1.24' },
 		{ capacity: 10n ** 18n, expected: '1' },
 	])('fills the mint amount within wallet balance and live backing capacity: $expected', async ({ capacity, expected }) => {
 		let mintedAmount: string | undefined
@@ -599,7 +607,7 @@ void describe('TradingSection', () => {
 		})
 
 		expect(mintedAmount).toBe(expected)
-		expect(document.body.textContent?.includes('Max uses your entire ETH balance. Leave ETH for gas.')).toBe(expected === '1.25')
+		expect(document.body.textContent?.includes('Max keeps 0.01\u00a0ETH in your wallet for gas.')).toBe(expected === '1.24')
 	})
 
 	void test('uses standing commitments when the optional UI price is unavailable', async () => {
@@ -632,7 +640,7 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					accountState: createAccountState({ ethBalanceAttoEth: 10n * 10n ** 18n }),
+					accountState: createAccountState({ ethBalanceAttoEth: 20n * 10n ** 18n }),
 					onTradingFormChange: ({ completeSetAmount }) => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
@@ -813,12 +821,12 @@ void describe('TradingSection', () => {
 		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 
-	void test('redeems resolved shares directly without a confirmation dialog', async () => {
+	void test('reviews the winning shares and expected ETH payout before redeeming resolved shares', async () => {
 		const redeem = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+					selectedPool: createSelectedPool({ questionOutcome: 'yes', settlementCollateralAttoEth: 6n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }),
 					onRedeemShares: redeem,
 				})}
 			/>,
@@ -826,11 +834,91 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const launcher = documentQueries.getByRole('button', { name: 'Redeem resolved shares' })
-		fireEvent.click(launcher)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem resolved shares' }))
+		})
 
-		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		expect(redeem).not.toHaveBeenCalled()
+		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem resolved shares' })
+		const modalQueries = within(dialog)
+		const sharesMetric = modalQueries.getByText('Winning Yes shares').parentElement
+		const payoutMetric = modalQueries.getByText('Expected ETH payout').parentElement
+		if (sharesMetric === null || payoutMetric === null) throw new Error('Expected resolved-share redemption metrics')
+		expect(getExactValueTitles(sharesMetric, '3')).toHaveLength(1)
+		// 3 winning shares of a 4-share supply backed by 6 ETH.
+		expect(getExactValueTitles(payoutMetric, '4.5')).toHaveLength(1)
+		await act(() => {
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Redeem resolved shares' }))
+		})
 		expect(redeem).toHaveBeenCalledTimes(1)
+	})
+
+	void test('blocks resolved-share redemption when the wallet holds no winning shares', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'no' }),
+					tradingDetails: createTradingDetails({ shareBalances: createShareBalances({ noAttoShares: 0n }) }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const launcher = within(document.body).getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
+		expect(launcher.disabled).toBe(true)
+		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('No winning No shares to redeem.')
+	})
+
+	void test('explains that an escalation game pauses minting instead of reporting missing capacity', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true, totalPoolHeldAttoRep: 10n ** 18n }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is paused while the outcome is disputed.')
+	})
+
+	void test('shows how many shares of the selected outcome a migration moves and each outcome balance', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ universeHasForked: true }),
+					tradingForkUniverse: createScalarForkUniverse(),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+		})
+
+		const dialog = documentQueries.getByRole('dialog', { name: 'Migrate forked shares' })
+		expect(dialog.textContent).toContain('Migrating 3.00 Yes shares')
+		expect(dialog.textContent).toContain('Migration cannot be undone.')
+		const outcomeDropdown = within(dialog).getByRole('button', { name: 'Share outcome to migrate' })
+		expect(outcomeDropdown.textContent).toContain('Yes (3.00 shares)')
+		await act(() => {
+			fireEvent.click(outcomeDropdown)
+		})
+		const optionLabels = Array.from(dialog.querySelectorAll('[role="option"]')).map(option => option.textContent)
+		expect(optionLabels).toEqual(['Invalid (2.00 shares)', 'Yes (3.00 shares)', 'No (4.00 shares)'])
+	})
+
+	void test('shows the redeemable complete sets and their ETH value in the redeem modal', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 3n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem complete sets' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Redeem complete sets' }))
+		const setsMetric = modalQueries.getByText('Redeemable complete sets').parentElement
+		const ethMetric = modalQueries.getByText('Available to redeem').parentElement
+		if (setsMetric === null || ethMetric === null) throw new Error('Expected complete-set redemption metrics')
+		expect(getExactValueTitles(setsMetric, '2 sets')).toHaveLength(1)
+		expect(getExactValueTitles(ethMetric, '1.5 ETH')).toHaveLength(1)
 	})
 
 	void test('blocks minting once the selected market has finalized', async () => {

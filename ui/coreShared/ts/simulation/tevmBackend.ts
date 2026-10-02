@@ -14,6 +14,11 @@ import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWo
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
 
+const WORKER_REQUEST_TIMEOUT_MILLISECONDS = 120_000
+// These calls run a whole scenario seeding script as one request, which can legitimately outlast an ordinary request
+// on a slow machine. The worker reports progress while it seeds, so each report restarts their timeout instead.
+const PROGRESS_REPORTING_CALLS: ReadonlySet<SimulationWorkerCallMethod> = new Set(['bootstrap', 'reset', 'waitUntilReady'])
+
 type PendingRequest = {
 	reject: (error: Error) => void
 	resolve: (value: SimulationWorkerResultValue) => void
@@ -111,6 +116,7 @@ export async function createSimulationBackend(
 	const workerPath = resolveWorkerPath(appId)
 	const worker = (dependencies.createWorkerConnection ?? createWorkerConnection)(workerPath)
 	const pendingRequests = new Map<number, PendingRequest>()
+	const progressListeners = new Set<() => void>()
 	let nextRequestId = 1
 	let currentState: SimulationWorkerState | undefined = undefined
 	let bootstrapPromise: Promise<void> | undefined = undefined
@@ -137,9 +143,29 @@ export async function createSimulationBackend(
 		worker.terminate()
 	}
 
-	const requestFromWorker = <TResult>(message: WorkerRequestMessage): Promise<TResult> => {
+	const withWorkerTimeout = async <TResult>(work: Promise<TResult>, restartsOnProgress: boolean) => {
+		let timeoutId: ReturnType<typeof setTimeout> | undefined
+		let rejectTimeout: (error: Error) => void = () => undefined
+		const timeout = new Promise<never>((_resolve, reject) => {
+			rejectTimeout = reject
+		})
+		const restartTimeout = () => {
+			clearTimeout(timeoutId)
+			timeoutId = setTimeout(() => rejectTimeout(new Error('Simulation request timed out. Reload the page to retry.')), WORKER_REQUEST_TIMEOUT_MILLISECONDS)
+		}
+		restartTimeout()
+		if (restartsOnProgress) progressListeners.add(restartTimeout)
+		try {
+			return await Promise.race([work, timeout])
+		} finally {
+			clearTimeout(timeoutId)
+			progressListeners.delete(restartTimeout)
+		}
+	}
+
+	const requestFromWorker = <TResult>(message: WorkerRequestMessage, restartsOnProgress = false): Promise<TResult> => {
 		let settled = false
-		return withTimeout(
+		return withWorkerTimeout(
 			new Promise<TResult>((resolve, reject) => {
 				if (terminalError !== undefined) {
 					reject(terminalError)
@@ -169,8 +195,7 @@ export async function createSimulationBackend(
 			}).finally(() => {
 				settled = true
 			}),
-			120_000,
-			'Simulation request timed out. Reload the page to retry.',
+			restartsOnProgress,
 		).catch(error => {
 			if (!settled) failWorker(error instanceof Error ? error : new Error(String(error)))
 			throw error
@@ -178,11 +203,14 @@ export async function createSimulationBackend(
 	}
 
 	const callWorker = async <TMethod extends SimulationWorkerCallMethod>(method: TMethod, params: SimulationWorkerCallMap[TMethod]['params']): Promise<SimulationWorkerCallMap[TMethod]['result']> =>
-		await requestFromWorker<SimulationWorkerCallMap[TMethod]['result']>({
-			method,
-			params,
-			type: 'call',
-		})
+		await requestFromWorker<SimulationWorkerCallMap[TMethod]['result']>(
+			{
+				method,
+				params,
+				type: 'call',
+			},
+			PROGRESS_REPORTING_CALLS.has(method),
+		)
 
 	const requestRpc = async (parameters: SimulationProviderRequest) =>
 		await requestFromWorker<unknown>({
@@ -219,6 +247,7 @@ export async function createSimulationBackend(
 			}
 			if (message.type === 'state') {
 				applyState(message.state)
+				for (const restartTimeout of progressListeners) restartTimeout()
 				return
 			}
 			if (message.type === 'error' && message.id === undefined) {

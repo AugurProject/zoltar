@@ -1,6 +1,6 @@
 import { getDisplayedLeadingEscalationOutcome, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened } from './reporting.js'
 import { formatReportingDeadline } from './reportingViewerStatus.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -52,7 +52,7 @@ export function getReportingStagePresentation({
 			label: reportingCopy.resolved,
 			tone: 'success',
 		}
-	if (reportingDetails.status === 'not-started') return { availableActions: [], blockedActions: [], detail: reportingCopy.firstReportNext(formatCurrencyInputBalance(reportingDetails.startBondAttoRep)), key: 'reporting-open', label: reportingCopy.phaseLabels[0] ?? reportingCopy.reportingOpen, tone: 'default' }
+	if (reportingDetails.status === 'not-started') return { availableActions: [], blockedActions: [], detail: reportingCopy.firstReportNext(formatCurrencyBalance(reportingDetails.startBondAttoRep)), key: 'reporting-open', label: reportingCopy.phaseLabels[0] ?? reportingCopy.reportingOpen, tone: 'default' }
 	const escalationPhase = getEscalationPhase(reportingDetails)
 	const leadingOutcome = getDisplayedLeadingEscalationOutcome(reportingDetails.sides)
 	switch (escalationPhase) {

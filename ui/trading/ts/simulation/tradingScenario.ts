@@ -3,13 +3,16 @@ import { tradingContracts } from '../generated/contractArtifact.js'
 import { discoverLiveUniverseMarketPage } from '../protocol/live.js'
 import type { BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { reportBootstrapProgress, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
+import { applyStatoblastScenario, forkSecurityPoolUniverseWithOwnEscalation } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
+import { getStatoblastScenarioProtocol } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarioProtocol.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../protocol/deployment.js'
-import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from './index.js'
+import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from './index.js'
+
+const TRADING_SIMULATION_SCENARIOS: readonly string[] = [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, FORKED_TRADING_SIMULATION_SCENARIO]
 
 export async function applyTradingScenario(parameters: BootstrapScenarioApplyParameters): Promise<boolean> {
-	if (parameters.scenario !== DEPLOYED_TRADING_SIMULATION_SCENARIO && parameters.scenario !== FUNDED_TRADING_SIMULATION_SCENARIO) return false
+	if (!TRADING_SIMULATION_SCENARIOS.includes(parameters.scenario)) return false
 	const seeded = await applyStatoblastScenario({ ...parameters, scenario: 'security-pool' })
 	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast security pool')
 
@@ -33,8 +36,8 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 	await deployTradingStep(writeClient, readClient, plan, plan.factory)
 	await reportBootstrapProgress(parameters.onProgress, 'Deploying TwoWayConstantProductRouter', 0.98)
 	await deployTradingStep(writeClient, readClient, plan, plan.router)
-	if (parameters.scenario === FUNDED_TRADING_SIMULATION_SCENARIO) {
-		await reportBootstrapProgress(parameters.onProgress, 'Funding Trading liquidity and wallet shares', 0.99)
+	if (parameters.scenario !== DEPLOYED_TRADING_SIMULATION_SCENARIO) {
+		await reportBootstrapProgress(parameters.onProgress, 'Funding Trading liquidity and wallet shares', 0.984)
 		const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
 		const { markets } = await discoverLiveUniverseMarketPage(readClient, configuration, 0n)
 		const market = markets[0]
@@ -47,6 +50,20 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 		const sharesHash = await writeClient.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: market.pool, functionName: 'createCompleteSet', value: 5n * 10n ** 15n })
 		const sharesReceipt = await readClient.waitForTransactionReceipt({ hash: sharesHash })
 		if (sharesReceipt.status !== 'success') throw new Error('Trading simulation wallet share funding reverted')
+		if (parameters.scenario === FORKED_TRADING_SIMULATION_SCENARIO) {
+			// The wallet keeps its parent-universe shares while the universe forks, so Settlement offers Fork migration.
+			const parentPool = (await getStatoblastScenarioProtocol().loadAllSecurityPools(readClient)).find(pool => pool.securityPoolAddress.toLowerCase() === market.pool.toLowerCase())
+			if (parentPool === undefined) throw new Error('Trading simulation could not load its seeded SecurityPool for the fork')
+			await forkSecurityPoolUniverseWithOwnEscalation({
+				accountAddress: account,
+				createWriteClient: parameters.createWriteClient,
+				memoryClient: parameters.memoryClient,
+				onProgress: parameters.onProgress,
+				parentPool,
+				profile: parameters.profile,
+				readClient,
+			})
+		}
 	}
 	await reportBootstrapProgress(parameters.onProgress, 'Trading simulation is ready', 0.995)
 	return true

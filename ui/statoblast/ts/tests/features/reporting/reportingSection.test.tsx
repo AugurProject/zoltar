@@ -374,13 +374,14 @@ describe('ReportingSection', () => {
 	test('shows nonzero tiny fork progress and grouped amounts', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ nonDecisionThresholdAttoRep: rep(225000n) }) })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('8 / 225 000 REP (<0.01%)')
+		expect(document.body.textContent).toContain('second side at 5 / 225\u00a0000 REP (<0.01%)')
 	})
 	test('keeps active phase visible, scales bars to fork threshold and hides premature settlement', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('Response window')
-		expect(document.body.textContent).toContain('Progress to fork: 8 / 20 REP (40%)')
+		// A fork needs two sides at the threshold, so progress follows the second-largest side (Yes), not the leader (No).
+		expect(document.body.textContent).toContain('Progress to fork: second side at 5 / 20 REP (25%)')
 		expect(document.body.querySelector('.escalation-side')?.getAttribute('style')).toContain('5.00%')
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(document.body.textContent).toContain("You're losing on Yes.")
@@ -408,6 +409,111 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelector('.escalation-sides-legend-marker')).toBeNull()
 		expect(document.body.querySelector('#reporting-contribution-amount')).toBeNull()
 		expect(within(document.body).queryByRole('radiogroup')).toBeNull()
+	})
+
+	test('explains that clearing losing deposits returns no REP and when it is needed', async () => {
+		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(settlementButtonLabel('Yes')).toBe('Clear Yes deposits (worth 0 REP)…')
+		expect(document.body.textContent).toContain('Losing deposits return no REP. Clearing them costs gas and is only needed before you redeem your vault REP from this pool: until then they still count as your dispute stake, which blocks redemption.')
+	})
+
+	describe('fork-triggering reports', () => {
+		// Yes already sits at the 20 REP threshold, so filling No (12 REP) with 8 REP ends escalation and triggers the fork.
+		const forkReadyDetails = () =>
+			createDynamicReportingDetails({
+				sides: [
+					{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+					{ balance: rep(12n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [createDeposit()] },
+				],
+			})
+		const amountInput = () => {
+			const input = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
+			if (!(input instanceof HTMLInputElement)) throw new Error('Contribution input is unavailable')
+			return input
+		}
+
+		test('Max stops below the fork and presets name the fork instead of a lead', async () => {
+			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: forkReadyDetails(), reportingForm: createReportingForm({ reportAmount: '', selectedOutcome: 'no' }) }} />)
+			cleanupRenderedComponent = rendered.cleanup
+			const queries = within(document.body)
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: 'Max' }))
+			})
+			expect(amountInput().value).toBe('7.999999999999999999')
+			expect(document.body.textContent).toContain('Max stops at 7.999999999999999999 REP, just below the fork threshold.')
+			expect(document.querySelector('.reporting-fork-trigger-warning')).toBeNull()
+			expect(reportingButtonLabel('No')).toBe('Report No · 7.999999999999999999 REP…')
+			// No can never lead Yes at the threshold, so the minimum preset is not a "Min to lead".
+			expect(queries.queryByRole('button', { name: /^Min to lead/ })).toBeNull()
+			expect(queries.getByRole('button', { name: 'Fill side & trigger fork (8 REP)' })).not.toBeNull()
+			const maxReward = requireButton(queries.getByRole('button', { name: /^Max reward/ }))
+			expect(maxReward.disabled).toBe(true)
+			expect(maxReward.title).toBe('Max reward is unavailable because matching the other side would trigger the universe fork.')
+		})
+
+		test('a fork-triggering amount needs an explicit confirmation and names the fork on the action', async () => {
+			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: forkReadyDetails(), reportingForm: createReportingForm({ reportAmount: '', selectedOutcome: 'no' }) }} />)
+			cleanupRenderedComponent = rendered.cleanup
+			const queries = within(document.body)
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (8 REP)' }))
+			})
+			expect(amountInput().value).toBe('8')
+			const warning = document.querySelector('.reporting-fork-trigger-warning')
+			expect(warning?.classList.contains('warning-surface')).toBe(true)
+			expect(warning?.textContent).toContain('This report triggers a universe fork')
+			expect(document.body.textContent).not.toContain('This deposit reaches the non-decision threshold')
+			const label = 'Report No & trigger fork · 8 REP…'
+			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork.')
+			const confirmation = queries.getByRole('checkbox', { name: 'I understand this report ends escalation and leads to a universe fork.' })
+			await act(() => {
+				fireEvent.click(confirmation)
+			})
+			expectTransactionButtonEnabled(document.body, label)
+			// Once the fork is confirmed, Max may fill the side to the threshold.
+			await act(() => {
+				fireEvent.input(amountInput(), { target: { value: '1' } })
+			})
+			expect(document.querySelector('.reporting-fork-trigger-warning')).toBeNull()
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: 'Max' }))
+			})
+			// Dropping below the fork amount cleared the confirmation, so Max stops below the fork again.
+			expect(amountInput().value).toBe('7.999999999999999999')
+		})
+
+		test('wallet-funded fork reports group amounts like the warning and ask for both the confirmation and the approval', async () => {
+			const details = createDynamicReportingDetails({
+				contributionFunding: 'wallet',
+				nonDecisionThresholdAttoRep: rep(225_000n),
+				sides: [
+					{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: rep(225_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+					{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				],
+				startBondAttoRep: rep(1n),
+				viewerWalletRepAllowanceAttoRep: 0n,
+				viewerWalletRepBalanceAttoRep: rep(300_000n),
+			})
+			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '', selectedOutcome: 'no' }) }} />)
+			cleanupRenderedComponent = rendered.cleanup
+			const queries = within(document.body)
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (225 000 REP)' }))
+			})
+			expect(amountInput().value).toBe('225000')
+			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225\u00a0000 REP')
+			expectTransactionButtonEnabled(document.body, 'Approve 225 000 REP')
+			const label = 'Report No & trigger fork · 225 000 REP…'
+			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.')
+			await act(() => {
+				fireEvent.click(queries.getByRole('checkbox', { name: 'I understand this report ends escalation and leads to a universe fork.' }))
+			})
+			expectTransactionButtonDisabled(document.body, label, 'Approve REP for this security pool before reporting.')
+		})
 	})
 
 	test('starts unselected until the user explicitly chooses an outcome side', async () => {
@@ -1332,7 +1438,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).not.toContain('Check back before')
 		expect(getEscalationMetricsSection().textContent).not.toContain('Response window ends')
 		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('You have 1 REP on Yes.')
-		const forkTriggeredReason = 'Escalation ended without a decision. Trigger the universe fork here if this pool should fork.'
+		const forkTriggeredReason = 'Escalation ended without a decision, so this question can only resolve through a universe fork. Trigger it unless someone else already has; until then, all escalation deposits stay locked. Triggering is permanent.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
@@ -1907,7 +2013,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const settlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. Trigger the universe fork here if this pool should fork.'
+		const settlementReason = 'Escalation ended without a decision, so deposits stay locked until someone triggers the universe fork. Settle them in Fork & migration afterwards.'
 		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
 		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()

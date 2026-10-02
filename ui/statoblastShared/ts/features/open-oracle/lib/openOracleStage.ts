@@ -1,8 +1,9 @@
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
+import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 
 type OpenOracleStageReport = Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'disputeDelay' | 'reportTimestamp' | 'timeType'> & Partial<Pick<OpenOracleReportDetails, 'coordinatorPriceValidUntilTimestamp' | 'settlementTimestamp'>>
@@ -18,7 +19,7 @@ function getDisputeWindowPendingPresentation(report: OpenOracleStageReport): Lif
 		blockedActions: [],
 		detail: `Disputes open in ${duration}.`,
 		key: 'dispute-pending',
-		label: 'Waiting for dispute window',
+		label: openOracleCopy.awaitingDisputeWindow,
 		tone: 'warning',
 	}
 }
@@ -53,7 +54,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 				availableActions: [],
 				blockedActions: [],
 				key: 'dispute-window',
-				label: 'Dispute window open',
+				label: openOracleCopy.disputeWindowOpen,
 				tone: 'default',
 			}
 		case 'settle':
@@ -61,7 +62,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 				availableActions: [],
 				blockedActions: [],
 				key: 'ready-to-settle',
-				label: 'Ready to settle',
+				label: openOracleCopy.readyToSettle,
 				tone: 'success',
 			}
 		case 'read-only':
@@ -69,7 +70,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 				availableActions: [],
 				blockedActions: [],
 				key: 'settled',
-				label: 'Settled',
+				label: commonCopy.settled,
 				tone: 'success',
 			}
 		default:

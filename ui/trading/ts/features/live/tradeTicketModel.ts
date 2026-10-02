@@ -2,6 +2,8 @@ import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/s
 import { largestExitForLongShares, maximumInsuredExit, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
+import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
@@ -125,10 +127,10 @@ function sellableShares(market: LiveMarket, side: Side, balances: LiveBalances |
 	return completeSets === 0n ? 0n : quoteExitPosition(side, completeSets, market).totalLongShares
 }
 
-// Shortcut amounts keep eight decimals, rounded down so they never exceed what can be sold.
+// Shortcut amounts keep eight decimals, rounded down so they never exceed what can be sold or spent; ETH and shares share the precision.
 const SHORTCUT_STEP = 10n ** BigInt(SHARE_QUANTITY_DECIMALS - 8)
 
-/** A share amount trimmed to eight decimals for the amount field; amounts below that step stay exact. */
+/** A share or ETH amount trimmed to eight decimals for the amount field; amounts below that step stay exact. */
 export function roundDownShortcut(value: bigint) {
 	return value < SHORTCUT_STEP ? value : value - (value % SHORTCUT_STEP)
 }
@@ -143,6 +145,20 @@ function sellShortcuts(market: LiveMarket, side: Side, balances: LiveBalances | 
 		{ label: ticketCopy.half, value: roundDownShortcut(longBalance / 2n) },
 		{ label: ticketCopy.max, value: roundDownShortcut(maximum) },
 	].filter(shortcut => shortcut.value > 0n)
+}
+
+/** The buy Max shortcut: the wallet's ETH less the gas reserve, trimmed to eight decimals like the sell shortcuts. */
+function buyShortcuts(walletEthAttoEth: bigint | undefined) {
+	if (walletEthAttoEth === undefined) return []
+	const spendable = roundDownShortcut(getSpendableEthBalance(walletEthAttoEth))
+	return spendable === 0n ? [] : [{ label: ticketCopy.max, value: spendable }]
+}
+
+/** A buy above the wallet balance cannot be paid; one that only eats into the gas reserve would leave nothing to send it with. */
+function insufficientEthReason(payAttoEth: bigint, walletEthAttoEth: bigint) {
+	if (payAttoEth > walletEthAttoEth) return availabilityCopy.insufficientEthReason
+	if (payAttoEth > getSpendableEthBalance(walletEthAttoEth)) return ticketCopy.gasReserveReason(formatTrimmedUnits(ETH_GAS_RESERVE_ATTO_ETH))
+	return undefined
 }
 
 /** Explains why a sell is larger than the INVALID balance can insure, instead of only disabling the button. */
@@ -189,14 +205,14 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const needsAcknowledgment = impactTier === 'warning'
 	const impactAcknowledged = estimate !== undefined && inputs.acknowledgedImpactBps !== undefined && estimate.impactBps <= inputs.acknowledgedImpactBps
 	let insufficient: string | undefined
-	if (mode === 'entry' && parsed.value !== undefined && inputs.walletEthAttoEth !== undefined && parsed.value > inputs.walletEthAttoEth) insufficient = availabilityCopy.insufficientEthReason
+	if (mode === 'entry' && parsed.value !== undefined && inputs.walletEthAttoEth !== undefined) insufficient = insufficientEthReason(parsed.value, inputs.walletEthAttoEth)
 	if (mode === 'exit' && parsed.value !== undefined && longBalance !== undefined && parsed.value > longBalance) insufficient = availabilityCopy.formatInsufficientOutcomeReason(side)
 	let balanceReason: string | undefined
 	if (inputs.balanceState === 'loading') balanceReason = availabilityCopy.balancesLoadingReason
 	else if (inputs.balanceState === 'error') balanceReason = availabilityCopy.balancesUnavailableReason
 	const availability: ActionAvailability = createActionAvailability(
 		inputs.networkMismatchReason,
-		inputs.marketClosed ? availabilityCopy.marketClosedReason : undefined,
+		inputs.marketClosed ? ticketCopy.tradingEndedReason : undefined,
 		submissionWindowBlocker(market, mode, inputs.nowSeconds),
 		balanceReason,
 		parsed.value === undefined || parsed.value === 0n ? (parsed.error ?? availabilityCopy.amountRequiredReason) : undefined,
@@ -223,7 +239,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		impactAcknowledged,
 		shortfall,
 		sellable: mode === 'exit' ? sellableShares(market, side, balances) : undefined,
-		shortcuts: mode === 'exit' ? sellShortcuts(market, side, balances) : [],
+		shortcuts: mode === 'exit' ? sellShortcuts(market, side, balances) : buyShortcuts(inputs.walletEthAttoEth),
 		// Connecting comes first: without a wallet the ticket still prices the trade, and the button offers to connect.
 		primaryStep,
 		availability: availability.reason !== undefined && loadingReasons.includes(availability.reason) ? { ...availability, loading: true } : availability,

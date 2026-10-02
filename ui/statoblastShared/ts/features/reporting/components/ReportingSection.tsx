@@ -11,6 +11,8 @@ import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 import { EscalationPhaseStepper } from './EscalationPhaseStepper.js'
 import { ReportingResultCard } from './ReportingResultCard.js'
 import { ReportingSides } from './ReportingSides.js'
+import { useKeyedConfirmation } from '../hooks/useKeyedConfirmation.js'
+import { getReportingMaxContribution } from '../lib/reportingMaxContribution.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
@@ -33,7 +35,7 @@ import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvail
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, isPoolQuestionFinalized, previewReportingContribution } from '../lib/reportingDomain.js'
+import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMinimumOutcomeChangeContribution, getRemainingSelectedOutcomeContributionCapacity, getSecondLargestEscalationBalance, isPoolQuestionFinalized, previewReportingContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getReportingStagePresentation } from '../lib/reportingStagePresentation.js'
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
@@ -55,8 +57,6 @@ type EscalationSideDisplay = {
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.presetDetailsRequired
 const SELECT_OUTCOME_PRESET_REASON = reportingCopy.presetOutcomeSelectionRequired
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = reportingCopy.reportingActivationHint
-const NO_SELECTED_SIDE_CAPACITY_REASON = reportingCopy.selectedSideCapacityEmpty
-const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = reportingCopy.selectedSideBelowMinimumReason
 function isRedundantPresetReason(reason: string | undefined) {
 	return reason === LOAD_REPORTING_PRESETS_REASON || reason === SELECT_OUTCOME_PRESET_REASON
 }
@@ -195,7 +195,7 @@ export function ReportingSection({
 	}
 	const outcomeSides = getOutcomeSides(effectiveReportingDetails)
 	const chartScaleMax = effectiveReportingDetails?.nonDecisionThresholdAttoRep
-	const largestBalance = outcomeSides.reduce((max, side) => ((side.balance ?? 0n) > max ? (side.balance ?? 0n) : max), 0n)
+	const forkProgressBalance = getSecondLargestEscalationBalance(outcomeSides)
 	const finalized = isPoolQuestionFinalized(effectiveReportingDetails)
 	const leadingOutcome = activeReportingDetails === undefined ? undefined : getDisplayedLeadingEscalationOutcome(activeReportingDetails.sides)
 	const reportContributionPreview = effectiveReportingDetails === undefined || selectedAmount === undefined || selectedOutcome === undefined ? undefined : previewReportingContribution(effectiveReportingDetails, selectedOutcome, selectedAmount)
@@ -204,39 +204,19 @@ export function ReportingSection({
 	const walletFundingQuote = getReportingWalletFundingQuote(effectiveReportingDetails, actualReportDepositAmount)
 	const selectedOutcomeLabel = selectedOutcome === undefined ? reportingCopy.selectedSide : (outcomeSides.find(side => side.key === selectedOutcome)?.label ?? getReportingOutcomeLabel(selectedOutcome))
 	const availableReportingRep = usesWalletFunding ? effectiveReportingDetails?.viewerWalletRepBalanceAttoRep : effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep
-	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction(reportingCopy.reportAmountLabel(selectedOutcomeLabel, formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)))
+	const reportTriggersFork = reportingContributionTriggersFork(effectiveReportingDetails, selectedOutcome, selectedAmount)
+	// A confirmation covers one exact fork-triggering report; any change to the pool, side, or amount asks again.
+	const forkConfirmation = useKeyedConfirmation(reportTriggersFork ? `${effectiveReportingDetails?.securityPoolAddress ?? ''}:${selectedOutcome ?? ''}:${selectedAmount?.toString() ?? ''}` : undefined)
+	const reportDisplayAmount = formatCurrencyBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)
+	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction((reportTriggersFork ? reportingCopy.reportAndTriggerForkLabel : reportingCopy.reportAmountLabel)(selectedOutcomeLabel, reportDisplayAmount))
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const minimumPresetAmount = minimumOutcomeChangeContribution.amountAttoRep ?? (effectiveReportingDetails?.status === 'not-started' ? effectiveReportingDetails.startBondAttoRep : undefined)
+	let minimumPresetKind: Parameters<typeof reportingCopy.minimumPreset>[0] = reportingStatus === 'active' ? 'lead' : 'start'
+	if (reportingContributionTriggersFork(effectiveReportingDetails, selectedOutcome, minimumOutcomeChangeContribution.amountAttoRep)) minimumPresetKind = 'fork'
 	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
 	const presetBlocker = reportControlsLocked ? undefined : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
 	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
-	const maxContributionAmount = (() => {
-		if (selectedOutcome === undefined) return { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON }
-		if (effectiveReportingDetails === undefined) return { amountAttoRep: undefined, reason: LOAD_REPORTING_PRESETS_REASON }
-		if (availableReportingRep === undefined) return { amountAttoRep: undefined, reason: usesWalletFunding ? reportingCopy.loadingWalletRepBalance : reportingCopy.loadingPoolHeldVaultRepBacking }
-		if (availableReportingRep <= 0n) return { amountAttoRep: undefined, reason: usesWalletFunding ? reportingCopy.walletRepBalanceEmpty : reportingCopy.poolHeldVaultRepBackingEmpty }
-		if (remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity <= 0n) return { amountAttoRep: undefined, reason: NO_SELECTED_SIDE_CAPACITY_REASON }
-		if (effectiveReportingDetails.status === 'not-started') {
-			const cappedAmount = remainingSelectedOutcomeCapacity === undefined || availableReportingRep < remainingSelectedOutcomeCapacity ? availableReportingRep : remainingSelectedOutcomeCapacity
-			if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
-			return {
-				amountAttoRep: cappedAmount,
-				reason: undefined,
-			}
-		}
-		const selectedSide = effectiveReportingDetails.sides.find(side => side.key === selectedOutcome)
-		if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
-		const maxContributionPreview = previewReportingContribution(effectiveReportingDetails, selectedOutcome, effectiveReportingDetails.nonDecisionThresholdAttoRep - selectedSide.balance)
-		if (maxContributionPreview.actualDepositAmount === undefined) return { amountAttoRep: undefined, reason: maxContributionPreview.reason }
-		let cappedAmount = maxContributionPreview.actualDepositAmount
-		if (cappedAmount > availableReportingRep) cappedAmount = availableReportingRep
-		if (remainingSelectedOutcomeCapacity !== undefined && cappedAmount > remainingSelectedOutcomeCapacity) cappedAmount = remainingSelectedOutcomeCapacity
-		if (cappedAmount < effectiveReportingDetails.startBondAttoRep) return { amountAttoRep: undefined, reason: BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON }
-		return {
-			amountAttoRep: cappedAmount,
-			reason: undefined,
-		}
-	})()
+	const maxContributionAmount = getReportingMaxContribution({ availableReportingRep, details: effectiveReportingDetails, forkConfirmed: forkConfirmation.confirmed, selectedOutcome, usesWalletFunding })
 	const presetReasons = [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && !isRedundantPresetReason(reason) && reason !== presetBlocker && reasons.indexOf(reason) === index)
 	const vaultFundingLoadingReason = usesWalletFunding && activeReportingDetails?.forkContinuation && actualReportDepositAmount !== undefined && walletDepositAmount === undefined ? reportingCopy.loadingVaultFunding : undefined
 	const reportGuardParameters = {
@@ -257,7 +237,11 @@ export function ReportingSection({
 		viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
 		viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
 	}
-	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? getReportingReportGuardMessage(reportGuardParameters)
+	const forkConfirmationReason = reportTriggersFork && !forkConfirmation.confirmed ? reportingCopy.forkTriggerConfirmationRequired : undefined
+	const reportPrerequisiteReason = getReportingReportGuardMessage(reportGuardParameters)
+	// The fork confirmation and the REP approval are independent steps, so when both are missing the reason names both instead of hiding the confirmation behind the approval.
+	const reportReadinessReason = forkConfirmationReason !== undefined && reportPrerequisiteReason === reportingCopy.reportingRepApprovalRequired ? reportingCopy.forkTriggerConfirmationAndApprovalRequired : (reportPrerequisiteReason ?? forkConfirmationReason)
+	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? reportReadinessReason
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
 	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
@@ -435,7 +419,7 @@ export function ReportingSection({
 							</WarningSurface>
 						))}
 					<ReportingSides
-						largestBalance={largestBalance}
+						forkProgressBalance={forkProgressBalance}
 						chartScaleMax={chartScaleMax}
 						displayBindingCapital={displayBindingCapital}
 						finalized={finalized}
@@ -460,7 +444,14 @@ export function ReportingSection({
 								value={reportingForm.reportAmount}
 							/>
 
-							<ReportingDepositPreview details={effectiveReportingDetails} outcome={selectedOutcome} amount={selectedAmount} />
+							{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(formatCurrencyBalance(maxContributionAmount.amountAttoRep))} /> : undefined}
+							<ReportingDepositPreview
+								details={effectiveReportingDetails}
+								outcome={selectedOutcome}
+								outcomeLabel={selectedOutcomeLabel}
+								amount={selectedAmount}
+								forkConfirmation={{ confirmed: forkConfirmation.confirmed, disabled: reportControlsLocked || reportingActiveAction !== undefined, onChange: forkConfirmation.setConfirmed }}
+							/>
 
 							<div className='actions'>
 								<button
@@ -474,7 +465,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 								>
-									{reportingCopy.minimumPreset(reportingStatus === 'active', minimumPresetAmount === undefined ? undefined : formatCurrencyInputBalance(minimumPresetAmount))}
+									{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : formatCurrencyBalance(minimumPresetAmount))}
 								</button>
 								<button
 									className='secondary'
@@ -487,7 +478,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 								>
-									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyInputBalance(maxProfitContribution.amountAttoRep))}
+									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyBalance(maxProfitContribution.amountAttoRep))}
 								</button>
 							</div>
 							{presetBlocker === undefined ? undefined : <UserMessage id={presetBlockerId} className='detail' detail={presetBlocker} />}
@@ -522,7 +513,7 @@ export function ReportingSection({
 									{usesWalletFunding ? (
 										<TransactionActionButton
 											idleLabel={getReportingApprovalLabel(walletDepositAmount, reportingRepApprovalRequired)}
-											pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
+											pendingLabel={reportingCopy.approvingAmount(formatCurrencyBalance(walletDepositAmount ?? 0n))}
 											onClick={onApproveReportingRep}
 											showDisabledReason={reportingRepApprovalRequired}
 											pending={reportingActiveAction === 'approveReportingRep'}
@@ -536,7 +527,7 @@ export function ReportingSection({
 									) : undefined}
 									<TransactionActionButton
 										idleLabel={reportButtonLabel}
-										pendingLabel={reportingCopy.reportingAmount(selectedOutcomeLabel, formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n))}
+										pendingLabel={(reportTriggersFork ? reportingCopy.reportingAndTriggeringFork : reportingCopy.reportingAmount)(selectedOutcomeLabel, reportDisplayAmount)}
 										onClick={onReportOutcome}
 										pending={reportingActiveAction === 'reportOutcome'}
 										actionButtonRef={reportActionButtonRef}

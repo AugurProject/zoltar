@@ -13,13 +13,14 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReportingDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { createForkAuctionForm, createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
@@ -499,11 +500,13 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(
-			documentQueries.getByText(
-				'First transfers this wallet’s REP backing units and underwriting commitments to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
-			),
-		).not.toBeNull()
+		expect(documentQueries.getByText('Optional. Moves your vault to the selected universe and clears your unresolved parent deposits in one step; the move can’t be undone. You don’t need it to claim winning deposits, and losing carried deposits need no transaction.')).not.toBeNull()
+		// The contract mechanics stay available under Technical details instead of leading the explanation.
+		expect(documentQueries.getByText('Technical details')).not.toBeNull()
+		expect(document.body.textContent).toContain('It then clears the three parent outcome totals in constant-size work.')
+		// Every unresolved deposit is included automatically, so the list shows no checkboxes that look selectable but cannot change.
+		expect(document.body.textContent).toContain('Deposit #4')
+		expect(document.body.querySelector('.withdraw-deposit-list input[type="checkbox"]')).toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
@@ -659,11 +662,184 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
+		expect(documentQueries.getByText('The window for this optional cleanup has closed. Nothing is lost: your child-pool backing and winning claims are unchanged.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear unresolved parent escalation-deposit accounting' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim parent escalation deposits' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
+	})
+
+	test('submits vault migration with the displayed vault amounts for the review', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const onMigrateVault = mock((_vault?: { repAttoRep: bigint; underwritingLimitAttoEth: bigint }) => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					currentTimestamp: 50n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 50n,
+						migrationEndsAt: 100n,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					forkMigrationReadClient: {
+						readContract: mock(async request => {
+							switch (request.functionName) {
+								case 'getChildUniverseId':
+									return 11n
+								case 'getMigrationProxyAddress':
+									return zeroAddress
+								case 'getRepToken':
+									return getAddress('0x00000000000000000000000000000000000000ae')
+								case 'balanceOf':
+									return 1n
+								default:
+									throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+							}
+						}) as ReadClient['readContract'],
+					},
+					onMigrateVault,
+					previewPool: createChildPool({
+						vaults: [
+							{
+								disputeStakedAttoRep: 0n,
+								vaultAttoRepBacking: 20n,
+								underwritingLimitAttoEth: 3n,
+								claimableFeesAttoEth: 0n,
+								vaultAddress: walletAddress,
+							},
+						],
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			const button = documentQueries.getByRole('button', { name: 'Migrate vault to Yes' })
+			if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
+			expect(button.disabled).toBe(false)
+		})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate vault to Yes' }))
+		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: 20n, underwritingLimitAttoEth: 3n })
+	})
+
+	const FORKED_VAULT_ADDRESS = getAddress('0x00000000000000000000000000000000000000ab')
+	const POOL_REP_AT_FORK_ATTO_REP = 2_000_000n * 10n ** 18n
+
+	function createSeedStatusReadClient(balances: { childPool: () => bigint; proxy: () => bigint }, onLoad: () => void = () => undefined): Pick<ReadClient, 'readContract'> {
+		const proxyAddress = getAddress('0x00000000000000000000000000000000000000a9')
+		return {
+			readContract: mock(async request => {
+				switch (request.functionName) {
+					case 'getChildUniverseId':
+						onLoad()
+						return 11n
+					case 'getMigrationProxyAddress':
+						return proxyAddress
+					case 'getRepToken':
+						return getAddress('0x00000000000000000000000000000000000000ae')
+					case 'balanceOf':
+						return Array.isArray(request.args) && request.args[0] === proxyAddress ? balances.proxy() : balances.childPool()
+					default:
+						throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+				}
+			}) as ReadClient['readContract'],
+		}
+	}
+
+	function createForkedVaultProps(overrides: Partial<ForkAuctionSectionProps> = {}, vaultOverrides: Partial<ListedSecurityPool['vaults'][number]> = {}) {
+		return createProps({
+			accountState: createAccountState({ address: FORKED_VAULT_ADDRESS }),
+			currentStageView: 'migration',
+			currentTimestamp: 50n,
+			forkAuctionDetails: createForkAuctionDetails({
+				auctionableAttoRepAtFork: POOL_REP_AT_FORK_ATTO_REP,
+				currentTime: 50n,
+				migrationEndsAt: 100n,
+				systemState: 'poolForked',
+				truthAuction: undefined,
+				truthAuctionStartedAt: 0n,
+			}),
+			forkMigrationReadClient: createSeedStatusReadClient({ childPool: () => 0n, proxy: () => POOL_REP_AT_FORK_ATTO_REP }),
+			previewPool: createChildPool({
+				vaults: [
+					{
+						claimableFeesAttoEth: 0n,
+						disputeStakedAttoRep: 0n,
+						repBackingUnits: 3n * 10n ** 18n,
+						totalPoolHeldRepBalanceAttoRep: 0n,
+						totalRepBackingUnits: 4n * 10n ** 18n,
+						underwritingLimitAttoEth: 0n,
+						vaultAddress: FORKED_VAULT_ADDRESS,
+						vaultAttoRepBacking: 0n,
+						...vaultOverrides,
+					},
+				],
+			}),
+			securityPools: [],
+			selectedStageView: 'migration',
+			...overrides,
+		})
+	}
+
+	test('shows and reviews the forked vault share of pool-held REP at fork instead of its emptied current backing', async () => {
+		const onMigrateVault = mock((_vault?: { repAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint }) => undefined)
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ onMigrateVault })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(false))
+		expect(documentQueries.getByText('1 500 000.00 REP')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate vault to Yes' }))
+		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: 1_500_000n * 10n ** 18n, underwritingLimitAttoEth: 0n })
+	})
+
+	test('omits the vault migration REP amount when the vault backing units are unavailable', async () => {
+		const onMigrateVault = mock((_vault?: { repAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint }) => undefined)
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ onMigrateVault }, { repBackingUnits: undefined, totalRepBackingUnits: undefined, underwritingLimitAttoEth: 3n })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(false))
+		expect(document.body.textContent).toContain('REP backing—')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate vault to Yes' }))
+		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: undefined, underwritingLimitAttoEth: 3n })
+	})
+
+	test('states each migration reason once and keeps the confirmed vault migration state while the seed status refreshes', async () => {
+		let proxyBalance = POOL_REP_AT_FORK_ATTO_REP
+		let seedStatusLoads = 0
+		const forkMigrationReadClient = createSeedStatusReadClient({ childPool: () => 0n, proxy: () => proxyBalance }, () => {
+			seedStatusLoads += 1
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ forkMigrationReadClient })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const stagedReason = 'Pool-held REP for the Yes universe is already staged and moves into the child pool during vault migration.'
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate pool to Yes universe').reason).toBe(stagedReason))
+		const bodyText = document.body.textContent ?? ''
+		expect(bodyText).not.toContain('already been migrated')
+		expect(bodyText.split(stagedReason)).toHaveLength(2)
+		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(false)
+
+		// The vault migration sweeps the staged REP into a child pool the pool list has not loaded yet, so the refresh reads neither balance.
+		proxyBalance = 0n
+		const seedStatusLoadsBeforeRefresh = seedStatusLoads
+		await act(() => {
+			render(h(ForkAuctionSection, createForkedVaultProps({ forkAuctionResult: { action: 'migrateVault', hash: `0x${'2'.repeat(64)}`, securityPoolAddress: PARENT_POOL_ADDRESS, universeId: 1n }, forkMigrationReadClient })), renderedComponent.container)
+		})
+		await waitFor(() => expect(seedStatusLoads).toBeGreaterThan(seedStatusLoadsBeforeRefresh))
+		await new Promise(resolve => setTimeout(resolve, 10))
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').reason).toBe('Vault migration is already complete for this wallet.'))
+		expect(getTransactionButtonState(document.body, 'Migrate pool to Yes universe')).toEqual({ disabled: true, reason: stagedReason })
+		expect(document.body.textContent).not.toContain('before moving vault balances')
+		expect(document.body.textContent).not.toContain('Already migrated')
 	})
 
 	test('disables vault migration after the migration window closes', async () => {
@@ -704,6 +880,8 @@ describe('ForkAuctionSection', () => {
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
 		expect(button.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').reason).toBe('Migration window has closed for this parent pool.')
+		expect(documentQueries.getByText('Moves all your vault REP and underwriting commitments to the Yes universe. This can’t be undone or split across outcomes.')).not.toBeNull()
+		expect(document.body.textContent).not.toContain('migration power')
 	})
 
 	test('keeps fork-carried settlement disabled until the child pool question finalizes', async () => {
@@ -1437,15 +1615,51 @@ describe('ForkAuctionSection', () => {
 		})
 	}
 
+	// The live-auction form bids 1 ETH at 1 ETH per REP, so the submit action names both.
+	const LIVE_AUCTION_BID_LABEL = 'Bid 1\u00a0ETH at 1\u00a0ETH per REP'
+
+	test('shows the tick price a bid is submitted at and offers to round it up', async () => {
+		const onForkAuctionFormChange = mock((_update: Partial<ForkAuctionSectionProps['forkAuctionForm']>) => undefined)
+		const props = createLiveAuctionProps(createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }))
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, { ...props, forkAuctionForm: { ...props.forkAuctionForm, submitBidPrice: '1.00005' }, onForkAuctionFormChange }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		// 1.00005 sits between the 1 and next valid tick prices, so the bid snaps down to 1.
+		expect(document.body.textContent).toContain('Will be submitted at 1\u00a0ETH per REP (nearest valid price below).')
+		expect(documentQueries.getByRole('button', { name: LIVE_AUCTION_BID_LABEL })).not.toBeNull()
+		const roundUpPrice = formatTruthAuctionTickPriceInput(1n)
+		fireEvent.click(documentQueries.getByRole('button', { name: `Round up to ${roundUpPrice}` }))
+		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidPrice: roundUpPrice })
+	})
+
+	test('shows the bid balance and minimum and fills Max below a gas reserve', async () => {
+		const onForkAuctionFormChange = mock((_update: Partial<ForkAuctionSectionProps['forkAuctionForm']>) => undefined)
+		const balanceAttoEth = 999_999_989_980_999_999_998_676_937_240n
+		const props = createLiveAuctionProps(createAccountState({ ethBalanceAttoEth: balanceAttoEth }))
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, { ...props, onForkAuctionFormChange }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		// The hint rounds like other amounts, rounding the balance down, and keeps exact values in the titles.
+		expect(document.body.textContent).toContain('Available: ≈ 999\u00a0999\u00a0989\u00a0980.99 ETH · Min bid 0.0000000000000000010 ETH · Max keeps 0.010 ETH for gas')
+		expect(document.body.querySelector(`[title="${formatCurrencyBalance(balanceAttoEth)} ETH"]`)).not.toBeNull()
+		// An exact tick price needs no rounding notice.
+		expect(document.body.textContent).not.toContain('Will be submitted at')
+		// Submitting the bid is the form's primary action.
+		expect(within(document.body).getByRole('button', { name: LIVE_AUCTION_BID_LABEL }).classList.contains('primary')).toBe(true)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
+		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidAmount: formatCurrencyInputBalance(balanceAttoEth - 10n ** 16n) })
+	})
+
 	test('keeps fork-auction actions disabled off Sepolia and shows switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveAuctionProps(createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }))))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		const submitBidButton = documentQueries.getByRole('button', { name: LIVE_AUCTION_BID_LABEL })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, LIVE_AUCTION_BID_LABEL).reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -1457,7 +1671,7 @@ describe('ForkAuctionSection', () => {
 			const { calls, walletActions } = createWalletActions()
 			const renderedComponent = await renderIntoDocument(h(WalletActionsProvider, { walletActions }, h(ForkAuctionSection, createLiveAuctionProps(accountState))))
 			cleanupRenderedComponent = renderedComponent.cleanup
-			const fix = expectWalletFixDescribesAction(document.body, 'Submit bid', fixLabel)
+			const fix = expectWalletFixDescribesAction(document.body, LIVE_AUCTION_BID_LABEL, fixLabel)
 			expect(document.body.textContent).not.toContain('Connect a wallet before using fork and auction actions.')
 			fireEvent.click(fix)
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
@@ -1606,8 +1820,52 @@ describe('ForkAuctionSection', () => {
 		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
 		expect(migrationCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 		expect(within(migrationCard).getByText('REP at fork')).not.toBeNull()
-		expect(within(migrationCard).getByText('Migrated REP')).not.toBeNull()
+		expect(within(migrationCard).getByText('REP migrated to Yes')).not.toBeNull()
 		expect(within(migrationCard).getByText('Settlement collateral')).not.toBeNull()
+	})
+
+	test('reports REP migrated into the selected outcome child pool instead of the parent pool own migrated amount', async () => {
+		const migratedToYesAttoRep = 2_012_000n * 10n ** 18n
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({ migratedAttoRep: 0n, systemState: 'forkMigration', truthAuctionStartedAt: 0n }),
+					securityPools: [createChildPool({ migratedAttoRep: migratedToYesAttoRep, questionOutcome: 'yes', truthAuctionStartedAt: 0n })],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const migrationCard = within(document.body).getByRole('heading', { name: 'Migration status' }).closest('.section-block')
+		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
+		const migratedMetric = within(migrationCard).getByText('REP migrated to Yes').closest('.fork-workflow-summary-stat-copy')
+		if (!(migratedMetric instanceof HTMLElement)) throw new Error('Expected migrated REP metric')
+		expect(migratedMetric.textContent).toContain('2\u00a0012\u00a0000.00')
+		expect(migratedMetric.textContent).toContain('REP')
+	})
+
+	test('reports no migrated REP for an outcome whose child pool does not exist yet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({ migratedAttoRep: 5n * 10n ** 18n, systemState: 'forkMigration', truthAuctionStartedAt: 0n }),
+					forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }),
+					securityPools: [createChildPool({ migratedAttoRep: 7n * 10n ** 18n, questionOutcome: 'yes' })],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const migrationCard = within(document.body).getByRole('heading', { name: 'Migration status' }).closest('.section-block')
+		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
+		const migratedMetric = within(migrationCard).getByText('REP migrated to No').closest('.fork-workflow-summary-stat-copy')
+		expect(migratedMetric?.textContent).toContain('0.00')
 	})
 
 	test('shows a closed migration badge once the truth auction timeline has started', async () => {

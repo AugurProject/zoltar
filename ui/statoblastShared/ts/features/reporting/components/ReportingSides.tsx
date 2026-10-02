@@ -9,7 +9,7 @@ import type { ReportingDetails, EscalationDeposit } from '../../../types/contrac
 import { EscalationSide } from './EscalationSide.js'
 
 export function ReportingSides({
-	largestBalance,
+	forkProgressBalance,
 	chartScaleMax,
 	displayBindingCapital,
 	finalized,
@@ -20,7 +20,8 @@ export function ReportingSides({
 	selectedOutcome,
 	onSelect,
 }: {
-	largestBalance: bigint
+	/** The second-largest side balance, since a fork needs two sides at the threshold. */
+	forkProgressBalance: bigint
 	chartScaleMax: bigint | undefined
 	displayBindingCapital: bigint | undefined
 	finalized: boolean
@@ -39,9 +40,9 @@ export function ReportingSides({
 					label={
 						chartScaleMax === undefined
 							? reportingCopy.progressToForkUnavailable
-							: reportingCopy.progressToFork(formatCurrencyBalance(largestBalance), formatCurrencyBalance(chartScaleMax), largestBalance > 0n && chartScaleMax > largestBalance * 10000n ? '<0.01' : (chartScaleMax > 0n ? Number((largestBalance * 10000n) / chartScaleMax) / 100 : 0).toString())
+							: reportingCopy.progressToFork(formatCurrencyBalance(forkProgressBalance), formatCurrencyBalance(chartScaleMax), forkProgressBalance > 0n && chartScaleMax > forkProgressBalance * 10000n ? '<0.01' : (chartScaleMax > 0n ? Number((forkProgressBalance * 10000n) / chartScaleMax) / 100 : 0).toString())
 					}
-					value={largestBalance}
+					value={forkProgressBalance}
 					maxValue={chartScaleMax ?? 0n}
 					detail={reportingCopy.forkProgressHelp}
 				/>

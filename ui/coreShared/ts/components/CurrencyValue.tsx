@@ -2,7 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import * as pricingCopy from '../copy/pricing.js'
 import { LoadingText } from './LoadingText.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
-import { formatAmount, formatCurrencyBalance, formatUnitSuffix, withApproximateMarker, type AmountNotation, type AmountRounding } from '../lib/formatters.js'
+import { formatAmount, formatCurrencyBalance, formatUnitSuffix, toPlainGrouping, withApproximateMarker, type AmountNotation, type AmountRounding } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 
@@ -34,11 +34,13 @@ function getDisplayNumber({ decimals, exactWhenRoundedToZero, notation, precisio
 
 export function CurrencyValue({ accessibleUnit, className = '', copyable = false, decimals = 2, exactWhenRoundedToZero = false, loading = false, notation = 'standard', precision = 'rounded', rounding = 'nearest', suffix = '', units = 18, value }: CurrencyValueProps) {
 	const exactValue = value === undefined ? undefined : formatCurrencyBalance(value, units)
-	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(exactValue)
+	// Copied text uses ordinary spaces so pasting it elsewhere never carries the no-break grouping separator.
+	const copyValue = exactValue === undefined ? undefined : toPlainGrouping(exactValue)
+	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(copyValue)
 
 	if (loading) return <LoadingText className={`currency-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</LoadingText>
 
-	if (value === undefined || exactValue === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
+	if (value === undefined || exactValue === undefined || copyValue === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
 
 	const exactSuffix = formatUnitSuffix(suffix)
 	const renderedValue = (
@@ -61,10 +63,10 @@ export function CurrencyValue({ accessibleUnit, className = '', copyable = false
 
 	return (
 		<span className='currency-value-wrap'>
-			<button type='button' className={`currency-value copyable ${className}`} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactTitle)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(exactValue)}>
+			<button type='button' className={`currency-value copyable ${className}`} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactTitle)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(copyValue)}>
 				{copied.value ? <span className='copy-feedback'>{commonCopy.copied}</span> : renderedValue}
 			</button>
-			<CopyErrorMessage id={copyErrorId} manualValue={exactValue} message={copyError.value} />
+			<CopyErrorMessage id={copyErrorId} manualValue={copyValue} message={copyError.value} />
 		</span>
 	)
 }

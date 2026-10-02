@@ -17,7 +17,7 @@ import {
 	getOpenOracleCreateGuardMessage,
 	getOpenOracleCreateValidationMessage,
 	getOpenOracleDisputeAvailability,
-	getOpenOracleReportStatus,
+	getOpenOracleReportProgress,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
@@ -199,7 +199,6 @@ function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof der
 		approvedToken2Amount: 1_000n,
 		disputeNewAmount1Input: '200',
 		disputeNewAmount2Input: '80',
-		disputeTokenToSwap: 'token1',
 		reportDetails: createDisputeSubmissionPreviewReport(),
 		token1AllowanceError: undefined,
 		token1Balance: 1_000n,
@@ -355,6 +354,8 @@ describe('OpenOracle helpers', () => {
 				},
 			)
 			expect(createResult1.action).toBe('createReportInstance')
+			// The new report ID comes from the receipt, so the app can link straight to the report.
+			expect(createResult1.reportId).toBe(1n)
 			expect(plannedFunctions).toEqual(preparedFunctions)
 			expect(plannedTokenOrder.map(address => address.toLowerCase())).toEqual([WETH_ADDRESS, REP_ADDRESS].map(address => address.toLowerCase()))
 			if (preapproved) expect(plannedFunctions).not.toContain('approve')
@@ -378,6 +379,7 @@ describe('OpenOracle helpers', () => {
 				token2Address: WETH_ADDRESS,
 			})
 			expect(createResult2.action).toBe('createReportInstance')
+			expect(createResult2.reportId).toBe(2n)
 
 			const page = await loadOpenOracleReportSummaries(uiReadClient, 0, 1)
 			expect(page.reportCount).toBe(2n)
@@ -385,7 +387,10 @@ describe('OpenOracle helpers', () => {
 			const newestReport = page.reports[0]
 			if (newestReport === undefined) throw new Error('Expected a newest report summary')
 			expect(newestReport.reportId).toBe(2n)
-			expect(getOpenOracleReportStatus(newestReport)).toBe('Pending')
+			expect(getOpenOracleReportProgress(newestReport, { currentTime: newestReport.reportTimestamp })).toBe('awaiting-dispute-window')
+			// Summaries carry lifecycle timing so browsing can show when a report is ready to settle.
+			expect(newestReport.disputeDelay).toBe(10n)
+			expect(newestReport.settlementTime).toBe(60n)
 
 			const firstPage = await loadOpenOracleReportSummaries(uiReadClient, 0, 10)
 			expect(firstPage.reports.map(report => report.reportId)).toEqual([2n, 1n])
@@ -498,7 +503,7 @@ describe('OpenOracle helpers', () => {
 				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 				token2Address: WETH_ADDRESS,
 			}),
-		).rejects.toThrow('Multiplier exceeds the contract maximum.')
+		).rejects.toThrow('Multiplier must be at most 655.35×.')
 		expect(preparedCount).toBe(0)
 	})
 
@@ -602,7 +607,6 @@ describe('OpenOracle helpers', () => {
 		for (const testCase of cases) {
 			const preview = createDisputeSubmissionPreview({
 				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
-				disputeTokenToSwap: testCase.disputeTokenToSwap,
 				reportDetails: {
 					currentAmount1: 100n,
 					currentAmount2: 50n,
@@ -628,6 +632,7 @@ describe('OpenOracle helpers', () => {
 			})
 
 			expect(preview.expectedNewAmount1).toBe(200n)
+			expect(preview.swapTokenKey).toBe(testCase.disputeTokenToSwap)
 			expect(preview.token1ContributionAmount).toBe(testCase.expectedToken1Contribution)
 			expect(preview.token2ContributionAmount).toBe(testCase.expectedToken2Contribution)
 			expect(preview.canSubmit).toBe(true)
@@ -647,7 +652,6 @@ describe('OpenOracle helpers', () => {
 				approvedToken1Amount: testCase.token1Balance,
 				approvedToken2Amount: testCase.token2Balance,
 				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
-				disputeTokenToSwap: testCase.disputeTokenToSwap,
 				token1Balance: testCase.token1Balance,
 				token2Balance: testCase.token2Balance,
 			})
@@ -656,7 +660,6 @@ describe('OpenOracle helpers', () => {
 				approvedToken1Amount: testCase.token1Balance,
 				approvedToken2Amount: testCase.token2Balance,
 				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
-				disputeTokenToSwap: testCase.disputeTokenToSwap,
 				token1Balance: testCase.token1Balance,
 				token2Balance: testCase.token2Balance,
 			})
@@ -673,9 +676,10 @@ describe('OpenOracle helpers', () => {
 		const beforeHaltToken1 = createDisputeSubmissionPreview({ reportDetails: { ...baseReport, feesOnlyAtHalt: true } })
 		expect(beforeHaltToken1.token1ContributionAmount).toBe(300n)
 		expect(beforeHaltToken1.canSubmit).toBe(true)
-		const beforeHaltToken2 = createDisputeSubmissionPreview({ disputeNewAmount2Input: '120', disputeTokenToSwap: 'token2', reportDetails: { ...baseReport, feesOnlyAtHalt: true } })
+		const beforeHaltToken2 = createDisputeSubmissionPreview({ disputeNewAmount2Input: '120', reportDetails: { ...baseReport, feesOnlyAtHalt: true } })
 		expect(beforeHaltToken2.token2ContributionAmount).toBe(170n)
-		const atHalt = createDisputeSubmissionPreview({ disputeNewAmount1Input: '101', reportDetails: { ...baseReport, escalationHalt: 100n, feesOnlyAtHalt: true } })
+		// A lower proposed price keeps the base token as the swapped token, so the halt fees are charged in it.
+		const atHalt = createDisputeSubmissionPreview({ disputeNewAmount2Input: '40', reportDetails: { ...baseReport, escalationHalt: 100n, feesOnlyAtHalt: true } })
 		expect(atHalt.expectedNewAmount1).toBe(101n)
 		expect(atHalt.token1ContributionAmount).toBe(216n)
 	})
@@ -686,40 +690,42 @@ describe('OpenOracle helpers', () => {
 		expect(flexible.expectedNewAmount1).toBe(200n)
 		expect(flexible.canSubmit).toBe(true)
 		expect(flexible.token1ContributionAmount).toBe(365n)
-		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '301', reportDetails: flexibleReport }).inputBlockMessage?.message).toBe('New base token amount must be between 200 and 300 for this dispute.')
-		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '199', reportDetails: flexibleReport }).inputBlockMessage?.message).toBe('New base token amount must be between 200 and 300 for this dispute.')
-		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '250', reportDetails: { ...flexibleReport, flexibleEscalation: false } }).inputBlockMessage?.message).toBe('New base token amount must be exactly 200 for this dispute.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '301', reportDetails: flexibleReport }).inputBlockMessage?.message).toBe('New REP amount must be between 200 and 300 for this dispute.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '199', reportDetails: flexibleReport }).inputBlockMessage?.message).toBe('New REP amount must be between 200 and 300 for this dispute.')
+		// Without flexible escalation the report fixes the base amount, so a typed amount is ignored rather than rejected.
+		const fixed = createDisputeSubmissionPreview({ disputeNewAmount1Input: '250', reportDetails: { ...flexibleReport, flexibleEscalation: false } })
+		expect(fixed.inputBlockMessage).toBeUndefined()
+		expect(fixed.maximumNewAmount1).toBeUndefined()
+		expect(fixed.newAmount1).toBe(200n)
 	})
 
-	test('dispute submission blockers use base and quote token terminology', () => {
-		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '' }).blockMessage?.message).toBe('Enter a valid new base token amount.')
-		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '0' }).blockMessage?.message).toBe('Enter a valid new quote token amount greater than zero.')
-		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '201' }).blockMessage?.message).toBe('New base token amount must be exactly 200 for this dispute.')
+	test('dispute submission blockers name the report tokens', () => {
+		const flexibleReport = { ...createDisputeSubmissionPreviewReport(), escalationHalt: 300n, flexibleEscalation: true, multiplier: 200n }
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '', reportDetails: flexibleReport }).blockMessage?.message).toBe('Enter a valid new REP amount.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '0' }).blockMessage?.message).toBe('Enter a valid new WETH amount greater than zero.')
 	})
 
-	test('blocks dispute approvals when the proposed price direction conflicts with the selected swap token', () => {
-		const preview = createDisputeSubmissionPreview({
-			disputeTokenToSwap: 'token2',
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.inputBlockMessage?.message).toBe('These amounts would swap out REP, not WETH. Select REP or change the proposed price.')
-		expect(preview.blockMessage).toEqual(preview.inputBlockMessage)
+	test('dispute submission derives the swapped token from the proposed price', () => {
+		const lowerPrice = createDisputeSubmissionPreview()
+		expect(lowerPrice.swapTokenKey).toBe('token1')
+		expect(lowerPrice.canSubmit).toBe(true)
+		const higherPrice = createDisputeSubmissionPreview({ disputeNewAmount2Input: '120' })
+		expect(higherPrice.swapTokenKey).toBe('token2')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '' }).swapTokenKey).toBeUndefined()
 	})
 
-	test('create guard and parameter validation share the enforced ETH value rule', () => {
-		const guardInput = { isOnActiveAppChain: true, settlerRewardInput: '0.1', walletBalanceAttoEth: 10n ** 18n, walletConnected: true }
-		const equalityMessage = 'ETH value to send must equal the settler reward for ERC-20 token pairs.'
-		expect(getOpenOracleCreateGuardMessage({ ...guardInput, ethValueInput: '0.2' })).toBe(equalityMessage)
-		expect(getOpenOracleCreateGuardMessage({ ...guardInput, ethValueInput: '0.05' })).toBe(equalityMessage)
-		expect(getOpenOracleCreateGuardMessage({ ...guardInput, ethValueInput: '0.1' })).toBeUndefined()
+	test('create guard checks the wallet for exactly the settler reward', () => {
+		const guardInput = { isOnActiveAppChain: true, walletBalanceAttoEth: 10n ** 18n, walletConnected: true }
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: '0.1' })).toBeUndefined()
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: '1.5' })).toBe('Need 0.5\u00a0more\u00a0ETH in this wallet to create the selected standalone OpenOracle report.')
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, settlerRewardInput: 'abc' })).toBe('Enter a valid settler reward.')
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
-		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9 007 199 254 740 991.12345%')
+		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9\u00a0007\u00a0199\u00a0254\u00a0740\u00a0991.12345%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.4×')
-		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9 007 199 254 740 991.01×')
+		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9\u00a0007\u00a0199\u00a0254\u00a0740\u00a0991.01×')
 	})
 
 	test('open oracle create form parser accepts user-facing decimal values', () => {
@@ -731,9 +737,8 @@ describe('OpenOracle helpers', () => {
 				escalationHalt: '2.5',
 				exactToken1Report: '1.25',
 				initialToken2Amount: '2',
-				ethValue: '0.000000000000001',
 				feePercentage: '0.001',
-				multiplier: '100',
+				multiplier: '1',
 				protocolFee: '0.002',
 				settlementTime: '60',
 				settlerRewardEthAmount: '0.000000000000001',
@@ -768,9 +773,8 @@ describe('OpenOracle helpers', () => {
 			disputeDelay: '10',
 			exactToken1Report: '1',
 			initialToken2Amount: '1',
-			ethValue: '1',
 			feePercentage: '1',
-			multiplier: '100',
+			multiplier: '1',
 			protocolFee: '1',
 			settlementTime: '60',
 			settlerRewardEthAmount: '1',
@@ -782,7 +786,10 @@ describe('OpenOracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, token2Address: token1Address } })).toBe('Base and quote tokens must use different addresses.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than dispute delay.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } })).toBe('Fee percentage plus protocol fee must not exceed 100%.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '99' } })).toBe('Multiplier must be at least 1.00x.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '0.99' } })).toBe('Multiplier must be at least 1×.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '2' } })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '1.5' } })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '1.505' } })).toBe('Enter a valid multiplier, such as 1.5.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1 000 000 000' } })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } })).toBeUndefined()
@@ -791,13 +798,13 @@ describe('OpenOracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '-.' } })).toBe('Enter a valid base token amount.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '.' } })).toBe('Enter a valid escalation halt.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '-.' } })).toBe('Enter a valid escalation halt.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: (1n << 16n).toString() } })).toBe('Multiplier exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '655.35' } })).toBeUndefined()
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '655.36' } })).toBe('Multiplier must be at most 655.35×.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } })).toBe('Dispute delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } })).toBe('Settlement time exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Base token amount exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Escalation halt exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, ethValue: (1n << 96n).toString() } })).toBe('ETH value to send exceeds the contract maximum.')
 	})
 
 	test('open oracle create parser accepts high-decimal token1 amounts once token decimals are known', () => {
@@ -808,9 +815,8 @@ describe('OpenOracle helpers', () => {
 				escalationHalt: '0.000000000000000000000000000000000001',
 				exactToken1Report: '0.000000000000000000000000000000000001',
 				initialToken2Amount: '1',
-				ethValue: '1',
 				feePercentage: '1',
-				multiplier: '100',
+				multiplier: '1',
 				protocolFee: '1',
 				settlementTime: '60',
 				settlerRewardEthAmount: '1',
@@ -831,9 +837,8 @@ describe('OpenOracle helpers', () => {
 			disputeDelay: '10',
 			exactToken1Report: '1',
 			initialToken2Amount: '1',
-			ethValue: '1',
 			feePercentage: '1',
-			multiplier: '100',
+			multiplier: '1',
 			protocolFee: '0.001',
 			settlementTime: '60',
 			settlerRewardEthAmount: '1',
@@ -856,9 +861,8 @@ describe('OpenOracle helpers', () => {
 					disputeDelay: '10',
 					exactToken1Report: '1',
 					initialToken2Amount: '1',
-					ethValue: '1',
 					feePercentage: '60',
-					multiplier: '100',
+					multiplier: '1',
 					protocolFee: '50.00001',
 					settlementTime: '60',
 					settlerRewardEthAmount: '1',
@@ -876,9 +880,8 @@ describe('OpenOracle helpers', () => {
 					disputeDelay: '10',
 					exactToken1Report: '1',
 					initialToken2Amount: '1',
-					ethValue: '1',
 					feePercentage: '1',
-					multiplier: (1n << 16n).toString(),
+					multiplier: '655.36',
 					protocolFee: '1',
 					settlementTime: '60',
 					settlerRewardEthAmount: '1',
@@ -888,7 +891,7 @@ describe('OpenOracle helpers', () => {
 				token1Decimals: 18,
 				token2Decimals: 18,
 			}),
-		).toThrow('Multiplier exceeds the contract maximum.')
+		).toThrow('Multiplier must be at most 655.35×.')
 	})
 
 	test('oracle bounty buffer adds a 20% headroom and rounds up', () => {
@@ -1593,7 +1596,7 @@ describe('OpenOracle helpers', () => {
 		expect(reportDetails.currentAmount1).toBe(amount1)
 		expect(reportDetails.currentAmount2).toBe(expectedAmount2)
 		expect(reportDetails.settlementTimestamp).toBe(0n)
-		expect(getOpenOracleReportStatus(reportDetails)).toBe('Pending')
+		expect(['awaiting-dispute-window', 'dispute-window-open']).toContain(getOpenOracleReportProgress(reportDetails, reportDetails))
 
 		const repBeforeSettlement = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), uiWriteClient.account.address)
 		const wethBeforeSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
@@ -1605,7 +1608,7 @@ describe('OpenOracle helpers', () => {
 
 		reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 		expect(reportDetails.settlementTimestamp).toBeGreaterThan(0n)
-		expect(getOpenOracleReportStatus(reportDetails)).toBe('Settled')
+		expect(getOpenOracleReportProgress(reportDetails, reportDetails)).toBe('settled')
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBe(0n)

@@ -1,19 +1,17 @@
 import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingActionResult } from '../types/contracts.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_EscalationGame_EscalationGame } from '../contractArtifact.js'
 import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
-import { getEscalationSideLabel } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { loadReportingDetails } from './reporting.js'
+import { getReportReviewText, loadReportingDetails } from './reporting.js'
 import { getReportingWalletFundingQuote } from '../lib/reportingFunding.js'
-import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 
-export async function reportOutcomeWithWalletViaVault(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, reportAmount: bigint, expectedDepositAmount: bigint, onVaultFunded: () => void) {
+export async function reportOutcomeWithWalletViaVault(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, reportAmount: bigint, expectedDepositAmount: bigint, onVaultFunded: () => void, triggersFork = false) {
 	const details = await loadReportingDetails(client, securityPoolAddress, client.account.address)
 	if (details.status !== 'active' || !details.forkContinuation || details.systemState !== 'operational') throw new Error('Reporting changed. Refresh the pool before continuing.')
 	const initialTimingGuard = getReportingSubmissionTimingGuard(details)
@@ -38,8 +36,7 @@ export async function reportOutcomeWithWalletViaVault(client: WriteClient, secur
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
 		args: [getReportingOutcomeValue(outcome), reportAmount],
-		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(actualReportAmount)),
-		reviewAmount: formatCurrencyBalanceWithUnit(actualReportAmount, commonCopy.rep),
+		...getReportReviewText(outcome, actualReportAmount, triggersFork),
 	} as const
 	const validateBeforeSubmit = async (depositing: boolean) => {
 		const latest = await loadReportingDetails(client, securityPoolAddress, client.account.address)

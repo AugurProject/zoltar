@@ -15,12 +15,15 @@ import { TransactionObjectContext } from '@zoltar/ui-core-shared/components/Tran
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { getLocalEntityScope, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, OPEN_ORACLE_CREATE_FIELD_ORDER, type OpenOracleCreateField } from '../lib/openOracle.js'
+import { formatOpenOracleSecondsInputHint, getOpenOracleCreateEthSent, getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, getOpenOracleImpliedPrice, OPEN_ORACLE_CREATE_FIELD_ORDER, type OpenOracleCreateField } from '../lib/openOracle.js'
+import { getCreatedOpenOracleReportId } from '../../../protocol/openOracle.js'
+import { loadOpenOracleCreateTokenMetadata, useOpenOracleCreateTokenMetadata, type LoadOpenOracleCreateTokenMetadata, type OpenOracleCreateTokenMetadata } from '../hooks/useOpenOracleCreateTokenMetadata.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { getOpenOracleReportEntityId, openOracleReportDownloadStore, toCachedOpenOracleReportSummary } from '../lib/reportBrowse.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '../../oracleTypes.js'
-import { BROWSE_PAGE_SIZE, getEffectiveOpenOracleReportDetails, getOpenOracleCreateFieldErrorId, loadBrowseReportPage, type SelectedReportModal } from './OpenOracleReportContent.js'
+import { BROWSE_PAGE_SIZE, getEffectiveOpenOracleReportDetails, getOpenOracleCreateFieldErrorId, loadBrowseReportPage, OPEN_ORACLE_PRICE_UNITS, type SelectedReportModal } from './OpenOracleReportContent.js'
 import { OpenOracleReportBrowser } from './OpenOracleReportBrowser.js'
 import { OpenOracleReportDetailsCard } from './OpenOracleReportDetailsCard.js'
 
@@ -30,11 +33,27 @@ function getOpenOracleRouteHeader(view: OpenOracleView) {
 	return { description: openOracleCopy.selectedReportDescription, title: openOracleCopy.openOracleReportDetails }
 }
 
+function getCreateTokenSymbol(metadata: OpenOracleCreateTokenMetadata) {
+	return metadata.status === 'ready' ? metadata.symbol : undefined
+}
+
+function getCreateTokenHint(metadata: OpenOracleCreateTokenMetadata) {
+	if (metadata.status === 'loading') return openOracleCopy.readingTokenMetadata
+	if (metadata.status === 'ready') return openOracleCopy.formatResolvedToken(metadata.symbol ?? commonCopy.metricUnavailablePlaceholder, metadata.decimals.toString())
+	return undefined
+}
+
+type OpenOracleSectionDependencies = {
+	/** Reads a create-form token's decimals and symbol; tests replace the connected-wallet read. */
+	loadCreateTokenMetadata?: LoadOpenOracleCreateTokenMetadata
+}
+
 export function OpenOracleSection({
 	activeView,
 	accountState,
 	environmentReady,
 	loadBrowseReports = loadBrowseReportPage,
+	loadCreateTokenMetadata = loadOpenOracleCreateTokenMetadata,
 	onApproveToken1,
 	onApproveToken2,
 	onCancelOpenOracleWithdrawalBalanceCheck,
@@ -63,7 +82,7 @@ export function OpenOracleSection({
 	openOracleWithdrawableBalancesError,
 	openOracleWithdrawableBalancesLoading,
 	onActiveViewChange,
-}: OpenOracleSectionProps) {
+}: OpenOracleSectionProps & OpenOracleSectionDependencies) {
 	const view = activeView
 	const routeHeader = getOpenOracleRouteHeader(view)
 	const chainCurrentTimestamp = useChainTimestamp()
@@ -79,10 +98,18 @@ export function OpenOracleSection({
 	useEffect(() => () => cancelWithdrawal.current(), [view])
 	const isConnected = accountState.address !== undefined
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
-	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm })
-	const hasCreateContractFieldErrors = openOracleCreateFieldErrors.token1Address !== undefined || openOracleCreateFieldErrors.token2Address !== undefined
+	const createTokenMetadata = useOpenOracleCreateTokenMetadata({ environmentReady, loadTokenMetadata: loadCreateTokenMetadata, token1Address: openOracleCreateForm.token1Address, token2Address: openOracleCreateForm.token2Address })
+	const token1Decimals = createTokenMetadata.token1.status === 'ready' ? createTokenMetadata.token1.decimals : undefined
+	const token2Decimals = createTokenMetadata.token2.status === 'ready' ? createTokenMetadata.token2.decimals : undefined
+	const token1Symbol = getCreateTokenSymbol(createTokenMetadata.token1)
+	const token2Symbol = getCreateTokenSymbol(createTokenMetadata.token2)
+	const createTokenMetadataLoading = createTokenMetadata.token1.status === 'loading' || createTokenMetadata.token2.status === 'loading'
+	// Known token decimals let amount fields report precision errors while typing instead of after submitting.
+	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm, token1Decimals, token2Decimals })
+	const token1ContractError = openOracleCreateFieldErrors.token1Address ?? (createTokenMetadata.token1.status === 'failure' ? createTokenMetadata.token1.message : undefined)
+	const token2ContractError = openOracleCreateFieldErrors.token2Address ?? (createTokenMetadata.token2.status === 'failure' ? createTokenMetadata.token2.message : undefined)
+	const hasCreateContractFieldErrors = token1ContractError !== undefined || token2ContractError !== undefined
 	const rawCreateGuardMessage = getOpenOracleCreateGuardMessage({
-		ethValueInput: openOracleCreateForm.ethValue,
 		isOnActiveAppChain,
 		settlerRewardInput: openOracleCreateForm.settlerRewardEthAmount,
 		walletConnected: isConnected,
@@ -103,17 +130,16 @@ export function OpenOracleSection({
 		onOpenOracleCreateFormChange(update)
 	}
 	const getCreateContractFieldError = (field: OpenOracleCreateField) => {
-		if (field === 'token1Address') return openOracleCreateFieldErrors.token1Address
-		if (field === 'token2Address') return openOracleCreateFieldErrors.token2Address
+		if (field === 'token1Address') return token1ContractError
+		if (field === 'token2Address') return token2ContractError
 		return undefined
 	}
 	const getVisibleCreateFieldError = (field: OpenOracleCreateField) => getCreateContractFieldError(field) ?? (touchedCreateFields.has(field) ? createValidation.fieldErrors[field] : undefined)
 	const firstVisibleInvalidCreateField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => getVisibleCreateFieldError(field) !== undefined)
 	const createDisabledReasonElementId = createGuardMessage === undefined && firstVisibleInvalidCreateField !== undefined ? getOpenOracleCreateFieldErrorId(firstVisibleInvalidCreateField) : undefined
-	const createAvailabilityMessage = createGuardMessage ?? openOracleCreateFieldErrors.token1Address ?? openOracleCreateFieldErrors.token2Address ?? createValidation.message
+	const createAvailabilityMessage = createGuardMessage ?? token1ContractError ?? token2ContractError ?? (createTokenMetadataLoading ? openOracleCopy.readingTokenMetadata : undefined) ?? createValidation.message
 	const disputeDelayError = getVisibleCreateFieldError('disputeDelay')
 	const escalationHaltError = getVisibleCreateFieldError('escalationHalt')
-	const ethValueError = getVisibleCreateFieldError('ethValue')
 	const exactToken1ReportError = getVisibleCreateFieldError('exactToken1Report')
 	const feePercentageError = getVisibleCreateFieldError('feePercentage')
 	const initialToken2AmountError = getVisibleCreateFieldError('initialToken2Amount')
@@ -123,8 +149,14 @@ export function OpenOracleSection({
 	const settlerRewardError = getVisibleCreateFieldError('settlerRewardEthAmount')
 	const token1AddressError = getVisibleCreateFieldError('token1Address')
 	const token2AddressError = getVisibleCreateFieldError('token2Address')
+	const createEthSentAttoEth = getOpenOracleCreateEthSent(openOracleCreateForm.settlerRewardEthAmount)
+	const createEthSentText = createEthSentAttoEth === undefined || createEthSentAttoEth < 0n ? commonCopy.metricUnavailablePlaceholder : formatCurrencyBalance(createEthSentAttoEth)
+	const createImpliedPrice = getOpenOracleImpliedPrice({ token1Amount: openOracleCreateForm.exactToken1Report, token2Amount: openOracleCreateForm.initialToken2Amount })
+	const createPriceUnit = openOracleCopy.formatReportPriceUnit(token1Symbol ?? openOracleCopy.baseToken, token2Symbol ?? openOracleCopy.quoteToken)
+	const createImpliedPriceValue = createImpliedPrice === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={createImpliedPrice} suffix={createPriceUnit} units={OPEN_ORACLE_PRICE_UNITS} />
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	const successfulCreateKey = openOracleResult?.action === 'createReportInstance' ? openOracleResult.hash : undefined
+	const createdReportId = getCreatedOpenOracleReportId(openOracleResult)
 	const showCreateSuccess = successfulCreateKey !== undefined && successfulCreateKey !== dismissedCreateSuccessKey
 	useEffect(() => {
 		if (successfulCreateKey === undefined) return
@@ -169,10 +201,23 @@ export function OpenOracleSection({
 			{view === 'create' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					{!showCreateSuccess ? undefined : (
-						<SectionBlock title={openOracleCopy.nextStep}>
+						<SectionBlock title={openOracleCopy.reportCreated}>
+							<UserMessage tone='success' detail={createdReportId === undefined ? openOracleCopy.reportCreatedWithoutIdDetail : openOracleCopy.formatReportCreatedDetail(createdReportId.toString())} />
 							<div className='actions'>
+								{createdReportId === undefined ? undefined : (
+									<button
+										className='primary'
+										type='button'
+										onClick={() => {
+											setDismissedCreateSuccessKey(successfulCreateKey)
+											void openBrowseReport(createdReportId)
+										}}
+									>
+										{openOracleCopy.formatOpenReportById(createdReportId.toString())}
+									</button>
+								)}
 								<button
-									className='primary'
+									className={createdReportId === undefined ? 'primary' : 'secondary'}
 									type='button'
 									onClick={() => {
 										setDismissedCreateSuccessKey(successfulCreateKey)
@@ -188,7 +233,7 @@ export function OpenOracleSection({
 						</SectionBlock>
 					)}
 					{showCreateSuccess ? undefined : (
-						<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
+						<SectionBlock title={openOracleCopy.standaloneReportSettings} variant='plain'>
 							<UserMessage tone='warning' detail={openOracleCopy.standaloneOracleWarningDetail} />
 							<UserMessage className='detail' detail={openOracleCopy.standaloneOracleIntroduction} />
 							<TransactionObjectContext
@@ -197,7 +242,8 @@ export function OpenOracleSection({
 								items={[
 									{ label: openOracleCopy.baseToken, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} copyable={false} responsiveAbbreviation /> },
 									{ label: openOracleCopy.quoteToken, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} copyable={false} responsiveAbbreviation /> },
-									{ label: openOracleCopy.ethValueToSend, value: formatValueWithUnit(openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder, commonCopy.eth) },
+									{ label: openOracleCopy.impliedInitialPrice, value: createImpliedPriceValue },
+									{ label: openOracleCopy.ethSent, value: formatValueWithUnit(createEthSentText, commonCopy.eth) },
 								]}
 							/>
 							<div className='form-grid'>
@@ -210,6 +256,7 @@ export function OpenOracleSection({
 													aria-label={openOracleCopy.token1Address}
 													error={token1AddressError}
 													errorId={getOpenOracleCreateFieldErrorId('token1Address')}
+													hint={token1AddressError === undefined ? getCreateTokenHint(createTokenMetadata.token1) : undefined}
 													liveError
 													onBlur={() => markCreateFieldTouched('token1Address')}
 													onInput={event => editCreateField('token1Address', { token1Address: event.currentTarget.value })}
@@ -225,6 +272,7 @@ export function OpenOracleSection({
 													aria-label={openOracleCopy.token2Address}
 													error={token2AddressError}
 													errorId={getOpenOracleCreateFieldErrorId('token2Address')}
+													hint={token2AddressError === undefined ? getCreateTokenHint(createTokenMetadata.token2) : undefined}
 													liveError
 													onBlur={() => markCreateFieldTouched('token2Address')}
 													onInput={event => editCreateField('token2Address', { token2Address: event.currentTarget.value })}
@@ -241,6 +289,7 @@ export function OpenOracleSection({
 										<label className='field'>
 											<span>{openOracleCopy.exactToken1Report}</span>
 											<FormInput
+												adornment={token1Symbol}
 												aria-label={openOracleCopy.exactToken1Report}
 												error={exactToken1ReportError}
 												errorId={getOpenOracleCreateFieldErrorId('exactToken1Report')}
@@ -255,6 +304,7 @@ export function OpenOracleSection({
 										<label className='field'>
 											<span>{openOracleCopy.initialToken2Amount}</span>
 											<FormInput
+												adornment={token2Symbol}
 												aria-label={openOracleCopy.initialToken2Amount}
 												error={initialToken2AmountError}
 												errorId={getOpenOracleCreateFieldErrorId('initialToken2Amount')}
@@ -270,6 +320,7 @@ export function OpenOracleSection({
 									<label className='field'>
 										<span>{openOracleCopy.settlerReward}</span>
 										<FormInput
+											adornment={commonCopy.eth}
 											aria-label={openOracleCopy.settlerReward}
 											error={settlerRewardError}
 											errorId={getOpenOracleCreateFieldErrorId('settlerRewardEthAmount')}
@@ -279,20 +330,6 @@ export function OpenOracleSection({
 											onBlur={() => markCreateFieldTouched('settlerRewardEthAmount')}
 											onInput={event => editCreateField('settlerRewardEthAmount', { settlerRewardEthAmount: event.currentTarget.value })}
 											value={openOracleCreateForm.settlerRewardEthAmount}
-										/>
-									</label>
-									<label className='field'>
-										<span>{openOracleCopy.ethValueToSend}</span>
-										<FormInput
-											aria-label={openOracleCopy.ethValueToSend}
-											error={ethValueError}
-											errorId={getOpenOracleCreateFieldErrorId('ethValue')}
-											hint={openOracleCopy.creationFundingRequirementHelpText}
-											inputMode='decimal'
-											liveError
-											onBlur={() => markCreateFieldTouched('ethValue')}
-											onInput={event => editCreateField('ethValue', { ethValue: event.currentTarget.value })}
-											value={openOracleCreateForm.ethValue}
 										/>
 									</label>
 								</SectionBlock>
@@ -316,11 +353,12 @@ export function OpenOracleSection({
 										<label className='field'>
 											<span>{commonCopy.multiplier}</span>
 											<FormInput
+												adornment={openOracleCopy.multiplierUnit}
 												aria-label={commonCopy.multiplier}
 												error={multiplierError}
 												errorId={getOpenOracleCreateFieldErrorId('multiplier')}
 												hint={openOracleCopy.escalationMultiplierHelpText}
-												inputMode='numeric'
+												inputMode='decimal'
 												liveError
 												onBlur={() => markCreateFieldTouched('multiplier')}
 												onInput={event => editCreateField('multiplier', { multiplier: event.currentTarget.value })}
@@ -336,6 +374,7 @@ export function OpenOracleSection({
 													aria-label={openOracleCopy.settlementDelaySeconds}
 													error={settlementTimeError}
 													errorId={getOpenOracleCreateFieldErrorId('settlementTime')}
+													hint={formatOpenOracleSecondsInputHint(openOracleCreateForm.settlementTime)}
 													inputMode='numeric'
 													liveError
 													onBlur={() => markCreateFieldTouched('settlementTime')}
@@ -346,6 +385,7 @@ export function OpenOracleSection({
 											<label className='field'>
 												<span>{openOracleCopy.escalationHalt}</span>
 												<FormInput
+													adornment={token1Symbol}
 													aria-label={openOracleCopy.escalationHalt}
 													error={escalationHaltError}
 													errorId={getOpenOracleCreateFieldErrorId('escalationHalt')}
@@ -365,6 +405,7 @@ export function OpenOracleSection({
 													aria-label={openOracleCopy.disputeDelaySeconds}
 													error={disputeDelayError}
 													errorId={getOpenOracleCreateFieldErrorId('disputeDelay')}
+													hint={formatOpenOracleSecondsInputHint(openOracleCreateForm.disputeDelay)}
 													inputMode='numeric'
 													liveError
 													onBlur={() => markCreateFieldTouched('disputeDelay')}
@@ -397,7 +438,10 @@ export function OpenOracleSection({
 										pendingLabel={openOracleCopy.creating}
 										onClick={onCreateOpenOracleGame}
 										pending={loadingOpenOracleCreate}
-										availability={withActiveAppChainWalletBlocker({ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors, reason: createAvailabilityMessage }, { accountAddress: accountState.address, isOnActiveAppChain })}
+										availability={withActiveAppChainWalletBlocker(
+											{ disabled: !isOnActiveAppChain || createGuardMessage !== undefined || !createValidation.isValid || hasCreateContractFieldErrors || createTokenMetadataLoading, reason: createAvailabilityMessage },
+											{ accountAddress: accountState.address, isOnActiveAppChain },
+										)}
 										disabledReasonElementId={createDisabledReasonElementId}
 										showDisabledReason={createDisabledReasonElementId === undefined}
 									/>

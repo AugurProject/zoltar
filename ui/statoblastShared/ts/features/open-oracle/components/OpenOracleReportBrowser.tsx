@@ -15,13 +15,15 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { buildLocalBrowseEntries, normalizeLocalSearchText } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { OpenOracleReportSummary } from '../../../types/contracts.js'
-import { formatOpenOracleReportPriceUnit, getOpenOracleReportStatus, getOpenOracleReportStatusTone } from '../lib/openOracle.js'
-import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, type BrowseStatusFilter } from '../lib/reportBrowse.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleReportProgress, getOpenOracleReportProgressLabel, getOpenOracleReportProgressTone, OPEN_ORACLE_REPORT_PROGRESS_ORDER } from '../lib/openOracle.js'
+import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, type BrowseStatusFilter, type OpenOracleBrowseReport } from '../lib/reportBrowse.js'
+import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
 
-function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt: number; onSelectReport: (reportId: bigint) => void; report: OpenOracleReportSummary }) {
-	const status = getOpenOracleReportStatus(report)
+type ReportClock = { currentBlockNumber: bigint | undefined; currentTime: bigint | undefined }
+
+function ReportSummaryRecord({ clock, fetchedAt, onSelectReport, report }: { clock: ReportClock; fetchedAt: number; onSelectReport: (reportId: bigint) => void; report: OpenOracleBrowseReport }) {
+	const progress = getOpenOracleReportProgress(report, clock)
 	const reportTitle = openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())
 	return (
 		<ComparisonRecord
@@ -29,7 +31,7 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 			badge={
 				<div className='open-oracle-report-badges'>
 					<FavoriteToggle app='statoblast' entityLabel={reportTitle} id={getOpenOracleReportEntityId(report.reportId)} kind='oracleReport' />
-					<Badge tone={getOpenOracleReportStatusTone(status)}>{status}</Badge>
+					<Badge tone={getOpenOracleReportProgressTone(progress)}>{getOpenOracleReportProgressLabel(progress)}</Badge>
 					{/* Cached summaries can be stale; opening the report reads it from chain again. */}
 					<span className='open-oracle-report-updated'>{openOracleCopy.formatReportUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</span>
 				</div>
@@ -61,6 +63,8 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 /** Reports use the same favorites-only browser as pools; opening a report saves its summary. */
 export function OpenOracleReportBrowser({ onOpenReport }: { onOpenReport: (reportId: bigint) => void }) {
 	const [statusFilter, setStatusFilter] = useState<BrowseStatusFilter>('all')
+	// Without a chain timestamp yet, wall-clock time still tells whether a time-based report is ready to settle.
+	const clock: ReportClock = { currentBlockNumber: useChainBlockNumber(), currentTime: useChainTimestamp() ?? getWallClockTimestamp() }
 	const [searchText, setSearchText] = useState('')
 	const favorites = useFavorites('statoblast', 'oracleReport')
 	const downloaded = useDownloadedEntities('statoblast', 'oracleReport', openOracleReportDownloadStore)
@@ -69,7 +73,7 @@ export function OpenOracleReportBrowser({ onOpenReport }: { onOpenReport: (repor
 	const fetchedAtById = new Map(entries.map(entry => [entry.id, entry.fetchedAt]))
 	const visibleReports = filterOpenOracleReports(
 		entries.map(entry => entry.data),
-		{ normalizedSearchText, statusFilter },
+		{ clock, normalizedSearchText, statusFilter },
 	)
 	const hasActiveFilters = normalizedSearchText !== '' || statusFilter !== 'all'
 	const searchedReportId = parseReportIdSearch(searchText)
@@ -87,7 +91,7 @@ export function OpenOracleReportBrowser({ onOpenReport }: { onOpenReport: (repor
 		return (
 			<div className='comparison-record-list'>
 				{visibleReports.map(report => (
-					<ReportSummaryRecord key={report.reportId.toString()} fetchedAt={fetchedAtById.get(getOpenOracleReportEntityId(report.reportId)) ?? 0} onSelectReport={onOpenReport} report={report} />
+					<ReportSummaryRecord key={report.reportId.toString()} clock={clock} fetchedAt={fetchedAtById.get(getOpenOracleReportEntityId(report.reportId)) ?? 0} onSelectReport={onOpenReport} report={report} />
 				))}
 			</div>
 		)
@@ -102,9 +106,11 @@ export function OpenOracleReportBrowser({ onOpenReport }: { onOpenReport: (repor
 					<span>{commonCopy.status}</span>
 					<select value={statusFilter} onChange={event => setStatusFilter(resolveBrowseStatusFilter(event.currentTarget.value))}>
 						<option value='all'>{openOracleCopy.allStatuses}</option>
-						<option value='Pending'>{commonCopy.pending}</option>
-						<option value='Disputed'>{openOracleCopy.disputed}</option>
-						<option value='Settled'>{commonCopy.settled}</option>
+						{OPEN_ORACLE_REPORT_PROGRESS_ORDER.map(progress => (
+							<option key={progress} value={progress}>
+								{getOpenOracleReportProgressLabel(progress)}
+							</option>
+						))}
 					</select>
 				</label>
 			</div>
