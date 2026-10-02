@@ -41,7 +41,8 @@ export function registerSectionNavigation(onPageShown: () => void = () => undefi
 		document.title = `${pageTitles.get(page) ?? page} · ${applicationTitle}`
 		for (const link of sectionLinks) markCurrentPage(link, new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
 		centerActiveLink()
-		if (options.push) window.history.pushState({}, '', `/${page}${options.hash}`)
+		// Following a link to the location already shown must not add a history entry.
+		if (options.push && (window.location.pathname.replace(/\/$/, '') !== `/${page}` || window.location.hash !== options.hash)) window.history.pushState({}, '', `/${page}${options.hash}`)
 		const target = options.hash.length > 1 ? document.getElementById(options.hash.slice(1)) : null
 		if (target !== null) target.scrollIntoView()
 		else window.scrollTo({ top: 0 })

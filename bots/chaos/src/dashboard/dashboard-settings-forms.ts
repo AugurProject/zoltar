@@ -135,6 +135,13 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 				settingsSaveStatus.textContent = 'Discard these edits and review the current configuration before saving.'
 				return
 			}
+			// The revision is captured with the configuration the patch is built from. A change that lands while the review
+			// dialog is open then fails as a conflict instead of travelling under a newer revision.
+			const { revision } = configuration
+			if (revision !== state.settingsRevision) {
+				settingsSaveStatus.textContent = 'The configuration is still reloading. Try again in a moment.'
+				return
+			}
 			settingsFields.disabled = true
 			settingsSaveStatus.textContent = 'Saving…'
 			let mutationReconciled = true
@@ -193,7 +200,7 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 					return
 				}
 				await put('/api/settings', {
-					revision: state.settingsRevision,
+					revision,
 					patch: policyPatch,
 				})
 				settingsDraft.dirty = false

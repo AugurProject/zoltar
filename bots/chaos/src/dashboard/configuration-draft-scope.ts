@@ -8,9 +8,13 @@ export function connectivityScope(configuration: Configuration) {
 	return JSON.stringify([configuration.connectivity?.readRpcUrl ?? '', configuration.connectivity?.quorumRpcUrls ?? [], configuration.connectivity?.publicRpcUrls ?? [], String(configuration.rpcQuorum ?? '')])
 }
 
-/** The saved values the execution policy form edits. */
+/**
+ * The saved values the execution policy save sends. The patch carries the execution mode and its reserve rules depend
+ * on it, so a mode change invalidates the draft even though the form has no control for it.
+ */
 export function executionPolicyScope(configuration: Configuration) {
 	return JSON.stringify([
+		configuration.execute === true,
 		configuration.allowHighRiskOperations === true,
 		configuration.allowIrreversibleOperations === true,
 		configuration.initializeGenesisUniverse === true,

@@ -3,6 +3,7 @@ import { confirmOperatorAction } from '../../src/dashboard/confirmation.ts'
 import { createFocusedFormSubmitter } from '../../src/dashboard/focused-form.ts'
 import { markFormClean, trackForm } from '../../src/dashboard/form-state.ts'
 import { renderOperatorHealth } from '../../src/dashboard/health-panel.ts'
+import { openResumePreflight, updateResumePreflight } from '../../src/dashboard/resume-preflight.ts'
 import { createUniverseExplorer } from '../../src/dashboard/universe-explorer.ts'
 import { installDom } from '../support/dom.ts'
 
@@ -128,4 +129,14 @@ test('the health panel keeps its stale-state live region mounted so a later chan
 	renderOperatorHealth(target, { ...health, stale: true })
 	expect(target.querySelector('[role="status"]')).toBe(region)
 	expect(region?.textContent).toBe('Dashboard state is stale; retrying.')
+})
+
+test('an open resume preflight follows newer rows and a closed one is left untouched', () => {
+	install('<dialog id="resume-dialog"><h2 id="resume-title" tabindex="-1">Resume</h2><ul id="resume-preflight"></ul></dialog>')
+	const rows = required('#resume-preflight', HTMLElement)
+	updateResumePreflight([['Mode', 'Live execution']])
+	expect(rows.textContent).toBe('')
+	openResumePreflight([['Execution signer', 'Missing']])
+	updateResumePreflight([['Execution signer', '0xabc queued for the next scan']])
+	expect(rows.textContent).toBe('Execution signer0xabc queued for the next scan')
 })

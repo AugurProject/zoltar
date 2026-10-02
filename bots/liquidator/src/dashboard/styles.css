@@ -738,5 +738,7 @@ body[data-page="pools"] #network-badge::before {
 .recovery-card a {
 	display: inline-block;
 	margin-bottom: 0.6rem;
+	color: var(--accent);
 	font-size: 0.82rem;
+	text-decoration: underline;
 }

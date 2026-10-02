@@ -101,10 +101,16 @@ export function createConfigurationLoader({ state, elements, controls, header, v
 		state.configurationConnected = false
 		networkBadge.textContent = 'Network unavailable'
 		networkBadge.className = 'badge warning'
+		const text = publicFailure(error, 'Configuration is unavailable, so settings are locked. The dashboard retries automatically. ')
+		// A repeated background failure keeps the notice it already shows, so it is not announced again and Retry keeps focus.
+		if (!configurationStatus.classList.contains('hidden') && configurationStatus.classList.contains('error') && configurationStatus.querySelector('span')?.textContent === text && configurationStatus.querySelector('button') !== null) {
+			controls.syncControls()
+			return
+		}
 		configurationStatus.classList.remove('hidden')
 		configurationStatus.classList.add('error')
 		const message = document.createElement('span')
-		message.textContent = publicFailure(error, 'Configuration is unavailable, so settings are locked. The dashboard retries automatically. ')
+		message.textContent = text
 		const retry = document.createElement('button')
 		retry.className = 'secondary compact'
 		retry.type = 'button'

@@ -1,4 +1,5 @@
 import { expect } from 'bun:test'
+import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durable-file'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
 import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS } from '../support/chromium.ts'
@@ -389,6 +390,65 @@ browserTest(
 		} finally {
 			status.release()
 		}
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
+)
+
+browserTest(
+	'a policy save reviewed before a concurrent execution-mode change cannot overwrite it',
+	async () => {
+		let revision = 'revision-1'
+		let execute = false
+		const saves: unknown[] = []
+		await withDashboard(
+			{
+				getConfiguration: () => {
+					const current = configuration(revision)
+					return { ...current, settings: { ...current.settings, runtime: { execute } } }
+				},
+				setSettings: value => {
+					saves.push(value)
+					if (typeof value !== 'object' || value === null || Reflect.get(value, 'revision') === revision) return
+					const conflict = new Error('revision conflict')
+					conflict.name = CONFIGURATION_REVISION_CONFLICT
+					throw conflict
+				},
+			},
+			'/settings',
+			async (cdp, refresh) => {
+				await cdp.waitFor("document.querySelector('#settings-fields')?.disabled === false", { message: 'policy form did not load' })
+				await cdp.evaluate("(() => { const input = document.querySelector('#min-delay'); input.value = '120'; input.dispatchEvent(new InputEvent('input', { bubbles: true })); document.querySelector('#settings-form').requestSubmit() })()")
+				await cdp.waitFor("document.querySelector('.operator-confirm-dialog')?.open === true", { message: 'policy review did not open' })
+				// Another client arms live execution while the review is open, and a poll observes it.
+				revision = 'revision-2'
+				execute = true
+				await refresh()
+				await cdp.evaluate("document.querySelector('#operator-confirm-submit')?.click()")
+				await cdp.waitFor("document.querySelector('.operator-confirm-dialog') === null", { message: 'policy review did not close' })
+				await Bun.sleep(300)
+				// The reviewed patch carries the old mode, so it may only travel under the revision it was built from.
+				expect(saves.map(save => (typeof save === 'object' && save !== null ? Reflect.get(save, 'revision') : undefined)).filter(sent => sent !== 'revision-1')).toEqual([])
+				await refresh()
+				expect(await cdp.evaluate("({ save: document.querySelector('#save-settings')?.disabled, status: document.querySelector('#settings-save-status')?.textContent })")).toEqual({
+					save: true,
+					status: 'Configuration changed elsewhere. Discard these edits and reload before saving.',
+				})
+			},
+		)
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
+)
+
+browserTest(
+	'clicking the section link of the page already shown adds no history entry',
+	async () => {
+		await withDashboard({}, '/recovery', async cdp => {
+			const before = await cdp.evaluate('history.length')
+			await cdp.evaluate('(() => { const link = document.querySelector(\'.section-nav a[href="/recovery"]\'); link.click(); link.click() })()')
+			expect(await cdp.evaluate('({ length: history.length, path: location.pathname, page: document.body.dataset.page })')).toEqual({ length: before, path: '/recovery', page: 'recovery' })
+			await cdp.evaluate('document.querySelector(\'.section-nav a[href="/catalog"]\').click()')
+			expect(await cdp.evaluate('history.length')).toBe(Number(before) + 1)
+		})
 	},
 	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
 )

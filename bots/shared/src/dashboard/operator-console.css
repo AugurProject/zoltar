@@ -32,6 +32,11 @@
 	box-sizing: border-box;
 }
 
+/* The hidden attribute always hides, even where a component rule sets display. */
+[hidden] {
+	display: none !important;
+}
+
 fieldset {
 	min-width: 0;
 	margin: 0;

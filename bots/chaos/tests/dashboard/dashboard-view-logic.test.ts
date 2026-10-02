@@ -21,10 +21,14 @@ const saved = {
 
 test('a revision bump that leaves a form its own saved fields rebases the draft instead of invalidating it', () => {
 	const before = parseConfiguration(saved)
-	// Pausing and switching the execution mode bump the revision without touching either form's fields.
-	const afterPause = parseConfiguration({ ...saved, execute: true, paused: true, revision: 'revision-2' })
+	// Pausing bumps the revision without touching either form's fields.
+	const afterPause = parseConfiguration({ ...saved, paused: true, revision: 'revision-2' })
 	expect(draftAfterRevisionChange(connectivityScope(before), connectivityScope(afterPause))).toBe('rebase')
 	expect(draftAfterRevisionChange(executionPolicyScope(before), executionPolicyScope(afterPause))).toBe('rebase')
+	// The policy save sends the execution mode, so an arm or disarm elsewhere makes the policy draft stale.
+	const afterArming = parseConfiguration({ ...saved, execute: true, revision: 'revision-2' })
+	expect(draftAfterRevisionChange(executionPolicyScope(before), executionPolicyScope(afterArming))).toBe('conflict')
+	expect(draftAfterRevisionChange(connectivityScope(before), connectivityScope(afterArming))).toBe('rebase')
 	// A catalog toggle rewrites the allowlist: the policy draft is stale, the RPC draft is not.
 	const afterSelection = parseConfiguration({ ...saved, revision: 'revision-3', selectableOperationAllowlist: [] })
 	expect(draftAfterRevisionChange(executionPolicyScope(before), executionPolicyScope(afterSelection))).toBe('conflict')

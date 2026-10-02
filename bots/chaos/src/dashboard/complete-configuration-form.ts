@@ -198,6 +198,8 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 					settings = optionalRecord(JSON.parse(jsonInput.value))
 					if (settings === undefined) throw new Error('Configuration must be a JSON object.')
 				} else for (const read of readers) read()
+				// Captured with the values under review, so a rebase while the dialog is open cannot move this save to a newer revision.
+				const reviewedRevision = revision
 				if (
 					!(await confirmOperatorAction({
 						title: 'Save complete configuration',
@@ -211,7 +213,7 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 				busy = true
 				renderAvailability()
 				status.textContent = 'Checking and saving configuration…'
-				await put('/api/configuration-document', { settings, revision }, 30_000)
+				await put('/api/configuration-document', { settings, revision: reviewedRevision }, 30_000)
 				locked = true
 				committed = true
 				status.textContent = 'Saved. The bot is restarting paused with live execution off. This page reconnects automatically at the same address; open the new address if you changed the dashboard binding.'

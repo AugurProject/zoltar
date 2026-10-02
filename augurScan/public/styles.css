@@ -1425,10 +1425,10 @@ button[aria-busy="true"]:disabled {
 }
 .feed-header,
 .log-row {
-	/* Seven tracks plus gaps and padding need 1127px; a smaller minimum lets cells spill out of the row. */
-	min-width: 1130px;
+	/* Seven tracks plus gaps and padding need 1177px; a smaller minimum lets cells spill out of the row. */
+	min-width: 1180px;
 	display: grid;
-	grid-template-columns: 112px 200px minmax(140px, 1fr) minmax(160px, 1fr) minmax(140px, 1fr) 160px 120px;
+	grid-template-columns: 112px 200px minmax(190px, 1fr) minmax(160px, 1fr) minmax(140px, 1fr) 160px 120px;
 	align-items: center;
 	gap: 0.7rem;
 }

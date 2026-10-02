@@ -2315,8 +2315,13 @@ describe('liquidator dashboard operator safeguards', () => {
 		expect(status.classList.contains('hidden')).toBe(false)
 		expect(status.textContent).toContain('Configuration is unavailable')
 		expect(status.querySelector('button')?.textContent).toBe('Retry configuration')
+		// Failed background retries leave the notice alone, so it is not re-announced and Retry keeps keyboard focus.
+		const retry = status.querySelector('button')
+		await page.refresh()
 		await page.refresh()
 		expect(status.classList.contains('hidden')).toBe(false)
+		// Compared by identity: a failed element comparison would print both DOM trees.
+		expect(status.querySelector('button') === retry).toBe(true)
 		page.setConfigurationRequestFailure(false)
 		await page.refresh()
 		expect(status.classList.contains('hidden')).toBe(true)

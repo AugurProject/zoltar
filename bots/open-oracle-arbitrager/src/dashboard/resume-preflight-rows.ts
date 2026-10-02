@@ -1,5 +1,6 @@
 import type { PublicOperatorSnapshot } from '#state/operator-state'
-import { element, shorten } from './dom.js'
+import { updateResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
+import { shorten } from './dom.js'
 
 type PreflightRow = readonly [string, string]
 
@@ -36,16 +37,5 @@ export function resumePreflightRows(snapshot: PublicOperatorSnapshot, stale = fa
 
 /** Rewrites the open readiness check from a newer snapshot, so the dialog never confirms facts older than the last poll. */
 export function refreshOpenResumePreflight(snapshot: PublicOperatorSnapshot, stale: boolean) {
-	if (!element('resume-dialog').hasAttribute('open')) return
-	element('resume-preflight').replaceChildren(
-		...resumePreflightRows(snapshot, stale).map(([label, value]) => {
-			const item = document.createElement('li')
-			const name = document.createElement('span')
-			name.textContent = label
-			const status = document.createElement('strong')
-			status.textContent = value
-			item.append(name, status)
-			return item
-		}),
-	)
+	updateResumePreflight(resumePreflightRows(snapshot, stale))
 }
