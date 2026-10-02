@@ -41,7 +41,9 @@ function OutcomeSelector({ address, universeId, loadPage }: { address: Address; 
 	const page = current?.page
 	const loading = current === undefined
 	const choice = page?.choices.find(candidate => candidate.universeId.toString() === selected && candidate.exists)
-	const hint = loading ? copy.loadingOutcomes : choice === undefined ? copy.selectOutcomeHint : undefined
+	let hint: string | undefined
+	if (loading) hint = copy.loadingOutcomes
+	else if (choice === undefined) hint = copy.selectOutcomeHint
 	useEffect(() => {
 		let active = true
 		const guard = createActiveEnvironmentGuard()

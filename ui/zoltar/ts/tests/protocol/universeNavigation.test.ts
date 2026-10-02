@@ -13,7 +13,10 @@ function fixture({ labelCount = 2n, scalarQuestion = false, forked = true } = {}
 	const labelReads: (readonly unknown[])[] = []
 	const labels = (start: bigint, count: bigint) => {
 		const result: string[] = []
-		for (let index = start; index < labelCount && index < start + count; index++) result.push(labelCount === 2n ? (index === 0n ? 'Yes' : 'No') : `Outcome ${index + 1n}`)
+		for (let index = start; index < labelCount && index < start + count; index++) {
+			const binaryLabel = index === 0n ? 'Yes' : 'No'
+			result.push(labelCount === 2n ? binaryLabel : `Outcome ${index + 1n}`)
+		}
 		return result
 	}
 	const client = {
