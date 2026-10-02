@@ -531,6 +531,61 @@ describe('OpenOracleSection route create view', () => {
 		expect(within(document.body).queryByText('Loading…')).toBeNull()
 	})
 
+	for (const settled of [false, true]) {
+		test(`updates price expiry while viewing a ${settled ? 'settled' : 'pending'} report`, async () => {
+			const rendered = await renderIntoDocument(
+				h(
+					OpenOracleSection,
+					createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						openOracleReportDetails: createOpenOracleReportDetails({
+							currentReporter: '0x3000000000000000000000000000000000000000',
+							currentTime: 459n,
+							reportTimestamp: 100n,
+							settlementTime: 60n,
+							coordinatorPriceValidUntilTimestamp: 460n,
+							isDistributed: settled,
+							settlementTimestamp: settled ? 200n : 0n,
+						}),
+					}),
+				),
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(within(document.body).queryByText('Price expired')).toBeNull()
+			await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+			expect(within(document.body).getByText('Price expired')).not.toBeNull()
+		})
+	}
+
+	for (const settled of [false, true]) {
+		test(`warns about an expired pool price ${settled ? 'after' : 'before'} settlement`, async () => {
+			const rendered = await renderIntoDocument(
+				h(
+					OpenOracleSection,
+					createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						isConnected: true,
+						isOnActiveAppChain: true,
+						openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
+						openOracleReportDetails: createOpenOracleReportDetails({
+							currentReporter: '0x3000000000000000000000000000000000000000',
+							currentTime: 460n,
+							reportTimestamp: 100n,
+							settlementTime: 60n,
+							coordinatorPriceValidUntilTimestamp: 460n,
+							isDistributed: settled,
+							settlementTimestamp: settled ? 460n : 0n,
+						}),
+					}),
+				),
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(within(document.body).getByText(settled ? 'Settled after price expired' : 'Price expired')).not.toBeNull()
+			expect(document.body.textContent).toContain(settled ? 'Request a new price.' : 'Settlement will clear this report, but the pool will reject its price.')
+			if (!settled) expectTransactionButtonEnabled(document.body, 'Settle report')
+		})
+	}
+
 	test('omits the empty report actions section for a settled report', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
