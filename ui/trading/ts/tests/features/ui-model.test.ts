@@ -5,7 +5,7 @@ import { formatEthAmountPair, formatRoundedUnits } from '../../lib/format.js'
 import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
 import {
 	createSecurityPoolDeploymentIndex,
 	liveBalancesForMarket,
@@ -405,10 +405,6 @@ describe('standalone trading UI model', () => {
 		expect(settlementAvailability(open, balances)).toEqual({ completeSets: 5n, winningBalance: 0n, canRedeemCompleteSets: true, canRedeemWinningShares: false, canMigrateShares: false })
 		expect(settlementAvailability({ ...open, questionOutcome: 2 }, balances)).toEqual({ completeSets: 5n, winningBalance: 6n, canRedeemCompleteSets: true, canRedeemWinningShares: true, canMigrateShares: false })
 		expect(settlementAvailability({ ...open, universeForkTime: 1n, systemState: 1 }, balances)).toEqual({ completeSets: 5n, winningBalance: 0n, canRedeemCompleteSets: false, canRedeemWinningShares: false, canMigrateShares: true })
-	})
-
-	test('requires an explicit fork branch and names the irreversible consequence', () => {
-		expect(migrationSimulationSummary(42n, 'YES', 12n)).toBe('Fork migration simulation ready at block 42: the entire selected Yes balance will be copied into 12 selected child branches and locked in the parent universe.')
 	})
 
 	test('allows many ready fork children while requiring missing children to be created singly', () => {

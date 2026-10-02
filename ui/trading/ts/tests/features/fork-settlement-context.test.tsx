@@ -196,7 +196,8 @@ describe('live fork settlement context', () => {
 			await Bun.sleep(QUOTE_SETTLE_MILLISECONDS)
 		})
 		await settleEffects()
-		expect(document.body.textContent).toContain('Fork migration simulation ready at block 12')
+		// The acknowledgment states the consequence once; no separate preflight summary repeats it.
+		expect(document.body.textContent).not.toContain('simulation ready at block')
 		// Migration moves the whole balance and locks it in the parent universe, so it waits for an explicit acknowledgment.
 		expect(document.body.textContent).toContain('Migrates your entire balance: <0.0001 Yes')
 		expect(buttonByLabel('Migrate to 1 branch').disabled).toBe(true)

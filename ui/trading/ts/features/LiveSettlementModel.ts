@@ -27,10 +27,6 @@ export function settlementUnavailableReason(operation: SettlementOperation, mark
 	return reason === undefined ? undefined : settlementUnavailableReasonCopy(reason)
 }
 
-export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetCount: bigint) {
-	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${outcomeLabel(sourceOutcome)} balance will be copied into ${targetCount.toString()} selected child ${targetCount === 1n ? 'branch' : 'branches'} and locked in the parent universe.`
-}
-
 export function settlementInputBlocker(operation: SettlementOperation, unavailableReason: string | undefined, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
 	if (unavailableReason !== undefined) return unavailableReason
 	if (operation === 'redeem-complete-set') {

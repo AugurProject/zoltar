@@ -26,7 +26,7 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
 import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
@@ -285,7 +285,6 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 						<UserMessage className='detail trade-estimate-note' detail={<>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</>} />
 					</section>
 				) : null}
-				{quote?.operation === 'migrate-shares' ? <UserMessage className='detail' detail={<>{migrationSimulationSummary(quote.blockNumber, quote.sourceOutcome, BigInt(quote.targetOutcomeIndexes.length))}</>} /> : null}
 			</QuotedTransactionPanel>
 		</div>
 	)
