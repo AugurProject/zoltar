@@ -159,7 +159,7 @@ describe('live workflow safety boundary', () => {
 				const discovered = await discoverSelectedUniverse(undefined, undefined, 1n)
 				return { ...discovered, markets: discovered.markets.filter(candidate => candidate.pool.toLowerCase() === address.toLowerCase()) }
 			},
-			discoverAllLiveMarketsInUniverse: discoverSelectedUniverse,
+			discoverSavedMarkets: discoverSelectedUniverse,
 			walletChainId: async () => {
 				if (deferredWalletChainRead !== undefined) {
 					walletChainReadStarted?.resolve(undefined)
@@ -311,14 +311,17 @@ describe('live workflow safety boundary', () => {
 		releaseWalletChainRead()
 		deferSecondPortfolioBalance = true
 		await show('portfolio')
-		// Each pool's balance lands on its own: the first is listed while the deferred second is not yet shown as a holding.
-		await waitForDom(() => document.querySelector(`[data-portfolio-pool="${pool}"]`)?.textContent?.includes('1 Yes') === true, 'first portfolio pool')
-		expect(document.querySelector(`[data-portfolio-pool="${secondPool}"]`)).toBeNull()
-		expect(document.querySelector('.portfolio-positions [role="status"]')?.textContent).toContain('Loading balances')
-		secondPortfolioBalance.resolve(undefined)
 		await waitForDom(() => document.querySelectorAll('[data-portfolio-pool]').length === 2, 'both portfolio pools')
-		expect(document.querySelector(`[data-portfolio-pool="${secondPool}"]`)?.textContent).toContain('4 Yes')
-		expect(document.querySelector(`[data-portfolio-pool="${pool}"]`)?.textContent).toContain('1 Yes')
+		expect(document.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
+		expect(document.body.textContent).toContain(secondPool)
+		const firstPortfolioCard = document.querySelector(`[data-portfolio-pool="${pool}"]`)
+		const secondPortfolioCard = document.querySelector(`[data-portfolio-pool="${secondPool}"]`)
+		await waitForDom(() => firstPortfolioCard?.textContent?.includes('1 Yes') === true, 'first queued portfolio balance')
+		expect(firstPortfolioCard?.textContent).toContain('1 Yes')
+		expect(secondPortfolioCard?.textContent).not.toContain('4 Yes')
+		secondPortfolioBalance.resolve(undefined)
+		await waitForDom(() => secondPortfolioCard?.textContent?.includes('4 Yes') === true, 'second queued portfolio balance')
+		expect(secondPortfolioCard?.textContent).toContain('4 Yes')
 		childBalanceStarted = createDeferred<undefined>()
 		deferChildDiscovery = true
 		render(liveTradingView('portfolio', { selectedUniverseId: '2' }), rendered.container)
@@ -546,7 +549,7 @@ describe('live workflow safety boundary', () => {
 		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
 		await show('portfolio', { selectedUniverseId: '3' })
 		await settleAsyncWorkflow()
-		await waitForDom(() => document.body.textContent?.includes('No security pools are deployed in the selected universe.') === true, 'empty universe portfolio')
+		await waitForDom(() => document.body.textContent?.includes('No saved pools in this universe.') === true, 'empty universe portfolio')
 		expect(document.querySelectorAll('.empty-state')).toHaveLength(1)
 		expect(document.querySelector('.portfolio-positions')).toBeNull()
 	})

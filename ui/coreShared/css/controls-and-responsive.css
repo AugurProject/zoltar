@@ -154,8 +154,10 @@
 	align-items: flex-start;
 }
 
+/* Content-sized tracks would let a long single-line label widen the button past its slot. */
 .tx-action {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-2);
 }
 
@@ -195,6 +197,7 @@
 
 .tx-action-row > .tx-action-button {
 	flex: 1 1 auto;
+	min-width: 0;
 }
 
 .tx-action-notice {
@@ -222,6 +225,7 @@ button.tx-action-wallet-fix {
 
 .tx-action-button-labels {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	align-items: center;
 }
 
@@ -1354,8 +1358,12 @@ button.tx-action-wallet-fix {
 
 	.route-subnav-shell .route-subtab-nav.view-tabs.segmented .view-tab {
 		justify-content: center;
-		padding-inline: 0.5rem;
+		min-width: 0;
+		padding-inline: var(--space-1);
 		font-size: var(--font-label);
+		text-align: center;
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 
 	.account-menu-trigger {

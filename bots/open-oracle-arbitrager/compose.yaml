@@ -30,6 +30,7 @@ volumes:
   arbitrager-state:
   signer-locks:
     name: zoltar-bot-signer-locks
+    external: true
 
 networks:
   default:

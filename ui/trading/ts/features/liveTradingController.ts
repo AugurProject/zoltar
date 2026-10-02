@@ -97,7 +97,20 @@ export function useLiveTradingController({
 		if (event.reason === 'invalidate' && account !== undefined) refreshWalletSummaryAfterReceipt()
 	})
 	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
-	useWalletSummaryEffects({ route, configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
+	useWalletSummaryEffects({
+		route,
+		configuration,
+		configurationError,
+		selectedUniverseId: walletUniverseId,
+		discoveryState,
+		discoveryError,
+		selected: selected ?? visibleMarkets.find(market => market.loadError === undefined),
+		retryNonce: walletSummaryRetryNonce,
+		onWalletSummaryChange,
+		session: walletSession,
+		services,
+		requests: walletSummaryRequests,
+	})
 	transactionWorkflow.knownReceiptRef.current = refreshWalletSummaryAfterReceipt
 
 	async function retryBalances() {
@@ -129,8 +142,8 @@ export function useLiveTradingController({
 			await connect()
 			return
 		}
-		if (discoveryState === 'error') {
-			await refresh(configuration, 0n)
+		if (discoveryState === 'error' || visibleMarkets.some(market => market.loadError !== undefined)) {
+			await refresh(configuration, 0n, undefined, { background: true, explicit: true })
 			return
 		}
 		setPortfolioRefreshNonce(value => value + 1)

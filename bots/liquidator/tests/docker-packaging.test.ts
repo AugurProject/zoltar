@@ -7,6 +7,15 @@ const botDirectory = join(import.meta.dir, '..')
 const windowsLauncher = join(botDirectory, 'start.bat')
 
 describe('Docker packaging', () => {
+	test('creates the shared external signer-lock volume before Compose runs', async () => {
+		for (const launcher of ['start.bat']) {
+			const commands = batchCommands(await readFile(join(botDirectory, launcher), 'utf8'))
+			const create = 'docker volume create zoltar-bot-signer-locks >nul || goto finish'
+			expect(commands).toContain(create)
+			expect(commands.indexOf(create)).toBeLessThan(commands.findIndex(command => command.startsWith('docker compose ')))
+		}
+	})
+
 	test('provides a location-independent Windows launcher', async () => {
 		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
 		expect(commands.at(0)).toBe('pushd "%~dp0" || exit /b 1')
@@ -28,6 +37,6 @@ describe('Docker packaging', () => {
 		expect(service.environment?.['ZOLTAR_BOT_SIGNER_LOCK_ROOT']).toBe('.state/process-locks')
 		expect(service.volumes).toEqual(expect.arrayContaining(['signer-locks:/app/bots/liquidator/.state/process-locks']))
 		const compose: unknown = Bun.YAML.parse(await readFile(join(botDirectory, 'compose.yaml'), 'utf8'))
-		expect(compose).toMatchObject({ volumes: { 'signer-locks': { name: 'zoltar-bot-signer-locks' } } })
+		expect(compose).toMatchObject({ volumes: { 'signer-locks': { name: 'zoltar-bot-signer-locks', external: true } } })
 	})
 })

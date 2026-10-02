@@ -1,6 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import { useMemo, useRef, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
+import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -8,23 +9,16 @@ import { ComparisonRecord } from '@zoltar/ui-core-shared/components/ComparisonRe
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
-import { LocalBrowseBar, LocalBrowseSearchField, LocalCollectionEmptyState } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { LocalBrowseSearchField } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
-import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { useLocalBrowseDirectory } from '@zoltar/ui-core-shared/hooks/useLocalBrowseDirectory.js'
-import type { DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
+import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { buildLocalBrowseEntries, normalizeLocalSearchText } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../../../types/contracts.js'
 import { formatOpenOracleReportPriceUnit, getOpenOracleReportProgress, getOpenOracleReportProgressLabel, getOpenOracleReportProgressTone, OPEN_ORACLE_REPORT_PROGRESS_ORDER } from '../lib/openOracle.js'
-import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, toCachedOpenOracleReportSummary, type BrowseStatusFilter, type OpenOracleBrowseReport } from '../lib/reportBrowse.js'
+import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, type BrowseStatusFilter, type OpenOracleBrowseReport } from '../lib/reportBrowse.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { BROWSE_PAGE_SIZE, getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
-
-type UnavailableReport = Readonly<{ reportId: bigint; message: string }>
-type ReceivedReportPage = Readonly<{ page: OpenOracleReportSummaryPage; requestKey: string }>
+import { getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
 
 type ReportClock = { currentBlockNumber: bigint | undefined; currentTime: bigint | undefined }
 
@@ -66,65 +60,24 @@ function ReportSummaryRecord({ clock, fetchedAt, onSelectReport, report }: { clo
 	)
 }
 
-type OpenOracleReportBrowserProps = {
-	environmentReady: boolean
-	environmentRefreshKey: number
-	loadBrowseReports: (pageIndex: number, pageSize: number) => Promise<OpenOracleReportSummaryPage>
-	onOpenReport: (reportId: bigint) => void
-}
-
-/**
- * Reports are browsed from this browser's favorites and downloaded summaries. Scanning OpenOracle is an explicit,
- * one-page-per-click action (newest reports first) whose results join the downloaded cache.
- */
-export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKey, loadBrowseReports, onOpenReport }: OpenOracleReportBrowserProps) {
+/** Reports use the same favorites-only browser as pools; opening a report saves its summary. */
+export function OpenOracleReportBrowser({ onOpenReport }: { onOpenReport: (reportId: bigint) => void }) {
 	const [statusFilter, setStatusFilter] = useState<BrowseStatusFilter>('all')
 	// Without a chain timestamp yet, wall-clock time still tells whether a time-based report is ready to settle.
 	const clock: ReportClock = { currentBlockNumber: useChainBlockNumber(), currentTime: useChainTimestamp() ?? getWallClockTimestamp() }
-	const [receivedPage, setReceivedPage] = useState<ReceivedReportPage | undefined>(undefined)
-	// Reports whose stored state cannot be read have no summary to cache; they are listed for the current visit only.
-	const [unavailable, setUnavailable] = useState<{ contextKey: string; reports: readonly UnavailableReport[] }>({ contextKey: '', reports: [] })
-	const contextKey = environmentRefreshKey.toString()
-	const liveContextKeyRef = useRef(contextKey)
-	liveContextKeyRef.current = contextKey
-	const discoveredPage = useMemo((): DiscoveredPage<OpenOracleReportSummary> | undefined => {
-		if (receivedPage === undefined) return undefined
-		return { items: receivedPage.page.reports, pageIndex: receivedPage.page.pageIndex, pageSize: receivedPage.page.pageSize, requestKey: receivedPage.requestKey, totalCount: receivedPage.page.reportCount }
-	}, [receivedPage])
-	const directory = useLocalBrowseDirectory({
-		app: 'statoblast',
-		contextKey,
-		kind: 'oracleReport',
-		loadPage: async (pageIndex, requestKey) => {
-			const page = await loadBrowseReports(pageIndex, BROWSE_PAGE_SIZE)
-			// A page for an earlier environment must not replace anything collected for the current one.
-			if (liveContextKeyRef.current !== contextKey) return
-			setReceivedPage({ page, requestKey })
-			const pageUnavailable = page.unavailableReports ?? []
-			if (pageUnavailable.length === 0) return
-			setUnavailable(current => {
-				const reports = current.contextKey === contextKey ? current.reports : []
-				const known = new Set(reports.map(report => report.reportId))
-				return { contextKey, reports: [...reports, ...pageUnavailable.filter(report => !known.has(report.reportId))] }
-			})
-		},
-		pageSize: BROWSE_PAGE_SIZE,
-		receivedPage: discoveredPage,
-		store: openOracleReportDownloadStore,
-		toDownloadedItem: report => ({ data: toCachedOpenOracleReportSummary(report), id: getOpenOracleReportEntityId(report.reportId) }),
-	})
-	const { collection, discovery, entries, normalizedSearchText, searchText } = directory
-	const unavailableReports = unavailable.contextKey === contextKey ? unavailable.reports : []
+	const [searchText, setSearchText] = useState('')
+	const favorites = useFavorites('statoblast', 'oracleReport')
+	const downloaded = useDownloadedEntities('statoblast', 'oracleReport', openOracleReportDownloadStore)
+	const entries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
+	const normalizedSearchText = normalizeLocalSearchText(searchText)
 	const fetchedAtById = new Map(entries.map(entry => [entry.id, entry.fetchedAt]))
 	const visibleReports = filterOpenOracleReports(
 		entries.map(entry => entry.data),
 		{ clock, normalizedSearchText, statusFilter },
 	)
 	const hasActiveFilters = normalizedSearchText !== '' || statusFilter !== 'all'
-	// Unreadable reports belong to the scan, so they appear in the downloaded collection while no filter is active.
-	const visibleUnavailableReports = collection === 'downloaded' && !hasActiveFilters ? unavailableReports : []
 	const searchedReportId = parseReportIdSearch(searchText)
-	// A report ID that is not listed (not downloaded, in the other collection, or filtered out) can still be opened directly.
+	// A report ID that is not listed (not cached, not favorited, or filtered out) can still be opened directly.
 	const openSearchedReport =
 		searchedReportId === undefined || visibleReports.some(report => report.reportId === searchedReportId) ? undefined : (
 			<button className='primary' type='button' onClick={() => onOpenReport(searchedReportId)}>
@@ -133,28 +86,10 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 		)
 
 	const content = (() => {
-		if (entries.length === 0 && visibleUnavailableReports.length === 0)
-			return (
-				<LocalCollectionEmptyState
-					action={openSearchedReport}
-					copy={{
-						downloadedEmpty: openOracleCopy.noDownloadedReports,
-						downloadedEmptyDetail: openOracleCopy.noDownloadedReportsDetail,
-						favoritesEmpty: openOracleCopy.noFavoriteReports,
-						favoritesEmptyDetail: openOracleCopy.noFavoriteReportsDetail,
-						favoritesEmptyWithDownloadsDetail: openOracleCopy.noFavoriteReportsWithDownloadsDetail,
-						showDownloaded: openOracleCopy.showDownloadedReports,
-					}}
-					directory={directory}
-					registryEmpty={<EmptyState live title={commonCopy.none} detail={openOracleCopy.oracleGamesEmpty} actions={openSearchedReport} />}
-				/>
-			)
-		if (visibleReports.length === 0 && visibleUnavailableReports.length === 0) return <EmptyState live title={commonCopy.noMatches} detail={openOracleCopy.reportFiltersEmpty} actions={openSearchedReport} />
+		if (entries.length === 0) return <EmptyState title={openOracleCopy.noFavoriteReports} detail={openOracleCopy.noFavoriteReportsDetail} actions={openSearchedReport} />
+		if (visibleReports.length === 0) return <EmptyState live title={commonCopy.noMatches} detail={openOracleCopy.reportFiltersEmpty} actions={openSearchedReport} />
 		return (
 			<div className='comparison-record-list'>
-				{visibleUnavailableReports.map(report => (
-					<StateHint key={`unavailable-${report.reportId.toString()}`} presentation={{ key: 'unavailable', badgeLabel: commonCopy.unavailable, badgeTone: 'muted', detail: report.message }} />
-				))}
 				{visibleReports.map(report => (
 					<ReportSummaryRecord key={report.reportId.toString()} clock={clock} fetchedAt={fetchedAtById.get(getOpenOracleReportEntityId(report.reportId)) ?? 0} onSelectReport={onOpenReport} report={report} />
 				))}
@@ -164,10 +99,9 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 
 	return (
 		<SectionBlock density='compact' title={openOracleCopy.reportDirectory} variant='plain'>
-			<RetryableNotice disabled={discovery.loading} message={discovery.loadFailed ? openOracleCopy.reportLoadError : undefined} onRetry={discovery.retry} retryLabel={discovery.loading ? <LoadingText>{commonCopy.retrying}</LoadingText> : openOracleCopy.retryReports} />
-			<LocalBrowseBar directory={directory} discoverLabel={openOracleCopy.discoverReports} disabled={!environmentReady} nounPlural={openOracleCopy.reportCountPlural} />
+			<p className='detail'>{favoritesCopy.formatCollectionTab(favoritesCopy.favorites, entries.length)}</p>
 			<div className='filter-toolbar'>
-				<LocalBrowseSearchField label={openOracleCopy.searchDownloadedReports} onChange={directory.setSearchText} placeholder={openOracleCopy.reportSearchPlaceholder} value={searchText} />
+				<LocalBrowseSearchField label={openOracleCopy.searchReports} onChange={setSearchText} placeholder={openOracleCopy.reportSearchPlaceholder} value={searchText} />
 				<label className='field'>
 					<span>{commonCopy.status}</span>
 					<select value={statusFilter} onChange={event => setStatusFilter(resolveBrowseStatusFilter(event.currentTarget.value))}>

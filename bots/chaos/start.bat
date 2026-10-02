@@ -6,6 +6,7 @@ set "chaos_container_list="
 pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed
+docker volume create zoltar-bot-signer-locks >nul || goto failed
 if /I "%~1"=="doctor" goto doctor
 rem Stop chaos services and one-off runs even if their Compose project name differs.
 rem Both filters are required so other bots and unrelated chaos services stay running.

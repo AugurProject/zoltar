@@ -32,7 +32,6 @@ const unknownDiscovery = 'unknown discovery error'
 const loadingSecurityPoolDetails = 'Loading security pool details…'
 const retryDiscovery = 'Retry discovery'
 const discoveringSecurityPoolsFromFactory = 'Discovering security pools from the configured factory…'
-const noSecurityPoolsInUniverse = 'No security pools are deployed in the selected universe.'
 const discoveringSecurityPools = 'Discovering security pools…'
 const securityPoolPages = 'Security pool pages'
 const previousPools = 'Previous pools'
@@ -146,7 +145,6 @@ export const liveCopy = {
 	loadingSecurityPoolDetails,
 	retryDiscovery,
 	discoveringSecurityPoolsFromFactory,
-	noSecurityPoolsInUniverse,
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
 	noEligiblePools: 'No favorite security pools.',

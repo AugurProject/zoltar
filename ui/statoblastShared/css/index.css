@@ -3205,6 +3205,7 @@ span.rep-price-status.stale,
 }
 
 @media (max-width: 40rem) {
+	.vault-workspace .vault-detail-hero,
 	.vault-address-lookup .lookup-field-controls.has-action {
 		grid-template-columns: minmax(0, 1fr);
 	}
