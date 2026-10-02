@@ -23,7 +23,7 @@ import {
 	parseOpenOracleCreateFormSubmission,
 } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
-import { loadOpenOracleInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
+import { loadOpenOracleInitialReportPrice, type OraclePriceQueryStage } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
 import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ETH_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
@@ -521,18 +521,21 @@ describe('OpenOracle helpers', () => {
 	})
 
 	test('initial report price helpers select the Uniswap version with the most executable liquidity', async () => {
+		const stages: OraclePriceQueryStage[] = []
 		const client = withInitializedV4Pool(createConnectedReadClient())
 		client.simulateContract = async parameters => {
+			expect(stages.at(-1)).toBe(parameters.address === UNISWAP_V4_QUOTER_ADDRESS ? 'v4' : 'v3')
 			if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [25n, 0n], request: {} as never } as never
 			return { result: [40n, 0n, 0, 0n], request: {} as never } as never
 		}
 		client.readContract = async () => zeroAddress as never
 
-		await expect(loadOpenOracleInitialReportPrice(client, REP_ADDRESS, WETH_ADDRESS, 100n)).resolves.toEqual({
+		await expect(loadOpenOracleInitialReportPrice(client, REP_ADDRESS, WETH_ADDRESS, 100n, stage => stages.push(stage))).resolves.toEqual({
 			price: 2_500_000_000_000_000_000_000_000_000_000n,
 			priceSource: 'Uniswap V3',
 			token2Amount: 40n,
 		})
+		expect(stages).toEqual(['v4', 'v3'])
 	})
 
 	test('initial report price helpers retain a usable V4 quote when V3 is unavailable', async () => {
