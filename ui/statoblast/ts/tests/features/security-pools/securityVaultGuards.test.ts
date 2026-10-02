@@ -188,6 +188,17 @@ describe('security vault guards', () => {
 				accountAddress: zeroAddress,
 				hasLoadedOracleManager: true,
 				isOnActiveAppChain: true,
+				isPriceValid: false,
+				resolvedPendingOperationId: 1n,
+				pendingSettlementOperationIds: [1n],
+			}),
+		).toBe('Auto-executes after oracle settlement.')
+
+		expect(
+			getVaultExecutePendingOperationGuardMessage({
+				accountAddress: zeroAddress,
+				hasLoadedOracleManager: true,
+				isOnActiveAppChain: true,
 				isPriceValid: true,
 				resolvedPendingOperationId: 1n,
 			}),

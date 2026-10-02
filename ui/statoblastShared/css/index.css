@@ -3335,10 +3335,6 @@ span.rep-price-status.stale,
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-record);
 }
-.staged-operation-card.selected {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-}
 .liquidation-outcome-review .transaction-review-row {
 	background: transparent;
 	border: 0;
