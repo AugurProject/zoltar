@@ -129,7 +129,7 @@ export function App({
 	// The universe is chosen on the universe route through the shared `universe` query parameter; discovery confirms it exists.
 	const { applyUrlStateUpdate, getOwnedSearch, state: urlState } = useUrlSearchState(readTradingUrlState)
 	const [liveUniverses, setLiveUniverses] = useState<LiveUniverses>({ ids: [], selected: undefined, forRequest: undefined, forPool: undefined })
-	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
+	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error' | 'not-found'>('loading')
 	const [liveWalletSummary, setLiveWalletSummary] = useState<WalletSummaryState>({ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: undefined })
 	const [walletSummaryRetryNonce, setWalletSummaryRetryNonce] = useState(0)
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
@@ -165,7 +165,7 @@ export function App({
 	const headerUniverse = useUniverseSummary(showUniverseField ? liveConfiguration : undefined, confirmedUniverseId === undefined ? undefined : BigInt(confirmedUniverseId), loadUniverseSummary)
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 	if (confirmedUniverseId !== undefined) universeValue = <UniverseSwitcher activeUniverseId={BigInt(confirmedUniverseId)} browseHref={getTradingRouteHref('#/universe')} universe={headerUniverse.state.kind === 'ready' ? headerUniverse.state.universe : undefined} />
-	else if (discoveryState === 'error') universeValue = <span>{appCopy.unavailable}</span>
+	else if (discoveryState === 'error' || discoveryState === 'not-found') universeValue = <span>{appCopy.unavailable}</span>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))
