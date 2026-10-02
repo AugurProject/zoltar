@@ -8,7 +8,7 @@ export function useMarketDiscovery() {
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
 	// Presentation-only registry slots; balances and persistence receive real markets only.
 	const [discoveryRows, setDiscoveryRows] = useState<readonly (LiveMarket | undefined)[]>()
-	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
+	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error' | 'not-found'>('loading')
 	const [discoveryError, setDiscoveryError] = useState<string>()
 	// The age of the committed discovery and whether a background refresh is re-reading it.
 	const [freshness, setFreshness] = useState<DataFreshness>({ refreshing: false, updatedAt: undefined })

@@ -77,7 +77,7 @@ export function LiveTrading({
 	/** Test seam for the universe route's summary read. */
 	loadUniverseSummary?: LoadUniverseSummary | undefined
 	/** Lets the shell know when universe discovery has failed, so the header can say so instead of loading forever. */
-	onDiscoveryStateChange?: ((state: 'loading' | 'ready' | 'error') => void) | undefined
+	onDiscoveryStateChange?: ((state: 'loading' | 'ready' | 'error' | 'not-found') => void) | undefined
 	onUniversesChange?(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange?(summary: WalletSummaryState): void
