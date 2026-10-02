@@ -137,6 +137,8 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 								const retry = final ? retryAction : undefined
 								const approvalBlocked = completedLabel === undefined && (retainedWorkflow !== undefined || step.phase === 'upcoming')
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, wallet: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
+								const stepReason = step.phase === 'upcoming' ? blockedReason : status
+								const retryReason = retry === undefined ? undefined : (retry.availability.reason ?? copy.notCompleted)
 								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
@@ -180,19 +182,21 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 												pendingLabel={copy.formatPendingAction(step.title)}
 												pending={active && pending}
 												onClick={() => {
-													if (retry !== undefined) retry.onClick()
-													else if (ready) workflow.confirmStep(index)
+													if (ready) workflow.confirmStep(index)
 												}}
-												availability={retry?.availability ?? { disabled: !ready, reason: completedLabel ?? (step.phase === 'upcoming' ? blockedReason : status) }}
+												availability={{ disabled: !ready, reason: completedLabel ?? retryReason ?? stepReason }}
 												showDisabledReason={final && (step.phase === 'upcoming' || retry?.availability.disabled === true)}
 												tone={step.approval === undefined ? 'primary' : 'secondary'}
 											/>
 										)}
-										{final && cancelable && (!terminal || retryAction !== undefined) ? (
+										{final && (retry !== undefined || (cancelable && !terminal)) ? (
 											<div className='actions transaction-step-close'>
-												<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
-													{commonCopy.cancel}
-												</button>
+												{retry === undefined ? undefined : <TransactionActionButton idleLabel={commonCopy.retry} pendingLabel={commonCopy.retrying} availability={retry.availability} onClick={retry.onClick} tone='secondary' />}
+												{cancelable ? (
+													<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
+														{commonCopy.cancel}
+													</button>
+												) : undefined}
 											</div>
 										) : undefined}
 									</div>
