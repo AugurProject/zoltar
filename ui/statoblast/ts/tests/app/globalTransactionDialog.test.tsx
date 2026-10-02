@@ -35,6 +35,20 @@ describe('GlobalTransactionDialog', () => {
 		restoreRouting = installTestRouting()
 	})
 
+	test.each(['success', 'pending'] as const)('reserves measured %s notice space so the next action stays reachable', async tone => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ title: 'WETH approval', tone, hash: '0x1111111111111111111111111111111111111111111111111111111111111111' }} />)
+		const panel = rendered.container.querySelector<HTMLElement>('.global-transaction-dialog')
+		if (panel === null) throw new Error('Missing transaction notice')
+		panel.getBoundingClientRect = () => new window.DOMRect(0, window.innerHeight - 200, 390, 180)
+		await act(async () => {
+			await new Promise(resolve => requestAnimationFrame(resolve))
+			window.dispatchEvent(new Event('resize'))
+		})
+		expect(document.documentElement.style.getPropertyValue('--transaction-status-inset')).toBe('200px')
+		await rendered.cleanup()
+		expect(document.documentElement.style.getPropertyValue('--transaction-status-inset')).toBe('')
+	})
+
 	test('reserves measured error notice space and releases it when dismissed', async () => {
 		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ title: 'Price request failed', tone: 'error', dismissKey: 'transaction-request-layout' }} />)
 		trackRendered(rendered)

@@ -1,3 +1,6 @@
+import { OracleOperationActions } from './OracleOperationActions.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { usePreparedOracleOperation } from '../hooks/usePreparedOracleOperation.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
@@ -9,13 +12,11 @@ import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps, WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
-import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { useId, useState } from 'preact/hooks'
 import { formatCurrencyInputBalance, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import type { OracleManagerDetails, SecurityVaultDetails, SecurityVaultActionResult } from '../../../types/contracts.js'
 import { getVaultBackingFactorAdjustmentGuard, getMaximumHealthyCommitment } from '../lib/securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -32,6 +33,8 @@ export function VaultBackingFactorForm({
 	repPerEthPrice,
 	poolSecurityMultiplierBps,
 	onAdjust,
+	onCompleted,
+	onCancel,
 	walletBlocker,
 	directExecution = false,
 }: {
@@ -44,7 +47,9 @@ export function VaultBackingFactorForm({
 	increaseBlocker?: string | undefined
 	busy: boolean
 	pending: boolean
-	onAdjust: (limit: string, proposedRepPerEthPrice?: bigint) => void
+	onAdjust: (limit: string, proposedRepPerEthPrice?: bigint) => void | Promise<void>
+	onCompleted?: (() => void) | undefined
+	onCancel?: (() => void) | undefined
 	/** The wallet prerequisite, when it is the `blocker`. */
 	walletBlocker?: WalletActionBlocker | undefined
 	/** After resolution the change is sent straight to the pool, so no oracle price or report is involved. */
@@ -85,14 +90,17 @@ export function VaultBackingFactorForm({
 	const priceErrorShown = reason === priceError && priceError !== undefined && initialPrice.price !== ''
 	let disabledReasonElementId = fieldErrorShown ? errorId : undefined
 	if (priceErrorShown) disabledReasonElementId = `${priceFieldId}-error`
+	const preparationKey = `${details?.securityPoolAddress}:${details?.vaultAddress}:${details?.managerAddress}:${limit}:${proposedRepPerEthPrice}:${acknowledgedRisk}`
+	const prepared = usePreparedOracleOperation({ key: preparationKey, enabled: !directExecution && reason === undefined, busy, onPrepare: () => onAdjust(limit, proposedRepPerEthPrice), onCompleted })
+	const fieldsLocked = prepared.sending || (busy && !prepared.preparing)
 	return (
 		<>
 			{needsInitialPrice ? <InlineHint message={securityPoolCopy.commitmentNeedsOracleReport} /> : undefined}
-			{needsInitialPrice ? <OracleInitialPriceFields managerAddress={details?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={busy} fieldId={priceFieldId} /> : undefined}
+			{needsInitialPrice ? <OracleInitialPriceFields managerAddress={details?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={fieldsLocked} fieldId={priceFieldId} /> : undefined}
 			<AmountField
 				fillMax={directExecution ? undefined : { amount: maximum }}
 				allowZero
-				disabled={busy}
+				disabled={fieldsLocked}
 				error={error}
 				errorId={errorId}
 				errorRevealed={errorRevealed}
@@ -124,32 +132,40 @@ export function VaultBackingFactorForm({
 				<>
 					<UserMessage className='detail' tone='warning' detail={securityPoolCopy.commitmentRiskWarning} />
 					<label className='commitment-risk-confirmation'>
-						<input type='checkbox' checked={acknowledgedRisk === riskKey} disabled={busy} onChange={event => setAcknowledgedRisk(event.currentTarget.checked ? riskKey : undefined)} />
+						<input type='checkbox' checked={acknowledgedRisk === riskKey} disabled={fieldsLocked} onChange={event => setAcknowledgedRisk(event.currentTarget.checked ? riskKey : undefined)} />
 						<span>{securityPoolCopy.commitmentRiskAcknowledgement}</span>
 					</label>
 				</>
 			) : undefined}
 			<InlineHint message={executionMessage} />
-			<div className='actions'>
-				<TransactionActionButton
-					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
-					pendingLabel={securityPoolCopy.settingCommitmentLimitPending}
-					pending={pending}
-					showDisabledReason={!fieldErrorShown && !priceErrorShown}
-					disabledReasonElementId={disabledReasonElementId}
-					onClick={() => {
-						if (!busy && reason === undefined) onAdjust(limit, proposedRepPerEthPrice)
-					}}
-					availability={withWalletBlocker({ disabled: busy || reason !== undefined, reason }, walletBlocker)}
-				/>
-			</div>
+			<OracleOperationActions
+				prepared={prepared}
+				operationKey={preparationKey}
+				actionLabel={securityPoolCopy.setVaultUnderwritingLimit}
+				pendingLabel={securityPoolCopy.settingCommitmentLimitPending}
+				requiresReportFunding={needsInitialPrice}
+				directExecution={directExecution}
+				busy={busy}
+				pending={pending}
+				reason={reason}
+				onExecute={() => onAdjust(limit, proposedRepPerEthPrice)}
+				onCancel={onCancel}
+				walletBlocker={walletBlocker}
+				disabledReasonElementId={disabledReasonElementId}
+				showDisabledReason={!fieldErrorShown && !priceErrorShown}
+			/>
 		</>
 	)
 }
 
 export function VaultBackingFactorModal({ result, error, children, ...props }: Omit<OperationModalProps, 'title' | 'closeOnSuccessKey'> & { result: SecurityVaultActionResult | undefined; error: string | undefined }) {
 	return (
-		<OperationModal {...props} title={securityPoolCopy.setVaultUnderwritingLimit} closeOnSuccessKey={result?.action === 'setVaultUnderwritingLimit' && result.stagedExecution?.success !== false ? result.hash : undefined}>
+		<OperationModal
+			{...props}
+			closeDisabled={props.closeDisabled || (props.embedTransactionSteps === false && transactionSteps.value?.steps.some(step => step.phase === 'wallet') === true)}
+			title={securityPoolCopy.setVaultUnderwritingLimit}
+			closeOnSuccessKey={result?.action === 'setVaultUnderwritingLimit' && result.stagedExecution?.success !== false ? result.hash : undefined}
+		>
 			{children}
 			<ErrorNotice message={error} />
 		</OperationModal>

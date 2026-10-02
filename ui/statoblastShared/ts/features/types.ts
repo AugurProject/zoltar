@@ -131,7 +131,7 @@ type LiquidationModalStateProps = {
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address, proposedRepPerEthPrice?: bigint) => void) | undefined
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void | Promise<void>
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	uiPriceOracle?: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle | undefined
 }
@@ -205,13 +205,13 @@ export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onSetVaultUnderwritingLimit: (factor: string, proposedRepPerEthPrice?: bigint) => void
+	onSetVaultUnderwritingLimit: (factor: string, proposedRepPerEthPrice?: bigint) => void | Promise<void>
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
 	onRedeemRepFromVault: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onWithdrawRep: (proposedRepPerEthPrice?: bigint) => void
+	onWithdrawRep: (proposedRepPerEthPrice?: bigint) => void | Promise<void>
 	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined

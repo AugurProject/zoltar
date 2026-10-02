@@ -59,6 +59,8 @@ type TransactionStepsActionsProps = {
 	/** False when the surrounding flow has no way back (the wallet is where the user declines); hides the Cancel/Dismiss control. */
 	cancelable?: boolean
 	contextKey: string
+	includeWrapAction?: boolean
+	finalActionLabel?: string | undefined
 	/** Move focus into the actions when the review replaced the control the user activated. */
 	focusOnMount?: boolean
 	/** Keep the actions scrolled into view as they change state when the review sits in page flow under the transaction tray. */
@@ -70,7 +72,7 @@ type TransactionStepsActionsProps = {
 }
 
 /** The review's confirm, approval, and cancel controls. */
-function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsActionsProps) {
+function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAction = false, finalActionLabel, focusOnMount = false, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsActionsProps) {
 	const { error, pending, presentation, workflow } = useTransactionStepsState(retainedWorkflow)
 	const actionsRef = useRef<HTMLDivElement>(null)
 	const pendingActionRef = useRef<HTMLDivElement>(null)
@@ -129,6 +131,11 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 					<div className='tx-action-group'>
 						<div className='tx-action-feedback' />
 						<div className='actions' aria-live='polite'>
+							{includeWrapAction && !workflow.steps.some(step => step.title === copy.wrapEthIntoWeth) ? (
+								<div className='transaction-plan-action transaction-plan-action-wide'>
+									<TransactionActionButton idleLabel={copy.wrapEthIntoWeth} pendingLabel={copy.formatPendingAction(copy.wrapEthIntoWeth)} availability={{ disabled: true, reason: copy.skipped }} onClick={() => undefined} tone='secondary' />
+								</div>
+							) : undefined}
 							{workflow.steps.map((step, index) => {
 								const completedLabel = getCompletedLabel(step)
 								const active = index === workflow.activeIndex
@@ -164,11 +171,12 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 											/>
 										) : (
 											<TransactionActionButton
+												ariaLabel={completedLabel ?? (final ? finalActionLabel : undefined) ?? step.title}
 												className={completedLabel === undefined ? '' : 'tx-action-completed'}
 												idleLabel={
 													completedLabel ?? (
 														<>
-															{step.title}
+															{(final ? finalActionLabel : undefined) ?? step.title}
 															{(step.ethValueAttoEth ?? 0n) === 0n ? undefined : (
 																<>
 																	{' '}
@@ -211,16 +219,19 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 }
 
 type TransactionStepsContentProps = TransactionStepsActionsProps & {
+	actionsFirst?: boolean
+
 	heading?: string | undefined
 }
 
-export function TransactionStepsContent({ cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsContentProps) {
+export function TransactionStepsContent({ actionsFirst = false, cancelable = true, contextKey, includeWrapAction = false, finalActionLabel, focusOnMount = false, heading, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsContentProps) {
 	const { current, presentation, workflow } = useTransactionStepsState(retainedWorkflow)
 	if (workflow === undefined || current === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const outcome = workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome
 	const totalEth = workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n)
+	const actions = <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} includeWrapAction={includeWrapAction} finalActionLabel={finalActionLabel} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} retainedWorkflow={retainedWorkflow} retryAction={retryAction} />
 	return (
 		<>
 			{heading === undefined ? undefined : (
@@ -228,6 +239,7 @@ export function TransactionStepsContent({ cancelable = true, contextKey, focusOn
 					<h4>{heading}</h4>
 				</div>
 			)}
+			{actionsFirst ? actions : undefined}
 			<div className='transaction-step-content'>
 				{funding.length === 0 ? (
 					<TransactionStepReview
@@ -249,7 +261,7 @@ export function TransactionStepsContent({ cancelable = true, contextKey, focusOn
 				)}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			<TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} retainedWorkflow={retainedWorkflow} retryAction={retryAction} />
+			{actionsFirst ? undefined : actions}
 		</>
 	)
 }

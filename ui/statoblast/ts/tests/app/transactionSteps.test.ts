@@ -1,5 +1,5 @@
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { requestOraclePrice, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
+import { requestOraclePrice, queueOracleManagerOperation, queueSecurityPoolLiquidation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
@@ -38,6 +38,21 @@ function setup(replacementReason?: ReplacementReason) {
 		return receipt
 	}
 	return { client, receipt, sendTransaction, onTransactionPrepared, replacementHash, reviewed: createReviewedClient({ ...client, sendTransaction, onTransactionPrepared, ...(replacementReason === undefined ? {} : { waitForTransactionReceipt }) }) }
+}
+
+async function waitForTransactionStep(index: number) {
+	for (let attempt = 0; attempt < 100; attempt += 1) {
+		if (transactionSteps.value?.steps[index]?.phase === 'review') {
+			return
+		}
+		await new Promise(resolve => setTimeout(resolve, 1))
+	}
+	throw new Error(`Transaction step ${index} was not ready`)
+}
+
+async function clickTransactionStep(index: number, amount?: bigint) {
+	await waitForTransactionStep(index)
+	transactionSteps.value?.confirmStep(index, amount)
 }
 
 async function waitForStarted() {
@@ -86,11 +101,9 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 	}
 })
 
-test('wallet-only reporting advances to the report after the deposit receipt without app confirmations', async () => {
-	const { client, receipt, sendTransaction, replacementHash } = setup()
-	sendTransaction.mockResolvedValueOnce(hash).mockResolvedValueOnce(replacementHash)
-	const depositReceipt = createDeferred<typeof receipt>()
-	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async parameters => ({ ...(await depositReceipt.promise), transactionHash: parameters.hash }) })
+test('reporting requires a separate button click for the deposit and report', async () => {
+	const { client, receipt, sendTransaction } = setup()
+	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async parameters => ({ ...receipt, transactionHash: parameters.hash }) })
 	const steps = ['depositRepToVault', 'depositToEscalationGame'].map(functionName => ({ functionName, contractAddress: account, args: [1n, 1n], data: '0x1234' as const }))
 	reviewed.onTransactionPlan?.(steps)
 	const action = (async () => {
@@ -101,17 +114,21 @@ test('wallet-only reporting advances to the report after the deposit receipt wit
 		}
 	})()
 	const settled = action.catch(error => error)
-	await new Promise(resolve => setTimeout(resolve, 10))
 	try {
+		await waitForStarted()
+		expect(sendTransaction).not.toHaveBeenCalled()
+		expect(transactionSteps.value?.showReviewDialog).toBe(true)
+		confirm()
+		await new Promise(resolve => setTimeout(resolve, 10))
 		expect(sendTransaction).toHaveBeenCalledTimes(1)
-		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['pending', 'upcoming'])
-		expect(transactionSteps.value?.showReviewDialog).toBe(false)
-	} finally {
-		depositReceipt.resolve({ ...receipt, transactionHash: hash })
+		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'review'])
+		confirm()
 		expect(await settled).toBeUndefined()
+		expect(sendTransaction).toHaveBeenCalledTimes(2)
+	} finally {
+		transactionSteps.value?.cancel()
+		await settled
 	}
-	expect(sendTransaction).toHaveBeenCalledTimes(2)
-	expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'confirmed'])
 })
 
 test('wallet-only steps cannot skip an unconfirmed deposit', () => {
@@ -231,7 +248,7 @@ test('describes an unlabeled Multicall3 batch instead of exposing aggregate3', a
 	expect(step?.description).toBe('Run several contract calls in one transaction.')
 })
 
-test('a chained action waits for receipts and opens each wallet request directly', async () => {
+test('a chained action waits for receipts and a separate click for each wallet request', async () => {
 	const { client, sendTransaction, receipt } = setup()
 	const mined = createDeferred<TransactionReceipt>()
 	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => await mined.promise })
@@ -241,13 +258,16 @@ test('a chained action waits for receipts and opens each wallet request directly
 		await reviewed.waitForTransactionReceipt({ hash })
 		await reviewed.sendTransaction({ to: account, value: 2n })
 	})()
-	await waitForStarted()
+	await clickTransactionStep(0)
+	await new Promise(resolve => setTimeout(resolve, 10))
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['pending', 'upcoming'])
 	mined.resolve({ ...receipt, transactionHash: hash })
+	await clickTransactionStep(1)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	await action
 	expect(sendTransaction).toHaveBeenCalledTimes(2)
-	expect(transactionSteps.value?.showReviewDialog).toBe(false)
+	expect(transactionSteps.value?.showReviewDialog).toBe(true)
 })
 
 test('rejecting a later wallet request prevents remaining transactions', async () => {
@@ -255,14 +275,16 @@ test('rejecting a later wallet request prevents remaining transactions', async (
 	sendTransaction.mockResolvedValueOnce(hash).mockRejectedValueOnce(new Error('User rejected the request'))
 	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) })
 	reviewed.onTransactionPlan?.([1n, 2n, 3n].map(value => ({ functionName: 'Transfer ETH', to: account, value })))
-	await expect(
-		(async () => {
-			for (const value of [1n, 2n, 3n]) {
-				await reviewed.sendTransaction({ to: account, value })
-				await reviewed.waitForTransactionReceipt({ hash })
-			}
-		})(),
-	).rejects.toThrow('User rejected')
+	const action = (async () => {
+		for (const value of [1n, 2n, 3n]) {
+			await reviewed.sendTransaction({ to: account, value })
+			await reviewed.waitForTransactionReceipt({ hash })
+		}
+	})()
+	const rejected = action.catch(error => error)
+	await clickTransactionStep(0)
+	await clickTransactionStep(1)
+	expect((await rejected).message).toContain('User rejected')
 	expect(sendTransaction).toHaveBeenCalledTimes(2)
 })
 
@@ -275,7 +297,7 @@ test('a wallet rejection stops the chain and exposes the error', async () => {
 		await reviewed.sendTransaction({ to: account, value: 2n })
 	})()
 	const rejected = action.catch(error => error)
-	await waitForStarted()
+	await clickTransactionStep(0)
 	expect(await rejected).toBeInstanceOf(Error)
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
@@ -350,7 +372,7 @@ for (const reason of ['repriced', 'cancelled', 'replaced'] as const) {
 }
 
 for (const method of ['sendTransaction', 'writeContract'] as const) {
-	test(`funding approval uses the required amount through ${method}`, async () => {
+	test.each([3n, 5n, maxUint256])(`funding approval preserves the selected amount through ${method}: %s`, async selectedAmount => {
 		const { client, receipt } = setup()
 		let sentData: `0x${string}` | undefined
 		const reviewed = createReviewedClient({
@@ -376,11 +398,12 @@ for (const method of ['sendTransaction', 'writeContract'] as const) {
 		])
 		const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
 		reviewed.onTransactionPrepared?.({ functionName: 'approve', contractAddress: account, account, args: [account, 6n], chainName: client.chain.name, value: undefined, data })
-		if (method === 'sendTransaction') await reviewed.sendTransaction({ to: account, data })
-		else await reviewed.writeContract({ address: account, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
+		const sending = method === 'sendTransaction' ? reviewed.sendTransaction({ to: account, data }) : reviewed.writeContract({ address: account, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
+		await clickTransactionStep(0, selectedAmount)
+		await sending
 		if (sentData === undefined) throw new Error('Expected approval calldata')
-		expect(decodeFunctionData({ abi: ABIS.mainnet.erc20, data: sentData }).args).toEqual([account, 3n])
-		expect(transactionSteps.value?.showReviewDialog).toBe(false)
+		expect(decodeFunctionData({ abi: ABIS.mainnet.erc20, data: sentData }).args).toEqual([account, selectedAmount])
+		expect(transactionSteps.value?.showReviewDialog).toBe(true)
 		await reviewed.waitForTransactionReceipt({ hash })
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 	})
@@ -391,13 +414,13 @@ test('funding runs in order and skips satisfied requirements before the final tr
 	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) })
 	reviewed.onTransactionPlan?.([1n, 2n, 3n].map(value => ({ functionName: 'Transfer ETH', to: account, value })))
 	if (reviewed.runFundingTransaction === undefined) throw new Error('Funding unavailable')
-	expect(
-		await reviewed.runFundingTransaction([1], async index => {
-			expect(index).toBe(1)
-			await reviewed.sendTransaction({ to: account, value: 2n })
-			await reviewed.waitForTransactionReceipt({ hash })
-		}),
-	).toBe(true)
+	const funding = reviewed.runFundingTransaction([1], async index => {
+		expect(index).toBe(1)
+		await reviewed.sendTransaction({ to: account, value: 2n })
+		await reviewed.waitForTransactionReceipt({ hash })
+	})
+	await clickTransactionStep(1)
+	expect(await funding).toBe(true)
 	expect(() => reviewed.onTransactionPlan?.([])).toThrow('Cannot change a transaction plan')
 	expect(
 		await reviewed.runFundingTransaction([], async () => {
@@ -405,7 +428,9 @@ test('funding runs in order and skips satisfied requirements before the final tr
 		}),
 	).toBe(false)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('skipped')
-	await reviewed.sendTransaction({ to: account, value: 3n })
+	const final = reviewed.sendTransaction({ to: account, value: 3n })
+	await clickTransactionStep(2)
+	await final
 	expect(sendTransaction).toHaveBeenCalledTimes(2)
 })
 
@@ -416,7 +441,7 @@ test('a funding preparation failure unlocks cancellation and sends no transactio
 		throw new Error('Insufficient balance')
 	})
 	const rejected = running?.catch(error => error)
-	await waitForStarted()
+	await clickTransactionStep(0)
 	expect(await rejected).toBeInstanceOf(Error)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 	expect(sendTransaction).not.toHaveBeenCalled()
@@ -491,6 +516,65 @@ function createCoordinatorFundingReads(readAllowance: (token: string) => bigint,
 	})
 }
 
+for (const operation of ['requestPrice', 'setVaultUnderwritingLimit', 'withdrawRep', 'liquidation'] as const) {
+	test(`${operation} exposes separate funding buttons and never advances the wallet automatically`, async () => {
+		const { client, receipt } = setup()
+		const needsWrap = operation === 'setVaultUnderwritingLimit'
+		let wethBalanceAttoEth = needsWrap ? 0n : 1000n
+		const allowances = new Map<string, bigint>()
+		const reads = createCoordinatorFundingReads(token => allowances.get(token) ?? 0n)
+		let submissionCount = 0
+		const sendTransaction = mock(async (parameters: Parameters<typeof client.sendTransaction>[0]) => {
+			if (parameters.data === '0xd0e30db0') wethBalanceAttoEth = 1000n
+			if (parameters.data !== undefined && parameters.to !== undefined && parameters.data.startsWith('0x095ea7b3')) {
+				const decoded = decodeFunctionData({ abi: ABIS.mainnet.erc20, data: parameters.data })
+				if (decoded.functionName === 'approve') allowances.set(parameters.to, decoded.args[1])
+			}
+			submissionCount += 1
+			return `0x${submissionCount.toString(16).padStart(64, '0')}` satisfies Hash
+		})
+		const reviewed = createReviewedClient({
+			...client,
+			...reads,
+			readContract: createReadContractStub(request => {
+				if (request.functionName === 'balanceOf' && request.address !== account) return wethBalanceAttoEth
+				if (request.functionName === 'lastPrice') return 0n
+				if (request.functionName === 'getPendingSettlementOperationIds') return []
+				if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n
+				if (request.functionName === 'getQueuedOperationCostAttoEth') return 2n
+				return reads.readContract(request)
+			}),
+			getGasPrice: async () => 1n,
+			estimateGas: async () => 100000n,
+			getBalance: async () => 1000n,
+			sendTransaction,
+			waitForTransactionReceipt: async parameters => ({ ...receipt, transactionHash: parameters.hash }),
+		})
+		const submit = async () => {
+			if (operation === 'requestPrice') return await requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n)
+			if (operation === 'liquidation') return await queueSecurityPoolLiquidation(reviewed, account, account, 1n, 60n, 0n, account, undefined, 10n ** 18n)
+			return await queueOracleManagerOperation(reviewed, account, operation, account, 1n, 60n, 10n ** 18n)
+		}
+		const action = submit().catch(error => error)
+		try {
+			const transactionCount = needsWrap ? 4 : 3
+			for (let index = 0; index < transactionCount; index += 1) {
+				await waitForTransactionStep(index)
+				expect(sendTransaction).toHaveBeenCalledTimes(index)
+				expect(transactionSteps.value?.showReviewDialog).toBe(true)
+				if (needsWrap && index === 0) expect(transactionSteps.value?.steps[index]?.title).toBe('Wrap ETH into WETH')
+				else if (index < transactionCount - 1) expect(transactionSteps.value?.steps[index]?.approval).toBeDefined()
+				transactionSteps.value?.confirmStep(index)
+			}
+			expect(await action).not.toBeInstanceOf(Error)
+			expect(sendTransaction).toHaveBeenCalledTimes(transactionCount)
+		} finally {
+			transactionSteps.value?.cancel()
+			await action
+		}
+	})
+}
+
 for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
 	test(`refreshes coordinator ${change} during preparation before opening the wallet`, async () => {
 		const { client, sendTransaction, receipt } = setup()
@@ -513,6 +597,7 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 			}
 		})
 		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
+		await clickTransactionStep(2)
 		await ready.promise
 		expect(transactionSteps.value?.steps).toHaveLength(3)
 		for (const step of transactionSteps.value?.steps.slice(0, 2) ?? []) {
@@ -936,16 +1021,21 @@ test.each([2n, 3n])('refreshes allowance and sends only required coordinator app
 		return hash
 	})
 	const prepare = () => requestOraclePrice(createReviewedClient({ ...client, ...reads, getGasPrice: async () => 1n, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) }), account, 10n ** 18n, 0n, 122n)
-	await prepare()
+	const first = prepare()
+	if (initialAllowance < 3n) await clickTransactionStep(1)
+	await clickTransactionStep(2)
+	await first
 	expect(sendTransaction).toHaveBeenCalledTimes(initialAllowance < 3n ? 2 : 1)
 	const previousReads = allowanceReads
 	transactionSteps.value?.cancel()
 	sendTransaction.mockClear()
-	await prepare()
+	const second = prepare()
+	await clickTransactionStep(2)
+	await second
 	expect(allowanceReads).toBeGreaterThan(previousReads)
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(transactionSteps.value?.steps.slice(0, 2).map(step => step.phase)).toEqual(['skipped', 'skipped'])
-	expect(transactionSteps.value?.showReviewDialog).toBe(false)
+	expect(transactionSteps.value?.showReviewDialog).toBe(true)
 })
 
 test('broadcasts a prepared raw deployment transaction without app confirmation', async () => {

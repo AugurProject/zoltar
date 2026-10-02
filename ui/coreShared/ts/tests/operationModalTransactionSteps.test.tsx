@@ -6,7 +6,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { OperationModal } from '../components/OperationModal.js'
-import { TransactionActionGroup } from '../components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { createTransactionStepController, transactionSteps } from '../transactions/transactionSteps.js'
 import type { GlobalTransactionPresentation } from '../types/components.js'
@@ -279,16 +279,20 @@ test("ignores another transaction's failure while its own multi-step review runs
 		await act(() => {
 			presentation.value = { hash: approvalHash, operationKey: 'mine', title: 'Approval failed', tone: 'error', detail: 'Transaction reverted.' }
 		})
-		// Its own failure still returns the dialog to the form.
+		// Retry is available in the form, while failed transaction controls stay visible and disabled.
 		expect(transactionSteps.value).toBeUndefined()
-		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
+		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
+		const retainedButtons = [...dialog.querySelectorAll('.operation-modal-steps .tx-action-button')]
+		expect(retainedButtons.length).toBe(2)
+		expect(retainedButtons.every(button => button.hasAttribute('disabled'))).toBe(true)
+		expect(dialog.querySelector('.operation-modal-steps')?.textContent).not.toContain('Approving REP')
 	} finally {
 		transactionSteps.value?.cancel()
 		await rendered.cleanup()
 	}
 })
 
-test('shows one action row while the review runs and keeps the form for reference without editing', async () => {
+test('keeps the initiating action row in place and disabled while transaction steps run', async () => {
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	let controller: ReturnType<typeof createTransactionStepController> | undefined
 	let review: Promise<bigint | undefined> | undefined
@@ -298,17 +302,16 @@ test('shows one action row while the review runs and keeps the form for referenc
 				<OperationModal isOpen title='Withdraw REP' onClose={() => undefined}>
 					<input aria-label='Amount' defaultValue='42' />
 					<TransactionActionGroup message={undefined}>
-						<button
-							type='button'
+						<TransactionActionButton
+							idleLabel='Withdraw'
+							pendingLabel='Withdrawing'
 							onClick={() => {
 								presentation.value = { operationKey: 'withdrawal', title: 'Preparing withdrawal', tone: 'preparing' }
 								controller = createTransactionStepController()
 								controller.setPlan([step, { ...step, title: 'Finish withdrawal' }])
 								review = controller.review().catch(() => undefined)
 							}}
-						>
-							Withdraw
-						</button>
+						/>
 						<button type='button'>Cancel</button>
 					</TransactionActionGroup>
 				</OperationModal>
@@ -325,8 +328,12 @@ test('shows one action row while the review runs and keeps the form for referenc
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw' })))
 		const steps = dialog.querySelector('.operation-modal-steps')
 		if (!(steps instanceof HTMLElement)) throw new Error('Expected the review below the form')
-		// One action row: the form's own buttons step aside for the review's confirm and cancel.
-		expect(formActions.hidden).toBe(true)
+		// The initiating controls remain in the same row while distinct transaction buttons run below.
+		expect(formActions.hidden).toBe(false)
+		expect(formActions).toBe(dialog.querySelector('.operation-modal-body .tx-action-group'))
+		expect(formActions.querySelector('button')?.matches(':disabled')).toBe(true)
+		expect(formActions.tagName).toBe('FIELDSET')
+		expect(formActions.hasAttribute('disabled')).toBe(true)
 		expect(within(steps).getByRole('button', { name: 'Send withdrawal' })).not.toBeNull()
 		expect(within(steps).getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
 		// The whole form is inert through its own container; nothing outside the dialog is touched.
