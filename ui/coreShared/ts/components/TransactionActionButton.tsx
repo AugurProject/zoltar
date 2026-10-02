@@ -13,7 +13,7 @@ import { useWalletActionFix } from './WalletActionFix.js'
 
 const TransactionActionGroupContext = createContext<{ noticeId: string; hasNotice: boolean } | undefined>(undefined)
 
-/** True inside a dialog form while its transaction review runs; the review then owns the only action row. */
+/** Keeps the initiating form's controls in place and disabled while its transaction steps run. */
 export const TransactionReviewActiveContext = createContext(false)
 
 /**
@@ -54,16 +54,16 @@ export function TransactionActionButtonLockProvider({ children, lock }: { childr
 export function TransactionActionGroup({ children, id, loading = false, message }: { children: ComponentChildren; id?: string | undefined; loading?: boolean; message: string | undefined }) {
 	const generatedId = useId()
 	const noticeId = id ?? generatedId
-	const notice = message
 	const reviewActive = useContext(TransactionReviewActiveContext)
+	const notice = reviewActive ? transactionStepsCopy.useTransactionButtons : message
 	return (
 		<TransactionActionGroupContext.Provider value={{ noticeId, hasNotice: notice !== undefined }}>
-			<div className='tx-action-group' hidden={reviewActive || undefined}>
+			<fieldset className='tx-action-group' disabled={reviewActive}>
 				<div className='tx-action-feedback' aria-live='polite' aria-atomic='true'>
 					{notice === undefined ? undefined : <InlineHint id={noticeId} loading={loading} message={notice} />}
 				</div>
 				<div className='actions'>{children}</div>
-			</div>
+			</fieldset>
 		</TransactionActionGroupContext.Provider>
 	)
 }
@@ -87,6 +87,7 @@ export function TransactionActionButton({
 	type = 'button',
 }: TransactionActionButtonProps) {
 	const group = useContext(TransactionActionGroupContext)
+	const reviewActive = useContext(TransactionReviewActiveContext)
 	const disabledReasonId = useId()
 	const globalTransaction = useGlobalTransactionPresentation()
 	const lock = useContext(TransactionActionButtonLockContext)
@@ -98,8 +99,9 @@ export function TransactionActionButton({
 	// The initiating button keeps its own pending state; other actions on the same object wait for the transaction.
 	const blockedByPendingRequest = !pending && isTransactionActionLockedBy(lock, actionScope)
 	const blockedByScopedTransaction = blockedByPendingRequest && !lock.promptOpen && availability?.disabled !== true && !disabled
-	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
+	const isDisabled = reviewActive || disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	let disabledReason = isDisabled ? availability?.reason : undefined
+	if (reviewActive) disabledReason = transactionStepsCopy.useTransactionButtons
 	if (blockedByScopedTransaction) disabledReason = transactionStepsCopy.transactionPending
 	const ownActionButtonRef = useRef<HTMLButtonElement>(null)
 	const actionButtonRef = sharedActionButtonRef ?? ownActionButtonRef
