@@ -109,7 +109,7 @@ export async function createDevToolsSession(chromiumPath: string, pageUrl: strin
 				const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
 				if (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker') {
 					workerStarted = true
-					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url || 'unknown worker URL')
 				}
 			}
 			if (method === 'Target.attachedToTarget') {
@@ -117,7 +117,7 @@ export async function createDevToolsSession(chromiumPath: string, pageUrl: strin
 				const targetInfo = params?.['targetInfo'] as { targetId?: string; type?: string; url?: string } | undefined
 				if (typeof childSessionId === 'string' && (targetInfo?.type === 'worker' || targetInfo?.type === 'service_worker')) {
 					workerStarted = true
-					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url ?? 'unknown worker URL')
+					if (targetInfo.targetId !== undefined) workerTargets.set(targetInfo.targetId, targetInfo.url || 'unknown worker URL')
 					void Promise.all([send('Network.enable', {}, childSessionId), send('Log.enable', {}, childSessionId), send('Runtime.enable', {}, childSessionId)]).catch(error => {
 						if (!(error instanceof Error) || !error.message.includes('Session with given id not found')) issues.push({ kind: 'worker', detail: error instanceof Error ? error.message : String(error) })
 					})

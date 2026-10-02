@@ -1217,7 +1217,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 })
 
 test('uses one activity view, groups repeats, and keeps diagnostics expanded across refreshes', async () => {
-	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' } })
 	const state = operatorState()
 	const diagnostic = `Venue quote failed: 0x${'a'.repeat(300)}`
 	state.opportunities = [{ decision: 'skipped', reason: 'Uniswap V3: Not enough token liquidity', reasonDetails: diagnostic, reportId: '8', token: address, tokenSymbol: 'REP', timeRemaining: '240', windowUnit: 'seconds' }]
