@@ -1,7 +1,11 @@
 import type { UiScreenshotCrop, UiScreenshotSpec, UiScreenshotStep } from '../ui-screenshot-specs.mts'
 
-const openFirstMarket: readonly UiScreenshotStep[] = [{ click: 'Will this resolve?' }, { waitForText: 'Question end' }]
-const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [{ click: 'Create market' }, { waitForText: 'Conditional Yes price' }, { fill: 'ETH amount', value: '0.01' }, { fill: 'Conditional Yes price', value: '70' }, { waitForText: 'You receive ≈' }, { waitForEnabled: 'Initialize pool' }]
+// This seeded pool address is deterministic in the deployed and trading-funded fixtures.
+const seededPool = '0x8e87c0e3028ef202D2188c11BBAB3dDAd097DBCC'
+const openSeededPool: readonly UiScreenshotStep[] = [{ fill: 'Search markets', value: seededPool }, { click: 'Open pool' }, { waitForText: 'Question end' }]
+const openFirstMarket: readonly UiScreenshotStep[] = openSeededPool
+const openSeededPoolForCreation: readonly UiScreenshotStep[] = [{ fill: 'Search pools', value: seededPool }, { click: 'Open pool' }, { waitForText: 'Question end' }]
+const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [...openSeededPoolForCreation, { waitForText: 'Conditional Yes price' }, { fill: 'ETH amount', value: '0.01' }, { fill: 'Conditional Yes price', value: '70' }, { waitForText: 'You receive ≈' }, { waitForEnabled: 'Initialize pool' }]
 const travelOneYear: readonly UiScreenshotStep[] = [{ click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+1 year' }, { waitForEnabled: '+1 year' }, { click: 'Hide details' }]
 // The trade panel scrolls inside the viewport, so panel shots use a taller window.
 const tradePanel: UiScreenshotCrop = { selector: '.market-ticket__panel' }
@@ -14,7 +18,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		id: 'markets',
 		app: 'trading',
 		scenario: 'trading-funded',
-		steps: [{ waitForText: 'Conditional odds' }, { waitForNoText: 'Discovering…' }],
+		steps: [...openSeededPool, { click: '← All markets' }, { waitForText: 'Conditional odds' }],
 		expectText: ['Markets', 'Conditional odds', 'TRADING OPEN'],
 		viewport: pageViewport,
 		crop: { selector: '.entity-card', containing: 'Conditional odds' },
@@ -65,8 +69,8 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'trading',
 		scenario: 'deployed',
 		route: '#/create-market',
-		steps: [{ waitForText: 'Will this resolve?' }],
-		expectText: ['Create new market', 'Security pools', 'Create market', 'Details'],
+		steps: [...openSeededPoolForCreation, { click: 'Create', nth: -1 }, { waitForText: 'Will this resolve?' }],
+		expectText: ['Create new market', 'Favorites', 'Create market', 'Details'],
 		viewport: pageViewport,
 		crop: { selector: '.entity-card', containing: 'Create market' },
 		usedBy: ['tutorials/trading-first-market.html'],
@@ -76,7 +80,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'trading',
 		scenario: 'deployed',
 		route: '#/create-market',
-		steps: [{ click: 'Details' }, { waitForText: 'Minting capacity' }],
+		steps: [...openSeededPoolForCreation, { click: 'Create', nth: -1 }, { click: 'Details' }, { waitForText: 'Minting capacity' }],
 		expectText: ['Pool facts', 'System state', 'Minting capacity', 'Deploy trading pool'],
 		viewport: pageViewport,
 		crop: { selector: '.section-block', containing: 'Pool facts', padding: 6 },

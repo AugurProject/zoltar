@@ -66,17 +66,14 @@ export function useMarketDiscoveryController({
 	const foregroundDiscovery = useRef<{ request: RequestIdentity; args: [DeploymentConfiguration, bigint, WorkflowOwner | undefined, RefreshOptions] }>()
 	const partialSnapshot = useRef<{ markets: typeof market.markets; page: typeof market.marketPage; rows: typeof market.discoveryRows }>()
 
-	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean, operation: ReadOperation, onProgress: MarketDiscoveryProgress) {
+	async function discover(nextConfiguration: DeploymentConfiguration, isCurrent: () => boolean, operation: ReadOperation, onProgress: MarketDiscoveryProgress) {
 		const client = readOperationClient(services.createTradingPublicClient(nextConfiguration), operation)
 		await services.validateLiveDeployment(client, nextConfiguration)
 		if (!isCurrent()) return undefined
 		const requestedUniverseId = parsedUniverseId(selectedUniverseId)
 		if (routePool !== undefined) return await services.discoverAddressedMarket(client, nextConfiguration, routePool)
 		if (route === 'portfolio') return await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, market.deploymentIndex, onProgress)
-		// Lookup routes are list-first, so they page through the candidates of their workflow.
-		const listRoute = tradingListKindFor(route)
-		if (listRoute === 'security-pools') return await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.deploymentIndex, onProgress)
-		if (listRoute === 'markets') return await services.discoverTradingMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.pairIndex, isCurrent, onProgress)
+		// Lookup lists use browser-local favorites; only an addressed route reads a pool.
 		return await services.discoverUniverses(client, nextConfiguration, requestedUniverseId, isCurrent)
 	}
 
@@ -148,7 +145,7 @@ export function useMarketDiscoveryController({
 				onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 				market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			}
-			const discovered = await runReadOperation(async operation => await discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request), operation, onProgress), { isCurrent: () => discoveryRequests.isCurrent(request) }).finally(() => {
+			const discovered = await runReadOperation(async operation => await discover(nextConfiguration, () => discoveryRequests.isCurrent(request), operation, onProgress), { isCurrent: () => discoveryRequests.isCurrent(request) }).finally(() => {
 				acceptingProgress = false
 			})
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
@@ -241,7 +238,7 @@ export function useMarketDiscoveryController({
 	}, [nowSeconds, selected])
 
 	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
-	const blockRefreshActive = configuration !== undefined && market.discoveryState !== 'not-found' && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
+	const blockRefreshActive = configuration !== undefined && market.discoveryState !== 'not-found' && (routePool !== undefined || route === 'portfolio')
 	useBlockRefresh(event => {
 		const foreground = foregroundDiscovery.current
 		if (event.reason === 'invalidate' && foreground !== undefined && discoveryRequests.isCurrent(foreground.request)) {
