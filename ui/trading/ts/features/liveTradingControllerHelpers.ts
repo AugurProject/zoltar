@@ -1,10 +1,10 @@
 import { tradingListKindFor } from '../lib/routing.js'
 import { liveCopy } from '../copy/live.js'
-import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../protocol/marketDiscovery.js'
+import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, discoverUniverses } from '../protocol/marketDiscovery.js'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import { createTradingPublicClient, createTradingWalletClient, discoverAllLiveMarketsInUniverse, discoverLiveUniverseMarketPage, loadLiveBalances, loadWalletHeaderBalances, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, validateLiveDeployment, type LiveMarket } from '../protocol/live.js'
+import { createTradingPublicClient, createTradingWalletClient, discoverLiveUniverseMarketPage, loadLiveBalances, loadWalletHeaderBalances, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, validateLiveDeployment, type LiveMarket } from '../protocol/live.js'
 import type { LiveTradingControllerServices, TransactionState } from './live/liveTradingTypes.js'
 export type WorkflowOwner = 'position' | 'liquidity'
 
@@ -15,7 +15,7 @@ export const liveTradingControllerServices: LiveTradingControllerServices = {
 	connectWallet: requestInjectedAccount,
 	createTradingPublicClient,
 	createTradingWalletClient,
-	discoverAllLiveMarketsInUniverse,
+	discoverSavedMarkets,
 	discoverLiveUniverseMarketPage,
 	loadLiveBalances,
 	loadWalletHeaderBalances,

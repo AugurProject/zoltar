@@ -1,22 +1,8 @@
-import type { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
+import type { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import type {
-	LiveBalances,
-	LiveMarket,
-	createTradingPublicClient,
-	createTradingWalletClient,
-	discoverAllLiveMarketsInUniverse,
-	discoverLiveUniverseMarketPage,
-	loadLiveBalances,
-	loadWalletHeaderBalances,
-	simulateEntry,
-	simulateExit,
-	submitFreshEntry,
-	submitFreshExit,
-	validateLiveDeployment,
-} from '../../protocol/live.js'
+import type { LiveBalances, LiveMarket, createTradingPublicClient, createTradingWalletClient, discoverLiveUniverseMarketPage, loadLiveBalances, loadWalletHeaderBalances, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, validateLiveDeployment } from '../../protocol/live.js'
 import type { TransactionPhase } from './transactionWorkflow.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
 import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
@@ -37,7 +23,7 @@ export type LiveTradingControllerServices = Readonly<{
 	connectWallet: typeof requestInjectedAccount
 	createTradingPublicClient: typeof createTradingPublicClient
 	createTradingWalletClient: typeof createTradingWalletClient
-	discoverAllLiveMarketsInUniverse: typeof discoverAllLiveMarketsInUniverse
+	discoverSavedMarkets: typeof discoverSavedMarkets
 	discoverLiveUniverseMarketPage: typeof discoverLiveUniverseMarketPage
 	loadLiveBalances: typeof loadLiveBalances
 	loadWalletHeaderBalances: typeof loadWalletHeaderBalances

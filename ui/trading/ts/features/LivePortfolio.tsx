@@ -116,6 +116,7 @@ export function LivePortfolio({
 	balanceState,
 	balanceError,
 	retryBalances,
+	discoveryComplete = true,
 	nowSeconds,
 	walletAction,
 }: {
@@ -123,13 +124,14 @@ export function LivePortfolio({
 	balanceState: BalanceState
 	balanceError: string | undefined
 	retryBalances(): Promise<void>
+	discoveryComplete?: boolean
 	nowSeconds: bigint
 	/** Inline connect or switch-network control for the disconnected state. */
 	walletAction?: PortfolioWalletAction | undefined
 }) {
 	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
 	const overview = portfolioOverview(visibleEntries, nowSeconds)
-	const showSummary = balanceState === 'ready' && visibleEntries.length > 0
+	const showSummary = discoveryComplete && balanceState === 'ready' && visibleEntries.length > 0
 	return (
 		<div className='portfolio-positions' aria-busy={balanceState === 'loading'}>
 			{balanceState === 'disconnected' ? (

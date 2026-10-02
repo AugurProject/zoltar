@@ -159,7 +159,7 @@ describe('live workflow safety boundary', () => {
 				const discovered = await discoverSelectedUniverse(undefined, undefined, 1n)
 				return { ...discovered, markets: discovered.markets.filter(candidate => candidate.pool.toLowerCase() === address.toLowerCase()) }
 			},
-			discoverAllLiveMarketsInUniverse: discoverSelectedUniverse,
+			discoverSavedMarkets: discoverSelectedUniverse,
 			walletChainId: async () => {
 				if (deferredWalletChainRead !== undefined) {
 					walletChainReadStarted?.resolve(undefined)
@@ -316,11 +316,11 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).toContain(secondPool)
 		const firstPortfolioCard = document.querySelector(`[data-portfolio-pool="${pool}"]`)
 		const secondPortfolioCard = document.querySelector(`[data-portfolio-pool="${secondPool}"]`)
+		await waitForDom(() => firstPortfolioCard?.textContent?.includes('1 Yes') === true, 'first queued portfolio balance')
 		expect(firstPortfolioCard?.textContent).toContain('1 Yes')
 		expect(secondPortfolioCard?.textContent).not.toContain('4 Yes')
 		secondPortfolioBalance.resolve(undefined)
-		await Bun.sleep(10)
-		await flush()
+		await waitForDom(() => secondPortfolioCard?.textContent?.includes('4 Yes') === true, 'second queued portfolio balance')
 		expect(secondPortfolioCard?.textContent).toContain('4 Yes')
 		childBalanceStarted = createDeferred<undefined>()
 		deferChildDiscovery = true
@@ -549,7 +549,7 @@ describe('live workflow safety boundary', () => {
 		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
 		await show('portfolio', { selectedUniverseId: '3' })
 		await settleAsyncWorkflow()
-		await waitForDom(() => document.body.textContent?.includes('No security pools are deployed in the selected universe.') === true, 'empty universe portfolio')
+		await waitForDom(() => document.body.textContent?.includes('No saved pools in this universe.') === true, 'empty universe portfolio')
 		expect(document.querySelectorAll('.empty-state')).toHaveLength(1)
 		expect(document.querySelector('.portfolio-positions')).toBeNull()
 	})

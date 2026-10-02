@@ -166,7 +166,7 @@ describe('universe directory', () => {
 	test('names a redacted portfolio discovery failure once as well', async () => {
 		const services = {
 			...offlineControllerServices,
-			discoverAllLiveMarketsInUniverse: async () => {
+			discoverSavedMarkets: async () => {
 				throw new Error(`call to 0x${'ab'.repeat(20)} reverted`)
 			},
 		}

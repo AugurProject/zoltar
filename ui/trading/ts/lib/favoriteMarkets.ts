@@ -1,3 +1,5 @@
+import { getAddress, isAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { SavedPortfolioPool } from '../protocol/marketDiscovery.js'
 import { createDownloadedEntityStore, normalizeEntityId, type DownloadedEntry, type FavoriteEntry } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { LiveMarket } from '../protocol/liveMarket.js'
@@ -87,4 +89,19 @@ export function selectMarketCacheUpdates(markets: readonly LiveMarket[], recorde
 		if (!favoriteIds.has(id) || recordedById.get(id) === market) return []
 		return [{ data: market, id }]
 	})
+}
+
+/** Portfolio reads cover both saved security pools and saved markets, once per pool address. */
+export function selectPortfolioMarkets(downloadedPools: readonly DownloadedEntry<LiveMarket>[], poolFavorites: readonly FavoriteEntry[], downloadedMarkets: readonly DownloadedEntry<LiveMarket>[], marketFavorites: readonly FavoriteEntry[]) {
+	const byId = new Map([...downloadedPools, ...downloadedMarkets].map(entry => [normalizeEntityId(entry.id), entry.data]))
+	const ids = new Set([...poolFavorites, ...marketFavorites].map(entry => normalizeEntityId(entry.id)))
+	const pools: SavedPortfolioPool[] = []
+	for (const id of ids) {
+		if (!isAddress(id)) continue
+		const pool = getAddress(id)
+		if (pool === zeroAddress) continue
+		const market = byId.get(id)
+		pools.push({ pool, universeId: market?.universeId, market })
+	}
+	return pools
 }

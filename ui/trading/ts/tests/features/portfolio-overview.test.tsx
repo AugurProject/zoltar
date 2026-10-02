@@ -78,7 +78,7 @@ describe('portfolio overview', () => {
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label^="Redeem"]`)).toBeNull()
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] a[aria-label="Redeem: Resolved market"]`)?.getAttribute('href')).toBe(`#/market/${resolvedPool}`)
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] a[aria-label^="Sell"]`)).toBeNull()
-		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)?.textContent).toContain('Value now2 ETH')
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)?.textContent).toContain('Position value2 ETH')
 	})
 
 	test('says when shares are left out of the total until resolution', async () => {
