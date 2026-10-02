@@ -188,18 +188,26 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Locked')).toBeNull()
 	})
 
-	test('shows a pool not found warning while an entered address is still unresolved', async () => {
+	test.each([undefined, zeroAddress])('shows loading while an entered address is unresolved (previous lookup: %s)', async checkedSecurityPoolAddress => {
 		const unresolvedAddress = '0x00000000000000000000000000000000000000ab'
-		await renderWorkflow(
-			createSecurityPoolWorkflowProps({
-				securityPoolAddress: unresolvedAddress,
-			}),
-		)
+		const props = createSecurityPoolWorkflowProps({ securityPoolAddress: unresolvedAddress, checkedSecurityPoolAddress })
+		const { rerender } = await renderWorkflow(props)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Manage Pool' })).toBeNull()
-		expect(documentQueries.getByText('Pool not found.')).not.toBeNull()
+		expect(documentQueries.getByText('Loading…')).not.toBeNull()
+		expect(document.body.textContent).not.toContain('not found')
+		expect(document.body.textContent).not.toContain('does not exist')
 		expect(documentQueries.queryByText('Refresh this address after the pool is deployed.')).toBeNull()
+
+		await rerender({ ...props, loadingSecurityPools: true })
+		expect(documentQueries.getByText('Loading…')).not.toBeNull()
+		expect(document.body.textContent).not.toContain('not found')
+
+		await rerender(createLoadedPoolProps({ securityPoolAddress: unresolvedAddress, checkedSecurityPoolAddress: unresolvedAddress, securityPools: [createSelectedPool({ securityPoolAddress: getAddress(unresolvedAddress) })] }))
+		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
+		expect(documentQueries.queryByText('Loading…')).toBeNull()
+		expect(document.body.textContent).not.toContain('not found')
 	})
 
 	test('shows a pool not found card when the selected address does not resolve', async () => {

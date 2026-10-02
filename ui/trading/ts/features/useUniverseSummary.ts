@@ -14,9 +14,11 @@ export type UniverseSummaryState = Readonly<{ kind: 'idle' } | { kind: 'loading'
 
 /** Loads one universe summary (lineage, fork state, children) for the universe route and the header switcher. */
 export function useUniverseSummary(configuration: DeploymentConfiguration | undefined, universeId: bigint | undefined, loadUniverse: LoadUniverseSummary = loadUniverseSummary) {
-	const [state, setState] = useState<UniverseSummaryState>({ kind: 'idle' })
 	const [retryNonce, setRetryNonce] = useState(0)
+	const [snapshot, setSnapshot] = useState<{ configuration: DeploymentConfiguration | undefined; universeId: bigint | undefined; loadUniverse: LoadUniverseSummary; retryNonce: number; state: UniverseSummaryState }>({ configuration, universeId, loadUniverse, retryNonce, state: { kind: 'idle' } })
+	const state: UniverseSummaryState = snapshot.configuration === configuration && snapshot.universeId === universeId && snapshot.loadUniverse === loadUniverse && snapshot.retryNonce === retryNonce ? snapshot.state : { kind: configuration === undefined || universeId === undefined ? 'idle' : 'loading' }
 	useEffect(() => {
+		const setState = (state: UniverseSummaryState) => setSnapshot({ configuration, universeId, loadUniverse, retryNonce, state })
 		if (configuration === undefined || universeId === undefined) {
 			setState({ kind: 'idle' })
 			return
