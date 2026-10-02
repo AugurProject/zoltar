@@ -2,6 +2,9 @@ import { getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 
+export type OraclePriceQueryStage = 'oracle' | 'v4' | 'v3'
+export type OraclePriceQueryProgress = (stage: OraclePriceQueryStage) => void
+
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n
 
 type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
@@ -28,11 +31,12 @@ function formatOpenOraclePriceLoadError(v4Error: unknown, v3Error?: unknown) {
 	return `Failed to fetch price from Uniswap. ${v4Message} Uniswap V3 did not run.`
 }
 
-export async function loadOpenOracleInitialReportPrice(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint): Promise<OpenOracleInitialReportQuote> {
+export async function loadOpenOracleInitialReportPrice(client: Parameters<typeof quoteExactInput>[0], token1: Parameters<typeof quoteExactInput>[1], token2: Parameters<typeof quoteExactInput>[2], token1Amount: bigint, onProgress?: OraclePriceQueryProgress): Promise<OpenOracleInitialReportQuote> {
 	if (!isRepPricingEnabled()) {
 		const profile = getActiveNetworkProfile()
 		throw new Error(`Automatic pricing is unavailable on ${profile.displayName} because no REP pricing source is configured for this network.`)
 	}
+	onProgress?.('v4')
 	let v4Failure: unknown = 'Uniswap V4 returned an unusable quote'
 	let v4Quote: OpenOracleInitialReportQuote | undefined
 	try {
@@ -45,6 +49,7 @@ export async function loadOpenOracleInitialReportPrice(client: Parameters<typeof
 	} catch (error) {
 		v4Failure = error
 	}
+	onProgress?.('v3')
 	let v3Failure: unknown = 'Uniswap V3 returned an unusable quote'
 	let v3Quote: OpenOracleInitialReportQuote | undefined
 	try {

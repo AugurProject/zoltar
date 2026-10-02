@@ -1,3 +1,4 @@
+import type { OraclePriceQueryProgress, OraclePriceQueryStage } from '../../../protocol/openOraclePricing.js'
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -16,8 +17,8 @@ export function parseOracleInitialPrice(input: OracleInitialPriceInput | undefin
 	return { proposedRepPerEthPrice, error }
 }
 
-async function fetchInitialPrice(managerAddress: Address) {
-	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), managerAddress)
+async function fetchInitialPrice(managerAddress: Address, onProgress?: OraclePriceQueryProgress) {
+	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), managerAddress, 0n, onProgress)
 }
 
 export function OracleInitialPriceFields({
@@ -36,6 +37,7 @@ export function OracleInitialPriceFields({
 	fetchPrice?: typeof fetchInitialPrice
 }) {
 	const [fetching, setFetching] = useState(false)
+	const [queryStage, setQueryStage] = useState<OraclePriceQueryStage>()
 	const [quoteError, setQuoteError] = useState<string>()
 	const attempt = useRef(0)
 	const previousManager = useRef(managerAddress)
@@ -53,10 +55,13 @@ export function OracleInitialPriceFields({
 		if (managerAddress === undefined || disabled || fetching) return
 		const current = ++attempt.current
 		setFetching(true)
+		setQueryStage('oracle')
 		setQuoteError(undefined)
 		onChange({ price: '' })
 		try {
-			const price = await fetchPrice(managerAddress)
+			const price = await fetchPrice(managerAddress, stage => {
+				if (current === attempt.current) setQueryStage(stage)
+			})
 			if (current === attempt.current) onChange({ price: formatUnits(price, 18) })
 		} catch (error) {
 			if (current === attempt.current) setQuoteError(getErrorMessage(error, priceRequestCopy.uniswapPriceFailed))
@@ -72,6 +77,7 @@ export function OracleInitialPriceFields({
 				disabled={disabled}
 				fetchDisabled={managerAddress === undefined}
 				fetching={fetching}
+				queryStage={queryStage}
 				error={quoteError ?? (value.price === '' ? undefined : parseOracleInitialPrice(value).error)}
 				onFetch={() => void fetchQuote()}
 				onInput={price => {
