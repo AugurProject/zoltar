@@ -1,4 +1,3 @@
-import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -267,6 +266,15 @@ function createReportPage(pageIndex: number, reportCount: bigint, reports: OpenO
 	return { nextReportId: reportCount + 1n, pageIndex, pageSize: 10, reportCount, reports }
 }
 
+function seedFavoriteReports(reports: readonly OpenOracleReportSummary[]) {
+	const scope = getLocalEntityScope('statoblast', 'oracleReport')
+	openOracleReportDownloadStore.record(
+		scope,
+		reports.map(report => ({ data: report, id: report.reportId.toString() })),
+	)
+	for (const report of reports) setEntityFavorite(scope, report.reportId.toString(), true)
+}
+
 /** Each browse test starts with an empty browser store; `seed` runs against the fresh document before rendering. */
 async function renderBrowseSection(overrides: Partial<OpenOracleSectionProps> = {}, seed?: () => void) {
 	const domEnvironment = installDomEnvironment()
@@ -295,7 +303,7 @@ async function clickButton(name: string) {
 }
 
 async function typeSearch(value: string) {
-	const input = within(document.body).getByLabelText('Search downloaded reports')
+	const input = within(document.body).getByLabelText('Search reports')
 	if (!(input instanceof window.HTMLInputElement)) throw new Error('Expected report search input')
 	input.value = value
 	await act(() => {
@@ -497,23 +505,21 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('keeps the symbol of a non-canonical token named WETH in report price directions', async () => {
-		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 1n, [createReportSummary(1n, { token1: getAddress('0x5000000000000000000000000000000000000000'), token1Symbol: 'WETH', token2Symbol: 'REP' })]) })
+		const browse = await renderBrowseSection({}, () => seedFavoriteReports([createReportSummary(1n, { token1: getAddress('0x5000000000000000000000000000000000000000'), token1Symbol: 'WETH', token2Symbol: 'REP' })]))
 		try {
-			await clickButton('Discover reports')
 			expect(document.body.textContent).toContain('REP per WETH')
 		} finally {
 			await browse.cleanup()
 		}
 	})
 
-	void test('renders block-based browse summary clocks as blocks after discovering reports', async () => {
-		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 1n, [createReportSummary(1n, { settlementTimestamp: 234n, timeType: false })]) })
+	void test('renders block-based favorite summary clocks as blocks', async () => {
+		const browse = await renderBrowseSection({}, () => seedFavoriteReports([createReportSummary(1n, { settlementTimestamp: 234n, timeType: false })]))
 		try {
 			const documentQueries = within(document.body)
-			const searchInput = documentQueries.getByLabelText('Search downloaded reports')
+			const searchInput = documentQueries.getByLabelText('Search reports')
 			if (!(searchInput instanceof window.HTMLInputElement)) throw new Error('Expected report search input')
 			expect(searchInput.placeholder).toBe('Report ID, token symbol, or token address')
-			await clickButton('Discover reports')
 			expect(documentQueries.getByText('Report block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
@@ -545,50 +551,66 @@ void describe('OpenOracleSection', () => {
 			expect(browseLoadAttempts).toBe(0)
 			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #3'])
 			expect(within(document.body).getByRole('button', { name: 'Favorite: REPv2 / WETH · report #3' }).getAttribute('aria-pressed')).toBe('true')
-			await clickButton('Downloaded (2)')
-			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #4', 'REPv2 / WETH · report #3'])
-			expect(within(document.body).getByRole('button', { name: 'Favorite: REPv2 / WETH · report #4' }).getAttribute('aria-pressed')).toBe('false')
+			expect(within(document.body).getByText('Favorites (1)')).not.toBeNull()
+			expect(document.body.textContent).not.toMatch(/Downloaded|Discover/)
+			expect(within(document.body).queryByRole('button', { name: 'Show downloaded reports' })).toBeNull()
 			expect(browseLoadAttempts).toBe(0)
 		} finally {
 			await browse.cleanup()
 		}
 	})
 
-	void test('discovers one report page per click and searches and filters every downloaded report', async () => {
-		const requestedPages: number[] = []
+	void test('searches and filters every favorite report without scanning', async () => {
 		const reports = Array.from({ length: 12 }, (_, index) => {
 			const reportId = BigInt(12 - index)
 			if (reportId === 5n) return createReportSummary(reportId, { token1Symbol: 'DAI' })
 			if (reportId === 2n) return createReportSummary(reportId, { isDistributed: true })
 			return createReportSummary(reportId)
 		})
-		const browse = await renderBrowseSection({
-			loadBrowseReports: async (pageIndex, pageSize) => {
-				requestedPages.push(pageIndex)
-				return createReportPage(pageIndex, 12n, reports.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize))
-			},
-		})
+		const browse = await renderBrowseSection({}, () => seedFavoriteReports(reports))
 		try {
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByText('No favorite reports yet')).not.toBeNull()
-			await clickButton('Discover reports')
-			expect(getRenderedReportTitles()).toHaveLength(10)
-			expect(documentQueries.getByText('10 of 12 reports scanned')).not.toBeNull()
-			await clickButton('Discover more')
-			expect(requestedPages).toEqual([0, 1])
 			expect(getRenderedReportTitles()).toHaveLength(12)
-			expect(documentQueries.getByRole('button', { name: 'Scan again' })).not.toBeNull()
-
 			await typeSearch('dai')
 			expect(getRenderedReportTitles()).toEqual(['DAI / WETH · report #5'])
 			expect(documentQueries.getByText('1 of 12 reports shown.')).not.toBeNull()
 			await typeSearch('no such token')
 			expect(documentQueries.queryByText(/reports shown/)).toBeNull()
-			expect(documentQueries.getByText('No downloaded reports match the current search and status filters.')).not.toBeNull()
+			expect(documentQueries.getByText('No favorite reports match the current search and status filters.')).not.toBeNull()
 			await typeSearch('')
 			await selectStatus('Settled')
 			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #2'])
-			expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'oracleReport'))).toEqual([])
+			expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'oracleReport'))).toHaveLength(12)
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('opens a cached report ID from empty favorites without a downloaded shortcut', async () => {
+		const onLoadOracleReport = mock(async (_reportId: string) => undefined)
+		const browse = await renderBrowseSection({ onLoadOracleReport }, () => {
+			openOracleReportDownloadStore.record(getLocalEntityScope('statoblast', 'oracleReport'), [{ data: createReportSummary(4n), id: '4' }])
+		})
+		try {
+			expect(within(document.body).getByText('No favorite reports yet')).not.toBeNull()
+			expect(document.body.textContent).not.toMatch(/Downloaded|Discover/)
+			await typeSearch('#4')
+			await clickButton('Open report #4')
+			expect(onLoadOracleReport).toHaveBeenCalledWith('4')
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('removes an unstarred report from favorites while keeping its cached summary', async () => {
+		const browse = await renderBrowseSection({}, () => seedFavoriteReports([createReportSummary(3n)]))
+		try {
+			await clickButton('Favorite: REPv2 / WETH · report #3')
+			expect(getRenderedReportTitles()).toEqual([])
+			expect(within(document.body).getByText('Favorites (0)')).not.toBeNull()
+			const scope = getLocalEntityScope('statoblast', 'oracleReport')
+			expect(readFavoriteEntries(scope)).toEqual([])
+			expect(openOracleReportDownloadStore.read(scope).map(entry => entry.id)).toEqual(['3'])
 		} finally {
 			await browse.cleanup()
 		}
@@ -608,93 +630,13 @@ void describe('OpenOracleSection', () => {
 		}
 	})
 
-	void test('keeps Discover disabled until the active environment is ready', async () => {
-		let browseLoadAttempts = 0
-		const browse = await renderBrowseSection({
-			environmentReady: false,
-			loadBrowseReports: async pageIndex => {
-				browseLoadAttempts += 1
-				return createReportPage(pageIndex, 0n, [])
-			},
-		})
+	void test('keeps favorites available before the environment is ready without scanning', async () => {
+		const loadBrowseReports = mock(async () => createReportPage(0, 0n, []))
+		const browse = await renderBrowseSection({ environmentReady: false, loadBrowseReports }, () => seedFavoriteReports([createReportSummary(3n)]))
 		try {
-			const discover = within(document.body).getByRole('button', { name: 'Discover reports' })
-			if (!(discover instanceof window.HTMLButtonElement)) throw new Error('Expected Discover button')
-			expect(discover.disabled).toBe(true)
-			expect(within(document.body).getByText('No favorite reports yet')).not.toBeNull()
-			expect(browseLoadAttempts).toBe(0)
-		} finally {
-			await browse.cleanup()
-		}
-	})
-
-	void test('confirms an empty registry only after a scan', async () => {
-		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 0n, []) })
-		try {
-			expect(within(document.body).queryByText('No OpenOracle reports found.')).toBeNull()
-			await clickButton('Discover reports')
-			expect(within(document.body).getByRole('status').textContent).toContain('No OpenOracle reports found.')
-		} finally {
-			await browse.cleanup()
-		}
-	})
-
-	void test('shows an unavailable stored-state report without claiming the directory is empty', async () => {
-		const message = 'Oracle report #2 is unavailable: it did not enable stored state and dispute history'
-		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => ({ ...createReportPage(pageIndex, 1n, []), unavailableReports: [{ reportId: 2n, message }] }) })
-		try {
-			await clickButton('Discover reports')
-			expect(browse.container.textContent).toContain(message)
-			expect(browse.container.textContent).not.toContain('No OpenOracle reports found.')
-		} finally {
-			await browse.cleanup()
-		}
-	})
-
-	void test('shows failed report discovery with retry instead of a confirmed empty state', async () => {
-		let browseLoadAttempts = 0
-		const browse = await renderBrowseSection({
-			loadBrowseReports: async () => {
-				browseLoadAttempts += 1
-				throw new Error('Report summary service unavailable')
-			},
-		})
-		try {
-			const documentQueries = within(document.body)
-			await clickButton('Discover reports')
-			expect(documentQueries.getByRole('alert', { name: /Failed to load OpenOracle reports/ })).not.toBeNull()
-			expect(documentQueries.queryByText('No OpenOracle reports found.')).toBeNull()
-			await clickButton('Retry')
-			expect(browseLoadAttempts).toBe(2)
-			expect(documentQueries.queryByText('No OpenOracle reports found.')).toBeNull()
-		} finally {
-			await browse.cleanup()
-		}
-	})
-
-	void test('ignores a report page that arrives after the environment changed', async () => {
-		const lateLoad = createDeferred<OpenOracleReportSummaryPage>()
-		const staleMessage = 'Oracle report #5 is unavailable in the earlier environment'
-		const currentMessage = 'Oracle report #3 is unavailable in the current environment'
-		const loadEarlierReports = () => lateLoad.promise
-		const loadCurrentReports = async () => ({ ...createReportPage(0, 1n, []), unavailableReports: [{ reportId: 3n, message: currentMessage }] })
-		const browse = await renderBrowseSection({ loadBrowseReports: loadEarlierReports })
-		try {
-			await clickButton('Discover reports')
-			await act(() => {
-				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports: loadCurrentReports })} />, browse.container)
-			})
-			await clickButton('Discover reports')
-			expect(browse.container.textContent).toContain(currentMessage)
-			await act(async () => {
-				lateLoad.resolve({ ...createReportPage(0, 1n, [createReportSummary(1n)]), unavailableReports: [{ reportId: 5n, message: staleMessage }] })
-				await lateLoad.promise
-			})
-			await flushAsyncWork()
-			expect(getRenderedReportTitles()).toEqual([])
-			expect(browse.container.textContent).toContain(currentMessage)
-			expect(browse.container.textContent).not.toContain(staleMessage)
-			expect(openOracleReportDownloadStore.read(getLocalEntityScope('statoblast', 'oracleReport'))).toEqual([])
+			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #3'])
+			expect(document.body.textContent).not.toMatch(/Downloaded|Discover/)
+			expect(loadBrowseReports).not.toHaveBeenCalled()
 		} finally {
 			await browse.cleanup()
 		}
@@ -742,8 +684,8 @@ void describe('OpenOracleSection', () => {
 				render(<OpenOracleSection {...createOpenOracleSectionProps()} />, browse.container)
 			})
 			expect(within(document.body).getByText('No favorite reports yet')).not.toBeNull()
-			await clickButton('Show downloaded reports')
-			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #7'])
+			expect(within(document.body).queryByRole('button', { name: 'Show downloaded reports' })).toBeNull()
+			expect(getRenderedReportTitles()).toEqual([])
 		} finally {
 			await browse.cleanup()
 		}
