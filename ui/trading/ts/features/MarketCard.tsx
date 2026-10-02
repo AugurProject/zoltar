@@ -12,7 +12,7 @@ import { marketsCopy } from '../copy/markets.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { coarseDuration, marketLiquidityAttoEth, marketOddsPercent } from '../lib/marketListing.js'
 import { getTradingRouteHref, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
-import { marketTicketHref } from '../lib/ticketSide.js'
+import { marketTicketHref } from '../lib/routeState.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import { livePairInitialized } from './liveTradingControllerHelpers.js'
 import { marketStatusLabel, marketStatusTone } from './marketStatus.js'
@@ -39,10 +39,10 @@ function MarketCardOdds({ market, tradeable }: { market: LiveMarket; tradeable: 
 			<MarketOddsBar yesPercent={odds.yes} noPercent={odds.no} showValues={!tradeable} />
 			{tradeable ? (
 				<div className='market-card__outcomes'>
-					<a className='button-link outcome-button outcome-button--yes' href={marketTicketHref(market.pool, 'YES')} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.yes, odds.yes)}>
+					<a className='button-link outcome-button outcome-button--yes' href={marketTicketHref(market.pool, { mode: 'entry', side: 'YES' })} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.yes, odds.yes)}>
 						{marketsCopy.outcomeOdds(marketsCopy.yes, odds.yes)}
 					</a>
-					<a className='button-link outcome-button outcome-button--no' href={marketTicketHref(market.pool, 'NO')} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.no, odds.no)}>
+					<a className='button-link outcome-button outcome-button--no' href={marketTicketHref(market.pool, { mode: 'entry', side: 'NO' })} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.no, odds.no)}>
 						{marketsCopy.outcomeOdds(marketsCopy.no, odds.no)}
 					</a>
 				</div>

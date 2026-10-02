@@ -204,6 +204,8 @@ test('shows the stage, marks the open tab row, and offers controls that leave it
 	// The open tab's row keeps its control slot, marked as shown below, so rows do not shift between tabs.
 	expect(card.querySelectorAll('.pool-action-control')).toHaveLength(card.querySelectorAll('.pool-action-item').length)
 	expect(card.querySelector('.pool-action-current')?.textContent).toBe('Shown below')
+	// The next-action control is a real button, so it reads as an action rather than a label beside the task.
+	expect(within(card).getByRole('button', { name: 'Open shares' }).classList.contains('secondary')).toBe(true)
 	await act(() => fireEvent.click(within(card).getByRole('button', { name: 'Open shares' })))
 	expect(views).toEqual(['trading'])
 })
@@ -237,7 +239,7 @@ for (const timestamp of [undefined, 100000n]) {
 	test('keeps reference capacity consistent when chain time is ' + String(timestamp), async () => {
 		await renderPoolPage(pricedPool(), {}, timestamp)
 		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ 5.00 ETH')
-		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Collateral in use / capacity')
+		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Open interest / commitment')
 	})
 }
 test('keeps the pending report reachable while the pool universe differs', async () => {

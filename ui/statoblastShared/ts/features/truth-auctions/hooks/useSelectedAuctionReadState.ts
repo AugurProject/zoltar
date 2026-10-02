@@ -54,10 +54,13 @@ export function useSelectedAuctionReadState({
 	const [selectedAuctionChildPoolRecoveryRetryNonce, setSelectedAuctionChildPoolRecoveryRetryNonce] = useState(0)
 	const lastHandledSelectedAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const selectedAuctionRequestGenerationRef = useRef(0)
-	const [selectedOutcomeMigrationSeedStatus, setSelectedOutcomeMigrationSeedStatus] = useState<ForkOutcomeMigrationSeedStatus | undefined>(undefined)
+	const [selectedOutcomeMigrationSeedStatusEntry, setSelectedOutcomeMigrationSeedStatusEntry] = useState<{ key: string; status: ForkOutcomeMigrationSeedStatus } | undefined>(undefined)
 	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
 	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
 	const [selectedOutcomeMigrationSeedStatusRetryNonce, setSelectedOutcomeMigrationSeedStatusRetryNonce] = useState(0)
+	const selectedOutcomeMigrationSeedStatusKey = securityPoolAddress === undefined || universeId === undefined ? undefined : `${securityPoolAddress.toLowerCase()}:${universeId.toString()}:${selectedOutcome}`
+	// A refresh keeps showing the last status for the same pool and outcome instead of flashing a loading state between confirmed actions.
+	const selectedOutcomeMigrationSeedStatus = selectedOutcomeMigrationSeedStatusEntry !== undefined && selectedOutcomeMigrationSeedStatusEntry.key === selectedOutcomeMigrationSeedStatusKey ? selectedOutcomeMigrationSeedStatusEntry.status : undefined
 	const selectedAuctionChildPoolRecoveryKey = securityPoolAddress === undefined ? undefined : `${securityPoolAddress.toLowerCase()}:${selectedOutcome}`
 	const scopedSelectedAuctionChildPoolRecoveryError = selectedAuctionChildPoolRecoveryErrorKey === selectedAuctionChildPoolRecoveryKey ? selectedAuctionChildPoolRecoveryError : undefined
 	const currentRecoveredSelectedAuctionChildPool =
@@ -181,8 +184,8 @@ export function useSelectedAuctionReadState({
 	}, [currentSelectedAuctionDetails, fullTruthAuctionReadClient, scopedSelectedAuctionDetails?.systemState, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
 
 	useEffect(() => {
-		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined) {
-			setSelectedOutcomeMigrationSeedStatus(undefined)
+		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined || selectedOutcomeMigrationSeedStatusKey === undefined) {
+			setSelectedOutcomeMigrationSeedStatusEntry(undefined)
 			setSelectedOutcomeMigrationSeedStatusError(undefined)
 			setLoadingSelectedOutcomeMigrationSeedStatus(false)
 			return
@@ -201,11 +204,13 @@ export function useSelectedAuctionReadState({
 		)
 			.then(status => {
 				if (cancelled) return
-				setSelectedOutcomeMigrationSeedStatus(status)
+				// Splitting pool-held REP into a child universe can't be undone. A refresh right after a vault migration sweeps the staged REP into a child
+				// pool the pool list hasn't loaded yet reads neither balance, so it must not regress an already seeded outcome to "not migrated".
+				setSelectedOutcomeMigrationSeedStatusEntry(previous => (previous !== undefined && previous.key === selectedOutcomeMigrationSeedStatusKey && previous.status.seeded && !status.seeded ? previous : { key: selectedOutcomeMigrationSeedStatusKey, status }))
 			})
 			.catch(error => {
 				if (cancelled) return
-				setSelectedOutcomeMigrationSeedStatus(undefined)
+				setSelectedOutcomeMigrationSeedStatusEntry(undefined)
 				setSelectedOutcomeMigrationSeedStatusError(getErrorMessage(error, `Unable to verify whether pool-held REP is ready for the ${selectedAuctionLabel} child pool.`))
 			})
 			.finally(() => {
@@ -215,13 +220,13 @@ export function useSelectedAuctionReadState({
 		return () => {
 			cancelled = true
 		}
-	}, [forkAuctionResultHash, forkMigrationReadClient, securityPoolAddress, selectedAuctionLabel, selectedOutcome, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedOutcomeMigrationSeedStatusRetryNonce, selectedStage, universeId])
+	}, [forkAuctionResultHash, forkMigrationReadClient, securityPoolAddress, selectedAuctionLabel, selectedOutcome, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedOutcomeMigrationSeedStatusKey, selectedOutcomeMigrationSeedStatusRetryNonce, selectedStage, universeId])
 
 	return {
 		loadingSelectedAuctionChildPoolRecovery:
 			(selectedStage === 'auction' || selectedStage === 'settlement') && selectedAuctionChildPoolRecoveryKey !== undefined && selectedAuctionChildPool === undefined && scopedSelectedAuctionChildPoolRecoveryError === undefined && selectedAuctionChildPoolRecoveryCompletedKey !== selectedAuctionChildPoolRecoveryKey,
 		loadingSelectedAuctionDetails: loadingSelectedAuctionDetails || ((selectedStage === 'auction' || selectedStage === 'settlement') && selectedAuctionPoolAddress !== undefined && currentSelectedAuctionDetails === undefined && scopedSelectedAuctionError === undefined),
-		loadingSelectedOutcomeMigrationSeedStatus,
+		loadingSelectedOutcomeMigrationSeedStatus: loadingSelectedOutcomeMigrationSeedStatus && selectedOutcomeMigrationSeedStatus === undefined,
 		retryingSelectedAuctionDetails: retryingSelectedAuctionDetails && loadingSelectedAuctionDetails && scopedSelectedAuctionDetails === undefined,
 		retrySelectedAuctionChildPoolRecovery: () => setSelectedAuctionChildPoolRecoveryRetryNonce(currentNonce => currentNonce + 1),
 		retrySelectedAuctionDetails,

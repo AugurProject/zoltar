@@ -15,7 +15,7 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome } from '../lib/reportingForm.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getEscalationDepositClaimAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution } from '../lib/reportingDomain.js'
+import { getEscalationDepositClaimAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -34,7 +34,16 @@ type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & 
 }
 
 export type UseReportingOperationsDependencies = {
-	reportOutcomeWithWalletViaVault?: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: ReportingOutcomeKey, reportAmount: bigint, depositAmount: bigint, onVaultFunded: () => void) => ReturnType<typeof reportOutcomeWithWalletViaVault>
+	reportOutcomeWithWalletViaVault?: (
+		accountAddress: Address,
+		callbacks: Parameters<typeof createWalletWriteClient>[1],
+		securityPoolAddress: Address,
+		outcome: ReportingOutcomeKey,
+		reportAmount: bigint,
+		depositAmount: bigint,
+		onVaultFunded: () => void,
+		triggersFork: boolean,
+	) => ReturnType<typeof reportOutcomeWithWalletViaVault>
 	approveReportingRep: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof approveReportingRep>[2], amount: bigint) => ReturnType<typeof approveReportingRep>
 	loadReportingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadReportingDetails>
 	reportOutcomeInSecurityPool: (
@@ -45,6 +54,7 @@ export type UseReportingOperationsDependencies = {
 		amount: bigint,
 		reviewAmount?: bigint,
 		contributionFunding?: 'vault' | 'wallet',
+		triggersFork?: boolean,
 	) => ReturnType<typeof reportOutcomeInSecurityPool>
 	withdrawEscalationFromSecurityPool: (
 		accountAddress: Address,
@@ -57,10 +67,11 @@ export type UseReportingOperationsDependencies = {
 }
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
-	reportOutcomeWithWalletViaVault: async (accountAddress, callbacks, pool, outcome, amount, depositAmount, onVaultFunded) => await reportOutcomeWithWalletViaVault(createWalletWriteClient(accountAddress, callbacks), pool, outcome, amount, depositAmount, onVaultFunded),
+	reportOutcomeWithWalletViaVault: async (accountAddress, callbacks, pool, outcome, amount, depositAmount, onVaultFunded, triggersFork) => await reportOutcomeWithWalletViaVault(createWalletWriteClient(accountAddress, callbacks), pool, outcome, amount, depositAmount, onVaultFunded, triggersFork),
 	approveReportingRep: async (accountAddress, callbacks, securityPoolAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount),
 	loadReportingDetails: async (securityPoolAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress),
-	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount, contributionFunding) => await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount, contributionFunding),
+	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork) =>
+		await reportOutcomeInSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork),
 	withdrawEscalationFromSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromSecurityPool(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, depositIndexes, claimAmount),
 }
 
@@ -216,6 +227,8 @@ export function useReportingOperations(
 					reportingResult.value = result
 					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createReportingSuccessPresentation(result))
+					// A submitted report must not leave its amount behind for an accidental second report.
+					if (actionName === 'reportOutcome') setReportingForm(current => (current.reportAmount === '' ? current : { ...current, reportAmount: '' }))
 					if (!isReportingSelectionCurrent(actionSelectionKey)) return
 					const details = await dependencies.loadReportingDetails(result.securityPoolAddress, accountAddress)
 					if (!isReportingSelectionCurrent(actionSelectionKey)) return
@@ -296,8 +309,14 @@ export function useReportingOperations(
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection, displayedDetails)
 				if (preflight === undefined) return undefined
+				// The user confirmed the fork warning only if the displayed report already triggered the fork.
+				const triggersFork = reportingContributionTriggersFork(preflight.latestDetails, preflight.selectedOutcome, preflight.reportAmount)
+				if (triggersFork && !reportingContributionTriggersFork(displayedDetails, preflight.selectedOutcome, preflight.reportAmount)) {
+					reportingDetails.value = preflight.latestDetails
+					throw new Error(reportingCopy.forkTriggerChangedSinceReview)
+				}
 				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < (preflight.walletDepositAmount ?? preflight.actualDepositAmount)) {
-					throw new Error('Approve REP for this security pool before reporting.')
+					throw new Error(reportingCopy.reportingRepApprovalRequired)
 				}
 				if (preflight.contributionFunding === 'wallet' && preflight.latestDetails.status === 'active' && preflight.latestDetails.forkContinuation) {
 					const execute = dependencies.reportOutcomeWithWalletViaVault
@@ -305,9 +324,18 @@ export function useReportingOperations(
 					let funded = false
 					try {
 						return {
-							...(await execute(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.walletDepositAmount, () => {
-								funded = true
-							})),
+							...(await execute(
+								walletAddress,
+								{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
+								securityPoolAddress,
+								preflight.selectedOutcome,
+								preflight.reportAmount,
+								preflight.walletDepositAmount,
+								() => {
+									funded = true
+								},
+								triggersFork,
+							)),
 							amountAttoRep: preflight.actualDepositAmount,
 						}
 					} catch (error) {
@@ -321,7 +349,7 @@ export function useReportingOperations(
 				// Wallet deposits transferFrom the accepted amount against an approval sized to the preview, so cap the maximum at that previewed amount.
 				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? preflight.actualDepositAmount : preflight.reportAmount
 				return {
-					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, maximumDepositAttoRep, preflight.actualDepositAmount, preflight.contributionFunding)),
+					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, maximumDepositAttoRep, preflight.actualDepositAmount, preflight.contributionFunding, triggersFork)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},

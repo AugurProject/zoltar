@@ -350,6 +350,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
 								currentPoolOracleManagerError={model.currentPoolOracleManagerError}
 								executePendingOperationGuardMessage={model.executePendingOperationGuardMessage}
+								stagedOperationGuardMessages={model.stagedOperationGuardMessages}
 								loadedSelectedPool={loadedSelectedPool}
 								loadingPoolOracleManager={loadingPoolOracleManager}
 								manualPendingOperationId={manualPendingOperationId}

@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 
-export type EnumDropdownOption<T extends string> = {
+type EnumDropdownOption<T extends string> = {
 	label: string
 	value: T
 }

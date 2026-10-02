@@ -31,7 +31,6 @@ const mintingCapacity = 'Minting capacity'
 const unknownDiscovery = 'unknown discovery error'
 const loadingSecurityPoolDetails = 'Loading security pool details…'
 const retryDiscovery = 'Retry discovery'
-const securityPoolUnavailableInUniverse = 'This security pool is not available in the selected universe.'
 const discoveringSecurityPoolsFromFactory = 'Discovering security pools from the configured factory…'
 const discoveringSecurityPools = 'Discovering security pools…'
 const securityPoolPages = 'Security pool pages'
@@ -145,7 +144,6 @@ export const liveCopy = {
 	unknownDiscovery,
 	loadingSecurityPoolDetails,
 	retryDiscovery,
-	securityPoolUnavailableInUniverse,
 	discoveringSecurityPoolsFromFactory,
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
@@ -162,8 +160,6 @@ export const liveCopy = {
 	manageLiquidity: 'Liquidity',
 	createMarketAction: 'Create market',
 	poolDetails: 'Details',
-	noPoolSelected: 'No security pool selected',
-	noPoolSelectedDetail: 'Open a security pool address to load its market.',
 	marketFacts: 'Pool facts',
 	lifecycle: 'Lifecycle',
 	capacity: 'Capacity',

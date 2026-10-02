@@ -20,6 +20,7 @@ import { getTradingRouteHref } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SecurityPoolIdentityFields } from './LiveMarketIdentity.js'
 import { liveCopy } from '../copy/live.js'
+import { marketsCopy } from '../copy/markets.js'
 import { questionOutcomeLabel, systemStateLabel } from '../lib/marketLabels.js'
 
 export function PairInitializationAction({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
@@ -162,5 +163,21 @@ export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, wo
 		)
 	if (discoveryState === 'loading') return <EmptyState live title={liveCopy.loadingSecurityPoolDetails} />
 	if (discoveryState === 'error') return <RetryableNotice disabled={workflowLocked} message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} onRetry={retry} retryLabel={liveCopy.retryDiscovery} />
-	return <EmptyState title={liveCopy.noPoolSelected} detail={liveCopy.securityPoolUnavailableInUniverse} />
+	// Discovery finished without the addressed pool: it belongs to another universe (or none), so offer both ways out.
+	return (
+		<EmptyState
+			title={marketsCopy.poolNotInUniverse}
+			detail={marketsCopy.poolNotInUniverseDetail}
+			actions={
+				<>
+					<a className='button-link primary' href={getTradingRouteHref('#/universe')}>
+						{marketsCopy.switchUniverse}
+					</a>
+					<a className='button-link secondary-link' href={getTradingRouteHref('#/market')}>
+						{liveCopy.marketList}
+					</a>
+				</>
+			}
+		/>
+	)
 }

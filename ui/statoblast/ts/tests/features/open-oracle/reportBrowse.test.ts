@@ -72,7 +72,9 @@ void describe('OpenOracle report browse cache', () => {
 			feesOnlyAtHalt: false,
 			flexibleEscalation: false,
 		}
-		expect(toCachedOpenOracleReportSummary(details)).toEqual(report)
+		// Lifecycle timing is kept so browsing can tell when the report is ready to settle.
+		expect(toCachedOpenOracleReportSummary(details)).toEqual({ ...report, disputeDelay: 60n, settlementTime: 60n })
+		expect(toCachedOpenOracleReportSummary(report)).toEqual(report)
 	})
 
 	test('round-trips cached summaries through browser storage, bigints included', () => {
@@ -80,6 +82,10 @@ void describe('OpenOracle report browse cache', () => {
 		openOracleReportDownloadStore.record(scope, [{ data: report, id: '12' }], 1_000)
 		resetLocalEntityStoreForTesting()
 		expect(openOracleReportDownloadStore.read(scope)).toEqual([{ data: report, fetchedAt: 1_000, id: '12' }])
+		const timedReport = { ...createReport(13n), disputeDelay: 10n, settlementTime: 600n }
+		openOracleReportDownloadStore.record(scope, [{ data: timedReport, id: '13' }], 2_000)
+		resetLocalEntityStoreForTesting()
+		expect(openOracleReportDownloadStore.read(scope).find(entry => entry.id === '13')?.data).toEqual(timedReport)
 	})
 
 	test('drops corrupt, incomplete, and statusless cached entries instead of rendering them', () => {
@@ -97,18 +103,32 @@ void describe('OpenOracle report browse cache', () => {
 		expect(openOracleReportDownloadStore.read(scope).map(entry => entry.id)).toEqual(['3'])
 	})
 
-	test('filters every downloaded report by status and by ID, symbol, or token address', () => {
-		const reports = [createReport(1n), createReport(2n, { disputeOccurred: true }), createReport(3n, { isDistributed: true, token1Symbol: 'DAI' }), createReport(14n, { token2: getAddress('0x00000000000000000000000000000000000000ab') })]
+	test('filters every downloaded report by live lifecycle stage and by ID, symbol, or token address', () => {
+		const timing = { disputeDelay: 10n, settlementTime: 100n }
+		const reports = [
+			{ ...createReport(1n), ...timing },
+			{ ...createReport(2n, { disputeOccurred: true }), ...timing },
+			{ ...createReport(3n, { isDistributed: true, token1Symbol: 'DAI' }), ...timing },
+			{ ...createReport(14n, { token2: getAddress('0x00000000000000000000000000000000000000ab') }), ...timing },
+			{ ...createReport(15n, { reportTimestamp: 50n }), ...timing },
+			{ ...createReport(16n, { reportTimestamp: 145n }), ...timing },
+		]
+		const clock = { currentBlockNumber: undefined, currentTime: 150n }
 		const ids = (filtered: readonly OpenOracleReportSummary[]) => filtered.map(report => report.reportId)
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '', statusFilter: 'all' }))).toEqual([1n, 2n, 3n, 14n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '', statusFilter: 'Pending' }))).toEqual([1n, 14n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '', statusFilter: 'Disputed' }))).toEqual([2n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '', statusFilter: 'Settled' }))).toEqual([3n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: 'dai', statusFilter: 'all' }))).toEqual([3n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '14', statusFilter: 'all' }))).toEqual([14n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '#1', statusFilter: 'all' }))).toEqual([1n, 14n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: '0x00000000000000000000000000000000000000ab', statusFilter: 'all' }))).toEqual([14n])
-		expect(ids(filterOpenOracleReports(reports, { normalizedSearchText: 'dai', statusFilter: 'Pending' }))).toEqual([])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '', statusFilter: 'all' }))).toEqual([1n, 2n, 3n, 14n, 15n, 16n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '', statusFilter: 'dispute-window-open' }))).toEqual([1n, 14n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '', statusFilter: 'disputed' }))).toEqual([2n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '', statusFilter: 'settled' }))).toEqual([3n])
+		// A report past its settlement time is ready to settle, not pending.
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '', statusFilter: 'ready-to-settle' }))).toEqual([15n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '', statusFilter: 'awaiting-dispute-window' }))).toEqual([16n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: 'dai', statusFilter: 'all' }))).toEqual([3n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '14', statusFilter: 'all' }))).toEqual([14n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '#1', statusFilter: 'all' }))).toEqual([1n, 14n, 15n, 16n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: '0x00000000000000000000000000000000000000ab', statusFilter: 'all' }))).toEqual([14n])
+		expect(ids(filterOpenOracleReports(reports, { clock, normalizedSearchText: 'dai', statusFilter: 'dispute-window-open' }))).toEqual([])
+		// Summaries cached before timing was recorded still filter by their stored state.
+		expect(ids(filterOpenOracleReports([createReport(4n), createReport(5n, { disputeOccurred: true })], { clock, normalizedSearchText: '', statusFilter: 'disputed' }))).toEqual([5n])
 	})
 
 	test('parses a searched report ID and resolves unknown status filters to all', () => {
@@ -117,7 +137,9 @@ void describe('OpenOracle report browse cache', () => {
 		expect(parseReportIdSearch('0')).toBeUndefined()
 		expect(parseReportIdSearch('dai')).toBeUndefined()
 		expect(parseReportIdSearch('12a')).toBeUndefined()
-		expect(resolveBrowseStatusFilter('Settled')).toBe('Settled')
+		expect(resolveBrowseStatusFilter('settled')).toBe('settled')
+		expect(resolveBrowseStatusFilter('ready-to-settle')).toBe('ready-to-settle')
+		expect(resolveBrowseStatusFilter('pending')).toBe('all')
 		expect(resolveBrowseStatusFilter('bogus')).toBe('all')
 	})
 })

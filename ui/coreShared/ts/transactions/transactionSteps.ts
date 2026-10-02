@@ -163,7 +163,11 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 				selected = true
 				activeIndex = index
 				for (const other of steps) if (other !== step && other.phase === 'review') other.phase = 'upcoming'
-				if (amount !== undefined && step.approval !== undefined) step.amount = formatValueWithUnit(amount === maxUint256 ? commonCopy.max : formatCurrencyBalance(amount, step.approval.tokenUnits), step.approval.tokenSymbol)
+				if (amount !== undefined && step.approval !== undefined) {
+					const formattedAmount = amount === maxUint256 ? commonCopy.max : formatCurrencyBalance(amount, step.approval.tokenUnits)
+					step.amount = formatValueWithUnit(formattedAmount, step.approval.tokenSymbol)
+					step.title = commonCopy.formatApproveTokenAmount(formattedAmount, step.approval.tokenSymbol)
+				}
 				step.approvalAmount = amount ?? step.approval?.requiredAmount
 				transitionStep(step, { type: 'review-confirmed' })
 				rejectReview = undefined

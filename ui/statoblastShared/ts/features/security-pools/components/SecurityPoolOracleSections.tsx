@@ -13,7 +13,8 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { transactionPending } from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '../../../types/contracts.js'
@@ -96,6 +97,7 @@ export function SecurityPoolStagedOperationsSection({
 	managerDetails,
 	managerError,
 	manualOperationId,
+	operationGuardMessages,
 	onExecute,
 	onLoadManager,
 	onManualOperationIdChange,
@@ -115,6 +117,7 @@ export function SecurityPoolStagedOperationsSection({
 	managerDetails: OracleManagerDetails | undefined
 	managerError: string | undefined
 	manualOperationId: string
+	operationGuardMessages: ReadonlyMap<bigint, string | undefined>
 	onExecute: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
 	onLoadManager: (managerAddress: Address) => void
 	onManualOperationIdChange: (value: string) => void
@@ -125,18 +128,23 @@ export function SecurityPoolStagedOperationsSection({
 	suggestedOperationId: bigint
 	universeId: bigint
 }) {
-	const selectedOperationListed = stagedOperations.some(operation => operation.operationId === resolvedOperationId)
-	const executionAction =
+	const [executingOperationId, setExecutingOperationId] = useState<bigint>()
+	const getExecutionGuardMessage = (operationId: bigint | undefined, guardMessage: string | undefined) => (executionPending && operationId !== executingOperationId ? transactionPending : guardMessage)
+	const lookupOperationListed = stagedOperations.some(operation => operation.operationId === resolvedOperationId)
+	const executionAction = (operationId: bigint | undefined, guardMessage: string | undefined) =>
 		managerDetails === undefined ? undefined : (
 			<TransactionActionButton
 				idleLabel={securityPoolCopy.executeStagedOperation}
 				pendingLabel={securityPoolCopy.executingStagedOperationLabel}
 				onClick={() => {
-					if (resolvedOperationId !== undefined) onExecute(managerAddress, resolvedOperationId, securityPoolAddress, universeId)
+					if (operationId !== undefined) {
+						setExecutingOperationId(operationId)
+						onExecute(managerAddress, operationId, securityPoolAddress, universeId)
+					}
 				}}
-				pending={executionPending}
+				pending={executionPending && operationId === executingOperationId}
 				tone='primary'
-				availability={{ disabled: !canExecute || executeGuardMessage !== undefined, reason: canExecute ? executeGuardMessage : undefined }}
+				availability={{ disabled: !canExecute || executionPending || guardMessage !== undefined, reason: canExecute ? guardMessage : undefined }}
 			/>
 		)
 	return (
@@ -146,9 +154,9 @@ export function SecurityPoolStagedOperationsSection({
 				<div className='decision-card-list'>
 					{stagedOperations.map(operation => {
 						const amount = getPendingOperationAmountPresentation(operation.operation)
-						const selected = operation.operationId === resolvedOperationId
+						const guardMessage = getExecutionGuardMessage(operation.operationId, operationGuardMessages.get(operation.operationId))
 						return (
-							<article key={operation.operationId.toString()} className={'staged-operation-card' + (selected ? ' selected' : '')}>
+							<article key={operation.operationId.toString()} className='staged-operation-card'>
 								<div className='entity-card-header'>
 									<div className='entity-card-copy'>
 										<h3>{getPendingOperationLabel(operation.operation)}</h3>
@@ -164,12 +172,7 @@ export function SecurityPoolStagedOperationsSection({
 										<span>{commonCopy.targetVault}</span>
 										<AddressValue address={operation.targetVault} />
 									</div>
-									<div className='actions'>
-										<button type='button' className='secondary' aria-pressed={selected} disabled={executionPending} onClick={() => onManualOperationIdChange(operation.operationId.toString())}>
-											{selected ? commonCopy.selected : securityPoolCopy.selectOperation}
-										</button>
-										{selected ? executionAction : undefined}
-									</div>
+									<TransactionActionGroup message={canExecute ? guardMessage : undefined}>{executionAction(operation.operationId, guardMessage)}</TransactionActionGroup>
 									<ReadOnlyDetailAccordion title={securityPoolCopy.operationDetails}>
 										<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
 										<MetricField label={securityPoolCopy.initiator}>
@@ -192,12 +195,12 @@ export function SecurityPoolStagedOperationsSection({
 					</label>
 				</ReadOnlyDetailAccordion>
 			)}
-			<div className='actions oracle-actions'>
+			<TransactionActionGroup message={!lookupOperationListed && canExecute ? getExecutionGuardMessage(resolvedOperationId, executeGuardMessage) : undefined}>
 				<button className='secondary' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager || (managerDetails === undefined && managerError === undefined)}>
 					{getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded: managerDetails !== undefined })}
 				</button>
-				{selectedOperationListed ? undefined : executionAction}
-			</div>
+				{lookupOperationListed ? undefined : executionAction(resolvedOperationId, getExecutionGuardMessage(resolvedOperationId, executeGuardMessage))}
+			</TransactionActionGroup>
 		</SectionBlock>
 	)
 }

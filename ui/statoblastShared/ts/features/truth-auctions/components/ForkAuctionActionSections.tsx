@@ -1,6 +1,8 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import type { ComponentChildren } from 'preact'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -9,6 +11,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
+import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityPoolStateModel } from '../../security-pools/lib/securityPoolState.js'
 import { withWalletGuardFirst, type WalletGuard } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -16,7 +19,7 @@ import { getTruthAuctionBidPreview, getRepPerEthPrice, type TruthAuctionBidPrice
 
 export type ForkAuctionActionOptions = {
 	action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
-	availability?: { disabled: boolean; reason: string | undefined }
+	availability?: ActionAvailability
 	forceEnabled?: boolean
 	idleLabel: string
 	onClick: () => void
@@ -29,7 +32,16 @@ export type ForkAuctionActionOptions = {
 export function createForkAuctionActionRenderer({ activeAction, forkPoolState, walletGuard }: { activeAction: ForkAuctionSectionProps['forkAuctionActiveAction']; forkPoolState: SecurityPoolStateModel; walletGuard: WalletGuard }) {
 	return ({ action, availability = { disabled: false, reason: undefined }, forceEnabled, idleLabel, onClick, pendingLabel, pending, tone = 'secondary' }: ForkAuctionActionOptions) => {
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		return <TransactionActionButton idleLabel={idleLabel} pendingLabel={pendingLabel} onClick={onClick} pending={pending ?? activeAction === action} tone={tone} availability={withWalletGuardFirst({ disabled: !actionEnabled || availability.disabled, reason: availability.reason }, walletGuard)} />
+		return (
+			<TransactionActionButton
+				idleLabel={idleLabel}
+				pendingLabel={pendingLabel}
+				onClick={onClick}
+				pending={pending ?? activeAction === action}
+				tone={tone}
+				availability={withWalletGuardFirst({ disabled: !actionEnabled || availability.disabled, loading: availability.loading === true && availability.disabled, reason: availability.reason }, walletGuard)}
+			/>
+		)
 	}
 }
 
@@ -130,8 +142,26 @@ function getBidPriceWarning(bidPricePosition: TruthAuctionBidPricePosition | und
 	return undefined
 }
 
+/** Rounded amounts with the exact values in their titles; the available balance rounds down so it never reads above what the wallet holds. */
+function BidAmountHint({ availableAttoEth, minimumBidAttoEth }: { availableAttoEth: bigint; minimumBidAttoEth: bigint }) {
+	return (
+		<>
+			{forkAuctionCopy.bidAmountHintAvailableLead}
+			<CurrencyValue rounding='down' suffix={commonCopy.eth} value={availableAttoEth} />
+			{forkAuctionCopy.bidAmountHintMinimumLead}
+			<CurrencyValue suffix={commonCopy.eth} value={minimumBidAttoEth} />
+			{forkAuctionCopy.bidAmountHintGasReserveLead}
+			<CurrencyValue suffix={commonCopy.eth} value={ETH_GAS_RESERVE_ATTO_ETH} />
+			{forkAuctionCopy.bidAmountHintGasReserveTail}
+		</>
+	)
+}
+
 export function ForkAuctionSubmitBidSection({
+	bidAmountHint,
+	bidAmountMax,
 	bidPricePosition,
+	bidPriceRounding,
 	clearingPrice,
 	minimumWinningPriceInput,
 	onBidAmountChange,
@@ -140,7 +170,10 @@ export function ForkAuctionSubmitBidSection({
 	submitBidAmount,
 	submitBidPrice,
 }: {
+	bidAmountHint: { availableAttoEth: bigint; minimumBidAttoEth: bigint } | undefined
+	bidAmountMax: { amount: bigint | undefined; unavailableReason: string | undefined }
 	bidPricePosition: TruthAuctionBidPricePosition | undefined
+	bidPriceRounding: { roundUpPriceInput: string | undefined; submittedPriceInput: string } | undefined
 	clearingPrice: bigint | undefined
 	minimumWinningPriceInput: string | undefined
 	onBidAmountChange: (value: string) => void
@@ -169,8 +202,22 @@ export function ForkAuctionSubmitBidSection({
 						unit={forkAuctionCopy.bidPriceUnit}
 						value={submitBidPrice}
 					/>
-					<AmountField label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
+					<AmountField fillMax={bidAmountMax} hint={bidAmountHint === undefined ? undefined : <BidAmountHint {...bidAmountHint} />} label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
 				</div>
+				{bidPriceRounding === undefined ? undefined : (
+					<UserMessage
+						className='detail'
+						tone='warning'
+						detail={forkAuctionCopy.formatRoundedBidPriceNotice(bidPriceRounding.submittedPriceInput)}
+						actions={
+							bidPriceRounding.roundUpPriceInput === undefined ? undefined : (
+								<button className='secondary' onClick={() => (bidPriceRounding.roundUpPriceInput === undefined ? undefined : onBidPriceChange(bidPriceRounding.roundUpPriceInput))} type='button'>
+									{forkAuctionCopy.formatRoundUpBidPrice(bidPriceRounding.roundUpPriceInput)}
+								</button>
+							)
+						}
+					/>
+				)}
 				<div className='actions'>{submitBidAction}</div>
 			</div>
 		</SectionBlock>

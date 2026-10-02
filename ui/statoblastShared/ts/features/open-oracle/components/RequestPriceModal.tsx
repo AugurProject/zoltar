@@ -2,12 +2,12 @@ import type { OraclePriceQueryProgress, OraclePriceQueryStage } from '../../../p
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getCoordinatorInitialReportPrice } from '../../../protocol/oracleCoordinator.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { OpenOraclePriceInput } from './OpenOraclePriceInput.js'
+import { formatOpenOraclePriceInput } from '../lib/openOracle.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider, unlockedTransactionActions } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -255,7 +255,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			if (attempt !== quoteAttempt.current || !mounted.current) return
 			const latest = latestPreparationState.current
 			if (latest.failureLatched || latest.preparationPaused) latest.retryPreparation()
-			setPrice(formatUnits(value, 18))
+			// A quote carries 18 decimals; a few significant digits keep the editable price readable and well within the report's dispute tolerance.
+			setPrice(formatOpenOraclePriceInput(value, 18))
 		} catch (error) {
 			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, priceRequestCopy.uniswapPriceFailed))
 		} finally {
@@ -292,6 +293,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{showSteps || failedWorkflow !== undefined ? (
 						<GlobalTransactionPresentationProvider transaction={presentation === ignoredFailure.current ? undefined : presentation}>
 							<TransactionStepsContent
+								actionsFirst
+								includeWrapAction
 								contextKey={key ?? ''}
 								onClose={close}
 								retainedWorkflow={failedWorkflow}

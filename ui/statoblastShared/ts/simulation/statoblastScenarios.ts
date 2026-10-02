@@ -188,6 +188,54 @@ async function loadRequiredChildSecurityPool(readClient: ReadClient, parentSecur
 	return childPool
 }
 
+/**
+ * Forks the pool's universe the way a reporter would: let the question end, refresh the oracle price, open and
+ * counter the pool's own escalation game with fork-threshold deposits, fork Zoltar with that game, then create and
+ * fund the Yes child universe so at least one fork branch has a canonical child pool.
+ */
+export async function forkSecurityPoolUniverseWithOwnEscalation({
+	accountAddress,
+	createWriteClient,
+	memoryClient,
+	onProgress,
+	parentPool,
+	profile,
+	readClient,
+}: Pick<ScenarioSeedParameters, 'createWriteClient' | 'memoryClient' | 'onProgress' | 'profile'> & {
+	accountAddress: Address
+	parentPool: Pick<ListedSecurityPool, 'managerAddress' | 'securityPoolAddress' | 'universeId'>
+	readClient: ReadClient
+}) {
+	const writeClient = createWriteClient(accountAddress)
+	const universeSummary = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, parentPool.universeId)
+	if (universeSummary === undefined) throw new Error(`Expected a Zoltar universe summary for parent pool ${parentPool.securityPoolAddress}`)
+	const reportingDetailsBeforeFork = await getScenarioProtocol().loadReportingDetails(readClient, parentPool.securityPoolAddress, accountAddress)
+	if (reportingDetailsBeforeFork.marketDetails.endTime >= reportingDetailsBeforeFork.currentTime) {
+		await advanceSimulationTime(memoryClient, reportingDetailsBeforeFork.marketDetails.endTime - reportingDetailsBeforeFork.currentTime + DAY_IN_SECONDS)
+	}
+
+	const ownForkDepositAmount = (universeSummary.forkThresholdAttoRep * 10_000n) / STATOBLAST_SECURITY_MULTIPLIER_BPS
+	await refreshSeededOraclePrice({
+		accountAddress,
+		createWriteClient,
+		managerAddress: parentPool.managerAddress,
+		memoryClient,
+		readClient,
+	})
+	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)
+	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, ownForkDepositAmount, 'approveRep')
+	await getScenarioProtocol().reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'yes', ownForkDepositAmount)
+	const activeReportingDetails = await getScenarioProtocol().loadReportingDetails(readClient, parentPool.securityPoolAddress, accountAddress)
+	if (activeReportingDetails.status !== 'active') throw new Error('Expected the seeded ordinary escalation game to be active')
+	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, ownForkDepositAmount, 'approveRep')
+	await getScenarioProtocol().reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'no', ownForkDepositAmount)
+	await getScenarioProtocol().forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
+
+	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
+	await getScenarioProtocol().createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
+	await getScenarioProtocol().migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
+}
+
 async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
 	await seedSecurityPoolX2Scenario({
 		accounts,
@@ -214,33 +262,15 @@ async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, c
 	await getScenarioProtocol().depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 	await getScenarioProtocol().createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
 
-	const universeSummary = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, parentPool.universeId)
-	if (universeSummary === undefined) throw new Error(`Expected a Zoltar universe summary for parent pool ${parentPool.securityPoolAddress}`)
-	const reportingDetailsBeforeFork = await getScenarioProtocol().loadReportingDetails(readClient, parentPool.securityPoolAddress, primaryAccount)
-	if (reportingDetailsBeforeFork.marketDetails.endTime >= reportingDetailsBeforeFork.currentTime) {
-		await advanceSimulationTime(memoryClient, reportingDetailsBeforeFork.marketDetails.endTime - reportingDetailsBeforeFork.currentTime + DAY_IN_SECONDS)
-	}
-
-	const ownForkDepositAmount = (universeSummary.forkThresholdAttoRep * 10_000n) / STATOBLAST_SECURITY_MULTIPLIER_BPS
-	await refreshSeededOraclePrice({
+	await forkSecurityPoolUniverseWithOwnEscalation({
 		accountAddress: primaryAccount,
 		createWriteClient,
-		managerAddress: parentPool.managerAddress,
 		memoryClient,
+		onProgress,
+		parentPool,
+		profile,
 		readClient,
 	})
-	await reportBootstrapProgress(onProgress, 'Triggering own-escalation fork', 0.988)
-	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, ownForkDepositAmount, 'approveRep')
-	await getScenarioProtocol().reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'yes', ownForkDepositAmount)
-	const activeReportingDetails = await getScenarioProtocol().loadReportingDetails(readClient, parentPool.securityPoolAddress, primaryAccount)
-	if (activeReportingDetails.status !== 'active') throw new Error('Expected the seeded ordinary escalation game to be active')
-	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, ownForkDepositAmount, 'approveRep')
-	await getScenarioProtocol().reportOutcomeInSecurityPool(writeClient, parentPool.securityPoolAddress, 'no', ownForkDepositAmount)
-	await getScenarioProtocol().forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
-
-	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
-	await getScenarioProtocol().createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
-	await getScenarioProtocol().migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
 	await advanceSimulationTime(memoryClient, FORK_MIGRATION_TIME_SECONDS + DAY_IN_SECONDS)
 
 	const yesChildPool = await loadRequiredChildSecurityPool(readClient, parentPool.securityPoolAddress, 'yes')

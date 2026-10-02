@@ -9,7 +9,6 @@ export const bidAmountEth = 'Bid amount (ETH)'
 export const bidAmount = 'Bid amount'
 export const scrollableAuctionBidHistory = 'Scrollable auction bid history'
 export const scrollableMyBids = 'Scrollable wallet bid history'
-export const selectedChildPoolRepReadinessLoading = 'Checking whether pool-held REP is already ready for the selected child universe.'
 export const clearingPrice = 'Clearing price'
 export const closed = 'Closed'
 export const entryDepthLead = 'Entry depth: '
@@ -31,6 +30,15 @@ export const startingTruthAuction = 'Starting truth auction…'
 export const startTruthAuction = 'Start truth auction'
 export const startTruthAuctionTitle = 'Start truth auction'
 export const submitBid = 'Submit bid'
+export const formatSubmitBidLabel = (amount: CopyTemplateValue, price: CopyTemplateValue) => `Bid ${amount}\u00a0ETH at ${price}\u00a0ETH per REP`
+export const bidAmountHintAvailableLead = 'Available: '
+export const bidAmountHintMinimumLead = ' · Min bid '
+export const bidAmountHintGasReserveLead = ' · Max keeps '
+export const bidAmountHintGasReserveTail = ' for gas'
+export const formatRoundedBidPriceNotice = (price: CopyTemplateValue) => `Will be submitted at ${price}\u00a0ETH per REP (nearest valid price below).`
+export const formatRoundUpBidPrice = (price: CopyTemplateValue) => `Round up to ${price}`
+export const loadingWalletEthBalance = 'Loading wallet ETH balance.'
+export const walletEthBelowGasReserve = 'Not enough wallet ETH above the gas reserve.'
 export const submitBidTitle = 'Submit bid'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool-held REP has already been migrated for the ${outcomeLabel} child universe.`
@@ -42,7 +50,10 @@ export const winningThreshold = 'Winning threshold'
 export const reservePrice = 'Reserve price'
 export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
-export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH per REP from depth chart`
+export const formatDepthChartPointLabel = ({ depth, price, status }: { depth: CopyTemplateValue; price: CopyTemplateValue; status: string | undefined }) => `Select bid price ${price}\u00a0ETH per REP. ${depth}\u00a0ETH bid at or above this price.${status === undefined ? '' : ` ${status}.`}`
+export const depthChartClearingStatus = 'Current clearing price'
+export const depthChartSelectedStatus = 'Your bid price'
+export const depthChartClearingAndSelectedStatus = 'Current clearing price and your bid price'
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security pool for ${outcomeLabel} universe does not exist.`
 export const migration = 'Migration'
 export const forkReadiness = 'Fork readiness'
@@ -62,7 +73,7 @@ export const mixedSettlementPreviewDetail = 'Winning bids add REP backing units 
 export const winningSettlementPreviewDetail = 'Winning bids add REP backing units to your vault, with a matching share of the auctioned underwriting commitments.'
 export const refundSettlementPreviewDetail = 'Refundable bids credit their ETH for withdrawal. They add no REP backing units or underwriting commitments.'
 export const truthAuctionRefundEstimateDetail = 'Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.'
-export const underfundedWinningClaimUnavailable = 'Claim preview is unavailable for underfunded winning bids because the required per-tick ETH denominator is not exposed in current UI data.'
+export const underfundedWinningClaimUnavailable = 'A claim preview isn’t available for winning bids in an auction that missed its ETH target. The final amount appears after settlement.'
 export const settlementRoundingNotice = 'These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.'
 export const selectedBidSettlementPreview = 'Settlement preview.'
 export const selectedBids = 'Selected bids'
@@ -122,9 +133,9 @@ export const useUnresolvedMigrationReason = 'Use the optional unresolved parent 
 export const unresolvedMigrationExpiredReason = 'The optional unresolved parent escalation-deposit accounting cleanup window has closed.'
 export const formatNoClaimableParentEscalationDeposits = (outcomeLabel: CopyTemplateValue) => `No ${outcomeLabel} parent escalation deposits are currently available for a direct claim by this wallet.`
 export const parentEscalationClaimSelectionRequired = 'Select at least one deposit to claim.'
-export const unresolvedMigrationUnavailableReason = 'Optional unresolved parent escalation-deposit accounting cleanup is unavailable for this pool.'
-export const unresolvedDepositsLoading = 'Loading unresolved escalation deposits.'
+export const unresolvedMigrationUnavailableReason = 'This optional cleanup isn’t available for this pool.'
 export const formatPoolRepAlreadyMigrated = (outcomeLabel: CopyTemplateValue) => `Pool-held REP has already been migrated to the ${outcomeLabel} universe.`
+export const formatPoolRepStagedForVaultMigration = (outcomeLabel: CopyTemplateValue) => `Pool-held REP for the ${outcomeLabel} universe is already staged and moves into the child pool during vault migration.`
 export const formatPoolMigrationRequiredForVault = (outcomeLabel: CopyTemplateValue) => `Migrate pool to the ${outcomeLabel} universe before moving vault balances.`
 export const vaultMigrationCompleteReason = 'Vault migration is already complete for this wallet.'
 export const combinedUnresolvedMigrationDetail = 'Optionally clear unresolved parent escalation-deposit accounting while migrating remaining REP backing units and underwriting commitments.'
@@ -139,7 +150,7 @@ export const maxAttoRepBeingSold = 'Max REP being sold'
 export const settlementAvailable = 'Settlement available'
 export const migrationStatus = 'Migration status'
 export const repAtFork = 'REP at fork'
-export const migratedAttoRep = 'Migrated REP'
+export const formatMigratedAttoRepToOutcome = (outcomeLabel: CopyTemplateValue) => `REP migrated to ${outcomeLabel}`
 export const settlementCollateral = 'Settlement collateral'
 export const migrationStarted = 'Migration started'
 export const migrationEnds = 'Migration ends'
@@ -157,9 +168,10 @@ export const forkNotTriggered = 'Fork not triggered'
 export const yourMigrationBalances = 'Your migration balances'
 export const parentWalletBalancesDescription = 'Wallet-level balances in the parent pool that may still need migration.'
 export const clearUnresolvedParentEscalationDepositAccounting = 'Optional: Clear unresolved parent escalation-deposit accounting'
-export const unresolvedMigrationExpiredDetail = 'The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.'
-export const unresolvedEscalationMigrationWithVaultDetail =
-	'First transfers this wallet’s REP backing units and underwriting commitments to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.'
+export const unresolvedMigrationExpiredDetail = 'The window for this optional cleanup has closed. Nothing is lost: your child-pool backing and winning claims are unchanged.'
+export const unresolvedEscalationMigrationWithVaultDetail = 'Optional. Moves your vault to the selected universe and clears your unresolved parent deposits in one step; the move can’t be undone. You don’t need it to claim winning deposits, and losing carried deposits need no transaction.'
+export const unresolvedEscalationMigrationTechnicalDetail =
+	'Transfers this wallet’s REP backing units and underwriting commitments to the selected child, checkpoints but retains claimable fees in the parent vault, and routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. It is not required to fund dispute-staked REP backing or to claim a winning carried proof.'
 export const walletUnresolvedDepositsLoading = 'Loading unresolved parent escalation-deposit accounting for the connected wallet…'
 export const capturedEntitlementDetail = 'Unresolved parent escalation-deposit accounting was already cleared. Child proof eligibility is unchanged.'
 export const formatEntitlementAlreadyMaterialized = (outcomeLabel: CopyTemplateValue) => `This wallet’s optional unresolved parent escalation-deposit accounting cleanup is already recorded for the ${outcomeLabel} child universe.`
@@ -168,21 +180,17 @@ export const formatMigrateUnresolvedEscalationToValue = (outcomeLabel: CopyTempl
 export const migratingUnresolvedEscalationTruncated = 'Clearing unresolved parent escalation-deposit accounting…'
 export const claimResolvedParentEscalationDeposits = 'Optional: Claim parent escalation deposits'
 export const resolvedParentDepositClaimDetail = 'This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.'
-export const parentEscalationClaimEmptyDisputeStakedRepDetail = 'No parent dispute-staked REP is currently visible for a direct claim by the connected wallet.'
-export const walletEscalationDepositsLoading = 'Loading escalation deposits for the selected wallet…'
 export const chooseParentDepositsToClaim = 'Choose deposits to claim'
 export const worthNowPendingClaimFinalization = 'Worth now: Pending direct claim'
 export const formatClaimSelectedValueParentDeposits = (outcomeLabel: CopyTemplateValue) => `Claim selected ${outcomeLabel} deposits`
 export const claimingParentEscalationDepositsTruncated = 'Claiming parent escalation deposits…'
 export const migratePoolToUniverse = 'Migrate pool to universe'
 export const poolRepMigrationDetail = 'This moves pool-held REP attributed to the selected outcome into the child universe. It affects the outcome pool, not just your vault.'
-export const poolRepAlreadyMigratedDetail = 'Pool-held REP has already been migrated to the selected child universe.'
-export const poolRepStagedForVaultMigrationDetail = 'Pool-held REP for this outcome is already staged and will sweep into the child universe during vault migration.'
 export const formatMigratePoolToValueUniverse = (outcomeLabel: CopyTemplateValue) => `Migrate pool to ${outcomeLabel} universe`
 export const migratingPoolToUniverseTruncated = 'Migrating pool to universe…'
-export const vaultMigrationDetail = 'This moves all remaining pool-held vault REP backing migration power and underwriting commitments from your parent vault into the selected child pool. Escalation claims have zero parent-OI migration power and follow their separate claim path.'
+export const formatVaultMigrationDetail = (outcomeLabel: CopyTemplateValue) => `Moves all your vault REP and underwriting commitments to the ${outcomeLabel} universe. This can’t be undone or split across outcomes.`
+export const vaultMigrationTechnicalDetail = 'Migrates all remaining pool-held vault REP backing and underwriting commitments from your parent vault into the selected child pool. Escalation deposits are not part of this migration; they carry over separately and are claimed in the child pool.'
 export const formatMigrateVaultToValue = (outcomeLabel: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}`
-export const alreadyMigratedStatus = 'Already migrated'
 export const truthAuctionStatus = 'Truth auction status'
 export const startTruthAuctionDetail = 'Start the ETH-for-REP truth auction once migration closes. Winning bids later claim REP backing units and a share of the auctioned underwriting commitments; losing bids are credited for withdrawal during settlement.'
 export const bypassTruthAuction = 'Bypass truth auction'
@@ -244,3 +252,16 @@ export const formatBidBelowClearingWarning = (price: CopyTemplateValue) => `This
 export const bidAtClearingWarning = 'This price equals the clearing price. Earlier bids at this price fill first, so this bid may fill only partly or not at all. Bid higher to win in full.'
 export const truthAuctionOpenProgressDetail = 'The ETH target has not been reached, so there is no clearing price yet. Once it is reached, a single clearing price decides which bids win.'
 export const truthAuctionClearingProgressDetail = 'Higher bids now raise the clearing price, so less REP is sold.'
+
+export const formatSubmitBidReviewTitle = (amount: CopyTemplateValue, price: CopyTemplateValue) => `Bid ${amount}\u00a0ETH at ${formatEthPerRepValue(price)}`
+export const submitBidReviewDescription = 'Locks the ETH shown below in the truth auction at your bid price. Bids can’t be cancelled: the ETH stays locked until the bid wins REP backing in the child pool or is refunded as a losing bid.'
+export const formatForkWithOwnEscalationReviewTitle = (amount: CopyTemplateValue) => `Trigger universe fork · ${amount}\u00a0REP`
+export const formatForkWithOwnEscalationReviewDescription = (amount: CopyTemplateValue) =>
+	`Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and ${amount}\u00a0REP held by the pool and its escalation game moves into fork migration. This can’t be undone.`
+const formatRepAmountSuffix = (amount: CopyTemplateValue | undefined) => (amount === undefined ? '' : ` · ${amount}\u00a0REP`)
+export const formatMigratePoolReviewTitle = (outcomeLabels: CopyTemplateValue, amount?: CopyTemplateValue) => `Migrate pool-held REP to ${outcomeLabels}${formatRepAmountSuffix(amount)}`
+export const formatMigratePoolReviewDescription = (outcomeLabels: CopyTemplateValue, amount?: CopyTemplateValue) =>
+	`Moves this pool’s ${amount === undefined ? 'REP' : `${amount}\u00a0REP`} attributed to ${outcomeLabels} into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.`
+export const formatMigrateVaultReviewTitle = (outcomeLabel: CopyTemplateValue, amount?: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}${formatRepAmountSuffix(amount)}`
+export const formatMigrateVaultReviewDescription = (outcomeLabel: CopyTemplateValue, amounts?: { rep: CopyTemplateValue | undefined; eth: CopyTemplateValue }) =>
+	`Moves all your vault REP${amounts?.rep === undefined ? '' : ` (${amounts.rep}\u00a0REP)`} and underwriting commitments${amounts === undefined ? '' : ` (${amounts.eth}\u00a0ETH)`} from this pool to the ${outcomeLabel} universe. This can’t be undone or split across outcomes.`

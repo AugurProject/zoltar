@@ -7,17 +7,17 @@ import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 
 test('vault operation copy uses accounting roles', () => {
-	expect(securityPoolCopy.withdrawingRep).toBe('Withdrawing REP…')
+	expect(securityPoolCopy.formatWithdrawingRep('REP')).toBe('Withdrawing REP…')
+	expect(securityPoolCopy.settingCommitmentLimitPending).toBe('Setting commitment limit…')
 })
 
 test('fork migration empty states are complete templates', () => {
 	expect(forkAuctionCopy.formatNoUnresolvedDeposits('yes')).toBe('No yes unresolved deposits remain for this wallet.')
 	expect(forkAuctionCopy.formatNoClaimableParentEscalationDeposits('Yes')).toBe('No Yes parent escalation deposits are currently available for a direct claim by this wallet.')
-	expect(forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail).toBe('No parent dispute-staked REP is currently visible for a direct claim by the connected wallet.')
-	expect(forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail).not.toMatch(/migrat/i)
-	expect(forkAuctionCopy.selectedChildPoolRepReadinessLoading).toContain('pool-held REP')
-	expect(forkAuctionCopy.poolRepAlreadyMigratedDetail).toContain('Pool-held REP')
-	expect(forkAuctionCopy.poolRepStagedForVaultMigrationDetail).toContain('Pool-held REP')
+	expect(forkAuctionCopy.walletDisputeStakedRepEmpty).not.toMatch(/migrat/i)
+	expect(forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse('Yes')).toContain('pool-held REP')
+	expect(forkAuctionCopy.formatPoolRepAlreadyMigrated('Yes')).toContain('Pool-held REP')
+	expect(forkAuctionCopy.formatPoolRepStagedForVaultMigration('Yes')).toContain('Pool-held REP')
 })
 
 test('truth-auction settlement copy identifies REP backing-unit credits', () => {
@@ -29,7 +29,7 @@ test('truth-auction settlement copy identifies REP backing-unit credits', () => 
 
 test('truth-auction dynamic values use nonbreaking separators', () => {
 	expect(forkAuctionCopy.formatEthPerRepValue('12')).toBe('12\u00a0ETH per REP')
-	expect(forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart('12')).toContain('12\u00a0ETH per REP')
+	expect(forkAuctionCopy.formatDepthChartPointLabel({ depth: '3', price: '12', status: forkAuctionCopy.depthChartClearingStatus })).toBe('Select bid price 12\u00a0ETH per REP. 3\u00a0ETH bid at or above this price. Current clearing price.')
 	expect(forkAuctionCopy.zeroEth).toBe('0\u00a0ETH')
 })
 

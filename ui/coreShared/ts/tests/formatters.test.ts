@@ -65,7 +65,7 @@ void describe('formatting helpers', () => {
 	})
 
 	void test('formatTrimmedUnits truncates fractional digits and preserves grouped whole units', () => {
-		expect(formatTrimmedUnits(1_234_567_890_000_000_000_000n, 18, 4)).toBe('1 234.5678')
+		expect(formatTrimmedUnits(1_234_567_890_000_000_000_000n, 18, 4)).toBe('1\u00a0234.5678')
 		expect(formatTrimmedUnits(-1_200_000n, 6, 4)).toBe('-1.2')
 	})
 
@@ -104,7 +104,7 @@ void describe('formatting helpers', () => {
 
 		void test('switches to compact notation when rounding carries into the threshold or the next suffix', () => {
 			expect(formatAmount(999_996n * 10n ** 15n, { notation: 'compact' })).toEqual({ approximate: true, exact: '999.996', text: '1k' })
-			expect(formatAmount(999_950n * 10n ** 18n, { notation: 'compact' })).toEqual({ approximate: true, exact: '999 950', text: '1M' })
+			expect(formatAmount(999_950n * 10n ** 18n, { notation: 'compact' })).toEqual({ approximate: true, exact: '999\u00a0950', text: '1M' })
 		})
 
 		void test('keeps the standard form below one thousand', () => {
@@ -114,13 +114,13 @@ void describe('formatting helpers', () => {
 
 	void describe('formatAmount precision detection', () => {
 		void test('rounds down at the displayed precision when asked, so a limit never reads above its exact value', () => {
-			expect(formatAmount(1_666_666_666_666_666_666_666n, { rounding: 'down' })).toEqual({ approximate: true, exact: '1 666.666666666666666666', text: '1 666.66' })
+			expect(formatAmount(1_666_666_666_666_666_666_666n, { rounding: 'down' })).toEqual({ approximate: true, exact: '1\u00a0666.666666666666666666', text: '1\u00a0666.66' })
 			// Small values keep their extra significant digits instead of flooring to 0.00.
 			expect(formatAmount(4_266_666_666_666_667n, { rounding: 'down' }).text).toBe('0.0042')
 			expect(formatAmount(999_999_999_999_999_999n, { rounding: 'down' }).text).toBe('0.99')
 			expect(formatAmount(5n * 10n ** 18n, { rounding: 'down' })).toEqual({ approximate: false, exact: '5', text: '5.00' })
 			// Compact SI rounding could read above the exact value, so rounding down keeps standard notation.
-			expect(formatAmount(1_234_567n * 10n ** 18n, { notation: 'compact', rounding: 'down' }).text).toBe('1 234 567.00')
+			expect(formatAmount(1_234_567n * 10n ** 18n, { notation: 'compact', rounding: 'down' }).text).toBe('1\u00a0234\u00a0567.00')
 		})
 
 		void test('does not mark exact values, including zero, as approximate', () => {
@@ -131,7 +131,7 @@ void describe('formatting helpers', () => {
 		})
 
 		void test('marks values whose dropped digits are non-zero', () => {
-			expect(formatAmount(1_234_567n * 10n ** 15n)).toEqual({ approximate: true, exact: '1 234.567', text: '1 234.57' })
+			expect(formatAmount(1_234_567n * 10n ** 15n)).toEqual({ approximate: true, exact: '1\u00a0234.567', text: '1\u00a0234.57' })
 			expect(formatAmountDisplay(999_999_990_000n * 10n ** 18n, { notation: 'compact' })).toBe('≈ 1T')
 			expect(formatAmountDisplay(1_234_000n * 10n ** 18n, { notation: 'compact' })).toBe('≈ 1.2M')
 		})

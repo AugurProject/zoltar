@@ -80,6 +80,7 @@ export const vaultRegistryScanEmpty = 'No current positions found within the sca
 export const formatNoCurrentVaultPositions = (knownVaultCount: bigint) => `No current positions among ${knownVaultCount.toString()} known ${knownVaultCount === 1n ? 'vault' : 'vaults'}.`
 export const poolVaultsEmpty = 'No known vaults in this pool.'
 export const autoExecPending = 'Auto-exec pending'
+export const autoExecAfterSettlement = 'Auto-executes after oracle settlement.'
 export const executeStagedOperation = 'Execute staged operation'
 export const executingStagedOperationLabel = 'Executing staged operation…'
 export const operationalForkReadOnlyDetail = 'This pool is currently operational, so fork and truth auction actions are read only.'
@@ -164,7 +165,7 @@ export const claimableFees = 'Claimable fees'
 export const claimingFees = 'Claiming fees…'
 export const missingVaultDepositDetail = 'This vault does not exist. Deposit REP to create it.'
 export const repBackingLabel = 'REP backing'
-export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0REP.`
+export const formatInsufficientRepBalanceDetail = (amount: string, tokenSymbol: CopyTemplateValue = commonCopy.rep) => `Insufficient ${tokenSymbol} balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0${tokenSymbol}.`
 export const connectWalletBeforeClaimingFees = commonCopy.formatConnectWalletBefore('claiming fees')
 export const connectWalletBeforeDepositingRep = commonCopy.formatConnectWalletBefore('depositing REP')
 export const connectWalletBeforeRedeemingRep = commonCopy.formatConnectWalletBefore('redeeming REP')
@@ -173,7 +174,8 @@ export const selectOwnVaultToClaimFees = 'Select your own vault to claim fees.'
 export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.'
 export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'
 export const selectOwnVaultToWithdrawRep = 'Select your own vault to withdraw REP.'
-export const selfServiceExecutionTimeoutHelpText = 'Whole minutes; expires after oracle settlement.'
+export const selfServiceExecutionTimeoutHelpText = '1–5 whole minutes; expires after oracle settlement.'
+export const stagedOperationTimeoutRangeError = 'Enter 1–5 whole minutes.'
 export const formatManualExecutionTimeoutResolvedDetail = (duration: string) => `If queued, this operation expires ${duration} after the oracle settlement window completes.`
 export const owned = 'Owned'
 export const readOnlyBadgeLabel = 'Read only'
@@ -187,10 +189,10 @@ export const immediateWithdrawalRejectedDetail = 'The oracle manager attempted t
 export const repWithdrawalQueued = 'REP withdrawal queued'
 export const repWithdrawalSubmitted = 'REP withdrawal submitted'
 export const formatRedeemRepFromVault = (tokenSymbol: CopyTemplateValue) => `Redeem ${tokenSymbol}`
-export const redeemingRep = 'Redeeming REP…'
+export const formatRedeemingRep = (tokenSymbol: CopyTemplateValue) => `Redeeming ${tokenSymbol}…`
 export const redeemableAttoRep = 'Redeemable REP'
 export const repRedemptionDescription = 'Recover remaining REP after escalation deposits settle.'
-export const repWithdrawAmount = 'REP withdraw amount'
+export const formatRepWithdrawAmount = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdraw amount`
 export const repWithdrawal = 'REP withdrawal'
 export const repWithdrawalDescription = 'Executes immediately with a valid oracle price; otherwise queued.'
 export const selectedVaultDetailsUnavailable = 'Selected vault details are unavailable.'
@@ -213,15 +215,16 @@ export const vaultLookup = 'Vault lookup'
 export const vaultMissing = 'Vault missing'
 export const vaultSummary = 'Vault summary'
 export const withdrawableAttoRep = 'Withdrawable REP'
-export const withdrawingRep = 'Withdrawing REP…'
+export const formatWithdrawingRep = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}…`
 
 export const setVaultUnderwritingLimit = 'Set commitment limit'
 export const adjustingVaultBackingFactor = 'Setting commitment limit'
+export const settingCommitmentLimitPending = 'Setting commitment limit…'
 export const minimumBackingRatio = 'Minimum backing ratio'
 export const vaultBackingFactor = 'Commitment limit (ETH)'
 export const vaultBackingFactorHelp = 'A standing ETH limit authorizes proportional coverage up to this amount. Depositing REP does not change it.'
-export const queueTargetChangeFundingAction = 'queue this target change'
-export const setVaultUnderwritingLimitDescription = 'Set your standing ETH underwriting limit.'
+export const queueTargetChangeFundingAction = 'queue this commitment limit change'
+export const setVaultUnderwritingLimitDescription = 'Set your standing ETH commitment limit.'
 export const currentCapacity = 'Current commitment'
 export const resultingCapacity = 'Resulting commitment'
 export const initialReportPriorityFee = 'Initial report priority fee'
@@ -232,7 +235,7 @@ export const backingRatioChangeExecuted = 'Commitment limit changed'
 export const backingRatioChangeFailed = 'Commitment limit change failed'
 export const backingRatioChangeSubmitted = 'Commitment limit change submitted'
 export const refreshingBackingRatioStatus = 'Refreshing commitment status'
-export const refreshingBackingRatioStatusDetail = 'Checking the target change result.'
+export const refreshingBackingRatioStatusDetail = 'Checking the commitment limit change result.'
 export const backingRatioChangeSuccessDetail = 'The standing ETH commitment has been updated. REP deposits leave this limit unchanged.'
 export const queuedVaultAutomaticExecution = 'Executes automatically when the oracle report settles.'
 
@@ -240,14 +243,13 @@ export const exposureSupported = 'Commitment limit'
 
 export const queuedVaultOperationExpired = 'Queued operation expired'
 export const queuedVaultOperationExpiredDetail = 'The execution window ended before this operation completed.'
-export const queuedVaultOperationSuperseded = 'Target change replaced'
-export const queuedVaultOperationSupersededDetail = 'A newer target change replaced this request.'
+export const queuedVaultOperationSuperseded = 'Commitment limit change replaced'
+export const queuedVaultOperationSupersededDetail = 'A newer commitment limit change replaced this request.'
 
 export const queuedVaultOperationManualRefreshDetail = 'If this operation is still pending, execute it manually after a valid oracle price is available.'
 export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
 
 export const operationDetails = 'Operation details'
-export const selectOperation = 'Select operation'
 export const openOperationById = 'Open operation by ID'
 
 export function universePoolCount(count: bigint) {
@@ -269,7 +271,6 @@ export const oracleOperationExecutionLoading = 'Checking whether this operation 
 
 export const liquidationWalletRequiredReason = 'Connect a wallet to liquidate a vault.'
 export const liquidationUnavailableReason = 'Liquidation is unavailable in this pool state.'
-export const liquidationOwnVaultReason = 'Choose another vault to liquidate.'
 export const withdrawalUnavailableReason = 'REP withdrawal is unavailable in this pool state.'
 export const noWithdrawableRepReason = 'No REP is available to withdraw.'
 
@@ -290,6 +291,10 @@ export const commitmentNeedsOracleReport = 'A new OpenOracle report is needed to
 export const vaultActionsNeedOracleReport = 'A valid OpenOracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.'
 export const openPriceOracle = 'Open price oracle'
 
-export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires too soon. Retry after it expires and review report funding.'
+export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires within a minute, before this transaction could confirm. Wait about a minute for it to expire, then submit again and fund a new oracle report.'
+export const formatOracleOperationPriceExpiresTooSoon = (seconds: bigint) => {
+	const duration = seconds === 1n ? '1 second' : `${seconds.toString()} seconds`
+	return `The oracle price expires in ${duration}, before this transaction could confirm. Wait ${duration} for it to expire, then submit again and fund a new oracle report.`
+}
 export const oracleOperationFundingChanged = 'Oracle funding requirements changed. Review funding again before sending.'
 export const oracleOperationTimingUnavailable = 'Checking oracle price validity.'

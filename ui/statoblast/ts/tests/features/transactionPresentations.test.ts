@@ -77,7 +77,7 @@ describe('transaction presentations', () => {
 		const deposit = createSecurityVaultTransactionIntent('depositRepToVault', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('depositRepToVault', form) })
 		const withdrawal = createSecurityVaultTransactionIntent('queueWithdrawRep', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('queueWithdrawRep', form) })
 		expect(deposit.rows?.map(row => row.label)).toEqual(['Amount', 'Security pool address', 'Vault'])
-		expect(deposit.rows?.[0]?.value).toBe('1 200\u00a0REP2')
+		expect(deposit.rows?.[0]?.value).toBe('1\u00a0200\u00a0REP2')
 		expect(withdrawal.rows?.[0]).toEqual({ label: 'Amount', value: '12.5\u00a0REP2' })
 		expect(getSecurityVaultActionRepAmount('redeemFees', form)).toBeUndefined()
 		expect(getSecurityVaultActionRepAmount('depositRepToVault', { depositAmount: '', repWithdrawAmount: '' })).toBeUndefined()

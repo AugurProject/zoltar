@@ -612,6 +612,10 @@
 		"./features/open-oracle/components/RequestPriceModal.js": {
 			"bun": "./ts/features/open-oracle/components/RequestPriceModal.tsx",
 			"default": "./js/features/open-oracle/components/RequestPriceModal.js"
+		},
+		"./features/security-pools/components/VaultBackingFactorForm.js": {
+			"bun": "./ts/features/security-pools/components/VaultBackingFactorForm.tsx",
+			"default": "./js/features/security-pools/components/VaultBackingFactorForm.js"
 		}
 	},
 	"version": "1.0.0"

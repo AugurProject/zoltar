@@ -86,8 +86,9 @@ export function PoolActionCard({ currentTimestamp, currentView, items, onChange 
 						if (tab !== undefined && tab === currentView) control = <span className='pool-action-current'>{copy.actionShownBelow}</span>
 						else if (tab !== undefined)
 							control = (
-								<button type='button' className='link' onClick={() => onChange(tab)}>
-									{copy.actionButtonLabels[tab]}
+								<button type='button' className='secondary pool-action-open' onClick={() => onChange(tab)}>
+									<span>{copy.actionButtonLabels[tab]}</span>
+									<span aria-hidden='true'>→</span>
 								</button>
 							)
 						return <PoolActionRow control={control} currentTimestamp={currentTimestamp} item={item} key={item.id} />

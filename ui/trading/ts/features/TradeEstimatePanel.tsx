@@ -24,9 +24,10 @@ function formatImpactPercent(impactBps: bigint) {
 function ImpactNotice({ tier, impactBps, acknowledged, disabled, onAcknowledge }: { tier: PriceImpactTier; impactBps: bigint; acknowledged: boolean; disabled: boolean; onAcknowledge(value: boolean): void }) {
 	const percent = formatImpactPercent(impactBps)
 	if (tier === 'low') return null
-	if (tier === 'caution') return <UserMessage tone='warning' announcement='polite' className='trade-impact-notice trade-impact-notice--caution' detail={ticketCopy.priceImpactCaution(percent)} />
+	// The percentage follows every debounced estimate, so these stay quiet; the panel's tier announcement speaks for them.
+	if (tier === 'caution') return <UserMessage tone='warning' className='trade-impact-notice trade-impact-notice--caution' detail={ticketCopy.priceImpactCaution(percent)} />
 	return (
-		<WarningSurface role='alert' surface='flat' variant='compact' className={`trade-impact-warning trade-impact-warning--${tier}`}>
+		<WarningSurface surface='flat' variant='compact' className={`trade-impact-warning trade-impact-warning--${tier}`}>
 			<p>{tier === 'blocked' ? ticketCopy.priceImpactBlocked(percent) : ticketCopy.priceImpactWarning(percent)}</p>
 			{tier === 'warning' ? (
 				<label className='trade-impact-acknowledge'>
@@ -92,6 +93,9 @@ export function TradeEstimatePanel({
 					{ label: ticketCopy.poolFee, value: formatScaledPercentage(market.feeBps, 2) },
 				]}
 			/>
+			<p className='visually-hidden' role='status'>
+				{ticketCopy.priceImpactTierAnnouncement(impactTier)}
+			</p>
 			<ImpactNotice tier={impactTier} impactBps={estimate.impactBps} acknowledged={impactAcknowledged} disabled={disabled} onAcknowledge={onAcknowledgeImpact} />
 			{estimate.kind === 'entry' ? (
 				<UserMessage

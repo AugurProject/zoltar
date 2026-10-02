@@ -49,7 +49,7 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 		else dismissGlobalTransaction(current)
 	}
 	useEffect(() => {
-		if (!visible || current?.tone !== 'error' || typeof requestAnimationFrame !== 'function') return
+		if (!visible || typeof requestAnimationFrame !== 'function') return
 		const reserveSpace = () => {
 			const panel = dialogRef.current?.getBoundingClientRect()
 			if (panel === undefined || panel.height === 0) return

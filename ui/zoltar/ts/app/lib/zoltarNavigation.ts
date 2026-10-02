@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { readUniverseQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
@@ -31,7 +31,8 @@ export function getZoltarTabLabel(view: ZoltarTabView) {
 	}
 }
 
-/** Link to a Zoltar view that keeps the selected universe and environment parameters. */
+/** Link to a Zoltar view that keeps the selected universe and environment parameters; a malformed universe is dropped so the link recovers to Genesis. */
 export function getZoltarViewHref(view: ZoltarView) {
-	return buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), view))
+	const search = getRouteHashSearch()
+	return buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(writeUniverseQueryParam(search, readUniverseQueryParam(search)), view))
 }

@@ -91,7 +91,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			},
 		})
 		const expectDialogActions = (dialog: HTMLElement, expectedLabels: string[]) => {
-			const actionRow = within(dialog).getByRole('button', { name: 'Cancel' }).closest('.actions')
+			const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+			const actionRow = cancel.closest('.transaction-plan-action-final') ?? cancel.closest('.actions')
 			if (actionRow === null) throw new Error('Dialog action row is missing')
 			const buttons = [...actionRow.querySelectorAll('button')]
 			expect(buttons.map(button => button.textContent?.trim())).toEqual(expectedLabels)
@@ -242,9 +243,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		await act(() => {
 			withdrawInput.dispatchEvent(new Event('blur'))
 		})
-		// The action guard owns the over-maximum reason; the field does not repeat it.
-		expect(withdrawDialog.querySelector('.field-error')).toBeNull()
-		expect(withdrawDialog.textContent?.includes('Enter at most')).toBe(false)
+		// The field flags the over-maximum amount inline; the disabled action keeps its own reason once.
+		expect(withdrawInput.getAttribute('aria-invalid')).toBe('true')
 		expect(withdrawDialog.textContent?.match(/Reduce the withdrawal/g)).toHaveLength(1)
 	})
 

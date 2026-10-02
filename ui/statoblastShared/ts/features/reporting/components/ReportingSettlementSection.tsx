@@ -137,6 +137,7 @@ function ReportingSettlementSide({
 					showDisabledReason={!withdrawAllUsesSharedReason}
 				/>
 			</div>
+			{winning || claimLabel === undefined ? undefined : <UserMessage className='detail' detail={reportingCopy.clearLosingDepositsDetail} />}
 		</SectionBlock>
 	)
 }

@@ -123,7 +123,7 @@ describe('security vault guards', () => {
 				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
 				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Reduce the withdrawal to 2 500\u00a0REP or less.')
+		).toBe('Reduce the withdrawal to 2\u00a0500\u00a0REP or less.')
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {
@@ -182,6 +182,17 @@ describe('security vault guards', () => {
 				resolvedPendingOperationId: 1n,
 			}),
 		).toBe('Request a new price in Price oracle before executing this operation.')
+
+		expect(
+			getVaultExecutePendingOperationGuardMessage({
+				accountAddress: zeroAddress,
+				hasLoadedOracleManager: true,
+				isOnActiveAppChain: true,
+				isPriceValid: false,
+				resolvedPendingOperationId: 1n,
+				pendingSettlementOperationIds: [1n],
+			}),
+		).toBe('Auto-executes after oracle settlement.')
 
 		expect(
 			getVaultExecutePendingOperationGuardMessage({

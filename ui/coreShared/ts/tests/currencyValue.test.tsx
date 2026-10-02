@@ -39,8 +39,8 @@ describe('CurrencyValue', () => {
 
 		expect(documentQueries.queryByRole('button')).toBeNull()
 		const value = container.querySelector('.currency-value')
-		expect(value?.textContent).toBe('≈ 1 234.57 ETH')
-		expect(value?.getAttribute('title')).toBe('1 234.567 ETH')
+		expect(value?.textContent).toBe('≈ 1\u00a0234.57 ETH')
+		expect(value?.getAttribute('title')).toBe('1\u00a0234.567 ETH')
 	})
 
 	test('omits the approximation marker when rounding keeps every digit, including zero', async () => {
@@ -79,7 +79,7 @@ describe('CurrencyValue', () => {
 		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000 ETH' })
 
 		expect(copyButton.textContent).toBe('≈ 1T ETH')
-		expect(copyButton.getAttribute('title')).toBe('999 999 990 000 ETH')
+		expect(copyButton.getAttribute('title')).toBe('999\u00a0999\u00a0990\u00a0000 ETH')
 		await act(() => {
 			fireEvent.click(copyButton)
 		})
@@ -93,7 +93,7 @@ describe('CurrencyValue', () => {
 		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 10 000 WETH' })
 
 		expect(copyButton.textContent).toBe('10k')
-		expect(copyButton.getAttribute('title')).toBe('10 000 WETH')
+		expect(copyButton.getAttribute('title')).toBe('10\u00a0000 WETH')
 	})
 
 	test('clears copied feedback when the exact value changes', async () => {
@@ -138,7 +138,7 @@ describe('CurrencyValue', () => {
 
 	test('keeps maximum exact values inside the ellipsizing number-unit group', async () => {
 		const maximumUint256 = (1n << 256n) - 1n
-		const formattedMaximum = maximumUint256.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+		const formattedMaximum = maximumUint256.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0')
 		const { documentQueries } = await renderCurrencyValue({ copyable: true, precision: 'exact', units: 0, value: maximumUint256 })
 		const copyButton = documentQueries.getByRole('button', { name: `Copy exact value ${formattedMaximum} ETH` })
 		const numberUnit = copyButton.querySelector('.currency-value-number-unit')
@@ -163,7 +163,7 @@ describe('CurrencyValue', () => {
 			fireEvent.click(copyButton)
 		})
 		const error = await waitFor(() => documentQueries.getByRole('alert'))
-		expect(copyButton.textContent).toBe('999 999 990 000.00 ETH')
+		expect(copyButton.textContent).toBe('999\u00a0999\u00a0990\u00a0000.00 ETH')
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
 		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe('999 999 990 000')

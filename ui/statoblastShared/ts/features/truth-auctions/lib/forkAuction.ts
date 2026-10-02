@@ -1,5 +1,5 @@
 import type { ForkOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TruthAuctionMetrics } from '../../../types/contracts.js'
+import type { ForkAuctionDetails, SecurityPoolVaultSummary, TruthAuctionMetrics } from '../../../types/contracts.js'
 import { getTimeRemaining as getSharedTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { deriveHasForkActivity } from '../../../protocol/forkActivity.js'
 
@@ -47,4 +47,23 @@ export function getForkAuctionStageView(source: ForkAuctionStageSource): ForkAuc
 
 export function getTimeRemaining(targetTime: bigint | undefined, currentTime: bigint) {
 	return getSharedTimeRemaining(targetTime, currentTime)
+}
+
+/** The pool-held REP snapshot that fork migration splits across child universes, mirroring SecurityPoolForker: an own fork splits the vault REP snapshot, otherwise the auctionable REP. */
+export function getForkPoolHeldRepAtForkAttoRep(details: Pick<ForkAuctionDetails, 'auctionableAttoRepAtFork' | 'ownForkRepBuckets'>) {
+	return details.ownForkRepBuckets?.vaultRepAtForkAttoRep ?? details.auctionableAttoRepAtFork
+}
+
+/**
+ * The pool-held REP `migrateVault` moves for a parent vault. Once the pool forks, its REP leaves the pool, so the vault's current REP backing reads zero;
+ * migration instead credits the vault's backing-unit share of the REP snapshotted at fork (SecurityPoolForkerVaultMigrationBase). The last vault to
+ * migrate also receives the rounding remainder, so this floor can be a few attoREP low. Undefined when the inputs aren't loaded.
+ */
+export function getForkVaultMigrationRepAttoRep(details: Pick<ForkAuctionDetails, 'auctionableAttoRepAtFork' | 'ownForkRepBuckets' | 'systemState'> | undefined, vault: Pick<SecurityPoolVaultSummary, 'repBackingUnits' | 'totalRepBackingUnits' | 'vaultAttoRepBacking'> | undefined) {
+	if (details === undefined || vault === undefined) return undefined
+	if (details.systemState !== 'poolForked') return vault.vaultAttoRepBacking
+	const { repBackingUnits, totalRepBackingUnits } = vault
+	if (repBackingUnits === undefined || totalRepBackingUnits === undefined) return undefined
+	if (repBackingUnits === 0n || totalRepBackingUnits === 0n) return 0n
+	return (repBackingUnits * getForkPoolHeldRepAtForkAttoRep(details)) / totalRepBackingUnits
 }

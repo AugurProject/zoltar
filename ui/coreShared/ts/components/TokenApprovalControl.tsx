@@ -2,7 +2,7 @@ import { UserMessage } from './UserMessage.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
-import { useEffect, useId, useMemo, useState } from 'preact/hooks'
+import { useLayoutEffect, useId, useMemo, useState } from 'preact/hooks'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { ErrorNotice } from './ErrorNotice.js'
@@ -11,7 +11,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { formatCurrencyBalance, formatCeilingAmount, withApproximateMarker } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCeilingAmount, formatCeilingAmountDisplay, formatUnitSuffix, withApproximateMarker } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
@@ -74,6 +74,21 @@ function resolveApprovalButtonLabel({
 		</span>
 	)
 }
+/** Shows the requirement with the button's upward rounding, so `Required` never reads below the amount the button approves. */
+function RequiredApprovalAmount({ requiredAmount, tokenSymbol, tokenUnits }: { requiredAmount: bigint | undefined; tokenSymbol: string; tokenUnits: number }) {
+	if (requiredAmount === undefined || requiredAmount < 0n) return <CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
+	const unitSuffix = formatUnitSuffix(tokenSymbol)
+	return (
+		<span className='currency-value-wrap'>
+			<span className='currency-value' title={`${formatCurrencyBalance(requiredAmount, tokenUnits)}${unitSuffix}`}>
+				<span className='currency-value-number-unit'>
+					{formatCeilingAmountDisplay(requiredAmount, tokenUnits)}
+					{unitSuffix}
+				</span>
+			</span>
+		</span>
+	)
+}
 export function TokenApprovalControl({
 	compact = false,
 	completedLabel,
@@ -100,7 +115,7 @@ export function TokenApprovalControl({
 	const amountValidationMessageId = useId()
 	const allowanceMessageId = useId()
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
-	useEffect(() => {
+	useLayoutEffect(() => {
 		setDraftAmount('')
 	}, [resetKey])
 	const parsedAmount = useMemo(() => {
@@ -208,7 +223,7 @@ export function TokenApprovalControl({
 		<div className='form-grid'>
 			<MetricGrid>
 				<MetricField label={commonCopy.formatRequiredValue(tokenSymbol)}>
-					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />
+					<RequiredApprovalAmount requiredAmount={requiredAmount} tokenSymbol={tokenSymbol} tokenUnits={tokenUnits} />
 				</MetricField>
 				<MetricField label={commonCopy.formatApprovedValue(tokenSymbol)}>
 					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} />

@@ -3,6 +3,7 @@ import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
+import { TransactionFundingActionsPlaceholder } from '@zoltar/ui-core-shared/components/TransactionFundingActionsPlaceholder.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
@@ -77,6 +78,7 @@ export function PriceRequestPreview({
 						</div>
 					) : undefined}
 					<div className='actions'>
+						<TransactionFundingActionsPlaceholder actionLabel={priceRequestCopy.requestPrice} loading={preparing} resetKey='price-request-preview' />
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
 							<WalletActionFixReason actionButtonRef={actionButtonRef} availability={availability} id={reasonId} visible={visibleFeedback !== undefined}>
 								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
