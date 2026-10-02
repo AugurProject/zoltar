@@ -126,7 +126,7 @@ export function LiveMarketBrowser({
 	discoveryRows?: readonly (LiveMarket | undefined)[] | undefined
 	favorites?: readonly FavoriteEntry[]
 	pageMarketCount: number
-	discoveryState: 'loading' | 'ready' | 'error'
+	discoveryState: 'loading' | 'ready' | 'error' | 'not-found'
 	discoveryError: string | undefined
 	freshness: DataFreshness
 	marketPage: Readonly<{ start: bigint; total: bigint; previousStart: bigint | undefined; nextStart: bigint | undefined }>

@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { shareTokenAbi } from '../../protocol/authorization.js'
 import { simulateEntry, simulateExit, simulateLiquidity, simulateSettlement, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement } from '../../protocol/live.js'
@@ -34,43 +37,104 @@ function transactionOf(params: unknown) {
 
 // A chain whose head advances on demand; `longSharesOut` lets a test move the price between blocks.
 function createAdvancingChain() {
-	const chain: { head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[] } = { head: 2n, feeMarket: market, longSharesOut: 10n, sends: [], simulatedBlocks: [] }
-	const client = createWalletClient({
-		account,
-		transport: custom({
-			async request({ method, params }) {
-				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_blockNumber') return `0x${chain.head.toString(16)}`
-				if (method === 'eth_getBlockByNumber') return { hash: blockHashAt(chain.head), number: `0x${chain.head.toString(16)}`, parentHash: blockHashAt(chain.head - 1n), timestamp: `0x${chain.head.toString(16)}`, transactions: [] }
-				if (method === 'eth_sendTransaction') {
-					chain.sends.push(transactionOf(params).data)
-					return transactionHash
-				}
-				if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
-				if (Array.isArray(params)) chain.simulatedBlocks.push(params[1])
-				const transaction = transactionOf(params)
-				if (transaction.to === pair.toLowerCase()) return decodeFunctionData({ abi: pairAbi, data: transaction.data }).functionName === 'removeLiquidity' ? encodeAbiParameters([uint256, uint256], [5n, 5n]) : encodeAbiParameters([uint256, uint256], [2n, 1n])
-				if (transaction.to === shareToken.toLowerCase()) {
-					const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data })
-					if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [100n])
-					if (decoded.functionName === 'safeBatchTransferFrom') return '0x'
-					throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
-				}
-				if (transaction.to === pool.toLowerCase()) return feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head) ?? '0x'
-				const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
-				if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
-				if (decoded.functionName === 'addLiquidityWithEth' || decoded.functionName === 'initializeWithEth' || decoded.functionName === 'createPairAndInitializeWithEth')
-					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
-				throw new Error(`Unexpected simulation ${decoded.functionName}`)
-			},
-		}),
-	})
-	return { chain, client }
+	const chain: { head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[] } = { head: 2n, feeMarket: market, longSharesOut: 10n, sends: [], simulatedBlocks: [], blockRequests: [] }
+	const provider: InjectedEthereum = {
+		async request({ method, params }) {
+			if (method === 'eth_chainId') return '0xaa36a7'
+			if (method === 'eth_accounts') return [account]
+			if (method === 'eth_blockNumber') return `0x${chain.head.toString(16)}`
+			if (method === 'eth_getBlockByNumber') {
+				chain.blockRequests.push(params)
+				const selector: unknown = Array.isArray(params) ? params[0] : undefined
+				const number = typeof selector === 'string' && selector.startsWith('0x') ? BigInt(selector) : chain.head
+				return { hash: blockHashAt(number), number: `0x${number.toString(16)}`, parentHash: blockHashAt(number - 1n), timestamp: `0x${number.toString(16)}`, transactions: [] }
+			}
+			if (method === 'eth_sendTransaction') {
+				chain.sends.push(transactionOf(params).data)
+				return transactionHash
+			}
+			if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
+			if (Array.isArray(params)) chain.simulatedBlocks.push(params[1])
+			const transaction = transactionOf(params)
+			if (transaction.to === pair.toLowerCase()) return decodeFunctionData({ abi: pairAbi, data: transaction.data }).functionName === 'removeLiquidity' ? encodeAbiParameters([uint256, uint256], [5n, 5n]) : encodeAbiParameters([uint256, uint256], [2n, 1n])
+			if (transaction.to === shareToken.toLowerCase()) {
+				const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data })
+				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [100n])
+				if (decoded.functionName === 'safeBatchTransferFrom') return '0x'
+				throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
+			}
+			if (transaction.to === pool.toLowerCase()) return feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head) ?? '0x'
+			const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
+			if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
+			if (decoded.functionName === 'addLiquidityWithEth' || decoded.functionName === 'initializeWithEth' || decoded.functionName === 'createPairAndInitializeWithEth')
+				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+			throw new Error(`Unexpected simulation ${decoded.functionName}`)
+		},
+	}
+	const client = createWalletClient({ account, transport: custom(provider) })
+	return { chain, client, provider }
 }
 
 const write = async <T>(send: () => Promise<T>) => await send()
 
 describe('submitting a quote after the chain advances', () => {
+	test('quotes and submits initialization with captured block numbers and no extra block queries', async () => {
+		for (const existingPair of [undefined, pair]) {
+			const { chain, provider } = createAdvancingChain()
+			const backend = createInjectedBackend({
+				profile: SEPOLIA_NETWORK_PROFILE,
+				provider: {
+					request: async request => {
+						if (request.method === 'eth_call' && Array.isArray(request.params) && typeof request.params[1] !== 'string') throw new TypeError('c.slice is not a function')
+						return await provider.request(request)
+					},
+				},
+			})
+			const client = backend.createWriteClient(account)
+			const initialMarket = { ...market, pair: existingPair, lpTotalSupply: 0n }
+			const quote = await simulateLiquidity(client, configuration, initialMarket, account, 'initialize', 10n)
+			expect(quote.expectedLiquidity).toBe(10n)
+			expect(quote.blockHash).toBe(blockHashAt(2n))
+			expect(chain.sends).toHaveLength(0)
+			expect(chain.simulatedBlocks).toEqual(['0x2', '0x2', '0x2'])
+			expect(chain.blockRequests).toEqual([['latest', false]])
+			chain.head = 3n
+			chain.simulatedBlocks.length = 0
+			expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
+			expect(chain.simulatedBlocks).toEqual(['0x3', '0x3', '0x3', '0x3', '0x3'])
+			expect(chain.blockRequests).toEqual([
+				['latest', false],
+				['latest', false],
+				['latest', false],
+			])
+			const submitted = decodeFunctionData({ abi: routerAbi, data: chain.sends[0] ?? '0x' })
+			expect(submitted.functionName).toBe(existingPair === undefined ? 'createPairAndInitializeWithEth' : 'initializeWithEth')
+			expect(submitted.args).toEqual([existingPair ?? pool, 5_000n, 9n, account, quote.deadline])
+		}
+	})
+
+	test('keeps all initialization reads at the captured height when a new block arrives', async () => {
+		const { chain, provider } = createAdvancingChain()
+		const backend = createInjectedBackend({
+			profile: SEPOLIA_NETWORK_PROFILE,
+			provider: {
+				request: async request => {
+					if (request.method === 'eth_call' && Array.isArray(request.params) && typeof request.params[1] !== 'string') throw new TypeError('c.slice is not a function')
+					const result = await provider.request(request)
+					if (request.method === 'eth_call') chain.head = 3n
+					return result
+				},
+			},
+		})
+		const quote = await simulateLiquidity(backend.createWriteClient(account), configuration, { ...market, pair: undefined, lpTotalSupply: 0n }, account, 'initialize', 10n)
+		expect(chain.head).toBe(3n)
+		expect(quote.blockNumber).toBe(2n)
+		expect(quote.deadline).toBe(2n + 20n * 60n)
+		expect(chain.simulatedBlocks).toEqual(['0x2', '0x2', '0x2'])
+		expect(chain.blockRequests).toEqual([['latest', false]])
+		expect(chain.sends).toHaveLength(0)
+	})
+
 	test('guards the question cutoff for entry, initialization, and addition with pinned fresh timing', async () => {
 		for (const remaining of [1n, 60n, 61n]) {
 			for (const operation of ['entry', 'initialize', 'add'] as const) {
@@ -161,7 +225,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(await submitFreshSettlement(client, configuration, account, winning, write)).toBe(transactionHash)
 		expect(chain.sends).toHaveLength(6)
 		expect(chain.simulatedBlocks.length).toBeGreaterThan(0)
-		for (const block of chain.simulatedBlocks) expect(JSON.stringify(block)).toContain(blockHashAt(3n))
+		for (const block of chain.simulatedBlocks) expect(block).toBe('0x3')
 	})
 
 	test('broadcasts the approved deadline and minimum after revalidating at a later block', async () => {

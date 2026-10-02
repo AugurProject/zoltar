@@ -29,7 +29,8 @@ export async function latestBlockIdentity(client: Pick<WalletClient, 'getBlock'>
 	return { blockNumber: block.number, blockHash: block.hash, blockTimestamp: block.timestamp }
 }
 
-// Every read inside `simulate` must pin `block.blockHash`, so a block landing mid-simulation cannot mix states.
+// Every read inside `simulate` must use the captured block number, which wallet middleware accepts.
+// New blocks do not change the selected height; reorgs during reads are intentionally not checked.
 export async function stableSimulation<T>(client: Pick<WalletClient, 'getBlock'>, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>) => Promise<T>) {
 	const block = await latestBlockIdentity(client)
 	return { ...block, result: await simulate(block) }
