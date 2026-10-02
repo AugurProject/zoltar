@@ -1,3 +1,4 @@
+import type { OraclePriceQueryProgress } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
 import { signal } from '@preact/signals'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
@@ -983,11 +984,15 @@ test('a late Uniswap result cannot overwrite a manual edit', async () => {
 	const quote = new Promise<bigint>(resolve => {
 		release = resolve
 	})
+	let progress: OraclePriceQueryProgress | undefined
 	const prices: Array<bigint | undefined> = []
 	const rendered = await renderIntoDocument(
 		<RequestPriceModal
 			{...props}
-			fetchPrice={() => quote}
+			fetchPrice={(_review, onProgress) => {
+				progress = onProgress
+				return quote
+			}}
 			onConfirm={async request => {
 				prices.push(request.proposedRepPerEthPrice)
 			}}
@@ -995,9 +1000,17 @@ test('a late Uniswap result cannot overwrite a manual edit', async () => {
 	)
 	try {
 		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '2.5' } }))
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
-		expect(queries.getByRole('button', { name: /Fetching/ }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: '1/3 Reading oracle…' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByText('Fetching…').closest('.visually-hidden') !== null).toBe(true)
+		await act(() => progress?.('v4'))
+		expect(queries.getByRole('button', { name: '2/3 Querying Uniswap V4…' }).getAttribute('aria-busy')).toBe('true')
+		await act(() => progress?.('v3'))
+		expect(queries.getByRole('button', { name: '3/3 Querying Uniswap V3…' }).hasAttribute('disabled')).toBe(true)
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '4' } }))
+		await act(() => progress?.('v4'))
+		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' }).hasAttribute('disabled')).toBe(false)
 		await act(async () => {
 			release(2n * 10n ** 18n)
 			await quote
