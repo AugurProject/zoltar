@@ -437,6 +437,14 @@
 			"bun": "./ts/protocol/openOraclePricing.ts",
 			"default": "./js/protocol/openOraclePricing.js"
 		},
+		"./protocol/vaultOperations.js": {
+			"bun": "./ts/protocol/vaultOperations.ts",
+			"default": "./js/protocol/vaultOperations.js"
+		},
+		"./features/vault-operations/lib/draft.js": {
+			"bun": "./ts/features/vault-operations/lib/draft.ts",
+			"default": "./js/features/vault-operations/lib/draft.js"
+		},
 		"./protocol/oracleCoordinator.js": {
 			"bun": "./ts/protocol/oracleCoordinator.ts",
 			"default": "./js/protocol/oracleCoordinator.js"

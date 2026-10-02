@@ -1,4 +1,5 @@
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { loadOracleManagerDetails, loadQueuedVaultOperationState, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 /// <reference types="bun-types" />
@@ -56,6 +57,28 @@ describe('Security vault integration', () => {
 		await createQuestion(client, questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
+	})
+
+	test('submits a pool bundle through the UI funding plan and confirms the owned vault outcome', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(client, mockWindow, manager)
+		const result = await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)
+		expect(result.stagedExecution?.success).toBe(true)
+		expect(result.queuedOperation).toBeUndefined()
+		const details = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+		expect(details?.vaultAttoRepBacking).toBe(depositAmount)
+		expect(details?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
+	})
+
+	test('funds the pool deposit and coordinator oracle report through distinct spenders in one bundle plan', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		const result = await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)
+		expect(result.queuedOperation?.operation).toBe('vaultOperations')
+		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.vaultAttoRepBacking).toBe(depositAmount)
+		expect((await loadQueuedVaultOperationState(uiReadClient, manager, result)).status).toBe('queued')
+		await handleOracleReporting(client, mockWindow, manager, 10n ** 18n)
+		expect((await loadQueuedVaultOperationState(uiReadClient, manager, result)).status).toBe('executed')
+		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
 	})
 
 	test('approves and deposits REP into the selected vault and reports REP units correctly', async () => {

@@ -197,9 +197,9 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	for (const functionName of externalPureFunctions) {
 		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
-	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*SetVaultUnderwritingLimit\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
+	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*SetVaultUnderwritingLimit,\s*VaultOperations\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
 	assert.match(priceCoordinator, /operationValue > 0 \|\| operation == OperationType.SetVaultUnderwritingLimit/, 'zero is a valid absolute underwriting-limit exit; other staged operations require a positive amount')
-	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit" \}/)
+	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit", "3": "VaultOperations" \}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
 	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)

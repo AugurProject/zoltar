@@ -1,3 +1,4 @@
+import { VaultOperationsPanel } from '../../vault-operations/components/VaultOperationsPanel.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ReportingOracleBlocker } from '../../reporting/components/ReportingOracleBlocker.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -277,6 +278,17 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								setVaultView={setVaultView}
 								vaultView={vaultView}
 								walletAddress={accountState.address}
+							/>
+						) : undefined}
+
+						{view === 'vault-operations' && loadedSelectedPool !== undefined && props.vaultOperationsParameters !== undefined ? (
+							<VaultOperationsPanel
+								key={`${props.vaultOperationsContextKey}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
+								pool={loadedSelectedPool}
+								parameters={props.vaultOperationsParameters}
+								contextKey={`${props.vaultOperationsContextKey}:${accountState.chainId}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
+								networkReady={model.isOnActiveAppChain}
+								onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 							/>
 						) : undefined}
 

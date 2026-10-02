@@ -86,7 +86,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(openOraclePriceCoordinator), 'Unauthorized');
+		require(msg.sender == address(openOraclePriceCoordinator) || msg.sender == address(openOraclePriceCoordinator.vaultOperations()), 'Unauthorized');
 		_requireValidPrice();
 		_;
 	}
@@ -777,7 +777,7 @@ contract SecurityPool is SecurityPoolStorage {
 	/// @notice Forwards the underwriting-limit, permit, and authorization vault operations to the operations delegate; rejects other selectors.
 	fallback() external {
 		bytes4 selector = msg.sig;
-		require(selector == SecurityPoolOperationsDelegate.setVaultUnderwritingLimit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector, 'Unsupported pool operation');
+		require(selector == SecurityPoolOperationsDelegate.depositRepToVaultFromCoordinator.selector || selector == SecurityPoolOperationsDelegate.setVaultUnderwritingLimit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector, 'Unsupported pool operation');
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, msg.data);
 	}
 }

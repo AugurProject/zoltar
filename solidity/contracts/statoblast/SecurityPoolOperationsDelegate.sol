@@ -105,7 +105,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	/// @notice Pool delegatecall target, coordinator-only: sets `vault`'s underwriting limit.
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(msg.sender == address(pool.openOraclePriceCoordinator()), 'Unauthorized');
+		require(msg.sender == address(pool.openOraclePriceCoordinator()) || msg.sender == address(pool.openOraclePriceCoordinator().vaultOperations()), 'Unauthorized');
 		_setUnderwritingLimit(vault, limitAttoEth);
 	}
 
@@ -180,6 +180,13 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	/// @notice Pool delegatecall target: deposits REP from the caller into the caller's vault.
+	/// @notice Coordinator-only deposit for the wallet that submitted a vault bundle; the pool remains the spender.
+	function depositRepToVaultFromCoordinator(address owner, uint256 amountAttoRep) external {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		require(msg.sender == address(pool.openOraclePriceCoordinator()) || msg.sender == address(pool.openOraclePriceCoordinator().vaultOperations()), 'Only coordinator');
+		_depositRepToVault(owner, amountAttoRep, statoblastSecurityMultiplierBps);
+	}
+
 	function depositRepToVault(uint256 amountAttoRep, uint256 targetHealthFactorBps) external {
 		_depositRepToVault(msg.sender, amountAttoRep, targetHealthFactorBps);
 	}

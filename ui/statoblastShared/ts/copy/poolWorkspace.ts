@@ -58,6 +58,7 @@ export const actionButtonLabels = {
 	'price-oracle': 'Review oracle',
 	reporting: 'Open reporting',
 	'staged-operations': 'Review operations',
+	'vault-operations': 'Vault operations',
 	trading: 'Open shares',
 	vaults: 'Open vaults',
 } as const

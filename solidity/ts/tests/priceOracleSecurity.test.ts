@@ -1257,7 +1257,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await client.waitForTransactionReceipt({ hash: setupHash })
 
 		const baseFeeAttoEthPerGas = 1n
-		const requestGasUnits = 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + maximumSettlerReward)
+		const requestGasUnits = 4n * ((BigInt(ORACLE_SETTLEMENT_GAS) + 50_000n) * 4n + maximumSettlerReward)
 		const requestEthCost = baseFeeAttoEthPerGas * requestGasUnits + 101n
 		assert.ok(requestEthCost > maximumSettlerReward, 'test setup must exceed the uint96 settler reward boundary')
 
@@ -1310,7 +1310,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
 		})
-		const callbackGasLimit = BigInt(ORACLE_SETTLEMENT_GAS) * 4n
+		const callbackGasLimit = (BigInt(ORACLE_SETTLEMENT_GAS) + 50_000n) * 4n
 		const requestEthCost = requestBaseFeeAttoEthPerGas * 4n * (callbackGasLimit + ORACLE_REPORT_GAS) + 101n
 		const proposedRepPerEthPrice = 10n ** 18n
 
@@ -1386,7 +1386,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const requestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const finalReportBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestEthCost = requestBaseFeeAttoEthPerGas * 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + ORACLE_REPORT_GAS) + 101n
+		const requestEthCost = requestBaseFeeAttoEthPerGas * 4n * ((BigInt(ORACLE_SETTLEMENT_GAS) + 50_000n) * 4n + ORACLE_REPORT_GAS) + 101n
 		const minimumWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
@@ -1461,7 +1461,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const baseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const finalDisputeBaseFeeAttoEthPerGas = 100n * 10n ** 9n
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestEthCost = baseFeeAttoEthPerGas * 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + ORACLE_REPORT_GAS) + 101n
+		const requestEthCost = baseFeeAttoEthPerGas * 4n * ((BigInt(ORACLE_SETTLEMENT_GAS) + 50_000n) * 4n + ORACLE_REPORT_GAS) + 101n
 		const initialWethReport = calculateOracleMinimumWethReportAttoEth({
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas,
@@ -1581,7 +1581,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('the settlement basefee cap and settler reward follow the committed bounty instead of the request block basefee', async () => {
-		const callbackGasLimit = BigInt(ORACLE_SETTLEMENT_GAS) * 4n
+		const callbackGasLimit = (BigInt(ORACLE_SETTLEMENT_GAS) + 50_000n) * 4n
 		const requestGasUnits = 4n * (callbackGasLimit + ORACLE_REPORT_GAS)
 		const impliedRequestBaseFeeAttoEthPerGas = 1n * 10n ** 9n
 		const bountyAttoEth = impliedRequestBaseFeeAttoEthPerGas * requestGasUnits + 101n

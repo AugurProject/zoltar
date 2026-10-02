@@ -148,6 +148,8 @@ type SecurityPoolsOverviewRouteContentProps = {
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
+	vaultOperationsParameters?: import('../types/app.js').WriteOperationsParameters
+	vaultOperationsContextKey?: number
 	controlledVaultView?: SelectedVaultView | undefined
 	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>

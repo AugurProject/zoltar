@@ -1,11 +1,10 @@
+import { getStagedOracleExecutionResult, getStagedOracleQueuedResult } from './oracleStagedOperationResults.js'
 import { writeStagedOperationAndWaitForReceipt } from './oracleStagedOperationExecution.js'
 import { readCoordinatorMinimumReport } from './oracleInitialReportFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { parseAbiItem, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
@@ -15,7 +14,7 @@ import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracle
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, StagedOracleExecutionResult, StagedOracleOperation, StagedOracleQueuedResult } from '../types/contracts.js'
+import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, StagedOracleOperation } from '../types/contracts.js'
 import { requireStagedOperationTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -27,58 +26,6 @@ import { wrapWeth } from './openOracle.js'
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
-
-function getStagedOracleExecutionResult(receipt: { logs: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'data' | 'topics'>[] }, managerAddress: Address, expectedOperation: OracleQueueOperation, expectedOperationId?: bigint): StagedOracleExecutionResult | undefined {
-	for (const log of receipt.logs) {
-		if (!sameAddress(log.address, managerAddress)) continue
-		try {
-			const decodedLog = decodeEventLog({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				data: log.data,
-				topics: log.topics,
-			})
-			if (decodedLog.eventName !== 'ExecutedStagedOperation' || (expectedOperationId !== undefined && decodedLog.args.operationId !== expectedOperationId)) continue
-			const operation = decodeOracleQueueOperation(BigInt(decodedLog.args.operation))
-			if (operation !== expectedOperation) continue
-			const errorMessage = decodedLog.args.errorMessage.trim() === '' ? undefined : decodedLog.args.errorMessage
-			return {
-				errorMessage,
-				operation,
-				operationId: decodedLog.args.operationId,
-				success: decodedLog.args.success,
-			} satisfies StagedOracleExecutionResult
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			continue
-		}
-	}
-	return undefined
-}
-
-function getStagedOracleQueuedResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation): StagedOracleQueuedResult | undefined {
-	for (const log of receipt.logs) {
-		if (!sameAddress(log.address, managerAddress)) continue
-		try {
-			const decodedLog = decodeEventLog({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				data: log.data,
-				topics: log.topics,
-			})
-			if (decodedLog.eventName !== 'StagedOperationQueued') continue
-			const operation = decodeOracleQueueOperation(BigInt(decodedLog.args.operation))
-			if (operation !== expectedOperation) continue
-			return {
-				isPendingSlot: decodedLog.args.isPendingSlot,
-				operation,
-				operationId: decodedLog.args.operationId,
-			} satisfies StagedOracleQueuedResult
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			continue
-		}
-	}
-	return undefined
-}
 
 async function readOracleRequestCost(client: Pick<ReadClient, 'getBlock' | 'readContract'>, managerAddress: Address) {
 	const block = await client.getBlock()
@@ -421,17 +368,17 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 	if (pendingReportId > 0n) throw new Error('Oracle price request is already pending')
 }
 
-async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep) {
+export async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep, extra: { actions: FundingTransaction[]; repAttoRep: bigint } = { actions: [], repAttoRep: 0n }) {
 	const fundingRequirement = await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 	const expectedWeth = requestedInitialAttoWeth > fundingRequirement.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : fundingRequirement.minimumToken1ReportAttoEth
 	const expectedRep = fundingRequirement.requiredRepAttoRep
-	if (fundingRequirement.currentRepBalanceAttoRep < expectedRep) throw new Error('Insufficient REP balance for coordinator initial report')
+	if (fundingRequirement.currentRepBalanceAttoRep < expectedRep + extra.repAttoRep) throw new Error('Insufficient REP balance for coordinator initial report')
 	const requiredEth = fundingRequirement.wethShortfallAttoEth + (finalStep.value ?? 0n)
 	if ((await client.getBalance({ address: client.account.address })) < requiredEth) throw new Error('Insufficient ETH for initial report funding and the oracle fee. Gas is additional.')
 	// The final step commits its whole ETH value as the settler bounty; the coordinator retains it in full.
 	const bountyAttoEth = finalStep.value ?? 0n
 	if ((await readOracleRequestCost(client, managerAddress)) > bountyAttoEth) throw new Error('The oracle fee increased. Review the price request again before funding it.')
-	const actions: FundingTransaction[] = []
+	const actions: FundingTransaction[] = [...extra.actions]
 	if (fundingRequirement.wethShortfallAttoEth > 0n)
 		actions.push({
 			step: { functionName: 'deposit', contractAddress: getWethAddress(), value: fundingRequirement.wethShortfallAttoEth },
@@ -450,6 +397,7 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 	}
 	await runFundingTransactions(client, actions, {
 		...finalStep,
+		fundingSpender: managerAddress,
 		refreshFundingRequirements: async () => {
 			const [currentFunding, currentCost, currentEth] = await Promise.all([
 				loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth),
@@ -457,6 +405,7 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 				client.getBalance({ address: client.account.address }),
 			])
 			const currentWeth = requestedInitialAttoWeth > currentFunding.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : currentFunding.minimumToken1ReportAttoEth
+			if (currentFunding.currentRepBalanceAttoRep < currentFunding.requiredRepAttoRep + extra.repAttoRep) throw new Error('Insufficient REP for the deposit and initial report.')
 			if (currentWeth > fundingRequirement.maximumInitialAttoWeth || currentFunding.requiredRepAttoRep > fundingRequirement.initialReportAmount2 || currentFunding.reputationTokenAddress !== fundingRequirement.reputationTokenAddress)
 				throw new Error('Oracle deposit requirements changed. Review funding again before sending the request.')
 			if (currentCost > (finalStep.value ?? 0n)) throw new Error('The oracle fee increased. Review the request again before sending.')
@@ -571,7 +520,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 
 // Read the exact operation, not the bounded active-operation preview. Pin state and logs
 // to one block so a concurrent settlement cannot turn a missing preview into guessed success.
-export async function loadQueuedVaultOperationState(client: Pick<ReadClient, 'getBlock' | 'readContract' | 'getTransactionReceipt' | 'getLogs'>, managerAddress: Address, result: SecurityVaultActionResult): Promise<QueuedVaultOperationState> {
+export async function loadQueuedVaultOperationState(client: Pick<ReadClient, 'getBlock' | 'readContract' | 'getTransactionReceipt' | 'getLogs'>, managerAddress: Address, result: Pick<SecurityVaultActionResult, 'hash' | 'queuedOperation'>): Promise<QueuedVaultOperationState> {
 	const queued = result.queuedOperation
 	if (queued === undefined) return { status: 'missing' }
 	const block = await client.getBlock()

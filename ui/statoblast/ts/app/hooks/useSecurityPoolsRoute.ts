@@ -246,6 +246,8 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		selectedPoolRepPrice,
 		universeDirectoryPools: universeDirectoryLoadedForContext ? overview.universeDirectoryPools : undefined,
 		workflow: {
+			vaultOperationsParameters: walletScopedHookConfig,
+			vaultOperationsContextKey: activeEnvironmentNonce,
 			...buildLiquidationSectionProps(overview, priceCoordinator),
 			...uiRepPrice,
 			controlledVaultView: urlState.vaultView,

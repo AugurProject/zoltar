@@ -94,7 +94,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 						describeTransaction(
 							client,
 							{ account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step },
-							plan?.find(candidate => candidate.tokenFunding !== undefined && candidate.contractAddress === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
+							plan?.find(candidate => candidate.tokenFunding !== undefined && (candidate.fundingSpender ?? candidate.contractAddress) === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
 						),
 					),
 				),
@@ -129,7 +129,10 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				const [spender] = transaction.args ?? []
 				if (transaction.functionName !== 'approve' || typeof spender !== 'string' || selectedAmount < 0n || selectedAmount > maxUint256) throw new Error('Invalid token approval selection.')
 				approvalArgs = [getAddress(spender), selectedAmount]
-				const requiredAmount = plan?.flatMap(step => step.tokenFunding ?? []).find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
+				const requiredAmount = plan
+					?.filter(step => (step.fundingSpender ?? step.contractAddress) === spender)
+					.flatMap(step => step.tokenFunding ?? [])
+					.find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
 				partialApproval = requiredAmount !== undefined && selectedAmount < requiredAmount
 				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
 			}
@@ -137,7 +140,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
+			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation' || transaction.functionName === 'submitVaultOperations') {
 				const gasPrice = await client.getGasPrice()
 				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
 				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
@@ -149,7 +152,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			}
 			const currentFunding = await expected.refreshFundingRequirements?.()
 			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
-				const spender = expected.contractAddress
+				const spender = expected.fundingSpender ?? expected.contractAddress
 				if (spender === undefined) throw new Error('Missing funding recipient.')
 				const [balance, allowance] = await Promise.all([
 					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
