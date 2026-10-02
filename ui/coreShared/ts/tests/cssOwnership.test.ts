@@ -58,7 +58,7 @@ test('feature stylesheets own their product rules and load after the shared shee
 	expect(zoltar).toStartWith('/* Zoltar feature styles:')
 	expect(zoltarQuestions).toStartWith('/* Zoltar question styles:')
 	expect(zoltarDeployment).toStartWith('/* Zoltar deployment route styles.')
-	for (const selector of ['.truth-auction-panel', '.escalation-sides', '.security-pool-strip', '.vault-workspace', '.liquidation-modal-actions', '.oracle-actions', '.fork-workflow-stage']) expect(statoblast).toContain(`${selector} {`)
+	for (const selector of ['.truth-auction-panel', '.escalation-sides', '.security-pool-strip', '.vault-workspace', '.liquidation-constraints', '.oracle-actions', '.fork-workflow-stage']) expect(statoblast).toContain(`${selector} {`)
 	for (const selector of ['.question-create-editor', '.question-preview', '.question-draft-preview']) expect(zoltarQuestions).toContain(`${selector} {`)
 	expect(zoltarDeployment).toContain('.deployment-contract-details {')
 	expect(zoltar).toContain('.categorical-outcomes {')
