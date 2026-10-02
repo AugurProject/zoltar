@@ -7,11 +7,10 @@ import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
-import { discoveryCommitAllowed, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { discoveryCommitAllowed, marketDiscoveryScope, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import { transactionMarketKey } from './transactionWorkflow.js'
 import { liveCopy } from '../../copy/live.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
-import { tradingListKindFor } from '../../lib/routing.js'
 import type { useMarketDiscovery } from './useMarketDiscovery.js'
 import type { usePortfolioQueries } from './usePortfolioQueries.js'
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
@@ -22,10 +21,6 @@ import type { LiveTradingControllerServices, LiveTradingRouteContext } from './l
 type RefreshOptions = Readonly<{ background?: boolean; navigation?: boolean; ownerMarket?: Address; explicit?: boolean }>
 
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
-
-function discoveryScope(route: string) {
-	return securityPoolAddressFromRoute(route) ?? tradingListKindFor(route) ?? route
-}
 
 export function useMarketDiscoveryController({
 	route,
@@ -222,7 +217,7 @@ export function useMarketDiscoveryController({
 		wallet.dispatch({ type: 'routeChanged', route })
 		if (previousRoute.current !== route) {
 			// Results only carry over between routes that discover the same thing, such as the trade and liquidity views of one pool.
-			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) {
+			if (marketDiscoveryScope(previousRoute.current) !== marketDiscoveryScope(route)) {
 				partialSnapshot.current = undefined
 				market.setDiscoveryRows(undefined)
 				market.setMarkets([])
