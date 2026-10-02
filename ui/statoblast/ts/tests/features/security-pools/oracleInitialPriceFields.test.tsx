@@ -42,11 +42,11 @@ test('fetches an explicit starting price and preserves manual edits over late qu
 			await Promise.resolve()
 		})
 		expect(submit.hasAttribute('disabled')).toBe(true)
-		expect(page.getByRole('status').textContent).toBe('Reading oracle…')
+		expect(page.getByRole('status').textContent).toBe('1/3 Reading oracle…')
 		await act(() => progress?.('v4'))
-		expect(page.getByRole('status').textContent).toBe('Querying Uniswap V4…')
+		expect(page.getByRole('status').textContent).toBe('2/3 Querying Uniswap V4…')
 		await act(() => progress?.('v3'))
-		expect(page.getByRole('status').textContent).toBe('Querying Uniswap V3…')
+		expect(page.getByRole('status').textContent).toBe('3/3 Querying Uniswap V3…')
 		await act(async () => {
 			quote.resolve(25n * 10n ** 17n)
 			await quote.promise
