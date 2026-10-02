@@ -1,6 +1,7 @@
+import { setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
-import type { discoverTradingMarketPage } from '../../protocol/marketDiscovery.js'
+import type { discoverAllLiveMarketsInUniverse } from '../../protocol/live.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { useLiveTradingController } from '../../features/liveTradingController.js'
 import { describe, expect, test } from 'bun:test'
@@ -55,7 +56,7 @@ function walletHolding(label: string) {
 
 async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services']) {
 	let controller: ReturnType<typeof useLiveTradingController> | undefined
-	function Harness({ route = 'market' }: { route?: string }) {
+	function Harness({ route = 'portfolio' }: { route?: string }) {
 		controller = useLiveTradingController({
 			route,
 			configuration,
@@ -102,50 +103,19 @@ describe('live market refresh', () => {
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
-	test('explicit invalidation reruns navigation from the first page', async () => {
-		const finish = createDeferred<void>()
-		const starts: bigint[] = []
-		const services = {
-			...offlineControllerServices,
-			discoverTradingMarketPage: async (_client: unknown, _configuration: unknown, _universe: unknown, start = 0n) => ({ ...discoveryPage([market]), start, total: 50n }),
-			discoverLiveUniverseMarketPage: async (_client: unknown, _configuration: unknown, _universe: unknown, start = 0n) => {
-				starts.push(start)
-				await finish.promise
-				return { ...discoveryPage([{ ...market, pair: undefined }]), start }
-			},
-		}
-		const rendered = await renderDiscoveryController(services)
-		cleanupRendered = rendered.cleanup
-		try {
-			await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'initial discovery')
-			await act(() => rendered.state().discovery.loadMarketPage(25n))
-			await waitForDom(() => rendered.state().discovery.marketPage.start === 25n, 'second page')
-			await rendered.navigate('create-market')
-			await waitForDom(() => starts.length === 1, 'navigation discovery')
-			await act(() => invalidateAppData())
-			await waitForDom(() => starts.length === 2, 'replacement navigation')
-			expect(starts).toEqual([0n, 0n])
-			finish.resolve()
-			await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'navigation committed')
-			expect(rendered.state().discovery.marketPage.start).toBe(0n)
-		} finally {
-			finish.resolve()
-		}
-	})
-
 	test('explicit invalidation retains first-load rows and reruns foreground progress', async () => {
 		const finish = createDeferred<void>()
 		const progress = createDeferred<void>()
 		let reads = 0
 		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Later row' }
-		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
+		const discover: typeof discoverAllLiveMarketsInUniverse = async (_client, _configuration, _universe, _size, _index, onProgress) => {
 			const read = ++reads
 			if (read === 2) await progress.promise
 			onProgress?.(discoveryPage(read === 1 ? [market] : [market, second]))
 			await finish.promise
 			return discoveryPage([market, second])
 		}
-		const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverTradingMarketPage: discover })
+		const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverAllLiveMarketsInUniverse: discover })
 		cleanupRendered = rendered.cleanup
 		try {
 			await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'first row')
@@ -167,7 +137,7 @@ describe('live market refresh', () => {
 		let reads = 0
 		const services = {
 			...offlineControllerServices,
-			discoverTradingMarketPage: async () => {
+			discoverAllLiveMarketsInUniverse: async () => {
 				const read = ++reads
 				if (read === 2) await older.promise
 				return discoveryPage([{ ...market, title: read >= 3 ? 'Explicitly refreshed' : 'Old state' }])
@@ -200,14 +170,14 @@ describe('live market refresh', () => {
 			test(`restores the initial list when a workflow blocks partial discovery ${outcome} (superseded: ${supersede})`, async () => {
 				const finish = createDeferred<void>()
 				let reads = 0
-				const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
+				const discover: typeof discoverAllLiveMarketsInUniverse = async (_client, _configuration, _universe, _size, _index, onProgress) => {
 					reads += 1
 					onProgress?.(discoveryPage([market]))
 					await finish.promise
 					if (outcome === 'error') throw new Error('Read failed')
 					return discoveryPage([market])
 				}
-				const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverTradingMarketPage: discover })
+				const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverAllLiveMarketsInUniverse: discover })
 				cleanupRendered = rendered.cleanup
 				try {
 					await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'partial row')
@@ -228,102 +198,23 @@ describe('live market refresh', () => {
 				}
 			})
 
-	test('retains downloaded markets while a new discovery publishes placeholders', async () => {
-		const saved = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Saved market' }
-		marketDownloadStore.record(getLocalEntityScope('trading', 'market'), [{ id: saved.pool, data: saved }])
-		const finish = createDeferred<void>()
-		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
-			onProgress?.({ ...discoveryPage([market]), markets: [undefined, market] })
-			await finish.promise
-			return discoveryPage([market])
-		}
-		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={{ ...offlineControllerServices, discoverTradingMarketPage: discover }} />)
-		cleanupRendered = rendered.cleanup
-		try {
-			await waitForDom(() => document.body.textContent?.includes(market.title) === true, 'new partial row')
-			expect(document.body.textContent).toContain('Saved market')
-		} finally {
-			finish.resolve()
-		}
-	})
-
-	test('shows a later market in its fixed slot while the first market is pending', async () => {
-		const finish = createDeferred<void>()
-		const first = { ...market, title: 'Slow first market', endTime: market.endTime + 100n }
-		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Fast second market' }
-		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
-			onProgress?.({ ...discoveryPage([first, second]), markets: [undefined, second] })
-			await finish.promise
-			return discoveryPage([first, second])
-		}
-		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={{ ...offlineControllerServices, discoverTradingMarketPage: discover }} />)
-		cleanupRendered = rendered.cleanup
-		try {
-			await waitForDom(() => document.body.textContent?.includes('Fast second market') === true, 'later completed row')
-			const slots = () => [...document.querySelectorAll('[data-discovery-slot]')]
-			expect(slots()).toHaveLength(2)
-			expect(slots()[0]?.querySelector('.skeleton-list')).not.toBeNull()
-			expect(slots()[1]?.textContent).toContain('Fast second market')
-			const secondSlot = slots()[1]
-			await settle(250)
-			expect(marketDownloadStore.read(getLocalEntityScope('trading', 'market'))).toEqual([])
-			finish.resolve()
-			await waitForDom(() => document.body.textContent?.includes('Slow first market') === true, 'first row completed')
-			expect(slots()[0]?.textContent).toContain('Slow first market')
-			expect(slots()[1]).toBe(secondSlot)
-			expect(slots()[1]?.textContent).toContain('Fast second market')
-		} finally {
-			finish.resolve()
-		}
-	})
-
-	test('shows completed markets while the rest of discovery is still pending', async () => {
-		let finish: () => void = () => undefined
-		const pending = new Promise<void>(resolve => {
-			finish = resolve
-		})
-		const first = { ...market, title: 'Fast market' }
-		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Slow market' }
-		const page = (markets: LiveMarket[]) => ({ start: 0n, count: 2n, total: 2n, previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
-		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
-			onProgress?.(page([first]))
-			await pending
-			return page([first, second])
-		}
-		const services = { ...offlineControllerServices, discoverTradingMarketPage: discover }
-		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
-		cleanupRendered = rendered.cleanup
-		try {
-			await waitForDom(() => document.body.textContent?.includes('Fast market') === true, 'first completed market')
-			expect(document.body.textContent).not.toContain('Slow market')
-			expect(document.querySelector('.market-browser')?.getAttribute('aria-busy')).toBe('true')
-			await settle(250)
-			expect(marketDownloadStore.read(getLocalEntityScope('trading', 'market'))).toEqual([])
-			finish()
-			await waitForDom(() => document.body.textContent?.includes('Slow market') === true, 'remaining market')
-			await waitForDom(() => marketDownloadStore.read(getLocalEntityScope('trading', 'market')).length === 2, 'completed discovery cached')
-		} finally {
-			finish()
-		}
-	})
-
 	test('preserves every loaded market when a partial foreground refresh later times out', async () => {
 		const timeout = createDeferred<void>()
 		const first = { ...market, title: 'Fast market' }
 		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Slow market' }
 		const page = (markets: LiveMarket[]) => ({ start: 0n, count: 2n, total: 2n, previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
 		let reads = 0
-		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
+		const discover: typeof discoverAllLiveMarketsInUniverse = async (_client, _configuration, _universe, _size, _index, onProgress) => {
 			if (++reads === 1) return page([first, second])
 			onProgress?.(page([first]))
 			await timeout.promise
 			throw new Error('RPC read timed out. Retry loading data.')
 		}
-		const services = { ...offlineControllerServices, discoverTradingMarketPage: discover }
+		const services = { ...offlineControllerServices, discoverAllLiveMarketsInUniverse: discover }
 		let controller: ReturnType<typeof useLiveTradingController> | undefined
 		function Harness() {
 			controller = useLiveTradingController({
-				route: 'market',
+				route: 'portfolio',
 				configuration,
 				configurationError: undefined,
 				selectedUniverseId: '1',
@@ -581,86 +472,96 @@ describe('live market refresh', () => {
 		await waitForDom(() => discoveries > 2, 'refresh cadence resumes')
 	})
 
-	test('lookup routes list the same candidates as their browse alias above the address lookup', async () => {
-		let universeDiscoveries = 0
-		const pagedRoutes: string[] = []
-		const page = (markets: LiveMarket[]) => discoveryPage(markets, [1n, 2n])
+	test('lookup routes use saved favorites without scanning pool or pair registries, including block refreshes', async () => {
+		let scans = 0
+		let universeReads = 0
 		const services = {
 			...offlineControllerServices,
 			discoverUniverses: async () => {
-				universeDiscoveries += 1
-				return page([])
+				universeReads += 1
+				return discoveryPage([])
 			},
 			discoverTradingMarketPage: async () => {
-				pagedRoutes.push('markets')
-				return page([{ ...market }])
+				scans += 1
+				return discoveryPage([market])
 			},
 			discoverLiveUniverseMarketPage: async () => {
-				pagedRoutes.push('security-pools')
-				return page([{ ...market, pair: undefined }])
-			},
-			discoverAddressedMarket: async () => {
-				throw new Error('Lookup routes have no address to discover')
+				scans += 1
+				return discoveryPage([market])
 			},
 		}
-		for (const [route, listRoute] of [
-			['market', 'markets'],
-			['liquidity', 'markets'],
-			['create-market', 'security-pools'],
-		] as const) {
-			const universes: Array<readonly bigint[]> = []
-			stopBlocks?.()
-			stopBlocks = produceBlocks(20)
-			const rendered = await renderIntoDocument(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onUniversesChange={ids => universes.push(ids)} controllerServices={services} />)
+		for (const route of ['market', 'liquidity', 'create-market'] as const) {
+			const rendered = await renderIntoDocument(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 			cleanupRendered = rendered.cleanup
-			await waitForDom(() => rendered.container.querySelectorAll('.market-record').length === 1, `${route} candidate list`)
-			expect(universes.length).toBeGreaterThan(0)
-			expect(pagedRoutes.at(-1)).toBe(listRoute)
-			// The market list's search opens a pasted pool address; the security-pool list keeps its address form.
-			expect(rendered.container.querySelector(listRoute === 'markets' ? 'form.market-list-search' : 'form.open-pool-form')).not.toBeNull()
-			expect(rendered.container.querySelector(`.market-record a[href="#/${route === 'create-market' ? 'create-market' : 'market'}/${pool}"]`)).not.toBeNull()
-			// The primary row action follows the workflow the landing names: the trade landing leads with one-click outcome buttons.
-			if (route === 'market') {
-				expect(rendered.container.querySelector('.market-record .outcome-button--yes')?.getAttribute('href')).toBe(`#/market/${pool}?side=yes`)
-				expect(rendered.container.querySelector('.market-record .outcome-button--no')?.getAttribute('href')).toBe(`#/market/${pool}?side=no`)
-				expect(rendered.container.querySelector('.market-record .button-link.primary')).toBeNull()
-			} else expect(rendered.container.querySelector('.market-record .button-link.primary')?.getAttribute('href')).toBe(`#/${route}/${pool}`)
-			expect(universeDiscoveries).toBe(0)
+			await waitForDom(() => universeReads > 0, 'universe discovery')
+			await settle(50)
+			await act(() => appBlockWatcher.reportBlock((appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n))
+			await settle(50)
+			expect(scans).toBe(0)
+			expect(rendered.container.querySelector('form.market-list-search')).not.toBeNull()
+			expect(rendered.container.querySelector('.discovery-control')).toBeNull()
 			await rendered.cleanup()
 			cleanupRendered = undefined
-			pagedRoutes.length = 0
+			universeReads = 0
 		}
 	})
 
-	test('the market list keeps discovered pages in the download cache, so Discover adds to the list and search spans every page', async () => {
-		const firstPageMarket = { ...market, pool: `0x${'a1'.repeat(20)}` as Address, title: 'First page market' }
-		const secondPageMarket = { ...market, pool: `0x${'a2'.repeat(20)}` as Address, title: 'Second page market' }
-		const requestedStarts: bigint[] = []
-		const services = {
-			...offlineControllerServices,
-			discoverTradingMarketPage: async (_client: unknown, _configuration: unknown, _universeId: unknown, start = 0n) => {
-				requestedStarts.push(start)
-				const firstPage = start === 0n
-				return { start, count: 1n, total: 2n, previousStart: firstPage ? undefined : 0n, nextStart: firstPage ? 1n : undefined, markets: [{ ...(firstPage ? firstPageMarket : secondPageMarket) }], universeIds: [1n], selectedUniverseId: 1n }
-			},
-		}
-		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+	test('opening an address saves it for local browsing; unfavoriting removes it without scanning', async () => {
+		const unrelated = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Unfavorited cache entry' }
+		marketDownloadStore.record(getLocalEntityScope('trading', 'market'), [{ id: unrelated.pool, data: unrelated }])
+		const services = { ...offlineControllerServices, discoverUniverses: async () => discoveryPage([]), discoverAddressedMarket: async () => discoveryPage([{ ...market }]) }
+		const view = (route: 'market' | `market/${Address}`, universe = '1') => <LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId={universe} onWorkflowLockChange={() => undefined} controllerServices={services} />
+		const rendered = await renderIntoDocument(view(`market/${pool}`))
 		cleanupRendered = rendered.cleanup
-		await waitForDom(() => document.querySelectorAll('.market-record').length === 1 && document.querySelector('.discovery-control')?.textContent?.includes('1 of 2 markets scanned') === true, 'first discovered page')
-		await act(() => buttonByLabel('Discover more').click())
-		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'second page joins the downloaded list')
-		expect(requestedStarts).toEqual([0n, 1n])
-		expect(buttonByLabel('Scan again').disabled).toBe(false)
-		expect(document.querySelector('.market-list-count')?.textContent).toBe('2 markets')
-		const search = document.querySelector<HTMLInputElement>('input[type="search"]')
-		if (search === null) throw new Error('Market search did not render')
+		await waitForDom(() => marketDownloadStore.read(getLocalEntityScope('trading', 'market')).some(entry => entry.id === pool.toLowerCase()), 'opened market cached')
+		await act(() => render(view('market'), rendered.container))
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 1, 'favorite market')
+		expect(document.body.textContent).not.toContain(unrelated.title)
+		expect(document.querySelector('.market-record .freshness-indicator')).not.toBeNull()
+		await act(() => render(view('market', '2'), rendered.container))
+		expect(document.querySelectorAll('.market-record')).toHaveLength(0)
+		await act(() => render(view('market'), rendered.container))
+		const star = document.querySelector<HTMLButtonElement>('.market-record .favorite-toggle')
+		if (star === null) throw new Error('Favorite control missing')
+		await act(() => star.click())
+		expect(document.querySelectorAll('.market-record')).toHaveLength(0)
+		expect(document.body.textContent).toContain('No favorite markets.')
+	})
+
+	test('pool favorites are searchable, stay separate from markets, and retain ended pools for details', async () => {
+		const ended = { ...market, pair: undefined, endTime: 1n, title: 'Ended pool' }
+		const scope = getLocalEntityScope('trading', 'pool')
+		marketDownloadStore.record(scope, [{ id: ended.pool, data: ended }])
+		setEntityFavorite(scope, ended.pool, true)
+		const services = { ...offlineControllerServices, discoverUniverses: async () => discoveryPage([]) }
+		const rendered = await renderIntoDocument(<LiveTrading route='create-market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => document.querySelector('.market-record') !== null, 'saved pool')
+		expect(document.querySelector('.market-record')?.textContent).toContain('Ended pool')
+		const input = document.querySelector<HTMLInputElement>('input[type="search"]')
+		if (input === null) throw new Error('Pool search missing')
 		await act(() => {
-			search.value = 'first page'
-			search.dispatchEvent(new Event('input', { bubbles: true }))
+			input.value = 'unmatched'
+			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})
-		// The first page is no longer the loaded page, yet its market is still searchable from the cache.
-		expect([...document.querySelectorAll('.market-record h3')].map(heading => heading.textContent)).toEqual(['First page market'])
-		expect(document.querySelector('.market-list-count')?.textContent).toBe('1 of 2 markets')
+		expect(document.querySelector('.market-record')).toBeNull()
+	})
+
+	test('market sort settings do not leak into the pool directory', async () => {
+		for (const kind of ['pool', 'market'] as const) {
+			const scope = getLocalEntityScope('trading', kind)
+			marketDownloadStore.record(scope, [{ id: market.pool, data: { ...market, pair: kind === 'pool' ? undefined : market.pair } }])
+			setEntityFavorite(scope, market.pool, true)
+		}
+		const services = { ...offlineControllerServices, discoverUniverses: async () => discoveryPage([]) }
+		const view = (route: 'market' | 'create-market') => <LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />
+		const rendered = await renderIntoDocument(view('market'))
+		cleanupRendered = rendered.cleanup
+		await act(() => document.querySelector<HTMLButtonElement>('.enum-dropdown-trigger')?.click())
+		await act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity')?.click())
+		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
+		await act(() => render(view('create-market'), rendered.container))
+		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently saved')
 	})
 
 	test('a market-card outcome link opens the ticket on that side and drops the one-shot side from the hash', async () => {

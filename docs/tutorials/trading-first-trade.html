@@ -18,13 +18,13 @@
 			<section id="before-you-start">
 				<h2>Before you start</h2>
 				<p>Trading is the market interface for <a href="../explanation/statoblast.html">Statoblast</a>: each market trades the Yes and No shares of one <a href="../reference/glossary.html#security-pool">SecurityPool</a> in a constant-product <a href="../reference/glossary.html#trading-pool">trading pool</a>.</p>
-				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1</code>. The browser-local simulator is labeled at the top of the page, starts with one funded market, and never reflects live chain state; the screenshots below come from it. To trade for real, open the UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a> and connect a wallet.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1#/market/0x8e87c0e3028ef202D2188c11BBAB3dDAd097DBCC</code>. The browser-local simulator is labeled at the top of the page, starts with one funded market, and never reflects live chain state; the screenshots below come from it. To trade for real, open the UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a> and connect a wallet.</p>
 			</section>
 			<section id="choose">
 				<h2>Choose a market</h2>
-				<p>The <strong>Markets</strong> tab lists every market in the selected universe with its conditional odds, liquidity, and closing time. Select the market title to open it.</p>
+				<p>Paste a SecurityPool address into <strong>Search markets</strong> and select <strong>Open pool</strong>, or follow a shared market link. Opening a market saves it as a favorite. The <strong>Markets</strong> tab lists your favorites in the selected universe with conditional odds, liquidity, and closing time; select a title to reopen it. The star removes a market from favorites.</p>
 				<figure class="screenshot" id="fig-trading-markets" aria-labelledby="fig-trading-markets-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/markets.png"><img width="410" height="471" src="../assets/screenshots/trading/markets.png" alt="The market card for Will this resolve? on the Markets tab, marked Trading open, with Yes 50% and No 50% conditional odds, 0.01 ETH liquidity, and its closing date." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/markets.png"><img width="410" height="502" src="../assets/screenshots/trading/markets.png" alt="The market card for Will this resolve? on the Markets tab, marked Trading open, with Yes 50% and No 50% conditional odds, 0.01 ETH liquidity, and its closing date." loading="lazy" /></a>
 					<figcaption id="fig-trading-markets-caption"><span class="figure-label">Markets.</span> Only markets whose badge reads <strong>TRADING OPEN</strong> accept new trades.</figcaption>
 				</figure>
 			</section>

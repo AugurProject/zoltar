@@ -1,3 +1,4 @@
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
@@ -54,7 +55,7 @@ function MarketCardOdds({ market, tradeable }: { market: LiveMarket; tradeable: 
  * One market in a list. Market lists lead with the conditional odds and, on the trade landing, one-click YES / NO
  * buttons that open the ticket on that side; contract addresses live on the market page, not here.
  */
-export function MarketCard({ listKind, lookupRoute, market, nowSeconds }: { listKind: TradingListKind; lookupRoute: TradingLookupRoute; market: LiveMarket; nowSeconds: bigint }) {
+export function MarketCard({ listKind, lookupRoute, market, nowSeconds, fetchedAt }: { fetchedAt?: number | undefined; listKind: TradingListKind; lookupRoute: TradingLookupRoute; market: LiveMarket; nowSeconds: bigint }) {
 	// The primary action follows the workflow the landing names: liquidity lists lead with liquidity, market lists with trading.
 	const actions = marketRowActions(listKind, lookupRoute, market.pool)
 	const loaded = market.loadError === undefined
@@ -70,12 +71,10 @@ export function MarketCard({ listKind, lookupRoute, market, nowSeconds }: { list
 			variant='compact'
 			title={<a href={getTradingRouteHref(actions.primary.href)}>{market.title}</a>}
 			badge={
-				listKind === 'markets' ? (
-					<>
-						<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
-						{loaded ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' /> : undefined}
-					</>
-				) : undefined
+				<>
+					{listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
+					{loaded ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind={listKind === 'markets' ? 'market' : 'pool'} /> : undefined}
+				</>
 			}
 			actions={
 				<>
@@ -100,6 +99,7 @@ export function MarketCard({ listKind, lookupRoute, market, nowSeconds }: { list
 					</MetricField>
 				</DataGrid>
 			) : undefined}
+			{fetchedAt === undefined ? undefined : <UpdatedAgo updatedAt={fetchedAt} />}
 		</EntityCard>
 	)
 }

@@ -284,9 +284,9 @@ describe('live workflow safety boundary', () => {
 		await show(poolRoute, { recordSummary: false, walletConnectRequestNonce: 1 })
 		await walletChainReadStarted.promise
 		await show('market', { recordSummary: false, walletConnectRequestNonce: 1 })
-		// The market opened earlier in this test leads the two discovered rows as a favorite, listed once.
-		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'browse rows')
-		expect([...document.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)).toEqual(['Favorites', 'Other markets'])
+		// Only the market opened earlier in this test is saved; unrelated pools are not scanned.
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 1, 'browse rows')
+		expect([...document.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)).toEqual([])
 		expect(document.querySelector(`.market-record a[href="#/market/${pool}"]`)).not.toBeNull()
 		expect(document.querySelector(`.market-record a[href="#/liquidity/${pool}"]`)).not.toBeNull()
 		deferredWalletChainRead.reject(new Error('Wallet request rejected after navigation'))
@@ -301,7 +301,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		// The lookup route is list-first: the search that also opens a pool address sits above the same rows the browse alias shows.
 		expect(document.querySelector('form.market-list-search')).not.toBeNull()
-		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 1, 'lookup route rows')
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
 		const midConnectChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())
 		await show('portfolio', { selectedUniverseId: '2' })

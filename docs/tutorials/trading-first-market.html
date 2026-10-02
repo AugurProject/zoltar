@@ -18,16 +18,16 @@
 			<section id="before-you-start">
 				<h2>Before you start</h2>
 				<p>Trading is the market interface for <a href="../explanation/statoblast.html">Statoblast</a>: a trading pool swaps the Yes and No shares of exactly one SecurityPool, and a SecurityPool without one has no market yet. The UI also calls the trading pool a <em>pair</em>.</p>
-				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;simScenario=deployed#/create-market</code>. That simulator scenario has one SecurityPool and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1&amp;simScenario=deployed#/create-market/0x8e87c0e3028ef202D2188c11BBAB3dDAd097DBCC</code>. That simulator scenario has one SecurityPool and no trading pool; the screenshots below come from it. For a live network, follow <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>, and if the UI opens the deployment screen, complete <a href="../how-to/trading-deploy-contracts.html">Deploy the Trading contracts</a> first. Fund the wallet with the deposit plus gas.</p>
 			</section>
 			<section id="find-pool">
 				<h2>Find a SecurityPool without a market</h2>
 				<ol>
-					<li>Select the <strong>Create</strong> tab. The <strong>Security pools</strong> list shows the pools in the selected universe that have no trading market yet.</li>
-					<li>Select <strong>Details</strong> on the SecurityPool you want.</li>
+					<li>Select the <strong>Create</strong> tab. Paste the SecurityPool address from Statoblast into <strong>Search pools</strong> and select <strong>Open pool</strong>. Opening it saves a favorite; the list shows your favorite pools in the selected universe that have no trading market yet.</li>
+					<li>To check its backing before seeding, return to <strong>Create</strong> and select <strong>Details</strong> on the saved pool.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-create-market" aria-labelledby="fig-trading-create-market-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/create-market.png"><img width="410" height="223" src="../assets/screenshots/trading/create-market.png" alt="A security pool card on the Create new market page for Will this resolve?, closing in 364 days, with Create market and Details buttons." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/create-market.png"><img width="410" height="298" src="../assets/screenshots/trading/create-market.png" alt="A security pool card on the Create new market page for Will this resolve?, closing in 364 days, with Create market and Details buttons." loading="lazy" /></a>
 					<figcaption id="fig-trading-create-market-caption"><span class="figure-label">Pools without a market.</span> <strong>Create market</strong> skips the details page and opens the form directly.</figcaption>
 				</figure>
 				<p>The details page tells you whether the SecurityPool can take a market. A <strong>Deploy trading pool</strong> button means it can; a disabled <strong>Initialize trading pool</strong> button names the reason it cannot, such as <em>Question ended — pair initialization unavailable</em>. <strong>Minting capacity</strong> shows the collateral already minted against the pool's ceiling (used / ceiling); your deposit must fit in the difference.</p>

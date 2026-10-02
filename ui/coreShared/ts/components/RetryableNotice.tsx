@@ -3,7 +3,7 @@ import type { UserMessagePresentation } from '../lib/userCopy.js'
 import { ErrorNotice } from './ErrorNotice.js'
 import { StateHint } from './StateHint.js'
 
-export function RetryAction({ ariaLabel, label, onRetry, disabled = false }: { ariaLabel?: string | undefined; label: ComponentChildren; onRetry(): void; disabled?: boolean }) {
+function RetryAction({ ariaLabel, label, onRetry, disabled = false }: { ariaLabel?: string | undefined; label: ComponentChildren; onRetry(): void; disabled?: boolean }) {
 	return (
 		<button aria-label={ariaLabel} className='secondary' type='button' disabled={disabled} onClick={onRetry}>
 			{label}
