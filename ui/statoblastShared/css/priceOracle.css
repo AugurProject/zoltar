@@ -52,8 +52,8 @@
 }
 
 .request-price-fetch {
-	inline-size: 12.5rem;
-	min-inline-size: 12.5rem;
+	inline-size: 14rem;
+	min-inline-size: 14rem;
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
