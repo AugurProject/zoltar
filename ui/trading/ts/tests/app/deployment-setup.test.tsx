@@ -16,6 +16,8 @@ import { createSimulationProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-cor
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
+import { createSimulationProvider } from '@zoltar/ui-core-shared/simulation/simulationProvider.js'
+import { formatChainIdHex, readInjectedChainIdNumber, requestInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -624,6 +626,57 @@ describe('trading deployment setup', () => {
 		await waitFor(() => expect(rendered.container.textContent).not.toContain('The connected wallet must use'))
 		expect(requests).toContain('wallet_switchEthereumChain')
 		expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(false)
+	})
+
+	test('follows a simulated wallet onto the wrong network and switches it back', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		const provider = createSimulationProvider({
+			getChainId: () => formatChainIdHex(core.chainId),
+			getSelectedAccount: () => testWalletAccount,
+			requestRpc: async ({ method }) => {
+				throw new Error(`Unexpected simulated RPC method ${method}`)
+			},
+		})
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => deploymentClient(),
+			connectWallet: async () => ({ account: await requestInjectedAccount(provider), chainId: await readInjectedChainIdNumber(provider), provider }),
+			getWalletProvider: () => provider,
+			loadCoreDeployments: async () => [core],
+		}
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Trading factory')
+		await connectDeploymentWallet(rendered.container)
+		await waitForConnectedWallet(rendered.container)
+		await waitFor(() => expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(false))
+		expect(rendered.container.textContent).not.toContain('The connected wallet must use')
+
+		// The QA wallet control moves the simulated wallet to another chain; setup keeps the account and offers the switch back.
+		await act(async () => {
+			provider.setWalletMode('wrong-chain')
+			await Bun.sleep(0)
+		})
+		await waitForText(`The connected wallet must use ${core.chainName}.`)
+		expect(rendered.container.textContent).not.toContain('Wallet context changed')
+		expect(rendered.container.querySelector('.wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect ${testWalletAccount}`)
+		expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(true)
+		const switchButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === `Switch to ${core.chainName}`)
+		if (!(switchButton instanceof HTMLButtonElement)) throw new Error('Missing network switch')
+		await act(async () => {
+			switchButton.click()
+			await Bun.sleep(0)
+		})
+		await waitFor(() => expect(rendered.container.textContent).not.toContain('The connected wallet must use'))
+		expect(provider.getWalletMode()).toBe('connected')
+		expect(rendered.container.querySelector('.wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect ${testWalletAccount}`)
+		expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(false)
+
+		// Changing accounts still invalidates the connection.
+		await act(async () => {
+			provider.setWalletMode('disconnected')
+			await Bun.sleep(0)
+		})
+		await waitForText('Wallet context changed. Reconnect before deploying.')
 	})
 
 	test('names the deployment network, the two-transaction sequence, and any registry fallback', async () => {

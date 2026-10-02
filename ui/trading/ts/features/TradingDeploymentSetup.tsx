@@ -192,14 +192,27 @@ export function TradingDeploymentSetup({
 	const walletContextEventRevision = useRef(0)
 	const mounted = useRef(true)
 	const walletContextSubscription = useRef<ReturnType<typeof createWalletContextSubscription>>()
+	const boundWalletProvider = useRef<InjectedEthereum>()
+	const walletAccountConnected = useRef(false)
+	walletAccountConnected.current = walletAccount !== undefined
 	if (walletContextSubscription.current === undefined)
-		walletContextSubscription.current = createWalletContextSubscription(() => {
+		walletContextSubscription.current = createWalletContextSubscription(eventName => {
 			walletContextEventRevision.current += 1
 			if (walletConnectionPending.current) return
 			walletConnectionRevision.current += 1
-			setWalletAccount(undefined)
-			setWalletChain(undefined)
-			setWalletConnectionMessage(deploymentCopy.walletContextChanged)
+			const revision = walletConnectionRevision.current
+			const provider = boundWalletProvider.current
+			const dropWalletContext = () => {
+				if (!mounted.current || walletConnectionRevision.current !== revision) return
+				setWalletAccount(undefined)
+				setWalletChain(undefined)
+				setWalletConnectionMessage(deploymentCopy.walletContextChanged)
+			}
+			// A network change keeps the connected account, so setup follows the wallet's chain and offers the switch back instead of disconnecting.
+			if (eventName !== 'chainChanged' || provider === undefined || !walletAccountConnected.current) return dropWalletContext()
+			void readInjectedChainIdNumber(provider).then(chainId => {
+				if (mounted.current && walletConnectionRevision.current === revision) setWalletChain(chainId)
+			}, dropWalletContext)
 		})
 	useEffect(() => {
 		if (busy || currentConfiguration === undefined) return
@@ -327,6 +340,7 @@ export function TradingDeploymentSetup({
 	}, [chainId, effectiveRpcUrl, feeBps, inputError, onComplete, retryNonce, selectedCore, services])
 
 	function bindWalletProvider(provider: InjectedEthereum | undefined) {
+		boundWalletProvider.current = provider
 		walletContextSubscription.current?.bind(provider)
 	}
 	useEffect(() => {
@@ -337,6 +351,7 @@ export function TradingDeploymentSetup({
 			walletConnectionRevision.current += 1
 			walletConnectionPending.current = false
 			walletContextSubscription.current?.dispose()
+			boundWalletProvider.current = undefined
 		}
 	}, [services])
 	async function connectDeploymentWallet() {
