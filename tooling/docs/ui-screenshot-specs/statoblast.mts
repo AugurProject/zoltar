@@ -11,7 +11,7 @@ const createPool: readonly UiScreenshotStep[] = [...fillPoolForm, { click: 'Crea
 const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'Vault actions' }]
 const approveRep: readonly UiScreenshotStep[] = [...openPool, { click: 'Deposit REP' }, { fill: 'REP backing', value: '1000' }, { click: 'Approve 1k REP' }, { waitForNoText: 'Approve 1k REP' }, { waitForNoText: 'Approving REP' }, { waitForNoText: 'Loading' }]
 const depositRep: readonly UiScreenshotStep[] = [...approveRep, { click: 'Deposit REP', nth: -1 }, { waitForText: 'Vault REP backing' }]
-const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'Open Oracle REP per ETH starting price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }]
+const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'OpenOracle REP per ETH starting price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }]
 const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Set commitment limit', nth: -1 }, { waitForText: 'View in staged operations' }]
 // The report settles after eight minutes; ten keeps the staged operation inside its validity window.
 const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForText: 'Ready to settle' }]
@@ -55,7 +55,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: fillCommitment,
-		expectText: ['Open Oracle REP per ETH starting price', 'Fetch from Uniswap', 'Commitment limit', 'Resulting commitment', 'Queues for execution after oracle settlement.'],
+		expectText: ['OpenOracle REP per ETH starting price', 'Fetch from Uniswap', 'Commitment limit', 'Resulting commitment', 'Queues for execution after oracle settlement.'],
 		viewport: modalViewport,
 		crop: { selector: '[role=dialog]', containing: 'Resulting commitment', padding: 0 },
 		usedBy: tutorial,

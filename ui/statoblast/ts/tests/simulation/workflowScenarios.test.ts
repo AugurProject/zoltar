@@ -82,7 +82,7 @@ void describe('production workflow simulation scenarios', () => {
 			const vault = await loadSecurityVaultDetails(readClient, pool.securityPoolAddress, account)
 			if (vault === undefined) throw new Error(`Expected the seeded vault ${account}`)
 			const disputeStakedAttoRep = vault.disputeStakedAttoRep
-			const vaultState = { disputeStakedAttoRep, openInterestAttoEth: vault.underwritingLimitAttoEth, poolHeldVaultRepBackingAttoRep: vault.vaultAttoRepBacking, poolSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps }
+			const vaultState = { disputeStakedAttoRep, underwritingLimitAttoEth: vault.underwritingLimitAttoEth, poolHeldVaultRepBackingAttoRep: vault.vaultAttoRepBacking, poolSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps }
 			expect(isVaultHealthyAtFactor({ ...vaultState, healthFactorBps: BPS, repPerEthPrice: manager.lastPrice })).toBe(healthy)
 			if (beyondDistance !== undefined) expect(isLiquidationBeyondMinPriceDistance({ ...vaultState, currentPrice: manager.lastPrice, minPriceDistanceBps })).toBe(beyondDistance)
 		}

@@ -3,8 +3,9 @@ import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { presetNetworkChainId, validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
-import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { parseQuorumConnectivitySettings, unconfiguredQuorumConnectivity, type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
+import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
 import { canonicalDeployment, parseRootMarketSettings, presetNetwork } from './canonical-deployment.ts'
@@ -42,14 +43,14 @@ export type StrategySettings = {
 	walletAttoRepReserve: bigint
 }
 
+/** Version 2 stores the desired-pool `statoblastSecurityMultiplierBps` as a JSON number like every other basis-point setting. */
+const SETTINGS_VERSION = 2
+
 export type OperatorSettings = {
 	approvedUniverses: bigint[]
 	childMarketConfigurations: CentralizedMarketSettings[]
 	centralizedMarkets: CentralizedMarketSettings
-	connectivity: ConnectivitySettings & {
-		quorumRpcUrls: string[]
-		rpcQuorum: RpcQuorumRequirement
-	}
+	connectivity: QuorumConnectivitySettings
 	deployment: {
 		multicall3: Address
 		securityPoolFactory: Address
@@ -79,7 +80,7 @@ export type OperatorSettings = {
 	selectedPools: Address[]
 	strategy: StrategySettings
 	submission: SubmissionSettings
-	version: 1
+	version: typeof SETTINGS_VERSION
 }
 
 function uiHost(value: unknown): '0.0.0.0' | '127.0.0.1' {
@@ -119,10 +120,9 @@ export function parseDesiredPools(value: unknown): DesiredPoolSettings[] {
 		const pool = {
 			initialReportPriorityFeeAttoEthPerGas: uint256(desired['initialReportPriorityFeeAttoEthPerGas'], `desiredPools[${index.toString()}].initialReportPriorityFeeAttoEthPerGas`),
 			questionId: uint256(desired['questionId'], `desiredPools[${index.toString()}].questionId`),
-			statoblastSecurityMultiplierBps: uint256(desired['statoblastSecurityMultiplierBps'], `desiredPools[${index.toString()}].statoblastSecurityMultiplierBps`),
+			statoblastSecurityMultiplierBps: BigInt(integer(desired['statoblastSecurityMultiplierBps'], `desiredPools[${index.toString()}].statoblastSecurityMultiplierBps`, 10_001, Number.MAX_SAFE_INTEGER)),
 			universeId: universeId(desired['universeId'], `desiredPools[${index.toString()}].universeId`),
 		}
-		if (pool.statoblastSecurityMultiplierBps <= 10_000n) throw new Error(`desiredPools[${index.toString()}].statoblastSecurityMultiplierBps must exceed 10000`)
 		return pool
 	})
 	const ids = parsed.map(pool => `${pool.universeId.toString()}:${pool.questionId.toString()}:${pool.statoblastSecurityMultiplierBps.toString()}:${pool.initialReportPriorityFeeAttoEthPerGas.toString()}`)
@@ -162,37 +162,36 @@ export function parseStrategy(value: unknown): StrategySettings {
 	return parsed
 }
 
-function parseConnectivity(value: unknown): OperatorSettings['connectivity'] {
-	const connectivity = record(value, 'connectivity')
-	const parsed = validateConnectivitySettings({
-		publicRpcUrls: connectivity['publicRpcUrls'],
-		readRpcUrl: connectivity['readRpcUrl'],
-	})
-	const rawQuorumRpcUrls = connectivity['quorumRpcUrls']
-	if (!Array.isArray(rawQuorumRpcUrls) || rawQuorumRpcUrls.some(value => typeof value !== 'string')) throw new Error('connectivity.quorumRpcUrls must be an array of RPC URLs')
-	const quorumRpcUrls = validateIndependentReadRpcUrls(
-		parsed.readRpcUrl,
-		rawQuorumRpcUrls.map(value => {
-			if (typeof value !== 'string') throw new Error('connectivity.quorumRpcUrls must contain only strings')
-			return value
-		}),
-	)
-	const configuredRpcQuorum = connectivity['rpcQuorum']
-	const rpcQuorum = configuredRpcQuorum === undefined ? rpcQuorumRequirement() : integer(configuredRpcQuorum, 'connectivity.rpcQuorum', 1, 2)
-	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('connectivity.rpcQuorum must be 1 or 2')
-	return { ...parsed, quorumRpcUrls, rpcQuorum }
+/**
+ * Upgrades an older saved document to the current shape, so files and dashboard-saved settings written by an earlier
+ * release keep loading. Version 1 stored the desired-pool multiplier as a uint256 string.
+ */
+function migrateSettingsDocument(root: Record<string, unknown>): Record<string, unknown> {
+	if (root['version'] === SETTINGS_VERSION) return root
+	if (root['version'] !== 1) throw new Error('operator settings version must be 1 or 2')
+	const desiredPools = root['desiredPools']
+	return {
+		...root,
+		desiredPools: Array.isArray(desiredPools)
+			? desiredPools.map(entry => {
+					if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return entry
+					const multiplier: unknown = Reflect.get(entry, 'statoblastSecurityMultiplierBps')
+					return typeof multiplier === 'string' && /^(?:0|[1-9]\d*)$/.test(multiplier) ? { ...entry, statoblastSecurityMultiplierBps: Number(multiplier) } : entry
+				})
+			: desiredPools,
+		version: SETTINGS_VERSION,
+	}
 }
 
 export function parseSettings(value: unknown): OperatorSettings {
-	const root = record(value, 'operator settings')
-	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
+	const root = migrateSettingsDocument(record(value, 'operator settings'))
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
 	const network = root['network'] === undefined ? presetNetwork('mainnet') : record(root['network'], 'network')
 	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
 	const runtime = record(root['runtime'], 'runtime')
-	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: rpcQuorumRequirement() }
+	const connectivity = networkConfigured ? parseQuorumConnectivitySettings(root['connectivity']) : unconfiguredQuorumConnectivity()
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
 	const parsedApprovedUniverses = parseApprovedUniverses(root['approvedUniverses'])
@@ -239,7 +238,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 		selectedPools: parsedSelectedPools,
 		strategy: parseStrategy(root['strategy']),
 		submission: validateSubmissionSettings(root['submission']),
-		version: 1,
+		version: SETTINGS_VERSION,
 	}
 	const canonicalChainId = presetNetworkChainId(settings.network.name)
 	if (settings.network.chainId !== canonicalChainId) throw new Error('network name and chainId must identify the same supported chain')
@@ -262,7 +261,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		desiredPools: settings.desiredPools.map(pool => ({
 			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 			questionId: pool.questionId.toString(),
-			statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps.toString(),
+			statoblastSecurityMultiplierBps: bigintToSafeNumber(pool.statoblastSecurityMultiplierBps, 'Desired pool security multiplier basis points'),
 			universeId: pool.universeId.toString(),
 		})),
 		network: settings.network,
@@ -295,6 +294,6 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 			walletReserveRep: formatDecimalAmount(settings.strategy.walletAttoRepReserve),
 		},
 		submission: settings.submission,
-		version: 1,
+		version: SETTINGS_VERSION,
 	}
 }

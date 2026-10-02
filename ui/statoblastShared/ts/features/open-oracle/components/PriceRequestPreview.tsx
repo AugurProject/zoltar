@@ -44,12 +44,12 @@ export function PriceRequestPreview({
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
 	const actionButtonRef = useRef<HTMLButtonElement>(null)
-	const availability = { disabled: onRetry === undefined, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
+	const availability = { disabled: true, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [error])
 	// While preparing, the primary action carries the busy state so the feedback slot stays empty and the actions do not move.
-	const reasonHidden = hideReason || preparing || onRetry !== undefined
+	const reasonHidden = hideReason || preparing
 	let visibleFeedback = undefined
 	if (error !== undefined) {
 		visibleFeedback = <InlineHint id={reasonId} message={error} role='alert' />
@@ -71,7 +71,7 @@ export function PriceRequestPreview({
 			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>
 				<div className='tx-action-group'>
 					{/* A hidden reason lives outside the feedback container so the empty container collapses instead of reserving space. */}
-					{error === undefined && reasonHidden && onRetry === undefined ? (
+					{error === undefined && reasonHidden ? (
 						<div className='visually-hidden'>
 							<InlineHint id={reasonId} message={reason} />
 						</div>
@@ -91,7 +91,7 @@ export function PriceRequestPreview({
 								}
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
-								onClick={() => onRetry?.()}
+								onClick={() => undefined}
 								actionButtonRef={actionButtonRef}
 								availability={availability}
 								disabledReasonElementId={reasonId}
@@ -99,6 +99,7 @@ export function PriceRequestPreview({
 								tone='primary'
 							/>
 							<div className='actions transaction-step-close'>
+								{onRetry === undefined ? undefined : <TransactionActionButton idleLabel={commonCopy.retry} pendingLabel={commonCopy.retrying} onClick={onRetry} tone='secondary' />}
 								<button className='secondary' type='button' onClick={onClose}>
 									{commonCopy.cancel}
 								</button>

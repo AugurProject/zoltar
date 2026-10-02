@@ -295,7 +295,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 		privateKey: undefined,
 		runtime: {
 			execute: true,
-			lifecyclePollMilliseconds: 1_000,
+			pollMilliseconds: 1_000,
 			once: false,
 			protocolLogBlockSpan: 1,
 			protocolStartBlock: 0n,
@@ -318,7 +318,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 			workflowValidForBlocks: 64n,
 		},
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
-		version: 1,
+		version: 2,
 	}
 }
 

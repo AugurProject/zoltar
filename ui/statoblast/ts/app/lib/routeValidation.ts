@@ -5,7 +5,7 @@ import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracl
 
 const OPEN_ORACLE_VIEWS: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']
 
-/** Pool locations come from the hash path, so only an unknown pool tab or Open Oracle view can make an otherwise resolved route invalid. */
+/** Pool locations come from the hash path, so only an unknown pool tab or OpenOracle view can make an otherwise resolved route invalid. */
 export function getInvalidStatoblastRouteState({ openOracleView, resolvedRoute, search, selectedPoolView }: { openOracleView: string; resolvedRoute: StatoblastRoute; search: string; selectedPoolView: string }) {
 	return {
 		hasInvalidOpenOracleView: hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle', 'pools', 'deploy'], allowedViews: OPEN_ORACLE_VIEWS, key: 'openOracleView', resolvedRoute, search, value: openOracleView }),

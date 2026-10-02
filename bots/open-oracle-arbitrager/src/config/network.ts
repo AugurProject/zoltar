@@ -2,7 +2,8 @@ import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { defineChain, type Address, type Chain } from '@zoltar/bot-shared/ethereum'
-import type { NetworkName } from '#monitoring/connectivity'
+import { mainnet as mainnetChain, sepolia as sepoliaChain } from '@zoltar/core-shared/evm/ethereum'
+import type { NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 
 export type NetworkConfiguration = {
 	chain: Chain
@@ -15,18 +16,17 @@ export type NetworkConfiguration = {
 	weth: Address
 }
 
+function networkDefaults(chain: typeof mainnetChain | typeof sepoliaChain) {
+	const [rpcUrl] = chain.rpcUrls.default.http
+	if (rpcUrl === undefined) throw new Error(`The shared ${chain.name} chain has no default RPC URL`)
+	return { chainName: chain.name, explorerUrl: chain.blockExplorers.default.url, rpcUrl }
+}
+
+// Chain names, default RPC endpoints, and block explorers come from the shared chain definitions.
 const NETWORK_DEFAULTS = {
-	mainnet: {
-		chainName: 'Ethereum Mainnet',
-		explorerUrl: 'https://etherscan.io',
-		rpcUrl: 'https://ethereum-rpc.publicnode.com',
-	},
-	sepolia: {
-		chainName: 'Sepolia',
-		explorerUrl: 'https://sepolia.etherscan.io',
-		rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
-	},
-} as const
+	mainnet: networkDefaults(mainnetChain),
+	sepolia: networkDefaults(sepoliaChain),
+}
 
 export function parseNetworkName(value: string | undefined): NetworkName {
 	if (value === undefined || value === 'mainnet') return 'mainnet'

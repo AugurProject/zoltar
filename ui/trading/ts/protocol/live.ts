@@ -1,4 +1,5 @@
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
+import { outcomeLabel } from '../copy/outcomes.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
@@ -479,7 +480,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 			const scope = shareBalanceScope(market)
 			const longTokenId = side === 'YES' ? scope.yesTokenId : scope.noTokenId
 			const longBalance = await client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, longTokenId], blockNumber: block.blockNumber })
-			if (totalLongShares > longBalance) throw new Error(`Insufficient ${side} balance for this exit`)
+			if (totalLongShares > longBalance) throw new Error(`Insufficient ${outcomeLabel(side)} balance for this exit`)
 			const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
 			const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
 			const slippageMaximum = maximumAfterSlippage(totalLongShares, slippageBps)
@@ -516,7 +517,7 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 	const refreshed = await simulateExitWithExpiry(client, configuration, quote.market, account, quote.side, quote.completeSets, quote.deadline, quote.slippageBps)
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
-	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('YES/NO balance no longer covers the approved exit transfer; simulate again')
+	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('Yes/No balance no longer covers the approved exit transfer; simulate again')
 	const maximumLongShares = retainApprovedMaximum(quote.maximumLongShares, refreshed.result.totalLongShares, 'long shares')
 	const minimumEth = retainApprovedMinimum(quote.minimumEth, refreshed.result.ethOut, 'ETH output')
 	const block = await latestBlockIdentity(client)

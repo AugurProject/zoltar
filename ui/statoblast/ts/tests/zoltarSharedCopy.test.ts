@@ -8,7 +8,7 @@ import * as simulationCopy from '@zoltar/ui-core-shared/copy/simulation.js'
 import * as tradingCopy from '@zoltar/ui-statoblast-shared/copy/trading.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 
-test('market and Open Oracle values own their complete spacing and units', () => {
+test('market and OpenOracle values own their complete spacing and units', () => {
 	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.secondsAbbreviation)).toBe('12\u00a0s')
 	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.blocks)).toBe('12\u00a0blocks')
 })

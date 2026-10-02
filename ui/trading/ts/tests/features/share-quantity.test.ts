@@ -7,7 +7,7 @@ test('holding fees change backing without changing displayed token quantities', 
 	for (const settlementCollateralAttoEth of [10n ** 18n, 984_200_000_000_000_000n, 0n]) {
 		const rate = { shareTokenSupplyAttoShares: amount, settlementCollateralAttoEth }
 		expect(attoSharesToCollateralAttoEth(amount, rate)).toBe(settlementCollateralAttoEth)
-		expect(formatOutcomeQuantity(amount, 'YES')).toBe('1 YES')
+		expect(formatOutcomeQuantity(amount, 'YES')).toBe('1 Yes')
 		expect(formatCompleteSetQuantity(amount)).toBe('1 complete set')
 		expect(formatLpQuantity(amount)).toBe('1 LP')
 	}
@@ -22,6 +22,6 @@ test('fee valuation stops at the epoch end and skips pools without fee-eligible 
 })
 
 test('does not label a nonzero token balance as zero at display precision', () => {
-	expect(formatOutcomeQuantity(1n, 'YES')).toBe('<0.0001 YES')
-	expect(formatOutcomeQuantity(0n, 'YES')).toBe('0 YES')
+	expect(formatOutcomeQuantity(1n, 'YES')).toBe('<0.0001 Yes')
+	expect(formatOutcomeQuantity(0n, 'YES')).toBe('0 Yes')
 })

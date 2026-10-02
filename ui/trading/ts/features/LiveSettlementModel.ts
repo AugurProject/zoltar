@@ -2,9 +2,10 @@ import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeQuanti
 import type { ForkTarget } from '../protocol/forks.js'
 import type { SettlementOperation, ShareOutcome } from '../protocol/live.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
+import { outcomeLabel } from '../copy/outcomes.js'
 
 export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetCount: bigint) {
-	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${sourceOutcome} balance will be copied into ${targetCount.toString()} selected child ${targetCount === 1n ? 'branch' : 'branches'} and locked in the parent universe.`
+	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${outcomeLabel(sourceOutcome)} balance will be copied into ${targetCount.toString()} selected child ${targetCount === 1n ? 'branch' : 'branches'} and locked in the parent universe.`
 }
 
 export function settlementInputBlocker(operation: SettlementOperation, operationAvailable: boolean, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
@@ -16,7 +17,7 @@ export function settlementInputBlocker(operation: SettlementOperation, operation
 	}
 	if (operation === 'migrate-shares') {
 		if (targetOutcomeIndexes.length === 0) return 'Select at least one child branch from the fork question'
-		if (sourceBalance === undefined || sourceBalance === 0n) return `The selected ${sourceOutcome} balance is zero`
+		if (sourceBalance === undefined || sourceBalance === 0n) return `The selected ${outcomeLabel(sourceOutcome)} balance is zero`
 	}
 	return undefined
 }

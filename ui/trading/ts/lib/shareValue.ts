@@ -1,6 +1,7 @@
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from './format.js'
 import type { LiveMarket } from '../protocol/liveMarket.js'
+import { outcomeLabel } from '../copy/outcomes.js'
 
 /** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
 export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
@@ -40,8 +41,11 @@ function formatShareQuantity(amount: bigint, maximumFractionDigits: number, roun
 	return amount > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
+/** Share outcome keys; display text comes from `outcomeLabel`. */
+export const shareOutcome = { yes: 'YES', no: 'NO', invalid: 'INVALID' } as const
+
 export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
-	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding)} ${outcome}`
+	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding)} ${outcomeLabel(outcome)}`
 }
 
 /** LP quantities use a fixed scale too; their underlying reserve claims are displayed separately. */

@@ -85,10 +85,10 @@ describe('transaction presentation', () => {
 
 	test('names each phase by the action the user pressed', () => {
 		expect(transactionStatusText('idle', 'Buy YES')).toBeUndefined()
-		expect(transactionStatusText('preparing', 'Buy YES')).toBe('Buy YES: checking the latest price before your wallet opens…')
-		expect(transactionStatusText('submitting', 'Buy YES')).toBe('Buy YES: confirm in your wallet.')
-		expect(transactionStatusText('pending', 'Buy YES')).toBe('Buy YES sent. Waiting for confirmation…')
-		expect(transactionStatusText('confirmed', 'Buy YES')).toBe('Buy YES confirmed.')
+		expect(transactionStatusText('preparing', 'Buy Yes')).toBe('Buy Yes: checking the latest price before your wallet opens…')
+		expect(transactionStatusText('submitting', 'Buy Yes')).toBe('Buy Yes: confirm in your wallet.')
+		expect(transactionStatusText('pending', 'Buy Yes')).toBe('Buy Yes sent. Waiting for confirmation…')
+		expect(transactionStatusText('confirmed', 'Buy Yes')).toBe('Buy Yes confirmed.')
 		expect(transactionStatusText('error', 'Buy YES')).toBeUndefined()
 	})
 
@@ -97,7 +97,7 @@ describe('transaction presentation', () => {
 		expect(resolveActionGroupMessage('idle', blocked, undefined)).toBe('Insufficient balance.')
 		expect(resolveActionGroupMessage('error', blocked, undefined)).toBe('Insufficient balance.')
 		expect(resolveActionGroupMessage('idle', { disabled: false, reason: undefined }, undefined)).toBeUndefined()
-		expect(resolveActionGroupMessage('pending', blocked, 'Buy YES sent. Waiting for confirmation…')).toBe('Buy YES sent. Waiting for confirmation…')
-		expect(resolveActionGroupMessage('confirmed', { disabled: true, reason: 'Transaction in progress.' }, 'Buy YES confirmed.')).toBe('Buy YES confirmed.')
+		expect(resolveActionGroupMessage('pending', blocked, 'Buy Yes sent. Waiting for confirmation…')).toBe('Buy Yes sent. Waiting for confirmation…')
+		expect(resolveActionGroupMessage('confirmed', { disabled: true, reason: 'Transaction in progress.' }, 'Buy Yes confirmed.')).toBe('Buy Yes confirmed.')
 	})
 })

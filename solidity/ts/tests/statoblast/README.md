@@ -1,12 +1,12 @@
 # Statoblast Test Slices
 
-Run every split statoblast suite:
+Run every split statoblast suite from the repository root:
 
 ```bash
 bun run test:statoblast
 ```
 
-Run one workflow slice directly:
+Run one workflow slice directly from the repository root:
 
 ```bash
 bun test --timeout 300000 solidity/ts/tests/statoblast/truthAuction/settlementClaims.test.ts

@@ -1,3 +1,4 @@
+import { outcomeLabel } from '../copy/outcomes.js'
 import { useId } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
@@ -6,7 +7,7 @@ import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
-import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS } from '../lib/shareValue.js'
+import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -69,7 +70,7 @@ function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { 
 	const sellable = model.sellable ?? 0n
 	return (
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
-			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, 'INVALID'), formatOutcomeQuantity(model.shortfall.invalidHeld, 'INVALID'), formatOutcomeQuantity(sellable, side, 4, 'down'), side)}</p>
+			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid), formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid), formatOutcomeQuantity(sellable, side, 4, 'down'), side)}</p>
 			{sellable > 0n ? (
 				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable), SHARE_QUANTITY_DECIMALS))}>
 					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down'))}
@@ -152,7 +153,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 					disabled={controlsDisabled}
 					inputMode='decimal'
 					autoComplete='off'
-					adornment={mode === 'entry' ? workflowCopy.eth : side}
+					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
 					error={model.amountError}
 					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}

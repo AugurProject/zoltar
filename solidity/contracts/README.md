@@ -8,6 +8,6 @@ The production contracts keep stable source paths because paths participate in a
 - `vendor/` and `statoblast/openOracle/` contain pinned upstream or upstream-derived sources with provenance records beside the code.
 - `test/` and `trading/test/` contain harnesses and mocks and may never be imported by production contracts.
 
-Run `bun run check:contract-boundaries` after changing imports. Delegate storage-layout and deployment-size compatibility are enforced separately by `bun run check:contract-safety`.
+From the repository root, run `bun run check:contract-boundaries` after changing imports. Delegate storage-layout and deployment-size compatibility are enforced separately by `bun run check:contract-safety`, also run from the repository root.
 
-Audit findings and exploit regressions remain close to their owning fixtures under `solidity/ts/tests`, but are also collected by the discoverable `bun run test:security-regressions` suite.
+Audit findings and exploit regressions remain close to their owning fixtures under `solidity/ts/tests`, but are also collected by the discoverable `bun run test:security-regressions` suite, which runs from the repository root.

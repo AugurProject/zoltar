@@ -533,7 +533,26 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Loading reporting details.')).toBe(true)
 	})
 
-	test('keeps reporting locked at the exact market end timestamp until the next second', async () => {
+	// The contracts accept reporting once block.timestamp >= the question end time.
+	test('keeps reporting locked until the exact market end timestamp', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 99n,
+					reportingDetails: undefined,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Reporting not enabled' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting open' })).toBeNull()
+		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 99n))).toBe(true)
+	})
+
+	test('opens reporting at the exact market end timestamp', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -545,10 +564,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting not enabled' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Reporting open' })).toBeNull()
-		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 100n))).toBe(true)
+		expect(within(document.body).queryByRole('heading', { name: 'Reporting not enabled' })).toBeNull()
 	})
 
 	test('shows resolved state for finalized pools even when no escalation game was started', async () => {

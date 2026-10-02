@@ -2,7 +2,7 @@ import { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOpti
 
 import { amount, choose, disabled, eligible, encodeStep, eventTopic, mixSeed, planBase } from '../planning.ts'
 
-import { ORACLE_PRICE_VALIDITY_SECONDS, stagedDownstreamPreflight } from './planning.ts'
+import { oraclePriceValidUntil, stagedDownstreamPreflight } from './planning.ts'
 
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
 
@@ -26,9 +26,9 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 	const id = `statoblast.staged.${mode}`
 	const metadata = (staged: EcosystemSnapshot['stagedOperations'][number]) => ({ coordinator: staged.coordinator, operationId: staged.id, operationType: staged.operation })
 	const stagedDeadline = (pool: PoolSnapshot, operation: EcosystemSnapshot['stagedOperations'][number]) => amount(operation.queuedAt) + amount(pool.oracleSettlementTime) + amount(operation.validForSeconds)
-	const executionDeadline = (pool: PoolSnapshot, operation: EcosystemSnapshot['stagedOperations'][number]) => {
+	const executionDeadline = (snapshot: EcosystemSnapshot, pool: PoolSnapshot, operation: EcosystemSnapshot['stagedOperations'][number]) => {
 		const operationDeadline = stagedDeadline(pool, operation)
-		const oracleDeadline = amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS
+		const oracleDeadline = oraclePriceValidUntil(snapshot, pool)
 		return operationDeadline < oracleDeadline ? operationDeadline : oracleDeadline
 	}
 	const candidates = (snapshot: EcosystemSnapshot, options: PlanningOptions) => {
@@ -36,13 +36,13 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 		return snapshot.stagedOperations.filter(operation => {
 			const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 			if (pool === undefined) return false
-			return mode === 'execute' ? (operation.operation === 1 || operation.operation === 2) && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
+			return mode === 'execute' ? (operation.operation === 1 || operation.operation === 2) && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(snapshot, pool, operation), options) : now > stagedDeadline(pool, operation)
 		})
 	}
 	const build = (snapshot: EcosystemSnapshot, staged: EcosystemSnapshot['stagedOperations'][number]) => {
 		const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === staged.coordinator.toLowerCase())
 		if (pool === undefined) return undefined
-		const deadline = (mode === 'execute' ? executionDeadline(pool, staged) : stagedDeadline(pool, staged)).toString()
+		const deadline = (mode === 'execute' ? executionDeadline(snapshot, pool, staged) : stagedDeadline(pool, staged)).toString()
 		const signature = 'ExecutedStagedOperation(uint256,uint8,bool,string)'
 		const successEvidence: OperationEvidence = {
 			abi: 'event ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)',
@@ -121,7 +121,7 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 			const found = snapshot.stagedOperations.some(operation => {
 				const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 				if (pool === undefined) return false
-				return mode === 'execute' ? (operation.operation === 1 || operation.operation === 2) && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
+				return mode === 'execute' ? (operation.operation === 1 || operation.operation === 2) && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(snapshot, pool, operation), options) : now > stagedDeadline(pool, operation)
 			})
 			return eligible(found ? undefined : `No staged operation is ready to ${mode}`)
 		},

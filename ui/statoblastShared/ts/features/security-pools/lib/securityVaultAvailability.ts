@@ -51,7 +51,7 @@ export function getVaultDepositAmountNotice({
 	currentVaultRepBackingAttoRep?: bigint | undefined
 	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
-	minimumVaultRepDepositAttoRep: bigint
+	minimumVaultRepDepositAttoRep: bigint | undefined
 	walletRepShortfallAttoRep: bigint | undefined
 }) {
 	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))

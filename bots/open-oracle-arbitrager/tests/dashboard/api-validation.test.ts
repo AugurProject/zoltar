@@ -5,11 +5,11 @@ import { isSnapshot } from '../../src/dashboard/snapshot-validation.ts'
 
 const address = `0x${'1'.repeat(40)}`
 const hash = `0x${'2'.repeat(64)}`
-const settings = { maxSpotTwapTicks: '100', minimumProfitBps: '5', minimumProfitWeth: '0.01', minimumRemainingBlocks: '3', minimumRemainingSeconds: '30', pollMilliseconds: 1000, twapSeconds: 60 }
+const settings = { maxSpotTwapTicks: '100', minimumProfitBps: 5, minimumProfitWeth: '0.01', minimumRemainingBlocks: '3', minimumRemainingSeconds: '30', twapSeconds: 60 }
 
 test('validates settings and submission envelopes before populating forms', () => {
 	expect(decodeSettings({ settings }).settings).toEqual(settings)
-	expect(() => decodeSettings({ settings: { ...settings, pollMilliseconds: '1000' } })).toThrow('invalid strategy response')
+	expect(() => decodeSettings({ settings: { ...settings, minimumProfitBps: '5' } })).toThrow('invalid strategy response')
 	expect(() => decodeSettings({ settings: { ...settings, twapSeconds: Infinity } })).toThrow('invalid strategy response')
 	const submission: SubmissionSettings = { mode: 'public', minimumBundleRelaySuccesses: 1, relayUrls: [] }
 	expect(decodeSubmission({ submission }).submission).toEqual(submission)
@@ -20,13 +20,13 @@ test('rejects malformed chain and deployment responses before changing local con
 	const connectivity = { publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://rpc.example' }
 	expect(decodeConnectivity({ connectivity, network: 'sepolia', quorumRpcUrls: ['https://quorum.example'], rpcQuorum: 2 }).quorumRpcUrls).toEqual(['https://quorum.example'])
 	for (const value of [
-		{ connectivity, network: 'other', quorumRpcUrls: [], rpcQuorum: 1 },
-		{ connectivity, network: 'mainnet', quorumRpcUrls: [], rpcQuorum: '1' },
+		{ connectivity, network: 'other', rpcQuorum: 1 },
+		{ connectivity, network: 'mainnet', rpcQuorum: '1' },
 		{ connectivity, network: 'mainnet', rpcQuorum: 1 },
-		{ connectivity: { ...connectivity, publicRpcUrls: [3] }, network: 'mainnet', quorumRpcUrls: [], rpcQuorum: 1 },
+		{ connectivity: { ...connectivity, publicRpcUrls: [3] }, network: 'mainnet', rpcQuorum: 1 },
 	])
 		expect(() => decodeConnectivity(value)).toThrow('invalid connectivity response')
-	const deployment = { uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false, quorumRpcUrls: [] }
+	const deployment = { uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false }
 	expect(decodeDeployment({ deployment }).deployment).toEqual(deployment)
 	expect(() => decodeDeployment({ deployment: { ...deployment, uniswapV2Enabled: 'false' } })).toThrow('invalid deployment response')
 })

@@ -41,7 +41,7 @@ function createReasonInput(overrides: Partial<Parameters<typeof getDeterministic
 }
 
 describe('liquidation minimum price distance', () => {
-	const base = { disputeStakedAttoRep: 0n, minPriceDistanceBps: DISTANCE_BPS, openInterestAttoEth: 10n * ATTO, poolHeldVaultRepBackingAttoRep: 100n * ATTO, poolSecurityMultiplierBps: 20_000n }
+	const base = { disputeStakedAttoRep: 0n, minPriceDistanceBps: DISTANCE_BPS, underwritingLimitAttoEth: 10n * ATTO, poolHeldVaultRepBackingAttoRep: 100n * ATTO, poolSecurityMultiplierBps: 20_000n }
 
 	test('matches the contract threshold and floor rounding at the distance boundary', () => {
 		expect(isLiquidationBeyondMinPriceDistance({ ...base, currentPrice: FIRST_PRICE_BEYOND_DISTANCE })).toBe(true)
@@ -58,7 +58,7 @@ describe('liquidation minimum price distance', () => {
 
 	test('treats a zero distance as always satisfied and zero open interest or price as unsatisfied', () => {
 		expect(isLiquidationBeyondMinPriceDistance({ ...base, currentPrice: 1n, minPriceDistanceBps: 0n })).toBe(true)
-		expect(isLiquidationBeyondMinPriceDistance({ ...base, currentPrice: 10n * ATTO, openInterestAttoEth: 0n })).toBe(false)
+		expect(isLiquidationBeyondMinPriceDistance({ ...base, currentPrice: 10n * ATTO, underwritingLimitAttoEth: 0n })).toBe(false)
 		expect(isLiquidationBeyondMinPriceDistance({ ...base, currentPrice: 0n })).toBe(false)
 	})
 
@@ -77,7 +77,7 @@ describe('liquidation minimum price distance', () => {
 	})
 
 	test('keeps the safe-vault reason for a healthy vault', () => {
-		expect(getDeterministicLiquidationFailureReason(createReasonInput({ repPerEthPrice: 4n * ATTO }))).toBe('This vault is not undercollateralized at the current Open Oracle price.')
+		expect(getDeterministicLiquidationFailureReason(createReasonInput({ repPerEthPrice: 4n * ATTO }))).toBe('This vault is not undercollateralized at the current OpenOracle price.')
 	})
 })
 
@@ -106,5 +106,13 @@ describe('liquidation execution failure details', () => {
 
 	test('passes through reverts the contracts do not emit', () => {
 		expect(getLiquidationExecutionFailureDetail('Target REP')).toBe('Target REP')
+	})
+})
+
+describe('liquidation pool minimum vault REP', () => {
+	// The pool stores its effective minimum (theoretical supply / 100_000 when unconfigured), so an unloaded value is unknown, not 10 REP.
+	test('execution waits for the pool minimum instead of assuming a default', () => {
+		const input = createReasonInput({ minimumVaultRepDepositAttoRep: undefined })
+		expect(getLiquidationFailureReason({ ...input, settlementCollateralAttoEth: 10n * ATTO, totalUnderwritingLimitAttoEth: 10n * ATTO })).toBe(liquidationCopy.selectedPoolReloadRequired)
 	})
 })

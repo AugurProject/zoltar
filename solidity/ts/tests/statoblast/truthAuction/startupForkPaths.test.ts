@@ -20,6 +20,7 @@ import { approximatelyEqual, ensureDefined, strictEqualTypeSafe } from '../../..
 import assert from '../../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from '../fixture'
+import { getTruthAuctionStartedEvents } from './helpers'
 
 describe('Statoblast: truth auction', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
@@ -90,9 +91,10 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getMigratedAttoRep(client, yesSecurityPool.securityPool), forkData.auctionableAttoRepAtFork, 'all parent REP should already be represented by migrated vault backingUnits in this fast path')
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-			await startTruthAuction(client, yesSecurityPool.securityPool)
+			const startHash = await startTruthAuction(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should finalize immediately when no auction is needed')
+			strictEqualTypeSafe((await getTruthAuctionStartedEvents(client, startHash)).length, 0, 'direct finalization must not announce a truth auction start')
 			strictEqualTypeSafe(await getTotalRepPurchasedAttoRep(client, yesSecurityPool.truthAuction), 0n, 'no REP should be sold when the auction is skipped')
 			strictEqualTypeSafe(await getTotalRepBackingUnits(client, yesSecurityPool.securityPool), denominatorBeforeStart, 'skipping the auction should preserve the existing child backingUnits denominator when no REP is sold')
 		})

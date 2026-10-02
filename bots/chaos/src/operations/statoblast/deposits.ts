@@ -49,9 +49,9 @@ function directEscalationDepositEvidence(snapshot: EcosystemSnapshot, token: `0x
 		topic0: eventTopic(signature),
 	})
 	return [
-		decoded(DEPOSIT_ON_OUTCOME_ABI, DEPOSIT_ON_OUTCOME_SIGNATURE, depositIndexed, 'attoRepAmount', acceptedAmountAttoRep.toString()),
+		decoded(DEPOSIT_ON_OUTCOME_ABI, DEPOSIT_ON_OUTCOME_SIGNATURE, depositIndexed, 'amountAttoRep', acceptedAmountAttoRep.toString()),
 		decoded(DEPOSIT_ON_OUTCOME_ABI, DEPOSIT_ON_OUTCOME_SIGNATURE, depositIndexed, 'cumulativeRepAmountAttoRep', resultingCumulativeAmountAttoRep.toString()),
-		decoded(LOCAL_DEPOSIT_APPENDED_ABI, LOCAL_DEPOSIT_APPENDED_SIGNATURE, localIndexed, 'attoRepAmount', acceptedAmountAttoRep.toString()),
+		decoded(LOCAL_DEPOSIT_APPENDED_ABI, LOCAL_DEPOSIT_APPENDED_SIGNATURE, localIndexed, 'amountAttoRep', acceptedAmountAttoRep.toString()),
 		decoded(LOCAL_DEPOSIT_APPENDED_ABI, LOCAL_DEPOSIT_APPENDED_SIGNATURE, localIndexed, 'cumulativeRepAmountAttoRep', resultingCumulativeAmountAttoRep.toString()),
 		{
 			abi: ERC20_TRANSFER_ABI,

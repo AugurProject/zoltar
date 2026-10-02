@@ -20,8 +20,8 @@
 				<h2 id="child-game-trust-boundary">Child-game trust boundary</h2>
 				<p>Fork entrypoints and child setup may receive contracts through unauthenticated pool lineages. External-universe initiation requires the supplied pool to be authorized by its declared share token, but that relationship alone does not prove factory registration; own-game initiation does not perform that authorization check. Canonicality comes from the configured <code>SecurityPoolFactory</code> registry. A game relationship check is point-in-time: the reported nonzero game address must return the supplied pool or child from <code>securityPool()</code> when validated. This does not prove that an arbitrary game getter is immutable or that the address was factory-deployed. Child setup captures one reported game address, validates it before privileged use, and reuses that exact address for continuation backing and escrow work. When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use. Combined vault migration passes the captured child/game pair into unresolved cleanup without reading the child getter again. Truth-auction completion performs a fresh point-in-time validation of the game reported then before checking continuation readiness. Genuine factory-deployed <code>EscalationGame</code> instances store their pool immutably, but safety on unauthenticated paths does not assume arbitrary contracts do.</p>
 				<h2 id="interactions">State-changing interactions</h2>
-				<!-- Validated read ABI fingerprint: 278455ca0fe2ccf4ffe8682e913ee946cea32e3e54c70dd59e803e121dd140c1 -->
-				<!-- Validated complete compiled ABI fingerprint: c34478103a1804c8de4dcbcd49690e8864d3ca9afc9148d2bea9d5fbf5ccae3d -->
+				<!-- Validated read ABI fingerprint: 44f89debf797ddb63c2614a513b7d04dfe528074f30a513ae53c700d9627fb51 -->
+				<!-- Validated complete compiled ABI fingerprint: cbde7d4ca1c41aa7a92d04162002915ae0edbcf1e47ae3cf9328a0603356d840 -->
 				<table>
 					<thead>
 						<tr>
@@ -87,7 +87,7 @@
 							<td>Anyone</td>
 							<td>Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.</td>
-							<td><code>ShareTokenSupplySet</code> and <code>TruthAuctionStarted</code>; immediate no-auction completion also emits <code>TruthAuctionFinalized</code>, pool accounting checkpoints, and <code>ForkContinuationResumed</code> for an unresolved continuation</td>
+							<td><code>ShareTokenSupplySet</code>, then <code>TruthAuctionStarted</code> when an auction starts; immediate no-auction completion instead emits <code>TruthAuctionFinalized</code>, pool accounting checkpoints, and <code>ForkContinuationResumed</code> for an unresolved continuation</td>
 						</tr>
 						<tr>
 							<td><code>finalizeTruthAuction(securityPool)</code></td>

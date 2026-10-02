@@ -1,5 +1,5 @@
 {
-	"version": 1,
+	"version": 2,
 	"connectivity": {
 		"publicRpcUrls": ["https://broadcast-rpc.example.invalid"],
 		"quorumRpcUrls": ["https://read-secondary.example.invalid", "https://read-tertiary.example.invalid"],
@@ -24,8 +24,8 @@
 	"privateKey": null,
 	"runtime": {
 		"execute": false,
-		"lifecyclePollMilliseconds": 12000,
 		"once": false,
+		"pollMilliseconds": 12000,
 		"protocolLogBlockSpan": 50000,
 		"protocolStartBlock": "0",
 		"stateFile": ".state/chaos.configured-placeholder.json",

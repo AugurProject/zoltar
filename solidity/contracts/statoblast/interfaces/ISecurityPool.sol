@@ -158,7 +158,7 @@ interface ISecurityPool {
 	function attoSharesToAttoEth(uint256 amountAttoShares) external view returns (uint256);
 	function attoEthToAttoShares(uint256 amountAttoEth) external view returns (uint256);
 
-	function attoRepToBackingUnits(uint256 attoRepAmount) external view returns (uint256);
+	function attoRepToBackingUnits(uint256 amountAttoRep) external view returns (uint256);
 	function backingUnitsToAttoRep(uint256 repBackingUnits) external view returns (uint256);
 	function getTotalPoolHeldAttoRep() external view returns (uint256);
 	function getCurrentMintingCapacityAttoEth() external view returns (uint256);
@@ -178,14 +178,14 @@ interface ISecurityPool {
 	function updateVaultFees(address vault) external;
 	function redeemFees(address vault) external;
 
-	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external;
+	function withdrawRepFromVault(address vault, uint256 amountAttoRep) external;
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external;
 	function setUnderwritingLimit(uint256 limitAttoEth) external;
 	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external;
 	function getVaultUnderwritingLimitAttoEth(address vault) external view returns (uint256);
-	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external;
-	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
-	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;
+	function depositRepToVault(uint256 amountAttoRep, uint256 targetHealthFactorBps) external;
+	function depositRepToVaultWithPermit(uint256 amountAttoRep, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+	function depositRepToVaultWithAuthorization(address owner, uint256 amountAttoRep, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;
 	function redeemRepFromVault(address vault) external;
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
 	function performLiquidation(LiquidationRequest calldata request) external returns (uint256 debtMovedAttoEth, uint256 underwritingLimitMovedAttoEth, uint256 badDebtAttoEth);

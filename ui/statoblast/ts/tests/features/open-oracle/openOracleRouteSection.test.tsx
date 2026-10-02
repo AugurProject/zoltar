@@ -659,7 +659,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Need 100\u00a0more\u00a0ETH in this wallet to create the selected standalone Open Oracle report.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Need 100\u00a0more\u00a0ETH in this wallet to create the selected standalone OpenOracle report.')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {
@@ -1286,14 +1286,14 @@ describe('OpenOracleSection route create view', () => {
 						reportTimestamp: 100n,
 						settlementTimestamp: 160n,
 					}),
-					openOracleWithdrawableBalancesError: 'Failed to load Open Oracle balances',
+					openOracleWithdrawableBalancesError: 'Failed to load OpenOracle balances',
 				})}
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Failed to load Open Oracle balances')).not.toBeNull()
+		expect(documentQueries.getByText('Failed to load OpenOracle balances')).not.toBeNull()
 		expect(documentQueries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
 	})
 

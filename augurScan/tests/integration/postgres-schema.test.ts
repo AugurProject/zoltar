@@ -184,6 +184,8 @@ const expectMigratedTimelineEvidence = async (database: ScannerDatabase, migrati
 	expect((await database.sql`SELECT to_regclass('public.indexer_ownership')::text AS relation`)[0]?.['relation']).toBe('indexer_ownership')
 	const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 	expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
+	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version`
+	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }])
 	const migratedTimeline = await database.sql`
 		SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
 		WHERE chain_id = ${migrationChainId} ORDER BY block_number

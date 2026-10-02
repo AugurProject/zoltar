@@ -79,12 +79,12 @@ browserTest(
 			expect(await cdp.evaluate("document.querySelector('#save-complete-configuration').disabled")).toBe(false)
 			expect(await cdp.evaluate("document.querySelector('#complete-configuration-content').textContent.includes('privateKey')")).toBe(false)
 			await capture('desktop-fields')
-			await cdp.evaluate("document.querySelector('[data-configuration-path=\"runtime.lifecyclePollMilliseconds\"]').scrollIntoView({block: 'center'})")
+			await cdp.evaluate("document.querySelector('[data-configuration-path=\"runtime.pollMilliseconds\"]').scrollIntoView({block: 'center'})")
 			await capture('desktop-runtime')
 			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
 			await cdp.evaluate("document.querySelector('#settings-complete').scrollIntoView()")
 			await capture('mobile-fields')
-			await cdp.evaluate("document.querySelector('[data-configuration-path=\"runtime.lifecyclePollMilliseconds\"]').scrollIntoView({block: 'center'})")
+			await cdp.evaluate("document.querySelector('[data-configuration-path=\"runtime.pollMilliseconds\"]').scrollIntoView({block: 'center'})")
 			await capture('mobile-runtime')
 			expect(await cdp.evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)
 			await cdp.evaluate("document.querySelector('#complete-configuration-json-mode').click()")
@@ -107,9 +107,9 @@ browserTest(
 			await cdp.evaluate("document.querySelector('#complete-configuration-json-mode').click()")
 			await cdp.waitFor("document.querySelector('#complete-configuration-json-mode').checked === false && document.querySelector('#complete-configuration-fields').disabled === false", { message: 'field editor should be ready' })
 			await cdp.evaluate(
-				"document.querySelector('[data-configuration-path=\"runtime.lifecyclePollMilliseconds\"]').value = '13000'; document.querySelector('[data-configuration-path=\"strategy.initializeGenesisUniverse\"]').click(); document.querySelector('[data-configuration-path=\"strategy.enabledEcosystems\"]').value = '[\"open-oracle\"]'; document.querySelector('#complete-configuration-json-mode').click()",
+				"document.querySelector('[data-configuration-path=\"runtime.pollMilliseconds\"]').value = '13000'; document.querySelector('[data-configuration-path=\"strategy.initializeGenesisUniverse\"]').click(); document.querySelector('[data-configuration-path=\"strategy.enabledEcosystems\"]').value = '[\"open-oracle\"]'; document.querySelector('#complete-configuration-json-mode').click()",
 			)
-			expect(await cdp.evaluate("JSON.parse(document.querySelector('#complete-configuration-json').value).runtime.lifecyclePollMilliseconds")).toBe(13000)
+			expect(await cdp.evaluate("JSON.parse(document.querySelector('#complete-configuration-json').value).runtime.pollMilliseconds")).toBe(13000)
 			expect(await cdp.evaluate("JSON.parse(document.querySelector('#complete-configuration-json').value).strategy.initializeGenesisUniverse")).toBe(true)
 			expect(await cdp.evaluate("JSON.parse(document.querySelector('#complete-configuration-json').value).strategy.enabledEcosystems")).toEqual(['open-oracle'])
 			await cdp.evaluate("document.querySelector('#complete-configuration-form').requestSubmit()")
@@ -126,7 +126,7 @@ browserTest(
 			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
 			await writeFile(join(screenshots, 'browser-issues.json'), JSON.stringify(cdp.issues, undefined, 2))
 			expect(restarted).toBe(true)
-			expect((await loadSettings(path)).settings.runtime.lifecyclePollMilliseconds).toBe(13000)
+			expect((await loadSettings(path)).settings.runtime.pollMilliseconds).toBe(13000)
 			expect(await cdp.evaluate("document.querySelector('#save-complete-configuration').disabled")).toBe(true)
 		} finally {
 			finishRead?.()

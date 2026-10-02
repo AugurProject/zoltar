@@ -72,7 +72,7 @@ function PolicySwitches() {
 const ECOSYSTEM_SWITCHES = [
 	['zoltar', 'Zoltar'],
 	['statoblast', 'Statoblast'],
-	['open-oracle', 'Open Oracle'],
+	['open-oracle', 'OpenOracle'],
 	['trading', 'Trading'],
 ] as const
 

@@ -81,7 +81,7 @@ describe('wallet trading deployment plan', () => {
 		expect(installed.router).toBe(plan.router.address)
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'factory-only'), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('trading deployment is incomplete')
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'missing'), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('Trading contracts have not been deployed')
-		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'complete', true), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('different factory')
+		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'complete', true), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('different TwoWayConstantProductFactory')
 	})
 
 	test('marks only confirmed-missing contracts as a missing deployment', async () => {

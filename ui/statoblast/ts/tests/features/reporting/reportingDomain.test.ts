@@ -1,5 +1,5 @@
 import { computeEscalationTimeSinceStartFromAttritionCostAttoRep } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
-import { getDisplayedLeadingEscalationOutcome } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
+import { getDisplayedLeadingEscalationOutcome, hasReportingOpened } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
@@ -491,5 +491,15 @@ describe('deposit deadline preview', () => {
 	test('respects the fresh response window for resumed games', () => {
 		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+	})
+})
+
+describe('reporting opening boundary', () => {
+	// The contracts accept reporting once block.timestamp >= the question end time.
+	test('reporting opens at the question end timestamp', () => {
+		expect(hasReportingOpened(100n, 99n)).toBe(false)
+		expect(hasReportingOpened(100n, 100n)).toBe(true)
+		expect(hasReportingOpened(100n, 101n)).toBe(true)
+		expect(hasReportingOpened(100n, undefined)).toBe(undefined)
 	})
 })

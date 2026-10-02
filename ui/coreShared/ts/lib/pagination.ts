@@ -1,3 +1,5 @@
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+
 export const QUESTION_PAGE_SIZE = 10
 
 function getPageSizeBigInt(pageSize: number) {
@@ -10,8 +12,7 @@ export function getPaginationPageCount(itemCount: bigint | undefined, pageSize: 
 	if (itemCount < 0n) throw new RangeError('Pagination count must be non-negative')
 	if (itemCount === 0n) return 0n
 
-	const pageSizeBigInt = getPageSizeBigInt(pageSize)
-	return (itemCount + pageSizeBigInt - 1n) / pageSizeBigInt
+	return ceilDiv(itemCount, getPageSizeBigInt(pageSize))
 }
 
 export function getHasNextPaginationPage(pageIndex: number, pageCount: bigint | undefined) {

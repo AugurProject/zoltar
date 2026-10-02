@@ -1,5 +1,5 @@
 import { getTruthAuctionBidTimingGuardMessage } from '../../../protocol/truthAuctionTiming.js'
-import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -46,11 +46,6 @@ type TruthAuctionBidSettlementEstimate = {
 function estimateRepPurchased(bidAmountAttoEth: bigint, price: bigint) {
 	if (bidAmountAttoEth <= 0n || price <= 0n) return 0n
 	return (bidAmountAttoEth * TRUTH_AUCTION_PRICE_PRECISION) / price
-}
-
-function ceilDiv(dividend: bigint, divisor: bigint) {
-	if (divisor <= 0n) return 0n
-	return divideUp(dividend, divisor)
 }
 
 // The contract's underfundedThreshold: an auction that misses its cap only fills bids priced at or above this reserve.
@@ -502,7 +497,7 @@ export function formatTruthAuctionTickPriceInput(tick: bigint) {
 	const price = getTruthAuctionPriceAtTick(tick)
 	for (let decimals = MIN_TICK_PRICE_INPUT_DECIMALS; decimals < 18; decimals += 1) {
 		const step = 10n ** BigInt(18 - decimals)
-		const roundedUpPrice = ((price + step - 1n) / step) * step
+		const roundedUpPrice = ceilDiv(price, step) * step
 		if (getTruthAuctionTickAtPrice(roundedUpPrice) === tick) return formatTruthAuctionValidationPrice(roundedUpPrice)
 	}
 	return formatTruthAuctionValidationPrice(price)

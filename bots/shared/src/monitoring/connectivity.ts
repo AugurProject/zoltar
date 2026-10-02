@@ -110,11 +110,6 @@ export function endpointLabel(value: string) {
 	return parsed.origin
 }
 
-export function validateReadRpcUrls(values: readonly string[]) {
-	if (values.length > 8) throw new Error('At most 8 read quorum RPC URLs are supported')
-	return [...new Set(values.map(value => endpointUrl(value.trim())))]
-}
-
 export function validateIndependentReadRpcUrls(primary: string, values: readonly string[]) {
 	const normalizedPrimary = endpointUrl(primary.trim())
 	if (values.length > 8) throw new Error('At most 8 read quorum RPC URLs are supported')

@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
-import { affectedProjects, componentProjects, projectDependencyClosure, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
+import { generatedArtifacts } from './generated-artifacts.ts'
+import { affectedProjects, componentProjects, projectDependencyClosure, projectForPath, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
 
@@ -61,4 +62,12 @@ test('validates composite task coverage against supported non-self tasks', () =>
 
 test('dependency closure follows registry edges without hard-coded package lists', () => {
 	expect(projectDependencyClosure(['chaos']).map(project => project.id)).toEqual(['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'contracts-zoltar', 'contracts-statoblast', 'contracts-trading', 'contracts', 'ui-core', 'bot-shared', 'chaos'])
+})
+
+test('bot projects declare every generated output the artifact registry records under their path', () => {
+	for (const artifact of generatedArtifacts.filter(entry => entry.pattern.startsWith('bots/'))) {
+		const owner = projectForPath(artifact.pattern)
+		if (owner === undefined) throw new Error(`No project owns ${artifact.pattern}`)
+		expect([...owner.generatedDirectories, ...(owner.generatedFiles ?? [])]).toContain(artifact.pattern)
+	}
 })

@@ -450,7 +450,7 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 		expect(sepoliaStatus.dataset['maskState']).toBeUndefined()
 		network.value = 'sepolia'
 		network.dispatchEvent(new Event('change'))
-		expect(summary.value).toBe('Sepolia: 1 of 15 tracked steps have set bits: Genesis Reputation Token.')
+		expect(summary.value).toBe('Sepolia: 1 of 15 tracked steps have set bits: GenesisReputationToken.')
 		expect(sepoliaStatus.dataset['maskState']).toBe('set')
 		expect(mainnetStatus.dataset['maskState']).toBeUndefined()
 		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(15)

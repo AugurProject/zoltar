@@ -399,8 +399,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		ISecurityPool parent;
 		uint256 parentSettlementCollateralAttoEth;
 		(data, parentData, parent, parentSettlementCollateralAttoEth) = _loadTruthAuctionState(securityPool);
-		uint256 poolAuctionableRepAtForkAttoRep = _getPoolAuctionableRepAtFork(parentData);
-		emit TruthAuctionStarted(securityPool, parentSettlementCollateralAttoEth, data.migratedAttoRep, poolAuctionableRepAtForkAttoRep);
 		_startTruthAuctionOrFinalize(securityPool, data, parentData, parentSettlementCollateralAttoEth);
 	}
 
@@ -449,6 +447,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		// the existing vaults' backingUnits anchor. With no migrated REP the full cap may
 		// sell; finalization then installs the standard PRICE_PRECISION backingUnits rate
 		// because the inherited denominator has no live child-vault owners.
+		emit TruthAuctionStarted(securityPool, parentSettlementCollateralAttoEth, data.migratedAttoRep, _getPoolAuctionableRepAtFork(parentData));
 		data.truthAuction.startAuction(settlementCollateralToRaiseAttoEth, _getTruthAuctionCap(securityPool, data, parentData));
 	}
 

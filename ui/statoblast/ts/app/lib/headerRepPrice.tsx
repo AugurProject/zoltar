@@ -15,8 +15,8 @@ type HeaderRepPerEthPrice = {
 }
 
 /**
- * The header REP / ETH figure follows the UI price setting, which can depend on the open pool's Open Oracle price.
- * It always names its source, marks a stale Open Oracle price, and says why no price is shown instead of leaving a blank.
+ * The header REP / ETH figure follows the UI price setting, which can depend on the open pool's OpenOracle price.
+ * It always names its source, marks a stale OpenOracle price, and says why no price is shown instead of leaving a blank.
  */
 export function getHeaderRepPerEthPrice({
 	currentTimestamp,
@@ -41,7 +41,7 @@ export function getHeaderRepPerEthPrice({
 		return hasSelectedPool ? status.title : appCopy.openPoolForOraclePrice
 	})()
 	return {
-		// A Uniswap quote failure only explains a missing Uniswap figure, never a missing Open Oracle price.
+		// A Uniswap quote failure only explains a missing Uniswap figure, never a missing OpenOracle price.
 		repPerEthFailure: usesOpenOracle ? undefined : repPerEthFailure,
 		repPerEthPrice: repPrice.price,
 		repPerEthSource: usesOpenOracle ? undefined : repPerEthSource,
