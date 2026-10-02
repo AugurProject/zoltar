@@ -344,11 +344,6 @@
 	background: var(--simulation-success-bg);
 }
 
-.simulation-banner > .contract-panel-header:first-child {
-	margin: -0.8rem -0.8rem 0;
-	padding: 0.75rem 0.8rem 0;
-}
-
 @media (max-width: 64rem) {
 	.simulation-banner-stats,
 	.simulation-delay-grid {
@@ -357,11 +352,6 @@
 
 	.simulation-banner {
 		padding: 0.1rem 0.5rem;
-	}
-
-	.simulation-banner > .contract-panel-header:first-child {
-		margin: -0.55rem -0.55rem 0;
-		padding: 0.55rem 0.55rem 0;
 	}
 
 	/* Narrow strips drop the account and trade the "Show details" text for a caret; the scenario and boot step truncate instead of wrapping. */
