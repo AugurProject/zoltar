@@ -6,7 +6,7 @@ export const maximumInsuredNoExit = 'Maximum insured No exit'
 export const disconnectedGuidance = 'Connect a wallet to load the positions for these security pools.'
 export const loadingPoolBalances = 'Loading balances separately for each security pool…'
 export const portfolioBalancesUnavailable = 'Portfolio balances could not be loaded.'
-export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in the discovered security pools.'
+export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in your saved pools.'
 export const lpClaims = 'LP claims'
 export const insuredExits = 'Insured exits'
 export const balanceUnavailable = 'Balance unavailable'
@@ -23,7 +23,7 @@ export const positionDetails = 'Position details'
 
 export const summaryLabel = 'Portfolio summary'
 export const totalValue = 'Total value'
-export const totalValueBasis = 'Exit and redemption prices now'
+export const totalValueBasis = 'Exit and redemption estimates at last refresh'
 export function excludedFromTotal(count: number) {
 	return `Excludes ${count.toString()} ${count === 1 ? 'position' : 'positions'} without a price`
 }
@@ -32,7 +32,7 @@ export const needsAttention = 'Needs attention'
 export const actionItemCount = 'Action items'
 export const nothingNeedsAttention = 'Nothing due'
 
-export const valueNow = 'Value now'
+export const valueNow = 'Position value'
 export const exitValueBasis = 'If exited at pool prices, after fees'
 export const redemptionValueBasis = 'Winning-share payout'
 export const exitValuePendingBasis = 'Pool exit for insured shares; other shares pay at resolution'
@@ -63,3 +63,8 @@ export function ethAmount(value: string) {
 export function actionFor(action: string, marketTitle: string) {
 	return `${action}: ${marketTitle}`
 }
+
+export const noSavedPools = 'No saved pools in this universe.'
+export const savePoolGuidance = 'Open a pool address in Markets to save it here.'
+
+export const refreshPortfolio = 'Refresh portfolio'

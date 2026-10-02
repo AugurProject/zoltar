@@ -46,7 +46,7 @@ test('restores the shared simulation wallet without another connect click', asyn
 			onWalletSummaryChange={value => {
 				summary = value
 			}}
-			controllerServices={{ ...liveTradingControllerServices, createTradingPublicClient: () => client, createTradingWalletClient: () => wallet, validateLiveDeployment: async () => undefined, discoverLiveUniverseMarketPage: async () => page, discoverAllLiveMarketsInUniverse: async () => page }}
+			controllerServices={{ ...liveTradingControllerServices, createTradingPublicClient: () => client, createTradingWalletClient: () => wallet, validateLiveDeployment: async () => undefined, discoverLiveUniverseMarketPage: async () => page, discoverSavedMarkets: async () => page }}
 		/>,
 	)
 	try {

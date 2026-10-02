@@ -38,7 +38,7 @@ describe('trading surface nesting', () => {
 		...offlineControllerServices,
 		discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
 		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
-		discoverAllLiveMarketsInUniverse: async () => discoveryPage([{ ...market }]),
+		discoverSavedMarkets: async () => discoveryPage([{ ...market }]),
 		...connectedWalletServices(account, configuration.chainId),
 		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
 		loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 10n ** 18n }),
