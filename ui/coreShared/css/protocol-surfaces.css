@@ -2050,6 +2050,9 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .approval-button-label {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 

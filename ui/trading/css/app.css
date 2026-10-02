@@ -569,6 +569,9 @@ button.outcome-button--no:hover:not(:disabled) {
 	color: var(--muted);
 	font-size: var(--font-label);
 }
+.fork-question-summary strong {
+	overflow-wrap: anywhere;
+}
 
 /* Deployment setup. */
 /* The progress metric's grid cell owns the divider above this row. */
