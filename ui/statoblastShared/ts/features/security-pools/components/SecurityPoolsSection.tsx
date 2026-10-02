@@ -28,21 +28,11 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 			),
 			title: commonCopy.createPool,
 		}
-	if (view === 'universes')
-		return {
-			description: (
-				<>
-					{securityPoolCopy.universesDescriptionLead}
-					<GlossaryTerm id='universe'>{glossaryCopy.universeTerm.toLowerCase()}</GlossaryTerm>
-					{securityPoolCopy.universesDescriptionTail}
-				</>
-			),
-			title: commonCopy.universe,
-		}
+	if (view === 'universes') return { description: undefined, title: commonCopy.universe }
 	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveViewChange, onLoadUniverseDirectoryPools, onOpenSecurityPool, overview, securityPoolUniverseDirectoryError, selectedPoolRepPrice, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, createPool, onActiveViewChange, onOpenSecurityPool, overview, selectedPoolRepPrice, workflow, zoltarUniverse, universeMissing, universeError, onRetryUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
@@ -64,9 +54,7 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 				/>
 			) : undefined}
 
-			{view === 'universes' ? (
-				<UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
-			) : undefined}
+			{view === 'universes' ? <UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} zoltarUniverse={zoltarUniverse} universeMissing={universeMissing} universeError={universeError} onRetryUniverse={onRetryUniverse} /> : undefined}
 
 			{/* A pending transaction on this pool locks only this pool's actions. */}
 			{view === 'operate' ? (

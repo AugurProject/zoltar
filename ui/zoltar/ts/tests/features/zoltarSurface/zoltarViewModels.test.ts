@@ -39,6 +39,13 @@ const forkedChild = createUniverse({
 	universeId: childUniverseId,
 })
 
+test('does not claim a remaining migration total when child migration history was omitted', () => {
+	const universe = createUniverse({ hasForked: true, relatedUniversesLoaded: false })
+	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n }))
+	expect(model.migratableRepAttoRep).toBeUndefined()
+	expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })
+})
+
 test('completed child migrations do not leave REP stranded in the overview', () => {
 	const universe = createUniverse({ hasForked: true, childUniverses: [{ exists: true, universeId: 2n, parentUniverseId: 0n, outcomeIndex: 0n, outcomeLabel: 'Yes', reputationToken: zeroAddress, forkTime: 0n }] })
 	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n, childMigratedAttoRep: { '2': 10n } }))

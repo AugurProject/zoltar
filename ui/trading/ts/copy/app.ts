@@ -9,7 +9,6 @@ import { disconnectWallet } from '@zoltar/ui-core-shared/copy/app.js'
 export { securityPools, universe } from '@zoltar/ui-core-shared/copy/common.js'
 export { connectWallet, deploy, loadingWithEllipsis, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
-export const universeRouteDescription = 'Market, liquidity, and portfolio follow the selected universe.'
 export const universeUnavailable = 'Unable to load the universe'
 export function universeNotFound(label: string) {
 	return `${label} is not deployed on this network.`

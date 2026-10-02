@@ -2,6 +2,7 @@
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 import { UniverseBrowser } from '../../components/UniverseBrowser.js'
 import { UniverseNamesProvider } from '../../components/UniverseNames.js'
 import { UniverseSwitcher } from '../../components/UniverseSwitcher.js'
@@ -76,6 +77,56 @@ describe('UniverseBrowser', () => {
 		expect(document.body.querySelector('nav[aria-label="Universe lineage"]')).toBeNull()
 		expect(queries.getByRole('heading', { name: 'Genesis' })).toBeTruthy()
 		expect(queries.getByText('Child universes appear after this universe forks.')).toBeTruthy()
+	})
+})
+
+describe('bounded universe overview', () => {
+	installDomTestLifecycle()
+
+	test('omits unqueried children and opens a hexadecimal ID without a tree scan', async () => {
+		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], lineage: undefined, relatedUniversesLoaded: false })} />)
+		try {
+			const queries = within(document.body)
+			expect(queries.queryByText('Child universes')).toBeNull()
+			expect(queries.queryByText('No deployed child universes.')).toBeNull()
+			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
+			fireEvent.input(input, { target: { value: '0x15' } })
+			const form = document.body.querySelector('form')
+			if (form === null) throw new Error('Expected the universe lookup form')
+			await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+			expect(window.location.hash).toContain('universe=21')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('rejects negative and oversized universe IDs', async () => {
+		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
+		try {
+			const queries = within(document.body)
+			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
+			const form = document.body.querySelector('form')
+			if (form === null) throw new Error('Expected the universe lookup form')
+			const initialHash = window.location.hash
+			for (const value of ['-1', (2n ** 248n).toString()]) {
+				fireEvent.input(input, { target: { value } })
+				await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+				expect(queries.getByText('Enter a universe ID in decimal or hexadecimal.')).toBeTruthy()
+				expect(window.location.hash).toBe(initialHash)
+			}
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('does not label omitted child information as an empty tree in the header', async () => {
+		const rendered = await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
+		try {
+			expect(within(document.body).queryByText('Child universes')).toBeNull()
+			expect(within(document.body).queryByText('No deployed child universes.')).toBeNull()
+		} finally {
+			await rendered.cleanup()
+		}
 	})
 })
 

@@ -22,6 +22,21 @@ void describe('forked categorical simulation backend', () => {
 		resetActiveEnvironmentForTesting()
 	}, 30_000)
 
+	void test('reads the universe overview without querying the fork question, ancestry, or children', async () => {
+		const client = backend.createReadClient()
+		const calls: string[] = []
+		const readContract: typeof client.readContract = async request => {
+			calls.push(request.functionName)
+			return await client.readContract(request)
+		}
+		const overview = await loadZoltarUniverseSummary({ ...client, readContract }, 0n, undefined, { includeRelatedUniverses: false })
+		expect(overview?.hasForked).toBe(true)
+		expect(overview?.relatedUniversesLoaded).toBe(false)
+		expect(overview?.childUniverses).toEqual([])
+		expect(overview?.forkQuestionDetails).toBeUndefined()
+		expect(calls).toEqual(['getUniverseTheoreticalSupplyAttoRep'])
+	})
+
 	void test('bootstraps a forked five-way categorical universe with two deployed child universes', async () => {
 		const universeSummary = await loadZoltarUniverseSummary(backend.createReadClient(), 0n)
 		if (universeSummary === undefined) throw new Error('Expected the seeded genesis universe')

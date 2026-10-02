@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolLineage, loadSecurityPoolChildren, loadSecurityPoolPage } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolLineage, loadSecurityPoolChildren } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -233,27 +233,6 @@ describe('securityPools protocol client', () => {
 		await expect(loadSecurityPoolChildren(client, securityPoolAddress)).rejects.toThrow('changed during discovery')
 	})
 
-	test('loadSecurityPoolPage preserves exact offsets above the safe multiplication range', async () => {
-		const pageIndex = Number.MAX_SAFE_INTEGER
-		const pageSize = 3
-		const expectedStartIndex = BigInt(pageIndex) * BigInt(pageSize)
-		const deploymentRangeCalls: unknown[][] = []
-		const client = createPoolLoaderClient({
-			deployments: [],
-			read: {
-				securityPoolDeploymentCount: () => expectedStartIndex + 1n,
-				securityPoolDeploymentsRange: request => {
-					deploymentRangeCalls.push(Array.isArray(request.args) ? [...request.args] : [])
-					return []
-				},
-			},
-		})
-
-		await loadSecurityPoolPage(client, pageIndex, pageSize)
-
-		expect(deploymentRangeCalls).toEqual([[expectedStartIndex, 1n]])
-	})
-
 	test.each(['all', 'new-pool-lineage'])('loads %s with the default root-pool fork outcome unset and inactive', async mode => {
 		let registryReads = 0
 		const client = createPoolLoaderClient({
@@ -281,13 +260,13 @@ describe('securityPools protocol client', () => {
 		expect(pool.hasForkActivity).toBe(false)
 	})
 
-	test('loadSecurityPoolPage rejects malformed fork data instead of casting tuple reads', async () => {
+	test('loadAllSecurityPools rejects malformed fork data instead of casting tuple reads', async () => {
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
 			poolRead: () => createPoolRead({ forkData: [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n] }),
 		})
 
-		await expect(loadSecurityPoolPage(client, 0, 1)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
+		await expect(loadAllSecurityPools(client)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
 	})
 
 	describe('parent fork activity', () => {
@@ -303,13 +282,6 @@ describe('securityPools protocol client', () => {
 			if (parentPool === undefined) throw new Error('Expected parent security pool')
 			return parentPool
 		}
-
-		test('loadSecurityPoolPage does not infer parent fork activity from other pools on the same page', async () => {
-			const parentPool = findParent((await loadSecurityPoolPage(createParentChildClient(), 0, 2)).pools)
-
-			expect(parentPool.hasForkActivity).toBe(false)
-			expect(parentPool.universeHasForked).toBe(true)
-		})
 
 		test('loadAllSecurityPools infers parent fork activity when a loaded child points to it', async () => {
 			const parentPool = findParent(await loadAllSecurityPools(createParentChildClient()))
@@ -367,7 +339,7 @@ describe('securityPools protocol client', () => {
 		expect(pool.vaults.map(vault => vault.badDebtAttoEth)).toEqual([0n, 7n])
 	})
 
-	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
+	test('loadAllSecurityPools includes bounded actionable vault previews', async () => {
 		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
 		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')]
 		let getVaultsCallCount = 0
@@ -388,9 +360,9 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		const page = await loadSecurityPoolPage(client, 0, 1, viewerVaultAddress)
-		const [pool] = page.pools
-		if (pool === undefined) throw new Error('Expected one paged security pool')
+		const pools = await loadAllSecurityPools(client, { accountAddress: viewerVaultAddress })
+		const [pool] = pools
+		if (pool === undefined) throw new Error('Expected one security pool')
 
 		expect(getVaultsCallCount).toBe(1)
 		expect(securityVaultSummaryMulticallCount).toBe(1)
@@ -401,7 +373,7 @@ describe('securityPools protocol client', () => {
 		expect(pool.questionId).toBe('0x1')
 	})
 
-	test('loadSecurityPoolPage scans past exited known vaults to fill actionable previews', async () => {
+	test('loadAllSecurityPools scans past exited known vaults to fill actionable previews', async () => {
 		const knownVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3'), getAddress('0x00000000000000000000000000000000000000c4')]
 		const currentVaultAddress = knownVaultAddresses[3]
 		if (currentVaultAddress === undefined) throw new Error('Expected a current vault address')
@@ -422,16 +394,16 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		const page = await loadSecurityPoolPage(client, 0, 1)
-		const [pool] = page.pools
-		if (pool === undefined) throw new Error('Expected one paged security pool')
+		const pools = await loadAllSecurityPools(client)
+		const [pool] = pools
+		if (pool === undefined) throw new Error('Expected one security pool')
 
 		expect(getVaultsCalls).toEqual([[0n, 4n]])
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([currentVaultAddress])
 		expect(pool.vaultCount).toBe(4n)
 	})
 
-	test('loadSecurityPoolPage caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
+	test('loadAllSecurityPools caps registry scans when arbitrary empty addresses exceed the scan budget', async () => {
 		const knownVaultAddresses = Array.from({ length: 600 }, (_, index) =>
 			getAddress(
 				`0x${BigInt(index + 1)
@@ -449,9 +421,9 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		const page = await loadSecurityPoolPage(client, 0, 1)
-		const [pool] = page.pools
-		if (pool === undefined) throw new Error('Expected one paged security pool')
+		const pools = await loadAllSecurityPools(client)
+		const [pool] = pools
+		if (pool === undefined) throw new Error('Expected one security pool')
 
 		expect(getVaultsCalls).toHaveLength(10)
 		expect(getVaultsCalls[0]).toEqual([0n, 50n])
@@ -460,40 +432,32 @@ describe('securityPools protocol client', () => {
 		expect(pool.vaultScanCapped).toBe(true)
 	})
 
-	test('loadSecurityPoolPage keeps the connected account after later positions fill the preview cap', async () => {
-		const knownVaultAddresses = [
-			getAddress('0x00000000000000000000000000000000000000c1'),
-			getAddress('0x00000000000000000000000000000000000000c2'),
-			getAddress('0x00000000000000000000000000000000000000c3'),
-			getAddress('0x00000000000000000000000000000000000000c4'),
-			getAddress('0x00000000000000000000000000000000000000c5'),
-			getAddress('0x00000000000000000000000000000000000000c6'),
-		]
-		const firstPreviewVaultAddress = knownVaultAddresses[0]
-		const secondPreviewVaultAddress = knownVaultAddresses[1]
-		const accountAddress = knownVaultAddresses[5]
-		const thirdPreviewVaultAddress = knownVaultAddresses[3]
-		if (firstPreviewVaultAddress === undefined || secondPreviewVaultAddress === undefined || accountAddress === undefined || thirdPreviewVaultAddress === undefined) throw new Error('Expected current vault addresses')
-		const currentVaultAddresses = new Set([firstPreviewVaultAddress, secondPreviewVaultAddress, thirdPreviewVaultAddress, accountAddress])
+	test('loadAllSecurityPools preserves the connected account beyond the bounded vault preview', async () => {
+		const knownVaultAddresses = Array.from({ length: 51 }, (_, index) =>
+			getAddress(
+				`0x${BigInt(index + 1)
+					.toString(16)
+					.padStart(40, '0')}`,
+			),
+		)
+		const accountAddress = knownVaultAddresses[50]
+		if (accountAddress === undefined) throw new Error('Expected the account vault beyond the preview')
 		const getVaultsCalls: [bigint, bigint][] = []
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
-			multicall: createVaultSummaryMulticall(contracts => contracts.map(contract => (currentVaultAddresses.has(getFirstArgAddress(contract)) ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]))),
+			multicall: createVaultSummaryMulticall(contracts => contracts.map(() => [2n, 0n, 0n, 0n, 0n])),
 			read: {
 				getVaultCount: () => BigInt(knownVaultAddresses.length),
 				getVaults: createPagedGetVaults(knownVaultAddresses, getVaultsCalls),
 			},
 		})
-
-		const page = await loadSecurityPoolPage(client, 0, 1, accountAddress)
-		const [pool] = page.pools
-		if (pool === undefined) throw new Error('Expected one paged security pool')
-
-		expect(getVaultsCalls).toEqual([[0n, 6n]])
-		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([firstPreviewVaultAddress, secondPreviewVaultAddress, thirdPreviewVaultAddress, accountAddress])
+		const [pool] = await loadAllSecurityPools(client, { accountAddress })
+		if (pool === undefined) throw new Error('Expected one security pool')
+		expect(getVaultsCalls).toEqual([[0n, 50n]])
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual(knownVaultAddresses)
 	})
 
-	test('loadSecurityPoolPage marks empty browse-page vault sets as already loaded', async () => {
+	test('loadAllSecurityPools marks empty vault sets as already loaded', async () => {
 		let getVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
 		const client = createPoolLoaderClient({
@@ -505,17 +469,17 @@ describe('securityPools protocol client', () => {
 			read: {
 				getVaults: () => {
 					getVaultsCallCount += 1
-					throw new Error('Empty browse-page loads should not fetch preview vault addresses')
+					throw new Error('Empty pool loads should not fetch preview vault addresses')
 				},
 				securityVaults: () => {
-					throw new Error('Empty browse-page loads should not fetch per-vault summaries')
+					throw new Error('Empty pool loads should not fetch per-vault summaries')
 				},
 			},
 		})
 
-		const page = await loadSecurityPoolPage(client, 0, 1)
-		const [pool] = page.pools
-		if (pool === undefined) throw new Error('Expected one paged security pool')
+		const pools = await loadAllSecurityPools(client)
+		const [pool] = pools
+		if (pool === undefined) throw new Error('Expected one security pool')
 
 		expect(getVaultsCallCount).toBe(0)
 		expect(securityVaultSummaryMulticallCount).toBe(0)

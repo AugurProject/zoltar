@@ -118,7 +118,8 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 			if (prepared === undefined || migrated === undefined) return undefined
 			return prepared > migrated ? prepared - migrated : 0n
 		}) ?? []
-	let remainingPrepared = prepared
+	// Remaining credit depends on per-child history, which bounded overviews intentionally omit.
+	let remainingPrepared = loadedUniverse?.relatedUniversesLoaded === false && prepared !== 0n ? undefined : prepared
 	if (remainingByChild.length > 0) {
 		remainingPrepared = remainingByChild.some(value => value === undefined) ? undefined : remainingByChild.reduce<bigint>((maximum, value) => (value !== undefined && value > maximum ? value : maximum), 0n)
 	}

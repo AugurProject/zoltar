@@ -66,7 +66,7 @@ export function App() {
 		onchainStateDependencies,
 	})
 	const { transactionState } = transactionTray
-	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, includeRelatedUniverses: activeRoute === 'zoltar' && activeZoltarView === 'migrate', autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const { loadingZoltarForkAccess, loadingZoltarUniverse, loadZoltarUniverse, zoltarForkRepBalanceAttoRep, zoltarUniverse, zoltarUniverseError, zoltarUniverseMissing } = operations
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,

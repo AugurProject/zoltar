@@ -1,12 +1,13 @@
 /// <reference types='bun-types' />
 
 import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { DeploymentStatus, MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -85,6 +86,51 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 
 describe('useZoltarUniverse', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
+
+	test('loads related universe details only for migration and discards a stale full read on return', async () => {
+		const delayedFullRead = createDeferred<ZoltarUniverseSummary>()
+		const scopes: boolean[] = []
+		const overview = createUniverseSummary({ relatedUniversesLoaded: false })
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => 0n,
+			loadZoltarUniverseSummary: async (_client, _id, _address, options) => {
+				const full = options?.includeRelatedUniverses ?? true
+				scopes.push(full)
+				return full ? await delayedFullRead.promise : overview
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness({ includeRelatedUniverses }: { includeRelatedUniverses: boolean }) {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					includeRelatedUniverses,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Harness includeRelatedUniverses={false} />)
+		trackCleanup(rendered.cleanup)
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse).toEqual(overview))
+		await act(() => render(<Harness includeRelatedUniverses />, rendered.container))
+		await waitFor(() => expect(scopes).toEqual([false, true]))
+		await act(() => render(<Harness includeRelatedUniverses={false} />, rendered.container))
+		await waitFor(() => expect(scopes).toEqual([false, true, false]))
+		await act(async () => {
+			delayedFullRead.resolve(createUniverseSummary({ relatedUniversesLoaded: true }))
+			await delayedFullRead.promise
+		})
+		expect(requireHookState(hookState).zoltarUniverse).toEqual(overview)
+	})
 
 	test('does not request a child-universe transaction when the active wallet account changed', async () => {
 		const onTransactionRequested = mock(() => undefined)

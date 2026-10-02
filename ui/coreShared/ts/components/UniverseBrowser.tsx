@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { UniverseLookup } from './UniverseLookup.js'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 import { formatUniverseIdHex } from '../lib/universeLabels.js'
@@ -126,9 +127,12 @@ export function UniverseBrowser({ actions, activeUniverseId, children, renderChi
 					</ReadOnlyDetailAccordion>
 				</div>
 			</SectionBlock>
-			<SectionBlock title={commonCopy.childUniverses} variant='plain'>
-				<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
-			</SectionBlock>
+			<UniverseLookup activeUniverseId={activeUniverseId} />
+			{universe.relatedUniversesLoaded === false ? undefined : (
+				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
+					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
+				</SectionBlock>
+			)}
 		</div>
 	)
 }

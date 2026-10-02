@@ -7,18 +7,17 @@ import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 import { readWithRpcStateRetries } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireForkDataView } from './forkData.js'
 import { getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
-import { getForkOutcomeKey, getProtocolPageOffset } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getForkOutcomeKey } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
-const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
 const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
@@ -621,37 +620,6 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
 	})
 	return applyChildForkActivityHints(pools)
-}
-
-export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number, pageSize: number, accountAddress?: Address): Promise<SecurityPoolPage> {
-	const startIndex = getProtocolPageOffset(pageIndex, pageSize)
-	const poolCount = await client.readContract({
-		address: getInfraContractAddresses().securityPoolFactory,
-		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'securityPoolDeploymentCount',
-		args: [],
-	})
-	if (startIndex >= poolCount) {
-		return {
-			pageIndex,
-			pageSize,
-			poolCount,
-			pools: [],
-		}
-	}
-	const count = poolCount - startIndex < BigInt(pageSize) ? poolCount - startIndex : BigInt(pageSize)
-	const deployments = await loadSecurityPoolDeployments(client, startIndex, count)
-	const pools = await loadListedSecurityPools(client, deployments, {
-		...(accountAddress === undefined ? {} : { accountAddress }),
-		vaultDetailMode: 'all',
-		vaultPreviewLimit: SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT,
-	})
-	return {
-		pageIndex,
-		pageSize,
-		poolCount,
-		pools,
-	}
 }
 
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {

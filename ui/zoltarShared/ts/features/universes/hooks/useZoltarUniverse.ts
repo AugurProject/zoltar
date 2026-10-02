@@ -49,6 +49,7 @@ type UseZoltarUniverseParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
 	autoLoadInitialData: boolean
+	includeRelatedUniverses?: boolean
 	deploymentStatuses: DeploymentStatus[]
 	environmentRefreshKey: number
 }
@@ -76,7 +77,7 @@ const defaultUseZoltarUniverseDependencies: UseZoltarUniverseDependencies = {
 }
 
 export function useZoltarUniverse(
-	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters,
+	{ accountAddress, activeUniverseId, autoLoadInitialData, includeRelatedUniverses = false, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted }: UseZoltarUniverseParameters,
 	dependencies: UseZoltarUniverseDependencies = defaultUseZoltarUniverseDependencies,
 ) {
 	const zoltarDeployed = hasDeployedStep(deploymentStatuses, 'zoltar')
@@ -101,8 +102,8 @@ export function useZoltarUniverse(
 	const zoltarChildUniverseFeedback = useSignal<ActionFeedback<'createChildUniverse'> | undefined>(undefined)
 	const zoltarChildUniversePendingOutcomeIndex = useSignal<bigint | undefined>(undefined)
 	const isMounted = useRef(true)
-	const currentZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed })
-	const previousZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed })
+	const currentZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses })
+	const previousZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses })
 	const currentQuestionContextRef = useRef({ environmentRefreshKey, zoltarDeployed })
 	const previousQuestionContextRef = useRef({ environmentRefreshKey, zoltarDeployed })
 	const questionLoadGenerationRef = useRef(0)
@@ -113,12 +114,12 @@ export function useZoltarUniverse(
 	// Each background request and foreground commit retires older background answers.
 	const universeCommitVersionRef = useRef(0)
 	const questionPageCommitVersionRef = useRef(0)
-	const universeQueryKey = zoltarDeployed ? `${environmentRefreshKey}:${activeUniverseId}` : undefined
+	const universeQueryKey = zoltarDeployed ? `${environmentRefreshKey}:${activeUniverseId}:${includeRelatedUniverses}` : undefined
 	const questionPage = zoltarQuestionPage.value
 	const questionPageQueryKey = zoltarDeployed && questionPage !== undefined ? `${environmentRefreshKey}:${questionPage.pageIndex}:${questionPage.pageSize}` : undefined
 	const universeQuery = useQueryState(zoltarUniverseQueries, universeQueryKey)
 	const questionPageQuery = useQueryState(zoltarQuestionPageQueries, questionPageQueryKey)
-	currentZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+	currentZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 	currentQuestionContextRef.current = { environmentRefreshKey, zoltarDeployed }
 
 	const resetZoltarUniverseState = () => {
@@ -145,9 +146,9 @@ export function useZoltarUniverse(
 		zoltarQuestionPage.value = undefined
 		zoltarQuestions.value = []
 	}
-	const isCurrentZoltarContext = (context: { activeUniverseId: bigint; environmentRefreshKey: number; zoltarDeployed: boolean }) => {
+	const isCurrentZoltarContext = (context: { activeUniverseId: bigint; environmentRefreshKey: number; zoltarDeployed: boolean; includeRelatedUniverses: boolean }) => {
 		const currentContext = currentZoltarContextRef.current
-		return currentContext.activeUniverseId === context.activeUniverseId && currentContext.environmentRefreshKey === context.environmentRefreshKey && currentContext.zoltarDeployed === context.zoltarDeployed
+		return currentContext.activeUniverseId === context.activeUniverseId && currentContext.environmentRefreshKey === context.environmentRefreshKey && currentContext.zoltarDeployed === context.zoltarDeployed && currentContext.includeRelatedUniverses === context.includeRelatedUniverses
 	}
 	const isCurrentQuestionLoad = (generation: number, context: { environmentRefreshKey: number; zoltarDeployed: boolean }) => {
 		const currentContext = currentQuestionContextRef.current
@@ -173,7 +174,7 @@ export function useZoltarUniverse(
 		const clearCurrentState = options.clearCurrentState ?? true
 		const isCurrent = nextUniverseLoad()
 		const requestedUniverseId = activeUniverseId
-		const universeLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+		const universeLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 		if (clearCurrentState) resetZoltarUniverseState()
 		else zoltarUniverseError.value = undefined
 		return await universeLoad.run({
@@ -188,7 +189,7 @@ export function useZoltarUniverse(
 					zoltarChildUniversePendingOutcomeIndex.value = undefined
 					return undefined
 				}
-				return await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), requestedUniverseId)
+				return await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), requestedUniverseId, undefined, { includeRelatedUniverses })
 			},
 			onSuccess: universe => {
 				if (!isCurrentZoltarContext(universeLoadContext)) return
@@ -202,7 +203,7 @@ export function useZoltarUniverse(
 				zoltarUniverseLoadedId.value = requestedUniverseId
 				zoltarUniverseResolvedId.value = requestedUniverseId
 				universeCommitVersionRef.current += 1
-				zoltarUniverseQueries.set(`${universeLoadContext.environmentRefreshKey}:${requestedUniverseId}`, universe)
+				zoltarUniverseQueries.set(`${universeLoadContext.environmentRefreshKey}:${requestedUniverseId}:${includeRelatedUniverses}`, universe)
 			},
 			onError: error => {
 				if (!isCurrentZoltarContext(universeLoadContext)) return
@@ -403,7 +404,7 @@ export function useZoltarUniverse(
 	/** Re-reads the loaded universe and question page on a new block, keeping the current data visible until the read lands. */
 	const refreshInBackground = async () => {
 		if (!isMounted.current || !zoltarDeployed) return
-		const universeContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+		const universeContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 		const questionContext = { environmentRefreshKey, zoltarDeployed }
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const tasks: Promise<void>[] = []
@@ -411,7 +412,11 @@ export function useZoltarUniverse(
 			const commitVersion = ++universeCommitVersionRef.current
 			tasks.push(
 				zoltarUniverseQueries
-					.fetch(universeQueryKey, async () => await runReadOperation(async operation => await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), activeUniverseId), { isCurrent: () => isMounted.current && isCurrentZoltarContext(universeContext) }))
+					.fetch(
+						universeQueryKey,
+						async () =>
+							await runReadOperation(async operation => await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), activeUniverseId, undefined, { includeRelatedUniverses }), { isCurrent: () => isMounted.current && isCurrentZoltarContext(universeContext) }),
+					)
 					.then(universe => {
 						if (universe === undefined || !isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
 						if (!isSameQueryData(universe, zoltarUniverse.value)) zoltarUniverse.value = universe
@@ -514,10 +519,10 @@ export function useZoltarUniverse(
 
 	useLayoutEffect(() => {
 		const previousContext = previousZoltarContextRef.current
-		const contextChanged = previousContext.activeUniverseId !== activeUniverseId || previousContext.environmentRefreshKey !== environmentRefreshKey || previousContext.zoltarDeployed !== zoltarDeployed
-		previousZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+		const contextChanged = previousContext.activeUniverseId !== activeUniverseId || previousContext.environmentRefreshKey !== environmentRefreshKey || previousContext.zoltarDeployed !== zoltarDeployed || previousContext.includeRelatedUniverses !== includeRelatedUniverses
+		previousZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 		if (contextChanged) resetZoltarUniverseState()
-	}, [activeUniverseId, environmentRefreshKey, zoltarDeployed])
+	}, [activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses])
 
 	useLayoutEffect(() => {
 		const previousContext = previousQuestionContextRef.current
@@ -534,7 +539,7 @@ export function useZoltarUniverse(
 			initialLoads.push(page === undefined ? loadZoltarQuestionCountData() : loadQuestionsPage(page.pageIndex, page.pageSize))
 		}
 		void Promise.allSettled(initialLoads)
-	}, [activeUniverseId, autoLoadInitialData, environmentRefreshKey, zoltarDeployed])
+	}, [activeUniverseId, autoLoadInitialData, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses])
 
 	useLayoutEffect(() => {
 		return () => {

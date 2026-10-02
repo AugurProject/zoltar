@@ -131,6 +131,7 @@ describe('universe directory', () => {
 		const rendered = await renderIntoDocument(view(undefined))
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
+		expect(within(rendered.container).getByRole('textbox', { name: 'Open universe by ID' })).toBeTruthy()
 		expect(rendered.container.textContent).not.toContain('Security pool discovery failed')
 		await waitFor(() => expect(discoveryStates.at(-1)).toBe('error'))
 		expect(rendered.container.textContent).not.toContain('Loading universe details')

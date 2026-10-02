@@ -223,7 +223,7 @@ async function loadUniverseLineage(client: ReadClient, universeId: bigint, unive
  * target that deployment; the fork question, outcome labels, and lineage outcome names still come from the active profile's question data, so the
  * address must belong to the same canonical deployment as the active network profile.
  */
-export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar')): Promise<ZoltarUniverseSummary | undefined> {
+export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar'), { includeRelatedUniverses = true }: { includeRelatedUniverses?: boolean } = {}): Promise<ZoltarUniverseSummary | undefined> {
 	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
@@ -263,12 +263,12 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	const [reputationTokenMetadata, totalTheoreticalSupplyAttoRep, lineage] = await Promise.all([
 		loadReputationTokenMetadata(client, repToken, universeId === 0n),
 		client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', address: zoltarAddress, args: [universeId] }),
-		loadUniverseLineage(client, universeId, universeData, zoltarAddress),
+		includeRelatedUniverses ? loadUniverseLineage(client, universeId, universeData, zoltarAddress) : undefined,
 	])
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
 	let forkQuestionDetails: MarketDetails | undefined = undefined
-	if (hasForked && forkQuestionId > 0n) {
+	if (includeRelatedUniverses && hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails
 		if (marketDetails.marketType === 'scalar') {
@@ -386,6 +386,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 
 	return {
 		childUniverses,
+		relatedUniversesLoaded: includeRelatedUniverses,
 		forkBurnDivisor,
 		forkQuestionDetails,
 		forkThresholdAttoRep,

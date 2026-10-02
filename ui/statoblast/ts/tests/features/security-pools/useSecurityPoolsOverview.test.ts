@@ -12,7 +12,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
-import { createCoordinatorFundingRequirement, createSecurityPoolPageFromLoadedPools, createSecurityPoolsOverviewDependencies, renderSecurityPoolsOverviewHook, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
+import { createCoordinatorFundingRequirement, createSecurityPoolsOverviewDependencies, renderSecurityPoolsOverviewHook, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 import { createSelectedPool } from './workflow/builders.js'
 
 function createListedSecurityPool(questionId: string, securityPoolAddress: Address = zeroAddress): ListedSecurityPool {
@@ -51,22 +51,10 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		return hook
 	}
 
-	void test('does not scan the registry on mount and waits for readiness for universe statistics', async () => {
-		const ready = createDeferred<void>()
-		const loadSecurityPoolPage = mock(async () => createSecurityPoolPageFromLoadedPools([createListedSecurityPool('0x01')], 0, 100))
-		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolPage, waitForSecurityPoolReadBackend: () => ready.promise }))
-		expect(loadSecurityPoolPage).not.toHaveBeenCalled()
-		let pending: Promise<boolean> | undefined
-		await act(() => {
-			pending = state().loadUniverseDirectoryPools()
-		})
-		expect(loadSecurityPoolPage).not.toHaveBeenCalled()
-		await act(async () => {
-			ready.resolve()
-			await pending
-		})
-		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
-		expect(state().universeDirectoryPools?.map(pool => pool.questionId)).toEqual(['0x01'])
+	void test('does not discover pools on mount', async () => {
+		const loadSecurityPoolLineage = unexpectedAsyncCall('loadSecurityPoolLineage')
+		await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolLineage }))
+		expect(loadSecurityPoolLineage).not.toHaveBeenCalled()
 	})
 
 	void test('loads only the checked pool lineage for workflow details', async () => {
@@ -195,7 +183,6 @@ void describe('useSecurityPoolsOverview helpers', () => {
 					createConnectedReadClient: mock(() => readClient),
 					loadCoordinatorInitialReportFundingRequirement: mock(async () => createCoordinatorFundingRequirement({ reputationTokenAddress: zeroAddress })),
 					loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
-					loadSecurityPoolPage: unexpectedAsyncCall('loadSecurityPoolPage'),
 					queueSecurityPoolLiquidation,
 				}),
 			)

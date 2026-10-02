@@ -5,19 +5,8 @@ import { zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/eth
 import { requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
-import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolPage } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { OracleManagerDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
-
-// Builds the page shape loadSecurityPoolPage returns from an in-memory pool list.
-export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
-	const startIndex = pageIndex * pageSize
-	return {
-		pageIndex,
-		pageSize,
-		poolCount: BigInt(pools.length),
-		pools: pools.slice(startIndex, startIndex + pageSize),
-	}
-}
 
 export type TestSecurityPoolsOverviewWriteClient = { kind: 'write-client' }
 type Dependencies = UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>
@@ -128,7 +117,6 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<Depen
 		})),
 		loadOracleManagerDetails: mock(async () => defaultManagerDetails),
 		loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
-		loadSecurityPoolPage: mock(async () => createSecurityPoolPageFromLoadedPools([], 0, 2)),
 		queueSecurityPoolLiquidation: mock(async () => ({
 			hash: zeroHash,
 		})),

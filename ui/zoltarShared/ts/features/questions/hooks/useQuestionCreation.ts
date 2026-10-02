@@ -22,6 +22,7 @@ export type UseQuestionCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
 		activeUniverseId: bigint
 		autoLoadInitialData: boolean
+		includeRelatedUniverses?: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
 	}
@@ -130,11 +131,11 @@ function getValueForStorageKey<T>(keyedValue: KeyedValue<T> | undefined, storage
 }
 
 export function useQuestionCreation(
-	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseQuestionCreationParameters,
+	{ accountAddress, activeUniverseId, autoLoadInitialData, includeRelatedUniverses = false, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseQuestionCreationParameters,
 	dependencies: UseQuestionCreationDependencies = defaultUseQuestionCreationDependencies,
 	{ fixedMarketType, universeScoped = false }: UseQuestionCreationOptions = {},
 ) {
-	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
+	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, includeRelatedUniverses, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
 	const normalizeForm: NormalizeQuestionForm = form => (fixedMarketType === undefined ? form : { ...form, marketType: fixedMarketType })
 	const draftUniverseId = universeScoped ? activeUniverseId : undefined
 	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress, draftUniverseId)

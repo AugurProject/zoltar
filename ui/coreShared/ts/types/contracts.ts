@@ -35,6 +35,8 @@ export type ZoltarChildUniverseSummary = {
 } & ReputationTokenMetadata
 
 export type ZoltarUniverseSummary = {
+	/** False for bounded overview reads that omit ancestry, fork question details, and children. */
+	relatedUniversesLoaded?: boolean
 	childUniverses: ZoltarChildUniverseSummary[]
 	forkBurnDivisor?: bigint
 	forkThresholdAttoRep: bigint

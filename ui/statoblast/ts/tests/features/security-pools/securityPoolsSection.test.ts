@@ -97,7 +97,6 @@ void describe('SecurityPoolsSection', () => {
 		const calls: string[] = []
 		const props = createSecurityPoolsSectionProps({
 			activeView: 'browse',
-			onLoadUniverseDirectoryPools: () => calls.push('universes'),
 			onOpenSecurityPool: address => calls.push(address),
 			overview: createOverviewProps(),
 		})
@@ -234,8 +233,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const universesRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'universes' })))
 		cleanupRenderedComponent = universesRender.cleanup
-		expect(getTextWithoutTermDefinitions(document.body.querySelector('.route-description'))).toBe('Security pools grouped by universe. A fork creates child universes, each with its own REP and pools.')
-		expect(within(document.body).getByRole('button', { name: 'universe' }).getAttribute('aria-expanded')).toBe('false')
+		expect(document.body.querySelector('.route-description')).toBeNull()
 	})
 
 	void test('shows the role guide on browse until it is dismissed', async () => {

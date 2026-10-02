@@ -27,6 +27,8 @@ import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
+import { UniverseLookup } from '@zoltar/ui-core-shared/components/UniverseLookup.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
@@ -193,13 +195,14 @@ export function LiveTrading({
 		if (confirmedUniverseId === undefined || discoveryState === 'error')
 			return (
 				<div className='route-view-flow'>
-					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
+					<RouteHeader title={appCopy.universe} />
 					<ErrorNotice message={connectionMessage} />
 					{discoveryState === 'error' ? (
 						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={refreshLocked} />
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}
+					<UniverseLookup activeUniverseId={tryParseBigIntInput(selectedUniverseId ?? '') ?? 0n} />
 				</div>
 			)
 		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />

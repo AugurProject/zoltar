@@ -21,8 +21,6 @@ export const creatingQuestionAndPool = 'Creating question and pool…'
 export const poolCreationInProgress = 'Security pool creation is already in progress.'
 export const createQuestionAndPoolReviewTitle = 'Create question and security pool'
 export const createPoolReviewTitle = 'Create security pool'
-export const universesDescriptionLead = 'Security pools grouped by '
-export const universesDescriptionTail = '. A fork creates child universes, each with its own REP and pools.'
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
 export const badDebt = 'Bad debt'
@@ -47,8 +45,6 @@ export const escalationWithdrawalRequiredDetail = 'Withdraw escalation deposits 
 export const openInterestFeeYear = 'Open interest fee / year'
 export const totalPoolHeldAttoRep = 'Pool-held REP'
 export const vaultCount = 'Known vaults'
-export const loadingSecurityPools = 'Loading security pools…'
-export const retryLoadingPools = 'Retry'
 export const searchPools = 'Search or paste a pool address'
 export const sortPools = 'Sort'
 export const remainingCapacity = 'Remaining capacity'
@@ -249,13 +245,6 @@ export const queuedVaultOperationAutomaticRefreshDetail = 'This request was subm
 export const operationDetails = 'Operation details'
 export const selectOperation = 'Select operation'
 export const openOperationById = 'Open operation by ID'
-
-export function universePoolCount(count: bigint) {
-	return `${count} ${count === 1n ? 'pool' : 'pools'}`
-}
-export function universeVaultCount(count: bigint) {
-	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
-}
 
 export const manualRepPerEth = 'OpenOracle REP per ETH starting price'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
