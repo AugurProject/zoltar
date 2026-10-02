@@ -202,8 +202,14 @@ fieldset {
 	background: rgba(0, 0, 0, 0.7);
 }
 
-.operator-confirm-dialog h2 {
-	margin-top: 0;
+.operator-confirm-dialog form {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.operator-confirm-dialog h2,
+.operator-confirm-dialog form > p {
+	margin: 0;
 }
 
 .operator-confirm-dialog label {

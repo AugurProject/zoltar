@@ -82,7 +82,9 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) {
 	return node
 }
 
-export function createOperationDialog(options: { request: (value: unknown) => Promise<unknown> }) {
+type OperationAction = 'execute' | 'inspect' | 'preview' | 'status'
+
+export function createOperationDialog(options: { request: (value: unknown, action: OperationAction) => Promise<unknown> }) {
 	const dialog = element('dialog')
 	dialog.className = 'operation-dialog'
 	dialog.id = 'operation-dialog'
@@ -303,7 +305,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 						}
 					}),
 			)
-			const value = result(await options.request({ action, definitionId: selected.id, inputs: submitted, ...(candidate === undefined ? {} : { candidate }) }))
+			const value = result(await options.request({ action, definitionId: selected.id, inputs: submitted, ...(candidate === undefined ? {} : { candidate }) }, action))
 			if (requestGeneration !== generation) return
 			show(value)
 		} catch (error) {
@@ -324,7 +326,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	async function poll(reference: string, requestGeneration: number) {
 		if (requestGeneration !== generation || !dialog.open) return
 		try {
-			const response = record(await options.request({ action: 'status', previewId: reference }))
+			const response = record(await options.request({ action: 'status', previewId: reference }, 'status'))
 			if (requestGeneration !== generation) return
 			if (response['execution'] === null) {
 				status.textContent = 'Execution status unavailable. Check Activity and the current workflow before retrying.'
@@ -381,7 +383,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		execute.disabled = true
 		workflowLink.hidden = false
 		status.textContent = 'Starting operation…'
-		void options.request({ action: 'execute', previewId: reference }).then(
+		void options.request({ action: 'execute', previewId: reference }, 'execute').then(
 			() => poll(reference, requestGeneration),
 			error => {
 				if (error instanceof Error && error.name === 'MutationOutcomeUnknown') {

@@ -14,7 +14,7 @@ import { createRecoveryContexts } from './dashboard-recovery-contexts.ts'
 import { registerRecoveryForms } from './dashboard-recovery-forms.ts'
 import { createDashboardRecoveryView } from './dashboard-recovery-view.js'
 import { createDashboardRefresh } from './dashboard-refresh.ts'
-import { put } from './dashboard-requests.ts'
+import { put, readThroughPut } from './dashboard-requests.ts'
 import { registerSettingsForms } from './dashboard-settings-forms.ts'
 import { createDashboardSettingsView } from './dashboard-settings-view.js'
 import { createDashboardState } from './dashboard-state.ts'
@@ -66,7 +66,11 @@ const selectionControls = createSelectionControls({
 	reconcile: (error, status) => controller.reconcileUnknownMutation(error, status, 'configuration and state', 'settings'),
 })
 const latches = createMutationLatches({ state, elements, executionModeForm, selectionControls })
-const operationDialog = createOperationDialog({ request: value => put('/api/operation', value, 120_000) })
+const operationDialog = createOperationDialog({
+	// The 1.5 s status poll must not hold back state polling. Inspect and preview stay counted: the server runs a scan
+	// for them inside its mutation queue, so state reads sent meanwhile would time out; the settle wait is bounded.
+	request: (value, action) => (action === 'status' ? readThroughPut('/api/operation', value, 10_000) : put('/api/operation', value, 120_000)),
+})
 const renderCatalogGroups = createCatalogGroups(elements.catalogRows, ecosystemOrder, ecosystemLabel)
 
 const recoveryView = createDashboardRecoveryView({ state, elements })

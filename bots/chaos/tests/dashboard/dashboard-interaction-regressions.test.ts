@@ -328,3 +328,67 @@ browserTest(
 	},
 	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
 )
+
+browserTest(
+	'an unanswered operation status poll does not stop state polling',
+	async () => {
+		const status = gate()
+		const actions: unknown[] = []
+		let stateReads = 0
+		try {
+			await withDashboard(
+				{
+					getState: () => {
+						stateReads += 1
+						return state({ evaluations: [{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.weth.wrap', independentlyExecutable: true, label: 'Wrap WETH' }, eligibility: { blockers: [], eligible: true } }], wallet: walletAddress })
+					},
+					setOperation: async value => {
+						const action = typeof value === 'object' && value !== null ? Reflect.get(value, 'action') : undefined
+						actions.push(action)
+						if (action === 'status') {
+							await status.opened
+							return { execution: null }
+						}
+						if (action === 'execute') return { execution: { message: 'Checking current state…', status: 'pending' } }
+						return {
+							blockers: [],
+							candidates: [],
+							coverage: [],
+							fields: [{ advanced: false, key: 'amount', kind: 'amount', label: 'Amount', value: '73' }],
+							mode: 'dry-run',
+							steps: [],
+							...(action === 'preview' ? { expiresAt: Date.now() + 60_000, previewId: 'preview-1' } : {}),
+						}
+					},
+				},
+				'/catalog',
+				async cdp => {
+					const executeButton = "document.querySelector('#operation-dialog .operation-actions button:nth-child(2)')"
+					await cdp.waitFor("document.querySelector('.operation-open') !== null", { message: 'catalog did not render' })
+					await cdp.evaluate("(() => { for (const group of document.querySelectorAll('.catalog-group')) group.open = true; document.querySelector('.operation-open').click() })()")
+					await cdp.waitFor("document.querySelector('#operation-input-amount') !== null && document.querySelector('#operation-dialog fieldset')?.disabled === false", { message: 'operation did not load' })
+					await cdp.evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+					await cdp.waitFor(`${executeButton}.disabled === false`, { message: 'preview did not complete' })
+					await cdp.evaluate(`${executeButton}.click()`)
+					for (let attempt = 0; attempt < 100 && !actions.includes('status'); attempt++) await Bun.sleep(25)
+					expect(actions).toContain('status')
+					// The status request now hangs inside the server's mutation queue. State polling must still run and,
+					// because the server cannot answer the read, mark the retained snapshot stale instead of waiting.
+					await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+					await cdp.waitFor("document.querySelector('#global-error')?.classList.contains('hidden') === false && document.querySelector('#operator-health')?.textContent?.includes('Dashboard state is stale') === true", {
+						attempts: 320,
+						message: 'state polling stopped behind an unanswered status poll',
+					})
+					status.release()
+					const readsAfterRelease = stateReads
+					await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+					await cdp.waitFor("document.querySelector('#global-error')?.classList.contains('hidden') === true", { message: 'state polling did not recover after the status poll answered' })
+					expect(stateReads).toBeGreaterThan(readsAfterRelease)
+				},
+			)
+		} finally {
+			status.release()
+		}
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
+)

@@ -1285,9 +1285,14 @@ figure.time-chart > svg {
 }
 .operations-filter-actions {
 	display: flex;
+	grid-column: 1 / -1;
 	gap: 0.65rem;
 	align-items: center;
 	justify-content: flex-end;
+}
+.operations-filter-actions .primary,
+.operations-filter-actions .secondary {
+	white-space: nowrap;
 }
 input,
 select {
@@ -1420,10 +1425,10 @@ button[aria-busy="true"]:disabled {
 }
 .feed-header,
 .log-row {
-	/* Seven tracks plus gaps and padding need 1097px; a smaller minimum lets cells spill out of the row. */
-	min-width: 1100px;
+	/* Seven tracks plus gaps and padding need 1127px; a smaller minimum lets cells spill out of the row. */
+	min-width: 1130px;
 	display: grid;
-	grid-template-columns: 112px 200px minmax(140px, 1fr) minmax(160px, 1fr) minmax(140px, 1fr) 130px 120px;
+	grid-template-columns: 112px 200px minmax(140px, 1fr) minmax(160px, 1fr) minmax(140px, 1fr) 160px 120px;
 	align-items: center;
 	gap: 0.7rem;
 }

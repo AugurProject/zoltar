@@ -1302,9 +1302,9 @@ function reviewFixture() {
 	const root = { forkQuestionId: 0n, forkTime: 0n, id: 0n, outcomeIndex: undefined, parentId: undefined, repToken: address }
 	const child = (id: bigint) => ({ forkQuestionId: 0n, forkTime: 0n, id, outcomeIndex: id, parentId: 0n, repToken: getAddress(`0x${id.toString(16).padStart(40, '0')}`) })
 	state.universes = [root, child(11n), child(12n)]
-	const fixed = { execute: false, queuedSigner: undefined as { kind: 'apply'; address: Address } | undefined, wallet: undefined as Address | undefined }
-	const requests = { paused: [] as boolean[], strategy: [] as unknown[], submission: [] as unknown[], universes: [] as unknown[] }
-	const failures = { paused: undefined as Error | undefined, state: false }
+	const fixed: { execute: boolean; queuedSigner: { kind: 'apply'; address: Address } | undefined; wallet: Address | undefined } = { execute: false, queuedSigner: undefined, wallet: undefined }
+	const requests: { paused: boolean[]; strategy: unknown[]; submission: unknown[]; universes: unknown[] } = { paused: [], strategy: [], submission: [], universes: [] }
+	const failures: { paused: Error | undefined; state: boolean } = { paused: undefined, state: false }
 	const snapshot = () => {
 		if (failures.state) throw new Error('State unavailable')
 		return operatorSnapshot(state, settings.strategy, settings.submission, settings.connectivity, {
@@ -1499,7 +1499,7 @@ test('reloading the configuration asks before discarding unsaved edits, and fiel
 
 test('polls leave an unchanged price chart in place so an open selector and a scrolled samples table survive', async () => {
 	const { server, state } = reviewFixture()
-	const pool = '0x0000000000000000000000000000000000000002' as Address
+	const pool = getAddress('0x0000000000000000000000000000000000000002')
 	state.priceHistory = [
 		{ blockNumber: '100', pool, priceWeth: '0.01', sampledAt: '2026-01-01T00:00:00.000Z', symbol: 'REP', token: address, venue: 'Uniswap V3' },
 		{ blockNumber: '101', pool, priceWeth: '0.02', sampledAt: '2026-01-01T00:00:12.000Z', symbol: 'REP', token: address, venue: 'Uniswap V3' },

@@ -88,3 +88,36 @@ browserTest(
 	},
 	60_000,
 )
+
+browserTest(
+	'the stylesheet hides hidden controls, overlays search results, and wraps exact metric values',
+	async () => {
+		await withBrowserPage(`${origin}/richlist?demo=1&chainId=1`, desktopViewport, async session => {
+			const { evaluate, waitFor } = session
+			await waitFor(`document.querySelector('.data-table tbody tr') !== null`)
+			expect(await evaluate(`(() => { const more = document.querySelector('#richlist-more'); more.hidden = true; return more.classList.contains('secondary') && getComputedStyle(more).display })()`)).toBe('none')
+			const headerHeight = await evaluate(`document.querySelector('.site-header').getBoundingClientRect().height`)
+			await evaluate(`document.querySelector('#global-search-input').value = '23184711'; document.querySelector('#global-search-input').dispatchEvent(new Event('input', { bubbles: true }))`)
+			await waitFor(`document.querySelector('#global-search-results a') !== null`)
+			expect(await evaluate(`getComputedStyle(document.querySelector('#global-search-results')).position`)).toBe('absolute')
+			expect(await evaluate(`document.querySelector('.site-header').getBoundingClientRect().height`)).toBe(headerHeight)
+
+			await session.send('Page.navigate', { url: `${origin}/system?demo=1&chainId=1` })
+			await waitFor(`document.querySelector('.metric-card strong') !== null`)
+			expect(await evaluate(`getComputedStyle(document.querySelector('.metric-card strong')).whiteSpace`)).toBe('normal')
+		})
+	},
+	60_000,
+)
+
+browserTest(
+	'activity rows fit their columns in an 800px-wide viewport',
+	async () => {
+		await withBrowserPage(`${origin}/?demo=1&chainId=1`, { width: 800, height: 900 }, async session => {
+			const { evaluate, waitFor } = session
+			await waitFor(`document.querySelector('.log-row .cell-tx') !== null`)
+			expect(await evaluate(`[...document.querySelectorAll('.log-row')].every(row => row.scrollWidth <= row.clientWidth)`)).toBe(true)
+		})
+	},
+	60_000,
+)

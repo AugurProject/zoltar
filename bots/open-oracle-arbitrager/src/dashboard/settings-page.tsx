@@ -20,10 +20,7 @@ function ConnectivityPanel() {
 	return (
 		<SettingsGroup formId='connectivity-form' id='network-connectivity' summary='Unknown network' summaryId='network-value' title='Chain and RPC connectivity'>
 			<p id='network-target-status' class='muted' role='status' aria-live='polite' hidden />
-			<p class='section-note'>
-				Changing Chain asks for confirmation, then pauses the bot and loads that chain's separately saved settings and journals without restarting the process. Unsaved edits on this page are discarded, and the bot stops managing the previous chain until you switch back. Every endpoint is checked against the selected
-				chain before it is accepted.
-			</p>
+			<p class='section-note'>Every endpoint is checked against the selected chain before it is accepted.</p>
 			<form id='connectivity-form'>
 				<fieldset id='connectivity-fieldset' disabled>
 					<RawMarkup html={rpcConnectivityFields({ independentQuorum: true, statusId: 'connectivity-status', statusText: '', submissionLimit: 8, submitLabel: 'Save RPC endpoints' })} />

@@ -1,7 +1,7 @@
 import { LIVE_SIGNER_MISMATCH } from '../core/execution-mode.ts'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardJson as json } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { publicOperatorFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
@@ -226,7 +226,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			['<!-- operator-header -->', operatorHeader],
 		],
 		port,
-		route: async (request, { acceptedAuthorities, url }) => {
+		route: async (request, { url }) => {
 			if (request.method === 'GET' && url.pathname === '/api/state') {
 				try {
 					return json(publicOperatorSnapshot(await controller.getState()))
@@ -264,9 +264,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				} catch (error) {
 					return publicDashboardError('liquidator', error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
 				}
-			}
-			if (request.method === 'PUT' && !dashboardRequestIsSameOrigin(request, acceptedAuthorities)) {
-				return json({ error: 'Cross-origin requests are not accepted' }, 403)
 			}
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
 				['/api/approved-universes', controller.setApprovedUniverses],
