@@ -33,12 +33,18 @@ contract VaultOperations {
 	uint256 public constant MAX_ACTIONS = 4;
 	address private immutable coordinator;
 	bool private submitting;
+	struct BundleLiquidation {
+		address targetVault;
+		uint256 requestedDebtAttoEth;
+		LiquidationSnapshot snapshot;
+	}
 	struct Bundle {
 		address owner;
 		bool changeCommitment;
 		uint256 commitmentAttoEth;
 		uint256 withdrawAttoRep;
-		LiquidationRequest[] liquidations;
+		uint256 minimumReceiverHealthFactorBps;
+		BundleLiquidation[] liquidations;
 	}
 	mapping(uint256 => Bundle) private bundles;
 
@@ -59,10 +65,10 @@ contract VaultOperations {
 		require(!submitting, 'Vault submission already active');
 		submitting = true;
 		ISecurityPool pool = IVaultOperationsCoordinator(coordinator).securityPool();
-		if (input.depositAttoRep > 0) pool.depositRepToVaultFromCoordinator(msg.sender, input.depositAttoRep);
+		if (input.depositAttoRep > 0) pool.depositRepToVaultFromExecutor(msg.sender, input.depositAttoRep);
 		if (input.changeCommitment || input.liquidations.length > 0 || input.withdrawAttoRep > 0) {
 			operationId = IVaultOperationsCoordinator(coordinator).stagedOperationCounter() + 1;
-			uint256 count = _stage(operationId, msg.sender, input, IVaultOperationsCoordinator(coordinator).minLiquidationPriceDistanceBps());
+			uint256 count = _stage(operationId, msg.sender, input);
 			require(IVaultOperationsCoordinator(coordinator).stageVaultOperations{value: msg.value}(msg.sender, input.changeCommitment, count, input.validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth) == operationId, 'Bundle id changed');
 		} else {
 			require(input.depositAttoRep > 0, 'Choose a vault action');
@@ -74,19 +80,21 @@ contract VaultOperations {
 		submitting = false;
 	}
 
-	function _stage(uint256 operationId, address owner, VaultOperationsInput calldata input, uint256 minLiquidationPriceDistanceBps) private returns (uint256 actionCount) {
+	function _stage(uint256 operationId, address owner, VaultOperationsInput calldata input) private returns (uint256 actionCount) {
 		actionCount =
 			input.liquidations.length +
 			(input.changeCommitment ? 1 : 0) +
 			(input.withdrawAttoRep > 0 ? 1 : 0);
 		require(actionCount > 0 && actionCount <= MAX_ACTIONS, 'Choose one to four price actions');
 		ISecurityPool pool = IVaultOperationsCoordinator(coordinator).securityPool();
-		require(input.minimumReceiverHealthFactorBps >= 10_000, 'Receiver health factor below one');
+		if (input.liquidations.length > 0)
+			require(input.minimumReceiverHealthFactorBps >= 10_000, 'Receiver health factor below one');
 		Bundle storage bundle = bundles[operationId];
 		bundle.owner = owner;
 		bundle.changeCommitment = input.changeCommitment;
 		bundle.commitmentAttoEth = input.commitmentAttoEth;
 		bundle.withdrawAttoRep = input.withdrawAttoRep;
+		bundle.minimumReceiverHealthFactorBps = input.minimumReceiverHealthFactorBps;
 		for (uint256 index = 0; index < input.liquidations.length; index++) {
 			VaultLiquidationInput calldata liquidation = input.liquidations[index];
 			require(liquidation.targetVault != address(0) && liquidation.targetVault != owner, 'Choose another vault');
@@ -96,7 +104,7 @@ contract VaultOperations {
 			}
 			(uint256 backingUnits, uint256 limit, , ) = pool.securityVaults(liquidation.targetVault);
 			require(backingUnits > 0 && limit > 0, 'Target vault has no commitment');
-			bundle.liquidations.push(LiquidationRequest({operationId: operationId, operator: owner, receiverVault: owner, targetVault: liquidation.targetVault, requestedDebtAttoEth: liquidation.requestedDebtAttoEth, snapshot: LiquidationSnapshot({targetBackingUnits: backingUnits, targetUnderwritingLimitAttoEth: limit}), minimumReceiverHealthFactorBps: input.minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps: minLiquidationPriceDistanceBps}));
+			bundle.liquidations.push(BundleLiquidation({targetVault: liquidation.targetVault, requestedDebtAttoEth: liquidation.requestedDebtAttoEth, snapshot: LiquidationSnapshot({targetBackingUnits: backingUnits, targetUnderwritingLimitAttoEth: limit})}));
 			emit VaultLiquidationStaged(operationId, liquidation.targetVault, liquidation.requestedDebtAttoEth);
 		}
 		emit VaultOperationsStaged(operationId, owner, input.changeCommitment, input.commitmentAttoEth, input.withdrawAttoRep);
@@ -111,20 +119,23 @@ contract VaultOperations {
 		Bundle memory bundle = bundles[operationId];
 		require(bundle.owner != address(0), 'Bundle unavailable');
 		ISecurityPool pool = IVaultOperationsCoordinator(coordinator).securityPool();
-		for (uint256 index = 0; index < bundle.liquidations.length; index++) {
-			LiquidationRequest memory request = bundle.liquidations[index];
-			(uint256 backingUnits, uint256 limit, , ) = pool.securityVaults(request.targetVault);
-			require(backingUnits == request.snapshot.targetBackingUnits && limit == request.snapshot.targetUnderwritingLimitAttoEth, 'Stale liquidation');
-		}
 		if (bundle.changeCommitment) pool.setVaultUnderwritingLimit(bundle.owner, bundle.commitmentAttoEth);
-		for (uint256 index = 0; index < bundle.liquidations.length; index++)
-			pool.performLiquidation(bundle.liquidations[index]);
-		if (bundle.withdrawAttoRep > 0) pool.withdrawRepFromVault(bundle.owner, bundle.withdrawAttoRep);
+		for (uint256 index = 0; index < bundle.liquidations.length; index++) {
+			BundleLiquidation memory liquidation = bundle.liquidations[index];
+			pool.performLiquidation(LiquidationRequest({operationId: operationId, operator: bundle.owner, receiverVault: bundle.owner, targetVault: liquidation.targetVault, requestedDebtAttoEth: liquidation.requestedDebtAttoEth, snapshot: liquidation.snapshot, minimumReceiverHealthFactorBps: bundle.minimumReceiverHealthFactorBps, minLiquidationPriceDistanceBps: IVaultOperationsCoordinator(coordinator).minLiquidationPriceDistanceBps()}));
+		}
+		if (bundle.withdrawAttoRep > 0) {
+			require(_previewWithdrawRep(pool, bundle.owner, bundle.withdrawAttoRep) > 0, 'Withdraw amount has no effect');
+			pool.withdrawRepFromVault(bundle.owner, bundle.withdrawAttoRep);
+		}
 	}
 
-	/// @notice Executes existing single operations through the same authenticated pool boundary.
 	/// @notice Uses the same minimum-remainder sweep rule as pool withdrawals.
 	function previewWithdrawRep(ISecurityPool pool, address vault, uint256 amountAttoRep) external view returns (uint256) {
+		return _previewWithdrawRep(pool, vault, amountAttoRep);
+	}
+
+	function _previewWithdrawRep(ISecurityPool pool, address vault, uint256 amountAttoRep) private view returns (uint256) {
 		if (amountAttoRep == 0) return 0;
 		(uint256 vaultBackingUnits, , , ) = pool.securityVaults(vault);
 		uint256 backingUnitsToWithdraw = pool.attoRepToBackingUnits(amountAttoRep);
@@ -136,6 +147,7 @@ contract VaultOperations {
 		return pool.backingUnitsToAttoRep(withdrawBackingUnits);
 	}
 
+	/// @notice Executes existing single operations through the same authenticated pool boundary.
 	function executeSingle(uint256 operationId, StagedOperation calldata operation) external onlyCoordinator returns (uint256 debtMovedAttoEth) {
 		ISecurityPool pool = IVaultOperationsCoordinator(coordinator).securityPool();
 		if (operation.operation == OperationType.VaultOperations) {

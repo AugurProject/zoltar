@@ -1,4 +1,5 @@
 export const title = 'Vault operations'
+export const review = 'Review vault operations'
 export const description = 'Deposit REP, change your commitment, and liquidate other vaults in this pool together.'
 export const myVault = 'Prepare my vault'
 export const deposit = 'Deposit REP (optional)'
@@ -37,15 +38,32 @@ export const laterFailure = 'Later execution can fail or expire. Deposited REP r
 export const reviewStaged = 'View staged operations'
 export const retry = 'Retry'
 export const lookup = 'Find target by address'
-export const lookupAction = 'Open vault'
+export const lookupAction = 'Add target'
 export const walletBalance = 'Wallet REP balance'
 export const currentCommitment = 'Current commitment'
 export const currentBacking = 'Current REP backing'
 export const initialPriceNeeded = 'Enter a positive initial oracle report price.'
+export const initialPriceLabel = 'Initial oracle report price'
+export const targetNoBacking = 'This vault has no REP backing to liquidate.'
+export const anotherTarget = 'Choose another vault to liquidate.'
+export const previewDeposit = 'Deposit'
+export const previewLiquidations = 'Liquidations'
+const targetBacking = 'REP backing'
+const targetCommitment = 'Commitment'
+const targetMaximum = 'Maximum liquidatable'
+export const dismiss = 'Dismiss'
+export const pendingCommitment = 'A commitment operation is already pending for your vault.'
+export const depositApprovalPurpose = 'Vault deposit'
+export const otherReportSponsor = 'Another wallet sponsors the pending report. Wait for settlement.'
+export const settlementCapacity = 'Not enough automatic settlement capacity. Wait for pending operations to finish.'
+export const minimumDeposit = 'The resulting vault deposit is below the pool minimum.'
+export const insufficientRep = 'Insufficient wallet REP for the deposit and oracle funding.'
+export const fundingChanged = 'Oracle funding changed. Review the batch again.'
+export const insufficientApproval = 'REP deposit approval is insufficient.'
+export const confirmedUnknown = 'Transaction confirmed, but the bundle outcome is unavailable. Check staged operations before submitting again.'
 export const actionNeeded = 'Choose a vault action.'
 export const poolInactive = 'Vault operations require an operational, unforked pool.'
 export const walletWrongNetwork = 'Switch to the pool network before submitting.'
-export const targetHealthy = 'Healthy at the current price'
 export const targetUnavailable = 'Target vault is unavailable in this pool.'
 export const estimateHint = 'Estimates use the displayed price. Execution rechecks every action.'
 export const freshFailure = 'Failure reverts the entire submission, including the deposit.'
@@ -57,7 +75,7 @@ export const unknownOutcome = 'Bundle outcome unavailable · check staged operat
 
 export const unavailable = '—'
 export const oracle = 'OpenOracle'
-export const formatRep = (amount: string) => `${amount} REP`
-export const formatEth = (amount: string) => `${amount} ETH`
-export const formatWeth = (amount: string) => `${amount} WETH`
-export const formatTargetSummary = (backing: string, commitment: string, healthy: boolean) => `${formatRep(backing)} · ${formatEth(commitment)}${healthy ? ` · ${targetHealthy}` : ''}`
+const formatRep = (amount: string) => `${amount} REP`
+const formatEth = (amount: string) => `${amount} ETH`
+export const formatTargetSummary = (backing: string, commitment: string) => `${targetBacking}: ${formatRep(backing)} · ${targetCommitment}: ${formatEth(commitment)}`
+export const formatTargetMaximum = (amount: string) => `${targetMaximum}: ${formatEth(amount)}`

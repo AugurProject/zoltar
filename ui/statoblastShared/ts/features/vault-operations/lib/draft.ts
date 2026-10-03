@@ -1,6 +1,7 @@
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { parseEthAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { validateVaultOperations, type VaultOperationsInput } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
+import * as copy from '../../../copy/vaultOperations.js'
 
 export type VaultOperationsDraft = {
 	deposit: string
@@ -27,5 +28,5 @@ export function parseVaultOperationsDraft(draft: VaultOperationsDraft, owner: Ad
 }
 
 export function getVaultOperationsPrice(proposedPrice: string, cachedPrice: bigint, isPriceValid: boolean) {
-	return isPriceValid || proposedPrice.trim() === '' ? cachedPrice : parseRepAmountInput(proposedPrice, 'Enter a positive initial oracle report price.')
+	return isPriceValid || proposedPrice.trim() === '' ? cachedPrice : parseRepAmountInput(proposedPrice, copy.initialPriceLabel)
 }

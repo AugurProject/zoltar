@@ -371,7 +371,7 @@ export function stagedDownstreamPreflight(pool: PoolSnapshot, staged: EcosystemS
 		return encodePreflightCall({
 			abi: securityPoolAbi,
 			args: [staged.operator, amount(staged.amount)],
-			caller: staged.coordinator,
+			caller: pool.vaultOperations,
 			expectedResult: staged.executionExpectedResult,
 			functionName: staged.operation === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit',
 			label: `${staged.operation === 1 ? 'withdraw REP' : 'adjust backing target'} for staged operation ${staged.id}`,

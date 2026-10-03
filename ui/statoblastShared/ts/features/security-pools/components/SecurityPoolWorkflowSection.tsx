@@ -289,6 +289,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								contextKey={`${props.vaultOperationsContextKey}:${accountState.chainId}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
 								networkReady={model.isOnActiveAppChain}
 								onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
+								onPoolChanged={totalCommitment => onRefreshSelectedPoolData(loadedSelectedPool.securityPoolAddress, totalCommitment)}
 							/>
 						) : undefined}
 

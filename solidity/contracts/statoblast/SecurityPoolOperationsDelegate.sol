@@ -102,10 +102,10 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		_setUnderwritingLimit(msg.sender, limitAttoEth);
 	}
 
-	/// @notice Pool delegatecall target, coordinator-only: sets `vault`'s underwriting limit.
+	/// @notice Pool delegatecall target, executor-only: sets `vault`'s underwriting limit.
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(msg.sender == address(pool.openOraclePriceCoordinator()) || msg.sender == address(pool.openOraclePriceCoordinator().vaultOperations()), 'Unauthorized');
+		require(msg.sender == address(pool.openOraclePriceCoordinator().vaultOperations()), 'Unauthorized');
 		_setUnderwritingLimit(vault, limitAttoEth);
 	}
 
@@ -179,14 +179,14 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
-	/// @notice Pool delegatecall target: deposits REP from the caller into the caller's vault.
-	/// @notice Coordinator-only deposit for the wallet that submitted a vault bundle; the pool remains the spender.
-	function depositRepToVaultFromCoordinator(address owner, uint256 amountAttoRep) external {
+	/// @notice Executor-only deposit for the wallet that submitted a vault bundle; the pool remains the spender.
+	function depositRepToVaultFromExecutor(address owner, uint256 amountAttoRep) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(msg.sender == address(pool.openOraclePriceCoordinator()) || msg.sender == address(pool.openOraclePriceCoordinator().vaultOperations()), 'Only coordinator');
+		require(msg.sender == address(pool.openOraclePriceCoordinator().vaultOperations()), 'Only vault operations executor');
 		_depositRepToVault(owner, amountAttoRep, statoblastSecurityMultiplierBps);
 	}
 
+	/// @notice Pool delegatecall target: deposits REP from the caller into the caller's vault.
 	function depositRepToVault(uint256 amountAttoRep, uint256 targetHealthFactorBps) external {
 		_depositRepToVault(msg.sender, amountAttoRep, targetHealthFactorBps);
 	}

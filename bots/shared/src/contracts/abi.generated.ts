@@ -1583,6 +1583,7 @@ export const openOraclePriceCoordinatorAbi = [
 	},
 	{ type: 'function', name: 'MAX_PENDING_SETTLEMENT_OPERATIONS', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'OPEN_INTEREST_DIVIDER', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'SETTLEMENT_GAS_OVERHEAD', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'disputeDelay', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
 	{ type: 'function', name: 'escalationHaltMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'executeStagedOperation', stateMutability: 'nonpayable', inputs: [{ name: 'operationId', type: 'uint256', internalType: 'uint256' }], outputs: [] },

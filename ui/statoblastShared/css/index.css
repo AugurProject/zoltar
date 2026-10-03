@@ -3908,6 +3908,7 @@ span.rep-price-status.stale,
 
 .vault-operations-fields {
 	display: grid;
+	align-items: start;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--space-4);
 }
@@ -3959,7 +3960,10 @@ span.rep-price-status.stale,
 	margin: 0;
 	text-align: right;
 	font-family: var(--font-family-mono);
-	overflow-wrap: anywhere;
+	white-space: nowrap;
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
 }
 
 .vault-operations-preview .section-block-body {
@@ -3974,6 +3978,11 @@ span.rep-price-status.stale,
 }
 
 @media (max-width: 40rem) {
+	.vault-operations-lookup .field-inline {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
 	.vault-operations-fields,
 	.vault-operations-targets li {
 		grid-template-columns: minmax(0, 1fr);

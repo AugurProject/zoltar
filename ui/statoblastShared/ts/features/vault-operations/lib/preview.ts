@@ -1,20 +1,23 @@
 import type { VaultOperationsInput } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
-import { simulateLiquidation } from '../../security-pools/lib/liquidation.js'
+import { getLiquidationFailureReason, simulateLiquidation } from '../../security-pools/lib/liquidation.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
+import * as copy from '../../../copy/vaultOperations.js'
 
-export function previewVaultOperations(pool: ListedSecurityPool, owned: SecurityVaultDetails, targets: SecurityPoolVaultSummary[], input: VaultOperationsInput, price: bigint) {
+export function previewVaultOperations(pool: ListedSecurityPool, owned: SecurityVaultDetails, targets: SecurityPoolVaultSummary[], input: VaultOperationsInput, price: bigint, minLiquidationPriceDistanceBps?: bigint) {
 	let receiver: SecurityPoolVaultSummary = {
 		vaultAddress: owned.vaultAddress,
 		vaultAttoRepBacking: owned.vaultAttoRepBacking + input.depositAttoRep,
 		underwritingLimitAttoEth: input.changeCommitment ? input.commitmentAttoEth : owned.underwritingLimitAttoEth,
 		disputeStakedAttoRep: owned.disputeStakedAttoRep,
 		claimableFeesAttoEth: owned.claimableFeesAttoEth,
+		badDebtAttoEth: owned.badDebtAttoEth,
 	}
 	const totalLimit = pool.totalUnderwritingLimitAttoEth - owned.underwritingLimitAttoEth + receiver.underwritingLimitAttoEth
 	for (const selected of input.liquidations) {
 		const target = targets.find(candidate => candidate.vaultAddress.toLowerCase() === selected.targetVault.toLowerCase())
-		if (target === undefined) throw new Error('A selected liquidation target is still loading.')
-		const transfer = simulateLiquidation({
+		if (target === undefined) throw new Error(copy.targetUnavailable)
+		if (target.vaultAttoRepBacking <= 0n) throw new Error(copy.targetNoBacking)
+		const parameters = {
 			callerVaultSummary: receiver,
 			requestedDebtAttoEth: selected.requestedDebtAttoEth,
 			totalUnderwritingLimitAttoEth: totalLimit,
@@ -23,7 +26,13 @@ export function previewVaultOperations(pool: ListedSecurityPool, owned: Security
 			settlementCollateralAttoEth: pool.settlementCollateralAttoEth,
 			statoblastSecurityMultiplierBps: pool.statoblastSecurityMultiplierBps,
 			targetVaultSummary: target,
-		})
+			minLiquidationPriceDistanceBps,
+			minimumSecurityBondDebtAttoEth: owned.minimumSecurityBondDebtAttoEth,
+			minimumReceiverHealthFactorBps: input.minimumReceiverHealthFactorBps,
+		}
+		const reason = getLiquidationFailureReason(parameters)
+		if (reason !== undefined) throw new Error(reason)
+		const transfer = simulateLiquidation(parameters)
 		receiver = { ...receiver, ...transfer.callerAfter }
 	}
 	const afterRequestedWithdrawal = receiver.vaultAttoRepBacking - input.withdrawAttoRep

@@ -3,11 +3,17 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsPrice } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/draft.js'
 
 import { getMaxLiquidationAmount } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
+import { validateVaultOperations } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
 
 const owner = getAddress('0x0000000000000000000000000000000000000001')
 const target = '0x0000000000000000000000000000000000000002'
 
 describe('pool vault operation draft', () => {
+	test('requires receiver health protection only for liquidation bundles', () => {
+		const deposit = { ...parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), deposit: '5' }, owner), minimumReceiverHealthFactorBps: 0n }
+		expect(() => validateVaultOperations(deposit, owner)).not.toThrow()
+		expect(() => validateVaultOperations({ ...deposit, liquidations: [{ targetVault: getAddress(target), requestedDebtAttoEth: 1n }] }, owner)).toThrow('Receiver health factor')
+	})
 	test('blank commitment preserves it, while zero explicitly clears it', () => {
 		const draft = { ...emptyVaultOperationsDraft(), deposit: '12.5' }
 		expect(parseVaultOperationsDraft(draft, owner).changeCommitment).toBe(false)

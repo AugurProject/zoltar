@@ -87,6 +87,7 @@
 	"functions": {
 		"MAX_PENDING_SETTLEMENT_OPERATIONS": "view",
 		"OPEN_INTEREST_DIVIDER": "view",
+		"SETTLEMENT_GAS_OVERHEAD": "view",
 		"disputeDelay": "view",
 		"escalationHaltMultiplierBps": "view",
 		"executeStagedOperation": "nonpayable",
@@ -150,8 +151,8 @@
 		"openOracleCallback": "openOracleCallback(uint256,uint256,uint256,uint256,address,address)",
 		"recoverSettledPendingReport": "recoverSettledPendingReport()",
 		"requestPrice": "requestPrice(uint256,uint256,uint256)",
-		"requestPriceIfNeededAndStageOperation": "requestPriceIfNeededAndStageOperation(uint8,address,uint256,uint256,uint256,uint256)",
-		"requestPriceIfNeededAndStageLiquidation": "requestPriceIfNeededAndStageLiquidation(address,address,uint256,bytes32,uint256,uint256,uint256)",
+		"requestPriceIfNeededAndStageOperation": "requestPriceIfNeededAndStageOperation(uint8,address,uint256,uint256,uint256,uint256,uint256)",
+		"requestPriceIfNeededAndStageLiquidation": "requestPriceIfNeededAndStageLiquidation(address,address,uint256,bytes32,uint256,uint256,uint256,uint256)",
 		"setLiquidationApprovalRegistry": "setLiquidationApprovalRegistry(address)",
 		"setRepEthPrice": "setRepEthPrice(uint256)",
 		"setSecurityPool": "setSecurityPool(address)",

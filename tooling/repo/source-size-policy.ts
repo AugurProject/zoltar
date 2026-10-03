@@ -15,7 +15,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/monitoring/discovery.ts', 1011],
+		['bots/chaos/src/monitoring/discovery.ts', 1002],
 		['bots/chaos/src/monitoring/topology-cache.ts', 941],
 		['bots/chaos/src/dashboard/dashboard-server.ts', 887],
 		['bots/chaos/src/state/protocol-index-store.ts', 900],
@@ -32,7 +32,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
 		['tooling/docs/check-docs-examples.mts', 1043],
 		['tooling/testing/coverage-report.mts', 931],
-		['tooling/docs/check-docs-reference-values.mts', 826],
+		['tooling/docs/check-docs-reference-values.mts', 802],
 		['tooling/ui/watch.mts', 781],
 		['tooling/contracts/deploy-testnet.mts', 671],
 	]),

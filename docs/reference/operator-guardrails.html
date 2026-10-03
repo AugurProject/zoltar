@@ -528,7 +528,7 @@
 							</tr>
 							<tr>
 								<td>Vault operation bundle</td>
-								<td><code>submitVaultOperations</code> applies a deposit, commitment change, liquidations of other vaults, and withdrawal to one pool. At most four price actions fit a bundle. A fresh-price failure reverts the submission; with a stale price the deposit remains while the remaining actions execute atomically after settlement. See <a href="./contracts/openoraclepricecoordinator.html">coordinator execution and funding</a>.</td>
+								<td><code>submitVaultOperations</code> applies a deposit, commitment change, liquidations of other vaults, and withdrawal to one pool. At most four price actions fit a bundle. A fresh-price failure reverts the submission; with a stale price the deposit remains while the remaining actions execute atomically after settlement. Any change to a queued liquidation target's REP backing units or underwriting commitment fails the whole bundle, including the owner's commitment change and withdrawal. See <a href="./contracts/openoraclepricecoordinator.html">coordinator execution and funding</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/VaultOperations.sol">VaultOperations.sol</a></td>
 							</tr>
 							<tr>

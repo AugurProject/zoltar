@@ -21,7 +21,7 @@ export function validateVaultOperations(input: VaultOperationsInput, owner: Addr
 	if (count > MAX_VAULT_PRICE_ACTIONS) throw new Error('Choose at most four commitment, liquidation, or withdrawal actions.')
 	if (count === 0 && input.depositAttoRep === 0n) throw new Error('Choose a vault action.')
 	if (input.validForSeconds <= 0n || input.validForSeconds > 300n) throw new Error('Execution window must be between one second and five minutes.')
-	if (input.minimumReceiverHealthFactorBps < 10_000n) throw new Error('Receiver health factor must be at least one.')
+	if (input.liquidations.length > 0 && input.minimumReceiverHealthFactorBps < 10_000n) throw new Error('Receiver health factor must be at least one.')
 	const targets = new Set<string>()
 	for (const liquidation of input.liquidations) {
 		const target = liquidation.targetVault.toLowerCase()

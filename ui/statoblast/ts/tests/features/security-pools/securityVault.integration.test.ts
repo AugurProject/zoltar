@@ -1,6 +1,6 @@
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
-import { submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
+import { quoteVaultOperations, submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { loadOracleManagerDetails, loadQueuedVaultOperationState, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
@@ -21,6 +21,11 @@ import { createQuestion } from '../../../../../../solidity/ts/testSupport/simula
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { useSepoliaAnvilUiEnvironment } from './testSupport/sepoliaAnvilUi.js'
 import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
+import { depositRepToVault, setUnderwritingLimit } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
+import { createWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
+import { approveToken } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
+import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
+import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 
 const genesisUniverse = 0n
 const statoblastSecurityMultiplierBps = 20_000n
@@ -70,6 +75,73 @@ describe('Security vault integration', () => {
 		const details = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
 		expect(details?.vaultAttoRepBacking).toBe(depositAmount)
 		expect(details?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
+	})
+
+	test('a queued withdrawal-only bundle does not block a commitment bundle quote', async () => {
+		await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)
+		const input = { depositAttoRep: 0n, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 10n ** 18n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }
+		const queued = await submitVaultOperations(uiWriteClient, securityPoolAddress, input, 10n ** 18n)
+		expect(queued.queuedOperation).toBeDefined()
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...input, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, withdrawAttoRep: 0n }, 10n ** 18n)).resolves.toMatchObject({ needsReport: false })
+	})
+
+	test('fresh bundle quotes reject an oracle price too close to expiry', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(client, mockWindow, manager)
+		const details = await loadOracleManagerDetails(uiReadClient, manager)
+		const now = await mockWindow.getTime()
+		if (details.priceValidUntilTimestamp === undefined) throw new Error('Missing price expiry in fixture')
+		await mockWindow.advanceTime(details.priceValidUntilTimestamp - now - 5n)
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { depositAttoRep: 0n, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)).rejects.toThrow('expire')
+	})
+
+	for (const stale of [false, true]) {
+		test(`the UI submits liquidation and withdrawal together (${stale ? 'queued' : 'fresh'})`, async () => {
+			const unit = 10n ** 18n
+			const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+			await manipulatePriceOracle(client, mockWindow, manager, unit)
+			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0, client.chain)
+			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
+			await depositRepToVault(targetClient, securityPoolAddress, 1000n * unit)
+			await setUnderwritingLimit(targetClient, securityPoolAddress, 400n * unit)
+			await mockWindow.advanceTime(3601n)
+			await manipulatePriceOracle(client, mockWindow, manager, 3n * unit)
+			if (stale) await mockWindow.advanceTime(3601n)
+			const result = await submitVaultOperations(
+				uiWriteClient,
+				securityPoolAddress,
+				{ depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * unit, liquidations: [{ targetVault: targetClient.account.address, requestedDebtAttoEth: 400n * unit }], withdrawAttoRep: 100n * unit, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n },
+				3n * unit,
+			)
+			if (stale) {
+				expect(result.queuedOperation).toBeDefined()
+				await handleOracleReporting(client, mockWindow, manager, 3n * unit)
+				expect((await loadQueuedVaultOperationState(uiReadClient, manager, result)).status).toBe('executed')
+			} else expect(result.stagedExecution?.success).toBe(true)
+			expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, targetClient.account.address))?.underwritingLimitAttoEth).toBe(0n)
+			const receiver = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+			expect(receiver?.underwritingLimitAttoEth).toBe(450n * unit)
+			expect(receiver?.vaultAttoRepBacking).toBe(10_900n * unit)
+		})
+	}
+
+	test('bundle simulation errors expose the pool revert reason before sending', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(client, mockWindow, manager)
+		await expect(submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: 0n, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 1n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)).rejects.toThrow('Withdraw amount has no effect')
+	})
+
+	test('quotes protect minimum deposits and combined wallet funding', async () => {
+		const input = { depositAttoRep: 1n, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, input, 0n)).rejects.toThrow('below the pool minimum')
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...input, depositAttoRep: 10n ** 50n }, 0n)).rejects.toThrow('Insufficient wallet REP')
+	})
+
+	test('quotes reject another report sponsor and a second pending commitment change', async () => {
+		const input = { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }
+		await submitVaultOperations(uiWriteClient, securityPoolAddress, input, 10n ** 18n)
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...input, depositAttoRep: 0n }, 10n ** 18n)).rejects.toThrow('commitment operation is already pending')
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, addressString(TEST_ADDRESSES[1]), { ...input, changeCommitment: false, withdrawAttoRep: 1n }, 10n ** 18n)).rejects.toThrow('Another wallet sponsors')
 	})
 
 	test('funds the pool deposit and coordinator oracle report through distinct spenders in one bundle plan', async () => {

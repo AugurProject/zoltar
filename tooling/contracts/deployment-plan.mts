@@ -11,17 +11,17 @@ import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as fa
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	tradingFactory: '0x1286a240001fa0d8bcf282331151c82336f877d21de98e240cb0d03a8ff5fdfd',
-	tradingRouter: '0x399e80bd5585fa70896d371403018d5608232f34c9b4e870723b18c94b3e64fd',
+	tradingFactory: '0x4a2e40b133792bc3443c668fd9d281ace05a13b2c6fd49bc6cff6125f3a48352',
+	tradingRouter: '0x499e9d4ef3cf82d5493c626a77763676bdb318317d979789ebb4723396b1d3b9',
 	arachnidCreate2Deployer: '0x2fa86add0aed31f33a762c9d88e807c475bd51d0f52bd0955754b2608f7e4989',
 }
 
 // Contracts whose runtime code embeds WETH-derived addresses differ on testnets that use the deterministic WETH9.
 const DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
-	openOraclePriceCoordinatorFactory: '0x5ba69360e4b4cf46bcd3137b9fd8dd3c95d9a2b0c654a3a25bd308163f367cd0',
-	securityPoolFactory: '0x18b8d949098a42b3bfea204638dba9563c07ec492668db7bb304722ce261d384',
-	tradingFactory: '0xad917900c9bf329c08ed150ce81f04a572de39eb57d79decbf80e9546f0ff3e2',
-	tradingRouter: '0xceb19b61002bbccd24a470ae279d377fe4437b6760aa48d8a11a1ec3e255feb7',
+	openOraclePriceCoordinatorFactory: '0xf520a6ed2c6ddae02234059697b6bc55c45774ffabd062672743c73a83d017e1',
+	securityPoolFactory: '0xd8b15695a97129c9867348609c2dd2b1c5a12cfb6195c84a21f5ff4202e641e0',
+	tradingFactory: '0x612120d47b1e352dfb43c2342fd350cff17832ca355ba420110d9541e915dff7',
+	tradingRouter: '0x6a4fa01327c5ef641b5b8a586de96b2024d95d52a20d19b3d23a6bb62a566283',
 }
 
 function getExpectedRuntimeCodeHash(id: string) {

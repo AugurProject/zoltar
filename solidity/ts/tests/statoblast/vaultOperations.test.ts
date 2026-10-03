@@ -31,6 +31,70 @@ describe('Statoblast: pool vault operation bundles', () => {
 		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator)
 	}
 
+	for (const stale of [false, true]) {
+		test(`non-liquidation bundles accept an unused zero receiver health factor (${stale ? 'queued' : 'fresh'})`, async () => {
+			await prepare()
+			const manager = fixture.securityPoolAddresses.openOraclePriceCoordinator
+			if (stale) {
+				await fixture.mockWindow.advanceTime(301n)
+				await fundCoordinatorInitialReport(fixture.client, manager, unit)
+			}
+			await submit({ ...input(), changeCommitment: true, commitmentAttoEth: 50n * unit, minimumReceiverHealthFactorBps: 0n }, stale ? await getRequestPriceCostAttoEth(fixture.client, manager) : 0n, stale ? unit : 0n)
+			if (stale) await handleOracleReporting(fixture.client, fixture.mockWindow, manager, unit)
+			expect((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)).underwritingLimitAttoEth).toBe(50n * unit)
+		})
+	}
+
+	test('a bundle withdrawal with no REP effect is rejected', async () => {
+		await prepare()
+		await submit({ ...input(), withdrawAttoRep: 10_000n * unit })
+		await expect(submit({ ...input(), changeCommitment: true, commitmentAttoEth: 0n, withdrawAttoRep: 1n })).rejects.toThrow('Withdraw amount has no effect')
+	})
+
+	test('queued no-effect withdrawals fail the bundle instead of succeeding', async () => {
+		await prepare()
+		const manager = fixture.securityPoolAddresses.openOraclePriceCoordinator
+		await submit({ ...input(), withdrawAttoRep: 10_000n * unit })
+		await fixture.mockWindow.advanceTime(301n)
+		await fundCoordinatorInitialReport(fixture.client, manager, unit)
+		await submit({ ...input(), changeCommitment: true, commitmentAttoEth: 0n, withdrawAttoRep: 1n }, await getRequestPriceCostAttoEth(fixture.client, manager), unit)
+		const fromBlock = await fixture.client.getBlockNumber()
+		await handleOracleReporting(fixture.client, fixture.mockWindow, manager, unit)
+		const events = (await fixture.client.getLogs({ address: manager, fromBlock: fromBlock + 1n, toBlock: await fixture.client.getBlockNumber() })).map(log => decodeEventLog({ abi: coordinatorArtifact.abi, data: log.data, topics: log.topics }))
+		expect(events.find(event => event.eventName === 'ExecutedStagedOperation')?.args).toMatchObject({ success: false, errorMessage: 'Withdraw amount has no effect' })
+		expect(await fixture.getVaultRepClaim(fixture.client.account.address)).toBe(0n)
+		expect(await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'getActiveStagedOperationCount' })).toBe(0n)
+	})
+
+	test('the coordinator cannot bypass the vault executor pool authorization', async () => {
+		await prepare()
+		const pool = fixture.securityPoolAddresses.securityPool
+		const manager = fixture.securityPoolAddresses.openOraclePriceCoordinator
+		await expect(fixture.client.simulateContract({ abi: poolInterfaceArtifact.abi, address: pool, functionName: 'withdrawRepFromVault', args: [fixture.client.account.address, unit], account: manager })).rejects.toThrow('Unauthorized')
+		await expect(fixture.client.simulateContract({ abi: poolInterfaceArtifact.abi, address: pool, functionName: 'setVaultUnderwritingLimit', args: [fixture.client.account.address, 0n], account: manager })).rejects.toThrow('Unauthorized')
+		await expect(
+			fixture.client.simulateContract({
+				abi: poolInterfaceArtifact.abi,
+				address: pool,
+				functionName: 'performLiquidation',
+				args: [
+					{
+						operationId: 1n,
+						operator: fixture.client.account.address,
+						receiverVault: fixture.client.account.address,
+						targetVault: addressString(TEST_ADDRESSES[1]),
+						requestedDebtAttoEth: unit,
+						snapshot: { targetBackingUnits: 0n, targetUnderwritingLimitAttoEth: 0n },
+						minimumReceiverHealthFactorBps: 10_000n,
+						minLiquidationPriceDistanceBps: 0n,
+					},
+				],
+				account: manager,
+			}),
+		).rejects.toThrow('Unauthorized')
+		await expect(fixture.client.simulateContract({ abi: poolInterfaceArtifact.abi, address: pool, functionName: 'depositRepToVaultFromExecutor', args: [fixture.client.account.address, unit], account: manager })).rejects.toThrow('Only vault operations executor')
+	})
+
 	test('deposit and commitment change credit the submitting wallet, not the coordinator', async () => {
 		await prepare()
 		const before = await fixture.getVaultRepClaim(fixture.client.account.address)
@@ -93,6 +157,15 @@ describe('Statoblast: pool vault operation bundles', () => {
 		await fixture.mockWindow.advanceTime(301n)
 		await fundCoordinatorInitialReport(fixture.client, manager, 3n * unit)
 		await submit({ ...input(), changeCommitment: true, commitmentAttoEth: 50n * unit, liquidations: targets.map(target => ({ targetVault: addressString(target), requestedDebtAttoEth: 400n * unit })), withdrawAttoRep: 100n * unit }, await getRequestPriceCostAttoEth(fixture.client, manager), 3n * unit)
+		const operationId = await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'stagedOperationCounter' })
+		expect((await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'stagedOperations', args: [operationId] }))[1]).toBe(fixture.client.account.address)
+		const executor = await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'vaultOperations' })
+		const bundle = await fixture.client.readContract({ address: executor, abi: bundleArtifact.abi, functionName: 'getBundle', args: [operationId] })
+		expect(bundle.minimumReceiverHealthFactorBps).toBe(10_000n)
+		for (const [index, target] of targets.entries()) {
+			const vault = await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, addressString(target))
+			expect(bundle.liquidations[index]).toEqual({ targetVault: addressString(target), requestedDebtAttoEth: 400n * unit, snapshot: { targetBackingUnits: vault.repBackingUnits, targetUnderwritingLimitAttoEth: 400n * unit } })
+		}
 		expect(await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'getPendingSettlementWork' })).toBe(4n)
 		await handleOracleReporting(fixture.client, fixture.mockWindow, manager, 3n * unit)
 		expect((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)).underwritingLimitAttoEth).toBe(850n * unit)
@@ -120,10 +193,11 @@ describe('Statoblast: pool vault operation bundles', () => {
 		expect(await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'getPendingSettlementWork' })).toBe(0n)
 	})
 
-	test('self liquidation and unauthorized coordinator deposits are rejected', async () => {
+	test('self liquidation and unauthorized executor deposits are rejected', async () => {
 		await prepare()
+		await expect(submit({ ...input(), minimumReceiverHealthFactorBps: 9_999n, liquidations: [{ targetVault: addressString(TEST_ADDRESSES[1]), requestedDebtAttoEth: unit }] })).rejects.toThrow('Receiver health factor below one')
 		await expect(submit({ ...input(), liquidations: [{ targetVault: fixture.client.account.address, requestedDebtAttoEth: unit }] })).rejects.toThrow('Choose another vault')
-		await expect(fixture.client.simulateContract({ abi: poolInterfaceArtifact.abi, address: fixture.securityPoolAddresses.securityPool, functionName: 'depositRepToVaultFromCoordinator', args: [addressString(TEST_ADDRESSES[1]), unit], account: fixture.client.account })).rejects.toThrow('Only coordinator')
+		await expect(fixture.client.simulateContract({ abi: poolInterfaceArtifact.abi, address: fixture.securityPoolAddresses.securityPool, functionName: 'depositRepToVaultFromExecutor', args: [addressString(TEST_ADDRESSES[1]), unit], account: fixture.client.account })).rejects.toThrow('Only vault operations executor')
 		const executor = await fixture.client.readContract({ abi: coordinatorArtifact.abi, address: fixture.securityPoolAddresses.openOraclePriceCoordinator, functionName: 'vaultOperations' })
 		await expect(fixture.client.simulateContract({ abi: bundleArtifact.abi, address: executor, functionName: 'execute', args: [1n], account: fixture.client.account })).rejects.toThrow('Only coordinator')
 	})
@@ -157,23 +231,31 @@ describe('Statoblast: pool vault operation bundles', () => {
 		expect(await fixture.client.readContract({ address: manager, abi: coordinatorArtifact.abi, functionName: 'getActiveStagedOperationCount' })).toBe(0n)
 	})
 
-	test('rescue deposits invalidate queued liquidation snapshots and roll back the dependent commitment change', async () => {
-		await prepare()
-		const targetAddress = TEST_ADDRESSES[1]
-		const target = createWriteClient(fixture.mockWindow, targetAddress)
-		await fixture.transferRepToAddress(fixture.client, addressString(targetAddress), 2_000n * unit)
-		await approveToken(target, addressString(GENESIS_REPUTATION_TOKEN), fixture.securityPoolAddresses.securityPool)
-		await depositRepToVault(target, fixture.securityPoolAddresses.securityPool, 1_000n * unit)
-		await setUnderwritingLimit(target, fixture.securityPoolAddresses.securityPool, 400n * unit)
-		const manager = fixture.securityPoolAddresses.openOraclePriceCoordinator
-		await fixture.mockWindow.advanceTime(301n)
-		await fundCoordinatorInitialReport(fixture.client, manager, 3n * unit)
-		await submit({ ...input(), changeCommitment: true, commitmentAttoEth: 50n * unit, liquidations: [{ targetVault: target.account.address, requestedDebtAttoEth: 400n * unit }] }, await getRequestPriceCostAttoEth(fixture.client, manager), 3n * unit)
-		await depositRepToVault(target, fixture.securityPoolAddresses.securityPool, 1_000n * unit)
-		await handleOracleReporting(fixture.client, fixture.mockWindow, manager, 3n * unit)
-		expect((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)).underwritingLimitAttoEth).toBe(0n)
-		expect((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, target.account.address)).underwritingLimitAttoEth).toBe(400n * unit)
-	})
+	for (const change of ['backing', 'commitment']) {
+		test(`target ${change} changes fail the whole queued bundle with the pool snapshot reason`, async () => {
+			await prepare()
+			const targetAddress = TEST_ADDRESSES[1]
+			const target = createWriteClient(fixture.mockWindow, targetAddress)
+			await fixture.transferRepToAddress(fixture.client, addressString(targetAddress), 2_000n * unit)
+			await approveToken(target, addressString(GENESIS_REPUTATION_TOKEN), fixture.securityPoolAddresses.securityPool)
+			await depositRepToVault(target, fixture.securityPoolAddresses.securityPool, 1_000n * unit)
+			await setUnderwritingLimit(target, fixture.securityPoolAddresses.securityPool, 400n * unit)
+			const manager = fixture.securityPoolAddresses.openOraclePriceCoordinator
+			await fixture.mockWindow.advanceTime(301n)
+			await fundCoordinatorInitialReport(fixture.client, manager, 3n * unit)
+			const before = await fixture.getVaultRepClaim(fixture.client.account.address)
+			await submit({ ...input(), depositAttoRep: 1_000n * unit, changeCommitment: true, commitmentAttoEth: 50n * unit, withdrawAttoRep: 100n * unit, liquidations: [{ targetVault: target.account.address, requestedDebtAttoEth: 400n * unit }] }, await getRequestPriceCostAttoEth(fixture.client, manager), 3n * unit)
+			if (change === 'backing') await depositRepToVault(target, fixture.securityPoolAddresses.securityPool, 1_000n * unit)
+			else await setUnderwritingLimit(target, fixture.securityPoolAddresses.securityPool, 300n * unit)
+			const fromBlock = await fixture.client.getBlockNumber()
+			await handleOracleReporting(fixture.client, fixture.mockWindow, manager, 3n * unit)
+			const events = (await fixture.client.getLogs({ address: manager, fromBlock: fromBlock + 1n, toBlock: await fixture.client.getBlockNumber() })).map(log => decodeEventLog({ abi: coordinatorArtifact.abi, data: log.data, topics: log.topics }))
+			expect(events.find(event => event.eventName === 'ExecutedStagedOperation')?.args).toMatchObject({ success: false, errorMessage: change === 'backing' ? 'Target backingUnits changed' : 'Target commitment changed' })
+			expect(await fixture.getVaultRepClaim(fixture.client.account.address)).toBe(before + 1_000n * unit)
+			expect((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)).underwritingLimitAttoEth).toBe(0n)
+			expect((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, target.account.address)).underwritingLimitAttoEth).toBe((change === 'backing' ? 400n : 300n) * unit)
+		})
+	}
 
 	test('duplicate targets and more than four price actions are rejected without depositing', async () => {
 		await prepare()
