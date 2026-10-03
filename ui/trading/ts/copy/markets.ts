@@ -52,10 +52,6 @@ export const marketsCopy = {
 	allMarkets: 'All markets',
 	shareToken: 'Share token',
 	ticket: 'Trade ticket',
-	openTicket: (label: string) => `Open ${label.toLowerCase()}`,
-	closeTicket: 'Close ticket',
-	/** The collapsed ticket bar while another market transaction holds this market's ticket. */
-	transactionInProgress: 'Transaction in progress',
 	poolNotInUniverse: 'Pool not in this universe',
 	poolNotInUniverseDetail: 'Switch universe to open it, or return to Markets.',
 	switchUniverse: 'Switch universe',
