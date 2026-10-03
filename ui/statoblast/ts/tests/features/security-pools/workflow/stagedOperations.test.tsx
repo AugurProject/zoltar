@@ -42,6 +42,29 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 	const renderSelectedPool = async (overrides: Partial<SecurityPoolWorkflowRouteContentProps>, chainTimestamp?: bigint) =>
 		await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: zeroAddress, securityPools: [createSelectedPool()], ...overrides }), chainTimestamp === undefined ? {} : { chainTimestamp })
 
+	test('ticks down the oracle window on an auto-exec operation card', async () => {
+		const operation = { operationId: 7n, operation: 'withdrawRep', amount: 1n, operator: zeroAddress, targetVault: zeroAddress } as const
+		await renderSelectedPool(
+			{
+				selectedPoolView: 'staged-operations',
+				poolOracleManagerDetails: createOracleManagerDetails({
+					pendingReportId: 5n,
+					pendingReportReadyAtTimestamp: 110n,
+					pendingOperation: operation,
+					pendingOperationSlotId: 7n,
+					pendingSettlementOperationIds: [7n],
+				}),
+			},
+			100n,
+		)
+		const card = document.querySelector('.staged-operation-card')
+		expect(card?.textContent).toContain('Settle in 10s')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 1100))
+		})
+		expect(card?.textContent).toContain('Settle in 9s')
+	})
+
 	const openWithdrawDialog = async (poolOracleManagerDetails: SecurityPoolWorkflowRouteContentProps['poolOracleManagerDetails'], securityVault: Partial<SecurityVaultRouteContentProps>) => {
 		await renderSelectedPool({
 			poolOracleManagerDetails,

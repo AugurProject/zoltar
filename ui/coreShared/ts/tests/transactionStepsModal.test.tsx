@@ -1,3 +1,4 @@
+import { render } from 'preact'
 import { completedAction, reviewedActions } from '../copy/transaction.js'
 import { formatPendingAction } from '../copy/transactionSteps.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
@@ -35,7 +36,7 @@ test('shows funding in plan order with readable amounts and exact values availab
 	}
 })
 
-test('returns a failed transaction to its action for a fresh submission', async () => {
+test('keeps a failed transaction visible until dismissal before a fresh submission', async () => {
 	const dom = installDomEnvironment()
 	let attempts = 0
 	const start = () => {
@@ -58,7 +59,8 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		const submit = queries.getByRole('button', { name: 'Deposit REP into vault' })
 		submit.focus()
 		await act(() => fireEvent.click(submit))
-		expect(queries.queryByRole('dialog')).toBeNull()
+		expect(queries.getByRole('dialog').textContent).toContain('nonce too low')
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(transactionSteps.value).toBeUndefined()
 		expect(document.activeElement).toBe(submit)
@@ -400,8 +402,8 @@ for (const result of ['success', 'reverted'] as const) {
 				await act(() => fireEvent.click(button('Approve REP')))
 				await secondReview
 			} else {
-				expect(queries.queryByRole('dialog')).toBeNull()
-				expect(transactionSteps.value).toBeUndefined()
+				expect(queries.getByRole('dialog') !== undefined).toBe(true)
+				expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 			}
 		} finally {
 			await rendered.cleanup()
@@ -431,7 +433,80 @@ test('both insufficient approvals are enabled independently while the report wai
 	}
 })
 
-test('returns to the original action when requirements fail after an approval confirms', async () => {
+test('enables the final request after approval and already satisfied funding steps', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const common = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	controller.setPlan([
+		{ ...common, title: 'Approve REP', approval: { requiredAmount: 100n, approvedAmount: 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
+		{ ...common, title: 'Approve WETH', approval: { requiredAmount: 3n, approvedAmount: 3n, tokenSymbol: 'WETH', tokenUnits: 0 } },
+		{ ...common, title: 'Submit vault operations' },
+	])
+	const approval = controller.chooseFunding([0])
+	approval.catch(() => undefined)
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='satisfied-funding' />)
+	let request: Promise<bigint | undefined> | undefined
+	try {
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /Approve (100 )?REP/ })))
+		await approval
+		await act(async () => {
+			const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+			controller.submitted(hash)
+			controller.receipt(hash, 'success')
+			await controller.chooseFunding([])
+			request = controller.review(2)
+			request.catch(() => undefined)
+		})
+		expect(within(document.body).getByRole('button', { name: 'Submit vault operations' }).hasAttribute('disabled')).toBe(false)
+	} finally {
+		transactionSteps.value?.cancel()
+		await request?.catch(() => undefined)
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('a confirmed approval keeps the batch review open for its final request', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const common = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	controller.setPlan([
+		{ ...common, title: 'Approve REP' },
+		{ ...common, title: 'Submit vault operations' },
+	])
+	const approval = controller.review()
+	transactionSteps.value?.confirm()
+	await approval
+	const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+	const view = (approved: boolean) => (
+		<GlobalTransactionPresentationProvider transaction={approved ? { tone: 'success', title: 'REP approved', hash } : undefined}>
+			<TransactionStepsModal contextKey='batch-approval' />
+		</GlobalTransactionPresentationProvider>
+	)
+	const rendered = await renderIntoDocument(view(false))
+	let next: Promise<bigint | undefined> | undefined
+	await act(() => {
+		controller.submitted(hash)
+		controller.receipt(hash, 'success')
+		next = controller.review(1)
+		next.catch(() => undefined)
+		render(view(true), rendered.container)
+	})
+	try {
+		const queries = within(document.body)
+		expect(queries.queryByRole('dialog') !== null).toBe(true)
+		expect(queries.getByRole('button', { name: 'Submit vault operations' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Submit vault operations' })))
+		await next
+		expect(transactionSteps.value?.steps[1]?.phase).toBe('wallet')
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps requirements failures and confirmed approvals in the review', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
 	const common = { description: 'Transaction purpose.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -452,8 +527,8 @@ test('returns to the original action when requirements fail after an approval co
 	)
 	try {
 		const queries = within(rendered.container)
-		expect(queries.queryByRole('dialog')).toBeNull()
-		expect(transactionSteps.value).toBeUndefined()
+		expect(queries.getByRole('dialog').textContent).toContain('Could not refresh funding requirements.')
+		expect(queries.getByRole('button', { name: 'Approve REP ✓' }).hasAttribute('disabled')).toBe(true)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -461,7 +536,7 @@ test('returns to the original action when requirements fail after an approval co
 })
 
 for (const phase of ['skipped', 'failed'] as const) {
-	test(`${phase === 'skipped' ? 'summarizes a satisfied approval when it is skipped' : 'closes review when approval fails'}`, async () => {
+	test(`${phase === 'skipped' ? 'summarizes a satisfied approval when it is skipped' : 'keeps approval failures visible in the review'}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		const common = { description: 'Authorize spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
@@ -479,10 +554,10 @@ for (const phase of ['skipped', 'failed'] as const) {
 		const nextReview = phase === 'skipped' ? controller.review(1) : undefined
 		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={phase} />)
 		try {
-			const queries = within(rendered.container)
+			const queries = within(document.body)
 			if (phase === 'failed') {
-				expect(queries.queryByRole('dialog')).toBeNull()
-				expect(transactionSteps.value).toBeUndefined()
+				expect(queries.getByRole('dialog').textContent).toContain('Approval rejected.')
+				expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 			} else {
 				expect(queries.getByRole('button', { name: 'REP approved ✓' }).hasAttribute('disabled')).toBe(true)
 				expect(queries.getByRole('textbox').hasAttribute('disabled')).toBe(true)
@@ -499,7 +574,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 }
 
 for (const result of ['pending', 'reverted'] as const) {
-	test(`${result === 'pending' ? 'keeps the pending query hash out of the review' : 'closes review after the final query reverts'}`, async () => {
+	test(`${result === 'pending' ? 'keeps the pending query hash out of the review' : 'keeps a reverted query visible in the review'}`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		controller.setPlan([{ title: 'Request price', description: 'Fund the report.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
@@ -518,10 +593,10 @@ for (const result of ['pending', 'reverted'] as const) {
 			</GlobalTransactionPresentationProvider>,
 		)
 		try {
-			const queries = within(rendered.container)
+			const queries = within(document.body)
 			if (result === 'reverted') {
-				expect(queries.queryByRole('dialog')).toBeNull()
-				expect(transactionSteps.value).toBeUndefined()
+				expect(queries.getByRole('dialog').textContent).toContain('Transaction failed after using its full gas limit.')
+				expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 			} else expect(queries.queryByRole('link', { name: hash })).toBeNull()
 		} finally {
 			await rendered.cleanup()

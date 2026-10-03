@@ -3416,22 +3416,6 @@ span.rep-price-status.stale,
 	text-decoration: none;
 }
 
-.created-pool-summary .address-value-full {
-	display: none;
-}
-
-/* The summary always shows the short form, so it must also override the base rule that hides it until measurement
-   chooses abbreviation; otherwise neither form is visible. */
-.created-pool-summary .address-value-abbreviated {
-	display: inline;
-	visibility: visible;
-}
-
-/* Its measurement box is sized for the hidden full form, so let the short form show whole. */
-.created-pool-summary .address-value-text {
-	overflow: visible;
-}
-
 .existing-pool-identifiers {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3461,14 +3445,6 @@ span.rep-price-status.stale,
 @media (max-width: 40rem) {
 	.existing-pool-identifiers {
 		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.existing-pool-identifiers .address-value-full {
-		display: none;
-	}
-
-	.existing-pool-identifiers .address-value-abbreviated {
-		display: inline;
 	}
 }
 
@@ -3866,9 +3842,10 @@ span.rep-price-status.stale,
 	}
 }
 
-/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. Addresses inline in running text have no hover padding to offset. */
+/* Keep hover padding outside the text column. Balance the negative start margin so the copy wrapper reserves the full control width instead of needlessly abbreviating its address. Inline addresses have no hover padding to offset. */
 :is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *, .global-transaction-detail-text *) {
 	margin-inline-start: -0.25rem;
+	margin-inline-end: 0.25rem;
 }
 
 /* Inline warnings (a clamped liquidation, a withdrawal that empties the vault, a lifecycle blocker) share one quiet warning treatment. */
@@ -3983,7 +3960,8 @@ span.rep-price-status.stale,
 }
 
 @media (max-width: 40rem) {
-	.vault-operations-lookup .field-inline {
+	.vault-operations-lookup .field-inline,
+	.vault-operations-price .field-inline {
 		flex-direction: column;
 		align-items: stretch;
 	}
@@ -3998,7 +3976,7 @@ span.rep-price-status.stale,
 	align-self: start;
 }
 
-/* Security pool UX fixes: next-action buttons, vault liquidation reasons, and the abbreviated vault address. */
+/* Security pool UX fixes: next-action buttons and vault liquidation reasons. */
 .pool-action-open {
 	display: inline-flex;
 	align-items: center;
@@ -4011,9 +3989,4 @@ span.rep-price-status.stale,
 
 .vault-position-strip-actions .vault-liquidation-reason {
 	margin-top: var(--space-2);
-}
-
-/* The record names the vault by its abbreviated address; the copy button still copies the full address. */
-.selected-vault-address .address-value {
-	max-width: min(100%, 12rem);
 }

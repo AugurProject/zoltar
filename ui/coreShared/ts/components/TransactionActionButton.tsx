@@ -98,19 +98,16 @@ export function TransactionActionButton({
 	const showPending = pending && !awaitingReview
 	// The initiating button keeps its own pending state; other actions on the same object wait for the transaction.
 	const blockedByPendingRequest = !pending && isTransactionActionLockedBy(lock, actionScope)
-	const blockedByScopedTransaction = blockedByPendingRequest && !lock.promptOpen && availability?.disabled !== true && !disabled
 	const isDisabled = reviewActive || disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	let disabledReason = isDisabled ? availability?.reason : undefined
 	if (reviewActive) disabledReason = transactionStepsCopy.useTransactionButtons
-	if (blockedByScopedTransaction) disabledReason = transactionStepsCopy.transactionPending
 	const ownActionButtonRef = useRef<HTMLButtonElement>(null)
 	const actionButtonRef = sharedActionButtonRef ?? ownActionButtonRef
 	// A disconnected wallet or wrong network offers its connect or switch fix where the reason would be. Wallet blockers only exist on disabled availability, so they never coincide with a scoped transaction lock.
 	const renderWalletFix = useWalletActionFix({ actionButtonRef, actionDisabled: isDisabled, availability })
 	const walletFixId = renderWalletFix !== undefined && (group !== undefined || showDisabledReason) ? disabledReasonId : undefined
 	const walletFix = walletFixId === undefined ? undefined : renderWalletFix?.(walletFixId)
-	// A lock from another transaction always explains itself, even on launchers that otherwise hide empty reason slots.
-	const shouldShowDisabledReason = (showDisabledReason || blockedByScopedTransaction) && isDisabled && disabledReason !== undefined
+	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
 	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
 	const resolvedInlineHintAriaLabel = getInlineHintAriaLabel(ariaLabel, inlineHintAriaLabel, idleLabel)
 	const externalReasonId = isDisabled ? disabledReasonElementId : undefined
