@@ -3983,7 +3983,8 @@ span.rep-price-status.stale,
 }
 
 @media (max-width: 40rem) {
-	.vault-operations-lookup .field-inline {
+	.vault-operations-lookup .field-inline,
+	.vault-operations-price .field-inline {
 		flex-direction: column;
 		align-items: stretch;
 	}

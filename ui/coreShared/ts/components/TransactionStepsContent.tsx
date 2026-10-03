@@ -105,8 +105,8 @@ function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAct
 	const terminal = completed || error !== undefined
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
-	const blockedReason = pending ? copy.transactionPending : fundingReason
-	const prerequisiteReason = pending ? copy.transactionPending : copy.prerequisitesRequired
+	const blockedReason = pending ? undefined : fundingReason
+	const prerequisiteReason = pending ? undefined : copy.prerequisitesRequired
 	const approvalBlockedReason = retainedWorkflow === undefined ? prerequisiteReason : copy.notCompleted
 	// Finished steps stay in place, disabled and labelled with their result, so the plan never loses a row as it advances.
 	const getCompletedLabel = (step: (typeof workflow.steps)[number]) => {

@@ -164,7 +164,7 @@ describe('TransactionActionButton', () => {
 		expect(callCount).toBe(0)
 	})
 
-	test('locks only actions on the object a pending transaction touches and explains why', async () => {
+	test('locks only actions on the object a pending transaction touches without repeating pending feedback', async () => {
 		let unrelatedClicks = 0
 		const renderedComponent = await renderIntoDocument(
 			<TransactionActionButtonLockProvider lock={{ lockedScopes: [['security-pool:0xa']], promptOpen: false }}>
@@ -183,8 +183,8 @@ describe('TransactionActionButton', () => {
 		const queries = within(document.body)
 		const locked = queries.getByRole('button', { name: 'Deposit REP' })
 		expect(locked.hasAttribute('disabled')).toBe(true)
-		expect(locked.getAttribute('aria-describedby')).not.toBeNull()
-		expect(document.getElementById(locked.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Transaction pending.')
+		expect(locked.getAttribute('aria-describedby')).toBeNull()
+		expect(queries.queryByText('Transaction pending.')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Explicit scope' }).hasAttribute('disabled')).toBe(true)
 		// The initiating action keeps its own pending state instead of the lock reason.
 		expect(queries.getByRole('button', { name: 'Depositing' }).getAttribute('aria-busy')).toBe('true')

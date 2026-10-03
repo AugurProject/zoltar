@@ -23,6 +23,7 @@ const confirmed: VaultOperationsResult = { hash: '0x01', depositAttoRep: 0n, sta
 
 function dependencies(overrides: Partial<VaultOperationsDependencies> = {}): VaultOperationsDependencies {
 	return {
+		fetchPrice: mock(async () => 2n * unit),
 		loadResolved: mock(async () => false),
 		claim: mock(async (_owner, _pool, action) => ({ hash: confirmed.hash, depositAttoRep: 0n, action })),
 		loadOwned: mock(async () => owned),
@@ -244,14 +245,14 @@ describe('vault operations lifecycle', () => {
 		expect(current.state().quote).toBe(previous)
 	})
 
-	async function mountPanel(deps: VaultOperationsDependencies, selectedTarget = target) {
+	async function mountPanel(deps: VaultOperationsDependencies, selectedTarget = target, onViewStagedOperations: (operationId: bigint) => void = () => undefined) {
 		const rendered = await renderIntoDocument(
 			<VaultOperationsPanel
 				pool={{ ...pool, vaults: [selectedTarget] }}
 				parameters={{ accountAddress: owner, onTransactionRequested: () => true, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, onTransactionSubmitted: () => undefined, refreshState: async () => undefined }}
 				contextKey={`panel-${sequence++}`}
 				networkReady
-				onViewStagedOperations={() => undefined}
+				onViewStagedOperations={onViewStagedOperations}
 				dependencies={deps}
 			/>,
 		)
@@ -277,6 +278,88 @@ describe('vault operations lifecycle', () => {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Vault operations executed'))
 		const confirmation = within(rendered.container).getByText('Vault operations executed')
 		expect(confirmation.closest('.vault-operations-preview')).not.toBeNull()
+	})
+	test('opens the exact staged operation returned by the bundle', async () => {
+		const viewStaged = mock((_operationId: bigint) => undefined)
+		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 5n * unit, queuedOperation: { operation: 'vaultOperations', operationId: 42n, isPendingSlot: true } }
+		const rendered = await mountPanel(dependencies({ submit: async () => queued }), target, viewStaged)
+		const queries = within(rendered.container)
+		await act(() => fireEvent.input(queries.getByLabelText('Deposit REP (optional)'), { target: { value: '5' } }))
+		const review = queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
+		await waitFor(() => expect(review.disabled).toBe(false))
+		await act(() => fireEvent.click(review))
+		await waitFor(() => expect(queries.queryByRole('button', { name: 'View staged operations' })).not.toBeNull())
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'View staged operations' })))
+		expect(viewStaged).toHaveBeenCalledWith(42n)
+	})
+
+	test('review uses only the button to indicate its pending state', async () => {
+		const pending = createDeferred<VaultOperationsResult>()
+		const rendered = await mountPanel(dependencies({ submit: () => pending.promise }))
+		const queries = within(rendered.container)
+		await act(() => fireEvent.input(queries.getByLabelText('Deposit REP (optional)'), { target: { value: '5' } }))
+		const review = queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
+		await waitFor(() => expect(review.disabled).toBe(false))
+		await act(() => fireEvent.click(review))
+		await waitFor(() => expect(queries.queryByRole('button', { name: 'Reviewing vault operations…' })).not.toBeNull())
+		expect(rendered.container.textContent).not.toContain('Submitting transaction')
+		expect(rendered.container.textContent).not.toContain('Submitting vault operations')
+		await act(() => pending.resolve(confirmed))
+	})
+	test.each([10n * unit, unit / 8n])('panel describes the pool minimum below the REP deposit (%s)', async minimum => {
+		const rendered = await mountPanel(dependencies({ loadOwned: async () => ({ ...owned, minimumVaultRepDepositAttoRep: minimum }) }))
+		const expected = minimum === 10n * unit ? 'Minimum vault backing: 10 REP' : 'Minimum vault backing: 0.125 REP'
+		await waitFor(() => expect(rendered.container.textContent).toContain(expected))
+		const deposit = within(rendered.container).getByLabelText('Deposit REP (optional)')
+		const hint = within(rendered.container).getByText(expected)
+		expect(deposit.closest('.amount-field')?.contains(hint)).toBe(true)
+		expect(deposit.getAttribute('aria-describedby')?.split(' ')).toContain(hint.id)
+	})
+	test('panel fetches a Uniswap price into the initial report field', async () => {
+		const deps = dependencies({
+			loadManager: async () => createOracleManagerDetails({ isPriceValid: false, lastPrice: unit }),
+			quote: async () => ({ managerAddress: pool.managerAddress, repToken: owned.repToken, balance: 10000n * unit, currentBacking: owned.vaultAttoRepBacking, resolved: false, validPrice: false, pendingReportId: 0n, needsReport: true, funding: undefined, requiredRep: 0n }),
+		})
+		const rendered = await mountPanel(deps)
+		const queries = within(rendered.container)
+		await waitFor(() => expect(queries.queryByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull())
+		const fetch = queries.getByRole<HTMLButtonElement>('button', { name: 'Fetch from Uniswap' })
+		await waitFor(() => expect(fetch.disabled).toBe(false))
+		await act(() => fireEvent.click(fetch))
+		await waitFor(() => expect(queries.getByLabelText<HTMLInputElement>('Initial report price').value).toBe('2'))
+		expect(deps.fetchPrice).toHaveBeenCalledWith(pool.managerAddress)
+	})
+	test('price fetch failure preserves manual input and allows retry', async () => {
+		const pending = createDeferred<bigint>()
+		const current = await mount(dependencies({ fetchPrice: () => pending.promise }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ proposedPrice: '3' }))
+		let fetching: Promise<void> | undefined
+		await act(() => {
+			fetching = current.state().fetchPrice()
+		})
+		await act(async () => {
+			pending.reject(new Error('Unavailable'))
+			await fetching
+		})
+		expect(current.state().draft.proposedPrice).toBe('3')
+		expect(current.state().priceFetchError).toContain('Try again or enter a price')
+		expect(current.state().fetchingPrice).toBe(false)
+	})
+	test('a delayed price does not overwrite manual edits', async () => {
+		const pending = createDeferred<bigint>()
+		const current = await mount(dependencies({ fetchPrice: () => pending.promise }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		let fetching: Promise<void> | undefined
+		await act(() => {
+			fetching = current.state().fetchPrice()
+		})
+		await act(() => current.state().setDraft({ proposedPrice: '3' }))
+		await act(async () => {
+			pending.resolve(2n * unit)
+			await fetching
+		})
+		expect(current.state().draft.proposedPrice).toBe('3')
 	})
 	test('panel disables a near target with the existing liquidation distance reason', async () => {
 		const near = { ...target, vaultAttoRepBacking: 190n * unit }

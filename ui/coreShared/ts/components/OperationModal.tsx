@@ -1,6 +1,7 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import * as transactionStepsCopy from '../copy/transactionSteps.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
+import { UserMessage } from './UserMessage.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
 import { ModalFrame } from './ModalFrame.js'
@@ -66,6 +67,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const ownedFailure = ownsPresentation && activeTransaction?.tone === 'error'
 	// Release a failed controller for retry while keeping its transaction buttons visible and disabled.
 	useEffect(() => {
+		if (hostsExternalReview) return
 		if (ownedWorkflow === undefined || activeStep === undefined || activeStep.phase === 'review' || activeStep.phase === 'upcoming') return
 		if (activeStep.phase !== 'failed' && !ownedFailure) return
 		if (ownedWorkflow.steps.length > 1)
@@ -77,12 +79,13 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 				}),
 			})
 		ownedWorkflow.cancel()
-	}, [activeStep, activeTransaction?.detail, ownedFailure, ownedWorkflow])
+	}, [activeStep, activeTransaction?.detail, hostsExternalReview, ownedFailure, ownedWorkflow])
 	// Only an open wallet prompt holds the dialog; a broadcast transaction keeps running and stays in the activity list after it closes.
 	const awaitingWallet = ownsWorkflow && workflow.steps.some(step => step.phase === 'wallet') && !ownedFailure
 	const cannotClose = closeDisabled || awaitingWallet
 	const activeTransactionOperationKey = getTransactionOperationKey(activeTransaction)
 	const modalTransaction = getModalTransactionPresentation(ownsPresentation ? activeTransaction : undefined, context)
+	const reviewError = activeStep?.failure?.message ?? (ownedFailure && typeof activeTransaction?.detail === 'string' ? activeTransaction.detail : undefined)
 	const titleId = useId()
 	const descriptionElementId = useId()
 	const descriptionId = description === undefined ? undefined : descriptionElementId
@@ -117,11 +120,11 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 			if (ownsWorkflow) workflow.cancel()
 			setRetainedWorkflow(undefined)
 			onClose()
-		} else if (ownsWorkflow && activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && workflow.steps.some(step => step.hash === activeTransaction.hash)) {
+		} else if ((approvalOnly || singleFormAction) && ownsWorkflow && activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && workflow.steps.some(step => step.hash === activeTransaction.hash)) {
 			// A standalone approval completed; keep the form for the actual action.
 			workflow.cancel()
 		}
-	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose, ownsWorkflow, workflow?.cancel])
+	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, approvalOnly, closeOnSuccessKey, isOpen, onClose, ownsWorkflow, singleFormAction, workflow?.cancel])
 
 	// The inline review takes focus itself when it appears; returning to the form hands focus back to the close control.
 	useLayoutEffect(() => {
@@ -159,6 +162,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 				</div>
 				{showSteps ? (
 					<div className='operation-modal-steps'>
+						{hostsExternalReview && reviewError !== undefined ? <UserMessage placement='section' tone='error' announcement='polite' detail={reviewError} /> : undefined}
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
 							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} retainedWorkflow={ownedWorkflow === undefined ? retainedWorkflow : undefined} />

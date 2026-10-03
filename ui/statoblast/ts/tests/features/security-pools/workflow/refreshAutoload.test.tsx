@@ -2,7 +2,20 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { createActiveReportingDetails, createEscalationSides, createForkAuctionProps, createLoadedPoolProps, createMarketDetails, createReportingForm, createReportingProps, createSecurityVaultDetails, createSecurityVaultForm, createSecurityVaultProps, createSelectedPool } from './builders.js'
+import {
+	createActiveReportingDetails,
+	createEscalationSides,
+	createForkAuctionProps,
+	createLoadedPoolProps,
+	createOracleManagerDetails,
+	createMarketDetails,
+	createReportingForm,
+	createReportingProps,
+	createSecurityVaultDetails,
+	createSecurityVaultForm,
+	createSecurityVaultProps,
+	createSelectedPool,
+} from './builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
 installTestRouting()
@@ -12,6 +25,24 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 	const endedPoolAt = (securityPoolAddress: Address) => createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress })
 	const yesReportingForm = (securityPoolAddress: Address | '') => createReportingForm({ securityPoolAddress, selectedOutcome: 'yes' })
 	const forkAuctionFailure = (onLoadForkAuction: () => void) => createForkAuctionProps({ forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable', onLoadForkAuction })
+
+	test('refreshes an already loaded queue when opening staged operations', async () => {
+		let loads = 0
+		const baseProps = createLoadedPoolProps({
+			poolOracleManagerDetails: createOracleManagerDetails({ managerAddress: zeroAddress }),
+			securityPools: [createSelectedPool({ managerAddress: zeroAddress })],
+			onLoadPoolOracleManager: () => {
+				loads += 1
+			},
+			selectedPoolView: 'vaults',
+		})
+		const { rerender } = await renderWorkflow(baseProps, atChainTimeOne)
+		const before = loads
+		await rerender({ ...baseProps, selectedPoolView: 'staged-operations' })
+		expect(loads).toBe(before + 1)
+		await rerender({ ...baseProps, selectedPoolView: 'staged-operations' })
+		expect(loads).toBe(before + 1)
+	})
 
 	test('autoloads reporting once after the reporting form pool matches the selected pool', async () => {
 		let reportingLoadCalls = 0
