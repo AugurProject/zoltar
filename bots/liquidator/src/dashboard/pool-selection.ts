@@ -42,12 +42,14 @@ export function createPoolSelection({ state, elements, populateConfiguration, sy
 
 	function updatePoolBrowser() {
 		const configuration = state.configuration
+		const topUpHealthBps = configuration?.strategy['vaultTopUpHealthBps']
 		const context = {
 			chainId: state.pendingNetworkProfile === undefined && configuration?.networkConfigured === true ? configuration.network?.chainId : undefined,
 			enabled: document.body.dataset['page'] === 'pools' && state.stateConnected && state.configurationConnected && state.pendingNetworkProfile === undefined && configuration?.networkConfigured === true && state.pendingPoolMutations === 0,
 			selected: state.selectedPools,
 			approved: state.approvedUniverses,
 			monitored: state.snapshot?.pools ?? [],
+			topUpHealthBps: typeof topUpHealthBps === 'number' && Number.isSafeInteger(topUpHealthBps) && topUpHealthBps >= 0 ? topUpHealthBps : undefined,
 		}
 		poolBrowser?.update(context)
 	}

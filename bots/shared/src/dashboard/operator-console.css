@@ -32,6 +32,11 @@
 	box-sizing: border-box;
 }
 
+/* The hidden attribute always hides, even where a component rule sets display. */
+[hidden] {
+	display: none !important;
+}
+
 fieldset {
 	min-width: 0;
 	margin: 0;
@@ -146,6 +151,12 @@ fieldset {
 	color: var(--operator-warning, var(--warning));
 }
 
+/* The live region stays in the accessibility tree while empty so a later message is announced; it only takes no space. */
+.operator-health-stale:empty {
+	padding: 0;
+	border-top: 0;
+}
+
 .operator-confirm-dialog {
 	width: min(34rem, calc(100vw - 2rem));
 	max-height: calc(100dvh - 2rem);
@@ -196,8 +207,14 @@ fieldset {
 	background: rgba(0, 0, 0, 0.7);
 }
 
-.operator-confirm-dialog h2 {
-	margin-top: 0;
+.operator-confirm-dialog form {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.operator-confirm-dialog h2,
+.operator-confirm-dialog form > p {
+	margin: 0;
 }
 
 .operator-confirm-dialog label {
@@ -368,6 +385,12 @@ fieldset {
 .section-nav a:focus-visible {
 	background: color-mix(in srgb, var(--operator-text), transparent 94%);
 	color: var(--operator-text);
+}
+
+/* The row scrolls horizontally and clips overflow, so the ring is drawn inside the link. */
+.section-nav a:focus-visible {
+	outline: 2px solid var(--operator-accent);
+	outline-offset: -2px;
 }
 
 .section-nav a[aria-current="page"] {
@@ -1025,6 +1048,16 @@ fieldset {
 	color: #20070b;
 }
 
+/* The confirm button reads as unavailable until the confirmation phrase matches; the rules above outrank the shared disabled style. */
+.operator-confirm-dialog .dialog-actions button:disabled,
+.operator-confirm-dialog .dialog-actions button.danger:disabled,
+.operator-confirm-dialog .dialog-actions button[type="submit"]:disabled {
+	border: 1px dashed var(--operator-muted);
+	background: var(--operator-surface-raised);
+	color: var(--operator-muted);
+	cursor: not-allowed;
+}
+
 .alert-row {
 	display: flex;
 	align-items: center;
@@ -1086,6 +1119,11 @@ fieldset {
 
 /* Shared operator primitives, loaded after application-specific layouts. */
 :root {
+	/*
+	 * The operator console is dark only. The imported tokens declare `light dark`, which on a light system theme would
+	 * resolve every `light-dark()` token this block does not pin (such as --accent-ink and --info) to its light value.
+	 */
+	color-scheme: dark;
 	--operator-background: #080b10;
 	--operator-surface: #10151d;
 	--operator-surface-raised: #151c26;
@@ -1701,13 +1739,14 @@ button.danger-action {
 	display: none;
 }
 .universe-explorer .ue-status[data-error="true"] {
-	color: #ff8b8b;
+	color: var(--operator-error);
 }
 .universe-explorer :is(button, input, select):focus-visible {
 	outline: 2px solid var(--ue-accent);
 	outline-offset: 2px;
 }
-.universe-explorer :disabled {
+.universe-explorer :disabled,
+.universe-explorer [aria-disabled="true"] {
 	opacity: 0.55;
 	cursor: not-allowed;
 }

@@ -1,4 +1,4 @@
-import { markCurrentPage } from './dom.ts'
+import { markCurrentPage, stickyShellHeight } from './dom.ts'
 
 export function createSectionNavigation(linkFilter: (link: HTMLAnchorElement) => boolean = () => true) {
 	const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')].filter(linkFilter)
@@ -14,7 +14,8 @@ export function createSectionNavigation(linkFilter: (link: HTMLAnchorElement) =>
 				navigation.scrollLeft = activeLink.offsetLeft - (navigation.clientWidth - activeLink.offsetWidth) / 2
 			})
 		}
-		if (push) window.history.pushState({}, '', `/${page}`)
+		// Selecting the section already shown must not stack a duplicate entry the Back button then has to unwind.
+		if (push && window.location.pathname.replace(/\/$/, '') !== `/${page}`) window.history.pushState({}, '', `/${page}`)
 		window.scrollTo({ top: 0 })
 	}
 
@@ -66,12 +67,11 @@ export function createSectionNavigation(linkFilter: (link: HTMLAnchorElement) =>
 
 	function scrollToSection(id: string) {
 		const target = document.getElementById(id)
-		const shell = document.querySelector<HTMLElement>('.operator-shell')
-		if (target === null || shell === null) return
+		if (target === null) return
 		if (target instanceof HTMLDetailsElement) target.open = true
 		else target.closest('details')?.setAttribute('open', '')
 		const align = () => {
-			const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
+			const top = target.getBoundingClientRect().top + window.scrollY - stickyShellHeight(document) - 16
 			window.scrollTo({ top: Math.max(0, top) })
 		}
 		align()

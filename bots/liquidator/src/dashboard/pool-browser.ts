@@ -4,7 +4,15 @@ import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import type { CatalogPool, PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 
-type Context = { chainId: number | undefined; enabled: boolean; selected: ReadonlySet<string>; approved: ReadonlySet<string>; monitored: readonly MonitoredPool[] }
+type Context = {
+	chainId: number | undefined
+	enabled: boolean
+	selected: ReadonlySet<string>
+	approved: ReadonlySet<string>
+	monitored: readonly MonitoredPool[]
+	/** The strategy's top-up health threshold in basis points, once the configuration has loaded. */
+	topUpHealthBps: number | undefined
+}
 
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = '') {
 	const result = document.createElement(tag)
@@ -14,7 +22,7 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', classNam
 }
 
 export function createPoolBrowser(root: HTMLElement, save: (address: string, supported: boolean, chainId: number) => Promise<void>) {
-	let context: Context = { chainId: undefined, enabled: false, selected: new Set(), approved: new Set(), monitored: [] }
+	let context: Context = { chainId: undefined, enabled: false, selected: new Set(), approved: new Set(), monitored: [], topUpHealthBps: undefined }
 	let scope: 'all' | 'monitored' = 'all'
 	let page = 0
 	let epoch = 0
@@ -113,7 +121,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	}
 
 	function render() {
-		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, scope, context.monitored, page, loading, saving, error, search.value, searchError])
+		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, scope, context.monitored, page, loading, saving, error, search.value, searchError, context.topUpHealthBps])
 		const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 		snapshot.hidden = poolDateTimestamp(data?.snapshotTimestamp) === undefined
 		if (snapshot.hidden) clearPoolDate(snapshotDate)
@@ -248,10 +256,10 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 					for (const [label, value] of [
 						['Eligibility', poolStatusText({ ...monitored, selected: supported }) || 'Not supported'],
 						['Oracle', `${monitored.isPriceValid ? 'Fresh' : 'Stale'} · ${monitored.lastPrice} REP / ETH${monitored.centralizedPriceDeviationBps === undefined ? '' : ` · ${monitored.centralizedPriceDeviationBps} bps from reference`}`],
-						['Capacity ownership', `${monitored.totalCapacityOwnershipRep} REP`],
-						['Bot vault', botVaultState(monitored.botVault)],
+						['Capacity ownership', `${monitored.totalCapacityOwnershipEth} ETH`],
+						['Bot vault', botVaultState(monitored.botVault, context.topUpHealthBps === undefined ? undefined : BigInt(context.topUpHealthBps))],
 						['Vault backing', `${monitored.botVault.vaultRepBacking} REP`],
-						['Vault capacity ownership', `${monitored.botVault.capacityOwnershipRep} REP`],
+						['Vault capacity ownership', `${monitored.botVault.capacityOwnershipEth} ETH`],
 						['Open interest', `${monitored.botVault.openInterestDisplay} ETH`],
 						['Claimable fees', `${monitored.botVault.claimableFeesEth} ETH`],
 						['Targets', `${monitored.candidateCount}${monitored.bestCandidateBonusValueEth === undefined ? ' · No executable target' : ` · ${monitored.bestCandidateBonusValueEth} ETH best bonus`}`],

@@ -48,10 +48,8 @@ describe('dashboard exact ETH formatting', () => {
 	})
 
 	test('shows the server-sanitized poll cause and describes the attempted operation for local failures', () => {
-		expect(statePollingFailureMessage(new Error('The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active.'))).toBe(
-			'The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active. Use Refresh to retry now.',
-		)
-		expect(statePollingFailureMessage(new Error('Failed to fetch'))).toBe('The bot tried to load the latest operator state for the dashboard, but it failed: Failed to fetch. Automatic retry remains active; use Refresh to retry now.')
+		expect(statePollingFailureMessage(new Error('The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active.'))).toBe('The bot tried to read blockchain data through an RPC endpoint, but it failed: request timed out. Automatic retry remains active.')
+		expect(statePollingFailureMessage(new Error('Failed to fetch'))).toBe('The bot tried to load the latest operator state for the dashboard, but it failed: Failed to fetch. Automatic retry remains active.')
 	})
 
 	test('renders execution venue names without exposing snapshot slugs', () => {
@@ -80,7 +78,11 @@ describe('dashboard exact ETH formatting', () => {
 
 	test('never maps an empty Set signer form to the clear-signer request', () => {
 		expect(() => requiredSignerPrivateKey('  ')).toThrow('Enter a private key')
-		expect(requiredSignerPrivateKey('  0x1234  ')).toBe('0x1234')
+		const key = `0x${'ab'.repeat(32)}`
+		expect(requiredSignerPrivateKey(`  ${key}  `)).toBe(key)
+		// A malformed key is refused in the browser with the expected format, instead of a generic bot refusal after the round trip.
+		expect(() => requiredSignerPrivateKey('ab'.repeat(32))).toThrow('0x followed by 64 hexadecimal characters')
+		expect(() => requiredSignerPrivateKey('0x1234')).toThrow('0x followed by 64 hexadecimal characters')
 	})
 
 	test('keeps every signer control locked throughout a pending request', () => {

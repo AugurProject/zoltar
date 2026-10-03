@@ -119,6 +119,7 @@ export const resetSelectedNetworkContext = (context: ScannerContext, views: Scan
 	systemRouteState.detailRequestVersion++
 	systemRouteState.data = undefined
 	systemRouteState.selectedKey = undefined
+	systemRouteState.renderedDetailKey = undefined
 	systemRouteState.historyOffset = 0
 	lookup('#state-stats').replaceChildren()
 	lookup('#entity-list').replaceChildren()
@@ -144,6 +145,7 @@ export const resetSelectedNetworkContext = (context: ScannerContext, views: Scan
 
 export const bindNetworkFilter = (context: ScannerContext, views: ScannerViews, network: NetworkControls): void => {
 	context.elements.globalNetworkFilter.addEventListener('change', async () => {
+		document.querySelector('#network-notice')?.remove()
 		resetSelectedNetworkContext(context, views)
 		presentSelectedNetwork(context, network)
 		await loadRouteAfterNetworkSelection(context, views)

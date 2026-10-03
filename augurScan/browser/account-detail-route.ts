@@ -82,6 +82,8 @@ export const createAccountDetailRoute = (deps: AccountDetailRouteDeps) => {
 
 	const openAccountTransactions = (account: AccountReference, options: AccountDetailOptions = {}): Promise<boolean> => {
 		if (options.live !== true && options.canonicalRecovery !== true) {
+			// The control that opened the dialog is remembered by key, because live refreshes replace the element itself.
+			if (!dialog.open) activityDetailState.dialogInvokerKey = document.activeElement instanceof HTMLElement ? document.activeElement.dataset['dialogInvoker'] : undefined
 			activityDetailState.detailContextVersion++
 			activityDetailState.detailRequestVersion++
 		}
@@ -138,11 +140,19 @@ export const createAccountDetailRoute = (deps: AccountDetailRouteDeps) => {
 		clearDetailUrl()
 	}
 
+	/** Returns focus to the control that opened the dialog when the browser could not, because that control was re-rendered meanwhile. */
+	const restoreDialogInvokerFocus = () => {
+		const key = activityDetailState.dialogInvokerKey
+		activityDetailState.dialogInvokerKey = undefined
+		if (key === undefined || (document.activeElement !== null && document.activeElement !== document.body)) return
+		;[...document.querySelectorAll<HTMLElement>('[data-dialog-invoker]')].find(candidate => candidate.dataset['dialogInvoker'] === key)?.focus({ preventScroll: true })
+	}
+
 	const clearDetailUrl = () => {
 		const url = urlWithoutLogDetail(new URL(location.href))
 		url.searchParams.delete('account')
 		history.replaceState(null, '', url)
 	}
 
-	return { captureAccountDialogSnapshot, openAccountTransactions, restorePendingCanonicalAccount, closeDetail, clearDetailUrl }
+	return { captureAccountDialogSnapshot, openAccountTransactions, restorePendingCanonicalAccount, closeDetail, clearDetailUrl, restoreDialogInvokerFocus }
 }

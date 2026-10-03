@@ -148,15 +148,9 @@ textarea:focus-visible,
 	outline-offset: 3px;
 }
 
-.app-header,
 main {
 	width: min(1480px, calc(100% - 48px));
 	margin-inline: auto;
-}
-
-.app-header {
-	display: block;
-	padding: 20px 0 0;
 }
 
 .section-nav {
@@ -192,7 +186,6 @@ h2 {
 	text-transform: uppercase;
 }
 
-.header-actions,
 .section-heading {
 	display: flex;
 	align-items: center;
@@ -368,8 +361,7 @@ section,
 	gap: 18px;
 }
 
-.monitoring-grid,
-.operations-grid {
+.monitoring-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 18px;
@@ -780,10 +772,6 @@ a {
 	.dashboard-grid {
 		grid-template-columns: 1fr;
 	}
-
-	.operations-grid {
-		grid-template-columns: 1fr;
-	}
 }
 
 @media (max-width: 680px) {
@@ -834,61 +822,8 @@ a {
 		grid-template-columns: 1fr;
 	}
 
-	.app-header,
 	main {
 		width: min(100% - 28px, 1480px);
-	}
-
-	.app-header {
-		padding-top: 14px;
-	}
-
-	.header-actions {
-		width: 100%;
-		flex-wrap: wrap;
-	}
-
-	.header-actions .badge {
-		flex: 1 0 calc(50% - 0.4rem);
-		text-align: center;
-	}
-
-	.header-actions .button {
-		flex: 1;
-	}
-
-	#mode-badge {
-		grid-column: 1;
-		grid-row: 1;
-	}
-
-	#run-status-badge {
-		grid-column: 2;
-		grid-row: 1;
-	}
-
-	.header-actions[data-retry-active] #run-status-badge {
-		display: none;
-	}
-
-	#header-network-badge {
-		grid-column: 3;
-		grid-row: 1;
-	}
-
-	#attention-badge {
-		grid-column: 1;
-		grid-row: 2;
-	}
-
-	#pause-button {
-		grid-column: 2 / 4;
-		grid-row: 2;
-	}
-
-	#retry-status-badge {
-		grid-column: 2;
-		grid-row: 1;
 	}
 
 	.notice {

@@ -4,6 +4,7 @@ export interface SystemRouteState {
 	data: StateCatalog | undefined
 	activeType: StateTab
 	selectedKey: string | undefined
+	renderedDetailKey: string | undefined
 	historyOffset: number
 	detailRequestVersion: number
 	detailContextVersion: number
@@ -14,6 +15,7 @@ export const createSystemRouteState = (): SystemRouteState => ({
 	data: undefined,
 	activeType: 'pools',
 	selectedKey: undefined,
+	renderedDetailKey: undefined,
 	historyOffset: 0,
 	detailRequestVersion: 0,
 	detailContextVersion: 0,

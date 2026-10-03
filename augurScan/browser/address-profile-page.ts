@@ -7,6 +7,7 @@ import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { tradingPnlPanel } from './trading-panels.ts'
+import { captureViewState, restoreViewState } from './view-state.ts'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -35,6 +36,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const { lookup: $, liveSnapshot, nativeSymbol, element, isDemo, setLiveRecord, number, protocolAddressLink, operationsPanel, operationRow, operationCounted, operationsHref, openAccountTransactions, internalEvidenceLink, time, decodedArgumentsTable, applyLiveChanges, loadAddressProfile } = deps
 	const content = $('#address-profile-content')
 	const previousSections = liveSnapshot(content, '[data-live-key]')
+	const viewState = live ? captureViewState(content) : undefined
 	const chainId = String(item.chain_id)
 	const itemNativeSymbol = nativeSymbol(chainId)
 	const header = element('header', 'address-profile-header')
@@ -261,6 +263,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	activityHeader.append(activityCopy)
 	const allTransactions = element('button', 'secondary', 'View all sent transactions')
 	allTransactions.type = 'button'
+	allTransactions.dataset['dialogInvoker'] = 'address-profile-transactions'
 	allTransactions.addEventListener('click', () => openAccountTransactions(item))
 	activityHeader.append(allTransactions)
 	const transactionList = element('div', 'address-transaction-list')
@@ -305,6 +308,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		)
 		if (transaction.action_arguments && Object.keys(transaction.action_arguments).length > 0) {
 			const action = element('details', 'account-transaction-action')
+			action.dataset['detailKey'] = `interaction:${transaction.chain_id}:${transaction.tx_hash}`
 			const argumentsContent = element('div', 'account-transaction-arguments')
 			argumentsContent.append(decodedArgumentsTable(transaction.action_argument_schema, transaction.action_arguments, transaction.action_display_arguments, transaction.chain_id))
 			action.append(element('summary', '', 'Decoded arguments'), argumentsContent)
@@ -317,6 +321,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
 	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, refundPanel, tradingPnl, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
+	if (viewState !== undefined && portfolioFocusKind === undefined) restoreViewState(content, viewState)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }

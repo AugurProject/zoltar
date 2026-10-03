@@ -2,6 +2,8 @@ import { workflowProgress } from './workflow-progress.js'
 import { fullIdentifier } from './dom.js'
 import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
+import { stepValueLabel } from './dashboard-format.ts'
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 
 type Operation = { id?: string | undefined; label?: string | undefined; description?: string | undefined; blockers: string[] }
 type Input = { source: 'chaosbot' } | { source: 'custom'; value: string }
@@ -80,7 +82,9 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) {
 	return node
 }
 
-export function createOperationDialog(options: { request: (value: unknown) => Promise<unknown> }) {
+type OperationAction = 'execute' | 'inspect' | 'preview' | 'status'
+
+export function createOperationDialog(options: { request: (value: unknown, action: OperationAction) => Promise<unknown> }) {
 	const dialog = element('dialog')
 	dialog.className = 'operation-dialog'
 	dialog.id = 'operation-dialog'
@@ -138,6 +142,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	let fieldDefinitions: Field[] = []
 	let candidate: string | undefined
 	let busy = false
+	let live = false
+	let previewedSteps: Result['steps'] = []
 	let executionReference: string | undefined
 	const retainedExecutions = new Map<string, string>()
 	let renderedTransactions = ''
@@ -239,6 +245,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		mode.hidden = value.fields.length === 0
 		mode.textContent = value.mode === 'live' ? 'Live execution · transactions will be signed by the configured bot signer.' : 'Dry run · no transactions will be signed.'
 		previewId = value.previewId
+		live = value.mode === 'live'
+		previewedSteps = value.steps
 		if (value.expiresAt !== undefined && previewId !== undefined) {
 			const reference = previewId
 			window.setTimeout(
@@ -262,7 +270,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			for (const step of value.steps) {
 				const details = element('details')
 				details.append(element('summary', step.label))
-				details.append(element('p', `To: ${step.to}`), element('p', `ETH value: ${step.value} attoETH`), element('p', step.method), element('pre', step.arguments))
+				details.append(element('p', `To: ${step.to}`), element('p', `ETH value: ${stepValueLabel(step.value)}`), element('p', step.method), element('pre', step.arguments))
 				transactions.append(details)
 			}
 		}
@@ -297,7 +305,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 						}
 					}),
 			)
-			const value = result(await options.request({ action, definitionId: selected.id, inputs: submitted, ...(candidate === undefined ? {} : { candidate }) }))
+			const value = result(await options.request({ action, definitionId: selected.id, inputs: submitted, ...(candidate === undefined ? {} : { candidate }) }, action))
 			if (requestGeneration !== generation) return
 			show(value)
 		} catch (error) {
@@ -318,7 +326,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	async function poll(reference: string, requestGeneration: number) {
 		if (requestGeneration !== generation || !dialog.open) return
 		try {
-			const response = record(await options.request({ action: 'status', previewId: reference }))
+			const response = record(await options.request({ action: 'status', previewId: reference }, 'status'))
 			if (requestGeneration !== generation) return
 			if (response['execution'] === null) {
 				status.textContent = 'Execution status unavailable. Check Activity and the current workflow before retrying.'
@@ -365,11 +373,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		void load('preview')
 	})
 	retry.addEventListener('click', () => void load('inspect'))
-	execute.addEventListener('click', () => {
-		if (previewId === undefined || selected?.id === undefined || busy) return
-		const reference = previewId
-		const requestGeneration = generation
-		retainedExecutions.set(selected.id, reference)
+	function startExecution(reference: string, requestGeneration: number, operationId: string) {
+		retainedExecutions.set(operationId, reference)
 		executionReference = reference
 		previewId = undefined
 		busy = true
@@ -378,21 +383,49 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		execute.disabled = true
 		workflowLink.hidden = false
 		status.textContent = 'Starting operation…'
-		void options.request({ action: 'execute', previewId: reference }).then(
+		void options.request({ action: 'execute', previewId: reference }, 'execute').then(
 			() => poll(reference, requestGeneration),
 			error => {
-				if (requestGeneration !== generation) return
 				if (error instanceof Error && error.name === 'MutationOutcomeUnknown') {
 					void poll(reference, requestGeneration)
 					return
 				}
-				if (selected?.id !== undefined) retainedExecutions.delete(selected.id)
+				// The execution never started, so reopening this operation must not try to re-attach to it.
+				retainedExecutions.delete(operationId)
+				if (requestGeneration !== generation) return
 				busy = false
 				fields.disabled = false
 				preview.disabled = false
 				status.textContent = error instanceof Error ? error.message : 'Execution could not start. Preview the operation again.'
 			},
 		)
+	}
+
+	execute.addEventListener('click', () => {
+		if (previewId === undefined || selected?.id === undefined || busy) return
+		const reference = previewId
+		const requestGeneration = generation
+		const operationId = selected.id
+		if (!live) {
+			startExecution(reference, requestGeneration, operationId)
+			return
+		}
+		execute.disabled = true
+		void (async () => {
+			const confirmed = await confirmOperatorAction({
+				title: 'Sign and submit live transactions',
+				description: `${selected?.label ?? 'This operation'} will be signed by the configured bot signer and submitted to the network. This cannot be undone.`,
+				evidence: previewedSteps.map((step, index) => ({ label: `Transaction ${(index + 1).toString()}`, value: `${step.label} · to ${step.to} · ${stepValueLabel(step.value)}` })),
+				confirmLabel: 'Sign and submit',
+			})
+			// The preview may have expired or been replaced while the confirmation was open.
+			if (requestGeneration !== generation || previewId !== reference || busy) return
+			if (!confirmed) {
+				execute.disabled = false
+				return
+			}
+			startExecution(reference, requestGeneration, operationId)
+		})()
 	})
 	dialog.addEventListener('close', () => {
 		if (!dialog.open) {

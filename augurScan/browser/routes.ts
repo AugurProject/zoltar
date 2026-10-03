@@ -55,3 +55,31 @@ export const routeTitle = (pathname: string): string => {
 	const identity = pathname.split('/').filter(Boolean).at(-1)
 	return `${name}${identity !== undefined && ['address', 'tx', 'block', 'pool', 'vault', 'report', 'auction', 'escalation', 'fork', 'trading', 'question', 'universe'].includes(canonicalKind ?? '') ? ` ${shortIdentifier(canonicalKind === 'question' ? questionIdHex(identity) : identity, 12, 8)}` : ''} · augurScan`
 }
+
+const timelineContextParameters = ['q', 'entityType', 'event', 'address', 'fromBlock', 'toBlock', 'canonical']
+
+/** Identifies the data a route shows: the chain, the path, and the query parameters that select a different result set. */
+export const routeDataContext = (chainId: string, url: URL): string => {
+	const { pathname } = url
+	let parameters: readonly string[] = []
+	if (pathname === '/operations/timeline') parameters = timelineContextParameters
+	else if (pathname.startsWith('/operations/risk') || pathname.startsWith('/pool/') || pathname.startsWith('/vault/')) parameters = ['atBlock']
+	const selected = parameters.flatMap(name => {
+		const value = url.searchParams.get(name)
+		return value === null || value === '' ? [] : [`${name}=${encodeURIComponent(value)}`]
+	})
+	return `${chainId}:${pathname}${selected.length === 0 ? '' : `?${selected.join('&')}`}`
+}
+
+// Parameters that select content within one route (details, tabs, and filters); they never follow the user to another route.
+const routeScopedParameters = ['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock', 'event', 'address', 'q', 'entityType', 'canonical', 'atBlock']
+
+/** Builds the destination of a navigation link: the link's own URL plus the current page-wide parameters (network, demo flags, preferences). */
+export const navigationTarget = (linkUrl: URL, currentUrl: URL): URL => {
+	const target = new URL(linkUrl)
+	for (const name of routeScopedParameters) target.searchParams.delete(name)
+	for (const [name, value] of currentUrl.searchParams) {
+		if (!target.searchParams.has(name) && !routeScopedParameters.includes(name)) target.searchParams.set(name, value)
+	}
+	return target
+}

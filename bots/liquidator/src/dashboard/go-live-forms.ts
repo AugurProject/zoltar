@@ -4,6 +4,7 @@ import { formIsDirty, formIsSubmitting, markFormClean, refreshAllFormButtons, se
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { decodeConfiguration, decodeSigner, type Configuration, type Snapshot } from './api-validation.ts'
 import { renderGoLive } from './go-live.ts'
+import { REQUEST_REJECTED } from './dashboard-requests.ts'
 import { publicFailure } from './pool-presentation.ts'
 
 type GoLiveFormsContext = {
@@ -38,6 +39,15 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 	let chainSettingsAvailable = false
 	// An execution save whose response was lost may have armed the bot; the panel stays locked until a reload resolves it.
 	let executionOutcomeUnknown = false
+	// A signer request in flight keeps the whole signer form locked across polls so it cannot be sent twice.
+	let signerRequestPending = false
+	const lockSignerForm = () => {
+		const locked = !chainSettingsAvailable || signerRequestPending
+		signerFieldset.disabled = locked
+		// The individual controls carry the disabled state too, so a locked fieldset never hides an enabled input.
+		for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = locked
+		setSignerButton.disabled = locked || privateKeyInput.value.trim() === ''
+	}
 	for (const formId of ['submission-form', 'execution-form']) trackForm(formId)
 
 	element('submission-form', HTMLFormElement).addEventListener('submit', async event => {
@@ -74,8 +84,8 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 			await refresh()
 			actionStatus(executionStatus, next.runtime.execute ? 'Live execution armed; the bot is paused until you resume through the readiness check.' : 'Dry-run mode saved.')
 		} catch (error) {
-			// `api` names a refused request `DashboardRequestRejected`; any other failure leaves the outcome unknown.
-			if (error instanceof Error && error.name === 'DashboardRequestRejected') {
+			// `api` names a refused request `REQUEST_REJECTED`; any other failure leaves the outcome unknown.
+			if (error instanceof Error && error.name === REQUEST_REJECTED) {
 				// A rejected switch changes nothing, so the control returns to the saved mode instead of showing an unapplied choice.
 				executionEnabled.checked = loaded.runtime.execute
 				actionStatus(executionStatus, publicFailure(error, 'Could not change execution mode. Review the readiness checklist and retry.', true), true)
@@ -94,37 +104,49 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 
 	signerForm.addEventListener('submit', async event => {
 		event.preventDefault()
+		if (signerRequestPending) return
 		if (privateKeyInput.value.trim() === '') {
 			actionStatus(signerStatus, 'Enter a private key or use Remove signer.', true)
 			return
 		}
+		const request = { privateKey: privateKeyInput.value, rememberSigner: rememberSignerInput.checked }
+		signerRequestPending = true
+		lockSignerForm()
 		actionStatus(signerStatus, 'Updating…')
 		try {
-			const result = decodeSigner(await put('/api/signer', { privateKey: privateKeyInput.value, rememberSigner: rememberSignerInput.checked }))
+			const result = decodeSigner(await put('/api/signer', request))
 			privateKeyInput.value = ''
-			setSignerButton.disabled = true
+			// The summary and readiness checklist follow the snapshot, so it is reloaded before the outcome is reported.
+			await refresh()
 			actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : `Signer active: ${shorten(result.wallet)}`)
 		} catch (error) {
 			actionStatus(signerStatus, publicFailure(error, 'Could not update the signer. Check the bot connection and retry.', true), true)
+		} finally {
+			signerRequestPending = false
+			lockSignerForm()
 		}
 	})
 
 	signerForm.addEventListener('input', () => {
-		setSignerButton.disabled = !chainSettingsAvailable || privateKeyInput.value.trim() === ''
+		setSignerButton.disabled = !chainSettingsAvailable || signerRequestPending || privateKeyInput.value.trim() === ''
 	})
 
 	clearSignerButton.addEventListener('click', async () => {
+		if (signerRequestPending) return
 		if (!(await confirmOperatorAction({ title: 'Clear signer', description: 'Remove the active signer and saved private key from the local operator file.', phrase: 'CLEAR SIGNER', confirmLabel: 'Clear signer' }))) return
-		clearSignerButton.disabled = true
+		if (signerRequestPending) return
+		signerRequestPending = true
+		lockSignerForm()
 		actionStatus(signerStatus, 'Clearing…')
 		try {
 			const result = decodeSigner(await put('/api/signer', { privateKey: '', rememberSigner: true }))
-			actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
 			await refresh()
+			actionStatus(signerStatus, result.wallet === undefined ? 'Signer cleared' : 'Signer was not cleared', result.wallet !== undefined)
 		} catch (error) {
 			actionStatus(signerStatus, publicFailure(error, 'Could not clear the signer. Check the bot connection and retry.', true), true)
 		} finally {
-			clearSignerButton.disabled = !chainSettingsAvailable
+			signerRequestPending = false
+			lockSignerForm()
 		}
 	})
 
@@ -165,10 +187,7 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 			// A save in flight keeps its fieldset locked regardless of the connection state so later edits cannot be lost.
 			submissionFieldset.disabled = !enabled || formIsSubmitting('submission-form')
 			executionFieldset.disabled = !enabled || !snapshotLoaded || formIsSubmitting('execution-form') || executionOutcomeUnknown
-			signerFieldset.disabled = !enabled
-			// The individual controls carry the disabled state too, so a locked fieldset never hides an enabled input.
-			for (const control of signerForm.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = !enabled
-			setSignerButton.disabled = !enabled || privateKeyInput.value.trim() === ''
+			lockSignerForm()
 		},
 	}
 }

@@ -60,6 +60,8 @@ export type Snapshot = {
 	activities: Activity[]
 	alerts: { message: string; severity: 'error' | 'warning' }[]
 	centralizedMarket?: CentralizedMarket
+	/** Revision of the operator file the bot runs; it changes whenever the saved configuration does. */
+	configurationRevision?: string
 	marketConsensus?: MarketConsensus
 	error?: string
 	execute: boolean
@@ -120,7 +122,7 @@ const pool = object<MonitoredPool>({
 	address: stringValue,
 	approvedUniverse: booleanValue,
 	bestCandidateBonusValueEth: optionalString,
-	botVault: object<MonitoredPool['botVault']>({ capacityOwnershipRep: stringValue, openInterestDisplay: stringValue, healthBps: optional(unsignedInteger), vaultRepBacking: stringValue, claimableFeesEth: stringValue }),
+	botVault: object<MonitoredPool['botVault']>({ capacityOwnershipEth: stringValue, openInterestDisplay: stringValue, healthBps: optional(unsignedInteger), vaultRepBacking: stringValue, claimableFeesEth: stringValue }),
 	candidateCount: numberValue,
 	centralizedPriceAllowed: booleanValue,
 	centralizedPriceDeviationBps: optionalString,
@@ -132,7 +134,7 @@ const pool = object<MonitoredPool>({
 	questionId: stringValue,
 	selected: booleanValue,
 	systemState: stringValue,
-	totalCapacityOwnershipRep: stringValue,
+	totalCapacityOwnershipEth: stringValue,
 	totalPoolHeldRep: stringValue,
 })
 const snapshot = object<Snapshot>({
@@ -148,6 +150,7 @@ const snapshot = object<Snapshot>({
 			observations: array(object<CentralizedMarket['observations'][number]>({ askDepthEth: stringValue, bidDepthEth: stringValue, exchangeId: stringValue, observedAt: stringValue, priceRepPerEth: stringValue, repMarket: stringValue })),
 		}),
 	),
+	configurationRevision: optionalString,
 	marketConsensus: optional(object<MarketConsensus>({ cex: marketGroup, dex: marketGroup, priceRepPerEth: optionalString, reasons: strings, reliable: booleanValue })),
 	error: optionalString,
 	execute: booleanValue,

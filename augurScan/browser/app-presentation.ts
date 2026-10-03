@@ -89,6 +89,31 @@ export const renderRetryStatus = (status: HTMLElement, message: string, retryAct
 	status.replaceChildren(element('span', '', message), retry)
 }
 
+/** Hides a status that may have shown a retry message and restores its neutral presentation for the next message. */
+export const clearRetryStatus = (status: HTMLElement): void => {
+	status.hidden = true
+	status.className = 'system-status'
+	status.replaceChildren()
+}
+
+/** Writes text only when it differs, so unchanged live regions are not announced again. */
+export const setTextIfChanged = (node: { textContent: string | null }, text: string): void => {
+	if (node.textContent !== text) node.textContent = text
+}
+
+/** Advances every relative-time label; activity cells keep their timestamp and update only the age element. */
+export const tickRelativeTimes = (root: ParentNode, age: (value: string | undefined) => string): void => {
+	for (const node of root.querySelectorAll<HTMLElement>('[data-time]')) {
+		const label = age(node.dataset['time'])
+		if (!node.classList.contains('cell-time')) {
+			setTextIfChanged(node, label)
+			continue
+		}
+		const ageNode = node.querySelector<HTMLElement>('.activity-age')
+		if (ageNode !== null) setTextIfChanged(ageNode, `· ${label}`)
+	}
+}
+
 export const accountTransactionsError = (detail: string, hasLoaded: boolean, append: boolean): string => {
 	if (!hasLoaded) return `Could not load sent transactions: ${detail}`
 	return append ? `Could not load more transactions; showing the last known activity: ${detail}` : `Could not refresh sent transactions; showing the last known activity: ${detail}`
@@ -109,3 +134,6 @@ export const nextTabIndex = (key: string, current: number, count: number): numbe
 	if (key === 'End') return count - 1
 	return (current + (key === 'ArrowRight' ? 1 : -1) + count) % count
 }
+
+/** The first heading of the visible route section that is actually rendered; canonical entity routes hide the section's own heading. */
+export const firstVisibleHeading = (root: ParentNode, isRendered: (heading: HTMLElement) => boolean): HTMLElement | undefined => [...root.querySelectorAll<HTMLElement>('main > section:not([hidden]) :is(h1, h2, h3)')].find(isRendered)

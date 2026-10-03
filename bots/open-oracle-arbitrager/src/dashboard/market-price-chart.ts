@@ -23,8 +23,18 @@ export function renderMarketPriceChart(snapshot: Pick<PublicOperatorSnapshot, 'p
 	const selector = element('price-token', HTMLSelectElement)
 	const selected = selector.value
 	const tokens = [...new Map(snapshot.priceHistory.map(point => [point.token.toLowerCase(), { address: point.token, symbol: point.symbol }])).values()]
-	selector.replaceChildren(...tokens.map(token => new Option(`${token.symbol} · ${shorten(token.address)}`, token.address)))
+	selector.replaceChildren(
+		...tokens.map(token => {
+			const option = document.createElement('option')
+			option.value = token.address
+			option.textContent = `${token.symbol} · ${shorten(token.address)}`
+			return option
+		}),
+	)
+	// The previous choice survives a rebuild; otherwise the first token is charted, stated explicitly rather than left to the selector's default.
+	const firstToken = tokens[0]
 	if (tokens.some(token => token.address === selected)) selector.value = selected
+	else if (firstToken !== undefined) selector.value = firstToken.address
 	const token = selector.value
 	const points = selectedTokenPriceHistory(snapshot.priceHistory, token)
 	const container = element('market-price-chart')

@@ -1,6 +1,7 @@
 import { type Workflow } from './workflow-history.js'
-import { formatDate, node, setBadge, statusLabel, statusTone } from './dom.js'
+import { formatDate, node, renderWhenChanged, setBadge, statusLabel, statusTone } from './dom.js'
 import { pendingTransactionSummary } from './pending-transaction-summary.js'
+import { recoveryFormSubmitting } from './recovery-form-lock.ts'
 import { type Snapshot, type OperationEvaluation, type PendingTransaction } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { ecosystemLabel, ecosystemLabels, ecosystemOrder, normalizeEcosystem, obligationDetail, operationIsIndependentlyExecutable, transactionIdentifier, transactionLine } from './dashboard-format.ts'
@@ -8,6 +9,13 @@ import type { DashboardState } from './dashboard-state.ts'
 
 export function createDashboardRecoveryView({ state, elements }: { state: DashboardState; elements: DashboardElements }) {
 	function renderWorkflow(value: Workflow | undefined, pendingTransactions: readonly PendingTransaction[]) {
+		const stepHashes = new Set(value?.steps.flatMap(step => (step.txHash === undefined ? [] : [step.txHash.toLowerCase()])) ?? [])
+		const waitingTransaction = value?.status === 'waiting-transaction' ? pendingTransactions.find(transaction => transaction.hash !== undefined && stepHashes.has(transaction.hash.toLowerCase())) : undefined
+		const waitSummary = waitingTransaction === undefined ? undefined : pendingTransactionSummary(waitingTransaction)
+		renderWhenChanged(elements.currentWorkflow, JSON.stringify([value, waitSummary, state.configuration?.explorerUrl]), () => buildWorkflow(value, waitingTransaction))
+	}
+
+	function buildWorkflow(value: Workflow | undefined, waitingTransaction: PendingTransaction | undefined) {
 		if (value === undefined) {
 			elements.currentWorkflow.className = 'empty-state'
 			elements.currentWorkflow.textContent = 'No operation is in progress.'
@@ -21,8 +29,6 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 		const status = node('span')
 		setBadge(status, value.status === undefined ? 'In progress' : statusLabel(value.status), statusTone(value.status))
 		heading.append(copy, status)
-		const stepHashes = new Set(value.steps.flatMap(step => (step.txHash === undefined ? [] : [step.txHash.toLowerCase()])))
-		const waitingTransaction = value.status === 'waiting-transaction' ? pendingTransactions.find(transaction => transaction.hash !== undefined && stepHashes.has(transaction.hash.toLowerCase())) : undefined
 		const steps = node('ol', 'step-list')
 		for (const step of value.steps) {
 			const row = node('li')
@@ -54,92 +60,114 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 			card.append(node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`), node('small', undefined, 'eligible operations'))
 			return card
 		})
-		elements.coverageSummary.replaceChildren(...cards)
+		renderWhenChanged(elements.coverageSummary, JSON.stringify(cards.map(card => card.textContent)), () => elements.coverageSummary.replaceChildren(...cards))
+	}
+
+	/** The wait note carries relative ages, so it refreshes on its own without rebuilding the row that holds the transaction hash. */
+	function fillTransactionWaitNote(note: HTMLElement, transaction: PendingTransaction) {
+		const summary = pendingTransactionSummary(transaction)
+		renderWhenChanged(note, JSON.stringify(summary), () => {
+			note.className = `transaction-wait ${summary.tone}`
+			note.replaceChildren(node('strong', undefined, summary.headline), ...(summary.detail === '' ? [] : [node('small', undefined, summary.detail)]))
+		})
 	}
 
 	function transactionWaitNote(transaction: PendingTransaction) {
-		const summary = pendingTransactionSummary(transaction)
-		const note = node('div', `transaction-wait ${summary.tone}`)
-		note.append(node('strong', undefined, summary.headline))
-		if (summary.detail !== '') note.append(node('small', undefined, summary.detail))
+		const note = node('div')
+		fillTransactionWaitNote(note, transaction)
 		return note
 	}
+
+	let pendingTransactionNotes: HTMLElement[] = []
 
 	function renderRecovery(value: Snapshot) {
 		elements.pendingCount.textContent = value.pendingTransactions.length.toString()
 		elements.obligationCount.textContent = value.obligations.length.toString()
-		elements.obligationFields.disabled = value.paused !== true || value.obligations.length === 0
+		elements.obligationFields.disabled = recoveryFormSubmitting(elements.obligationFields) || value.paused !== true || value.obligations.length === 0
 		const recoverableWorkflow = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? value.currentWorkflow : undefined
 		elements.workflowRecoveryPanel.hidden = recoverableWorkflow === undefined
-		elements.workflowFields.disabled = value.paused !== true || recoverableWorkflow === undefined
+		elements.workflowFields.disabled = recoveryFormSubmitting(elements.workflowFields) || value.paused !== true || recoverableWorkflow === undefined
 		if (recoverableWorkflow !== undefined) {
 			const label = recoverableWorkflow.label ?? recoverableWorkflow.operationId ?? 'Partial workflow'
-			elements.workflowRecoverySummary.replaceChildren(node('strong', undefined, label), node('span', 'badge warning', statusLabel(recoverableWorkflow.status)), node('p', 'muted', `Workflow ${recoverableWorkflow.id ?? 'ID unavailable'} · ${recoverableWorkflow.operationId ?? 'Operation unavailable'}`))
+			const detail = `Workflow ${recoverableWorkflow.id ?? 'ID unavailable'} · ${recoverableWorkflow.operationId ?? 'Operation unavailable'}`
+			renderWhenChanged(elements.workflowRecoverySummary, JSON.stringify([label, recoverableWorkflow.status, detail]), () => elements.workflowRecoverySummary.replaceChildren(node('strong', undefined, label), node('span', 'badge warning', statusLabel(recoverableWorkflow.status)), node('p', 'muted', detail)))
 		}
-		const selectedObligation = elements.obligationIdInput.value
-		elements.obligationIdInput.replaceChildren(
-			...value.obligations.map(obligation => {
-				const option = document.createElement('option')
-				option.value = obligation.id ?? ''
-				option.textContent = `${obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'} · ${statusLabel(obligation.status ?? 'pending')}`
-				return option
-			}),
-		)
-		if (value.obligations.some(obligation => obligation.id === selectedObligation)) {
-			elements.obligationIdInput.value = selectedObligation
-		}
-		elements.replacementFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
-		elements.cancellationFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
+		const obligationOptions = value.obligations.map(obligation => ({ label: `${obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'} · ${statusLabel(obligation.status ?? 'pending')}`, value: obligation.id ?? '' }))
+		renderWhenChanged(elements.obligationIdInput, JSON.stringify(obligationOptions), () => {
+			const selectedObligation = elements.obligationIdInput.value
+			elements.obligationIdInput.replaceChildren(...obligationOptions.map(option => new Option(option.label, option.value)))
+			if (obligationOptions.some(option => option.value === selectedObligation)) elements.obligationIdInput.value = selectedObligation
+		})
+		elements.replacementFields.disabled = recoveryFormSubmitting(elements.replacementFields) || value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
+		elements.cancellationFields.disabled = recoveryFormSubmitting(elements.cancellationFields) || value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
 		const queuedCandidate = value.pendingTransactions[0]?.replacementHash ?? value.pendingTransactions[0]?.cancellationHash
-		elements.candidateFields.disabled = value.paused !== true || queuedCandidate === undefined
+		elements.candidateFields.disabled = recoveryFormSubmitting(elements.candidateFields) || value.paused !== true || queuedCandidate === undefined
 		elements.replacementForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
 		elements.cancellationForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
 		elements.candidateForm.hidden = queuedCandidate === undefined
 		elements.workflowForm.hidden = recoverableWorkflow === undefined
 		elements.obligationForm.hidden = value.obligations.length === 0
-		if (value.pendingTransactions.length === 0) {
-			elements.pendingTransactions.className = 'stack-list empty-state'
-			elements.pendingTransactions.textContent = 'No transaction requires confirmation.'
-		} else {
+		const explorerUrl = state.configuration?.explorerUrl
+		// The observation only feeds the wait note, which updates in place below.
+		const pendingRows = value.pendingTransactions.map(({ observation: _observation, submittedAt: _submittedAt, ...row }) => row)
+		renderWhenChanged(elements.pendingTransactions, JSON.stringify([pendingRows, explorerUrl]), () => {
+			pendingTransactionNotes = []
+			if (value.pendingTransactions.length === 0) {
+				elements.pendingTransactions.className = 'stack-list empty-state'
+				elements.pendingTransactions.textContent = 'No transaction requires confirmation.'
+				return
+			}
 			elements.pendingTransactions.className = 'stack-list'
 			elements.pendingTransactions.replaceChildren(
 				...value.pendingTransactions.map(transaction => {
 					const row = node('div', 'stack-row')
 					const copy = node('div')
 					copy.append(node('strong', undefined, transaction.label ?? transaction.operationId ?? 'Pending transaction'))
-					copy.append(transactionLine(state.configuration?.explorerUrl, `Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
-					if (transaction.replacementHash !== undefined) {
-						copy.append(transactionLine(state.configuration?.explorerUrl, 'Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
-					}
-					if (transaction.cancellationHash !== undefined) {
-						copy.append(transactionLine(state.configuration?.explorerUrl, 'Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
-					}
+					copy.append(transactionLine(explorerUrl, `Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
+					if (transaction.replacementHash !== undefined) copy.append(transactionLine(explorerUrl, 'Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
+					if (transaction.cancellationHash !== undefined) copy.append(transactionLine(explorerUrl, 'Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
 					const status = node('span')
 					setBadge(status, statusLabel(transaction.status ?? 'pending'), statusTone(transaction.status ?? 'pending'))
-					row.append(copy, status, transactionWaitNote(transaction))
+					const note = transactionWaitNote(transaction)
+					pendingTransactionNotes.push(note)
+					row.append(copy, status, note)
 					return row
 				}),
 			)
+		})
+		for (const [index, transaction] of value.pendingTransactions.entries()) {
+			const note = pendingTransactionNotes[index]
+			if (note !== undefined) fillTransactionWaitNote(note, transaction)
 		}
-		if (value.obligations.length === 0) {
-			elements.obligations.className = 'stack-list empty-state'
-			elements.obligations.textContent = 'No follow-up obligation is due.'
-		} else {
+		const obligationRows = value.obligations.map(obligation => {
+			const automaticRetryWaiting = obligation.status === 'deferred' && obligation.notBefore !== undefined
+			const tone: ReturnType<typeof statusTone> = automaticRetryWaiting ? 'warning' : statusTone(obligation.status ?? 'pending')
+			return {
+				badge: automaticRetryWaiting ? 'Retry waiting' : statusLabel(obligation.status ?? 'pending'),
+				detail: obligationDetail(obligation),
+				title: obligation.label ?? obligation.operationId ?? 'Lifecycle obligation',
+				tone,
+			}
+		})
+		renderWhenChanged(elements.obligations, JSON.stringify(obligationRows), () => {
+			if (obligationRows.length === 0) {
+				elements.obligations.className = 'stack-list empty-state'
+				elements.obligations.textContent = 'No follow-up obligation is due.'
+				return
+			}
 			elements.obligations.className = 'stack-list'
 			elements.obligations.replaceChildren(
-				...value.obligations.map(obligation => {
+				...obligationRows.map(obligation => {
 					const row = node('div', 'stack-row')
 					const copy = node('div')
-					copy.append(node('strong', undefined, obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'))
-					copy.append(node('small', undefined, obligationDetail(obligation)))
+					copy.append(node('strong', undefined, obligation.title), node('small', undefined, obligation.detail))
 					const status = node('span')
-					const automaticRetryWaiting = obligation.status === 'deferred' && obligation.notBefore !== undefined
-					setBadge(status, automaticRetryWaiting ? 'Retry waiting' : statusLabel(obligation.status ?? 'pending'), automaticRetryWaiting ? 'warning' : statusTone(obligation.status ?? 'pending'))
+					setBadge(status, obligation.badge, obligation.tone)
 					row.append(copy, status)
 					return row
 				}),
 			)
-		}
+		})
 	}
 	return { renderWorkflow, renderCoverage, renderRecovery }
 }

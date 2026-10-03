@@ -2,6 +2,7 @@ import * as Plot from '@observablehq/plot'
 import type { JsonRecord } from './api-validation.ts'
 import { exactNumber } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
+import { blockRangeError, filterFormDestination } from './operations-presentation.ts'
 import { sparklineBuckets } from './operations-sparkline.ts'
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', value?: string): HTMLElementTagNameMap[K] => {
@@ -21,6 +22,7 @@ export const createOperationsComponents = () => {
 			const { points, range } = sparklineBuckets(trend)
 			if (range !== undefined) {
 				const sparkline = Plot.plot({ width: 180, height: 38, margin: 0, style: { background: 'transparent' }, x: { axis: null }, y: { axis: null, domain: [0, Math.max(1, ...points.map(point => point.y))] }, marks: [Plot.lineY(points, { x: 'x', y: 'y', stroke: '#56d7d0' })] })
+				sparkline.querySelector('style')?.remove()
 				sparkline.setAttribute('role', 'img')
 				sparkline.setAttribute('aria-label', `${label}: indexed transitions from ${range[0]} to ${range[1]}`)
 				card.append(sparkline)
@@ -72,12 +74,41 @@ export const createOperationsComponents = () => {
 	return { operationCard, operationRow, exactEvidenceRow, operationsPanel }
 }
 
-export const renderOperationsTimelineFilters = (pageUrl: URL, chainId: string, isDemo: boolean, operationsHref: (path: string) => string): HTMLFormElement => {
+/** Applies a filter form through in-place navigation after validating its block-number fields. */
+const bindFilterForm = (form: HTMLFormElement, actionPath: string, blockFields: readonly string[], navigate: (destination: URL) => void): void => {
+	const inputs = () => [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[name], select[name]')]
+	form.addEventListener('input', () => {
+		for (const input of inputs()) input.setCustomValidity('')
+	})
+	form.addEventListener('submit', event => {
+		event.preventDefault()
+		const byName = new Map(inputs().map(input => [input.name, input]))
+		for (const input of byName.values()) input.setCustomValidity('')
+		const valueOf = (name: string) => byName.get(name)?.value ?? ''
+		const failure = blockFields.length === 2 ? blockRangeError(valueOf(blockFields[0] ?? ''), valueOf(blockFields[1] ?? '')) : blockRangeError(valueOf(blockFields[0] ?? ''), '')
+		if (failure !== undefined) {
+			const invalid = byName.get(failure.field === 'fromBlock' ? (blockFields[0] ?? '') : (blockFields[1] ?? ''))
+			invalid?.setCustomValidity(failure.message)
+			invalid?.reportValidity()
+			return
+		}
+		navigate(
+			filterFormDestination(
+				actionPath,
+				location.origin,
+				[...byName].map(([name, input]) => [name, input.value] as const),
+			),
+		)
+	})
+}
+
+export const renderOperationsTimelineFilters = (pageUrl: URL, chainId: string, isDemo: boolean, operationsHref: (path: string) => string, navigate: (destination: URL) => void): HTMLFormElement => {
 	const form = document.createElement('form')
 	form.className = 'filters operations-filters'
 	form.method = 'get'
 	form.action = '/operations/timeline'
 	form.setAttribute('role', 'search')
+	form.setAttribute('aria-label', 'Timeline filters')
 	const field = (label: string, name: string, placeholder: string, inputMode?: 'numeric') => {
 		const wrapper = document.createElement('label')
 		const input = document.createElement('input')
@@ -120,10 +151,11 @@ export const renderOperationsTimelineFilters = (pageUrl: URL, chainId: string, i
 		canonicalLabel,
 		actions,
 	)
+	bindFilterForm(form, '/operations/timeline', ['fromBlock', 'toBlock'], navigate)
 	return form
 }
 
-export const renderOperationsRiskSnapshotFilter = (pageUrl: URL, chainId: string, isDemo: boolean, operationsHref: (path: string) => string): HTMLFormElement => {
+export const renderOperationsRiskSnapshotFilter = (pageUrl: URL, chainId: string, isDemo: boolean, operationsHref: (path: string) => string, navigate: (destination: URL) => void): HTMLFormElement => {
 	const form = document.createElement('form')
 	form.className = 'filters operations-filters operations-as-of-filter'
 	form.method = 'get'
@@ -152,5 +184,7 @@ export const renderOperationsRiskSnapshotFilter = (pageUrl: URL, chainId: string
 	latest.href = `${latestDestination.pathname}${latestDestination.search}`
 	latest.textContent = 'Latest state'
 	form.append(label, submit, latest)
+	form.setAttribute('aria-label', 'Risk snapshot block')
+	bindFilterForm(form, '/operations/risk', ['atBlock'], navigate)
 	return form
 }

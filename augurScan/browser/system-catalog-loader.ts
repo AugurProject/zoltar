@@ -191,14 +191,16 @@ export const createSystemCatalogLoader = (deps: SystemCatalogLoaderDeps) => {
 				$('#state-stats').setAttribute('aria-busy', 'false')
 				$('#entity-list').setAttribute('aria-busy', 'false')
 				$('#state-detail').setAttribute('aria-busy', 'false')
-				alert.hidden = false
-				alert.replaceChildren()
 				status.hidden = true
-				alert.append(element('span', '', hadData ? `Refresh failed; showing last known state: ${errorMessage(error)}` : `System state unavailable: ${errorMessage(error)}`))
-				const retry = element('button', '', 'Retry')
-				retry.type = 'button'
-				retry.addEventListener('click', () => retryCanonicalViewOr(loadSystemState))
-				alert.append(retry)
+				const message = hadData ? `Refresh failed; showing last known state: ${errorMessage(error)}` : `System state unavailable: ${errorMessage(error)}`
+				// A repeated failure keeps the existing alert so assistive technology does not announce it on every poll.
+				if (alert.hidden || alert.querySelector('span')?.textContent !== message) {
+					alert.hidden = false
+					const retry = element('button', '', 'Retry')
+					retry.type = 'button'
+					retry.addEventListener('click', () => retryCanonicalViewOr(loadSystemState))
+					alert.replaceChildren(element('span', '', message), retry)
+				}
 				if (!hadData) {
 					$('#entity-list-title').textContent = 'Registry unavailable'
 					$('#entity-count').textContent = '—'

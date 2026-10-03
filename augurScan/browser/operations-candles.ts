@@ -1,6 +1,7 @@
 import * as Plot from '@observablehq/plot'
 import { isRecord, type JsonRecord } from './api-validation.ts'
 import { chartValueBounds } from './chart-values.ts'
+import { utcDateTime } from './format.ts'
 
 type EvidenceRow = (title: string, status: string, identity: string | undefined, block: unknown) => HTMLElement
 
@@ -44,6 +45,7 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 				Plot.rect(plotRows, { x1: row => new Date(row.start - bodyHalfWidth), x2: row => new Date(row.start + bodyHalfWidth), y1: 'open', y2: 'close', fill: row => (row.direction === 'up' ? '#56d7d0' : '#e58989'), tip: true }),
 			],
 		})
+		chart.querySelector('style')?.remove()
 		chart.setAttribute('role', 'img')
 		chart.setAttribute('aria-label', 'Hourly NO per YES price candles')
 		chart.classList.add('time-chart')
@@ -60,7 +62,7 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 			const close = isRecord(candle['close']) ? candle['close'] : {}
 			disclosure.append(
 				operationRow(
-					new Date(Number(candle['bucketStart'] ?? 0) * 1_000).toLocaleString(),
+					utcDateTime(Number(candle['bucketStart'] ?? 0) * 1_000),
 					`O ${operationRatio(open['numerator'], open['denominator'])} · H ${operationRatio(high['numerator'], high['denominator'])} · L ${operationRatio(low['numerator'], low['denominator'])} · C ${operationRatio(close['numerator'], close['denominator'])}`,
 					`${String(candle['observations'] ?? '0')} observations`,
 					undefined,

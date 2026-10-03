@@ -1,9 +1,8 @@
 import type { RichListRecord } from './browser-types.ts'
 import { renderDataTable } from './data-table.ts'
 import { exactNumber, exactUnit } from './format.ts'
+import { nativeSymbolFor as nativeSymbol } from './network-freshness.ts'
 import { richListLargestRep } from './rich-list-rep.ts'
-
-const nativeSymbol = (chainId: string | number): string => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
 
 export const renderRichListTable = (container: HTMLElement, items: readonly RichListRecord[], options: { readonly chainId: string; readonly sort: string; readonly demo: boolean; readonly onSort: (sort: string) => void }): void => {
 	renderDataTable(container, {

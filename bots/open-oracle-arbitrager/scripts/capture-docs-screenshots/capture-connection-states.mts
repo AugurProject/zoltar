@@ -160,7 +160,7 @@ async function assertHungRequestFailsClosed(session: BrowserSession, origin: str
 	await Bun.sleep(750)
 }
 
-/** An open resume preflight closes and locks its confirmation while state is unavailable, then recovers with current state. */
+/** An open resume preflight stays open with its confirmation locked while state is unavailable, then recovers with current state. */
 async function assertPreflightFollowsConnection(session: BrowserSession, origin: string, viewport: (typeof VIEWPORTS)[number]) {
 	const { width, height, suffix } = viewport
 	fixture.paused = true
@@ -175,7 +175,7 @@ async function assertPreflightFollowsConnection(session: BrowserSession, origin:
 	fixture.stateUnavailable = true
 	await Bun.sleep(2_300)
 	const stalePreflight = await readConnectionState(session)
-	if (typeof stalePreflight !== 'object' || stalePreflight === null || !('resumeOpen' in stalePreflight) || stalePreflight.resumeOpen !== false || !('confirmDisabled' in stalePreflight) || stalePreflight.confirmDisabled !== true) {
+	if (typeof stalePreflight !== 'object' || stalePreflight === null || !('resumeOpen' in stalePreflight) || stalePreflight.resumeOpen !== true || !('confirmDisabled' in stalePreflight) || stalePreflight.confirmDisabled !== true) {
 		throw new Error(`Disconnected resume preflight remained actionable: ${JSON.stringify(stalePreflight)}`)
 	}
 	fixture.stateUnavailable = false

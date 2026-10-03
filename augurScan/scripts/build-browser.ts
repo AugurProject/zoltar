@@ -6,6 +6,7 @@ const entrypointSource = demo ? '../tests/browser/demo-app.ts' : 'live-app.ts'
 const result = await Bun.build({
 	entrypoints: [path.join(projectRoot, 'browser', entrypointSource)],
 	format: 'esm',
+	minify: true,
 	naming: 'app.js',
 	outdir: path.join(projectRoot, demo ? 'qa/build' : 'public'),
 	target: 'browser',

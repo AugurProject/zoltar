@@ -62,22 +62,22 @@
 					</div>
 					<span id="opportunity-count" class="muted">0 evaluated</span>
 				</div>
-				<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Open opportunities table">
+				<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Open opportunities table">
 					<table class="mobile-record-table">
 						<thead>
 							<tr>
-								<th>Report</th>
-								<th>Decision</th>
-								<th>Reference deviation</th>
-								<th>Executable REP / ETH</th>
-								<th>Reason</th>
-								<th>Direction</th>
-								<th>Estimated net (ETH)</th>
-								<th>Required WETH</th>
-								<th>Required token</th>
-								<th>Window</th>
-								<th>Venue</th>
-								<th>Pool / manager</th>
+								<th scope="col">Report</th>
+								<th scope="col">Decision</th>
+								<th scope="col">Reference deviation</th>
+								<th scope="col">Executable REP / ETH</th>
+								<th scope="col">Reason</th>
+								<th scope="col">Direction</th>
+								<th scope="col">Estimated net (ETH)</th>
+								<th scope="col">Required WETH</th>
+								<th scope="col">Required token</th>
+								<th scope="col">Window</th>
+								<th scope="col">Venue</th>
+								<th scope="col">Pool / manager</th>
 							</tr>
 						</thead>
 						<tbody id="opportunities-body"></tbody>
@@ -95,19 +95,19 @@
 					<span id="settlement-count" class="muted">0 awaiting settlement</span>
 				</div>
 				<div id="settlement-summary" class="balance-list settlement-summary"></div>
-				<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Settlement queue table">
+				<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Settlement queue table">
 					<table class="mobile-record-table">
 						<thead>
 							<tr>
-								<th>Report</th>
-								<th>Decision</th>
-								<th>Reason</th>
-								<th>Reward</th>
-								<th>Gas budget</th>
-								<th>Net at fee ceiling</th>
-								<th>Past deadline</th>
-								<th>Token</th>
-								<th>Coordinator</th>
+								<th scope="col">Report</th>
+								<th scope="col">Decision</th>
+								<th scope="col">Reason</th>
+								<th scope="col">Reward</th>
+								<th scope="col">Gas budget</th>
+								<th scope="col">Net at fee ceiling</th>
+								<th scope="col">Past deadline</th>
+								<th scope="col">Token</th>
+								<th scope="col">Coordinator</th>
 							</tr>
 						</thead>
 						<tbody id="settlement-queue-body"></tbody>
@@ -136,17 +136,17 @@
 							<label>Filter <select id="operation-filter"><option value="all">All decisions</option><option value="error">Errors</option><option value="warning">Warnings</option><option value="info">Information</option></select></label>
 							<span id="operation-count" class="muted">0 groups</span>
 						</div>
-						<div class="table-scroll mobile-record-scroll operation-scroll" tabindex="0" aria-label="Operations log table">
+						<div role="region" class="table-scroll mobile-record-scroll operation-scroll" tabindex="0" aria-label="Operations log table">
 							<table class="mobile-record-table">
 								<thead>
 									<tr>
-										<th>Latest</th>
-										<th>Level</th>
-										<th>Category</th>
-										<th>Report</th>
-										<th>Operation</th>
-										<th>Result</th>
-										<th>Occurrences</th>
+										<th scope="col">Latest</th>
+										<th scope="col">Level</th>
+										<th scope="col">Category</th>
+										<th scope="col">Report</th>
+										<th scope="col">Operation</th>
+										<th scope="col">Result</th>
+										<th scope="col">Occurrences</th>
 									</tr>
 								</thead>
 								<tbody id="operations-body"></tbody>
@@ -162,21 +162,21 @@
 							</div>
 							<span id="position-count" class="muted">0 durable positions</span>
 						</div>
-						<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Position lifecycle table">
+						<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Position lifecycle table">
 							<table class="mobile-record-table">
 								<thead>
 									<tr>
-										<th>Opened</th>
-										<th>Report</th>
-										<th>Direction</th>
-										<th>Status</th>
-										<th>Hedged pre-gas</th>
-										<th>Entry gas</th>
-										<th>Lifecycle gas</th>
-										<th>Settler reward</th>
-										<th>Realized net</th>
-										<th>Withdrawn</th>
-										<th>Entry transaction</th>
+										<th scope="col">Opened</th>
+										<th scope="col">Report</th>
+										<th scope="col">Direction</th>
+										<th scope="col">Status</th>
+										<th scope="col">Hedged pre-gas</th>
+										<th scope="col">Entry gas</th>
+										<th scope="col">Lifecycle gas</th>
+										<th scope="col">Settler reward</th>
+										<th scope="col">Realized net</th>
+										<th scope="col">Withdrawn</th>
+										<th scope="col">Entry transaction</th>
 									</tr>
 								</thead>
 								<tbody id="positions-body"></tbody>
@@ -192,20 +192,20 @@
 							<label>Filter <select id="transaction-filter"><option value="all">All transactions</option><option value="confirmation-unknown">Recovery required</option><option value="confirmed">Confirmed</option><option value="failed">Failed</option></select></label>
 							<span id="transaction-count" class="muted">0 tracked</span>
 						</div>
-						<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Transaction tracking table">
+						<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Transaction tracking table">
 							<table class="mobile-record-table">
 								<thead>
 									<tr>
-										<th>Updated</th>
-										<th>Report</th>
-										<th>Transaction</th>
-										<th>Kind</th>
-										<th>Delivery</th>
-										<th>Status</th>
-										<th>Target results</th>
-										<th>Estimated net (ETH)</th>
-										<th>Tracked net (ETH)</th>
-										<th>Actual gas</th>
+										<th scope="col">Updated</th>
+										<th scope="col">Report</th>
+										<th scope="col">Transaction</th>
+										<th scope="col">Kind</th>
+										<th scope="col">Delivery</th>
+										<th scope="col">Status</th>
+										<th scope="col">Target results</th>
+										<th scope="col">Estimated net (ETH)</th>
+										<th scope="col">Tracked net (ETH)</th>
+										<th scope="col">Actual gas</th>
 									</tr>
 								</thead>
 								<tbody id="transactions-body"></tbody>
@@ -220,19 +220,19 @@
 							</div>
 							<span class="muted">Stored on this operator host</span>
 						</div>
-						<div id="profit-chart" class="profit-chart" aria-label="Tracked net profit in ETH for displayed history"></div>
-						<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Execution history table">
+						<div id="profit-chart" class="profit-chart" role="group" aria-label="Tracked net profit in ETH for displayed history"></div>
+						<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Execution history table">
 							<table class="mobile-record-table">
 								<thead>
 									<tr>
-										<th>Time</th>
-										<th>Report</th>
-										<th>Direction</th>
-										<th>Modeled net (ETH)</th>
-										<th>Tracked net (ETH)</th>
-										<th>Actual gas</th>
-										<th>Inventory used</th>
-										<th>Transaction</th>
+										<th scope="col">Time</th>
+										<th scope="col">Report</th>
+										<th scope="col">Direction</th>
+										<th scope="col">Modeled net (ETH)</th>
+										<th scope="col">Tracked net (ETH)</th>
+										<th scope="col">Actual gas</th>
+										<th scope="col">Inventory used</th>
+										<th scope="col">Transaction</th>
 									</tr>
 								</thead>
 								<tbody id="history-body"></tbody>
@@ -247,18 +247,18 @@
 							</div>
 							<span id="settlement-history-count" class="muted">0 transactions</span>
 						</div>
-						<div class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Settlement history table">
+						<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Settlement history table">
 							<table class="mobile-record-table">
 								<thead>
 									<tr>
-										<th>Submitted</th>
-										<th>Kind</th>
-										<th>Report</th>
-										<th>Status</th>
-										<th>Reward</th>
-										<th>Projected gas</th>
-										<th>Actual gas</th>
-										<th>Transaction</th>
+										<th scope="col">Submitted</th>
+										<th scope="col">Kind</th>
+										<th scope="col">Report</th>
+										<th scope="col">Status</th>
+										<th scope="col">Reward</th>
+										<th scope="col">Projected gas</th>
+										<th scope="col">Actual gas</th>
+										<th scope="col">Transaction</th>
 									</tr>
 								</thead>
 								<tbody id="settlement-history-body"></tbody>
@@ -302,19 +302,19 @@
 						<h3 id="token-market-title">Token pools</h3>
 					</div>
 				</div>
-				<div id="token-market-table" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Token pools table">
+				<div id="token-market-table" role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Token pools table">
 					<table class="mobile-record-table">
 						<thead>
 							<tr>
-								<th>Token</th>
-								<th>Address</th>
-								<th>Wallet balance</th>
-								<th>Exchange</th>
-								<th>Strategy use</th>
-								<th>Pool</th>
-								<th>Fee</th>
-								<th>Spot (WETH/token)</th>
-								<th>Raw liquidity / reserves</th>
+								<th scope="col">Token</th>
+								<th scope="col">Address</th>
+								<th scope="col">Wallet balance</th>
+								<th scope="col">Exchange</th>
+								<th scope="col">Strategy use</th>
+								<th scope="col">Pool</th>
+								<th scope="col">Fee</th>
+								<th scope="col">Spot (WETH/token)</th>
+								<th scope="col">Raw liquidity / reserves</th>
 							</tr>
 						</thead>
 						<tbody id="token-markets-body"></tbody>
@@ -335,7 +335,7 @@
 					><span>Asset</span
 					><select id="price-token"></select
 				></label>
-				<div id="market-price-chart" class="market-price-chart" aria-label="Token price in WETH over time by exchange pool"></div>
+				<div id="market-price-chart" class="market-price-chart" role="group" aria-label="Token price in WETH over time by exchange pool"></div>
 				<p class="section-note">Each series is a supported WETH/token pool spot price sampled once at each newly observed head.</p>
 			</section>
 

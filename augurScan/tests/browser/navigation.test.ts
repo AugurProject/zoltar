@@ -14,7 +14,7 @@ browserTest(
 			expect(await evaluate(`document.querySelector('.log-row .activity-summary-text')?.textContent.length > 0`)).toBe(true)
 			await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))`)
 			expect(await evaluate(`document.activeElement?.id`)).toBe('global-search-input')
-			await evaluate(`document.querySelector('#global-search-input').value = '23184711'; document.querySelector('#global-search').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))`)
+			await evaluate(`document.querySelector('#global-search-input').value = '23184711'; document.querySelector('#global-search-input').dispatchEvent(new Event('input', { bubbles: true }))`)
 			await waitFor(`document.querySelector('#global-search-results a') !== null`)
 			expect(await evaluate(`document.querySelector('#global-search-results').textContent.includes('Block #23184711')`)).toBe(true)
 			await evaluate(`document.querySelector('#global-network-filter').value = '11155111'; document.querySelector('#global-network-filter').dispatchEvent(new Event('change', { bubbles: true }))`)

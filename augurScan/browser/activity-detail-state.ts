@@ -12,6 +12,7 @@ export interface ActivityDetailState {
 	pendingCanonicalAccount: AccountReference | undefined
 	pendingAccountDialogSnapshot: DialogSnapshot | undefined
 	preservePendingOnDialogClose: boolean
+	dialogInvokerKey: string | undefined
 }
 
 export const createActivityDetailState = (): ActivityDetailState => ({
@@ -26,4 +27,5 @@ export const createActivityDetailState = (): ActivityDetailState => ({
 	pendingCanonicalAccount: undefined,
 	pendingAccountDialogSnapshot: undefined,
 	preservePendingOnDialogClose: false,
+	dialogInvokerKey: undefined,
 })

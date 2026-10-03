@@ -3,7 +3,7 @@ import { type Configuration, parseConfiguration, parseSnapshot, type Snapshot } 
 import type { DashboardElements } from './dashboard-elements.ts'
 import type { MutationLatches, MutationReconciliationTarget } from './dashboard-mutation-latches.ts'
 import type { RecoveryContextRefresh } from './dashboard-recovery-contexts.ts'
-import { requestJson } from './dashboard-requests.ts'
+import { mutationsSettled, requestJson, settledMutations } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 
 type ReconciliationScope = 'configuration and state' | 'state'
@@ -92,14 +92,17 @@ export function createDashboardRefresh(context: DashboardRefreshContext) {
 		if (state.configuration !== undefined) context.renderConfiguration(state.configuration)
 	}
 
-	function refresh() {
-		if (state.refreshPromise !== undefined) return state.refreshPromise
+	function markRefreshing() {
 		markRecoveryContextRefreshesLoading()
 		elements.rpcHealthRetryButton.disabled = true
 		elements.rpcHealthRetryButton.textContent = 'Refreshing…'
+	}
+
+	async function refreshOnce() {
+		markRefreshing()
 		let stateAvailable = false
 		let configurationAvailable = false
-		state.refreshPromise = (async () => {
+		try {
 			const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', STATE_REQUEST_TIMEOUT_MS), requestJson('/api/configuration', CONFIGURATION_REQUEST_TIMEOUT_MS)])
 			// Transaction explorer links come from the configuration, so it must be current before the state renders.
 			const parsedConfiguration = configurationResult.status === 'fulfilled' ? parseConfiguration(configurationResult.value) : undefined
@@ -136,12 +139,32 @@ export function createDashboardRefresh(context: DashboardRefreshContext) {
 			}
 			latches.applyMutationControlLatches()
 			return { configurationAvailable, stateAvailable }
-		})().finally(() => {
-			state.refreshPromise = undefined
+		} finally {
 			elements.rpcHealthRetryButton.disabled = false
 			elements.rpcHealthRetryButton.textContent = 'Retry'
+		}
+	}
+
+	type RefreshResult = Awaited<ReturnType<typeof refreshOnce>>
+	let refreshInFlight: Promise<RefreshResult> | undefined
+
+	async function refreshUntilCurrent() {
+		for (;;) {
+			// A read sent while this page's own mutation runs would wait behind it on the server and time out.
+			await mutationsSettled()
+			const settledBeforeRead = settledMutations()
+			const result = await refreshOnce()
+			// A mutation that finished during the read may postdate it; a caller that joined after that mutation needs the newer state.
+			if (settledMutations() === settledBeforeRead) return result
+		}
+	}
+
+	function refresh() {
+		markRefreshing()
+		refreshInFlight ??= refreshUntilCurrent().finally(() => {
+			refreshInFlight = undefined
 		})
-		return state.refreshPromise
+		return refreshInFlight
 	}
 
 	const reconcileUnknownMutation: ReconcileUnknownMutation = async (error, status, scope, target) => {
@@ -152,8 +175,6 @@ export function createDashboardRefresh(context: DashboardRefreshContext) {
 		if (!(error instanceof Error) || error.name !== 'MutationOutcomeUnknown') return { handled: false, reconciled: false }
 		if (target !== undefined) latches.setMutationReconciliationPending(target)
 		status.textContent = `${error.message} Controls remain frozen while the dashboard reloads current ${scope}.`
-		const activeRefresh = state.refreshPromise
-		if (activeRefresh !== undefined) await activeRefresh
 		const result = await refresh()
 		const reconciled = scope === 'state' ? result.stateAvailable : result.configurationAvailable && result.stateAvailable
 		const verb = scope === 'configuration and state' ? 'were' : 'was'

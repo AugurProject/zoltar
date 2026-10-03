@@ -4,6 +4,7 @@ import type { RefreshGate } from './live-refresh.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
 import { refreshPresentation } from './refresh-presentation.ts'
 import { decodeItemsPage, isContractRecord } from './api-decoding.ts'
+import { clearRetryStatus } from './app-presentation.ts'
 import { renderContractsPage } from './contracts-page.ts'
 
 interface ContractsRouteDeps {
@@ -50,7 +51,7 @@ export const createContractsRoute = (deps: ContractsRouteDeps) => {
 			if (presentation.loadingState) {
 				status.className = 'system-status sr-only'
 				status.textContent = 'System contracts updated.'
-			} else status.hidden = true
+			} else clearRetryStatus(status)
 			return true
 		} catch (error) {
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, version) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false

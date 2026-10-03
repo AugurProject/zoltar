@@ -32,6 +32,8 @@ function useSnapshotFreshness(lastScanAt: string | undefined, stateReceivedAt: n
 function Panel({ health, stateReceivedAt }: { health: OperatorHealth; stateReceivedAt: number }) {
 	const freshness = useSnapshotFreshness(health.lastScanAt, stateReceivedAt, health.stale, health.scanStaleAfterMilliseconds)
 	const modeTone = health.mode === 'Live armed' ? 'warning' : 'muted'
+	let staleMessage = ''
+	if (freshness.stale) staleMessage = health.stale ? 'Dashboard state is stale; retrying.' : 'Last successful scan is overdue.'
 	return h(
 		'section',
 		{ class: 'operator-health', 'aria-label': 'Operator health' },
@@ -44,7 +46,8 @@ function Panel({ health, stateReceivedAt }: { health: OperatorHealth; stateRecei
 			healthSlot('Open recovery items', health.recoveryItems.toString()),
 			healthSlot('Last action', health.lastAction),
 		),
-		freshness.stale ? h('p', { class: 'operator-health-stale', role: 'status' }, health.stale ? 'Dashboard state is stale; retrying.' : 'Last successful scan is overdue.') : undefined,
+		// The live region stays mounted and only its text changes; a region inserted already filled is not reliably announced.
+		h('p', { class: 'operator-health-stale', role: 'status' }, staleMessage),
 	)
 }
 

@@ -4,6 +4,7 @@ import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import { captureActivityDetailFocus, captureDisclosureState, decodedActionLabel, placeActivityDetailDrawer, restoreActivityDetailFocus, restoreDisclosureState } from './activity-detail-dom.ts'
 import { isCurrentCanonicalGeneration } from './live-refresh.ts'
+import { nativeSymbolFor } from './network-freshness.ts'
 import { isNoncanonicalDetailFailure, refreshPresentation } from './refresh-presentation.ts'
 import { decodeValue, isActivityRecord, isLogDetail } from './api-decoding.ts'
 import { logKeyFor } from './activity-row.ts'
@@ -172,7 +173,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 				addressDetailCard('msg.origin', detail.origin_address, { chainId: detail.chain_id }),
 				addressDetailCard('To', detail.to_address, { chainId: detail.chain_id }),
 				detailCard('Gas used', number(detail.gas_used)),
-				detailCard('Transaction value', exactUnit(detail.value, 18, 'ETH')),
+				detailCard('Transaction value', exactUnit(detail.value, 18, nativeSymbolFor(detail.chain_id))),
 				detailCard('Transaction action', decodedActionLabel(detail.action_summary, detail.to_address, detail.contract_label, detail.emitter_address, deployedContractAddress)),
 			)
 			const contractCard = evidenceDetailCard('Contract', detail.explorer_base_url, 'address', detail.emitter_address)

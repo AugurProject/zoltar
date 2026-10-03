@@ -67,7 +67,6 @@ export function publicOperatorFailure(error: string, fallback = GENERIC_PUBLIC_F
 export function publicPollFailure(error: string, attempt?: string) {
 	if (isSignerLockConflictMessage(error)) return error
 	if (attempt !== undefined) return attemptedOperationFailure(attempt, error, 'Automatic retry remains active.')
-	if (isSignerLockConflictMessage(error)) return error
 	const category = publicFailureCategory(error)
 	return category === undefined ? attemptedOperationFailure('complete the latest polling cycle', error, 'Automatic retry remains active.') : attemptedOperationFailure(category.attempt, error, category.pollRecovery)
 }

@@ -1,8 +1,9 @@
 import type { ScannerContext } from './app-context.ts'
 import type { HistoryRangeElements } from './app-dom.ts'
 import { reconcileRouteNetwork, type NetworkControls } from './app-network.ts'
-import { focusNewRoute, hydrateVisibleRoute, invalidateRouteRequests, loadVisibleRoute, restoreOperationsRoute, restoreRouteDeepLink, stashOperationsRoute, syncVisibleRoute } from './app-routing.ts'
+import { focusNewRoute, hydrateVisibleRoute, invalidateRouteRequests, loadVisibleRoute, refocusLoadedRoute, restoreOperationsRoute, restoreRouteDeepLink, stashOperationsRoute, syncVisibleRoute } from './app-routing.ts'
 import type { ScannerViews } from './app-views.ts'
+import { navigationTarget } from './routes.ts'
 
 export interface NavigationDeps {
 	readonly views: ScannerViews
@@ -10,8 +11,6 @@ export interface NavigationDeps {
 	readonly historyRange: HistoryRangeElements
 	readonly initialNetworkStatusLoad: Promise<void>
 }
-
-const routeScopedParameters = ['log', 'account', 'contract', 'entity', 'tab', 'fromBlock', 'toBlock']
 
 /** Switches the visible route without a document load, then restores focus and any deep-linked detail. */
 export const navigateInPlace = async (context: ScannerContext, deps: NavigationDeps, url: URL, replace = false): Promise<void> => {
@@ -21,6 +20,8 @@ export const navigateInPlace = async (context: ScannerContext, deps: NavigationD
 	const navigation = ++state.navigationGeneration
 	stashOperationsRoute(context)
 	views.detail.eventDetail.closeEventDrawer()
+	// A modal left open would cover the route that a link inside it just opened.
+	if (context.elements.dialog.open) views.detail.account.closeDetail()
 	invalidateRouteRequests(context, views)
 	if (replace) history.replaceState(null, '', url)
 	else history.pushState(null, '', url)
@@ -29,10 +30,33 @@ export const navigateInPlace = async (context: ScannerContext, deps: NavigationD
 	syncVisibleRoute(context)
 	const restoredPosition = restoreOperationsRoute(context)
 	hydrateVisibleRoute(context, views, deps.historyRange)
+	// Focus and scroll move with the route change itself; waiting for data would pull the user back after they started reading.
+	const focusedBeforeLoad = restoredPosition === undefined ? focusNewRoute() : undefined
 	await loadVisibleRoute(context, views, deps.initialNetworkStatusLoad)
 	if (navigation !== state.navigationGeneration) return
-	if (restoredPosition === undefined) focusNewRoute()
+	if (restoredPosition === undefined) refocusLoadedRoute(focusedBeforeLoad)
 	await restoreRouteDeepLink(context, views)
+}
+
+const decodeFragment = (fragment: string): string => {
+	try {
+		return decodeURIComponent(fragment)
+	} catch (error) {
+		if (!(error instanceof URIError)) throw error
+		return fragment
+	}
+}
+
+/** Moves focus to an in-page target (such as the skip link's section) without creating a history entry. */
+const focusFragmentTarget = (destination: HTMLElement): void => {
+	const heading = destination.matches('section') ? focusNewRoute({ scrollToTop: false }) : undefined
+	if (heading !== undefined && destination.contains(heading)) {
+		heading.scrollIntoView({ block: 'start' })
+		return
+	}
+	if (!destination.hasAttribute('tabindex')) destination.tabIndex = -1
+	destination.focus({ preventScroll: true })
+	destination.scrollIntoView({ block: 'start' })
 }
 
 const isPlainPrimaryClick = (event: MouseEvent): boolean => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
@@ -55,9 +79,11 @@ const handlePopState = (context: ScannerContext, deps: NavigationDeps): void => 
 	syncVisibleRoute(context)
 	const restoredPosition = restoreOperationsRoute(context)
 	hydrateVisibleRoute(context, views, deps.historyRange)
+	// History traversal keeps the scroll position the browser restores for the entry.
+	const focusedBeforeLoad = restoredPosition === undefined ? focusNewRoute({ scrollToTop: false }) : undefined
 	void loadVisibleRoute(context, views, deps.initialNetworkStatusLoad).then(async () => {
 		if (navigation !== state.navigationGeneration) return
-		if (restoredPosition === undefined) focusNewRoute()
+		if (restoredPosition === undefined) refocusLoadedRoute(focusedBeforeLoad)
 		await restoreRouteDeepLink(context, views)
 	})
 }
@@ -68,28 +94,16 @@ export const bindNavigation = (context: ScannerContext, deps: NavigationDeps): v
 	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a, .operations-nav a, .brand-block')) {
 		link.addEventListener('click', event => {
 			if (!isPlainPrimaryClick(event)) return
-			const target = new URL(link.href)
-			const activeProductTab = link.closest('.product-nav') !== null && link.getAttribute('aria-current') === 'page'
-			if (activeProductTab || target.pathname === location.pathname) {
-				event.preventDefault()
-				return
-			}
 			event.preventDefault()
-			for (const name of routeScopedParameters) target.searchParams.delete(name)
-			for (const [name, value] of new URL(location.href).searchParams) {
-				if (!target.searchParams.has(name) && !routeScopedParameters.includes(name)) target.searchParams.set(name, value)
-			}
-			navigate(target)
+			// The highlighted section link still leads to the section's own page from any of its sub-routes.
+			if (new URL(link.href).pathname === location.pathname) return
+			navigate(navigationTarget(new URL(link.href), new URL(location.href)))
 		})
 	}
 
 	const { operationsRouteSelect } = context.elements
 	operationsRouteSelect.addEventListener('change', () => {
-		const target = new URL(operationsRouteSelect.value, location.href)
-		for (const [name, value] of new URL(location.href).searchParams) {
-			if (!routeScopedParameters.includes(name)) target.searchParams.set(name, value)
-		}
-		navigate(target)
+		navigate(navigationTarget(new URL(operationsRouteSelect.value, location.origin), new URL(location.href)))
 	})
 
 	document.addEventListener('click', event => {
@@ -99,7 +113,16 @@ export const bindNavigation = (context: ScannerContext, deps: NavigationDeps): v
 		const link = targetElement.closest<HTMLAnchorElement>('a[href]')
 		if (link === null || link.hasAttribute('download') || (link.target !== '' && link.target !== '_self')) return
 		const target = new URL(link.href)
-		if (target.origin !== location.origin || target.hash !== '' || target.pathname.startsWith('/api/')) return
+		if (target.origin !== location.origin || target.pathname.startsWith('/api/')) return
+		if (target.hash !== '') {
+			// A fragment navigation fires popstate and would reload the whole route; same-page targets are focused directly instead.
+			if (target.pathname !== location.pathname || target.search !== location.search) return
+			const destination = document.getElementById(decodeFragment(target.hash.slice(1)))
+			if (destination === null) return
+			event.preventDefault()
+			focusFragmentTarget(destination)
+			return
+		}
 		event.preventDefault()
 		navigate(target)
 	})
