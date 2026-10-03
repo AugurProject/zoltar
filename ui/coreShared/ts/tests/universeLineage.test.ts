@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { buildUniverseLineageLabels, extendUniverseLineage, formatUniverseLineageLabel, formatUniverseStepName } from '../lib/universeLineage.js'
+import { buildUniverseLineageLabels, extendUniverseLineage, formatUniverseLineageLabel, formatUniverseStepName, formatUniverseViewLabel } from '../lib/universeLineage.js'
 import { formatShortUniverseId } from '../lib/universeLabels.js'
 
 const yesUniverseId = BigInt('0x3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5')
@@ -11,6 +11,18 @@ const lineage = [
 	{ outcomeLabel: 'Yes', universeId: yesUniverseId },
 	{ outcomeLabel: 'No', universeId: noUniverseId },
 ]
+
+test('view scope keeps summary names stable while migration can display ancestry', () => {
+	const full = { lineage, outcomeLabel: 'No', universeId: noUniverseId, childUniverses: [] }
+	expect(formatUniverseViewLabel(full, noUniverseId, false)).toBe('No')
+	expect(formatUniverseViewLabel({ outcomeLabel: 'No' }, noUniverseId, false)).toBe('No')
+	expect(formatUniverseViewLabel(full, noUniverseId, true)).toBe('Genesis › Yes › No')
+	expect(formatUniverseViewLabel(full, 0n, false)).toBe('Genesis')
+	const names = buildUniverseLineageLabels(full, false)
+	expect(names.get(noUniverseId.toString())).toBe('No')
+	expect(names.get(yesUniverseId.toString())).toBeUndefined()
+	expect(formatUniverseViewLabel({ lineage }, yesUniverseId, false)).toBe(`Universe ${formatShortUniverseId(yesUniverseId)}`)
+})
 
 describe('universe lineage labels', () => {
 	test('names a universe by the fork outcomes from Genesis', () => {
@@ -56,6 +68,15 @@ describe('universe lineage labels', () => {
 		expect(labels.get('0')).toBe('Genesis')
 		expect(labels.get(yesUniverseId.toString())).toBe('Genesis › Yes')
 		expect(labels.get('99')).toBe('Genesis › Yes › Alpha')
+	})
+
+	test('names the selected outcome without an ancestry walk and retains complete lineage when available', () => {
+		expect([...buildUniverseLineageLabels({ childUniverses: [], outcomeLabel: ' Yes ', universeId: yesUniverseId })]).toEqual([
+			['0', 'Genesis'],
+			[yesUniverseId.toString(), 'Yes'],
+		])
+		expect(buildUniverseLineageLabels({ childUniverses: [], outcomeLabel: 'No', lineage, universeId: noUniverseId }).get(noUniverseId.toString())).toBe('Genesis › Yes › No')
+		expect([...buildUniverseLineageLabels({ childUniverses: [], outcomeLabel: ' ', universeId: yesUniverseId })]).toEqual([['0', 'Genesis']])
 	})
 
 	test('knows only Genesis when the lineage is missing or incomplete', () => {

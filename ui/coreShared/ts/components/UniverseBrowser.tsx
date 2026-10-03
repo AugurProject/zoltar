@@ -2,14 +2,14 @@ import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 import { formatUniverseIdHex } from '../lib/universeLabels.js'
-import { formatUniverseLineageLabel, formatUniverseStepName, type UniverseLineageStep } from '../lib/universeLineage.js'
+import { formatUniverseViewLabel, formatUniverseStepName, type UniverseLineageStep } from '../lib/universeLineage.js'
 import type { BadgeTone } from '../types/components.js'
 import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 import { Badge } from './Badge.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { EntityCard } from './EntityCard.js'
 import { MetricField } from './MetricField.js'
-import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
+import { MetricGrid } from './MetricGrid.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
@@ -18,6 +18,9 @@ import { UniverseLink } from './UniverseLink.js'
 type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
 	actions?: ComponentChildren
+	navigation?: ComponentChildren
+	/** Whether this view includes ancestry and the complete child list. */
+	includeRelatedUniverses?: boolean
 	activeUniverseId: bigint
 	/** Application facts about the browsed universe, such as pool metrics or the fork question. */
 	children?: ComponentChildren
@@ -44,9 +47,16 @@ function UniverseLineageTrail({ lineage }: { lineage: readonly UniverseLineageSt
 	return (
 		<nav aria-label={universeCopy.lineageAriaLabel} className='universe-lineage'>
 			<ol>
-				{lineage.map((step, index) => (
-					<li key={step.universeId.toString()}>{index === lineage.length - 1 ? <span aria-current='location'>{formatUniverseStepName(step)}</span> : <UniverseLink universeId={step.universeId}>{formatUniverseStepName(step)}</UniverseLink>}</li>
-				))}
+				{lineage.map((step, index) => {
+					const name = formatUniverseStepName(step)
+					if (index === lineage.length - 1)
+						return (
+							<li key={step.universeId.toString()}>
+								<span aria-current='location'>{name}</span>
+							</li>
+						)
+					return <li key={step.universeId.toString()}>{index === lineage.length - 2 ? <UniverseLink universeId={step.universeId}>{name}</UniverseLink> : <span>{name}</span>}</li>
+				})}
 			</ol>
 		</nav>
 	)
@@ -76,12 +86,12 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 					>
 						<div className='decision-summary'>
 							{renderChildSummary?.(childUniverse)}
-							<ReadOnlyDetailAccordion title={universeCopy.universeDetails}>
+							<MetricGrid columns={2}>
 								{childUniverse.reputationTokenSymbol === undefined ? undefined : <MetricField label={commonCopy.reputationToken}>{childUniverse.reputationTokenSymbol}</MetricField>}
 								<MetricField label={universeCopy.universeId}>
 									<span className='universe-id-value'>{formatUniverseIdHex(childUniverse.universeId)}</span>
 								</MetricField>
-							</ReadOnlyDetailAccordion>
+							</MetricGrid>
 						</div>
 					</EntityCard>
 				)
@@ -92,13 +102,12 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 
 /**
  * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
- * universes its fork created. Opening an ancestor or child changes the shared `universe` query parameter.
+ * universes its fork created. Opening the parent or a child changes the shared `universe` query parameter.
  */
-export function UniverseBrowser({ actions, activeUniverseId, children, renderChildSummary, universe }: UniverseBrowserProps) {
-	const lineage = resolveLineage(universe)
-	const currentStep = lineage[lineage.length - 1]
-	// The lineage trail already names the ancestors, so the heading names only this generation.
-	const universeName = lineage.length > 1 && currentStep !== undefined ? formatUniverseStepName(currentStep) : formatUniverseLineageLabel(universe.lineage, universe.universeId)
+export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe, includeRelatedUniverses = universe.relatedUniversesLoaded !== false }: UniverseBrowserProps) {
+	const lineage = includeRelatedUniverses ? resolveLineage(universe) : [{ outcomeLabel: universe.outcomeLabel, universeId: universe.universeId }]
+	// The heading names this generation; ancestry belongs in the optional trail.
+	const universeName = formatUniverseViewLabel(universe, universe.universeId, false)
 	return (
 		<div className='route-view-flow universe-browser'>
 			<SectionBlock variant='plain'>
@@ -115,20 +124,23 @@ export function UniverseBrowser({ actions, activeUniverseId, children, renderChi
 					) : undefined}
 					{actions === undefined ? undefined : <div className='actions'>{actions}</div>}
 					{children}
-					<ReadOnlyDetailAccordion title={universeCopy.universeDetails}>
+					<MetricGrid columns={2}>
 						<MetricField label={universeCopy.universeId}>
 							<span className='universe-id-value'>{formatUniverseIdHex(universe.universeId)}</span>
 						</MetricField>
-						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink universeId={universe.parentUniverseId} />}</MetricField>
-						<MetricField label={universe.reputationTokenName ?? universeCopy.repSupply}>
+						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />}</MetricField>
+						<MetricField label={universeCopy.repSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>
-					</ReadOnlyDetailAccordion>
+					</MetricGrid>
 				</div>
 			</SectionBlock>
-			<SectionBlock title={commonCopy.childUniverses} variant='plain'>
-				<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
-			</SectionBlock>
+			{navigation}
+			{!includeRelatedUniverses ? undefined : (
+				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
+					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
+				</SectionBlock>
+			)}
 		</div>
 	)
 }

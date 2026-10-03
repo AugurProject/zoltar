@@ -39,6 +39,26 @@ const forkedChild = createUniverse({
 	universeId: childUniverseId,
 })
 
+test('names a child overview from its outcome when bounded reads omit lineage', () => {
+	const universe = createUniverse({ universeId: 5n, outcomeLabel: 'Yes', lineage: undefined, relatedUniversesLoaded: false })
+	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: 5n, universe })).universeLabel).toBe('Yes')
+	expect(deriveZoltarOverviewModel(createInput({ universe: createUniverse({ lineage: undefined, outcomeLabel: 'Wrong' }) })).universeLabel).toBe('Genesis')
+})
+
+test('overview names a cached full summary the same way as a bounded read', () => {
+	const full = { ...forkedChild, outcomeLabel: 'Yes', relatedUniversesLoaded: true }
+	const short = { ...full, childUniverses: [], lineage: undefined, relatedUniversesLoaded: false }
+	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: full })).universeLabel).toBe('Yes')
+	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: short })).universeLabel).toBe('Yes')
+})
+
+test('does not claim a remaining migration total when child migration history was omitted', () => {
+	const universe = createUniverse({ hasForked: true, relatedUniversesLoaded: false })
+	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n }))
+	expect(model.migratableRepAttoRep).toBeUndefined()
+	expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })
+})
+
 test('completed child migrations do not leave REP stranded in the overview', () => {
 	const universe = createUniverse({ hasForked: true, childUniverses: [{ exists: true, universeId: 2n, parentUniverseId: 0n, outcomeIndex: 0n, outcomeLabel: 'Yes', reputationToken: zeroAddress, forkTime: 0n }] })
 	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n, childMigratedAttoRep: { '2': 10n } }))
@@ -76,7 +96,7 @@ describe('resolveZoltarRouteGate', () => {
 	test('waits for the universe and blocks the workflow that does not apply', () => {
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: undefined, universeState: 'loading', view: 'universes' })).toBe('loading')
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: true }, universeState: 'ready', view: 'fork' })).toBe('fork-unavailable')
-		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'migrate' })).toBe('migrate-unavailable')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'migrate' })).toBe('ready')
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'fork' })).toBe('ready')
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: true }, universeState: 'ready', view: 'migrate' })).toBe('ready')
 	})
@@ -110,7 +130,7 @@ describe('deriveZoltarOverviewModel', () => {
 		const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, { preparedMigrationRepAttoRep: 5n, repBalanceAttoRep: 10n }))
 		expect(model.status).toBe('forked')
 		expect(model.forkTime).toBe(100n)
-		expect(model.universeLabel).toBe('Genesis › Yes')
+		expect(model.universeLabel).toBe('Yes')
 		expect(model.migratableRepAttoRep).toBe(15n)
 		expect(model.needsAttention).toBe(true)
 		expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })

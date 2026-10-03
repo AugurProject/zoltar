@@ -22,6 +22,8 @@ describe('pool locations', () => {
 		expect(parsePoolsRouteHash('#/pools/operate')).toBeUndefined()
 		expect(parsePoolsRouteHash('#/pools/create')).toEqual({ view: 'create' })
 		expect(parsePoolsRouteHash('#/pools/universes')).toEqual({ view: 'universes' })
+		expect(parsePoolsRouteHash('#/pools/migrate')).toEqual({ view: 'migrate' })
+		expect(parsePoolsRouteHash('#/pools/migrate/extra')).toBeUndefined()
 		expect(parsePoolsRouteHash(`#/pools/${POOL}`)).toEqual({ securityPoolAddress: POOL, tab: '', view: 'operate' })
 		expect(parsePoolsRouteHash(`#/pools/${POOL}/reporting/`)).toEqual({ securityPoolAddress: POOL, tab: 'reporting', view: 'operate' })
 		expect(parsePoolsRouteHash('#/pools/create/extra')).toBeUndefined()

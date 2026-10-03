@@ -4,7 +4,6 @@ export const genesis = 'Genesis'
 export const formatUnknownLineageUniverse = (shortUniverseId: CopyTemplateValue) => `Universe ${shortUniverseId}`
 
 export const lineageAriaLabel = 'Universe lineage'
-export const universeDetails = 'Universe details'
 export const universeId = 'Universe ID'
 export const parentUniverse = 'Parent universe'
 export const repSupply = 'REP supply'
@@ -18,3 +17,5 @@ export const lineageTitle = 'Lineage'
 export const currentUniverse = 'Current'
 export const noDeployedChildren = 'No deployed child universes.'
 export const browseUniverses = 'Browse universes'
+
+export const universeNotFoundTitle = 'Universe not found'

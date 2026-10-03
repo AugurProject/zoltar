@@ -5,10 +5,10 @@ import type { SecurityPoolDeploymentTuple } from '../../../protocol/helpers.js'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { loadLiquidationApproval as loadProtocolLiquidationApproval } from '../../../protocol/liquidationApprovals.js'
 import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, loadOracleManagerQueueOperationEthValue, queueSecurityPoolLiquidation } from '../../../protocol/oracleCoordinator.js'
-import { loadSecurityPoolLineage, loadSecurityPoolPage, loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
+import { loadSecurityPoolLineage, loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary } from '../../../types/contracts.js'
+import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 /** The chain reads and writes the security-pools overview uses; tests replace them. */
 type SecurityPoolsOverviewReadClient = {
@@ -27,7 +27,6 @@ export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOve
 	loadSecurityPoolVaultSummary: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityPoolVaultSummary>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadOracleManagerQueueOperationEthValue: (client: TWriteClient, managerAddress: Address) => Promise<bigint>
-	loadSecurityPoolPage: (pageIndex: number, pageSize: number, accountAddress: Address | undefined, operation?: ReadOperation) => Promise<SecurityPoolPage>
 	queueSecurityPoolLiquidation: (client: TWriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth?: bigint, receiverVault?: Address, approvalId?: Hash, proposedRepPerEthPrice?: bigint) => Promise<SecurityPoolLiquidationQueueResult>
 	waitForSecurityPoolReadBackend: () => Promise<void>
 }
@@ -61,7 +60,6 @@ export const defaultUseSecurityPoolsOverviewDependencies: UseSecurityPoolsOvervi
 	loadSecurityPoolVaultSummary: async (securityPoolAddress, vaultAddress) => await loadProtocolSecurityPoolVaultSummary(createConnectedReadClient(), securityPoolAddress, vaultAddress),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 	loadOracleManagerQueueOperationEthValue,
-	loadSecurityPoolPage: async (pageIndex, pageSize, accountAddress, operation) => await loadSecurityPoolPage(createOperationClient(operation), pageIndex, pageSize, accountAddress),
 	queueSecurityPoolLiquidation,
 	waitForSecurityPoolReadBackend,
 }

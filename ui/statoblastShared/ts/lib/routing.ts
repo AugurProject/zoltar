@@ -19,7 +19,7 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 		const nextSearch = updateSearchParams(search, next => next.delete('poolsView'))
 		if (route === 'pools') {
 			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ securityPoolAddress: address, tab, view: 'operate' }), nextSearch)
-			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'create', 'universes'])
+			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'create', 'universes', 'migrate'])
 			const view = current !== undefined && current.view !== 'operate' ? current.view : rememberedView
 			return buildRouteHref(buildPoolsRouteHash({ view }), nextSearch)
 		}

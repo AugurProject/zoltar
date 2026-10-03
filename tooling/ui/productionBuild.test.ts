@@ -473,7 +473,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
 	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
-	const openSeededPool = async (kind: 'origin' | 'auction' = 'origin') => {
+	const loadSeededPools = async () => {
 		await driver.waitForBodyWithoutText('BOOTSTRAPPING')
 		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
@@ -505,6 +505,10 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const count = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentCount' })) })
 		expect(count > 0n && count <= 10n).toBe(true)
 		const pools = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentsRange', args: [0n, count] })) })
+		return pools
+	}
+	const openSeededPool = async (kind: 'origin' | 'auction' = 'origin') => {
+		const pools = await loadSeededPools()
 		const universe = await driver.evaluate("new URLSearchParams(location.hash.split('?')[1] ?? '').get('universe') ?? '0'")
 		if (typeof universe !== 'string') throw new Error('Pool route universe was not available')
 		const pool = pools.find(pool => pool.universeId === BigInt(universe) && (kind === 'origin' ? pool.parent === zeroAddress : pool.parent !== zeroAddress && pool.truthAuction !== zeroAddress))
@@ -529,7 +533,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const reopened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 		expect(reopened).toBe(true)
 	}
-	return { completeTransactionReview, isPoolToolSelected, selectPoolTool, openSeededPool }
+	return { completeTransactionReview, isPoolToolSelected, selectPoolTool, openSeededPool, loadSeededPools }
 }
 
 function productionInteractionTest(scenario: ProductionWorkflowScenario, route: string, viewport: { height: number; width: number }, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -827,14 +831,22 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	await driver.navigate('?workflow=auction#/pools?simulate=1&simScenario=securitypoolx2-auction')
 	await driver.waitForBodyText('Browse pools')
 	await driver.waitForBodyWithoutText('BOOTSTRAPPING')
-	const { completeTransactionReview, openSeededPool, selectPoolTool } = createWorkflowActions(driver)
+	const { completeTransactionReview, openSeededPool, selectPoolTool, loadSeededPools } = createWorkflowActions(driver)
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
 	await driver.waitForBodyText('Child universes')
-	const yesUniverseSelected = await driver.evaluate(
-		`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-	)
-	expect(yesUniverseSelected).toBe(true)
+	await driver.waitForBodyWithoutText('Loading outcomes…')
+	expect(await driver.evaluate("document.querySelectorAll('.universe-browser .entity-card-list').length")).toBe(0)
+	expect(await driver.evaluate("document.querySelector('.universe-browser input') === null")).toBe(true)
+	// The fixture has one auction child; its fork outcome opens the child without entering its ID.
+	const auctionPools = (await loadSeededPools()).filter(pool => pool.parent !== zeroAddress && pool.truthAuction !== zeroAddress)
+	expect(auctionPools).toHaveLength(1)
+	const auctionPool = auctionPools[0]
+	if (auctionPool === undefined) throw new Error('Seeded auction child pool was not available')
+	const openedOutcome = await driver.evaluate(`(() => { const button = document.querySelector('.universe-browser button[aria-label="Open Yes universe"]'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
+	expect(openedOutcome).toBe(true)
+	expect(await driver.evaluate("new URLSearchParams(location.hash.split('?')[1] ?? '').get('universe')")).toBe(auctionPool.universeId.toString())
+	await driver.waitForBodyWithoutText('Loading universe details')
 	const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(childPoolBrowserOpened).toBe(true)
 	await driver.clickButton('+1 month')

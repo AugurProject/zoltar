@@ -7,5 +7,5 @@ export const uncheckedPoolRegistryDetail = 'Loading security pools…'
 export const retrieving = 'retrieving…'
 export const formatMissingLookupDetail = (kind: 'question' | 'report') => `No ${kind} matches this ID. Try another ${kind} ID.`
 export const uncheckedUniverseDetail = 'Choose a universe to continue.'
-export const missingUniverseDetail = 'Choose another universe.'
+export const missingUniverseDetail = 'This universe is not deployed.'
 export const walletInstallationRequired = 'Install or enable a wallet to continue.'

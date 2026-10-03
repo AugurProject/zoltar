@@ -32,10 +32,7 @@ export const migrationStepBlocked = 'Blocked'
 export const migrationBack = 'Back'
 export const migrationContinue = 'Continue'
 
-export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP. Universes that do not exist yet are created when you migrate.'
-export const outcomeUniverseStatus = 'Universe'
-export const outcomeUniverseCreated = 'Created'
-export const outcomeUniverseNotCreated = 'Not created yet'
+export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP.'
 export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
 export const formatOpenOutcomeUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
@@ -96,16 +93,15 @@ export const browseQuestionsAction = 'Browse questions'
 export const browseQuestionsDetail = 'This universe is operational. Review questions or create one.'
 export const browseUniversesAction = 'Browse universes'
 export const universesTitle = 'Universes'
-export const universesDescription = 'Browse the universe tree. Every Zoltar view follows the universe you open.'
+export const universesDescription = 'Every Zoltar view follows the universe you open.'
 export const forkRouteDescription = 'Fork this universe with an ended question. A universe forks only once.'
-export const migrateRouteDescription = 'Split your REP into the outcome universes this fork created.'
-export const universeNotFoundTitle = 'Universe not found'
+export const migrateRouteDescription = 'Move your REP into the outcome universes of a fork.'
 export const universeUnavailableDetail = 'Universe details could not be loaded.'
 export const universeNotFoundDetail = 'No universe exists with this ID.'
 export const forkUnavailableTitle = 'Already forked'
 export const forkUnavailableDetail = 'This universe has forked and cannot fork again. Migrate REP instead.'
-export const migrateUnavailableTitle = 'No fork yet'
-export const migrateUnavailableDetail = 'REP migrates only after this universe forks.'
+export const previewMigration = 'Preview REP migration'
+export const migrationOutcomesAfterFork = 'Outcome choices appear after this universe forks.'
 
 export const migrationWalletBalancesReason = 'Connect a wallet to read migration balances.'
 
@@ -114,3 +110,7 @@ export const forkRepBalanceUnavailableReason = 'Could not read your REP balance.
 export const forkWalletRep = 'Wallet REP'
 
 export const forkRepBalanceUnavailableShortReason = 'REP balance unavailable.'
+
+export const selectedOutcomes = 'Selected outcomes'
+export const formatRemoveOutcome = (outcome: CopyTemplateValue) => `Remove ${outcome}`
+export const formatDeployOutcomeUniverse = (outcome: CopyTemplateValue) => `Deploy ${outcome} universe`

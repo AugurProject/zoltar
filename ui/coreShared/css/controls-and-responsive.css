@@ -325,6 +325,25 @@ button.tx-action-wallet-fix {
 	gap: var(--space-2);
 }
 
+.universe-outcome-heading {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.universe-outcome-status-idle {
+	visibility: hidden;
+}
+
+.universe-browser .universe-parent-link {
+	color: var(--accent);
+	text-decoration: underline;
+}
+
+.universe-browser {
+	gap: var(--space-5);
+}
+
 .section-mode-switch,
 .security-pools-header-switch {
 	display: inline-flex;

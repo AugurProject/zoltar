@@ -52,11 +52,6 @@ const invalidPriceManagerDetails: OracleManagerDetails = {
 }
 
 const mockQueuedLiquidation = (hash: `0x${string}`) => mock(async () => ({ action: 'queueLiquidation' as const, hash, securityPoolAddress: zeroAddress }))
-const unexpectedPageLoad = () =>
-	mock(async () => {
-		throw new Error('loadSecurityPoolPage should not be called in this test')
-	})
-
 describe('useSecurityPoolsOverview queueLiquidation', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
@@ -130,7 +125,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { state } = await renderHook(
 			createSecurityPoolsOverviewDependencies({
 				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
-				loadSecurityPoolPage: unexpectedPageLoad(),
 				queueSecurityPoolLiquidation,
 			}),
 		)
@@ -157,7 +151,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { state } = await renderHook(
 			createSecurityPoolsOverviewDependencies({
 				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
-				loadSecurityPoolPage: unexpectedPageLoad(),
 				queueSecurityPoolLiquidation: mock(async () => {
 					throw new Error('queued liquidation failure')
 				}),
@@ -184,7 +177,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { state } = await renderHook(
 			createSecurityPoolsOverviewDependencies({
 				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
-				loadSecurityPoolPage: unexpectedPageLoad(),
 				queueSecurityPoolLiquidation: mock(async () => {
 					throw new Error('stale queued liquidation failure')
 				}),
@@ -217,7 +209,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 					},
 				})),
 				loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
-				loadSecurityPoolPage: unexpectedPageLoad(),
 				queueSecurityPoolLiquidation,
 			}),
 		)
@@ -420,7 +411,6 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { state } = await renderHook(
 			createSecurityPoolsOverviewDependencies({
 				loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
-				loadSecurityPoolPage: unexpectedPageLoad(),
 				queueSecurityPoolLiquidation: mock(async () => ({
 					action: 'queueLiquidation' as const,
 					hash: '0x03' as const,

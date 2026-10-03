@@ -10,6 +10,7 @@ type UseZoltarOperationsParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
 		activeUniverseId: bigint
 		autoLoadInitialData: boolean
+		includeRelatedUniverses?: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
 	}
@@ -18,6 +19,7 @@ export function useZoltarOperations({
 	accountAddress,
 	activeUniverseId,
 	autoLoadInitialData,
+	includeRelatedUniverses = false,
 	deploymentStatuses,
 	environmentRefreshKey,
 	onTransactionFailed,
@@ -32,6 +34,7 @@ export function useZoltarOperations({
 		accountAddress,
 		activeUniverseId,
 		autoLoadInitialData,
+		includeRelatedUniverses,
 		deploymentStatuses,
 		environmentRefreshKey,
 		onTransactionFailed,

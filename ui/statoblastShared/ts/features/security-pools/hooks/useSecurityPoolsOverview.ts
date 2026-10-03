@@ -64,26 +64,21 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
 	})
 	const liquidationModalOpen = useSignal(false)
-	const universeDirectoryPools = useSignal<ListedSecurityPool[] | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
-	const universeDirectoryLoad = useLoadController()
 	const liquidationFundingPreviewLoad = useLoadController()
 	const liquidationApprovalLoad = useLoadController()
 	const securityPoolsLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
-	const universeDirectoryLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewActiveAction = useSignal<SecurityPoolOverviewActionResult['action'] | undefined>(undefined)
 	const securityPoolOverviewFeedback = useSignal<ActionFeedback<SecurityPoolOverviewActionResult['action']> | undefined>(undefined)
 	const securityPoolOverviewError = useSignal<string | undefined>(undefined)
 	const securityPoolsLoadError = useSignal<string | undefined>(undefined)
-	const universeDirectoryError = useSignal<string | undefined>(undefined)
 	const securityPoolsLoadErrorEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const securityPoolLiquidationError = useSignal<string | undefined>(undefined)
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 	const nextSecurityPoolsLoad = useRequestGuard()
 	const activeLineageIsCurrent = useRef<() => boolean>(() => false)
-	const nextUniverseDirectoryLoad = useRequestGuard()
 	const nextLiquidationFundingPreviewLoad = useRequestGuard()
 	const nextLiquidationApprovalLoad = useRequestGuard()
 
@@ -151,44 +146,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		} catch (error) {
 			void error // A failed background read keeps the loaded pools; the next block retries.
 		}
-	}
-
-	const loadUniverseDirectoryPools = async () => {
-		const requestedEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
-		const requestedAccountAddress = latestAccountAddress.current
-		const requestedAccountKey = requestedAccountAddress?.toLowerCase() ?? 'no-account'
-		const isCurrent = nextUniverseDirectoryLoad()
-		const result = await universeDirectoryLoad.run({
-			isCurrent,
-			onStart: () => {
-				if (!isCurrent()) return
-				universeDirectoryError.value = undefined
-				universeDirectoryLoadedEnvironmentRefreshKey.value = undefined
-			},
-			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
-			load: async operation => {
-				const loadedPools: ListedSecurityPool[] = []
-				const pageSize = 100
-				for (let pageIndex = 0; ; pageIndex += 1) {
-					const page = await dependencies.loadSecurityPoolPage(pageIndex, pageSize, requestedAccountAddress, operation)
-					loadedPools.push(...page.pools)
-					if (BigInt(loadedPools.length) >= page.poolCount || page.pools.length < pageSize) return loadedPools
-				}
-			},
-			onSuccess: pools => {
-				const currentAccountKey = latestAccountAddress.current?.toLowerCase() ?? 'no-account'
-				if (!isCurrent() || latestEnvironmentRefreshKey.current !== requestedEnvironmentRefreshKey || currentAccountKey !== requestedAccountKey) return
-				universeDirectoryPools.value = pools
-				universeDirectoryLoadedEnvironmentRefreshKey.value = requestedEnvironmentRefreshKey
-			},
-			onError: error => {
-				if (!isCurrent()) return
-				universeDirectoryPools.value = undefined
-				universeDirectoryError.value = getErrorMessage(error, 'Failed to load universe stats')
-			},
-		})
-		const currentAccountKey = latestAccountAddress.current?.toLowerCase() ?? 'no-account'
-		return result !== undefined && latestEnvironmentRefreshKey.current === requestedEnvironmentRefreshKey && currentAccountKey === requestedAccountKey
 	}
 
 	const getCurrentLiquidationFundingPreviewRequestKey = () => {
@@ -470,11 +427,9 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationTimeoutMinutes: liquidationTimeoutMinutes.value,
 		checkedSecurityPoolAddress: checkedSecurityPoolAddress.value,
 		hasLoadedSecurityPools: securityPoolsLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
-		hasLoadedUniverseDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
 		securityPoolsLoadedEnvironmentRefreshKey: securityPoolsLoadedEnvironmentRefreshKey.value,
 		liquidationSecurityPoolAddress: liquidationSecurityPoolAddress.value,
 		loadingSecurityPools: securityPoolsLoad.isLoading.value,
-		loadingUniverseDirectoryPools: universeDirectoryLoad.isLoading.value,
 		loadingLiquidationFundingPreview: loadingCurrentLiquidationFundingPreview,
 		loadingLiquidationApproval: loadingCurrentLiquidationApproval,
 		loadingLiquidationReceiverVaultSummary: receiver.loading,
@@ -492,8 +447,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		securityPoolOverviewFeedback: securityPoolOverviewFeedback.value,
 		securityPoolOverviewResult: securityPoolOverviewResult.value,
 		securityPools: securityPools.value,
-		securityPoolUniverseDirectoryError: universeDirectoryError.value,
-		universeDirectoryPools: universeDirectoryLoadedEnvironmentRefreshKey.value === environmentRefreshKey ? universeDirectoryPools.value : undefined,
 		setLiquidationAmount: (value: string) => {
 			liquidationDebtEthAmount.value = value
 		},
@@ -511,7 +464,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			liquidationApprovalError.value = undefined
 			liquidationApprovalLoadingKey.value = undefined
 		},
-		loadUniverseDirectoryPools,
 		loadSecurityPools,
 		refreshSecurityPools,
 		updatePoolCommitment,
