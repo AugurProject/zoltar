@@ -69,7 +69,7 @@ function PoolActionRow({ context, control, currentTimestamp, item }: { context?:
 }
 
 /** Next actions retain position, deadline, and exception context even when their tab is open. */
-export function PoolActionCard({ currentTimestamp, currentView, items, onChange }: { currentTimestamp: bigint | undefined; currentView: SelectedPoolView; items: readonly PoolActionItem[]; onChange: (view: SelectedPoolView) => void }) {
+export function PoolActionCard({ currentTimestamp, currentView, items, onChange }: { currentTimestamp: bigint | undefined; currentView: SelectedPoolView | undefined; items: readonly PoolActionItem[]; onChange: (view: SelectedPoolView) => void }) {
 	const visibleItems = items.filter(item => item.id !== 'manageVault' || item.tab !== currentView)
 	if (visibleItems.length === 0 && items.length > 0) return undefined
 	return (

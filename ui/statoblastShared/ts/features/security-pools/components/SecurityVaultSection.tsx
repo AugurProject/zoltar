@@ -60,7 +60,7 @@ import type { SecurityVaultSectionProps } from '../../types.js'
 import { VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
 import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
-import { VaultOperationsLauncher, VaultWithdrawalSummaryMetrics, VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
+import { VaultAdditionalActions, VaultWithdrawalSummaryMetrics, VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
 import { SecurityVaultInlineActionSections } from './SecurityVaultInlineActionSections.js'
 
 export function SecurityVaultSection({
@@ -79,7 +79,7 @@ export function SecurityVaultSection({
 	onSecurityVaultFormChange,
 	oracleManagerDetails,
 	onViewPriceOracle,
-	onViewVaultOperations,
+	showIndividualActions = true,
 	onViewStagedOperations,
 	onWithdrawRep,
 	repPerEthPrice,
@@ -550,7 +550,7 @@ export function SecurityVaultSection({
 	const vaultActions = (
 		<>
 			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />
-			{onViewVaultOperations === undefined ? actionSections : <VaultOperationsLauncher onOpen={onViewVaultOperations} error={securityVaultError} additionalActions={extraReadinessActions} />}
+			{showIndividualActions ? actionSections : <VaultAdditionalActions error={securityVaultError} additionalActions={extraReadinessActions} />}
 		</>
 	)
 	const sections = (
@@ -578,7 +578,7 @@ export function SecurityVaultSection({
 				</SectionBlock>
 			) : undefined}
 
-			{compactLayout && modalFirst && summarySection !== undefined ? (
+			{compactLayout && modalFirst && summarySection !== undefined && (showIndividualActions || extraReadinessActions.length > 0) ? (
 				<div className='vault-detail-layout'>
 					{summarySection}
 					<div className='vault-detail-actions'>{vaultActions}</div>

@@ -206,12 +206,9 @@ function VaultActionLauncher({ action, claimingFees = false, hasVaultRepBacking 
 	)
 }
 
-export function VaultOperationsLauncher({ onOpen, error, additionalActions }: { onOpen: () => void; error: string | undefined; additionalActions: Omit<ReadinessAction, 'title'>[] }) {
+export function VaultAdditionalActions({ error, additionalActions }: { error: string | undefined; additionalActions: Omit<ReadinessAction, 'title'>[] }) {
 	return (
 		<>
-			<button type='button' onClick={onOpen}>
-				{vaultOperationsCopy.title}
-			</button>
 			{additionalActions.map(action => (
 				<VaultActionLauncher key={action.key} action={action} />
 			))}
@@ -276,4 +273,3 @@ export function VaultWithdrawalSummaryMetrics({ repTokenSymbol, amountLabel, max
 		</MetricGrid>
 	)
 }
-import * as vaultOperationsCopy from '../../../copy/vaultOperations.js'

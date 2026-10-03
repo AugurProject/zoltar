@@ -8,7 +8,7 @@ const pageViewport = { width: 800, height: 900 }
 const modalViewport = { width: 800, height: 1400 }
 const fillPoolForm: readonly UiScreenshotStep[] = [{ click: 'Create pool' }, { waitForText: 'Create question and pool' }, { fill: 'Title', value: 'Will it rain in Lisbon on 1 June 2027?' }, { fill: 'End time', value: '2027-06-02T00:00' }, { waitForEnabled: 'Create question and pool' }]
 const createPool: readonly UiScreenshotStep[] = [...fillPoolForm, { click: 'Create question and pool' }, { waitForText: 'Pool created' }]
-const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'Vault operations' }, { click: 'Vault operations', nth: -1 }]
+const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'Deposit REP (optional)' }]
 const approveRep: readonly UiScreenshotStep[] = [...openPool, { fill: 'Deposit REP (optional)', value: '1000' }, { click: 'Review vault operations' }, { click: 'Approve 1k REP' }, { waitForEnabled: 'Submit vault operations' }]
 const depositRep: readonly UiScreenshotStep[] = [...approveRep, { click: 'Submit vault operations' }, { waitForText: 'REP deposit confirmed' }, { waitForEnabled: 'Clear draft' }]
 const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { fill: 'Initial report price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { click: 'Review vault operations' }, { waitForEnabled: 'Approve ≈ 1.62 WETH' }]
@@ -75,9 +75,9 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: settleAndReturn,
-		expectText: ['Current commitment', '10.00 ETH', 'Vault operations executed'],
+		expectText: ['My vault', 'Commitment limit', '10.00 ETH', 'Vault REP backing'],
 		viewport: pageViewport,
-		crop: { selector: '.vault-operations-flow > .workflow-metric-grid' },
+		crop: { selector: '.vault-workspace .entity-card', containing: 'My vault' },
 		usedBy: tutorial,
 	},
 	{

@@ -4,6 +4,7 @@ import { ReportingOracleBlocker } from '../../reporting/components/ReportingOrac
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useState } from 'preact/hooks'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -200,8 +201,37 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				}
 	const poolOracleStatus = model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />
 	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined
-	const actionItems = props.vaultOperationsParameters === undefined ? model.actionItems : model.actionItems.map(item => (item.tab === 'vaults' ? { ...item, tab: 'vault-operations' as const } : item))
-	const poolActions = showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={actionItems} onChange={onSelectedPoolViewChange} /> : undefined
+	const openMyVault = () => {
+		if (accountState.address !== undefined && !sameAddress(model.selectedVaultOwner, accountState.address)) {
+			securityVault.onSecurityVaultFormChange({ selectedVaultOwner: accountState.address })
+			void securityVault.onLoadSecurityVault(accountState.address)
+		}
+		setVaultView('selected-vault')
+		onSelectedPoolViewChange('vaults')
+	}
+	const poolActions = showSelectedPoolWorkflowDetails ? (
+		<PoolActionCard currentTimestamp={currentTimestamp} currentView={view === 'vaults' && vaultView !== 'selected-vault' ? undefined : view} items={model.actionItems} onChange={nextView => (nextView === 'vaults' ? openMyVault() : onSelectedPoolViewChange(nextView))} />
+	) : undefined
+	const vaultOperations =
+		loadedSelectedPool === undefined || props.vaultOperationsParameters === undefined ? undefined : (
+			<VaultOperationsPanel
+				key={`${props.vaultOperationsContextKey}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
+				pool={loadedSelectedPool}
+				parameters={props.vaultOperationsParameters}
+				contextKey={`${props.vaultOperationsContextKey}:${accountState.chainId}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
+				networkReady={model.isOnActiveAppChain}
+				embedded
+				onViewStagedOperations={operationId => {
+					setManualPendingOperationId(operationId.toString())
+					onSelectedPoolViewChange('staged-operations')
+				}}
+				onPoolChanged={totalCommitment => {
+					onRefreshSelectedPoolData(loadedSelectedPool.securityPoolAddress, totalCommitment)
+					if (accountState.address !== undefined) securityVault.onLoadSecurityVault(accountState.address)
+				}}
+			/>
+		)
+
 	return (
 		<RouteWorkflowPanel showHeader={showHeader && objectHeaderProps === undefined} title={securityPoolCopy.selectedPool}>
 			<div className='pool-context'>
@@ -263,7 +293,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								liquidationEnabled={selectedPoolStateModel.actions.queueLiquidation.enabled}
 								onOpenLiquidationModal={onOpenLiquidationModal}
 								onSelectedPoolViewChange={onSelectedPoolViewChange}
-								vaultOperationsAvailable={props.vaultOperationsParameters !== undefined}
+								vaultOperations={vaultOperations}
 								poolState={selectedPoolStateModel}
 								repPerEthPrice={repPerEthPrice}
 								repPerEthSource={repPerEthSource}
@@ -280,21 +310,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								setVaultView={setVaultView}
 								vaultView={vaultView}
 								walletAddress={accountState.address}
-							/>
-						) : undefined}
-
-						{view === 'vault-operations' && loadedSelectedPool !== undefined && props.vaultOperationsParameters !== undefined ? (
-							<VaultOperationsPanel
-								key={`${props.vaultOperationsContextKey}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
-								pool={loadedSelectedPool}
-								parameters={props.vaultOperationsParameters}
-								contextKey={`${props.vaultOperationsContextKey}:${accountState.chainId}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
-								networkReady={model.isOnActiveAppChain}
-								onViewStagedOperations={operationId => {
-									setManualPendingOperationId(operationId.toString())
-									onSelectedPoolViewChange('staged-operations')
-								}}
-								onPoolChanged={totalCommitment => onRefreshSelectedPoolData(loadedSelectedPool.securityPoolAddress, totalCommitment)}
 							/>
 						) : undefined}
 

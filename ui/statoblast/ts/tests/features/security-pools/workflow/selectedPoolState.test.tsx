@@ -52,24 +52,29 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(section.classList.contains('default')).toBe(false)
 	}
 
-	test('replaces individual vault launchers with navigation to the newer vault operations flow', async () => {
-		const views: string[] = []
+	test('shows vault operations directly in My vault without a separate tab or launcher', async () => {
 		await renderLoadedPool({
 			vaultOperationsParameters,
-			onSelectedPoolViewChange: view => views.push(view),
 			securityVault: createSecurityVaultProps({ securityVaultDetails: createSecurityVaultDetails(), securityVaultForm: createSecurityVaultForm() }),
 		})
 		const page = within(document.body)
-		for (const label of ['Deposit REP', 'Set commitment limit', 'Withdraw REP', 'Claim fees', 'Open price oracle']) {
-			expect(page.queryByRole('button', { name: label })).toBeNull()
-		}
+		expect(page.queryByRole('tab', { name: 'Vault operations' })).toBeNull()
+		expect(page.queryByRole('button', { name: /^Vault operations$/ })).toBeNull()
+		for (const label of ['Deposit REP', 'Set commitment limit', 'Withdraw REP', 'Open price oracle']) expect(page.queryByRole('button', { name: label })).toBeNull()
 		expect(page.queryByRole('heading', { name: 'Vault actions' })).toBeNull()
 		expect(document.body.textContent).not.toContain('A valid OpenOracle price is required for commitment changes')
 		expect(page.getByRole('heading', { name: 'My vault' })).not.toBeNull()
-		const launchers = page.getAllByRole('button', { name: /^Vault operations/ })
-		expect(launchers).toHaveLength(3)
-		for (const launcher of launchers) await act(() => fireEvent.click(launcher))
-		expect(views).toEqual(['vault-operations', 'vault-operations', 'vault-operations'])
+		expect(page.getByRole('textbox', { name: 'Deposit REP (optional)' })).not.toBeNull()
+		expect(page.getByRole('button', { name: 'Review vault operations' })).not.toBeNull()
+		expect(page.queryByText('Current commitment')).toBeNull()
+		expect(page.queryByText('Current REP backing')).toBeNull()
+		expect(page.getByText('Wallet REP balance')).not.toBeNull()
+		await openAllVaults()
+		expect(page.queryByRole('textbox', { name: 'Deposit REP (optional)' })).toBeNull()
+		const readinessLink = page.getAllByRole('button', { name: 'Open vaults' })[0]
+		if (readinessLink === undefined) throw new Error('Expected vault readiness link')
+		await act(() => fireEvent.click(readinessLink))
+		expect(page.getByRole('textbox', { name: 'Deposit REP (optional)' })).not.toBeNull()
 	})
 
 	test('uses one selected-pool surface with unframed direct structural sections', async () => {
@@ -101,7 +106,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(tabList.getAttribute('data-size')).toBe('compact')
 		expect(tabList.compareDocumentPosition(objectHeader) & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
 		const tabs = within(tabList).getAllByRole('tab')
-		expect(tabs.map(tab => tab.textContent)).toEqual(['Vaults', 'Vault operations', 'Shares', 'Reporting'])
+		expect(tabs.map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
 		const workflowPanel = document.body.querySelector('.selected-pool-workflow-content')
 		if (!(workflowPanel instanceof HTMLElement)) throw new Error('Expected the selected-pool workflow panel')
 		expect(workflowPanel.getAttribute('role')).toBe('tabpanel')
@@ -184,7 +189,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tablist')).toBeNull()
 		expect(document.body.querySelectorAll('[role="tab"]')).toHaveLength(0)
-		for (const label of ['Vaults', 'Vault operations', 'Shares', 'Reporting']) {
+		for (const label of ['Vaults', 'Shares', 'Reporting']) {
 			expect(documentQueries.queryByText(label)).toBeNull()
 		}
 		expect(document.body.querySelector('.selected-pool-object-header')).toBeNull()
