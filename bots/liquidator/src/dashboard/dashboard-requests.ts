@@ -1,13 +1,33 @@
-import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
+import { requestJson, requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 
-/** Sends a dashboard API request and returns the decoded JSON body; a rejected request throws the bot's public error message. */
+/** Name of the error `api` throws when the bot answered with a failure status. */
+export const REQUEST_REJECTED = 'DashboardRequestRejected'
+/** Name of the error `api` throws when the bot answered with a body that is not the JSON the dashboard expects. */
+export const INVALID_RESPONSE = 'DashboardInvalidResponse'
+
+/** Sends the request and decodes its JSON body; with a timeout the shared helper bounds the body read as well as the headers. */
+async function send(path: string, options: RequestInit | undefined, timeoutMilliseconds: number | undefined) {
+	try {
+		if (timeoutMilliseconds !== undefined) return await requestJson(path, timeoutMilliseconds, options)
+		const response = await fetch(path, options)
+		const value: unknown = await response.json()
+		return { response, value }
+	} catch (error) {
+		if (error instanceof SyntaxError) throw Object.assign(new Error('The bot answered without a JSON body'), { name: INVALID_RESPONSE })
+		throw error
+	}
+}
+
+/**
+ * Sends a dashboard API request and returns the decoded JSON body; a rejected request throws the bot's public error
+ * message. The timeout covers reading the body as well as the response headers.
+ */
 export async function api(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<unknown> {
-	const response = await (timeoutMilliseconds === undefined ? fetch(path, options) : requestWithTimeout(signal => fetch(path, { ...options, signal }), timeoutMilliseconds))
-	const value: unknown = await response.json()
+	const { response, value } = await send(path, options, timeoutMilliseconds)
 	if (!response.ok) {
 		const error = typeof value === 'object' && value !== null ? Reflect.get(value, 'error') : undefined
 		const message = typeof error === 'string' ? error : `Request failed with HTTP ${response.status.toString()}`
-		throw Object.assign(new Error(message), { name: 'DashboardRequestRejected' })
+		throw Object.assign(new Error(message), { name: REQUEST_REJECTED })
 	}
 	return value
 }

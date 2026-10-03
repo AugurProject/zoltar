@@ -5,7 +5,18 @@ import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 
 type RetirementResidual = { amount: string; asset: string; category: string; reason: string }
 type CompletionEvidence = { blockHash: string; blockNumber: string; residuals: RetirementResidual[] }
-type RetirementDetails = { blockers: unknown[]; completionEvidence?: CompletionEvidence | undefined; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; status?: string | undefined }
+type RetirementBlockerView = { category?: string | undefined; details?: string | undefined; id?: string | undefined; nextEligibleAt?: string | undefined }
+type RetirementPositionView = {
+	fee?: string | number | undefined
+	id?: string | undefined
+	lastCheckedAtBlock?: string | undefined
+	owner?: string | undefined
+	pool?: string | undefined
+	status?: string | undefined
+	tickLower?: string | number | undefined
+	tickUpper?: string | number | undefined
+}
+type RetirementDetails = { blockers: RetirementBlockerView[]; completionEvidence?: CompletionEvidence | undefined; finalSweepStartedAt?: string | undefined; positions: RetirementPositionView[]; recipient?: string | undefined; status?: string | undefined }
 type RetirementSnapshot = { profileId?: string | undefined; retirement?: RetirementDetails | undefined; wallet?: string | undefined }
 
 function residualDescription(residual: RetirementResidual) {
@@ -14,6 +25,46 @@ function residualDescription(residual: RetirementResidual) {
 
 function retirementStringValue(value: unknown) {
 	return typeof value === 'string' ? value : undefined
+}
+
+function retirementScalarValue(value: unknown) {
+	return typeof value === 'string' || typeof value === 'number' ? value : undefined
+}
+
+function retirementRecords(value: unknown) {
+	return Array.isArray(value)
+		? value.flatMap(entry => {
+				const source = retirementRecord(entry)
+				return source === undefined ? [] : [source]
+			})
+		: []
+}
+
+function retirementDate(value: string) {
+	const date = new Date(value)
+	return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date)
+}
+
+/** One line per blocker: what kind it is, what it says, and when the bot next retries it. */
+export function retirementBlockerDescription(blocker: RetirementBlockerView) {
+	const category = blocker.category?.replaceAll('-', ' ') ?? 'Blocker'
+	const summary = blocker.details === undefined ? category : `${category}: ${blocker.details}`
+	return blocker.nextEligibleAt === undefined ? summary : `${summary} · next attempt ${retirementDate(blocker.nextEligibleAt)}`
+}
+
+/** One line per registered V3 position: its status, pool, owner, range, fee tier, and last checked block. */
+export function retirementPositionDescription(position: RetirementPositionView) {
+	const range = position.tickLower === undefined || position.tickUpper === undefined ? undefined : `ticks ${String(position.tickLower)} to ${String(position.tickUpper)}`
+	return [
+		position.status?.replaceAll('-', ' ') ?? 'status unavailable',
+		position.pool === undefined ? undefined : `pool ${position.pool}`,
+		position.owner === undefined ? undefined : `owner ${position.owner}`,
+		range,
+		position.fee === undefined ? undefined : `fee ${String(position.fee)}`,
+		position.lastCheckedAtBlock === undefined ? undefined : `checked at block ${position.lastCheckedAtBlock}`,
+	]
+		.filter(part => part !== undefined)
+		.join(' · ')
 }
 
 function parseCompletionEvidence(value: unknown) {
@@ -33,10 +84,24 @@ export function parsePublicRetirement(value: unknown): RetirementSnapshot['retir
 	return retirement === undefined
 		? undefined
 		: {
-				blockers: Array.isArray(retirement['blockers']) ? retirement['blockers'] : [],
+				blockers: retirementRecords(retirement['blockers']).map(blocker => ({
+					category: retirementStringValue(blocker['category']),
+					details: retirementStringValue(blocker['details']),
+					id: retirementStringValue(blocker['id']),
+					nextEligibleAt: retirementStringValue(blocker['nextEligibleAt']),
+				})),
 				completionEvidence: parseCompletionEvidence(retirement['completionEvidence']),
 				finalSweepStartedAt: retirementStringValue(retirement['finalSweepStartedAt']),
-				positions: Array.isArray(retirement['positions']) ? retirement['positions'] : [],
+				positions: retirementRecords(retirement['positions']).map(position => ({
+					fee: retirementScalarValue(position['fee']),
+					id: retirementStringValue(position['id']),
+					lastCheckedAtBlock: retirementStringValue(position['lastCheckedAtBlock']),
+					owner: retirementStringValue(position['owner']),
+					pool: retirementStringValue(position['pool']),
+					status: retirementStringValue(position['status']),
+					tickLower: retirementScalarValue(position['tickLower']),
+					tickUpper: retirementScalarValue(position['tickUpper']),
+				})),
 				recipient: retirementStringValue(retirement['recipient']),
 				status: retirementStringValue(retirement['status']),
 			}
@@ -45,6 +110,8 @@ export function parsePublicRetirement(value: unknown): RetirementSnapshot['retir
 type RetirementDashboardOptions = {
 	current: () => RetirementSnapshot | undefined
 	put: (value: unknown) => Promise<unknown>
+	/** Reloads state after a request whose outcome is unknown; reports whether it recognized the error. */
+	reconcile: (error: unknown, status: HTMLElement) => Promise<{ handled: boolean }>
 	refresh: () => Promise<unknown>
 }
 
@@ -95,7 +162,28 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const residualReason = retirementElement('retirement-residual-reason', HTMLTextAreaElement)
 	const residualConfirmation = retirementElement('retirement-residual-confirmation', HTMLInputElement)
 	const residualSubmit = retirementElement('retirement-residual-submit', HTMLButtonElement)
+	const details = retirementElement('retirement-details', HTMLDivElement)
+	const blockersHeading = retirementElement('retirement-blockers-heading', HTMLHeadingElement)
+	const blockerList = retirementElement('retirement-blockers', HTMLUListElement)
+	const positionsHeading = retirementElement('retirement-positions-heading', HTMLHeadingElement)
+	const positionList = retirementElement('retirement-positions', HTMLUListElement)
+	let renderedDetails = ''
 	let requestInFlight = false
+	/** One retirement request at a time: a second click while one is in flight could submit it twice. */
+	let actionInFlight = false
+
+	async function reportFailure(error: unknown, fallback: string) {
+		const reconciliation = await options.reconcile(error, actionStatus)
+		if (!reconciliation.handled) actionStatus.textContent = error instanceof Error ? error.message : fallback
+	}
+
+	function listItems(values: readonly string[]) {
+		return values.map(value => {
+			const item = document.createElement('li')
+			item.textContent = value
+			return item
+		})
+	}
 
 	form.addEventListener('submit', event => {
 		event.preventDefault()
@@ -144,7 +232,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				actionStatus.textContent = 'Drain request saved.'
 				await options.refresh()
 			} catch (error) {
-				actionStatus.textContent = error instanceof Error ? error.message : 'Drain request failed.'
+				await reportFailure(error, 'Drain request failed.')
 			} finally {
 				requestInFlight = false
 				if (!saved) {
@@ -157,6 +245,8 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	})
 	cancel.addEventListener('click', () => {
 		void (async () => {
+			if (actionInFlight) return
+			actionInFlight = true
 			try {
 				if (!(await confirmOperatorAction({ title: 'Cancel drain', description: 'Cancel the pending retirement request before the final sweep starts.', phrase: 'CANCEL DRAIN', confirmLabel: 'Cancel drain' }))) return
 				confirmation.value = 'CANCEL DRAIN'
@@ -164,7 +254,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				actionStatus.textContent = 'Drain request cancelled.'
 				await options.refresh()
 			} catch (error) {
-				actionStatus.textContent = error instanceof Error ? error.message : 'Drain cancellation failed.'
+				await reportFailure(error, 'Drain cancellation failed.')
+			} finally {
+				actionInFlight = false
 			}
 		})()
 	})
@@ -172,7 +264,8 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 		event.preventDefault()
 		void (async () => {
 			const profileId = options.current()?.profileId
-			if (profileId === undefined) return
+			if (profileId === undefined || actionInFlight) return
+			actionInFlight = true
 			try {
 				const position = {
 					fee: v3Fee.valueAsNumber,
@@ -211,13 +304,17 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				actionStatus.textContent = 'Legacy V3 position registered for canonical verification.'
 				await options.refresh()
 			} catch (error) {
-				actionStatus.textContent = error instanceof Error ? error.message : 'Position registration failed.'
+				await reportFailure(error, 'Position registration failed.')
+			} finally {
+				actionInFlight = false
 			}
 		})()
 	})
 	residualForm.addEventListener('submit', event => {
 		event.preventDefault()
 		void (async () => {
+			if (actionInFlight) return
+			actionInFlight = true
 			try {
 				const targetProfileId = residualTargetProfile.value.trim()
 				const reason = residualReason.value
@@ -243,7 +340,9 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				actionStatus.textContent = 'Residual deployment replacement acceptance saved.'
 				await options.refresh()
 			} catch (error) {
-				actionStatus.textContent = error instanceof Error ? error.message : 'Residual acceptance failed.'
+				await reportFailure(error, 'Residual acceptance failed.')
+			} finally {
+				actionInFlight = false
 			}
 		})()
 	})
@@ -267,6 +366,20 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			if (status === 'known-claims-recovered') summary.textContent = 'Earlier history remains unverified; additional claims may exist.'
 			else if (status === 'inactive') summary.textContent = 'No retirement has been requested.'
 			else summary.textContent = `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; signer wallet ${retirement?.recipient ?? 'not recorded'}.`
+			const blockers = retirement?.blockers.map(retirementBlockerDescription) ?? []
+			const positions = retirement?.positions.map(retirementPositionDescription) ?? []
+			const detailsSignature = JSON.stringify([status, blockers, positions])
+			// Unchanged lists keep their nodes so an operator can select and copy a blocker or pool address across polls.
+			if (detailsSignature !== renderedDetails) {
+				renderedDetails = detailsSignature
+				details.hidden = status === 'inactive' || (blockers.length === 0 && positions.length === 0)
+				blockersHeading.hidden = blockers.length === 0
+				blockerList.hidden = blockers.length === 0
+				blockerList.replaceChildren(...listItems(blockers))
+				positionsHeading.hidden = positions.length === 0
+				positionList.hidden = positions.length === 0
+				positionList.replaceChildren(...listItems(positions))
+			}
 			request.disabled = status !== 'inactive' || value.wallet === undefined || value.profileId === undefined || requestInFlight
 			requestOptions.disabled = request.disabled
 			requestOptions.hidden = status !== 'inactive'
@@ -277,7 +390,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 			start.disabled = status !== 'inactive' || value.wallet === undefined || value.profileId === undefined
 			start.hidden = status !== 'inactive' || drainEditorOpen
 			form.hidden = status === 'inactive' ? !drainEditorOpen : !canCancel
-			v3Form.parentElement?.toggleAttribute('hidden', status !== 'blocked' || !retirement?.blockers.some(blocker => typeof blocker === 'object' && blocker !== null && Reflect.get(blocker, 'category') === 'ambiguous-position'))
+			v3Form.parentElement?.toggleAttribute('hidden', status !== 'blocked' || !retirement?.blockers.some(blocker => blocker.category === 'ambiguous-position'))
 			residualForm.parentElement?.toggleAttribute('hidden', status !== 'drained-with-residuals')
 			const evidence = retirement?.completionEvidence
 			residualEvidence.hidden = status !== 'drained-with-residuals'

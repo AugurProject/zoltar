@@ -14,8 +14,17 @@ function preflightItem(label: string, value: string) {
 	return item
 }
 
-export function openResumePreflight(rows: readonly (readonly [string, string])[]) {
+function renderPreflightRows(rows: readonly (readonly [string, string])[]) {
 	requiredElement('resume-preflight').replaceChildren(...rows.map(([label, value]) => preflightItem(label, value)))
+}
+
+/** Rewrites the rows of an open resume preflight from newer state; a closed dialog is left untouched. */
+export function updateResumePreflight(rows: readonly (readonly [string, string])[]) {
+	if (requiredElement('resume-dialog').hasAttribute('open')) renderPreflightRows(rows)
+}
+
+export function openResumePreflight(rows: readonly (readonly [string, string])[]) {
+	renderPreflightRows(rows)
 	const dialog = requiredElement('resume-dialog')
 	if ('showModal' in dialog && typeof dialog.showModal === 'function') dialog.showModal()
 	if (!dialog.hasAttribute('open')) dialog.setAttribute('open', '')

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { reconcileIndexerOwnership } from '../../src/database/indexer-ownership-reconciliation.ts'
-import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, metricRoute, parseBasicAccessCredentials, requestAccessGuard, staticAssetResponse } from '../../src/http.ts'
+import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, metricRoute, parseBasicAccessCredentials, requestAccessGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from '../../src/http.ts'
 
 // Access checks are observable only through the request guard, which admits every API request here.
 const hasBasicAccess = (request: Request, credentials: Parameters<typeof requestAccessGuard>[3]) => requestAccessGuard(request, '/', 'client', credentials, createFixedWindowRateLimiter(0, 60_000)) === undefined
@@ -46,6 +46,34 @@ describe('HTTP response policy', () => {
 		expect(response.headers.get('cache-control')).toBe('no-cache')
 		expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+	})
+
+	test('serves each static extension with its own media type instead of defaulting to HTML', () => {
+		expect(staticContentType('index.html')).toBe('text/html; charset=utf-8')
+		expect(staticContentType('styles.css')).toBe('text/css; charset=utf-8')
+		expect(staticContentType('app.js')).toBe('text/javascript; charset=utf-8')
+		expect(staticContentType('favicon.svg')).toBe('image/svg+xml')
+		expect(staticContentType('app.js.map')).toBe('application/json; charset=utf-8')
+		expect(staticContentType('icon.PNG')).toBe('image/png')
+		expect(staticContentType('archive.unknown')).toBe('application/octet-stream')
+	})
+
+	test('restricts form targets and plugins without allowing inline styles', () => {
+		const policy = SECURITY_HEADERS['content-security-policy']
+		expect(policy).toContain("form-action 'self'")
+		expect(policy).toContain("object-src 'none'")
+		expect(policy).toContain("style-src 'self'")
+		expect(policy).not.toContain('unsafe-inline')
+	})
+
+	test('adds security headers to responses that were built without them', () => {
+		const response = withSecurityHeaders(Response.json({ status: 'ok' }), SECURITY_HEADERS)
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+		expect(response.headers.get('x-frame-options')).toBe('DENY')
+		expect(response.headers.get('content-security-policy')).toBe(SECURITY_HEADERS['content-security-policy'])
+		expect(response.headers.get('content-type')).toContain('application/json')
+		const preset = withSecurityHeaders(new Response('x', { headers: { 'referrer-policy': 'same-origin' } }), SECURITY_HEADERS)
+		expect(preset.headers.get('referrer-policy')).toBe('same-origin')
 	})
 
 	test('retains process-local ownership diagnostics when the health database is unavailable', async () => {

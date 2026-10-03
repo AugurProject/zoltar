@@ -1,4 +1,5 @@
 import type { QuestionRecord } from './browser-types.ts'
+import { utcDateTime } from './format.ts'
 
 export const questionStatus = (question: Pick<QuestionRecord, 'start_time' | 'end_time'>, nowMilliseconds = Date.now()): string => {
 	const now = BigInt(Math.floor(nowMilliseconds / 1000))
@@ -10,5 +11,5 @@ export const questionStatus = (question: Pick<QuestionRecord, 'start_time' | 'en
 export const questionDateLabel = (seconds: string): string => {
 	const milliseconds = BigInt(seconds) * 1000n
 	if (milliseconds > 8_640_000_000_000_000n || milliseconds < -8_640_000_000_000_000n) return `Date out of range (${seconds} Unix seconds)`
-	return `${new Date(Number(milliseconds)).toLocaleDateString('en-GB', { timeZone: 'UTC' })} UTC`
+	return utcDateTime(Number(milliseconds))
 }

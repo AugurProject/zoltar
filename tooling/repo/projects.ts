@@ -55,11 +55,24 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
 	...(groups === undefined ? {} : { groups }),
 })
 
-const packageAuditTask = (projectPath: string, groups?: readonly string[]): ProjectTask => ({ ...packageTask(projectPath, 'audit'), command: ['bun', 'audit'], ...(groups === undefined ? {} : { groups }) })
+/**
+ * Advisories every dependency audit accepts, each with the reason it cannot be fixed by an upgrade or override. Remove an
+ * entry as soon as a patched release exists.
+ *
+ * GHSA-vfj7-8cjw-p6xm: braces <= 3.0.3 exhausts the stack on deeply nested brace patterns and has no patched release. Its
+ * only path is @tevm/compiler > solc-typed-ast > findup-sync > micromatch, and the only caller is solc-typed-ast's import
+ * resolver, which passes the constant pattern `node_modules/`. No pattern from this repository, a user, or a remote party
+ * reaches braces.
+ */
+export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm'] as const
+
+export const dependencyAuditCommand: readonly string[] = ['bun', 'audit', ...acceptedAuditAdvisories.map(advisory => `--ignore=${advisory}`)]
+
+const packageAuditTask = (projectPath: string, groups?: readonly string[]): ProjectTask => ({ ...packageTask(projectPath, 'audit'), command: dependencyAuditCommand, ...(groups === undefined ? {} : { groups }) })
 
 const rootTask = (command: readonly string[], inputs: readonly string[], groups?: readonly string[]): ProjectTask => ({ command, cwd: '.', inputs, ...(groups === undefined ? {} : { groups }) })
 
-const botAudit = ['bun', 'audit'] as const
+const botAudit = dependencyAuditCommand
 
 /**
  * Canonical project ownership and build graph. All packages share the root workspace lockfile.
@@ -88,7 +101,7 @@ export const projects: readonly Project[] = [
 			),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'knip.ts', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
 			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.ts', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
-			audit: rootTask(['bun', 'audit'], ['package.json', 'bun.lock'], ['core-audit']),
+			audit: rootTask(dependencyAuditCommand, ['package.json', 'bun.lock'], ['core-audit']),
 		},
 		generatedDirectories: [],
 		ci: { scope: 'core' },

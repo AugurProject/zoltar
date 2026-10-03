@@ -57,7 +57,9 @@ configuration, and resume only after reviewing the saved settings. Run
 `docker compose down` to stop the bot and `docker compose up` to start it again.
 The named volume preserves its configuration, history, and recovery state.
 
-To operate on Sepolia, choose Sepolia in the dashboard's **Chain** selector. The bot
+To operate on Sepolia, choose Sepolia in the dashboard's **Chain** selector and
+confirm the switch; while live execution is armed the confirmation asks for a typed
+phrase. The bot
 saves the current profile, pauses at a safe scan boundary, releases its current
 chain and state locks, and loads Sepolia without exiting the process or restarting
 the container. The first switch creates a clean profile with a chain-named durable
@@ -159,13 +161,13 @@ Connect** (chain and RPCs), **2 · Markets** (approved universes, market and poo
 configuration), **3 · Liquidation policy** (strategy and automation), and **4 · Go
 live** (execution signer, submission, execution mode). Each form's save button unlocks
 only after an edit differs from the loaded values and its panel shows an **Unsaved
-changes** badge until it is saved.
+changes** badge until it is saved. Saving one panel keeps unsaved edits in the others.
 
 Keep live execution off until the factory, WETH, signer, selected pools, RPC
 endpoints, gas limits, and REP limits have been reviewed. The **Execution mode**
 panel under Go live lists every prerequisite the bot enforces (execution signer,
 chain and RPC endpoints, independent quorum RPCs, canonical contracts, delivery)
-plus advisory rows for approved universes, monitored pools, and market evidence,
+plus advisory rows for approved universes, supported pools, and market evidence,
 and keeps the live switch locked until the required rows hold. Enabling it pauses
 the bot and reserves the signer for this process; resume through the readiness
 check to start signing. A memory-only signer arms live mode in the running process

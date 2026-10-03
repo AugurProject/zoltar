@@ -1,7 +1,17 @@
 /** DOM helpers shared by the dashboard panels; none of them read module state. */
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 
+import { element } from '@zoltar/bot-shared/dashboard/dom'
+
 export { element, setText, shorten } from '@zoltar/bot-shared/dashboard/dom'
+
+/** Writes a form's status line; a failure is styled and announced as an alert, anything else as a polite status. */
+export function setStatus(id: string, message: string, error = false) {
+	const target = element(id)
+	if (target.textContent !== message) target.textContent = message
+	target.classList.toggle('error', error)
+	target.setAttribute('role', error ? 'alert' : 'status')
+}
 
 export function row(cells: readonly (HTMLElement | string)[], labels?: readonly string[]) {
 	const tableRow = document.createElement('tr')

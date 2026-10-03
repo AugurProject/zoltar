@@ -1,18 +1,28 @@
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
+import { formIsSubmitting, setFormSubmitting } from '@zoltar/bot-shared/dashboard/form-state'
 import { type Configuration, decodeConfiguration } from './api-validation.ts'
+import type { ConfigurationSource } from './dashboard-configuration.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { actionStatus, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { publicFailure } from './pool-presentation.ts'
 import { strategyReviewRows, validateStrategyReview } from './strategy-review.ts'
 
-const AUTOMATIC_ACTIONS = ['allowAutomaticDeposits', 'allowAutomaticPoolCreation', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals']
+/** The automatic actions the strategy can enable, with the name the dashboard gives each one. */
+const AUTOMATIC_ACTION_LABELS = [
+	['allowAutomaticDeposits', 'REP deposits'],
+	['allowAutomaticPoolCreation', 'pool creation'],
+	['allowAutomaticVaultMigrations', 'vault migrations'],
+	['allowAutomaticWithdrawals', 'REP withdrawals'],
+] as const
 const NUMERIC_STRATEGY_FIELDS = ['stalePriceFundingBufferBps', 'stagedOperationValidForSeconds', 'vaultTargetHealthBps', 'vaultTopUpHealthBps', 'vaultWithdrawHealthBps']
 
 type StrategyFormContext = {
 	state: DashboardState
 	elements: DashboardElements
-	populateConfiguration: (configuration: Configuration) => void
+	populateConfiguration: (configuration: Configuration, source?: ConfigurationSource) => void
+	/** Re-derives every fieldset's locked state once a save has finished. */
+	syncControls: () => void
 }
 
 function checkboxChecked(form: HTMLFormElement, name: string) {
@@ -34,9 +44,10 @@ export function loadStrategyForm(elements: DashboardElements, configuration: Con
 	setFormValue(form, 'historicalLogRecovery', configuration.runtime.historicalLogRecovery)
 }
 
-/** Counts the automatic actions the strategy form currently enables. */
-export function enabledAutomaticActionCount(elements: DashboardElements) {
-	return AUTOMATIC_ACTIONS.filter(name => checkboxChecked(elements.strategyForm, name)).length
+/** Names the automatic actions the saved strategy enables: what the running bot does, not what the form currently shows. */
+export function enabledAutomaticActions(configuration: Configuration | undefined) {
+	if (configuration === undefined) return undefined
+	return AUTOMATIC_ACTION_LABELS.filter(([name]) => configuration.strategy[name] === true).map(([, label]) => label)
 }
 
 function healthPercent(value: string) {
@@ -65,7 +76,7 @@ function readStrategyForm(form: HTMLFormElement, saved: Configuration) {
 		const value = next[name]
 		if (typeof value === 'string' && value !== '') next[name] = Number(value)
 	}
-	for (const name of AUTOMATIC_ACTIONS) next[name] = checkboxChecked(form, name)
+	for (const [name] of AUTOMATIC_ACTION_LABELS) next[name] = checkboxChecked(form, name)
 	next['logLookbackBlocks'] = Number(data.get('logLookbackBlocks'))
 	next['historicalLogRecovery'] = checkboxChecked(form, 'historicalLogRecovery')
 	return next
@@ -77,13 +88,12 @@ export function registerStrategyPreview(elements: DashboardElements) {
 }
 
 /** Saves the strategy form after validating it and confirming the reviewed changes. */
-export function registerStrategyForm({ state, elements, populateConfiguration }: StrategyFormContext) {
+export function registerStrategyForm({ state, elements, populateConfiguration, syncControls }: StrategyFormContext) {
 	const { strategyForm, strategyStatus } = elements
 	strategyForm.addEventListener('submit', async event => {
 		event.preventDefault()
-		if (state.configuration === undefined) return
+		if (state.configuration === undefined || formIsSubmitting('strategy-form')) return
 		const savedConfiguration = state.configuration
-		strategyStatus.textContent = 'Saving…'
 		const next = readStrategyForm(strategyForm, savedConfiguration)
 		try {
 			validateStrategyReview(savedConfiguration, next)
@@ -91,17 +101,23 @@ export function registerStrategyForm({ state, elements, populateConfiguration }:
 			actionStatus(strategyStatus, error instanceof Error ? error.message : 'Review the strategy values and retry.', true)
 			return
 		}
+		// The submitting latch keeps the form locked across polls through the review and the request.
+		setFormSubmitting('strategy-form', true)
 		try {
 			const changes = strategyReviewRows(savedConfiguration, next)
 			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review liquidation strategy', description: 'Changes to amounts and automation apply on the next scan.', changes, confirmLabel: 'Save strategy' }))) {
 				actionStatus(strategyStatus, '')
 				return
 			}
+			actionStatus(strategyStatus, 'Saving…')
 			const configuration = decodeConfiguration(await put('/api/strategy', next))
-			populateConfiguration(configuration)
+			populateConfiguration(configuration, 'strategy-form')
 			actionStatus(strategyStatus, 'Saved')
 		} catch (error) {
 			actionStatus(strategyStatus, publicFailure(error, 'Could not save strategy. Review the fields and retry.'), true)
+		} finally {
+			setFormSubmitting('strategy-form', false)
+			syncControls()
 		}
 	})
 }

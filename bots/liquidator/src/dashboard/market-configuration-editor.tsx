@@ -196,6 +196,13 @@ function marketDocument(market: Market, child: boolean) {
 	return result
 }
 
+const desiredPoolFields = [
+	['universeId', 'Universe ID'],
+	['questionId', 'Question ID'],
+	['statoblastSecurityMultiplierBps', 'Security multiplier (bps)'],
+	['initialReportPriorityFeeAttoEthPerGas', 'Initial report priority fee (attoETH per gas)'],
+] as const
+
 let currentDraft: Draft | undefined
 
 export function readMarketConfiguration() {
@@ -207,7 +214,7 @@ export function readMarketConfiguration() {
 			universeId: uintString(pool['universeId'], 'Universe ID'),
 			questionId: uintString(pool['questionId'], 'Question ID'),
 			statoblastSecurityMultiplierBps: integer(pool['statoblastSecurityMultiplierBps'], 'Security multiplier (bps)', 10_001, Number.MAX_SAFE_INTEGER),
-			initialReportPriorityFeeAttoEthPerGas: uintString(pool['initialReportPriorityFeeAttoEthPerGas'], 'Initial report priority fee (attoETH/gas)'),
+			initialReportPriorityFeeAttoEthPerGas: uintString(pool['initialReportPriorityFeeAttoEthPerGas'], 'Initial report priority fee (attoETH per gas)'),
 		})),
 	}
 }
@@ -265,9 +272,7 @@ export function renderMarketConfiguration(target: HTMLElement, configuration: { 
 					</div>
 					{draft.desiredPools.map((pool, index) => (
 						<div className='market-editor-row' key={index}>
-							{(['universeId', 'questionId', 'statoblastSecurityMultiplierBps', 'initialReportPriorityFeeAttoEthPerGas'] as const).map(key =>
-								textField(key.replace(/([A-Z])/g, ' $1'), pool[key], value => update({ ...draft, desiredPools: draft.desiredPools.map((old, at) => (at === index ? { ...old, [key]: value } : old)) }), { inputMode: 'numeric' }),
-							)}
+							{desiredPoolFields.map(([key, label]) => textField(label, pool[key], value => update({ ...draft, desiredPools: draft.desiredPools.map((old, at) => (at === index ? { ...old, [key]: value } : old)) }), { inputMode: 'numeric' }))}
 							<button type='button' className='secondary' onClick={() => update({ ...draft, desiredPools: draft.desiredPools.filter((_, at) => at !== index) })}>
 								Remove
 							</button>

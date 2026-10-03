@@ -22,7 +22,7 @@ const stateRefreshMilliseconds = 3_000
 const elements = createDashboardElements()
 const state = createDashboardState()
 
-// The collaborators below call back into `configuration`, `controls`, `refresh`, `sectionNavigation`, and `goLiveForms` only from
+// The collaborators below call back into `configuration`, `controls`, `refresh`, `sectionNavigation`, `networkSettings`, and `goLiveForms` only from
 // user events, timers, and request completions, which cannot run before this module finishes wiring the page.
 const pools = createPoolSelection({
 	state,
@@ -37,7 +37,6 @@ const view = createSnapshotView({
 	elements,
 	controls,
 	header,
-	pools,
 	refresh: () => refresh(),
 	applyInitialFragment: fragment => {
 		sectionNavigation.syncSectionNavigation()
@@ -54,10 +53,10 @@ const configuration = createConfigurationLoader({
 	syncSectionNavigation: scrollToTarget => sectionNavigation.syncSectionNavigation(scrollToTarget),
 })
 const { populateConfiguration, loadConfiguration } = configuration
-const refresh = createStateRefresh({ state, view, loadConfiguration })
+const refresh = createStateRefresh({ state, view, loadConfiguration, settleStalledProfileSwitch: () => networkSettings.settleStalledProfileSwitch() })
 
 view.registerActivityFilter()
-registerNetworkSettings({ state, elements, controls, configuration, refresh, clearMarketSourceProbe: () => clearMarketSourceProbe(state, elements) })
+const networkSettings = registerNetworkSettings({ state, elements, controls, configuration, refresh, clearMarketSourceProbe: () => clearMarketSourceProbe(state, elements) })
 registerMarketSettings({ state, elements, controls, populateConfiguration })
 registerRecoveryRecheck({ elements, controls, refresh })
 registerPauseControls({ state, elements, controls, refresh })
@@ -67,7 +66,7 @@ const sectionNavigation = createSectionNavigation()
 for (const formId of TRACKED_FORMS) trackForm(formId)
 createSettingsNavigation()
 const goLiveForms = registerGoLiveForms({ actionStatus, configuration: () => state.configuration, populateConfiguration, put, refresh: () => refresh(), reloadConfiguration: () => loadConfiguration(), syncControls: controls.syncControls })
-registerStrategyForm({ state, elements, populateConfiguration })
+registerStrategyForm({ state, elements, populateConfiguration, syncControls: controls.syncControls })
 
 void loadConfiguration()
 void refresh()

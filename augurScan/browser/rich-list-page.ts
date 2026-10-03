@@ -3,6 +3,7 @@ import { exactUnit } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import { retainedPaginationAvailable } from './refresh-presentation.ts'
 import { renderRichListTable } from './rich-list-table.ts'
+import { captureViewState, restoreViewState } from './view-state.ts'
 
 export interface RichListPageDeps {
 	lookup(selector: '#rich-sort'): HTMLSelectElement
@@ -32,6 +33,8 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 	$('#richlist-table').hidden = showCards
 	$('#richlist-shell').hidden = !showCards
 	$('#rich-view-toggle').textContent = showCards ? 'Show table' : 'Show details'
+	const tableState = captureViewState($('#richlist-table'))
+	const rowsState = captureViewState($('#richlist-rows'))
 	renderRichListTable($('#richlist-table'), richListItems, {
 		chainId: selectedChainId(),
 		sort: $('#rich-sort').value,
@@ -65,6 +68,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		wallet.append(richFieldLabel(`${itemNativeSymbol} / WETH`), element('strong', '', hasNative ? richBalance(item.native_balance, itemNativeSymbol) : `${itemNativeSymbol} pending`), element('span', '', wethComplete ? richBalance(item.weth_balance, 'WETH') : `${richBalance(item.weth_balance, 'WETH')} · partial`))
 		const transactions = element('button', 'rich-count rich-transactions')
 		transactions.type = 'button'
+		transactions.dataset['dialogInvoker'] = `rich-list:${itemKey}`
 		transactions.setAttribute('aria-label', `View ${number(item.transaction_count)} transactions sent by ${item.label ?? item.address}`)
 		transactions.append(richFieldLabel('Transactions'), element('strong', '', number(item.transaction_count)))
 		transactions.addEventListener('click', () => openAccountTransactions(item))
@@ -126,6 +130,8 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		if (Number(item.pool_count) > 0 || Number(item.vault_count) > 0) article.append(involvement)
 		rows.append(article)
 	}
+	restoreViewState($('#richlist-table'), { focus: tableState.focus, openDetails: new Set() })
+	restoreViewState(rows, { focus: rowsState.focus, openDetails: new Set() })
 	if (focusedDetailKey) {
 		const focusedDetails = [...rows.querySelectorAll<HTMLElement>('details[data-detail-key]')].find(details => details.dataset['detailKey'] === focusedDetailKey)
 		focusedDetails?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })

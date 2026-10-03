@@ -253,6 +253,13 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const networkSelect = element(window, 'network-name', window.HTMLSelectElement)
 	networkSelect.value = 'sepolia'
 	networkSelect.dispatchEvent(new window.Event('change'))
+	// Nothing switches until the operator confirms; the selector already shows the saved chain again.
+	await Bun.sleep(20)
+	expect(networkSelect.value).toBe('mainnet')
+	expect(element(window, 'network-target-status', window.HTMLElement).hidden).toBe(true)
+	expect(window.document.querySelector('.operator-confirm-dialog')?.textContent).toContain('Ethereum mainnet→Sepolia')
+	expect(window.document.querySelector('.operator-confirm-dialog')?.textContent).toContain('are not managed until you switch back')
+	await acceptOperatorDialog(window)
 	await Bun.sleep(20)
 
 	expect(networkSelect.value).toBe('mainnet')
@@ -289,6 +296,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const mainnetSelect = element(window, 'network-name', window.HTMLSelectElement)
 	mainnetSelect.value = 'mainnet'
 	mainnetSelect.dispatchEvent(new window.Event('change'))
+	await acceptOperatorDialog(window)
 	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.includes('did not reconnect in time'); attempt++) await Bun.sleep(20)
 	expect(element(window, 'connectivity-status', window.HTMLElement).textContent).toBe('The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
 	const profileRetry = element(window, 'profile-switch-retry-button', window.HTMLButtonElement)
@@ -298,6 +306,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	network = 'mainnet'
 	currentStrategy = strategy(333n)
 	profileRetry.click()
+	for (let attempt = 0; attempt < 200 && !element(window, 'settings-chain-scope', window.HTMLElement).textContent.includes('Ethereum mainnet'); attempt++) await Bun.sleep(10)
 	await Bun.sleep(50)
 	expect(element(window, 'settings-chain-scope', window.HTMLElement).textContent).toContain('Ethereum mainnet')
 	expect(element(window, 'network-name', window.HTMLSelectElement).value).toBe('mainnet')
@@ -616,11 +625,11 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 	const settlementQueue = element(window, 'settlement-queue-body', window.HTMLTableSectionElement)
 	for (let attempt = 0; attempt < 100 && settlementQueue.children.length < 2; attempt++) await Bun.sleep(10)
 	const settlementCells = (bodyId: string) => Array.from(element(window, bodyId, window.HTMLTableSectionElement).children[0]?.querySelectorAll('td') ?? [], cell => cell.textContent)
-	expect(settlementCells('settlement-queue-body')).toEqual(['11', 'dry run settlement', 'Reward covers gas and the minimum net; execution mode is disabled', '0.017043310270400101 ETH', '0.008746984 ETH', '0.008296326270400101 ETH', '95 seconds', 'WETH/REP', `${coordinator.slice(0, 8)}…${coordinator.slice(-6)}`])
+	expect(settlementCells('settlement-queue-body')).toEqual(['11', 'dry run settlement', 'Reward covers gas and the minimum net; the bot is in dry-run mode', '0.017043310270400101 ETH', '0.008746984 ETH', '0.008296326270400101 ETH', '95 seconds', 'WETH/REP', `${coordinator.slice(0, 8)}…${coordinator.slice(-6)}`])
 	expect(settlementCells('settlement-history-body').slice(1, 7)).toEqual(['settle', '9', 'confirmed', '0.017 ETH', '0.0087 ETH', '0.004 ETH'])
 	expect(element(window, 'settlement-count', window.HTMLElement).textContent).toBe('1 awaiting settlement')
 	expect(element(window, 'settlement-history-count', window.HTMLElement).textContent).toBe('1 transaction')
-	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.017 ETH · withdrawal waits for execution mode')
+	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.017 ETH · withdrawal waits for live execution')
 	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).not.toContain('withdrawal due')
 	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.013 ETH')
 	expect(element(window, 'settlement-summary', window.HTMLElement).textContent).toContain('0.013 ETH')
@@ -872,7 +881,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	minimumAskDepth.value = '0.0000000000000000001'
 	minimumAskDepth.dispatchEvent(new window.Event('input', { bubbles: true }))
 	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
-	await Bun.sleep(20)
+	for (let attempt = 0; attempt < 100 && element(window, 'market-status', window.HTMLElement).textContent === 'Validating market sources…'; attempt++) await Bun.sleep(10)
 	expect(window.document.querySelector('.operator-confirm-dialog') === null).toBe(true)
 	expect(element(window, 'market-status', window.HTMLElement).textContent).toContain('centralizedMarkets.minimumAskDepthEth')
 	minimumAskDepth.value = '2'
@@ -886,7 +895,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	const savedVenueDepth = venueDepth.value
 	venueDepth.value = '0.0000000000000000001'
 	element(window, 'market-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
-	await Bun.sleep(20)
+	for (let attempt = 0; attempt < 100 && element(window, 'market-status', window.HTMLElement).textContent === 'Validating market sources…'; attempt++) await Bun.sleep(10)
 	expect(window.document.querySelector('.operator-confirm-dialog') === null).toBe(true)
 	expect(element(window, 'market-status', window.HTMLElement).textContent).toContain('centralizedMarkets.venueConsensus.dexProbeDepthEth')
 	venueDepth.value = savedVenueDepth
@@ -948,7 +957,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	expect(badges('runtime-form')).toEqual(['Queued · next scan'])
 	for (const [field, value, label] of [
 		['maxHedgeSlippageBps', '75', 'Maximum hedge slippage'],
-		['logLookbackBlocks', '32', 'Lookback period'],
+		['logLookbackBlocks', '32', 'Event lookback'],
 		['pollMilliseconds', '5000', 'Poll interval'],
 	] as const) {
 		const previous = settings.runtime[field]
@@ -980,7 +989,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	runtimeInput('maxHedgeSlippageBps').value = '75'
 	runtimeInput('maxPositionNotionalWeth').value = '20'
 	runtimeInput('maxPositionNotionalWeth').dispatchEvent(new window.Event('input', { bubbles: true }))
-	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Per-position WETH limit cannot exceed the total locked WETH limit.')
+	expect(await submit('runtime-form', 'runtime-status', 'Saving risk limits…')).toBe('Maximum position notional cannot exceed maximum total locked.')
 	expect(settings.runtime.riskLimits.maxPositionNotionalAttoWeth).toBe(5n * 10n ** 18n)
 	expect(saveButton('runtime-form').disabled).toBe(false)
 
@@ -993,7 +1002,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 	for (let attempt = 0; attempt < 100 && !element(window, 'settlement-panel-summary', window.HTMLElement).textContent.startsWith('Enabling'); attempt++) await Bun.sleep(10)
 	expect(element(window, 'settlement-panel-summary', window.HTMLElement).textContent).toBe('Enabling at the next scan · 0 reports awaiting settlement')
 	settlementInput('settlementRewardWithdrawThresholdEth').value = '0'
-	expect(await submit('settlement-form', 'settlement-status', 'Saving settlement…')).toBe('Settlement rewardWithdrawThresholdEth must be from 0.000000000000000001 to 100')
+	expect(await submit('settlement-form', 'settlement-status', 'Saving settlement…')).toBe('Reward withdraw threshold must be from 0.000000000000000001 to 100 ETH.')
 	expect(settings.settlement.rewardWithdrawThresholdAttoEth).toBe(10n ** 16n)
 
 	// The switch is locked while prerequisites are missing; a direct submit is still rejected by the bot and reset.
@@ -1157,6 +1166,13 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 
 	const submit = async (formId: string, statusId: string, pendingPrefix: string) => {
 		element(window, formId, window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		// Endpoint changes are reviewed before the bot checks and saves them.
+		if (formId === 'connectivity-form') {
+			await Bun.sleep(20)
+			expect(window.document.querySelector('.operator-confirm-dialog')?.textContent).toContain('https://quorum-two.example/→https://quorum-three.example/')
+			expect(connectivityRequests).toEqual([])
+			await acceptOperatorDialog(window)
+		}
 		await page.waitUntilComplete()
 		for (let attempt = 0; attempt < 100 && element(window, statusId, window.HTMLElement).textContent.startsWith(pendingPrefix); attempt++) await Bun.sleep(10)
 		return element(window, statusId, window.HTMLElement).textContent
@@ -1188,6 +1204,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 	})
 	element(window, 'quorum-rpc-urls', window.HTMLTextAreaElement).value = 'https://quorum-four.example/\nhttps://quorum-five.example/'
 	element(window, 'connectivity-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await acceptOperatorDialog(window)
 	await Bun.sleep(30)
 	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
 	element(window, 'deployment-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
@@ -1276,4 +1293,284 @@ test('uses one activity view, groups repeats, and keeps diagnostics expanded acr
 	window.location.hash = '#position-lifecycle'
 	window.dispatchEvent(new window.HashChangeEvent('hashchange'))
 	expect(views()).toEqual(['position-lifecycle'])
+})
+
+/** A configured Sepolia operator whose saves are recorded, for the tests of reviews, reloads, and the resume readiness check. */
+function reviewFixture() {
+	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], quorumRpcUrls: [], readRpcUrl: 'https://rpc.example/' } })
+	const state = operatorState()
+	const root = { forkQuestionId: 0n, forkTime: 0n, id: 0n, outcomeIndex: undefined, parentId: undefined, repToken: address }
+	const child = (id: bigint) => ({ forkQuestionId: 0n, forkTime: 0n, id, outcomeIndex: id, parentId: 0n, repToken: getAddress(`0x${id.toString(16).padStart(40, '0')}`) })
+	state.universes = [root, child(11n), child(12n)]
+	const fixed: { execute: boolean; queuedSigner: { kind: 'apply'; address: Address } | undefined; wallet: Address | undefined } = { execute: false, queuedSigner: undefined, wallet: undefined }
+	const requests: { paused: boolean[]; strategy: unknown[]; submission: unknown[]; universes: unknown[] } = { paused: [], strategy: [], submission: [], universes: [] }
+	const failures: { paused: Error | undefined; state: boolean } = { paused: undefined, state: false }
+	const snapshot = () => {
+		if (failures.state) throw new Error('State unavailable')
+		return operatorSnapshot(state, settings.strategy, settings.submission, settings.connectivity, {
+			deployment: settings.deployment,
+			execute: fixed.execute,
+			executor: undefined,
+			expectedChainId: 11_155_111,
+			explorerUrl: 'https://sepolia.etherscan.io',
+			network: 'sepolia',
+			networkConfigured: true,
+			openOracle: settings.deployment.openOracle,
+			queuedSigner: fixed.queuedSigner,
+			savedWallet: undefined,
+			wallet: fixed.wallet,
+		})
+	}
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), effectiveRpcQuorum: settings.connectivity.rpcQuorum, revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setApprovedUniverses: value => {
+			requests.universes.push(value)
+			if (!Array.isArray(value)) throw new Error('Unexpected universe request')
+			const approvedUniverses = value.map(id => BigInt(String(id)))
+			settings = { ...settings, approvedUniverses }
+			return approvedUniverses.map(id => id.toString())
+		},
+		setPaused: paused => {
+			requests.paused.push(paused)
+			if (failures.paused !== undefined) throw failures.paused
+		},
+		updateConnectivity: value => value,
+		updateSigner: () => ({ wallet: undefined }),
+		updateStrategy: value => {
+			requests.strategy.push(value)
+			return snapshot().settings
+		},
+		updateSubmission: value => {
+			requests.submission.push(value)
+			const submission = validateSubmissionSettings(value)
+			settings = { ...settings, submission }
+			return submission
+		},
+	})
+	servers.push(server)
+	return { failures, fixed, requests, server, state }
+}
+
+async function settingsLoaded(window: BrowserWindow) {
+	for (let attempt = 0; attempt < 100 && element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled; attempt++) await Bun.sleep(10)
+	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
+}
+
+function panelBadges(window: BrowserWindow, formId: string) {
+	return Array.from(window.document.querySelectorAll(`.settings-badges[data-form="${formId}"] .settings-badge`), badge => badge.textContent)
+}
+
+function saveButton(window: BrowserWindow, formId: string) {
+	const found = element(window, formId, window.HTMLFormElement).querySelector('button[type="submit"]')
+	if (!(found instanceof window.HTMLButtonElement)) throw new Error(`Missing save button for ${formId}`)
+	return found
+}
+
+async function operatorDialogText(window: BrowserWindow) {
+	for (let attempt = 0; attempt < 100 && window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+	return window.document.querySelector('.operator-confirm-dialog')?.textContent ?? ''
+}
+
+test('browsing the universe explorer leaves the approvals form clean, and a changed approval is reviewed before it is saved', async () => {
+	const { requests, server } = reviewFixture()
+	const { triggerRefresh, window } = await mountDashboard(server, '/settings')
+	await settingsLoaded(window)
+	triggerRefresh()
+	const explorer = element(window, 'approved-universes', window.HTMLElement)
+	for (let attempt = 0; attempt < 100 && explorer.querySelector('.ue-approve') === null; attempt++) await Bun.sleep(10)
+	expect(explorer.querySelector('.ue-approve')).not.toBeNull()
+	expect(panelBadges(window, 'tokens-form')).toEqual([])
+
+	// Searching, filtering, and expanding only browse the tree; none of them is an edit to save.
+	const search = explorer.querySelector('.ue-search')
+	const filter = explorer.querySelector('.ue-filter')
+	if (!(search instanceof window.HTMLInputElement) || !(filter instanceof window.HTMLSelectElement)) throw new Error('Missing universe explorer controls')
+	search.value = '11'
+	search.dispatchEvent(new window.Event('input', { bubbles: true }))
+	filter.value = 'approved'
+	filter.dispatchEvent(new window.Event('input', { bubbles: true }))
+	filter.dispatchEvent(new window.Event('change', { bubbles: true }))
+	triggerRefresh()
+	await Bun.sleep(30)
+	expect(panelBadges(window, 'tokens-form')).toEqual([])
+	expect(saveButton(window, 'tokens-form').disabled).toBe(true)
+	search.value = ''
+	search.dispatchEvent(new window.Event('input', { bubbles: true }))
+	filter.value = 'all'
+	filter.dispatchEvent(new window.Event('input', { bubbles: true }))
+
+	const approval = Array.from(explorer.querySelectorAll('.ue-approve')).find(input => input instanceof window.HTMLInputElement && input.value === '11')
+	if (!(approval instanceof window.HTMLInputElement)) throw new Error('Missing universe 11 approval')
+	approval.checked = true
+	approval.dispatchEvent(new window.Event('change', { bubbles: true }))
+	for (let attempt = 0; attempt < 100 && saveButton(window, 'tokens-form').disabled; attempt++) await Bun.sleep(10)
+	expect(panelBadges(window, 'tokens-form')).toEqual(['Unsaved changes'])
+
+	element(window, 'tokens-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	const review = await operatorDialogText(window)
+	expect(review).toContain('Review approved universes')
+	expect(review).toContain('Universe 11Not approved→Approved')
+	expect(requests.universes).toEqual([])
+	await acceptOperatorDialog(window)
+	for (let attempt = 0; attempt < 100 && element(window, 'tokens-status', window.HTMLElement).textContent !== 'Universe approvals saved.'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'tokens-status', window.HTMLElement).textContent).toBe('Universe approvals saved.')
+	expect(requests.universes).toEqual([['0', '11']])
+	expect(saveButton(window, 'tokens-form').disabled).toBe(true)
+
+	// The read-only operator file view follows the save instead of showing the file from before it.
+	const savedFile = () => JSON.stringify(Reflect.get(JSON.parse(element(window, 'configuration-json', window.HTMLTextAreaElement).value), 'approvedUniverses'))
+	for (let attempt = 0; attempt < 100 && savedFile() !== '["0","11"]'; attempt++) await Bun.sleep(10)
+	expect(savedFile()).toBe('["0","11"]')
+})
+
+test('reloading the configuration asks before discarding unsaved edits, and field mistakes are named before anything is sent', async () => {
+	const { requests, server } = reviewFixture()
+	const { page, window } = await mountDashboard(server, '/settings')
+	await settingsLoaded(window)
+	const blocks = window.document.querySelector('[name="minimumRemainingBlocks"]')
+	if (!(blocks instanceof window.HTMLInputElement)) throw new Error('Missing minimum remaining blocks input')
+	const saved = blocks.value
+	blocks.value = '010'
+	blocks.dispatchEvent(new window.Event('input', { bubbles: true }))
+	expect(panelBadges(window, 'strategy-form')).toEqual(['Unsaved changes'])
+
+	// A number input accepts `010`, which the bot stores as an integer string and rejects; the form says so itself.
+	element(window, 'strategy-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && element(window, 'form-status', window.HTMLElement).textContent === 'Saving strategy…'; attempt++) await Bun.sleep(10)
+	expect(element(window, 'form-status', window.HTMLElement).textContent).toBe('Minimum remaining blocks must be a whole number written in plain digits, such as 12.')
+	expect(requests.strategy).toEqual([])
+
+	const reload = element(window, 'reload-configuration-button', window.HTMLButtonElement)
+	reload.click()
+	expect(await operatorDialogText(window)).toContain('Unsaved edits will be lost in: Strategy.')
+	const cancel = window.document.querySelector('.operator-confirm-dialog .dialog-actions button[type="button"]')
+	if (!(cancel instanceof window.HTMLButtonElement)) throw new Error('Missing cancel button')
+	cancel.click()
+	await Bun.sleep(30)
+	expect(blocks.value).toBe('010')
+	expect(panelBadges(window, 'strategy-form')).toEqual(['Unsaved changes'])
+
+	reload.click()
+	await acceptOperatorDialog(window)
+	for (let attempt = 0; attempt < 100 && blocks.value !== saved; attempt++) await Bun.sleep(10)
+	expect(blocks.value).toBe(saved)
+	await settingsLoaded(window)
+	expect(panelBadges(window, 'strategy-form')).toEqual([])
+
+	// With nothing unsaved the reload needs no confirmation.
+	reload.click()
+	await Bun.sleep(30)
+	expect(window.document.querySelector('.operator-confirm-dialog')).toBeNull()
+	await settingsLoaded(window)
+
+	// Private delivery without a relay is refused in the form; leaving private relays for the public mempool is reviewed.
+	const mode = element(window, 'submission-mode', window.HTMLSelectElement)
+	const relays = element(window, 'relay-urls', window.HTMLTextAreaElement)
+	const submitSubmission = () => element(window, 'submission-form', window.HTMLFormElement).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+	const submissionStatus = async (pending: string) => {
+		await page.waitUntilComplete()
+		for (let attempt = 0; attempt < 100 && element(window, 'submission-status', window.HTMLElement).textContent === pending; attempt++) await Bun.sleep(10)
+		return element(window, 'submission-status', window.HTMLElement).textContent
+	}
+	mode.value = 'private'
+	relays.value = ''
+	submitSubmission()
+	expect(await submissionStatus('Saving submission…')).toBe('Private delivery requires at least one relay URL.')
+	expect(requests.submission).toEqual([])
+	relays.value = 'https://relay.example/'
+	submitSubmission()
+	await acceptOperatorDialog(window)
+	expect(await submissionStatus('Saving submission…')).toBe('Submission settings saved.')
+	mode.value = 'public'
+	submitSubmission()
+	const review = await operatorDialogText(window)
+	expect(review).toContain('Public mempool delivery shows every entry transaction to other searchers')
+	expect(review).toContain('private→public')
+	expect(requests.submission).toHaveLength(1)
+	await acceptOperatorDialog(window)
+	for (let attempt = 0; attempt < 100 && requests.submission.length < 2; attempt++) await Bun.sleep(10)
+	expect(requests.submission.at(-1)).toEqual({ minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: ['https://relay.example/'] })
+	expect(await submissionStatus('Saving submission…')).toBe('Submission settings saved.')
+})
+
+test('polls leave an unchanged price chart in place so an open selector and a scrolled samples table survive', async () => {
+	const { server, state } = reviewFixture()
+	const pool = getAddress('0x0000000000000000000000000000000000000002')
+	state.priceHistory = [
+		{ blockNumber: '100', pool, priceWeth: '0.01', sampledAt: '2026-01-01T00:00:00.000Z', symbol: 'REP', token: address, venue: 'Uniswap V3' },
+		{ blockNumber: '101', pool, priceWeth: '0.02', sampledAt: '2026-01-01T00:00:12.000Z', symbol: 'REP', token: address, venue: 'Uniswap V3' },
+	]
+	const { triggerRefresh, window } = await mountDashboard(server, '/markets')
+	const chart = element(window, 'market-price-chart', window.HTMLElement)
+	const settle = async () => {
+		triggerRefresh()
+		await Bun.sleep(30)
+	}
+	for (let attempt = 0; attempt < 100 && chart.querySelector('details.chart-data') === null; attempt++) await Bun.sleep(10)
+	// The first poll after the selector is filled may redraw once for the now-selected token.
+	await settle()
+	const samples = chart.querySelector('details.chart-data')
+	const option = element(window, 'price-token', window.HTMLSelectElement).options[0]
+	expect(samples).not.toBeNull()
+	await settle()
+	await settle()
+	expect(chart.querySelector('details.chart-data')).toBe(samples)
+	expect(element(window, 'price-token', window.HTMLSelectElement).options[0]).toBe(option)
+
+	// A new sample still redraws the chart.
+	state.priceHistory = [...state.priceHistory, { blockNumber: '102', pool, priceWeth: '0.03', sampledAt: '2026-01-01T00:00:24.000Z', symbol: 'REP', token: address, venue: 'Uniswap V3' }]
+	await settle()
+	expect(chart.querySelector('details.chart-data')).not.toBe(samples)
+	expect(element(window, 'price-point-count', window.HTMLElement).textContent).toBe('3 persisted samples')
+})
+
+test('the resume readiness check follows each poll, names a queued signer, survives a failed poll, and a refused resume leaves the dashboard connected', async () => {
+	const { failures, fixed, requests, server } = reviewFixture()
+	const queued = getAddress('0x00000000000000000000000000000000000000aa')
+	fixed.execute = true
+	fixed.queuedSigner = { kind: 'apply', address: queued }
+	const { triggerRefresh, window } = await mountDashboard(server, '/settings')
+	await settingsLoaded(window)
+	const dialog = element(window, 'resume-dialog', window.HTMLElement)
+	const rows = () => Array.from(element(window, 'resume-preflight', window.HTMLElement).children, item => item.textContent)
+	const signerRow = () => rows().find(row => row.startsWith('Execution signer'))
+	element(window, 'pause-button', window.HTMLButtonElement).click()
+	expect(dialog.hasAttribute('open')).toBe(true)
+	// The signer that will sign after resuming is the queued one, not the absent active signer.
+	expect(signerRow()).toContain('queued for the next scan · no active signer')
+	expect(signerRow()).toContain('0x000000')
+
+	// The scan boundary applies the signer while the dialog is open; the open dialog shows the new fact.
+	fixed.queuedSigner = undefined
+	fixed.wallet = queued
+	triggerRefresh()
+	for (let attempt = 0; attempt < 100 && signerRow()?.includes('queued') === true; attempt++) await Bun.sleep(10)
+	expect(signerRow()).not.toContain('queued')
+	expect(rows()[0]).toBe('ModeLive execution')
+
+	// One failed poll keeps the check open, says the facts are stale, and locks Resume until the next successful poll.
+	failures.state = true
+	triggerRefresh()
+	for (let attempt = 0; attempt < 100 && !(rows()[0] ?? '').startsWith('Dashboard state'); attempt++) await Bun.sleep(10)
+	expect(dialog.hasAttribute('open')).toBe(true)
+	expect(rows()[0]).toContain('Stale')
+	expect(element(window, 'confirm-resume', window.HTMLButtonElement).disabled).toBe(true)
+	failures.state = false
+	triggerRefresh()
+	for (let attempt = 0; attempt < 100 && element(window, 'confirm-resume', window.HTMLButtonElement).disabled; attempt++) await Bun.sleep(10)
+	expect(rows()[0]).toBe('ModeLive execution')
+
+	// A refusal from the bot is not a lost connection: the check closes, the notice explains, and Settings stay editable.
+	failures.paused = new Error('Recover the pending executor deployment before resuming execution')
+	element(window, 'confirm-resume', window.HTMLButtonElement).click()
+	for (let attempt = 0; attempt < 100 && element(window, 'notice-title', window.HTMLElement).textContent !== 'Unable to change bot state'; attempt++) await Bun.sleep(10)
+	expect(requests.paused).toEqual([false])
+	expect(element(window, 'notice-title', window.HTMLElement).textContent).toBe('Unable to change bot state')
+	expect(dialog.hasAttribute('open')).toBe(false)
+	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
+	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(false)
 })

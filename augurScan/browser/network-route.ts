@@ -3,6 +3,7 @@ import type { CanonicalState } from './canonical-state.ts'
 import type { ScannerLiveState } from './scanner-live-state.ts'
 import { decodeNetworkResponse } from './api-decoding.ts'
 import { isCurrentCanonicalGeneration } from './live-refresh.ts'
+import { nativeSymbolFor, unavailableNetworkNotice } from './network-freshness.ts'
 
 interface NetworkRouteDeps {
 	lookup: (selector: string) => HTMLElement
@@ -43,15 +44,37 @@ export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 	}
 
 	const updateNetworkLabels = () => {
-		const symbol = selectedChainId() === '1' ? 'ETH' : 'SepoliaETH'
+		const symbol = nativeSymbolFor(selectedChainId())
 		$('#rich-native-sort-option').textContent = symbol
 		$('#rich-native-heading').textContent = `${symbol} / WETH`
+	}
+
+	const showNetworkNotice = (message: string) => {
+		const main = document.querySelector('main')
+		if (main === null) return
+		document.querySelector('#network-notice')?.remove()
+		const notice = document.createElement('div')
+		notice.id = 'network-notice'
+		notice.className = 'system-status'
+		notice.setAttribute('role', 'status')
+		const text = document.createElement('span')
+		text.textContent = message
+		const dismiss = document.createElement('button')
+		dismiss.type = 'button'
+		dismiss.className = 'secondary compact'
+		dismiss.textContent = 'Dismiss'
+		dismiss.addEventListener('click', () => notice.remove())
+		notice.append(text, dismiss)
+		main.prepend(notice)
 	}
 
 	const reconcileNetworkOptions = (items: NetworkRecord[]) => {
 		const selected = selectedChainId()
 		globalNetworkFilter.replaceChildren(...items.map((network: { name: string; chain_id: string }) => new Option(network.name, network.chain_id)))
-		globalNetworkFilter.value = [...globalNetworkFilter.options].some(option => option.value === selected) ? selected : String(items[0]?.chain_id ?? '')
+		const selectedIsIndexed = [...globalNetworkFilter.options].some(option => option.value === selected)
+		globalNetworkFilter.value = selectedIsIndexed ? selected : String(items[0]?.chain_id ?? '')
+		const shown = items[0]
+		if (selected !== '' && !selectedIsIndexed && shown !== undefined) showNetworkNotice(unavailableNetworkNotice(selected, shown.name))
 		globalNetworkFilter.dataset['restored'] = 'true'
 		syncNetworkUrl()
 		updateNetworkLabels()

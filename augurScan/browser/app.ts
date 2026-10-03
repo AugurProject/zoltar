@@ -7,11 +7,11 @@ import { bindNavigation, navigateInPlace, type NavigationDeps } from './app-navi
 import { bindNetworkFilter, createNetworkControls, createNetworkSnapshotCache, resetSelectedNetworkContext, restoreInitialNetwork } from './app-network.ts'
 import { relativeAge, relativeUntil } from './app-presentation.ts'
 import { loadVisibleRoute, restoreRouteDeepLink, selectSystemRouteEntity, syncVisibleRoute } from './app-routing.ts'
-import { createScannerState, nativeSymbolFor, requireChainId, selectedChainId } from './app-state.ts'
+import { createScannerState, requireChainId, selectedChainId } from './app-state.ts'
 import { createScannerViews } from './app-views.ts'
 import type { DemoFactory } from './demo-runtime.ts'
 import { fetchApi } from './fetch-api.ts'
-import { loadInitialNetworkStatus } from './network-freshness.ts'
+import { loadInitialNetworkStatus, nativeSymbolFor } from './network-freshness.ts'
 import { createQueryCache } from './query-cache.ts'
 import { mountSearch } from './search-ui.ts'
 

@@ -1,17 +1,18 @@
 import type { Configuration, Snapshot } from './dashboard-data.ts'
 
-type RefreshResult = { configurationAvailable: boolean; stateAvailable: boolean }
-
 /** The dashboard page's mutable data and mutation latches; every view and controller reads and writes this one record. */
 export type DashboardState = {
 	snapshot: Snapshot | undefined
 	snapshotStale: boolean
 	configuration: Configuration | undefined
-	refreshPromise: Promise<RefreshResult> | undefined
 	settingsRevision: string | number | undefined
 	connectivityDraftDirty: boolean
 	connectivityDraftConflict: boolean
 	connectivityDraftRevision: string | number | undefined
+	/** The saved connectivity values the RPC draft started from; see `configuration-draft-scope.ts`. */
+	connectivityDraftScope: string | undefined
+	/** The saved policy values the execution policy draft started from. */
+	settingsDraftScope: string | undefined
 	pauseMutationPending: boolean
 	pauseMutationUnreconciled: boolean
 	settingsMutationUnreconciled: boolean
@@ -27,11 +28,12 @@ export function createDashboardState(): DashboardState {
 		snapshot: undefined,
 		snapshotStale: false,
 		configuration: undefined,
-		refreshPromise: undefined,
 		settingsRevision: undefined,
 		connectivityDraftDirty: false,
 		connectivityDraftConflict: false,
 		connectivityDraftRevision: undefined,
+		connectivityDraftScope: undefined,
+		settingsDraftScope: undefined,
 		pauseMutationPending: false,
 		pauseMutationUnreconciled: false,
 		settingsMutationUnreconciled: false,

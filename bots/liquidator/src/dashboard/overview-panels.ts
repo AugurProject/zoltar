@@ -25,8 +25,8 @@ export function renderOverviewHealth(snapshot: Snapshot, configuration: Configur
 
 export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
 	element('metrics', HTMLDivElement).replaceChildren(
-		createMetric('Pools', snapshot.metrics.poolCount.toString()),
-		createMetric('Selected', snapshot.metrics.selectedPoolCount.toString()),
+		createMetric('Monitored pools', snapshot.metrics.poolCount.toString()),
+		createMetric('Supported pools', snapshot.metrics.selectedPoolCount.toString()),
 		createMetric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
 		createMetric('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
 		createMetric('Candidates', snapshot.metrics.candidateCount.toString()),

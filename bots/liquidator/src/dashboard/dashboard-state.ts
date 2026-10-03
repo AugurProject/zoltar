@@ -23,6 +23,12 @@ export type DashboardState = {
 	initialFragmentApplied: boolean
 	/** `true` while a pause request is pending and `false` while a resume request is pending. */
 	pauseRequestPending: boolean | undefined
+	/** A market-source probe is in flight; its button stays locked across polls until it settles. */
+	marketSourceProbePending: boolean
+	/** The operator-file revision the last rendered snapshot reported; a change reloads the configuration in the background. */
+	configurationRevision: string | undefined
+	/** A profile switch outlived its reconnect wait while the bot could not be asked which profile it runs. */
+	profileSwitchStalled: boolean
 }
 
 export function createDashboardState(): DashboardState {
@@ -41,5 +47,8 @@ export function createDashboardState(): DashboardState {
 		marketSourceProbeRows: undefined,
 		initialFragmentApplied: false,
 		pauseRequestPending: undefined,
+		marketSourceProbePending: false,
+		configurationRevision: undefined,
+		profileSwitchStalled: false,
 	}
 }

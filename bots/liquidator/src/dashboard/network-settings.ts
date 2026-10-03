@@ -1,3 +1,5 @@
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
+import { formIsSubmitting, setFormSubmitting } from '@zoltar/bot-shared/dashboard/form-state'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, waitForProfileReconnect } from '@zoltar/bot-shared/dashboard/polling'
 import { decodeConfiguration } from './api-validation.ts'
@@ -26,8 +28,23 @@ function profileLabel(network: string) {
 export function registerNetworkSettings({ state, elements, controls, configuration, refresh, clearMarketSourceProbe }: NetworkSettingsContext) {
 	const { networkName, networkFields, networkStatus, networkScopeSummary } = elements
 
-	function networkFieldsLocked() {
-		return state.pendingNetworkProfile !== undefined || !state.stateConnected || state.configuration === undefined
+	/** Reports what the bot says about a switch that outlived its reconnect wait, unlocking the dashboard when it never happened. */
+	async function settleStalledProfileSwitch() {
+		const requestedNetwork = state.pendingNetworkProfile
+		if (requestedNetwork === undefined) return
+		const outcome = await configuration.settleStalledProfileSwitch()
+		if (outcome === 'settled') return
+		if (outcome === 'saved') {
+			actionStatus(networkStatus, `The ${profileLabel(requestedNetwork)} profile was saved, but the bot has not reopened on it yet. The dashboard keeps retrying automatically.`, true)
+			return
+		}
+		if (outcome === 'unreachable') {
+			actionStatus(networkStatus, `The switch to the ${profileLabel(requestedNetwork)} profile has an unknown outcome because the bot could not be reached. Settings stay locked while the dashboard keeps retrying.`, true)
+			return
+		}
+		const activeNetwork = state.configuration?.network?.name
+		actionStatus(networkStatus, `The switch to the ${profileLabel(requestedNetwork)} profile did not take effect${activeNetwork === undefined ? '' : `; the bot still runs the ${profileLabel(activeNetwork)} profile`}. Check the bot logs before retrying.`, true)
+		await refresh()
 	}
 
 	async function waitForNetworkProfile(network: string) {
@@ -36,19 +53,30 @@ export function registerNetworkSettings({ state, elements, controls, configurati
 				await refresh()
 				return state.pendingNetworkProfile === undefined && state.configuration?.network?.name === network ? 'reconnected' : 'waiting'
 			},
-			() => actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. It keeps retrying automatically.', true),
+			() => void settleStalledProfileSwitch(),
 		)
 	}
 
 	networkName.addEventListener('change', async () => {
-		if (state.configuration?.network?.name === networkName.value) return
-		if (networkName.value !== 'mainnet' && networkName.value !== 'sepolia') return
-		const requestedNetwork = networkName.value
 		const activeNetwork = state.configuration?.network?.name
+		const requestedNetwork = networkName.value
+		if (activeNetwork === requestedNetwork) return
+		if (requestedNetwork !== 'mainnet' && requestedNetwork !== 'sepolia') return
+		// The select keeps naming the active profile until the bot has reopened on the requested one.
+		if (activeNetwork !== undefined) networkName.value = activeNetwork
+		const live = state.snapshot?.execute === true
+		const confirmed = await confirmOperatorAction({
+			title: 'Switch chain profile',
+			description: `Switching pauses the bot and restarts it on the ${profileLabel(requestedNetwork)} profile${live ? ' while live execution is armed' : ''}. Unsaved settings edits are discarded.`,
+			phrase: live ? 'SWITCH CHAIN' : undefined,
+			confirmLabel: `Switch to ${profileLabel(requestedNetwork)}`,
+		})
+		// The dialog can outlive a disconnect, another switch, or a configuration reload that already changed the profile.
+		if (!confirmed || state.pendingNetworkProfile !== undefined || state.configuration?.network?.name !== activeNetwork || networkFields.disabled) return
 		state.profileRequestEpoch += 1
 		state.pendingNetworkProfile = requestedNetwork
 		state.pendingProfileStateConfirmed = false
-		if (activeNetwork !== undefined) networkName.value = activeNetwork
+		state.profileSwitchStalled = false
 		if (activeNetwork !== undefined) networkScopeSummary.textContent = `${profileLabel(activeNetwork)} profile · switching to ${profileLabel(requestedNetwork)}`
 		clearMarketSourceProbe()
 		networkFields.disabled = true
@@ -75,13 +103,15 @@ export function registerNetworkSettings({ state, elements, controls, configurati
 				networkName.value = state.configuration.network.name
 				networkScopeSummary.textContent = `${profileLabel(state.configuration.network.name)} profile · switchable`
 			}
-			networkFields.disabled = networkFieldsLocked()
+			controls.syncControls()
 		}
 	})
 
 	elements.networkForm.addEventListener('submit', async event => {
 		event.preventDefault()
-		networkFields.disabled = true
+		if (formIsSubmitting('network-form')) return
+		// The submitting latch keeps the form locked across polls until the request settles.
+		setFormSubmitting('network-form', true)
 		actionStatus(networkStatus, 'Checking every RPC against the selected chain…')
 		try {
 			const next = decodeConfiguration(
@@ -90,12 +120,15 @@ export function registerNetworkSettings({ state, elements, controls, configurati
 					network: networkName.value,
 				}),
 			)
-			configuration.populateConfiguration(next)
+			configuration.populateConfiguration(next, 'network-form')
 			actionStatus(networkStatus, 'Chain and RPCs passed validation, were saved, and apply to the next scan.')
 		} catch (error) {
 			actionStatus(networkStatus, publicFailure(error, 'Could not apply the chain and RPC settings.', true), true)
 		} finally {
-			networkFields.disabled = networkFieldsLocked()
+			setFormSubmitting('network-form', false)
+			controls.syncControls()
 		}
 	})
+
+	return { settleStalledProfileSwitch }
 }

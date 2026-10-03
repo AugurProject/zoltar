@@ -5,7 +5,7 @@ import type { CanonicalState } from './canonical-state.ts'
 import type { RefreshGate } from './live-refresh.ts'
 import { visibleActivityLogCount } from './activity-detail-dom.ts'
 import { collectCanonicalPages } from './canonical-pagination.ts'
-import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
+import { isCurrentCanonicalGeneration, isCurrentContextRequest, liveRecordsMatch, type LiveRecord } from './live-refresh.ts'
 import { paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, resolveActivityRefreshDepth, retainedPaginationAvailable } from './refresh-presentation.ts'
 import { decodeItemsPage, isActivityRecord } from './api-decoding.ts'
 import { logKeyFor } from './activity-row.ts'
@@ -40,6 +40,8 @@ interface ActivityRouteDeps {
 	element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K]
 	logRefreshGate: RefreshGate
 }
+
+const liveRecordsOf = (rows: readonly HTMLElement[]): LiveRecord[] => rows.map(row => ({ key: row.dataset['liveKey'] ?? '', signature: row.dataset['liveSignature'] ?? '' }))
 
 export const createActivityRoute = (deps: ActivityRouteDeps) => {
 	const {
@@ -153,7 +155,7 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 			const payload =
 				!append && replaceDepth !== undefined
 					? await collectCanonicalPages(async (cursor, limit) => decodeItemsPage(await api(queryPath(cursor ?? '', limit), { signal: requestSignal }), isActivityRecord, 'Activity'), replaceDepth, logKeyFor)
-					: decodeItemsPage(await api(queryPath(append ? (activityRoute.nextCursor ?? '') : '')), isActivityRecord, 'Activity')
+					: decodeItemsPage(await api(queryPath(append ? (activityRoute.nextCursor ?? '') : ''), { signal: requestSignal }), isActivityRecord, 'Activity')
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, activityRoute.requestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
 			const anchor = live && window.scrollY >= 420 ? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find(row => row.getBoundingClientRect().bottom > 0) : undefined
 			const anchorKey = anchor?.dataset['liveKey']
@@ -162,20 +164,34 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 			const retainedDrawers = append ? [] : eventDrawers()
 			const activeDrawer = retainedDrawers.find(drawer => drawer.contains(document.activeElement)) ?? retainedDrawers[0]
 			const activeDrawerContext = activeDrawer ? captureDetailContext(activeDrawer) : undefined
-			if (!append) {
-				for (const drawer of retainedDrawers) drawer.remove()
-				feed.replaceChildren()
-			}
-			const refreshedKeys = new Set(append ? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].flatMap(row => (row.dataset['liveKey'] === undefined ? [] : [row.dataset['liveKey']])) : [])
+			const currentRows = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')]
+			const refreshedKeys = new Set(append ? currentRows.flatMap(row => (row.dataset['liveKey'] === undefined ? [] : [row.dataset['liveKey']])) : [])
+			const nextRows: HTMLElement[] = []
 			for (const log of payload.items) {
 				const row = rowFor(log)
 				const rowKey = row.dataset['liveKey']
 				if (rowKey !== undefined && refreshedKeys.has(rowKey)) continue
 				if (rowKey !== undefined) refreshedKeys.add(rowKey)
-				feed.append(row)
+				nextRows.push(row)
 			}
-			applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
-			for (const drawer of retainedDrawers) placeEventDrawer(drawer, { allowOutsideShellFallback: false })
+			// An unchanged background refresh keeps the rendered rows, so focus, selection, and open drawers are left untouched.
+			const unchanged = live && !append && liveRecordsMatch(liveRecordsOf(currentRows), liveRecordsOf(nextRows))
+			if (!unchanged) {
+				const focusedRow = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('.log-row[data-live-key]') : null
+				const focusedRowKey = focusedRow?.dataset['liveKey']
+				const focusedControlIndex = focusedRow === null || focusedRow === undefined ? -1 : [...focusedRow.querySelectorAll<HTMLElement>('a, button')].findIndex(control => control === document.activeElement)
+				if (!append) {
+					for (const drawer of retainedDrawers) drawer.remove()
+					feed.replaceChildren()
+				}
+				feed.append(...nextRows)
+				applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
+				for (const drawer of retainedDrawers) placeEventDrawer(drawer, { allowOutsideShellFallback: false })
+				if (!append && focusedRowKey !== undefined && focusedControlIndex >= 0) {
+					const nextFocusedRow = nextRows.find(row => row.dataset['liveKey'] === focusedRowKey)
+					nextFocusedRow?.querySelectorAll<HTMLElement>('a, button')[focusedControlIndex]?.focus({ preventScroll: true })
+				}
+			}
 			const drawerReanchored = activeDrawer?.isConnected ?? false
 			updateLogDisclosures()
 			if (activeDrawer && !drawerReanchored) {

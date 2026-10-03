@@ -1,10 +1,10 @@
 import { LIVE_SIGNER_MISMATCH } from '../core/execution-mode.ts'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardJson as json } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { publicOperatorFailure } from '@zoltar/bot-shared/dashboard/public-failures'
-import { publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
+import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -157,10 +157,10 @@ function publicMarketConsensus(value: unknown) {
 }
 
 function publicPool(value: unknown) {
-	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'parent', 'universeId', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipRep', 'totalPoolHeldRep'])
+	const pool = publicFields(value, ['address', 'approvedUniverse', 'centralizedPriceAllowed', 'centralizedPriceDeviationBps', 'isPriceValid', 'knownVaultCount', 'lastPrice', 'multiplierBps', 'parent', 'universeId', 'questionId', 'selected', 'systemState', 'totalCapacityOwnershipEth', 'totalPoolHeldRep'])
 	const source = record(value)
 	if (source === undefined) return pool
-	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['capacityOwnershipRep', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])
+	if (record(source['botVault']) !== undefined) pool['botVault'] = publicFields(source['botVault'], ['capacityOwnershipEth', 'claimableFeesEth', 'healthBps', 'openInterestDisplay', 'vaultRepBacking'])
 	const candidates = source['candidates']
 	pool['candidateCount'] = Array.isArray(candidates) ? candidates.length : 0
 	const bestCandidate = Array.isArray(candidates) ? record(candidates[0]) : undefined
@@ -190,7 +190,7 @@ function publicRpcEndpointHealth(value: unknown) {
 function publicOperatorSnapshot(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
-	const snapshot = publicFields(value, ['deploymentMissingName', 'deploymentCheckedBlock', 'deploymentCheckedTimestamp', 'execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
+	const snapshot = publicFields(value, ['configurationRevision', 'deploymentMissingName', 'deploymentCheckedBlock', 'deploymentCheckedTimestamp', 'execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
@@ -218,6 +218,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		exposure: { password: controller.password, publicAuthority: controller.publicAuthority },
 		hostname: controller.hostname,
 		loopbackPublished: controller.loopbackPublished,
+		onUnhandledError: error => logDashboardFailure('liquidator', 'unhandled', error),
 		pages: ['overview', 'pools', 'markets', 'operations', 'settings'],
 		pageSlots: [
 			['<!-- rep-market-consensus -->', repMarketConsensusPanel],
@@ -225,7 +226,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			['<!-- operator-header -->', operatorHeader],
 		],
 		port,
-		route: async (request, { acceptedAuthorities, url }) => {
+		route: async (request, { url }) => {
 			if (request.method === 'GET' && url.pathname === '/api/state') {
 				try {
 					return json(publicOperatorSnapshot(await controller.getState()))
@@ -234,6 +235,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/api/pool-catalog' && controller.getPoolCatalog !== undefined) {
+				// Discovery spends RPC requests, so another site must not be able to start it through a cross-site subresource load.
+				const fetchSite = request.headers.get('sec-fetch-site')
+				if (fetchSite !== null && fetchSite !== 'same-origin' && fetchSite !== 'none') return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				const page = Number(url.searchParams.get('page') ?? '0')
 				if (!Number.isSafeInteger(page) || page < 0) return json({ error: 'Invalid pool page' }, 400)
 				const scope = url.searchParams.get('scope') ?? 'all'
@@ -260,9 +264,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				} catch (error) {
 					return publicDashboardError('liquidator', error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
 				}
-			}
-			if (request.method === 'PUT' && !dashboardRequestIsSameOrigin(request, acceptedAuthorities)) {
-				return json({ error: 'Cross-origin requests are not accepted' }, 403)
 			}
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
 				['/api/approved-universes', controller.setApprovedUniverses],

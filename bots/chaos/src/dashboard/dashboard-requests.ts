@@ -39,14 +39,69 @@ export async function requestJson(path: string, timeoutMilliseconds: number, ini
 	return value
 }
 
-export async function put(path: string, value: unknown, timeoutMilliseconds = mutationRequestTimeoutMilliseconds) {
+let mutationsInFlight = 0
+let settledMutationCount = 0
+let mutationWaiters: (() => void)[] = []
+
+/** Longest a refresh waits for this page's mutations; past it the read goes out so a hung mutation still surfaces as stale state. */
+const MUTATION_SETTLE_WAIT_MILLISECONDS = 30_000
+
+/**
+ * Resolves once none of this page's mutations is in flight, or after `maximumWaitMilliseconds`. The server answers state
+ * and configuration reads only after its mutation queue drains, so a read sent during a long mutation would exceed the
+ * short read timeout and report a healthy bot as unavailable. The wait is bounded so a mutation that never answers
+ * cannot stop state polling.
+ */
+export function mutationsSettled(maximumWaitMilliseconds = MUTATION_SETTLE_WAIT_MILLISECONDS) {
+	if (mutationsInFlight === 0) return Promise.resolve()
+	let settle: () => void = () => undefined
+	const settled = new Promise<void>(resolve => {
+		settle = resolve
+	})
+	const timeout = setTimeout(settle, maximumWaitMilliseconds)
+	mutationWaiters.push(() => {
+		clearTimeout(timeout)
+		settle()
+	})
+	return settled
+}
+
+/** Counts this page's settled mutations, so a refresh can tell that its read began before one of them finished. */
+export function settledMutations() {
+	return settledMutationCount
+}
+
+function sendPut(path: string, value: unknown, timeoutMilliseconds: number) {
 	const body = JSON.stringify(value)
 	if (body === undefined) throw new Error('Dashboard mutation body is not serializable')
-	return await requestJson(path, timeoutMilliseconds, {
+	return requestJson(path, timeoutMilliseconds, {
 		body,
 		headers: { 'content-type': 'application/json' },
 		method: 'PUT',
 	})
+}
+
+export async function put(path: string, value: unknown, timeoutMilliseconds = mutationRequestTimeoutMilliseconds) {
+	mutationsInFlight += 1
+	try {
+		return await sendPut(path, value, timeoutMilliseconds)
+	} finally {
+		mutationsInFlight -= 1
+		settledMutationCount += 1
+		if (mutationsInFlight === 0) {
+			const waiters = mutationWaiters
+			mutationWaiters = []
+			for (const resolve of waiters) resolve()
+		}
+	}
+}
+
+/**
+ * A request that changes nothing but travels as a PUT, such as the operation dialog's status poll. It is not counted as
+ * a mutation, so it neither defers state refreshes nor makes one rerun.
+ */
+export async function readThroughPut(path: string, value: unknown, timeoutMilliseconds: number) {
+	return await sendPut(path, value, timeoutMilliseconds)
 }
 
 export type DashboardPut = typeof put

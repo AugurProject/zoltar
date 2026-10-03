@@ -86,8 +86,6 @@ export const requireChainId = (chainId: string): string => {
 	return chainId
 }
 
-export const nativeSymbolFor = (chainId: string): string => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
-
 export const isStateTab = (value: string | undefined | null): value is StateTab => value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
 
 /** Advances every request-version counter so in-flight responses for the previous route are discarded. */

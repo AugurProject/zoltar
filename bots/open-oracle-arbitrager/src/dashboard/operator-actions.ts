@@ -4,13 +4,14 @@ import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation
 import { markFormClean, setFormSubmitting } from '@zoltar/bot-shared/dashboard/form-state'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import { decodeExecutorDeployment, decodePrediction } from './api-validation.ts'
+import type { ConfigurationLoader } from './dashboard-configuration.ts'
 import type { DashboardControls } from './dashboard-controls.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { requiredSignerPrivateKey } from './dashboard-format.ts'
 import { sendJson } from './dashboard-requests.ts'
 import type { SnapshotView } from './dashboard-snapshot-view.ts'
 import type { DashboardState } from './dashboard-state.ts'
-import { setText } from './dom.ts'
+import { setStatus, setText, shorten } from './dom.ts'
 import { resumePreflightRows } from './resume-preflight-rows.ts'
 
 type OperatorActionContext = {
@@ -18,11 +19,12 @@ type OperatorActionContext = {
 	elements: DashboardElements
 	controls: DashboardControls
 	view: SnapshotView
+	configuration: ConfigurationLoader
 	refresh: () => Promise<void>
 }
 
 /** Wires the pause button and the resume preflight; a rejected request stays on the overview notice until it is resolved. */
-export function registerPauseControls({ state, elements, controls, view, refresh }: OperatorActionContext) {
+export function registerPauseControls({ state, elements, controls, view, configuration, refresh }: OperatorActionContext) {
 	async function changePaused(paused: boolean) {
 		const emergencyPauseAvailable = paused && state.latestSnapshot?.paused === false
 		if ((!state.connected && !emergencyPauseAvailable) || (!paused && state.latestSnapshot?.networkConfigured !== true)) {
@@ -36,8 +38,10 @@ export function registerPauseControls({ state, elements, controls, view, refresh
 			await sendJson('/api/paused', 'PUT', { paused })
 			await refresh()
 			closeResumePreflight()
+			void configuration.refreshConfigurationView()
 		} catch (error) {
-			controls.setControlsEnabled(false)
+			// The bot refused the request; the dashboard is still connected, so only the readiness check closes and the notice explains why.
+			closeResumePreflight()
 			state.pauseFailure = { message: errorMessage(error), recoverySeen: false, requestedPaused: paused }
 			if (state.latestSnapshot !== undefined) view.renderOperatorNotice(state.latestSnapshot)
 		} finally {
@@ -63,22 +67,41 @@ export function registerPauseControls({ state, elements, controls, view, refresh
 	})
 }
 
+/** The approvals a save would add and remove, capped so a large fork tree still fits the review dialog. */
+function universeReviewRows(saved: ReadonlySet<string>, selected: ReadonlySet<string>) {
+	const added = [...selected].filter(id => !saved.has(id))
+	const removed = [...saved].filter(id => !selected.has(id))
+	const rows = [...added.map(id => ({ label: `Universe ${shorten(id)}`, before: 'Not approved', after: 'Approved' })), ...removed.map(id => ({ label: `Universe ${shorten(id)}`, before: 'Approved', after: 'Not approved' }))]
+	const maximumRows = 12
+	const shown = rows.slice(0, maximumRows)
+	if (rows.length > maximumRows) shown.push({ label: 'More changes', before: '—', after: `${(rows.length - maximumRows).toString()} more` })
+	return [{ label: 'Approved universes', before: saved.size.toString(), after: selected.size.toString() }, ...shown]
+}
+
 /** Wires the approved-universe form, whose selection lives in the universe explorer rather than in form controls. */
-export function registerUniverseForm({ state, elements, controls }: OperatorActionContext) {
+export function registerUniverseForm({ state, elements, controls, configuration }: OperatorActionContext) {
 	elements.tokensForm.addEventListener('submit', async event => {
 		event.preventDefault()
+		if (state.universeSavePending) return
 		const requestEpoch = state.profileRequestEpoch
+		const approved = [...state.approvedUniverseIds]
 		state.universeSavePending = true
 		controls.syncControls()
 		setFormSubmitting('tokens-form', true)
-		setText('tokens-status', 'Saving universe approvals…')
 		try {
-			await sendJson('/api/approved-universes', 'PUT', [...state.approvedUniverseIds])
+			if (!(await confirmOperatorAction({ title: 'Review approved universes', description: 'Only REP of approved universes can be traded. Existing positions continue recovery after a change.', changes: universeReviewRows(state.savedUniverseIds, new Set(approved)), confirmLabel: 'Save universe approvals' }))) {
+				setStatus('tokens-status', 'Save canceled.')
+				return
+			}
+			setStatus('tokens-status', 'Saving universe approvals…')
+			await sendJson('/api/approved-universes', 'PUT', approved)
 			if (requestEpoch !== state.profileRequestEpoch) return
+			state.savedUniverseIds = new Set(approved)
 			markFormClean('tokens-form')
-			setText('tokens-status', 'Universe approvals saved.')
+			setStatus('tokens-status', 'Universe approvals saved.')
+			void configuration.refreshConfigurationView()
 		} catch (error) {
-			if (requestEpoch === state.profileRequestEpoch) setText('tokens-status', errorMessage(error))
+			if (requestEpoch === state.profileRequestEpoch) setStatus('tokens-status', errorMessage(error), true)
 		} finally {
 			state.universeSavePending = false
 			setFormSubmitting('tokens-form', false)
@@ -88,27 +111,38 @@ export function registerUniverseForm({ state, elements, controls }: OperatorActi
 }
 
 /** Wires the CREATE2 executor deployment, which shows the predicted address and requires a typed confirmation before deploying. */
-export function registerExecutorDeploymentForm({ state, elements, refresh }: OperatorActionContext) {
+export function registerExecutorDeploymentForm({ state, elements, configuration, refresh }: OperatorActionContext) {
 	elements.create2Form.addEventListener('submit', async event => {
 		event.preventDefault()
 		const button = elements.deployExecutorButton
 		button.disabled = true
-		setText('create2-status', 'Calculating the CREATE2 address…')
+		setStatus('create2-status', 'Calculating the CREATE2 address…')
 		try {
 			const prediction = decodePrediction(await sendJson('/api/executor-prediction', 'POST', {}))
-			if (!(await confirmOperatorAction({ title: 'Deploy executor', description: `Deploy the executor at ${prediction.address} with the active local signer.`, phrase: 'DEPLOY EXECUTOR', confirmLabel: 'Deploy executor' }))) {
-				setText('create2-status', `Deployment cancelled. Predicted executor address: ${prediction.address}.`)
+			const snapshot = state.latestSnapshot
+			const chain = snapshot === undefined ? 'the active chain' : `${snapshot.network} (chain ${snapshot.expectedChainId.toString()})`
+			const signer = snapshot?.wallet === undefined ? 'the active local signer' : `signer ${snapshot.wallet}`
+			if (
+				!(await confirmOperatorAction({
+					title: 'Deploy executor',
+					description: `Deploy the executor at ${prediction.address} on ${chain} with ${signer}. Unless the executor already exists there, this broadcasts a transaction immediately and spends that wallet's ETH on gas.`,
+					phrase: 'DEPLOY EXECUTOR',
+					confirmLabel: 'Deploy executor',
+				}))
+			) {
+				setStatus('create2-status', `Deployment canceled. Predicted executor address: ${prediction.address}.`)
 				return
 			}
-			setText('create2-status', `Checking the canonical CREATE2 proxy before deploying ${prediction.address}…`)
+			setStatus('create2-status', `Checking the canonical CREATE2 proxy before deploying ${prediction.address}…`)
 			const result = decodeExecutorDeployment(await sendJson('/api/executor-deployment', 'POST', {}))
 			setText('deployment-executor', result.address)
-			setText('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}.`)
+			setStatus('create2-status', result.alreadyDeployed ? `Verified existing executor at ${result.address}.` : `Deployed ${result.address} in transaction ${result.transactionHash ?? 'unknown'}.`)
 			// A verified deployment is the recovery the refusal asked for; do not wait for a poll that may never have shown the journal.
 			if (state.pauseFailure?.message === EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED) state.pauseFailure = undefined
 			await refresh()
+			void configuration.refreshConfigurationView()
 		} catch (error) {
-			setText('create2-status', errorMessage(error))
+			setStatus('create2-status', errorMessage(error), true)
 		} finally {
 			button.disabled = !state.connected
 		}
@@ -116,7 +150,7 @@ export function registerExecutorDeploymentForm({ state, elements, refresh }: Ope
 }
 
 /** Wires the signer form and the clear and forget actions; keys are cleared from the input whatever the outcome. */
-export function registerSignerControls({ state, elements, view, refresh }: OperatorActionContext) {
+export function registerSignerControls({ state, elements, view, configuration, refresh }: OperatorActionContext) {
 	async function updateSigner(privateKey: string | undefined, rememberSigner: boolean) {
 		if (state.signerRequestPending) return
 		state.signerRequestPending = true
@@ -127,6 +161,7 @@ export function registerSignerControls({ state, elements, view, refresh }: Opera
 			elements.privateKey.value = ''
 			elements.rememberSigner.checked = false
 			state.signerFeedback = undefined
+			void configuration.refreshConfigurationView()
 		} catch (error) {
 			elements.privateKey.value = ''
 			state.signerFeedback = { error: true, message: errorMessage(error) }
@@ -162,6 +197,7 @@ export function registerSignerControls({ state, elements, view, refresh }: Opera
 		try {
 			await sendJson('/api/signer', 'PUT', { forgetSavedSigner: true })
 			state.signerFeedback = undefined
+			void configuration.refreshConfigurationView()
 		} catch (error) {
 			state.signerFeedback = { error: true, message: errorMessage(error) }
 		} finally {

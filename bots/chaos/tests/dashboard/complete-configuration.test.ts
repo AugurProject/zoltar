@@ -106,6 +106,10 @@ browserTest(
 			await cdp.waitFor("document.querySelector('#complete-configuration-json').value.startsWith('{\\n') && document.querySelector('#complete-configuration-fields').disabled === false", { message: 'discard should restore JSON' })
 			await cdp.evaluate("document.querySelector('#complete-configuration-json-mode').click()")
 			await cdp.waitFor("document.querySelector('#complete-configuration-json-mode').checked === false && document.querySelector('#complete-configuration-fields').disabled === false", { message: 'field editor should be ready' })
+			// A cleared number field must be rejected instead of being saved as zero.
+			await cdp.evaluate("document.querySelector('[data-configuration-path=\"runtime.pollMilliseconds\"]').value = ''; document.querySelector('#complete-configuration-form').requestSubmit()")
+			await cdp.waitFor("document.querySelector('#complete-configuration-status').textContent === 'runtime.pollMilliseconds must be a number.'", { message: 'a cleared number field should not save' })
+			expect(await cdp.evaluate("document.querySelector('dialog[open]') === null")).toBe(true)
 			await cdp.evaluate(
 				"document.querySelector('[data-configuration-path=\"runtime.pollMilliseconds\"]').value = '13000'; document.querySelector('[data-configuration-path=\"strategy.initializeGenesisUniverse\"]').click(); document.querySelector('[data-configuration-path=\"strategy.enabledEcosystems\"]').value = '[\"open-oracle\"]'; document.querySelector('#complete-configuration-json-mode').click()",
 			)

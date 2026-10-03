@@ -2,7 +2,7 @@ import type { PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapsho
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import { venueLabel } from '#core/venue-strategy'
 import { endpointHealthDetail, endpointRow } from '@zoltar/bot-shared/dashboard/components'
-import { amount, countLabel, exactAmount, opportunityCountLabel, opportunityDecisionReason } from './dashboard-format.ts'
+import { countLabel, exactAmount, opportunityCountLabel, opportunityDecisionReason } from './dashboard-format.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { decisionBadge, diagnosticDisclosure, type ExplorerLink, row, setText } from './dom.ts'
 import { diagnosticSummary, groupedOperations } from './operation-log.ts'
@@ -40,12 +40,12 @@ function opportunityRow(opportunity: OpportunitySnapshot, link: ExplorerLink) {
 			opportunity.reportId,
 			decisionBadge(opportunity.decision),
 			opportunity.centralizedPriceDeviationBps === undefined ? 'Unavailable' : `${opportunity.centralizedPriceDeviationBps} bps`,
-			amount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
+			exactAmount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
 			opportunityDecisionReason(opportunity),
 			opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
-			amount(opportunity.estimatedNetProfitEth, 'ETH'),
-			amount(opportunity.requiredWeth, 'WETH'),
-			amount(opportunity.requiredToken, opportunity.tokenSymbol),
+			exactAmount(opportunity.estimatedNetProfitEth, 'ETH'),
+			exactAmount(opportunity.requiredWeth, 'WETH'),
+			exactAmount(opportunity.requiredToken, opportunity.tokenSymbol),
 			`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
 			venueLabel(opportunity.venue),
 			link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
@@ -63,7 +63,7 @@ function historyRow(record: PublicExecutionRecord, link: ExplorerLink) {
 			exactAmount(record.estimatedNetProfitWeth, 'ETH'),
 			exactAmount(record.trackedNetProfitEth, 'ETH'),
 			exactAmount(record.actualGasCostEth, 'ETH'),
-			`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredToken, record.tokenSymbol)}`,
+			`${exactAmount(record.requiredWeth, 'WETH')} · ${exactAmount(record.requiredToken, record.tokenSymbol)}`,
 			link(record.transactionHash, 'tx', `history:${record.reportId}:transaction`),
 		],
 		HISTORY_LABELS,
@@ -93,7 +93,7 @@ function positionRow(position: PublicPositionRecord, link: ExplorerLink) {
 			lifecycleGas,
 			settlerRewardAttoEth,
 			exactAmount(position.realizedNetProfitEth, 'ETH'),
-			`${amount(position.withdrawnWeth, 'WETH')} · ${amount(position.withdrawnToken, position.tokenSymbol)}`,
+			`${exactAmount(position.withdrawnWeth, 'WETH')} · ${exactAmount(position.withdrawnToken, position.tokenSymbol)}`,
 			link(position.entryTransactionHash, 'tx', `position:${position.reportId}:transaction`),
 		],
 		POSITION_LABELS,

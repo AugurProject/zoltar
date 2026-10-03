@@ -1,4 +1,5 @@
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
+import { formIsDirty } from '@zoltar/bot-shared/dashboard/form-state'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import type { Snapshot } from './api-validation.ts'
 import type { MutationControls } from './dashboard-controls.ts'
@@ -6,7 +7,7 @@ import type { DashboardElements } from './dashboard-elements.ts'
 import { actionStatus, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { publicFailure } from './pool-presentation.ts'
-import { enabledAutomaticActionCount } from './strategy-form.ts'
+import { enabledAutomaticActions } from './strategy-form.ts'
 
 type PauseControlsContext = {
 	state: DashboardState
@@ -19,6 +20,14 @@ type PauseControlsContext = {
 export function registerPauseControls({ state, elements, controls, refresh }: PauseControlsContext) {
 	const { pauseButton, pauseStatus } = elements
 
+	/** The preflight describes the saved strategy the bot runs, so unsaved form edits are called out instead of counted. */
+	function automaticActionsSummary() {
+		const actions = enabledAutomaticActions(state.configuration)
+		if (actions === undefined) return 'Unavailable'
+		const summary = actions.length === 0 ? 'None' : `${actions.length.toString()} · ${actions.join(', ')}`
+		return formIsDirty('strategy-form') ? `${summary} · unsaved strategy edits are not applied` : summary
+	}
+
 	function openResumeConfirmation(snapshot: Snapshot) {
 		const recoveryWork = snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length
 		openResumePreflight([
@@ -27,7 +36,7 @@ export function registerPauseControls({ state, elements, controls, refresh }: Pa
 			['Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'],
 			['Eligible pools', snapshot.metrics.eligiblePoolCount.toString()],
 			['Execution signer', snapshot.wallet === undefined ? 'Missing' : shorten(snapshot.wallet)],
-			['Automatic actions enabled', enabledAutomaticActionCount(elements).toString()],
+			['Automatic actions enabled', automaticActionsSummary()],
 		])
 	}
 

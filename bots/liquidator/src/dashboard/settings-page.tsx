@@ -148,7 +148,7 @@ function LiquidatorSettingsPage() {
 				<StrategyPanel />
 			</SettingsSection>
 			<SettingsSection id='settings-go-live' step={4} title='Go live'>
-				<SignerPanel summary='No active signer' />
+				<SignerPanel summary='No active signer' title='Execution signer' />
 				<SubmissionPanel note='Liquidations, vault maintenance, and ETH-funded stale-price requests all use this delivery policy. Private relays are checked against the selected chain before they are saved.' />
 				<ExecutionModePanel note='Enabling pauses the bot and reserves the signer for this process; it signs only after you resume through the readiness check. Dry run keeps scanning and reporting candidates without sending transactions.' />
 			</SettingsSection>

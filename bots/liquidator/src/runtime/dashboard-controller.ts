@@ -37,7 +37,7 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 			state.rpcEndpointHealth = runtime.readPool.snapshot()
 			const snapshot = operatorSnapshot(state, runtime.settings.runtime.execute, marketConfigurations(runtime.settings))
 			if (!snapshot.execute && deps.processLocks.startupSignerConflict !== undefined) snapshot.alerts.unshift({ message: deps.processLocks.startupSignerConflict, severity: 'error' })
-			return { ...snapshot, network: runtime.settings.network.name }
+			return { ...snapshot, configurationRevision: runtime.settingsRevision, network: runtime.settings.network.name }
 		},
 		hostname: runtime.settings.runtime.uiHost,
 		isNetworkConfigured: () => runtime.settings.networkConfigured,

@@ -6,7 +6,7 @@ import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import { nonnegativeAtomicValue } from '@zoltar/bot-shared/dashboard/amount'
 import { confirmOperatorAction, reviewChangeRows } from '@zoltar/bot-shared/dashboard/confirmation'
 import { decodeCentralizedMarkets, decodeDeployment, decodeExecution, decodeRuntimeLimits, decodeSettings, decodeSettlement, decodeSubmission, type DashboardDeployment } from './api-validation.ts'
-import { element, setText } from './dom.js'
+import { element, setStatus, setText } from './dom.js'
 import { createFocusedFormSubmitter, onFormSubmit } from '@zoltar/bot-shared/dashboard/focused-form'
 import { formIsDirty, markFormClean, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
 import type { GoLiveConfiguration } from './go-live.ts'
@@ -32,6 +32,7 @@ let loadedRuntime: StoredRuntimeLimits | undefined
 let loadedStrategy: StrategySettings | undefined
 let loadedSettlement: SettlementSettings | undefined
 let loadedMarkets: Record<string, unknown> | undefined
+let loadedSubmission: SubmissionSettings | undefined
 
 export function goLiveConfiguration(): GoLiveConfiguration | undefined {
 	if (loaded.deployment === undefined) return undefined
@@ -65,6 +66,7 @@ export function loadSubmission(submission: SubmissionSettings) {
 	mode.value = submission.mode
 	element('relay-urls', HTMLTextAreaElement).value = submission.relayUrls.join('\n')
 	element('minimum-bundle-relay-successes', HTMLInputElement).value = submission.minimumBundleRelaySuccesses.toString()
+	loadedSubmission = submission
 	loaded.relayUrls = submission.relayUrls
 	loaded.submissionMode = submission.mode
 	markFormClean('submission-form')
@@ -156,6 +158,39 @@ const FOCUSED_FORMS: Readonly<Record<string, QueuedSettingsSection | undefined>>
 	'submission-form': 'submission',
 }
 
+/** Panel titles of every Settings form a configuration reload or chain switch would overwrite. */
+const SETTINGS_PANELS: readonly (readonly [formId: string, title: string])[] = [
+	['connectivity-form', 'Chain and RPC connectivity'],
+	['tokens-form', 'Approved universes'],
+	['deployment-form', 'Venues and executor'],
+	['market-form', 'REP market sources'],
+	['strategy-form', 'Strategy'],
+	['runtime-form', 'Risk limits and scanning'],
+	['settlement-form', 'Settlement'],
+	['submission-form', 'Submission'],
+	['execution-form', 'Execution mode'],
+]
+
+/** The panels holding edits the operator has not saved, by title, in page order. */
+export function dirtySettingsPanels() {
+	return SETTINGS_PANELS.filter(([formId]) => formIsDirty(formId)).map(([, title]) => title)
+}
+
+/** The strategy fields the bot stores as integer strings; a number input also accepts forms such as `010` or `1e2` that it rejects. */
+const STRATEGY_INTEGER_FIELDS = [
+	['maxSpotTwapTicks', 'Maximum spot/TWAP ticks'],
+	['minimumRemainingBlocks', 'Minimum remaining blocks'],
+	['minimumRemainingSeconds', 'Minimum remaining seconds'],
+] as const
+
+const RISK_FIELDS = [
+	['maxPositionNotionalWeth', 'Maximum position notional', 'WETH'],
+	['maxTotalLockedWeth', 'Maximum total locked', 'WETH'],
+	['maxConcurrentPositions', 'Maximum concurrent positions', 'positions'],
+	['maxDailyGasSpendWeth', 'Maximum daily gas spend', 'ETH'],
+	['lifecycleGasReserveWeth', 'Lifecycle gas reserve', 'ETH'],
+] as const
+
 /**
  * Wires the focused Settings forms that each edit one section of the operator file. Values load from the complete
  * configuration document, every save reloads the section the bot returns, and a form's save button stays disabled until
@@ -178,6 +213,9 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				twapSeconds: Number(input('twapSeconds').value),
 			} satisfies StrategySettings
 			nonnegativeAtomicValue(settings.minimumProfitWeth, 'WETH')
+			for (const [field, label] of STRATEGY_INTEGER_FIELDS) {
+				if (!/^(?:0|[1-9]\d*)$/.test(settings[field])) throw new Error(`${label} must be a whole number written in plain digits, such as 12.`)
+			}
 			if (loadedStrategy !== undefined && !(await confirmOperatorAction({ title: 'Review strategy', description: 'Profit and timing settings change which transactions the bot may submit.', changes: reviewChangeRows(loadedStrategy, settings), confirmLabel: 'Save strategy' }))) return 'Save canceled.'
 			loadSettings(decodeSettings(await put('/api/settings', settings)).settings)
 			return 'Strategy saved.'
@@ -191,6 +229,14 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				mode: element('submission-mode', HTMLSelectElement).value,
 				relayUrls: urlLines(element('relay-urls', HTMLTextAreaElement).value),
 			}
+			if (submission.mode !== 'private' && submission.mode !== 'public') throw new Error('Choose private relays or the public mempool.')
+			if (submission.mode === 'private' && submission.relayUrls.length === 0) throw new Error('Private delivery requires at least one relay URL.')
+			if (submission.mode === 'private' && submission.minimumBundleRelaySuccesses > submission.relayUrls.length) throw new Error(`Required successful bundle relays cannot exceed the ${submission.relayUrls.length.toString()} configured relay URLs.`)
+			if (loadedSubmission !== undefined) {
+				const exposesTransactions = loadedSubmission.mode === 'private' && submission.mode === 'public'
+				const description = exposesTransactions ? 'Public mempool delivery shows every entry transaction to other searchers before it is included.' : 'Delivery settings decide how signed transactions reach block builders.'
+				if (!(await confirmOperatorAction({ title: 'Review submission', description, changes: reviewChangeRows(loadedSubmission, submission), confirmLabel: 'Save submission' }))) return 'Save canceled.'
+			}
 			loadSubmission(decodeSubmission(await put('/api/submission', submission)).submission)
 			return 'Submission settings saved.'
 		})
@@ -200,34 +246,38 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		void (async () => {
 			const saved = loadedRuntime
 			if (saved === undefined) return
-			const riskFields = ['lifecycleGasReserveWeth', 'maxConcurrentPositions', 'maxDailyGasSpendWeth', 'maxPositionNotionalWeth', 'maxTotalLockedWeth'] as const
-			for (const field of riskFields) {
-				if (field !== 'maxConcurrentPositions') nonnegativeAtomicValue(runtimeInput(field).value, 'WETH')
+			setStatus('runtime-status', '')
+			for (const [field, , unit] of RISK_FIELDS) {
+				if (field !== 'maxConcurrentPositions') nonnegativeAtomicValue(runtimeInput(field).value, unit)
 			}
 			const positionLimit = nonnegativeAtomicValue(runtimeInput('maxPositionNotionalWeth').value, 'WETH')
 			const totalLimit = nonnegativeAtomicValue(runtimeInput('maxTotalLockedWeth').value, 'WETH')
-			if (positionLimit > totalLimit) throw new Error('Per-position WETH limit cannot exceed the total locked WETH limit.')
+			if (positionLimit > totalLimit) throw new Error('Maximum position notional cannot exceed maximum total locked.')
 			const hedgeSlippageValue = runtimeInput('maxHedgeSlippageBps').value
 			const maxHedgeSlippageBps = Number(hedgeSlippageValue)
 			if (!/^\d+$/.test(hedgeSlippageValue) || !Number.isSafeInteger(maxHedgeSlippageBps) || maxHedgeSlippageBps > 1_000) throw new Error('Maximum hedge slippage must be a whole number from 0 to 1000 bps.')
 			const lookbackValue = runtimeInput('logLookbackBlocks').value
 			const logLookbackBlocks = Number(lookbackValue)
-			if (!/^\d+$/.test(lookbackValue) || !Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks > 256) throw new Error('Lookback period must be a whole number from 0 to 256 blocks.')
+			if (!/^\d+$/.test(lookbackValue) || !Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks > 256) throw new Error('Event lookback must be a whole number from 0 to 256 blocks.')
 			const pollValue = runtimeInput('pollMilliseconds').value
 			const pollMilliseconds = Number(pollValue)
 			if (!/^\d+$/.test(pollValue) || !Number.isSafeInteger(pollMilliseconds) || pollMilliseconds < 1_000 || pollMilliseconds > 3_600_000) throw new Error('Poll interval must be a whole number from 1000 to 3600000 milliseconds.')
-			const changes = riskFields
-				.flatMap(field => {
-					const before = String(saved.riskLimits[field])
-					const after = runtimeInput(field).value
-					return before === after ? [] : [{ label: field.replace(/([A-Z])/g, ' $1'), before: `${before} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}`, after: `${after} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}` }]
-				})
-				.concat(
-					saved.maxHedgeSlippageBps === maxHedgeSlippageBps ? [] : [{ label: 'Maximum hedge slippage', before: `${saved.maxHedgeSlippageBps.toString()} bps`, after: `${maxHedgeSlippageBps.toString()} bps` }],
-					saved.logLookbackBlocks === logLookbackBlocks ? [] : [{ label: 'Lookback period', before: `${saved.logLookbackBlocks.toString()} blocks`, after: `${logLookbackBlocks.toString()} blocks` }],
-					saved.pollMilliseconds === pollMilliseconds ? [] : [{ label: 'Poll interval', before: `${saved.pollMilliseconds.toString()} ms`, after: `${pollMilliseconds.toString()} ms` }],
-				)
-			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review risk limits', description: 'These limits govern the next scan and live execution.', changes, confirmLabel: 'Save risk limits' }))) return
+			// Amounts are compared by value, so `1.0` over a saved `1` is not reported as a change.
+			const riskChanges: { label: string; before: string; after: string }[] = RISK_FIELDS.flatMap(([field, label, unit]) => {
+				const before = String(saved.riskLimits[field])
+				const after = runtimeInput(field).value
+				const unchanged = field === 'maxConcurrentPositions' ? Number(before) === Number(after) : nonnegativeAtomicValue(before, unit) === nonnegativeAtomicValue(after, unit)
+				return unchanged ? [] : [{ label, before: `${before} ${unit}`, after: `${after} ${unit}` }]
+			})
+			const changes = riskChanges.concat(
+				saved.maxHedgeSlippageBps === maxHedgeSlippageBps ? [] : [{ label: 'Maximum hedge slippage', before: `${saved.maxHedgeSlippageBps.toString()} bps`, after: `${maxHedgeSlippageBps.toString()} bps` }],
+				saved.logLookbackBlocks === logLookbackBlocks ? [] : [{ label: 'Event lookback', before: `${saved.logLookbackBlocks.toString()} blocks`, after: `${logLookbackBlocks.toString()} blocks` }],
+				saved.pollMilliseconds === pollMilliseconds ? [] : [{ label: 'Poll interval', before: `${saved.pollMilliseconds.toString()} ms`, after: `${pollMilliseconds.toString()} ms` }],
+			)
+			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review risk limits', description: 'These limits govern the next scan and live execution.', changes, confirmLabel: 'Save risk limits' }))) {
+				setStatus('runtime-status', 'Save canceled.')
+				return
+			}
 			await submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
 				const runtime = {
 					logLookbackBlocks,
@@ -244,7 +294,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				loadRuntimeLimits(decodeRuntimeLimits(await put('/api/runtime-limits', runtime)).runtime)
 				return 'Risk limits saved.'
 			})
-		})().catch(error => setText('runtime-status', error instanceof Error ? error.message : 'Risk limits are invalid.'))
+		})().catch(error => setStatus('runtime-status', error instanceof Error ? error.message : 'Risk limits are invalid.', true))
 	})
 
 	onFormSubmit(element('settlement-form', HTMLFormElement), () => {
@@ -256,10 +306,10 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 				rewardWithdrawThresholdEth: settlementInput('settlementRewardWithdrawThresholdEth').value,
 			} satisfies SettlementSettings
 			const threshold = nonnegativeAtomicValue(settlement.rewardWithdrawThresholdEth, 'ETH')
-			if (threshold === 0n || threshold > 100n * 10n ** 18n) throw new Error('Settlement rewardWithdrawThresholdEth must be from 0.000000000000000001 to 100')
-			if (nonnegativeAtomicValue(settlement.minimumProfitWeth, 'WETH') > 10n ** 18n) throw new Error('Settlement minimumProfitWeth must be from 0 to 1')
+			if (threshold === 0n || threshold > 100n * 10n ** 18n) throw new Error('Reward withdraw threshold must be from 0.000000000000000001 to 100 ETH.')
+			if (nonnegativeAtomicValue(settlement.minimumProfitWeth, 'ETH') > 10n ** 18n) throw new Error('Minimum net must be from 0 to 1 ETH.')
 			const gasPrice = nonnegativeAtomicValue(settlement.maxGasPriceNanoEth, 'nanoETH', 9)
-			if (gasPrice === 0n || gasPrice > 10000n * 10n ** 9n) throw new Error('Settlement maxGasPriceNanoEth must be from 0.000000001 to 10000')
+			if (gasPrice === 0n || gasPrice > 10000n * 10n ** 9n) throw new Error('Settlement fee cap must be from 0.000000001 to 10000 nanoETH.')
 			if (loadedSettlement !== undefined && !(await confirmOperatorAction({ title: 'Review settlement', description: 'These thresholds control settlement transactions and reward withdrawals.', changes: reviewChangeRows(loadedSettlement, settlement), confirmLabel: 'Save settlement' }))) return 'Save canceled.'
 			const response = decodeSettlement(await put('/api/settlement', settlement))
 			loadSettlement(response.settlement)

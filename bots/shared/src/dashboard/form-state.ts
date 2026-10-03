@@ -13,6 +13,26 @@ type TrackedForm = {
 
 const trackedForms = new Map<string, TrackedForm>()
 let queuedSections: ReadonlySet<string> = new Set()
+const guardedViews = new WeakSet<object>()
+
+/** Whether any tracked form that is still on the page holds edits that have not been saved. */
+function hasUnsavedChanges() {
+	for (const [formId, tracked] of trackedForms) if (tracked.form.isConnected && formIsDirty(formId)) return true
+	return false
+}
+
+/** Asks the browser to confirm a reload, close, or navigation away while a tracked form holds unsaved edits. */
+function guardUnsavedChanges(form: HTMLFormElement) {
+	const view = form.ownerDocument.defaultView
+	if (view === null || guardedViews.has(view)) return
+	guardedViews.add(view)
+	view.addEventListener('beforeunload', event => {
+		if (!hasUnsavedChanges()) return
+		event.preventDefault()
+		// Chromium versions before 119 only prompt when the legacy return value is set.
+		event.returnValue = true
+	})
+}
 
 function controlSignature(control: Element) {
 	if (control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')) return control.checked ? '1' : '0'
@@ -74,11 +94,13 @@ export function markFormClean(formId: string) {
 
 /**
  * Diffs a Settings form against its loaded values: the save button unlocks on edits and the panel summary shows an
- * Unsaved changes badge, plus a Queued badge while the bot holds a saved change for the form's section.
+ * Unsaved changes badge, plus a Queued badge while the bot holds a saved change for the form's section. While any
+ * tracked form holds unsaved edits the browser confirms before the page is reloaded or closed.
  */
 export function trackForm(formId: string, options: { extra?: () => string; section?: string | undefined } = {}) {
 	const form = element(formId, HTMLFormElement)
 	trackedForms.set(formId, { clean: signature({ extra: options.extra, form }), extra: options.extra, form, section: options.section, submitting: false })
+	guardUnsavedChanges(form)
 	const update = () => refreshFormButton(formId)
 	form.addEventListener('input', update)
 	form.addEventListener('change', update)
