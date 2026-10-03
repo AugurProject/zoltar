@@ -1,6 +1,5 @@
 import { parsedUniverseId } from './live/useLiveTradingState.js'
 import * as portfolioCopy from '../copy/portfolio.js'
-import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -115,8 +114,11 @@ export function LiveTrading({
 	const { workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'
-	const [createdMarketTitle, setCreatedMarketTitle] = useState<string>()
-	useEffect(() => setCreatedMarketTitle(undefined), [route])
+	const existingMarketPool = creatingMarket && routePool !== undefined && selected?.pool.toLowerCase() === routePool.toLowerCase() && selected.pair !== undefined && selected.loadError === undefined ? selected.pool : undefined
+	useEffect(() => {
+		if (existingMarketPool === undefined || marketWorkflowLocked) return
+		window.location.replace(getTradingRouteHref(`#/market/${existingMarketPool}`))
+	}, [existingMarketPool, marketWorkflowLocked])
 	// Trade and settlement share the `#/market/<address>` hash, so a closed market's chosen view lives in its `view` parameter; liquidity is its own hash.
 	const [closedMarketView, setClosedMarketView] = useState<'trade' | 'settlement'>('settlement')
 	useEffect(() => setClosedMarketView(readMarketViewParam(parseRouteHash(window.location.hash).search) ?? 'settlement'), [routePool])
@@ -347,17 +349,6 @@ export function LiveTrading({
 		<div className='route-view-flow'>
 			{showsMarketPage ? <MarketPageHeader market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} actions={walletAction} /> : <RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />}
 			<ErrorNotice message={connectionMessage} />
-			{createdMarketTitle === undefined ? null : (
-				<UserMessage
-					className='detail'
-					announcement='polite'
-					detail={
-						<>
-							{liveCopy.marketCreated(createdMarketTitle)} <a href={getTradingRouteHref(routePool === undefined ? '#/liquidity' : `#/liquidity/${routePool}`)}>{appCopy.liquidity}</a>
-						</>
-					}
-				/>
-			)}
 			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
 			<div className='market-stack'>
 				{selected === undefined ? (
@@ -371,14 +362,6 @@ export function LiveTrading({
 						return (
 							<SectionBlock variant='plain'>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<UserMessage
-									className='detail'
-									detail={
-										<>
-											{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
-										</>
-									}
-								/>
 								<MarketContracts market={selected} />
 							</SectionBlock>
 						)
@@ -414,16 +397,7 @@ export function LiveTrading({
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<LiveLiquidityControls
-									{...workflowPanelProps}
-									walletEthAttoEth={walletEthAttoEth}
-									nowSeconds={nowSeconds}
-									refresh={async () => {
-										await refresh(configuration, marketPage.start, 'liquidity')
-										setCreatedMarketTitle(selected.title)
-									}}
-									services={liquidityServices}
-								/>
+								<LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} />
 							</SectionBlock>
 						)
 					const ticket = (
