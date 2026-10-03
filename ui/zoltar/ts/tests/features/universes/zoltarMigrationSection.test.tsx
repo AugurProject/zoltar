@@ -455,10 +455,17 @@ describe('ZoltarMigrationSection', () => {
 
 	test('offers retry when selected universe details fail with a retained summary', async () => {
 		let retries = 0
-		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({
-			zoltarUniverseError: 'Selected outcome lookup failed',
-			onRetryUniverse: () => { retries += 1 },
-		})))
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarUniverseError: 'Selected outcome lookup failed',
+					onRetryUniverse: () => {
+						retries += 1
+					},
+				}),
+			),
+		)
 		expect(within(document.body).getByText('Selected outcome lookup failed')).toBeTruthy()
 		await act(() => within(document.body).getByRole('button', { name: 'Retry' }).click())
 		expect(retries).toBe(1)
