@@ -1,4 +1,4 @@
-import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeWithValue, type ShareValueRate } from '../lib/shareValue.js'
 import type { ForkTarget } from '../protocol/forks.js'
 import { settlementUnavailability, type LiveBalances, type LiveMarket, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
@@ -51,9 +51,9 @@ export function forkMigrationBatchWarning(targets: readonly ForkTarget[]) {
 	return 'For this source share, submit each missing child as a separate migration. After confirmation, do not select that same source-child pair again. A different source share may batch those children once their pools are ready.'
 }
 
-export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate, outcome?: ShareOutcome) {
+export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate & Partial<SettlementLifecycle>, outcome?: ShareOutcome) {
 	if (balanceState === 'loading') return 'Loading…'
 	if (balanceState === 'error') return 'Unavailable'
 	if (balanceState !== 'ready' || balance === undefined) return 'Not loaded'
-	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeQuantity(balance, outcome)
+	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeWithValue(balance, outcome, rate)
 }

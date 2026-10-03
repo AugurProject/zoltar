@@ -61,16 +61,39 @@ function stubChild(exitCode: number) {
 
 async function runStubbedDeployment(args: readonly string[], deploymentExitCode: number, verificationExitCode = 0) {
 	const verificationCommands: string[][] = []
+	const verificationEnvironments: Readonly<Record<string, string | undefined>>[] = []
 	const exitCode = await runHeadlessTestnetDeployment([...args], {
 		buildEntrypoint: async () => new Blob([`process.exitCode = ${deploymentExitCode.toString()}`]),
 		spawnChild: () => stubChild(deploymentExitCode),
-		spawnVerification: command => {
+		spawnVerification: (command, environment) => {
 			verificationCommands.push(command)
+			verificationEnvironments.push(environment)
 			return stubChild(verificationExitCode)
 		},
 	})
-	return { exitCode, verificationCommands }
+	return { exitCode, verificationCommands, verificationEnvironments }
 }
+
+test.each([
+	{ args: ['--etherscan-api-key=flag-key', 'ETHERSCAN_API_KEY=assignment-key'], expected: 'flag-key' },
+	{ args: ['ETHERSCAN_API_KEY=assignment-key', '--etherscan-api-key=flag-key'], expected: 'flag-key' },
+	{ args: ['ETHERSCAN_API_KEY=assignment-key'], expected: 'assignment-key' },
+	{ args: ['--ETHERSCAN_API_KEY=assignment-key', 'ETHERSCAN_API_KEY=ignored-key'], expected: 'assignment-key' },
+	{ args: ['--etherscan-api-key='], expected: '' },
+])('headless deployment passes an explicit Etherscan key to the verification environment: $args', async ({ args, expected }) => {
+	const originalKey = process.env['ETHERSCAN_API_KEY']
+	const { exitCode, verificationCommands, verificationEnvironments } = await runStubbedDeployment(args, 0)
+	expect(exitCode).toBe(0)
+	expect(verificationEnvironments[0]?.['ETHERSCAN_API_KEY']).toBe(expected)
+	expect(verificationEnvironments[0]?.['PATH']).toBe(process.env['PATH'])
+	expect(verificationCommands[0]).toHaveLength(3)
+	expect(process.env['ETHERSCAN_API_KEY']).toBe(originalKey)
+})
+
+test('headless deployment inherits the Etherscan environment key when no argument is supplied', async () => {
+	const { verificationEnvironments } = await runStubbedDeployment([], 0)
+	expect(verificationEnvironments[0]?.['ETHERSCAN_API_KEY']).toBe(process.env['ETHERSCAN_API_KEY'])
+})
 
 test('headless deployment runs explorer verification after a successful deployment', async () => {
 	const { exitCode, verificationCommands } = await runStubbedDeployment(['--chain-id=17000', `--private-key=${privateKey}`], 0)

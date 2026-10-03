@@ -6,11 +6,11 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { formatRoundedUnits } from '../lib/format.js'
-import { averagePriceBps, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
+import { averagePriceBps, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveMarket } from '../protocol/live.js'
-import * as ticketCopy from '../copy/tradeTicket.js'
 import * as payoutCopy from '../copy/payout.js'
+import * as ticketCopy from '../copy/tradeTicket.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 import type { PriceImpactTier, TradeEstimate } from './live/tradeTicketModel.js'
 
@@ -65,21 +65,21 @@ export function TradeEstimatePanel({
 	const impact = `${formatImpactPercent(estimate.impactBps)}%`
 	const primary =
 		estimate.kind === 'entry'
-			? [{ label: ticketCopy.youReceiveEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) }]
+			? [{ label: ticketCopy.youReceiveEstimate, value: `${formatOutcomeWithValue(estimate.quote.totalLongShares, side, market, ESTIMATE_DIGITS)} · ${payoutCopy.otherwiseZero}` }]
 			: [
-					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) },
+					{ label: ticketCopy.youSellEstimate, value: formatOutcomeWithValue(estimate.quote.totalLongShares, side, market, ESTIMATE_DIGITS) },
 					{ label: ticketCopy.youReceiveEstimate, value: `${formatRoundedUnits(estimate.receiveAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
 				]
 	const average = estimate.kind === 'entry' ? averagePriceBps(estimate.payAttoEth, estimate.quote.totalLongShares, market) : undefined
 	const detailRows = [
-		{ label: ticketCopy.completeSets, value: formatCompleteSetQuantity(estimate.quote.completeSetShares) },
+		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(estimate.quote.completeSetShares, market) },
 		...(estimate.kind === 'entry'
 			? [
-					{ label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite) },
+					{ label: ticketCopy.swapped(opposite), value: formatOutcomeWithValue(estimate.quote.oppositeSharesSwapped, opposite, market) },
 					{ label: ticketCopy.averagePrice, value: average === undefined ? '—' : formatScaledPercentage(average, 2) },
 				]
-			: [{ label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side) }]),
-		{ label: ticketCopy.poolFeePaid, value: formatOutcomeQuantity(estimate.quote.feeAmount, estimate.kind === 'entry' ? opposite : side, 8) },
+			: [{ label: ticketCopy.swapped(side), value: formatOutcomeWithValue(estimate.quote.longSharesSwapped, side, market) }]),
+		{ label: ticketCopy.poolFeePaid, value: formatOutcomeWithValue(estimate.quote.feeAmount, estimate.kind === 'entry' ? opposite : side, market, 8) },
 	]
 	return (
 		<section className='trade-estimate' aria-label={ticketCopy.estimateHeading}>
@@ -87,9 +87,9 @@ export function TradeEstimatePanel({
 				variant='inline'
 				primary={primary}
 				details={[
-					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
+					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeWithValue(estimate.minimumLongShares, side, market, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
 					{ label: ticketCopy.priceImpact, value: <span className={`trade-impact-value trade-impact-value--${impactTier}`}>{impact}</span> },
-					{ label: estimate.kind === 'entry' ? ticketCopy.invalidInsurance : ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.kind === 'entry' ? estimate.quote.invalidInsurance : estimate.quote.invalidRequired, shareOutcome.invalid) },
+					{ label: estimate.kind === 'entry' ? ticketCopy.invalidInsurance : ticketCopy.invalidUsed, value: formatOutcomeWithValue(estimate.kind === 'entry' ? estimate.quote.invalidInsurance : estimate.quote.invalidRequired, shareOutcome.invalid, market) },
 					{ label: ticketCopy.poolFee, value: formatScaledPercentage(market.feeBps, 2) },
 				]}
 			/>
@@ -97,18 +97,6 @@ export function TradeEstimatePanel({
 				{ticketCopy.priceImpactTierAnnouncement(impactTier)}
 			</p>
 			<ImpactNotice tier={impactTier} impactBps={estimate.impactBps} acknowledged={impactAcknowledged} disabled={disabled} onAcknowledge={onAcknowledgeImpact} />
-			{estimate.kind === 'entry' ? (
-				<UserMessage
-					className='detail payout-note'
-					detail={
-						<>
-							<strong>{payoutCopy.conditionalPayout(formatCollateralEth(estimate.quote.totalLongShares, market), side)}</strong>
-							{' · '}
-							{payoutCopy.otherwiseZero}
-						</>
-					}
-				/>
-			) : null}
 			<UserMessage
 				className='detail trade-estimate-note'
 				detail={
