@@ -63,6 +63,20 @@ async function capturePendingProfileSwitch(session: BrowserSession) {
 		network.value = 'sepolia'
 		network.dispatchEvent(new Event('change', { bubbles: true }))
 	})()`)
+	// The switch starts only after the operator confirms the review dialog, which a live operator unlocks by typing the phrase.
+	await Bun.sleep(100)
+	await session.run(`(() => {
+		const phrase = document.querySelector('#operator-confirm-phrase')
+		if (!(phrase instanceof HTMLInputElement)) return
+		phrase.value = 'SWITCH CHAIN'
+		phrase.dispatchEvent(new Event('input', { bubbles: true }))
+	})()`)
+	await Bun.sleep(100)
+	await session.run(`(() => {
+		const confirm = document.querySelector('#operator-confirm-submit')
+		if (!(confirm instanceof HTMLButtonElement)) throw new Error('Chain switch confirmation missing')
+		confirm.click()
+	})()`)
 	await Bun.sleep(100)
 	for (const { width, height, suffix } of VIEWPORTS) {
 		await session.setViewport(width, height)

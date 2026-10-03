@@ -50,7 +50,8 @@ export function createDashboardControls(state: DashboardState, elements: Dashboa
 		const configurationEnabled = mutationsEnabled && state.configurationLoaded
 		const focusedSettingsEnabled = configurationEnabled && state.latestSnapshot?.networkConfigured === true
 		renderPauseControls(mutationsEnabled)
-		if (!mutationsEnabled) closeResumePreflight()
+		// A failed poll keeps the readiness check open with Resume locked; only a chain switch invalidates what it shows.
+		if (state.pendingNetworkProfile !== undefined) closeResumePreflight()
 		lockWhileSubmitting(elements.strategyFieldset, 'strategy-form', !focusedSettingsEnabled || !state.settingsLoaded)
 		lockWhileSubmitting(elements.submissionFieldset, 'submission-form', !focusedSettingsEnabled || !state.submissionLoaded)
 		lockWhileSubmitting(elements.connectivityFieldset, 'connectivity-form', connectivityControlsDisabled(configurationEnabled, state.connectivityRequestPending) || !state.connectivityLoaded)

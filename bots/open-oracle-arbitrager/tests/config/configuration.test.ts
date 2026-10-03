@@ -989,7 +989,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(queuedSignerClear.status).toBe(400)
-		expect(await queuedSignerClear.json()).toEqual({ error: 'Signer settings could not be changed. Review the submitted action and protected bot logs.' })
+		expect(await queuedSignerClear.json()).toEqual({ error: 'Live execution requires an active signer. Switch to dry run under Execution mode before removing it.' })
 		const beforePersistedLiveSwitch = await Bun.file(path).text()
 		const persistedLiveSwitchResponse = await fetch(`${origin}/api/connectivity`, {
 			body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://sepolia.example/'], readRpcUrl: 'https://sepolia.example/' }, network: 'sepolia', rpcQuorum: 2 }),

@@ -17,6 +17,7 @@ interface OperationsRouteViewDeps {
 	number: (value: string | number | bigint | null | undefined) => string
 	counted: (value: string | number | bigint | null | undefined, singular: string, plural?: string) => string
 	operationRow: ReturnType<typeof createOperationsComponents>['operationRow']
+	navigate: (destination: URL) => void
 }
 
 export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
@@ -95,9 +96,9 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 		return `${destination.pathname}${destination.search}`
 	}
 
-	const operationsTimelineFilters = (): HTMLFormElement => renderOperationsTimelineFilters(pageUrl(), requiredChainId(), isDemo, operationsHref)
+	const operationsTimelineFilters = (): HTMLFormElement => renderOperationsTimelineFilters(pageUrl(), requiredChainId(), isDemo, operationsHref, deps.navigate)
 
-	const operationsRiskSnapshotFilter = (): HTMLFormElement => renderOperationsRiskSnapshotFilter(pageUrl(), requiredChainId(), isDemo, operationsHref)
+	const operationsRiskSnapshotFilter = (): HTMLFormElement => renderOperationsRiskSnapshotFilter(pageUrl(), requiredChainId(), isDemo, operationsHref, deps.navigate)
 
 	const operationsDetailRoute = (): OperationsDetailRoute | undefined => parseOperationsDetailRoute(location.pathname)
 

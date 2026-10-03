@@ -110,7 +110,7 @@
 								<dd id="rpc-last-check">No completed check</dd>
 							</div>
 						</dl>
-						<p class="rpc-health-note muted">Endpoint identities and error details remain in protected bot logs.</p>
+						<p class="rpc-health-note muted">This panel shows counts only. Per-endpoint errors remain in protected bot logs; the saved RPC URLs are listed under Settings.</p>
 					</article>
 
 					<article class="panel submission-health-panel" aria-labelledby="submission-health-title">
@@ -147,7 +147,7 @@
 								<dd id="submission-last-check">No completed check</dd>
 							</div>
 						</dl>
-						<p class="rpc-health-note muted">Only origin counts and proof state are shown. Relay and RPC identities remain in protected bot logs.</p>
+						<p class="rpc-health-note muted">This panel shows origin counts and proof state only. Per-origin errors remain in protected bot logs.</p>
 					</article>
 				</div>
 				<div class="two-column">
@@ -321,8 +321,8 @@
 							<fieldset id="cancellation-fields" disabled>
 								<p class="muted">Use only after manually sending a zero-value, empty-calldata self-transfer from the recovery signer at the exact pending nonce. The bot requires quorum identity checks and a successful receipt in a canonical block.</p>
 								<label>Nonce cancellation transaction hash<input id="cancellation-hash" autocomplete="off" placeholder="0x…" spellcheck="false" type="text" /></label>
-								<label>Audit reason<textarea id="cancellation-reason" minlength="12" maxlength="2048" required></textarea></label>
-								<label>Typed confirmation<input id="cancellation-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="VERIFY NONCE CANCELLATION" /></label>
+								<label>Audit reason <small id="cancellation-reason-help">12–2048 characters</small><textarea id="cancellation-reason" aria-describedby="cancellation-reason-help" minlength="12" maxlength="2048" required></textarea></label>
+								<label>Type VERIFY NONCE CANCELLATION to confirm<input id="cancellation-confirmation" autocomplete="off" spellcheck="false" type="text" /></label>
 								<div class="form-actions"><button type="submit">Queue cancellation verification</button></div>
 							</fieldset>
 							<div class="recovery-status-row"><span id="cancellation-status" class="action-status" role="alert"></span><button id="cancellation-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="cancellation-status">Retry</button></div>
@@ -331,7 +331,7 @@
 							<fieldset id="candidate-fields" disabled>
 								<p class="muted">A mistyped or stale replacement/cancellation hash can be cleared without changing the original signed intent.</p>
 								<label>Audit reason<textarea id="candidate-reason" minlength="12" maxlength="2048" required></textarea></label>
-								<label>Typed confirmation<input id="candidate-confirmation" autocomplete="off" spellcheck="false" type="text" placeholder="CLEAR RECOVERY CANDIDATE" /></label>
+								<label>Type CLEAR RECOVERY CANDIDATE to confirm<input id="candidate-confirmation" autocomplete="off" spellcheck="false" type="text" /></label>
 								<div class="form-actions"><button type="submit">Clear queued candidate</button></div>
 							</fieldset>
 							<div class="recovery-status-row"><span id="candidate-status" class="action-status" role="alert"></span><button id="candidate-retry" class="secondary recovery-context-retry hidden" type="button" aria-describedby="candidate-status">Retry</button></div>
@@ -354,7 +354,7 @@
 									</select>
 								</label>
 								<label>Audit reason<textarea id="obligation-reason" minlength="12" maxlength="2048" required></textarea></label>
-								<label>Typed confirmation<input id="obligation-confirmation" autocomplete="off" spellcheck="false" type="text" /></label>
+								<label>Typed confirmation<input id="obligation-confirmation" aria-describedby="obligation-confirmation-help" autocomplete="off" spellcheck="false" type="text" /></label>
 								<p id="obligation-confirmation-help" class="muted">Type RETRY VERIFIED SAFE FAILURE. Retry is limited to unsigned failures, canonically included reverts, and verified nonce cancellations.</p>
 								<div class="form-actions"><button type="submit">Reconcile lifecycle item</button></div>
 							</fieldset>
@@ -374,6 +374,12 @@
 					</div>
 					<p id="retirement-summary" class="muted">No retirement has been requested.</p>
 					<p id="retirement-destination" class="muted">Configure a signer wallet before requesting retirement.</p>
+					<div id="retirement-details" hidden>
+						<h4 id="retirement-blockers-heading">Blockers</h4>
+						<ul id="retirement-blockers" aria-labelledby="retirement-blockers-heading"></ul>
+						<h4 id="retirement-positions-heading">V3 position records</h4>
+						<ul id="retirement-positions" aria-labelledby="retirement-positions-heading"></ul>
+					</div>
 					<form id="retirement-form" hidden>
 						<fieldset id="retirement-request-options" disabled>
 							<label>Maximum unmatched-share loss (bps) <input id="retirement-max-loss" type="number" min="0" max="10000" value="0" /></label>
@@ -419,6 +425,7 @@
 				<p>Recovery work may run immediately. A new randomized operation runs only when its timer is due and its exact transaction passes simulation.</p>
 				<ul id="resume-preflight" class="preflight-list"></ul>
 				<p id="resume-random-scope-warning" class="notice warning hidden" role="alert"></p>
+				<p id="resume-stale-warning" class="notice warning hidden" role="alert">Current dashboard state could not be loaded, so this checklist may be out of date. Keep the bot paused until the state refreshes.</p>
 				<div class="dialog-actions"><button id="cancel-resume" class="secondary" type="button">Keep paused</button><button id="confirm-resume" type="button">Resume bot</button></div>
 			</div>
 		</dialog>

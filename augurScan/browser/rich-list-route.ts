@@ -5,6 +5,7 @@ import { paginatedSnapshotWasReplaced } from './canonical-pagination.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
 import { paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, retainedPaginationAvailable } from './refresh-presentation.ts'
 import { decodeItemsPage, isRichListRecord } from './api-decoding.ts'
+import { clearRetryStatus } from './app-presentation.ts'
 import { renderRichListPage } from './rich-list-page.ts'
 
 interface RichListRouteDeps {
@@ -42,6 +43,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 	let richListSnapshot: string | undefined
 	let richListRequestVersion = 0
 	let richListPaginationIntentVersion = 0
+	let richListRendered = false
 	const renderRichList = () =>
 		renderRichListPage({
 			lookup: $,
@@ -84,11 +86,12 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 				more.textContent = 'Loading more…'
 			} else {
 				status.hidden = false
+				status.className = 'system-status'
 				status.textContent = richListItems.length === 0 ? 'Loading known addresses…' : 'Refreshing known addresses…'
 			}
 		}
 		more.disabled = presentation.busy
-		$('#rich-sort').disabled = presentation.busy
+		$('#rich-sort').setAttribute('aria-busy', String(presentation.busy))
 		$('#richlist-rows').setAttribute('aria-busy', String(presentation.busy))
 		try {
 			let snapshotCursor = append ? richListSnapshot : undefined
@@ -117,13 +120,20 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 				if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, richListRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
 				replace = true
 			}
-			richListItems = replace ? result.items : [...richListItems, ...result.items]
+			const nextItems = replace ? result.items : [...richListItems, ...result.items]
+			const nextTotal = result.total ?? nextItems.length
+			// An unchanged background refresh keeps the rendered rows so focus and open disclosures survive it.
+			const unchanged = live && !append && richListRendered && nextTotal === richListTotal && JSON.stringify(nextItems) === JSON.stringify(richListItems)
+			richListItems = nextItems
 			richListSnapshot = result.snapshotCursor
-			richListTotal = result.total ?? richListItems.length
-			renderRichList()
-			status.hidden = true
-			paginationStatus.hidden = true
-			paginationStatus.replaceChildren()
+			richListTotal = nextTotal
+			if (unchanged) {
+				$('#richlist-rows').setAttribute('aria-busy', 'false')
+				more.hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalState.refreshRequired)
+			} else renderRichList()
+			richListRendered = true
+			clearRetryStatus(status)
+			clearRetryStatus(paginationStatus)
 			return true
 		} catch (error) {
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, richListRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
@@ -138,7 +148,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			if (isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, richListRequestVersion)) {
 				more.disabled = canonicalState.refreshRequired
 				if (canonicalState.refreshRequired) more.hidden = true
-				$('#rich-sort').disabled = false
+				$('#rich-sort').removeAttribute('aria-busy')
 				more.removeAttribute('aria-busy')
 				more.textContent = 'Show more'
 			}
@@ -195,6 +205,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 		clear() {
 			richListItems = []
 			richListTotal = 0
+			richListRendered = false
 		},
 	}
 }

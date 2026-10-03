@@ -3,6 +3,9 @@ export interface ScannerLiveState {
 	blockRefreshTimer: number | undefined
 	streamHasOpened: boolean
 	stream: EventSource | undefined
+	streamReconnectTimer: number | undefined
+	streamReconnectAttempts: number
+	lastStreamRefreshAt: number | undefined
 	networkLoadPromise: Promise<boolean> | undefined
 	networkFollowUpPromise: Promise<boolean> | undefined
 	serverClockOffsetMs: number
@@ -19,6 +22,9 @@ export const createScannerLiveState = (): ScannerLiveState => ({
 	blockRefreshTimer: undefined,
 	streamHasOpened: false,
 	stream: undefined,
+	streamReconnectTimer: undefined,
+	streamReconnectAttempts: 0,
+	lastStreamRefreshAt: undefined,
 	networkLoadPromise: undefined,
 	networkFollowUpPromise: undefined,
 	serverClockOffsetMs: 0,

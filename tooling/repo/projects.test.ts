@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { generatedArtifacts } from './generated-artifacts.ts'
-import { affectedProjects, componentProjects, projectDependencyClosure, projectForPath, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
+import { acceptedAuditAdvisories, affectedProjects, componentProjects, dependencyAuditCommand, projectDependencyClosure, projectForPath, projects, projectsInTaskGroup, projectTaskNames, taskInputMatches, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project } from './projects.ts'
 
 const project = (id: string, dependencies: readonly string[] = []): Project => ({ id, path: id, type: 'library', dependencies, tasks: {}, generatedDirectories: [] })
 
@@ -49,8 +49,14 @@ test('complete validation includes root and non-database AugurScan tests', () =>
 	expect(projects.find(project => project.id === 'augur-scan')?.tasks.test?.command).toEqual(['bun', 'run', 'test:ci'])
 })
 
-test('component package audits run without advisory exclusions', () => {
-	for (const project of componentProjects()) expect(project.tasks.audit?.command).toEqual(['bun', 'audit'])
+test('every dependency audit excludes only the documented unpatched advisories', () => {
+	expect(acceptedAuditAdvisories).toEqual(['GHSA-vfj7-8cjw-p6xm'])
+	expect(dependencyAuditCommand).toEqual(['bun', 'audit', '--ignore=GHSA-vfj7-8cjw-p6xm'])
+	for (const project of projects) {
+		const audit = project.tasks.audit
+		if (audit !== undefined) expect(audit.command).toEqual(dependencyAuditCommand)
+	}
+	expect(componentProjects().every(project => project.tasks.audit !== undefined)).toBe(true)
 })
 
 test('validates composite task coverage against supported non-self tasks', () => {

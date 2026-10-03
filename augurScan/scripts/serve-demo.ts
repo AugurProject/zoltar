@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { SECURITY_HEADERS } from '../src/http.ts'
 
 const CONTENT_TYPES = new Map([
 	['.css', 'text/css'],
@@ -47,7 +48,7 @@ const server = Bun.serve({
 		const type = CONTENT_TYPES.get(path.extname(name)) ?? 'text/html'
 		return new Response(file, {
 			headers: {
-				'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+				'content-security-policy': SECURITY_HEADERS['content-security-policy'],
 				'content-type': `${type}; charset=utf-8`,
 			},
 		})

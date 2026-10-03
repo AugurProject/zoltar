@@ -10,7 +10,6 @@ import type { HeaderView } from './dashboard-header-view.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { renderMarketSources } from './market-source-panel.tsx'
 import { renderOverviewAlerts, renderOverviewHealth, renderOverviewMetrics } from './overview-panels.ts'
-import type { PoolSelection } from './pool-selection.ts'
 import { createRecoveryPanel } from './recovery-panel.ts'
 
 type SnapshotViewContext = {
@@ -18,7 +17,6 @@ type SnapshotViewContext = {
 	elements: DashboardElements
 	controls: MutationControls
 	header: HeaderView
-	pools: PoolSelection
 	refresh: () => Promise<void>
 	/** Scrolls to the section named by the page's URL fragment; called once, after the first snapshot renders. */
 	applyInitialFragment: (fragment: string) => void
@@ -30,7 +28,7 @@ function pauseButtonAction(snapshot: Snapshot) {
 }
 
 /** Renders a state snapshot into every dashboard panel, and the last known snapshot as stale once polling fails. */
-export function createSnapshotView({ state, elements, controls, header, pools, refresh, applyInitialFragment }: SnapshotViewContext) {
+export function createSnapshotView({ state, elements, controls, header, refresh, applyInitialFragment }: SnapshotViewContext) {
 	const recovery = createRecoveryPanel({ state, elements, refresh })
 
 	function renderBlockStatus(snapshot = state.snapshot) {
@@ -60,8 +58,6 @@ export function createSnapshotView({ state, elements, controls, header, pools, r
 		renderRepMarketConsensus(document, snapshot.centralizedMarket, snapshot.marketConsensus)
 		renderMarketSources(state.marketSourceProbeRows ?? snapshot.marketSources)
 		recovery.renderRecovery(snapshot)
-		pools.renderUniverses(snapshot)
-		pools.updatePoolBrowser()
 		renderActivities(snapshot.activities, state.configuration?.network?.explorerUrl)
 		renderCurrentRpcEndpointHealth(snapshot)
 		if (!state.initialFragmentApplied) {
@@ -71,24 +67,27 @@ export function createSnapshotView({ state, elements, controls, header, pools, r
 		}
 	}
 
-	function renderConnectionFailure() {
+	/** `incompatible` means the bot answered with something this page cannot read, which retrying alone will not fix. */
+	function renderConnectionFailure(reason: 'incompatible' | 'unreachable' = 'unreachable') {
 		const snapshot = state.snapshot
 		if (snapshot !== undefined) renderOverviewHealth(snapshot, state.configuration, true)
 		state.stateConnected = false
 		header.renderNetworkBadge()
 		renderRepMarketConsensusError(document)
-		header.renderDisconnected(snapshot)
+		header.renderDisconnected(snapshot, reason)
 		elements.recoveryGuidance.hidden = true
 		controls.setMutationControlsEnabled(false)
 	}
 
-	/** Re-renders the snapshot-dependent panels after a configuration load changed what they show. */
+	/**
+	 * Re-renders the snapshot-dependent panels after a configuration load changed what they show. The caller re-derives
+	 * the controls afterwards, which also redraws the universe approvals and the pool browser.
+	 */
 	function renderConfigurationChange() {
 		if (state.snapshot !== undefined) {
 			renderOverviewMetrics(state.snapshot, state.configuration, !state.stateConnected)
 			header.renderAttention(state.snapshot)
-			pools.renderUniverses(state.snapshot)
-			pools.updatePoolBrowser()
+			recovery.renderRecovery(state.snapshot)
 		}
 		renderCurrentRpcEndpointHealth()
 	}

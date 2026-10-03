@@ -93,4 +93,52 @@ describe('bot dashboard server', () => {
 		expect(() => startBotDashboardServer({ ...options, exposure: { passwordlessExposureError: 'Loopback only' } })).toThrow('Loopback only')
 		expect(() => startBotDashboardServer({ ...options, exposure: { password: undefined, publicAuthority: undefined } })).toThrow('ZOLTAR_BOT_DASHBOARD_PASSWORD must contain at least 16 characters')
 	})
+
+	test('answers an unexpected route failure with a sanitized JSON error that keeps the security headers', async () => {
+		const failures: unknown[] = []
+		const server = await startServer({
+			onUnhandledError: error => failures.push(error),
+			route: async () => {
+				throw new Error('ENOENT /home/operator/.secrets/operator.json')
+			},
+		})
+		const response = await fetch(`http://127.0.0.1:${server.port}/api/state`)
+		expect(response.status).toBe(500)
+		expect(response.headers.get('content-security-policy')).toContain("default-src 'self'")
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+		expect(await response.json()).toEqual({ error: 'The dashboard request failed unexpectedly. Check protected bot logs for details.' })
+		expect(failures).toHaveLength(1)
+	})
+
+	test('rejects every mutating request that is not same-origin before it reaches a bot route', async () => {
+		const reached: string[] = []
+		const server = await startServer({
+			route: async request => {
+				reached.push(request.method)
+				return Response.json({ ok: true })
+			},
+		})
+		const url = `http://127.0.0.1:${server.port}/api/anything`
+		for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+			for (const headers of [{}, { origin: 'https://attacker.example' }, { origin: 'null' }]) {
+				const response = await fetch(url, { headers, method })
+				expect(response.status).toBe(403)
+				expect(await response.json()).toEqual({ error: 'Cross-origin requests are not accepted' })
+			}
+		}
+		expect(reached).toEqual([])
+		expect((await fetch(url, { headers: { origin: `http://127.0.0.1:${server.port}` }, method: 'POST' })).status).toBe(200)
+		expect((await fetch(url)).status).toBe(200)
+		expect(reached).toEqual(['POST', 'GET'])
+	})
+
+	test('inserts page slot markup verbatim even when it contains replacement patterns', async () => {
+		const server = await startServer({
+			pageSlots: [
+				['<!-- operator-header -->', "<header>$& costs $$5 $' $`</header>"],
+				['<!-- settings-page -->', ''],
+			],
+		})
+		expect(await (await fetch(`http://127.0.0.1:${server.port}/`)).text()).toBe('<html><body data-page="overview"><header>$& costs $$5 $\' $`</header><main></main></body></html>')
+	})
 })

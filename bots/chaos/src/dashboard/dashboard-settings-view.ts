@@ -2,6 +2,7 @@ import type { registerExecutionModeForm } from './execution-mode-form.js'
 import type { createExecutionPolicyDraft } from './execution-policy-draft.js'
 import { fullIdentifier, node, setBadge, statusLabel } from './dom.js'
 import { activeSchedulerWorkLabel } from './selection-controls.js'
+import { connectivityScope, draftAfterRevisionChange, executionPolicyScope } from './configuration-draft-scope.ts'
 import { type Configuration } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { formatClockDuration, parsePositiveNumber } from './dashboard-format.ts'
@@ -35,7 +36,15 @@ export function createDashboardSettingsView(context: DashboardSettingsViewContex
 		elements.settingsScope.textContent = value.chainId === undefined ? network : `${network} · chain ${String(value.chainId)}`
 		elements.settingsScope.className = 'badge neutral'
 		if (state.connectivityDraftDirty) {
-			if (value.revision !== state.connectivityDraftRevision) {
+			if (value.revision !== state.connectivityDraftRevision && draftAfterRevisionChange(state.connectivityDraftScope, connectivityScope(value)) === 'rebase') {
+				// Another control saved; the endpoint set this draft replaces is unchanged, so the draft carries over.
+				state.connectivityDraftRevision = value.revision
+				if (state.connectivityDraftConflict) {
+					state.connectivityDraftConflict = false
+					elements.saveConnectivityButton.disabled = false
+					if (elements.connectivityStatus.textContent?.startsWith('Configuration changed elsewhere') === true) elements.connectivityStatus.textContent = ''
+				}
+			} else if (value.revision !== state.connectivityDraftRevision) {
 				state.connectivityDraftConflict = true
 				elements.saveConnectivityButton.disabled = true
 				elements.discardConnectivityButton.disabled = false
@@ -47,6 +56,7 @@ export function createDashboardSettingsView(context: DashboardSettingsViewContex
 			elements.quorumRpcUrlsInput.value = value.connectivity?.quorumRpcUrls.join('\n') ?? ''
 			elements.publicRpcUrlsInput.value = value.connectivity?.publicRpcUrls.join('\n') ?? ''
 			state.connectivityDraftRevision = value.revision
+			state.connectivityDraftScope = connectivityScope(value)
 			state.connectivityDraftConflict = false
 			elements.saveConnectivityButton.disabled = false
 			elements.discardConnectivityButton.disabled = true
@@ -61,7 +71,15 @@ export function createDashboardSettingsView(context: DashboardSettingsViewContex
 		elements.rememberSignerInput.checked = value.rememberSigner === true
 		if (context.settingsDraft.dirty && !force) {
 			context.settingsDraft.render()
-			if (value.revision !== state.settingsRevision) {
+			if (value.revision !== state.settingsRevision && draftAfterRevisionChange(state.settingsDraftScope, executionPolicyScope(value)) === 'rebase') {
+				// Another control saved; the policy values this draft edits are unchanged, so the draft carries over.
+				state.settingsRevision = value.revision
+				if (context.settingsDraft.conflict) {
+					context.settingsDraft.conflict = false
+					elements.saveSettingsButton.disabled = false
+					if (elements.settingsSaveStatus.textContent?.startsWith('Configuration changed elsewhere') === true) elements.settingsSaveStatus.textContent = ''
+				}
+			} else if (value.revision !== state.settingsRevision) {
 				context.settingsDraft.conflict = true
 				elements.saveSettingsButton.disabled = true
 				elements.discardSettingsButton.disabled = false
@@ -70,6 +88,7 @@ export function createDashboardSettingsView(context: DashboardSettingsViewContex
 			return
 		}
 		state.settingsRevision = value.revision
+		state.settingsDraftScope = executionPolicyScope(value)
 		context.settingsDraft.conflict = false
 		elements.saveSettingsButton.disabled = false
 		elements.discardSettingsButton.disabled = true

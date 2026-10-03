@@ -1,4 +1,4 @@
-import { shorten } from './dom.ts'
+import { shorten, stickyShellHeight } from './dom.ts'
 import { indexUniverseTree, universeApprovalSelection, universeLabel, universeLineage, visibleUniverseRows, type UniverseNode } from './universe-tree.ts'
 
 const PAGE_SIZE = 60
@@ -82,9 +82,8 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 	let networkRevision = 0
 	const scrollOnMobile = (target: HTMLElement) => {
 		if (document.defaultView?.matchMedia('(max-width: 700px)').matches !== true) return
-		const headerHeight = document.querySelector('.operator-shell')?.getBoundingClientRect().height ?? 0
-		const navHeight = document.querySelector('.section-nav')?.getBoundingClientRect().height ?? 0
-		target.style.scrollMarginTop = `${headerHeight + navHeight + 16}px`
+		// The section navigation sits inside the operator header, so the header height already covers it.
+		target.style.scrollMarginTop = `${stickyShellHeight(document) + 16}px`
 		target.scrollIntoView({ block: 'start' })
 	}
 	const inspect = (id: string) => {
@@ -204,10 +203,18 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			approval.type = 'checkbox'
 			approval.value = node.id
 			approval.checked = state.approved.has(node.id)
-			approval.disabled = state.disabled || pending
+			// A pending save locks every box except the focused one, which stays focusable so keyboard focus survives the
+			// re-render; that box is marked unavailable and its handler ignores input until the save settles.
+			const keepsFocus = pending && focusKey === `approve:${node.id}`
+			approval.disabled = state.disabled || (pending && !keepsFocus)
+			if (keepsFocus) approval.setAttribute('aria-disabled', 'true')
 			approval.dataset['universeFocus'] = `approve:${node.id}`
 			approval.setAttribute('aria-label', `Approve path through ${universeLabel(node)}, universe ${node.id}`)
 			approval.addEventListener('change', () => {
+				if (pending) {
+					approval.checked = state.approved.has(node.id)
+					return
+				}
 				void changeApproval(node.id, approval.checked)
 			})
 			const approvalTarget = make('label', 'ue-approval-target')

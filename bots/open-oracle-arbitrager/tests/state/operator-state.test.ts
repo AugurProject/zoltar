@@ -181,7 +181,7 @@ test('publishes the pending executor deployment recovery and lets it own the ope
 		noticeTone: 'danger',
 	})
 	expect(pauseFailurePresentation('Configure the chain and RPC endpoints before resuming')).toEqual({ noticeCopy: 'Configure the chain and RPC endpoints before resuming', noticeTitle: 'Unable to change bot state', noticeTone: 'danger' })
-	expect(pauseFailurePresentation('The bot run state could not be changed. Refresh current state and check protected bot logs.').noticeCopy).not.toContain('Deploy predictable executor')
+	expect(pauseFailurePresentation('The bot run state could not be changed. Wait for the next state update and check protected bot logs.').noticeCopy).not.toContain('Deploy predictable executor')
 })
 
 test('reports operator capability only after a complete current scan and signer readiness', () => {

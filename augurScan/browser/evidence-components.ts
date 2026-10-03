@@ -138,7 +138,11 @@ export const createEvidenceComponents = (deps: EvidenceComponentsDeps) => {
 		const table = element('table', 'arguments')
 		const head = element('thead')
 		const headRow = element('tr')
-		for (const label of ['# / Name', 'Solidity type', 'Value']) headRow.append(element('th', '', label))
+		for (const label of ['# / Name', 'Solidity type', 'Value']) {
+			const cell = element('th', '', label)
+			cell.scope = 'col'
+			headRow.append(cell)
+		}
 		head.append(headRow)
 		const body = element('tbody')
 		for (const entry of entries) {

@@ -1,6 +1,6 @@
 import { Fragment, h, render } from 'preact'
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
-import { amount, exactAmount, transactionKindLabel } from './dashboard-format.ts'
+import { exactAmount, transactionKindLabel } from './dashboard-format.ts'
 import { element, setText, shorten } from './dom.ts'
 import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
 import { transactionMatchesFilter } from './transaction-filter.ts'
@@ -20,17 +20,20 @@ export function renderHealth(snapshot: PublicOperatorSnapshot, scanIntervalMilli
 
 export function renderBalances(snapshot: PublicOperatorSnapshot) {
 	setText('wallet-address', snapshot.wallet === undefined ? 'No execution wallet' : snapshot.wallet)
+	// The heading ellipsizes a long address at narrow widths, so the full value stays available on hover and to assistive technology.
+	if (snapshot.wallet === undefined) element('wallet-address').removeAttribute('title')
+	else element('wallet-address').title = snapshot.wallet
 	const list = element('balance-list')
 	if (snapshot.balances === undefined) {
 		render(h('p', { class: 'balance-empty' }, 'Set a local signer to load its ETH, WETH, REP, and executable portfolio balances.'), list)
 		return
 	}
 	const values: [string, string][] = [
-		['ETH', amount(snapshot.balances.availableEth, 'ETH')],
-		['WETH', amount(snapshot.balances.availableWeth, 'WETH')],
-		['REP', amount(snapshot.balances.availableRep, 'REP')],
-		['REP executable value', amount(snapshot.balances.repValueWeth, 'WETH')],
-		['Executable portfolio', amount(snapshot.balances.totalValueWeth, 'WETH')],
+		['ETH', exactAmount(snapshot.balances.availableEth, 'ETH')],
+		['WETH', exactAmount(snapshot.balances.availableWeth, 'WETH')],
+		['REP', exactAmount(snapshot.balances.availableRep, 'REP')],
+		['REP executable value', exactAmount(snapshot.balances.repValueWeth, 'WETH')],
+		['Executable portfolio', exactAmount(snapshot.balances.totalValueWeth, 'WETH')],
 	]
 	render(h(Fragment, null, ...values.map(([label, value]) => h('div', { class: 'balance-row', key: label }, h('span', null, label), h('strong', null, value)))), list)
 }

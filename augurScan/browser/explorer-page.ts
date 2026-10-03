@@ -3,6 +3,8 @@ import { callTraceRows } from './call-trace.ts'
 import { isRecord } from './api-validation.ts'
 import { exactNumber, exactUnit, utcDateTime } from './format.ts'
 import { short } from './identifier-format.ts'
+import { nativeSymbolFor } from './network-freshness.ts'
+import { captureViewState, restoreViewState } from './view-state.ts'
 
 const node = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, value?: string): HTMLElementTagNameMap[K] => {
 	const result = document.createElement(tag)
@@ -29,6 +31,8 @@ const string = (record: Record<string, unknown>, key: string): string => String(
 
 const activeRequests = new WeakMap<HTMLElement, number>()
 
+const renderedEvidence = new WeakMap<HTMLElement, string>()
+
 export const renderExplorerPage = async (path: string, chainId: string, api: (path: string) => Promise<unknown>, live = false): Promise<boolean> => {
 	const content = document.querySelector<HTMLElement>('#explorer-content')
 	if (content === null) return false
@@ -36,10 +40,15 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 	activeRequests.set(content, requestId)
 	const isCurrent = () => {
 		const current = new URL(location.href)
-		return activeRequests.get(content) === requestId && current.pathname === path && current.searchParams.get('chainId') === chainId
+		const urlChainId = current.searchParams.get('chainId')
+		// Links without a chain parameter rely on the selected network, which is the chain this request was made for.
+		return activeRequests.get(content) === requestId && current.pathname === path && (urlChainId === null || urlChainId === chainId)
 	}
 	if (live) content.setAttribute('aria-busy', 'true')
-	else content.replaceChildren(node('p', 'system-status', 'Loading indexed evidence…'))
+	else {
+		renderedEvidence.delete(content)
+		content.replaceChildren(node('p', 'system-status', 'Loading indexed evidence…'))
+	}
 	const parts = path.split('/').filter(Boolean)
 	const kind = parts[0]
 	const identity = parts[1]
@@ -55,6 +64,14 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 		const record = result[kind === 'tx' ? 'transaction' : 'block']
 		if (!isRecord(record)) throw new Error('Evidence record is malformed')
 		if (!isCurrent()) return false
+		const evidenceSignature = `${chainId}:${path}:${JSON.stringify(result)}`
+		if (live && renderedEvidence.get(content) === evidenceSignature) {
+			// Unchanged evidence keeps its nodes, so focus, selection, and assistive-technology reading position survive the refresh.
+			content.querySelector('.explorer-refresh-error')?.remove()
+			content.removeAttribute('aria-busy')
+			return true
+		}
+		const viewState = live ? captureViewState(content) : undefined
 		const title = kind === 'tx' ? `Transaction ${short(identity, 12, 8)}` : `Block #${exactNumber(string(record, 'number'))}`
 		document.title = `${title} · augurScan`
 		const heading = node('header', 'section-heading')
@@ -72,7 +89,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 				field('From', link(string(record, 'from_address'), `/address/${record['from_address']}?chainId=${chainId}`)),
 				field('To', record['to_address'] === null ? 'Contract deployment' : link(string(record, 'to_address'), `/address/${record['to_address']}?chainId=${chainId}`)),
 				field('Status', string(record, 'status')),
-				field('Transaction value', exactUnit(string(record, 'value'), 18, 'ETH')),
+				field('Transaction value', exactUnit(string(record, 'value'), 18, nativeSymbolFor(chainId))),
 				field('Gas used', exactNumber(string(record, 'gas_used'))),
 			)
 		} else {
@@ -109,6 +126,8 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 				section.append(article)
 			}
 		content.replaceChildren(heading, explorer, summary, section)
+		renderedEvidence.set(content, evidenceSignature)
+		if (viewState !== undefined) restoreViewState(content, viewState)
 		content.removeAttribute('aria-busy')
 		return true
 	} catch (error) {
@@ -120,6 +139,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 			const retry = node('button', 'state-retry explorer-retry', 'Retry')
 			retry.type = 'button'
 			retry.addEventListener('click', () => void renderExplorerPage(path, chainId, api))
+			renderedEvidence.delete(content)
 			content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', errorMessage(error)), retry, link('Back to activity', '/'))
 		}
 		content.removeAttribute('aria-busy')

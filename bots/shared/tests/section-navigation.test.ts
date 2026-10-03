@@ -37,3 +37,49 @@ test('in-page navigation marks the active section link with aria-current="page"'
 		void window.happyDOM.close()
 	}
 })
+
+function withNavigation(run: (window: Window, navigation: ReturnType<typeof createSectionNavigation>) => void) {
+	const window = new Window({ url: 'http://127.0.0.1/settings' })
+	const globalNames = ['document', 'window', 'HTMLAnchorElement', 'HTMLElement', 'HTMLDetailsElement', 'MutationObserver', 'ResizeObserver'] as const
+	const previousGlobals = globalNames.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
+	for (const name of globalNames) Object.defineProperty(globalThis, name, { configurable: true, value: name === 'window' ? window : Reflect.get(window, name) })
+	try {
+		window.document.body.innerHTML = '<header class="operator-shell"><nav class="section-nav"><a href="/overview">Overview</a><a href="/ecosystem">Ecosystem</a><a href="/settings">Settings</a></nav></header><section id="recovery">Recovery</section>'
+		run(window, createSectionNavigation())
+	} finally {
+		for (const [name, descriptor] of previousGlobals) {
+			if (descriptor === undefined) Reflect.deleteProperty(globalThis, name)
+			else Object.defineProperty(globalThis, name, descriptor)
+		}
+		void window.happyDOM.close()
+	}
+}
+
+test('selecting the section that is already shown adds no history entry', () => {
+	withNavigation(window => {
+		const entries = window.history.length
+		clickLink(window, '/settings')
+		clickLink(window, '/settings')
+		expect(window.history.length).toBe(entries)
+		clickLink(window, '/ecosystem')
+		expect(window.history.length).toBe(entries + 1)
+		expect(window.location.pathname).toBe('/ecosystem')
+	})
+})
+
+test('fragment scrolling clears the operator header only while it is sticky', () => {
+	withNavigation((window, navigation) => {
+		const shell = window.document.querySelector('.operator-shell')
+		const target = window.document.getElementById('recovery')
+		if (shell === null || target === null) throw new Error('Missing navigation fixture')
+		Object.defineProperty(shell, 'getBoundingClientRect', { value: () => ({ height: 120, top: 0 }) })
+		Object.defineProperty(target, 'getBoundingClientRect', { value: () => ({ height: 40, top: 500 }) })
+		const tops: (number | undefined)[] = []
+		Object.defineProperty(window, 'scrollTo', { configurable: true, value: (options: { top?: number }) => tops.push(options.top) })
+		navigation.scrollToSection('recovery')
+		expect(tops[0]).toBe(484)
+		shell.setAttribute('style', 'position: sticky')
+		navigation.scrollToSection('recovery')
+		expect(tops.at(-1)).toBe(364)
+	})
+})

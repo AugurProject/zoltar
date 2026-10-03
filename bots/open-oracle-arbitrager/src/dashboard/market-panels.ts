@@ -1,7 +1,7 @@
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { refreshFormButton } from '@zoltar/bot-shared/dashboard/form-state'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
-import { amount, countLabel, marketPoolStrategyUse } from './dashboard-format.ts'
+import { countLabel, exactAmount, marketPoolStrategyUse } from './dashboard-format.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { type ExplorerLink, row, setText, shorten } from './dom.ts'
@@ -69,13 +69,13 @@ export function createMarketPanels(state: DashboardState, elements: DashboardEle
 		const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
 		for (const token of snapshot.tokenMarkets) {
 			if (token.pools.length === 0) {
-				body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address`), amount(token.balance, token.symbol), '—', 'Monitoring only', 'No supported WETH pools found', '—', 'Unavailable', '0'], TOKEN_MARKET_LABELS))
+				body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address`), exactAmount(token.balance, token.symbol), '—', 'Monitoring only', 'No supported WETH pools found', '—', 'Unavailable', '0'], TOKEN_MARKET_LABELS))
 				continue
 			}
 			for (const pool of token.pools) {
 				const poolLink = poolAnchor(pool.url, `token:${token.address}:pool:${pool.address}`, pool.address)
 				const strategyUse = marketPoolStrategyUse(executableTokens.has(token.address.toLowerCase()), pool.venue)
-				body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity], TOKEN_MARKET_LABELS))
+				body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), exactAmount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, exactAmount(pool.priceWeth, 'WETH'), pool.liquidity], TOKEN_MARKET_LABELS))
 			}
 		}
 		elements.tokenMarketsEmpty.hidden = snapshot.tokenMarkets.length !== 0

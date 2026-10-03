@@ -55,6 +55,7 @@ export function createDashboardElements() {
 		tokenMarketsBody: element('token-markets-body', HTMLTableSectionElement),
 		tokenMarketsEmpty: element('token-markets-empty'),
 		priceToken: element('price-token', HTMLSelectElement),
+		marketPriceChart: element('market-price-chart'),
 		opportunitiesBody: element('opportunities-body', HTMLTableSectionElement),
 		opportunitiesEmpty: element('opportunities-empty'),
 		historyBody: element('history-body', HTMLTableSectionElement),

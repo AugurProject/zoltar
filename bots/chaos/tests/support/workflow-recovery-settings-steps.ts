@@ -68,6 +68,18 @@ export async function verifySettingsConnectivityAndSigner(context: WorkflowRecov
 		read.dispatchEvent(new InputEvent('input', { bubbles: true }))
 		return true
 	})()`)
+	// A revision bump that leaves the saved endpoint set untouched (a pause, another panel's save) carries the draft over.
+	fixture.configurationRevision = `${viewport.nextConfigurationRevision}-unrelated`
+	await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+	await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false", `${viewport.label} dashboard did not refresh after an unrelated configuration change`)
+	await Bun.sleep(100)
+	expect(await cdp.evaluate("({ read: document.querySelector('#read-rpc-url')?.value, saveDisabled: document.querySelector('#save-connectivity')?.matches(':disabled'), blocked: document.querySelector('#connectivity-status')?.textContent?.startsWith('Configuration changed elsewhere') })")).toEqual({
+		read: 'http://stale-draft.example',
+		saveDisabled: false,
+		blocked: false,
+	})
+	// A change to the saved endpoint set itself still blocks the stale draft.
+	fixture.additionalPublicRpcUrls = [`https://submit-${viewport.label}.example/`]
 	fixture.configurationRevision = viewport.nextConfigurationRevision
 	await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 	await waitFor(

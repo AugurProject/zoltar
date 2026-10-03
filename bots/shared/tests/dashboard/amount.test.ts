@@ -12,4 +12,11 @@ describe('operator amounts', () => {
 		expect(formatAtomicAmount(10 ** 18, 'ETH')).toBe('Unavailable')
 		expect(formatAmount('1e18', 'ETH')).toBe('Unavailable')
 	})
+
+	test('never renders a negative zero', () => {
+		expect(formatAmount('-0', 'ETH')).toBe('0 ETH')
+		expect(formatAmount('-0.000', 'ETH')).toBe('0 ETH')
+		expect(formatAmount(-0, 'ETH')).toBe('0 ETH')
+		expect(formatAmount('-0.5', 'ETH')).toBe('-0.5 ETH')
+	})
 })

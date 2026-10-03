@@ -32,6 +32,7 @@ export const createOperationsViews = (context: ScannerContext) => {
 		number: exactNumber,
 		counted,
 		operationRow,
+		navigate: destination => void context.links.navigateInPlace(destination),
 	})
 	const { captureOperationsRenderContext, restoreOperationsRenderContext, operationNumber, operationCounted, operationsHref, approvalTransitionSummary, operationsCatalogSection, operationsSectionFilters } = routeView
 

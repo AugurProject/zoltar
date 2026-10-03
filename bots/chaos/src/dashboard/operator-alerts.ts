@@ -1,4 +1,10 @@
+const renderedSignatures = new WeakMap<HTMLUListElement, string>()
+
 export function renderOperatorAlerts(container: HTMLUListElement, alerts: readonly { actionHref?: string | undefined; actionLabel?: string | undefined; message?: string | undefined; severity?: string | undefined }[]) {
+	// Rewriting a live region re-announces it, so an unchanged alert list must leave the DOM untouched on every poll.
+	const signature = JSON.stringify([alerts, document.location.pathname])
+	if (renderedSignatures.get(container) === signature) return
+	renderedSignatures.set(container, signature)
 	const entries = alerts.flatMap(alert => {
 		if (alert.message === undefined) return []
 		const item = document.createElement('li')

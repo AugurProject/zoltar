@@ -6,6 +6,12 @@ export const knownNetworkName = (chainId: string): string => {
 	return `Chain ${chainId}`
 }
 
+/** Explains that a linked network is not indexed here and names the network shown instead. */
+export const unavailableNetworkNotice = (requestedChainId: string, shownNetworkName: string): string => `Chain ${requestedChainId} is not indexed by this scanner. Showing ${shownNetworkName} instead.`
+
+/** Native currency symbol shown for a chain; only Ethereum mainnet is labelled plain ETH. */
+export const nativeSymbolFor = (chainId: string | number): string => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
+
 interface NetworkStatusPresentation {
 	readonly chain_id?: string
 	readonly name?: string

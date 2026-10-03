@@ -1,5 +1,6 @@
 import { confirmOperatorAction, reviewChangeRows } from '@zoltar/bot-shared/dashboard/confirmation'
 import { optionalRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { completeConfigurationScope, draftAfterRevisionChange } from './configuration-draft-scope.ts'
 import { requestJson, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import type { ReconcileUnknownMutation } from './dashboard-refresh.ts'
@@ -30,8 +31,10 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 	let committed = false
 	let dirty = false
 	let attemptedRevision: unknown
-	fields.addEventListener('input', () => {
-		dirty = true
+	let rebaseCheckedRevision: unknown
+	fields.addEventListener('input', event => {
+		// Switching between the form and JSON views edits nothing.
+		if (event.target !== jsonMode) dirty = true
 	})
 
 	function renderRecord(value: Record<string, unknown>, parent: HTMLElement, path = '') {
@@ -89,8 +92,12 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 				else label.append(input)
 				readers.push(() => {
 					if (typeof original === 'boolean') value[key] = input.checked
-					else if (typeof original === 'number') value[key] = Number(input.value)
-					else value[key] = input.value
+					else if (typeof original === 'number') {
+						// `Number('')` is 0, so a cleared field would otherwise save as zero.
+						const parsed = input.value.trim() === '' ? Number.NaN : Number(input.value)
+						if (!Number.isFinite(parsed)) throw new Error(`${name} must be a number.`)
+						value[key] = parsed
+					} else value[key] = input.value
 				})
 			}
 		}
@@ -109,9 +116,26 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 		load.disabled = busy || locked || state.configurationCommitIndeterminate || state.configuration?.completeConfigurationAvailable !== true
 		if (settings !== undefined && revision !== state.configuration?.revision && !busy && !locked) {
 			save.disabled = true
-			status.textContent = 'Configuration changed. Discard this draft before saving.'
+			if (dirty && state.configuration !== undefined && rebaseCheckedRevision !== state.configuration.revision) void rebaseDraft(state.configuration.revision)
+			else status.textContent = 'Configuration changed. Discard this draft before saving.'
 		}
 		if (!busy && !locked && !dirty && state.configuration?.completeConfigurationAvailable === true && attemptedRevision !== state.configuration.revision && window.location.pathname === '/settings') void loadDocument()
+	}
+	/**
+	 * Pausing, the execution mode, and the signer bump the revision without touching any field this editor shows. The
+	 * draft then carries over to the new revision instead of being invalidated by the operator's own action.
+	 */
+	async function rebaseDraft(currentRevision: unknown) {
+		rebaseCheckedRevision = currentRevision
+		// A failed read leaves the draft blocked exactly as an unchanged-revision read does.
+		const response = await requestJson('/api/configuration-document', 5_000).then(optionalRecord, () => undefined)
+		if (response === undefined || response['revision'] !== currentRevision) {
+			// The draft stays blocked; the next state refresh checks again.
+			rebaseCheckedRevision = undefined
+			return
+		}
+		if (draftAfterRevisionChange(completeConfigurationScope(baseline), completeConfigurationScope(response['settings'])) === 'rebase') revision = currentRevision
+		renderAvailability()
 	}
 	jsonMode.addEventListener('change', () => {
 		try {
@@ -144,6 +168,7 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 			const document = optionalRecord(response?.['settings'])
 			if (document === undefined) throw new Error('Complete configuration is unavailable in this launcher.')
 			dirty = false
+			rebaseCheckedRevision = undefined
 			load.textContent = 'Discard changes'
 			settings = document
 			baseline = structuredClone(document)
@@ -173,6 +198,8 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 					settings = optionalRecord(JSON.parse(jsonInput.value))
 					if (settings === undefined) throw new Error('Configuration must be a JSON object.')
 				} else for (const read of readers) read()
+				// Captured with the values under review, so a rebase while the dialog is open cannot move this save to a newer revision.
+				const reviewedRevision = revision
 				if (
 					!(await confirmOperatorAction({
 						title: 'Save complete configuration',
@@ -186,7 +213,7 @@ export function registerCompleteConfigurationForm(state: DashboardState, reconci
 				busy = true
 				renderAvailability()
 				status.textContent = 'Checking and saving configuration…'
-				await put('/api/configuration-document', { settings, revision }, 30_000)
+				await put('/api/configuration-document', { settings, revision: reviewedRevision }, 30_000)
 				locked = true
 				committed = true
 				status.textContent = 'Saved. The bot is restarting paused with live execution off. This page reconnects automatically at the same address; open the new address if you changed the dashboard binding.'
