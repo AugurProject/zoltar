@@ -7,9 +7,12 @@ function createSession() {
 	return {
 		draft: signal(emptyVaultOperationsDraft()),
 		result: signal<VaultOperationsResult | undefined>(undefined),
+		claimResult: signal<VaultOperationsResult | undefined>(undefined),
+		claimError: signal<string | undefined>(undefined),
 		targets: signal<SecurityPoolVaultSummary[]>([]),
 		status: signal<QueuedVaultOperationState | undefined>(undefined),
 		busy: signal(false),
+		busyAction: signal<'bundle' | 'fees' | 'redeem' | undefined>(undefined),
 		revision: signal(0),
 		presentedTerminal: false,
 	}

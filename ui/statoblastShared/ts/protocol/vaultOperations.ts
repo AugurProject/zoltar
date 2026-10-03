@@ -9,6 +9,7 @@ import { fundCoordinatorInitialReport, loadOracleManagerQueueOperationEthValue, 
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { StagedOracleExecutionResult, StagedOracleQueuedResult } from '../types/contracts.js'
 import { getVaultOperationsRevertReason } from './vaultOperationsErrors.js'
+import { isSecurityPoolEscalationResolved, setUnderwritingLimit } from './securityVault.js'
 import * as copy from '../copy/vaultOperations.js'
 
 export type VaultOperationsResult = {
@@ -16,6 +17,7 @@ export type VaultOperationsResult = {
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 	depositAttoRep: bigint
+	action?: 'commitment' | 'fees' | 'redeem'
 }
 
 export async function hasPendingVaultCommitment(client: ReadClient, manager: Address, owner: Address) {
@@ -39,7 +41,7 @@ export async function hasPendingVaultCommitment(client: ReadClient, manager: Add
 export async function quoteVaultOperations(client: ReadClient, pool: Address, owner: Address, input: VaultOperationsInput, proposedPrice: bigint) {
 	validateVaultOperations(input, owner)
 	const managerAddress = await client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'openOraclePriceCoordinator' })
-	const [repToken, validPrice, sponsor, pendingReportId, pendingWork, vault, minimumDeposit] = await Promise.all([
+	const [repToken, validPrice, sponsor, pendingReportId, pendingWork, vault, minimumDeposit, resolved] = await Promise.all([
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'repToken' }),
 		client.readContract({ address: managerAddress, abi: coordinatorArtifact.abi, functionName: 'isPriceValid' }),
 		client.readContract({ address: managerAddress, abi: coordinatorArtifact.abi, functionName: 'pendingReportSponsor' }),
@@ -47,25 +49,41 @@ export async function quoteVaultOperations(client: ReadClient, pool: Address, ow
 		client.readContract({ address: managerAddress, abi: coordinatorArtifact.abi, functionName: 'getPendingSettlementWork' }),
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'securityVaults', args: [owner] }),
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'minimumVaultRepDepositAttoRep' }),
+		isSecurityPoolEscalationResolved(client, pool),
 	])
-	if (countVaultPriceActions(input) > 0 && pendingReportId > 0n && sponsor.toLowerCase() !== owner.toLowerCase()) throw new Error(copy.otherReportSponsor)
+	if (!resolved && countVaultPriceActions(input) > 0 && pendingReportId > 0n && sponsor.toLowerCase() !== owner.toLowerCase()) throw new Error(copy.otherReportSponsor)
+	if (resolved) {
+		if (!input.changeCommitment || input.depositAttoRep > 0n || input.liquidations.length > 0 || input.withdrawAttoRep > 0n) throw new Error(copy.resolvedActions)
+		if (input.commitmentAttoEth > vault[1]) throw new Error(copy.resolvedIncrease)
+	}
 	const count = countVaultPriceActions(input)
-	if (!validPrice && pendingWork + BigInt(count) > BigInt(MAX_VAULT_PRICE_ACTIONS)) throw new Error(copy.settlementCapacity)
-	if (input.changeCommitment && (await hasPendingVaultCommitment(client, managerAddress, owner))) throw new Error(copy.pendingCommitment)
-	if (count > 0 && validPrice) await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	if (!resolved && !validPrice && pendingWork + BigInt(count) > BigInt(MAX_VAULT_PRICE_ACTIONS)) throw new Error(copy.settlementCapacity)
+	if (!resolved && input.changeCommitment && (await hasPendingVaultCommitment(client, managerAddress, owner))) throw new Error(copy.pendingCommitment)
+	if (!resolved && count > 0 && validPrice) await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const [balance, currentBacking] = await Promise.all([client.readContract({ address: repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }), client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'backingUnitsToAttoRep', args: [vault[0]] })])
 	if (input.depositAttoRep > 0n && currentBacking + input.depositAttoRep < minimumDeposit) throw new Error(copy.minimumDeposit)
-	const needsReport = count > 0 && !validPrice && pendingReportId === 0n
+	const needsReport = !resolved && count > 0 && !validPrice && pendingReportId === 0n
 	if (needsReport && proposedPrice <= 0n) throw new Error(copy.initialPriceNeeded)
 	const funding = needsReport ? await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, owner, proposedPrice) : undefined
 	const requiredRep = input.depositAttoRep + (funding?.requiredRepAttoRep ?? 0n)
 	if (balance < requiredRep) throw new Error(copy.insufficientRep)
-	return { managerAddress, repToken, balance, currentBacking, validPrice, pendingReportId, needsReport, funding, requiredRep }
+	return { managerAddress, repToken, balance, currentBacking, resolved, validPrice, pendingReportId, needsReport, funding, requiredRep }
 }
 
-export async function submitVaultOperations(client: WriteClient, pool: Address, input: VaultOperationsInput, proposedPrice: bigint) {
+export async function submitVaultOperations(client: WriteClient, pool: Address, input: VaultOperationsInput, proposedPrice: bigint): Promise<VaultOperationsResult> {
 	validateVaultOperations(input, client.account.address)
 	const initial = await quoteVaultOperations(client, pool, client.account.address, input, proposedPrice)
+	if (initial.resolved) {
+		const call = { address: pool, abi: poolArtifact.abi, functionName: 'setUnderwritingLimit', args: [input.commitmentAttoEth] } as const
+		const validateBeforeSubmit = async () => {
+			await quoteVaultOperations(client, pool, client.account.address, input, proposedPrice)
+			await client.simulateContract({ ...call, account: client.account })
+		}
+		await runFundingTransactions(client, [], { ...call, contractAddress: pool, reviewTitle: copy.reduceCommitment, requireReview: true, validateBeforeSubmit })
+		await validateBeforeSubmit()
+		const result = await setUnderwritingLimit(client, pool, input.commitmentAttoEth)
+		return { hash: result.hash, depositAttoRep: 0n, action: 'commitment' }
+	}
 	const value = initial.needsReport ? await loadOracleManagerQueueOperationEthValue(client, initial.managerAddress) : 0n
 	const executorAddress = await client.readContract({ address: initial.managerAddress, abi: coordinatorArtifact.abi, functionName: 'vaultOperations' })
 	const call = { address: executorAddress, abi: bundleArtifact.abi, functionName: 'submitVaultOperations', args: [input, proposedPrice, 0n, value], value } as const
@@ -101,7 +119,7 @@ export async function submitVaultOperations(client: WriteClient, pool: Address, 
 						execute: async () => await writeContractAndWait(client, () => ({ address: initial.repToken, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [pool, input.depositAttoRep] })),
 					},
 				]
-	const finalStep = { ...call, contractAddress: executorAddress, reviewTitle: copy.submit, validateBeforeSubmit }
+	const finalStep = { ...call, contractAddress: executorAddress, reviewTitle: copy.submit, requireReview: true, validateBeforeSubmit }
 	if (initial.needsReport) await fundCoordinatorInitialReport(client, initial.managerAddress, proposedPrice, 0n, finalStep, { actions, repAttoRep: input.depositAttoRep })
 	else await runFundingTransactions(client, actions, finalStep)
 	await validateBeforeSubmit()

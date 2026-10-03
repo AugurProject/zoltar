@@ -56,6 +56,8 @@ function deriveActive(state: TransactionTrayState): TransactionTrayState {
 
 /** Records a request's latest status (replacing its previous one) and re-derives the shown status. */
 function present(state: TransactionTrayState, ownerKey: string | undefined, presentation: GlobalTransactionPresentation): TransactionTrayState {
+	const owner = state.entries.find(entry => entry.key === ownerKey)
+	if (presentation.showStatusDialog === undefined && owner?.intent.showStatusDialog === false) presentation = { ...presentation, showStatusDialog: false }
 	const records = state.presentations ?? []
 	const sequence = (records.at(-1)?.sequence ?? 0) + 1
 	const kept = ownerKey === undefined ? records.filter(record => record.presentation.hash === undefined || record.presentation.hash !== presentation.hash) : records.filter(record => record.key !== ownerKey)

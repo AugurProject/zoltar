@@ -12,6 +12,7 @@ import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary
 import { type quoteVaultOperations } from '../../../protocol/vaultOperations.js'
 import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsPrice, type VaultOperationsDraft } from '../lib/draft.js'
 import { previewVaultOperations } from '../lib/preview.js'
+import { getVaultRedeemRepGuardMessage } from '../../security-pools/lib/securityVaultGuards.js'
 import * as copy from '../../../copy/vaultOperations.js'
 
 import { vaultOperationsDependencies, type VaultOperationsDependencies } from './dependencies.js'
@@ -25,6 +26,7 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 	const session = getVaultOperationsSession(contextKey)
 	const { draft, result, busy, revision, status, targets: extraTargets } = session
 	const owned = useSignal<SecurityVaultDetails | undefined>(undefined)
+	const resolved = useSignal<boolean | undefined>(undefined)
 	const manager = useSignal<OracleManagerDetails | undefined>(undefined)
 	const balance = useSignal<bigint | undefined>(undefined)
 	const commitmentPending = useSignal(false)
@@ -88,6 +90,10 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 					for (const selected of draft.value.liquidations) addresses.add(getAddress(selected.address))
 					await Promise.all([
 						(async () => {
+							const nextResolved = await dependencies.loadResolved(poolAddress)
+							if (isCurrent()) resolved.value = nextResolved
+						})(),
+						(async () => {
 							const details = await dependencies.loadOwned(poolAddress, owner)
 							if (details === undefined) throw new Error(copy.targetUnavailable)
 							if (!isCurrent()) return
@@ -97,10 +103,12 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 							if (isCurrent()) balance.value = walletBalance
 						})(),
 						(async () => {
-							const [oracle, pendingCommitment] = await Promise.all([dependencies.loadManager(pool.managerAddress), dependencies.loadCommitmentPending(pool.managerAddress, owner)])
-							if (!isCurrent()) return
-							manager.value = oracle
-							commitmentPending.value = pendingCommitment
+							const oracle = await dependencies.loadManager(pool.managerAddress)
+							if (isCurrent()) manager.value = oracle
+						})(),
+						(async () => {
+							const pendingCommitment = await dependencies.loadCommitmentPending(pool.managerAddress, owner)
+							if (isCurrent()) commitmentPending.value = pendingCommitment
 						})(),
 						(async () => {
 							const currentTargets = await Promise.all([...addresses].filter(address => address.toLowerCase() !== owner.toLowerCase()).map(address => dependencies.loadTarget(poolAddress, address)))
@@ -114,8 +122,8 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 							if (!isTerminalVaultOperation(state) || session.presentedTerminal) return
 							session.presentedTerminal = true
 							onPoolChanged()
-							if (state.status === 'executed') parameters.onTransactionPresented({ hash: currentResult.hash, title: copy.success, tone: 'success', universeId: pool.universeId })
-							else parameters.onTransactionPresented({ hash: currentResult.hash, title: state.execution?.errorMessage || copy.failure, tone: 'error', universeId: pool.universeId })
+							if (state.status === 'executed') parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: copy.success, tone: 'success', universeId: pool.universeId })
+							else parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: state.execution?.errorMessage || copy.failure, tone: 'error', universeId: pool.universeId })
 						})(),
 					])
 					if (isCurrent()) readError.value = undefined
@@ -140,14 +148,14 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 	let inputError: string | undefined
 	if (owner !== undefined) {
 		try {
-			input = parseVaultOperationsDraft(draft.value, owner)
+			input = parseVaultOperationsDraft({ ...draft.value, timeoutMinutes: resolved.value || manager.value?.isPriceValid ? '5' : draft.value.timeoutMinutes }, owner)
 		} catch (failure) {
 			inputError = failureMessage(failure, copy.actionNeeded)
 		}
 	}
 	let price = manager.value?.lastPrice ?? pool.lastOraclePrice ?? 0n
 	try {
-		price = getVaultOperationsPrice(draft.value.proposedPrice, price, manager.value?.isPriceValid ?? false)
+		if (!resolved.value) price = getVaultOperationsPrice(draft.value.proposedPrice, price, manager.value?.isPriceValid ?? false)
 	} catch (failure) {
 		inputError = failureMessage(failure, copy.initialPriceNeeded)
 	}
@@ -155,13 +163,41 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 	const targets = [...extraTargets.value, ...pool.vaults.filter(target => !extraTargets.value.some(existing => existing.vaultAddress.toLowerCase() === target.vaultAddress.toLowerCase()))].filter(
 		target => target.vaultAddress.toLowerCase() !== owner?.toLowerCase() && ((target.underwritingLimitAttoEth > 0n && target.vaultAttoRepBacking > 0n) || draft.value.liquidations.some(selected => selected.address.toLowerCase() === target.vaultAddress.toLowerCase())),
 	)
-	if (input?.changeCommitment && commitmentPending.value) inputError = copy.pendingCommitment
+	if (!resolved.value && input?.changeCommitment && commitmentPending.value) inputError = copy.pendingCommitment
+	if (resolved.value && input !== undefined && owned.value !== undefined) {
+		if (!input.changeCommitment || input.depositAttoRep > 0n || input.liquidations.length > 0 || input.withdrawAttoRep > 0n) inputError = copy.resolvedActions
+		else if (input.commitmentAttoEth > owned.value.underwritingLimitAttoEth) inputError = copy.resolvedIncrease
+	}
 	let preview: ReturnType<typeof previewVaultOperations> | undefined
-	if (input !== undefined && owned.value !== undefined && price > 0n) {
+	if (input !== undefined && owned.value !== undefined && (price > 0n || resolved.value)) {
 		try {
-			preview = previewVaultOperations({ ...pool, totalUnderwritingLimitAttoEth: owned.value.totalUnderwritingLimitAttoEth }, owned.value, targets, input, price, manager.value?.minLiquidationPriceDistanceBps)
+			preview = previewVaultOperations(
+				{ ...pool, totalUnderwritingLimitAttoEth: owned.value.totalUnderwritingLimitAttoEth, settlementCollateralAttoEth: owned.value.settlementCollateralAttoEth ?? pool.settlementCollateralAttoEth },
+				owned.value,
+				targets,
+				input,
+				price,
+				manager.value?.minLiquidationPriceDistanceBps,
+				!resolved.value && (manager.value?.isPriceValid ?? false),
+			)
 		} catch (failure) {
 			inputError = failureMessage(failure, copy.failure)
+		}
+	}
+	let withdrawMaximum: bigint | undefined
+	if (owned.value !== undefined && manager.value?.isPriceValid && !resolved.value) {
+		try {
+			const withdrawalInput = input ?? parseVaultOperationsDraft({ ...draft.value, withdraw: '1' }, owned.value.vaultAddress)
+			withdrawMaximum = previewVaultOperations(
+				{ ...pool, totalUnderwritingLimitAttoEth: owned.value.totalUnderwritingLimitAttoEth, settlementCollateralAttoEth: owned.value.settlementCollateralAttoEth ?? pool.settlementCollateralAttoEth },
+				owned.value,
+				targets,
+				{ ...withdrawalInput, withdrawAttoRep: 0n },
+				price,
+				manager.value.minLiquidationPriceDistanceBps,
+			).withdrawable
+		} catch (error) {
+			inputError ??= failureMessage(error, copy.failure)
 		}
 	}
 	useEffect(() => {
@@ -196,43 +232,72 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 			clearTimeout(timeout)
 			quoteGeneration.current += 1
 		}
-	}, [draft.value, owner, poolAddress, revision.value, price, inputError, manager.value?.isPriceValid])
+	}, [draft.value, owner, poolAddress, revision.value, price, inputError, manager.value?.isPriceValid, resolved.value])
 
-	const submit = async () => {
-		if (busy.value || input === undefined || quote.value === undefined || inputError !== undefined || readError.value !== undefined) return
+	const claimReason = (action: 'fees' | 'redeem') => {
+		if (owned.value === undefined || resolved.value === undefined) return copy.loading
+		if (action === 'fees') return owned.value.claimableFeesAttoEth > 0n || owned.value.underwritingLimitAttoEth > 0n ? undefined : copy.noFees
+		if (pool.questionOutcome === 'none') return copy.questionNotFinal
+		return getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: owned.value.disputeStakedAttoRep, redeemableRepAmountAttoRep: owned.value.vaultAttoRepBacking, underwritingLimitAttoEth: owned.value.underwritingLimitAttoEth })
+	}
+	const submit = async (claimAction?: 'fees' | 'redeem') => {
+		if (busy.value || readError.value !== undefined) return
+		if (claimAction !== undefined ? claimReason(claimAction) !== undefined : input === undefined || quote.value === undefined || inputError !== undefined) return
+		let submittedTitle = resolved.value ? copy.confirmedCommitment : copy.submit
+		if (claimAction === 'fees') submittedTitle = copy.claimFees
+		else if (claimAction === 'redeem') submittedTitle = copy.redeemRep
 		const snapshot = input
 		busy.value = true
+		session.busyAction.value = claimAction ?? 'bundle'
+		if (claimAction !== undefined) session.claimError.value = undefined
 		try {
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, error, copy.noWallet, {
+					...buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, claimAction === undefined ? error : session.claimError, copy.noWallet, {
 						action: 'vaultOperations',
+						showStatusDialog: false,
 						source: copy.title,
-						submittedTitle: copy.submit,
+						submittedTitle,
 						universeId: pool.universeId,
 						scope: securityPoolTransactionScope(poolAddress),
 					}),
 					formatErrorMessage: failureMessage,
 				},
 				async (wallet, context) => {
+					if (claimAction !== undefined) {
+						const latest = await dependencies.loadOwned(poolAddress, wallet)
+						context.assertActive()
+						if (latest === undefined) throw new Error(copy.loading)
+						owned.value = latest
+						const reason = claimReason(claimAction)
+						if (reason !== undefined) throw new Error(reason)
+						return await dependencies.claim(wallet, poolAddress, claimAction, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
+					}
+					if (snapshot === undefined) throw new Error(copy.actionNeeded)
 					return await dependencies.submit(wallet, poolAddress, snapshot, price, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
 				},
 				copy.failure,
 				next => {
-					result.value = next
-					status.value = undefined
-					session.presentedTerminal = false
-					draft.value = emptyVaultOperationsDraft()
+					if (claimAction === undefined) {
+						result.value = next
+						status.value = undefined
+						session.presentedTerminal = false
+					} else session.claimResult.value = next
+					if (claimAction === undefined) draft.value = emptyVaultOperationsDraft()
 					refresh()
 					if (active.current) onPoolChanged()
 					let title = copy.confirmedDeposit
-					if (next.stagedExecution?.success === true) title = copy.success
+					if (next.action === 'commitment') title = copy.confirmedCommitment
+					else if (next.action === 'fees') title = copy.feesConfirmed
+					else if (next.action === 'redeem') title = copy.repConfirmed
+					else if (next.stagedExecution?.success === true) title = copy.success
 					else if (next.queuedOperation !== undefined) title = copy.awaiting
-					parameters.onTransactionPresented({ hash: next.hash, title, tone: next.queuedOperation === undefined ? 'success' : 'warning', universeId: pool.universeId })
+					parameters.onTransactionPresented({ showStatusDialog: false, hash: next.hash, title, tone: next.queuedOperation === undefined ? 'success' : 'warning', universeId: pool.universeId })
 				},
 			)
 		} finally {
 			busy.value = false
+			session.busyAction.value = undefined
 		}
 	}
 	const toggle = (target: SecurityPoolVaultSummary) => {
@@ -261,11 +326,18 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 	return {
 		draft: draft.value,
 		setDraft,
+		clearDraft: () => setDraft(emptyVaultOperationsDraft()),
 		owned: owned.value,
 		manager: manager.value,
 		balance: balance.value,
 		loading: loading.value,
 		busy: busy.value,
+		busyAction: session.busyAction.value,
+		resolved: resolved.value,
+		claimFees: () => submit('fees'),
+		redeemRep: () => submit('redeem'),
+		feeClaimReason: claimReason('fees'),
+		repClaimReason: claimReason('redeem'),
 		error: error.value,
 		readError: readError.value,
 		quoteError: quoteError.value,
@@ -273,6 +345,11 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 		quote: quote.value,
 		bounty: bounty.value,
 		result: result.value,
+		claimResult: session.claimResult.value,
+		claimError: session.claimError.value,
+		dismissClaimResult: () => {
+			session.claimResult.value = undefined
+		},
 		status: status.value,
 		pending,
 		commitmentPending: commitmentPending.value,
@@ -286,8 +363,9 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 		input,
 		inputError,
 		preview,
+		withdrawMaximum,
 		price,
-		submit,
+		submit: () => submit(),
 		refresh,
 		lookupAddress: lookupAddress.value,
 		setLookupAddress: (value: string) => {

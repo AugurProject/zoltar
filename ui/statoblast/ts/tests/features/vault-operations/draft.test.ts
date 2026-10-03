@@ -14,6 +14,12 @@ describe('pool vault operation draft', () => {
 		expect(() => validateVaultOperations(deposit, owner)).not.toThrow()
 		expect(() => validateVaultOperations({ ...deposit, liquidations: [{ targetVault: getAddress(target), requestedDebtAttoEth: 1n }] }, owner)).toThrow('Receiver health factor')
 	})
+	test('accepts a configurable queue expiry and rejects values outside 1–5 minutes', () => {
+		const draft = { ...emptyVaultOperationsDraft(), deposit: '5', timeoutMinutes: '2' }
+		expect(parseVaultOperationsDraft(draft, owner).validForSeconds).toBe(120n)
+		expect(() => parseVaultOperationsDraft({ ...draft, timeoutMinutes: '0' }, owner)).toThrow('1–5 whole minutes')
+		expect(() => parseVaultOperationsDraft({ ...draft, timeoutMinutes: '6' }, owner)).toThrow('1–5 whole minutes')
+	})
 	test('blank commitment preserves it, while zero explicitly clears it', () => {
 		const draft = { ...emptyVaultOperationsDraft(), deposit: '12.5' }
 		expect(parseVaultOperationsDraft(draft, owner).changeCommitment).toBe(false)

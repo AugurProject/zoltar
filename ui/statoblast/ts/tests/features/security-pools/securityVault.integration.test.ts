@@ -1,5 +1,7 @@
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { redeemRepFromVaultFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
 import { quoteVaultOperations, submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -77,6 +79,43 @@ describe('Security vault integration', () => {
 		expect(details?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
 	})
 
+	test('submits a direct commitment exit after resolution and redeems REP without an oracle', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(client, mockWindow, manager)
+		const input = { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }
+		await submitVaultOperations(uiWriteClient, securityPoolAddress, input, 10n ** 18n)
+		await mockWindow.advanceTime(366n * DAY)
+		const reporter = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const reporting = await loadReportingDetails(uiReadClient, securityPoolAddress, reporter.account.address)
+		await approveToken(reporter, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
+		await reportOutcomeInSecurityPool(reporter, securityPoolAddress, 'yes', reporting.startBondAttoRep, reporting.startBondAttoRep, 'wallet')
+		const active = await loadReportingDetails(uiReadClient, securityPoolAddress, reporter.account.address)
+		await mockWindow.advanceTime(active.escalationEndTime - active.currentTime + DAY)
+		const exit = { ...input, depositAttoRep: 0n, commitmentAttoEth: 0n }
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...exit, commitmentAttoEth: 51n * 10n ** 18n }, 0n)).rejects.toThrow('increase after resolution')
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...exit, withdrawAttoRep: 1n }, 0n)).rejects.toThrow('only a commitment reduction')
+		const quote = await quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, exit, 0n)
+		expect(quote).toMatchObject({ resolved: true, needsReport: false, requiredRep: 0n })
+		const scope = new AbortController()
+		const reviewed = createReviewedClient(uiWriteClient, undefined, scope.signal)
+		const action = submitVaultOperations(reviewed, securityPoolAddress, exit, 0n).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))))
+		try {
+			for (let attempt = 0; attempt < 200 && transactionSteps.value?.steps[0]?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 10))
+			expect(transactionSteps.value?.steps[0]?.title).toBe('Reduce commitment')
+			expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
+			transactionSteps.value?.confirmStep(0)
+			const result = await action
+			if (result instanceof Error) throw result
+			expect(result.action).toBe('commitment')
+			expect(result.queuedOperation).toBeUndefined()
+		} finally {
+			scope.abort()
+			transactionSteps.value = undefined
+			await action
+		}
+		await redeemRepFromVaultFromSecurityPool(uiWriteClient, securityPoolAddress, walletAddress)
+		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.vaultAttoRepBacking).toBe(0n)
+	})
 	test('a queued withdrawal-only bundle does not block a commitment bundle quote', async () => {
 		await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)
 		const input = { depositAttoRep: 0n, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 10n ** 18n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }

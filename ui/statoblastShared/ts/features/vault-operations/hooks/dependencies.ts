@@ -4,9 +4,16 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { loadSecurityVaultDetails, loadSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
 import { loadOracleManagerDetails, loadQueuedVaultOperationState, loadOracleManagerQueueOperationEthValue } from '../../../protocol/oracleCoordinator.js'
+import { isSecurityPoolEscalationResolved, redeemSecurityVaultFees, redeemRepFromVaultFromSecurityPool } from '../../../protocol/securityVault.js'
 import { hasPendingVaultCommitment, quoteVaultOperations, submitVaultOperations, type VaultOperationsResult } from '../../../protocol/vaultOperations.js'
 
 export const vaultOperationsDependencies = {
+	loadResolved: async (pool: Address) => await isSecurityPoolEscalationResolved(createConnectedReadClient(), pool),
+	claim: async (owner: Address, pool: Address, action: 'fees' | 'redeem', callbacks: Parameters<typeof createWalletWriteClient>[1]): Promise<VaultOperationsResult> => {
+		const client = createWalletWriteClient(owner, callbacks)
+		const result = action === 'fees' ? await redeemSecurityVaultFees(client, pool, owner) : await redeemRepFromVaultFromSecurityPool(client, pool, owner)
+		return { hash: result.hash, depositAttoRep: 0n, action } satisfies VaultOperationsResult
+	},
 	loadOwned: async (pool: Address, owner: Address) => await loadSecurityVaultDetails(createConnectedReadClient(), pool, owner),
 	loadManager: async (manager: Address) => await loadOracleManagerDetails(createConnectedReadClient(), manager),
 	loadBalance: async (token: Address, owner: Address) => await createConnectedReadClient().readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }),

@@ -154,6 +154,7 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		}
 		selectedPoolRefresh.setNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
+		if (nextSecurityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase()) void vault.loadSecurityVault()
 	}
 	const { securityVaultResult } = vault
 	useEffect(() => {

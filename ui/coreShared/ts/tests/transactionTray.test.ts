@@ -26,6 +26,14 @@ describe('transactionTray', () => {
 		resetActiveEnvironmentForTesting()
 	})
 
+	test('keeps inline transaction statuses recorded without requesting a floating notice', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), { action: 'vaultOperations', source: 'statoblast', submittedTitle: 'Submit vault operations', showStatusDialog: false })
+		const submitted = markTransactionSubmitted(requested, transactionHash)
+		expect(submitted.active?.showStatusDialog).toBe(false)
+		const presented = markTransactionPresented(submitted, { hash: transactionHash, title: 'Bundle queued', tone: 'warning' })
+		expect(presented.active?.showStatusDialog).toBe(false)
+		expect(presented.entries[0]?.presentation?.hash).toBe(transactionHash)
+	})
 	test('tracks a requested transaction through submit, presentation, and finish', () => {
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
 			action: 'createMarket',

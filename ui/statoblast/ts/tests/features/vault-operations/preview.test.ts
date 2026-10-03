@@ -24,6 +24,24 @@ describe('vault bundle preview guards', () => {
 		expect(preview.commitment).toBe(100n * unit)
 		expect(preview.backing).toBeGreaterThan(owned.vaultAttoRepBacking - 10n * unit)
 	})
+	test('rejects an increased commitment without sufficient backing', () => {
+		const receiver = { ...owned, vaultAttoRepBacking: 100n * unit, underwritingLimitAttoEth: 50n * unit }
+		const changing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), commitment: '100' }, owner)
+		expect(() => previewVaultOperations(pool, receiver, [], changing, unit)).toThrow('Deposit more REP')
+	})
+	test('rejects reductions below outstanding settlement collateral', () => {
+		const changing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), commitment: '0' }, owner)
+		expect(() => previewVaultOperations({ ...pool, settlementCollateralAttoEth: 100n * unit }, { ...owned, underwritingLimitAttoEth: 50n * unit }, [], changing, unit)).toThrow('Total commitments')
+	})
+	test('rejects withdrawals of backing required by the final commitment', () => {
+		const receiver = { ...owned, vaultAttoRepBacking: 100n * unit, underwritingLimitAttoEth: 50n * unit, minimumVaultRepDepositAttoRep: unit }
+		const withdrawing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), withdraw: '1' }, owner)
+		expect(() => previewVaultOperations(pool, receiver, [], withdrawing, unit)).toThrow('withdrawal')
+	})
+	test('rejects withdrawals while escalation deposits remain unsettled', () => {
+		const withdrawing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), withdraw: '1' }, owner)
+		expect(() => previewVaultOperations(pool, { ...owned, disputeStakedAttoRep: unit }, [], withdrawing, unit)).toThrow('Settle escalation')
+	})
 	test('uses a field label rather than an instruction for malformed proposed prices', () => {
 		expect(() => getVaultOperationsPrice('invalid', unit, false)).toThrow('Initial oracle report price must be a decimal number')
 	})

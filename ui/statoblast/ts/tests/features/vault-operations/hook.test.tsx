@@ -23,13 +23,15 @@ const confirmed: VaultOperationsResult = { hash: '0x01', depositAttoRep: 0n, sta
 
 function dependencies(overrides: Partial<VaultOperationsDependencies> = {}): VaultOperationsDependencies {
 	return {
+		loadResolved: mock(async () => false),
+		claim: mock(async (_owner, _pool, action) => ({ hash: confirmed.hash, depositAttoRep: 0n, action })),
 		loadOwned: mock(async () => owned),
 		loadManager: mock(async () => createOracleManagerDetails({ isPriceValid: true, lastPrice: unit, minLiquidationPriceDistanceBps: 1000n })),
 		loadBalance: mock(async () => 10000n * unit),
 		loadTarget: mock(async () => target),
 		loadCommitmentPending: mock(async () => false),
 		loadStatus: mock(async () => ({ status: 'queued' })),
-		quote: mock(async () => ({ managerAddress: pool.managerAddress, repToken: owned.repToken, balance: 10000n * unit, currentBacking: owned.vaultAttoRepBacking, validPrice: true, pendingReportId: 0n, needsReport: false, funding: undefined, requiredRep: 0n })),
+		quote: mock(async () => ({ managerAddress: pool.managerAddress, repToken: owned.repToken, balance: 10000n * unit, currentBacking: owned.vaultAttoRepBacking, resolved: false, validPrice: true, pendingReportId: 0n, needsReport: false, funding: undefined, requiredRep: 0n })),
 		queueCost: mock(async () => 0n),
 		submit: mock(async () => confirmed),
 		...overrides,
@@ -58,6 +60,65 @@ describe('vault operations lifecycle', () => {
 		return { state: () => requireHookState(state), cleanup: rendered.cleanup, key, presented, poolChanged }
 	}
 
+	test('reduces commitment without oracle funding after resolution, then unlocks REP redemption', async () => {
+		let details = { ...owned, underwritingLimitAttoEth: 50n * unit, totalUnderwritingLimitAttoEth: 50n * unit, settlementCollateralAttoEth: 0n, claimableFeesAttoEth: unit }
+		const deps = dependencies({
+			loadResolved: async () => true,
+			loadOwned: async () => details,
+			loadManager: async () => createOracleManagerDetails({ isPriceValid: false, lastPrice: 0n }),
+			quote: async () => ({ managerAddress: pool.managerAddress, repToken: owned.repToken, balance: 10000n * unit, currentBacking: details.vaultAttoRepBacking, resolved: true, validPrice: false, pendingReportId: 0n, needsReport: false, funding: undefined, requiredRep: 0n }),
+			submit: mock(async () => {
+				details = { ...details, underwritingLimitAttoEth: 0n }
+				return { hash: confirmed.hash, action: 'commitment', depositAttoRep: 0n }
+			}),
+		})
+		const current = await mount(deps, undefined, { ...pool, questionOutcome: 'yes' })
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		expect(current.state().repClaimReason).toContain('commitment limit to 0')
+		await act(() => current.state().setDraft({ commitment: '0', proposedPrice: 'invalid', timeoutMinutes: '0' }))
+		await waitFor(() => expect(current.state().quote).toBeDefined())
+		await act(async () => await current.state().submit())
+		await waitFor(() => expect(current.state().repClaimReason).toBeUndefined())
+		expect(deps.queueCost).not.toHaveBeenCalled()
+		await act(async () => await current.state().redeemRep())
+		expect(deps.claim).toHaveBeenCalledWith(owner, pool.securityPoolAddress, 'redeem', expect.anything())
+	})
+	test('can clear a persisted operational draft after the question resolves', async () => {
+		let resolved = false
+		const deps = dependencies({ loadResolved: async () => resolved })
+		const current = await mount(deps)
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '5', withdraw: '1' }))
+		resolved = true
+		await act(() => current.state().refresh())
+		await waitFor(() => expect(current.state().resolved).toBe(true))
+		expect(current.state().inputError).toContain('Clear other actions')
+		await act(() => current.state().clearDraft())
+		expect(current.state().draft.deposit).toBe('')
+		expect(current.state().draft.withdraw).toBe('')
+	})
+	test('claims fees independently while preserving an unfinished operation draft', async () => {
+		const deps = dependencies({ loadOwned: async () => ({ ...owned, claimableFeesAttoEth: unit }) })
+		const current = await mount(deps)
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '5' }))
+		await act(async () => await current.state().claimFees())
+		expect(deps.claim).toHaveBeenCalledWith(owner, pool.securityPoolAddress, 'fees', expect.anything())
+		expect(current.state().draft.deposit).toBe('5')
+	})
+	test('claiming fees preserves the receipt and polling of a queued bundle', async () => {
+		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 0n, queuedOperation: { operation: 'vaultOperations', operationId: 2n, isPendingSlot: true } }
+		const deps = dependencies({ submit: async () => queued })
+		const current = await mount(deps)
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '5' }))
+		await waitFor(() => expect(current.state().quote).toBeDefined())
+		await act(async () => await current.state().submit())
+		await act(async () => await current.state().claimFees())
+		expect(current.state().result?.hash).toBe('0x02')
+		expect(current.state().pending).toBe(true)
+		expect(current.state().claimResult?.action).toBe('fees')
+	})
 	test('keeps a looked-up selection removable across tab remounts', async () => {
 		const deps = dependencies()
 		const first = await mount(deps)
@@ -115,11 +176,12 @@ describe('vault operations lifecycle', () => {
 		expect(current.poolChanged).toHaveBeenCalledWith(owned.totalUnderwritingLimitAttoEth)
 	})
 
-	test('refreshes vault and targets without waiting for a slow oracle read', async () => {
+	test('refreshes vault, targets and pending commitment without waiting for a slow oracle read', async () => {
 		const oracle = createDeferred<ReturnType<typeof createOracleManagerDetails>>()
-		const current = await mount(dependencies({ loadManager: async () => await oracle.promise }), undefined, { ...pool, vaults: [target] })
+		const current = await mount(dependencies({ loadManager: async () => await oracle.promise, loadCommitmentPending: async () => true }), undefined, { ...pool, vaults: [target] })
 		await waitFor(() => expect(current.state().owned).toEqual(owned))
 		await waitFor(() => expect(current.state().targets).toContainEqual(target))
+		await waitFor(() => expect(current.state().commitmentPending).toBe(true))
 		expect(current.state().manager).toBeUndefined()
 		oracle.resolve(createOracleManagerDetails())
 		await waitFor(() => expect(current.state().loading).toBe(false))
@@ -186,6 +248,18 @@ describe('vault operations lifecycle', () => {
 		return rendered
 	}
 
+	test('panel presents confirmation in the submission area', async () => {
+		const rendered = await mountPanel(dependencies())
+		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		const deposit = within(rendered.container).getByLabelText('Deposit REP (optional)')
+		await act(() => fireEvent.input(deposit, { target: { value: '5' } }))
+		const review = within(rendered.container).getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
+		await waitFor(() => expect(review.disabled).toBe(false))
+		await act(() => fireEvent.click(review))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Vault operations executed'))
+		const confirmation = within(rendered.container).getByText('Vault operations executed')
+		expect(confirmation.closest('.vault-operations-preview')).not.toBeNull()
+	})
 	test('panel disables a near target with the existing liquidation distance reason', async () => {
 		const near = { ...target, vaultAttoRepBacking: 190n * unit }
 		const rendered = await mountPanel(dependencies({ loadTarget: async () => near }), near)

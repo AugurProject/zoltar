@@ -3889,12 +3889,12 @@ span.rep-price-status.stale,
 	gap: var(--space-4);
 }
 
-.vault-operations-flow > .state-hint {
+.vault-operations-flow .state-hint {
 	grid-template-columns: minmax(0, 1fr);
 	min-width: 0;
 }
 
-.vault-operations-flow > .state-hint > * {
+.vault-operations-flow .state-hint > * {
 	min-width: 0;
 	max-width: 100%;
 }
@@ -3966,7 +3966,12 @@ span.rep-price-status.stale,
 	overflow-x: auto;
 }
 
+.vault-operations-preview {
+	min-width: 0;
+}
+
 .vault-operations-preview .section-block-body {
+	grid-template-columns: minmax(0, 1fr);
 	display: grid;
 	gap: var(--space-3);
 }

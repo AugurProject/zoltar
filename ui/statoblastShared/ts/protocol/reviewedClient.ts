@@ -79,6 +79,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 	let controller = createTransactionStepController(signal, false)
 	const prepareInForm = isTransactionPreparationScope(signal)
 	const environment = createActiveEnvironmentGuard()
+	const requiresReview = () => prepareInForm || (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0
@@ -89,7 +90,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		if (!initialized) {
 			if (plan === undefined) throw new Error('Missing transaction plan.')
 			// Multi-transaction actions expose a separate control for every write, including the first funding step.
-			controller = createTransactionStepController(signal, plan.length > 1)
+			controller = createTransactionStepController(signal, plan.length > 1 || plan.some(step => step.requireReview))
 			controller.setPlan(
 				await Promise.all(
 					plan.map(step =>
@@ -123,7 +124,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
-				selectedAmount = prepareInForm || plan.length > 1 ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
+				selectedAmount = requiresReview() ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
 			}
 			selectedFunding = undefined
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
@@ -191,7 +192,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				controller.assertActive()
 				await validate()
 				await initialize()
-				selectedFunding = await controller.chooseFunding(requiredIndices, !prepareInForm && plan?.length === 1)
+				selectedFunding = await controller.chooseFunding(requiredIndices, !requiresReview() && plan?.length === 1)
 				stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
 				if (selectedFunding === undefined) return false
 				await execute(selectedFunding.index)

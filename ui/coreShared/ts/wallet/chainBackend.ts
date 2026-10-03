@@ -40,6 +40,8 @@ export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'
 		/** Minimum allowance for an approval prerequisite outside oracle report funding. */
 		requiredApprovalAmount?: bigint
 		approvalPurpose?: string
+		/** Require an explicit review even when the plan contains only one transaction. */
+		requireReview?: boolean
 		validateBeforeSubmit?: () => Promise<void>
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean
