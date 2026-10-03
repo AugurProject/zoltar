@@ -3,7 +3,7 @@ import type { UiScreenshotSpec } from './ui-screenshot-specs.mts'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
+import { extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, screenshotAppIds, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
 
 const spec: UiScreenshotSpec = { id: 'buy-ticket', app: 'trading', scenario: 'trading-funded', usedBy: ['tutorials/trading-first-trade.html'] }
 const outputPath = 'docs/assets/screenshots/trading/buy-ticket.png'
@@ -63,6 +63,10 @@ describe('documentation screenshots', () => {
 		expect(isScreenshotSourcePath('trading', 'ui/coreShared/css/application-surfaces.css')).toBe(true)
 		expect(isScreenshotSourcePath('trading', 'ui/coreShared/ts/app/components/ProtocolAppFrame.tsx')).toBe(true)
 		expect(isScreenshotSourcePath('trading', 'ui/coreShared/ts/lib/formatters.ts')).toBe(true)
+		for (const app of screenshotAppIds()) {
+			expect(isScreenshotSourcePath(app, 'ui/coreShared/ts/lib/universeIdentity.ts')).toBe(true)
+			expect(isScreenshotSourcePath(app, 'ui/coreShared/ts/lib/oklch.ts')).toBe(true)
+		}
 		expect(isScreenshotSourcePath('trading', 'ui/coreShared/ts/lib/formattersExtra.ts')).toBe(false)
 		expect(isScreenshotSourcePath('trading', 'ui/trading/ts/tests/features/trade.test.tsx')).toBe(false)
 		expect(isScreenshotSourcePath('trading', 'ui/trading/js/index.js')).toBe(false)
