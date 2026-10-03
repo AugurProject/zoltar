@@ -1,28 +1,25 @@
 import { hexToBytes, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { oklchToSrgb } from './oklch.js'
 
-// Curated OKLCH hues avoid the semantic Yes (~163°) and No (~12°) hue neighborhoods.
-const hues = [55, 70, 85, 100, 115, 130, 195, 210, 225, 240, 255, 270, 285, 300, 315, 330]
-const schemes = ['analogous', 'split-complementary', 'two-tone']
-const compositions = ['parallel', 'swirl', 'crossing']
+// Continuous travel through safe hue arcs skips the semantic Yes (~163°) and No (~12°) neighborhoods.
+const safeHue = (position: number) => {
+	const travel = (((position % 1) + 1) % 1) * 237
+	return travel <= 93 ? 42 + travel : 195 + travel - 93
+}
 
-/** One whole-ID hash supplies discrete identity choices and sixteen-bit geometry parameters. */
+/** One whole-ID hash supplies sixteen-bit palette and geometry parameters; there are no style buckets. */
 export function createUniverseIdentity(universeId: bigint) {
 	if (universeId < 0n || universeId >= 1n << 256n) throw new Error('Universe ID must be an unsigned 256-bit integer')
-	const seed = hexToBytes(keccak256(`universe-relief-v9:${universeId}`))
+	const seed = hexToBytes(keccak256(`universe-relief-v10:${universeId}`))
 	const byte = (index: number) => seed[index] ?? 0
 	const value = (index: number) => (byte(index * 2) * 256 + byte(index * 2 + 1)) / 65535
-	const hueBucket = byte(0) % hues.length
-	const schemeIndex = byte(1) % schemes.length
-	const compositionIndex = byte(2) % compositions.length
-	const scheme = schemes[schemeIndex]
-	const composition = compositions[compositionIndex]
-	if (scheme === undefined || composition === undefined) throw new Error('Universe identity choices must be configured')
-	const hue = (hues[hueBucket] ?? 55) + (value(2) - 0.5) * 4
-	const distance = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180)
-	const nearestHue = (target: number) => hues.reduce((closest, candidate) => (distance(candidate, target) < distance(closest, target) ? candidate : closest), hues[0] ?? 55)
-	const support = nearestHue(hue + ([25, 150, 180][schemeIndex] ?? 25))
-	const third = schemeIndex === 1 ? nearestHue(hue + 210) : support
+	const paletteStart = value(0)
+	const paletteSpread = 0.24 + value(1) * 0.48
+	const hue = safeHue(paletteStart)
+	const support = safeHue(paletteStart + paletteSpread / 2)
+	const third = safeHue(paletteStart + paletteSpread)
+	const winding = value(14)
+	const crossing = value(15) ** 2 * 0.65
 	const angle = Math.round(value(3) * 359)
 	const count = 6 + (byte(3) % 6)
 	const amplitude = 90 + value(4) * 210
@@ -35,6 +32,8 @@ export function createUniverseIdentity(universeId: bigint) {
 	const curl = (value(11) - 0.5) * 2.4
 	const roundness = 0.75 + value(12) * 0.25
 	const detail = value(13) * 0.2
+	const widthRatio = 0.3 + value(12) * 0.5
+	const sweep = (value(11) - 0.5) * 7
 	const noise = createNoise([28, 29, 30, 31].reduce((result, index) => result * 256 + byte(index), 0))
 	const relief = (t: number, lane: number) => {
 		const warp = noise(t / 850, lane / 900) * 200
@@ -42,28 +41,27 @@ export function createUniverseIdentity(universeId: bigint) {
 		return field + Math.exp(-(((t - focus) / spread) ** 2)) * amplitude * Math.sin(lane / 500) + t * bend
 	}
 	const edges = Array.from({ length: count }, (_, index) => {
-		if (compositionIndex === 1) {
-			// Spiral ribbons radiate from the seeded curl point; their centers and sweep are part of the identity.
-			const spiral = (side: number) =>
-				Array.from({ length: 33 }, (_, step) => {
-					const t = step / 32
-					const radius = 35 + t * 1900
-					const radians = (index / count) * Math.PI * 2 + t * (1.6 + value(11) * 1.5) + side * (0.12 + value(5) * 0.13)
-					return { x: Math.round(curlX + Math.cos(radians) * radius), y: Math.round(curlY + Math.sin(radians) * radius) }
-				})
-			return `${curve(spiral(-1), 'M', roundness)} ${curve(spiral(1).reverse(), 'L', roundness)} Z`
-		}
 		const lane = (index - count / 2) * spacing
-		const points = Array.from({ length: 49 }, (_, step) => {
-			const t = -1900 + step * (3800 / 48)
-			const x = 800 + t
-			const y = 500 + lane + relief(t, lane)
-			const dx = x - curlX
-			const dy = y - curlY
-			const rotation = curl * Math.exp(-(dx * dx + dy * dy) / 500000)
-			return { x: Math.round(curlX + dx * Math.cos(rotation) - dy * Math.sin(rotation)), y: Math.round(curlY + dx * Math.sin(rotation) + dy * Math.cos(rotation)) }
-		})
-		return `${curve(points, 'M', roundness)} L3500 3500 L-2000 3500 Z`
+		// Matching ribbon boundaries let straight flow and radial winding interpolate without a topology switch.
+		const contour = (side: number) =>
+			Array.from({ length: 49 }, (_, step) => {
+				const u = step / 48
+				const t = -1900 + u * 3800
+				const offset = (side * spacing * widthRatio) / 2
+				const x = 800 + t
+				const y = 500 + lane + offset + relief(t, lane + offset)
+				const dx = x - curlX
+				const dy = y - curlY
+				const rotation = curl * Math.exp(-(dx * dx + dy * dy) / 500000)
+				const flowX = curlX + dx * Math.cos(rotation) - dy * Math.sin(rotation)
+				const flowY = curlY + dx * Math.sin(rotation) + dy * Math.cos(rotation)
+				const radius = 35 + u * 2200 + noise(u * 3, index) * amplitude * u
+				const radians = ((index + 0.5) / count) * Math.PI * 2 + u * sweep + (side * widthRatio * Math.PI) / count
+				const radialX = curlX + Math.cos(radians) * radius
+				const radialY = curlY + Math.sin(radians) * radius
+				return { x: Math.round(flowX + (radialX - flowX) * winding), y: Math.round(flowY + (radialY - flowY) * winding) }
+			})
+		return `${curve(contour(-1), 'M', roundness)} ${curve(contour(1).reverse(), 'L', roundness)} Z`
 	})
 	const renderImage = (dark: boolean, miniature: boolean, band: boolean) => {
 		const palette = dark ? { ground: 17, fold: 24, miniature: 32, miniatureGround: 27, foldChroma: 0.075, foldRange: 2.5 } : { ground: 94, fold: 88, miniature: 84, miniatureGround: 93, foldChroma: 0.055, foldRange: 3 }
@@ -84,9 +82,7 @@ export function createUniverseIdentity(universeId: bigint) {
 		}
 		const gradients = edges
 			.map((_, index) => {
-				let h = hue
-				if (index % 3 === 0) h = third
-				else if (index % 2 !== 0) h = support
+				const h = safeHue(paletteStart + (index / (count - 1)) * paletteSpread)
 				const l = baseL + (index / count) * rangeL
 				const lane = (index - count / 2) * spacing
 				const anchor = 500 + lane + relief(0, lane)
@@ -95,7 +91,7 @@ export function createUniverseIdentity(universeId: bigint) {
 			})
 			.join('')
 		const paths = edges.map((d, index) => `<path d="${d}" fill="url(#fold${index})"/>`).join('')
-		const crossing = compositionIndex === 2 ? `<g opacity=".5" transform="rotate(${55 + value(12) * 35} 800 500)">${paths}</g>` : ''
+		const crossFlow = `<g opacity="${crossing.toFixed(5)}" transform="rotate(${35 + value(13) * 110} ${curlX.toFixed(2)} ${curlY.toFixed(2)})">${paths}</g>`
 		// Keep a visible silhouette from the first screen, with gentler shading in the content column.
 		// A nonzero center also preserves recognition when portrait viewports crop the artwork.
 		const quiet =
@@ -104,10 +100,10 @@ export function createUniverseIdentity(universeId: bigint) {
 				: '<linearGradient id="quiet" x2="0" y2="1"><stop stop-color="#ddd"/><stop offset=".45" stop-color="#ddd"/><stop offset=".7" stop-color="#ddd"/><stop offset="1" stop-color="#fff"/></linearGradient><linearGradient id="margins"><stop stop-color="#fff"/><stop offset=".12" stop-color="#aaa"/><stop offset=".25" stop-color="#aaa"/><stop offset=".75" stop-color="#aaa"/><stop offset=".88" stop-color="#aaa"/><stop offset="1" stop-color="#fff"/></linearGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask><mask id="column"><rect width="1600" height="1000" fill="url(#margins)"/></mask>'
 		// One bounded filter softens the entire composition; never allocate a full-viewport filter per fold.
 		const softness = miniature || band ? '' : '<filter id="soften" filterUnits="userSpaceOnUse" x="-72" y="-72" width="1744" height="1144" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="12"/></filter>'
-		const art = `<g transform="rotate(${angle} 800 500)">${paths}${crossing}</g>`
+		const art = `<g transform="rotate(${angle} 800 500)">${paths}${crossFlow}</g>`
 		const composed = miniature || band ? art : `<g mask="url(#space)"><g mask="url(#column)"><g filter="url(#soften)">${art}</g></g></g>`
 		return encodeSvg(
-			`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" data-composition="${composition}"><defs>${gradients}${quiet}${softness}</defs><rect x="-2000" y="-2000" width="6000" height="6000" fill="${color(hue, groundL, miniature ? 0.04 : 0.035)}"/>${composed}</svg>`,
+			`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" data-winding="${winding.toFixed(5)}" data-crossing="${crossing.toFixed(5)}"><defs>${gradients}${quiet}${softness}</defs><rect x="-2000" y="-2000" width="6000" height="6000" fill="${color(hue, groundL, miniature ? 0.04 : 0.035)}"/>${composed}</svg>`,
 		)
 	}
 	const variants = (miniature: boolean, band: boolean) => ({ light: renderImage(false, miniature, band), dark: renderImage(true, miniature, band) })
@@ -115,15 +111,18 @@ export function createUniverseIdentity(universeId: bigint) {
 		image: variants(false, false),
 		bandImage: variants(true, true),
 		swatchImage: variants(true, false),
-		traits: { hueBucket, hue, support, third, scheme, composition, angle, count },
+		traits: { hue, support, third, paletteSpread, winding, crossing, widthRatio, sweep, angle, count },
 	}
 }
 
 /** Role lightness is fixed across hues; reduce only chroma when needed to stay inside sRGB. */
 function color(hue: number, lightness: number, chroma: number) {
-	let c = chroma
-	while (oklchToSrgb(lightness / 100, c, hue).some(channel => channel < 0 || channel > 1)) c *= 0.9
-	return `oklch(${lightness.toFixed(2)}% ${c.toFixed(5)} ${hue.toFixed(2)})`
+	const l = Number(lightness.toFixed(2))
+	const h = Number(hue.toFixed(2))
+	let c = Number(chroma.toFixed(5))
+	// Test the rounded values actually emitted into SVG, not the unrounded parameters.
+	while (oklchToSrgb(l / 100, c, h).some(channel => channel < 0 || channel > 1)) c = Number((c * 0.9).toFixed(5))
+	return `oklch(${l.toFixed(2)}% ${c.toFixed(5)} ${h.toFixed(2)})`
 }
 
 function encodeSvg(svg: string) {

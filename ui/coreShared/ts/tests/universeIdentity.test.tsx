@@ -68,6 +68,22 @@ test('page recognition retains at least half of the fold shading in the top cont
 	}
 })
 
+test('compositions expose continuous winding and crossing rather than named style buckets', () => {
+	const values = Array.from({ length: 64 }, (_, id) => {
+		const svg = decodeURIComponent(createUniverseIdentity(BigInt(id)).image.light)
+		expect(svg).not.toContain('data-composition=')
+		const winding = Number(/data-winding="([\d.]+)"/.exec(svg)?.[1])
+		const crossing = Number(/data-crossing="([\d.]+)"/.exec(svg)?.[1])
+		expect(winding).toBeGreaterThanOrEqual(0)
+		expect(winding).toBeLessThanOrEqual(1)
+		expect(crossing).toBeGreaterThanOrEqual(0)
+		expect(crossing).toBeLessThanOrEqual(0.65)
+		return { winding, crossing }
+	})
+	expect(new Set(values.map(value => value.winding)).size).toBeGreaterThan(60)
+	expect(new Set(values.map(value => value.crossing)).size).toBeGreaterThan(60)
+})
+
 test('visual identity is deterministic, full-width, and independent of app and theme', () => {
 	const id = (1n << 255n) + 37n
 	expect(createUniverseIdentity(id)).toEqual(createUniverseIdentity(id))
@@ -82,10 +98,10 @@ test('neighboring IDs produce diverse palettes and geometry instead of a sequent
 	const identities = Array.from({ length: 256 }, (_, index) => createUniverseIdentity(BigInt(index)))
 	expect(new Set(identities.map(identity => identity.image.light)).size).toBe(256)
 	expect(new Set(identities.map(identity => identity.image.dark)).size).toBe(256)
-	expect(new Set(identities.map(identity => identity.traits.hueBucket)).size).toBe(16)
+	expect(new Set(identities.map(identity => identity.traits.hue.toFixed(2))).size).toBeGreaterThan(250)
 	const images = identities.map(identity => decodeURIComponent(identity.image.light))
 	expect(images.every(image => !image.includes('<circle') && !image.includes('<pattern'))).toBe(true)
-	expect(new Set(identities.map(identity => identity.traits.composition)).size).toBe(3)
+	expect(new Set(identities.map(identity => identity.traits.winding)).size).toBeGreaterThan(250)
 	const orientations = images.map(image => /rotate\((\d+) 800 500\)/.exec(image)?.[1])
 	expect(new Set(orientations).size).toBeGreaterThan(150)
 	expect(images.every(image => image.includes('linearGradient') && image.includes(' C'))).toBe(true)
@@ -100,23 +116,29 @@ test('neighboring IDs produce diverse palettes and geometry instead of a sequent
 	expect(images.some(image => /--\d/.test(image))).toBe(false)
 })
 
-test('discrete identities are diverse and palette hues avoid both semantic outcome neighborhoods', () => {
+test('continuous identities are diverse and every rendered hue avoids semantic outcome neighborhoods', () => {
 	const ids = [...Array.from({ length: 384 }, (_, index) => BigInt(index)), ...Array.from({ length: 384 }, (_, index) => BigInt(keccak256(`identity-test-random:${index}`)))]
 	for (const samples of [ids.slice(0, 384), ids.slice(384)]) {
 		const counts = new Map<string, number>()
 		for (const id of samples) {
-			const { traits } = createUniverseIdentity(id)
-			for (const hue of [traits.hue, traits.support, traits.third]) {
+			const identity = createUniverseIdentity(id)
+			const { traits } = identity
+			const colors = [...decodeURIComponent(identity.image.light).matchAll(/oklch\([\d.]+% [\d.]+ ([\d.]+)\)/g)].map(match => Number(match[1]))
+			for (const hue of [traits.hue, traits.support, traits.third, ...colors]) {
 				// OKLCH hues of current light/dark Yes and No tokens, including their small theme differences.
 				for (const outcome of [161.78, 165.62, 12.55, 8.98]) expect(Math.abs(((hue - outcome + 540) % 360) - 180)).toBeGreaterThanOrEqual(25)
 			}
-			const key = `${traits.hueBucket}:${traits.scheme}:${traits.composition}`
+			expect(traits.paletteSpread).toBeGreaterThanOrEqual(0.24)
+			expect(traits.paletteSpread).toBeLessThanOrEqual(0.72)
+			expect(Math.abs(((traits.hue - traits.third + 540) % 360) - 180)).toBeGreaterThan(40)
+			// Coarse perceptual parameters must still distinguish identities without named style buckets.
+			const key = `${Math.floor(traits.hue / 10)}:${Math.floor(traits.winding * 10)}:${Math.floor(traits.crossing * 20)}:${Math.floor(traits.angle / 15)}:${traits.count}`
 			counts.set(key, (counts.get(key) ?? 0) + 1)
 		}
 		const collisions = [...counts.values()].reduce((sum, count) => sum + (count * (count - 1)) / 2, 0)
-		// Pair collision probability, rather than impossible uniqueness among more IDs than 144 discrete tuples.
-		expect(collisions / ((samples.length * (samples.length - 1)) / 2)).toBeLessThan(0.015)
-		expect(counts.size).toBeGreaterThan(120)
+		// Pair collisions are measured after coarse quantization, not by comparing unrounded floating-point values.
+		expect(collisions / ((samples.length * (samples.length - 1)) / 2)).toBeLessThan(0.001)
+		expect(counts.size).toBeGreaterThan(375)
 	}
 })
 
@@ -129,14 +151,15 @@ test('OKLCH conversion matches neutral and sRGB red reference colors', () => {
 	expect(red[2]).toBeCloseTo(0, 5)
 })
 
-test('swatches retain the backdrop geometry, scheme, angle and count in both native themes', () => {
+test('swatches retain the backdrop geometry, blend, angle and count in both native themes', () => {
 	for (let id = 0; id < 32; id++) {
 		const identity = createUniverseIdentity(BigInt(id))
 		for (const theme of ['light', 'dark']) {
 			const page = decodeURIComponent(theme === 'light' ? identity.image.light : identity.image.dark)
 			const swatch = decodeURIComponent(theme === 'light' ? identity.swatchImage.light : identity.swatchImage.dark)
 			expect([...page.matchAll(/<path d="([^"]+)"/g)].map(match => match[1])).toEqual([...swatch.matchAll(/<path d="([^"]+)"/g)].map(match => match[1]))
-			expect(swatch).toContain(`data-composition="${identity.traits.composition}"`)
+			expect(swatch).toContain(`data-winding="${identity.traits.winding.toFixed(5)}"`)
+			expect(swatch).toContain(`data-crossing="${identity.traits.crossing.toFixed(5)}"`)
 			expect(swatch).toContain(`rotate(${identity.traits.angle} 800 500)`)
 		}
 	}
