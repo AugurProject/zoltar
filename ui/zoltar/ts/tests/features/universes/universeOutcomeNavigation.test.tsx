@@ -68,11 +68,11 @@ describe('outcome-based universe traversal', () => {
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
 		await act(() => appBlockWatcher.invalidate())
-		await waitFor(() => expect(q.queryByText('Unable to load child outcomes.')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
-		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
+		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
-		expect(q.queryByText('Unable to load child outcomes.')).toBeNull()
+		expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).toBeNull()
 		expect(calls).toBe(3)
 	})
 
@@ -97,9 +97,9 @@ describe('outcome-based universe traversal', () => {
 			next.reject(new Error('RPC unavailable'))
 			await Promise.resolve()
 		})
-		await waitFor(() => expect(q.queryByText('Unable to load child outcomes.')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
 		expect(q.getByRole('button', { name: 'Open Alpha universe' })).toBeTruthy()
-		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
+		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
 		await waitFor(() => expect(calls).toBe(3))
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(true)
 		await act(async () => {
@@ -141,8 +141,8 @@ describe('outcome-based universe traversal', () => {
 			pending.reject(new Error('RPC unavailable'))
 			await Promise.resolve()
 		})
-		await waitFor(() => expect(q.queryByText('Unable to load child outcomes.')).not.toBeNull())
-		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
+		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
 		await waitFor(() => expect(q.queryByText('Which proposal wins?')).not.toBeNull())
 		expect(calls).toBe(2)
 	})
@@ -299,6 +299,44 @@ describe('outcome-based universe traversal', () => {
 		}
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open 15 °C universe' }).hasAttribute('disabled')).toBe(false))
 		expect(indexes).toEqual([getScalarOutcomeIndex(question, 0n), getScalarOutcomeIndex(question, 3n)])
+	})
+
+	test('names the scalar outcome and preserves a nested timeout reason with a specific retry', async () => {
+		const question = { answerUnit: '°C', numTicks: 20n, displayValueMin: 0n, displayValueMax: 100n * 10n ** 18n }
+		const indexes: bigint[] = []
+		const view = lifecycle.trackRendered(
+			await renderIntoDocument(
+				<UniverseOutcomeNavigation
+					universe={universe}
+					loadPage={async () => ({ ...page, choices: [], scalarQuestion: question })}
+					loadOutcome={async (_address, _id, index) => {
+						indexes.push(index)
+						if (indexes.length === 1) throw new Error('Unknown error', { cause: new Error('RPC read timed out. Retry loading data.') })
+						return { universeId: 40n, exists: true }
+					}}
+				/>,
+			),
+		)
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByText('The 0 °C universe deployment status could not be read. Reason: RPC read timed out. Retry loading data')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Retry 0 °C universe' }))
+		await waitFor(() => expect(q.getByRole('button', { name: 'Open 0 °C universe' }).hasAttribute('disabled')).toBe(false))
+		expect(indexes).toHaveLength(2)
+	})
+
+	test('explains when the data source supplies no usable error reason', async () => {
+		const view = lifecycle.trackRendered(
+			await renderIntoDocument(
+				<UniverseOutcomeNavigation
+					universe={universe}
+					loadPage={async () => {
+						throw undefined
+					}}
+				/>,
+			),
+		)
+		await waitFor(() => expect(view.container.textContent).toContain('Child outcomes could not be read. Reason: The data source did not provide error details'))
+		expect(within(view.container).getByRole('button', { name: 'Retry child outcomes' })).toBeTruthy()
 	})
 
 	test('unforked universes never request outcomes', async () => {

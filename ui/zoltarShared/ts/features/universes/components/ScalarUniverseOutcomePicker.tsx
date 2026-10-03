@@ -1,3 +1,4 @@
+import { describeUniverseReadError } from '../lib/universeReadError.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
@@ -43,8 +44,8 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 				const outcome = await withReadTimeout(loadOutcome(address, universeId, outcomeIndex))
 				if (active && guard.isCurrent()) setSnapshot({ backend, loadOutcome, outcomeIndex, outcome })
 			} catch (error) {
-				void error
-				if (active && guard.isCurrent()) setSnapshot(previous => ({ backend, loadOutcome, outcomeIndex, outcome: previous?.backend === backend && previous.loadOutcome === loadOutcome && previous.outcomeIndex === outcomeIndex ? previous.outcome : undefined, error: copy.outcomesUnavailable }))
+				if (active && guard.isCurrent())
+					setSnapshot(previous => ({ backend, loadOutcome, outcomeIndex, outcome: previous?.backend === backend && previous.loadOutcome === loadOutcome && previous.outcomeIndex === outcomeIndex ? previous.outcome : undefined, error: describeUniverseReadError(error, copy.formatChildStatusReadFailure(label)) }))
 			}
 		}
 		const timer = setTimeout(() => void readSelection(), 150)
@@ -52,13 +53,13 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 			active = false
 			clearTimeout(timer)
 		}
-	}, [address, backend, loadOutcome, outcomeIndex, refresh, universeId])
+	}, [address, backend, label, loadOutcome, outcomeIndex, refresh, universeId])
 	return (
 		<div className='form-grid'>
 			<UniverseScalarPicker question={question} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} />
 			{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChild, detailIsLoading: true }} /> : undefined}
 			{outcomeIndex === undefined ? <UserMessage placement='field' tone='error' detail={copy.invalidScalarTick} /> : undefined}
-			<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRefresh(count => count + 1)} />
+			<RetryableNotice message={current?.error} retryLabel={copy.formatRetryChildOutcome(label)} onRetry={() => setRefresh(count => count + 1)} />
 			<div className='actions'>
 				{outcome === undefined ? undefined : (
 					<span id={statusId}>

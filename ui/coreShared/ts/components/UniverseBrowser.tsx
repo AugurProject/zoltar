@@ -128,7 +128,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 						<MetricField label={universeCopy.universeId}>
 							<span className='universe-id-value'>{formatUniverseIdHex(universe.universeId)}</span>
 						</MetricField>
-						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink universeId={universe.parentUniverseId} />}</MetricField>
+						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />}</MetricField>
 						<MetricField label={universeCopy.repSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>

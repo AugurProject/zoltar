@@ -335,6 +335,11 @@ button.tx-action-wallet-fix {
 	visibility: hidden;
 }
 
+.universe-browser .universe-parent-link {
+	color: var(--accent);
+	text-decoration: underline;
+}
+
 .universe-browser {
 	gap: var(--space-5);
 }

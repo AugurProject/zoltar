@@ -1,3 +1,4 @@
+import { describeUniverseReadError } from '../lib/universeReadError.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { OutcomeUniverseList } from './OutcomeUniverseList.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -48,7 +49,6 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 				const page = await withReadTimeout(loadPage(address, universeId, start))
 				if (active && guard.isCurrent()) setSnapshot({ backend, loadPage, start, retry, page })
 			} catch (error) {
-				void error
 				if (active && guard.isCurrent())
 					setSnapshot(previous => ({
 						backend,
@@ -56,7 +56,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 						start,
 						retry,
 						page: previous?.backend === backend && previous.loadPage === loadPage ? previous.page : undefined,
-						error: copy.outcomesUnavailable,
+						error: describeUniverseReadError(error, copy.outcomeReadFailure),
 					}))
 			}
 		})()
@@ -95,7 +95,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 					<ScalarUniverseOutcomePicker address={address} universeId={universeId} question={page.scalarQuestion} loadOutcome={loadOutcome} />
 				)}
 
-				<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />
+				<RetryableNotice message={current?.error} retryLabel={copy.retryOutcomes} onRetry={() => setRetry(count => count + 1)} />
 				<PaginationControls
 					loading={loading}
 					hasPreviousPage={start > 0n}
