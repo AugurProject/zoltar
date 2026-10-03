@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
-import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, ticketInputsAfterSelection, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
+import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, ticketInputsAfterSelection, tradeTicketModel, type TicketInputs, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
@@ -183,12 +183,12 @@ describe('trade ticket inputs', () => {
 	})
 
 	test('clears the amount when its unit changes and never carries an accepted price impact to another trade', () => {
-		const buyYes = { mode: 'entry', side: 'YES', amount: '0.5', acknowledgedImpactBps: 800n, requoteNotice: undefined } as const
+		const buyYes: TicketInputs = { mode: 'entry', side: 'YES', amount: '0.5', acknowledgedImpactBps: 800n, requoteNotice: undefined }
 		// ETH buys either outcome, so the amount survives a side change on a buy; the acknowledgment named the other trade.
 		expect(ticketInputsAfterSelection(buyYes, { side: 'NO' })).toEqual({ ...buyYes, side: 'NO', acknowledgedImpactBps: undefined })
 		// 0.5 ETH must not become 0.5 shares.
 		expect(ticketInputsAfterSelection(buyYes, { mode: 'exit' })).toEqual({ ...buyYes, mode: 'exit', amount: '', acknowledgedImpactBps: undefined })
-		const sellYes = { ...buyYes, mode: 'exit' } as const
+		const sellYes: TicketInputs = { ...buyYes, mode: 'exit' }
 		expect(ticketInputsAfterSelection(sellYes, { side: 'NO' })).toEqual({ ...sellYes, side: 'NO', amount: '', acknowledgedImpactBps: undefined })
 		expect(ticketInputsAfterSelection(sellYes, { mode: 'entry' }).amount).toBe('')
 		// Selecting what is already selected changes nothing.

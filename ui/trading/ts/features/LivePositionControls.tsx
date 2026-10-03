@@ -1,5 +1,5 @@
 import { outcomeLabel } from '../copy/outcomes.js'
-import { useId } from 'preact/hooks'
+import { useId, useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -14,7 +14,6 @@ import * as workflowCopy from '../copy/workflows.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import { marketsCopy } from '../copy/markets.js'
 import { marketOddsPercent } from '../lib/marketListing.js'
-import { transactionInFlight } from './live/transactionPresentation.js'
 import { positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
@@ -149,10 +148,15 @@ export function LivePositionControls({
 		const otherHeld = side === 'YES' ? holdings.balances?.no : holdings.balances?.yes
 		if (next === 'exit' && held === 0n && otherHeld !== undefined && otherHeld > 0n) ticket.setSide(side === 'YES' ? 'NO' : 'YES')
 	}
-	const submit = () => void ticket.submit(estimate)
-	const canSubmit = walletStep === undefined && !model.availability.disabled && !transactionInFlight(state)
+	const controlsRef = useRef<HTMLDivElement>(null)
+	// Enter presses the action button itself, so every lock that disables the button also stops the key; it never stands in for the wallet step.
+	const submitFromKeyboard = () => {
+		if (walletStep !== undefined) return
+		const actionButton = controlsRef.current?.querySelector<HTMLButtonElement>('.transaction-outcome .tx-action-button')
+		if (actionButton !== null && actionButton !== undefined && !actionButton.disabled) actionButton.click()
+	}
 	return (
-		<div className='position-controls' aria-busy={revalidatingAfterReceipt}>
+		<div ref={controlsRef} className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
 				<UserMessage
 					className='trade-ticket-closed'
@@ -192,6 +196,8 @@ export function LivePositionControls({
 						{ value: 'NO', label: odds === undefined ? workflowCopy.no : marketsCopy.outcomeOdds(workflowCopy.no, odds.no), disabled: controlsDisabled },
 					]}
 				/>
+				{/* The percentages on the outcome buttons are conditional on a valid resolution, and say so in view. */}
+				{odds === undefined ? null : <span className='trade-ticket-odds-caption'>{marketsCopy.conditionalOdds}</span>}
 			</div>
 			<FormField id={amountId} label={mode === 'entry' ? ticketCopy.youPay : ticketCopy.sharesToSell}>
 				<FormInput
@@ -207,7 +213,7 @@ export function LivePositionControls({
 					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth, market)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
 					onKeyDown={event => {
-						if (event.key === 'Enter' && canSubmit) submit()
+						if (event.key === 'Enter') submitFromKeyboard()
 					}}
 				/>
 			</FormField>
@@ -222,7 +228,17 @@ export function LivePositionControls({
 			)}
 			<InvalidCoverageExplanation market={market} model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
 			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
-			<QuotedTransactionPanel phase={state} actionLabel={model.actionLabel} availability={model.availability} statusText={confirmedText} transactionHash={ticket.positionHash} receiptWarning={ticket.positionReceiptWarning} error={requoted ? undefined : ticket.message} walletStep={walletStep} onSubmit={submit}>
+			<QuotedTransactionPanel
+				phase={state}
+				actionLabel={model.actionLabel}
+				availability={model.availability}
+				statusText={confirmedText}
+				transactionHash={ticket.positionHash}
+				receiptWarning={ticket.positionReceiptWarning}
+				error={requoted ? undefined : ticket.message}
+				walletStep={walletStep}
+				onSubmit={() => void ticket.submit(estimate)}
+			>
 				{estimate === undefined || model.impactTier === undefined ? null : (
 					<TradeEstimatePanel
 						estimate={estimate}

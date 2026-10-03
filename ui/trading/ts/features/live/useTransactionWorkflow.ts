@@ -1,21 +1,11 @@
 import { useCallback, useRef, useState } from 'preact/hooks'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import * as workflowCopy from '../../copy/workflows.js'
-import { ticketInputsAfterSelection } from './tradeTicketModel.js'
+import { ticketInputsAfterSelection, type TicketInputs } from './tradeTicketModel.js'
 import { transactionMarketKey } from './transactionWorkflow.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
 
 export type TradeMode = 'entry' | 'exit'
-
-type TicketInputs = Readonly<{
-	mode: TradeMode
-	side: 'YES' | 'NO'
-	amount: string
-	/** The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment. */
-	acknowledgedImpactBps: bigint | undefined
-	/** Set when the last submission stopped because the chain re-quoted past the estimate; the ticket shows it as a prompt to review, not a failure. */
-	requoteNotice: string | undefined
-}>
 
 // Amount fields start empty: a prefilled value reads like a recommendation.
 const emptyTicketInputs: TicketInputs = { mode: 'entry', side: 'YES', amount: '', acknowledgedImpactBps: undefined, requoteNotice: undefined }

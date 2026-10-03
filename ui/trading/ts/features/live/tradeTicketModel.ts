@@ -197,14 +197,23 @@ export function holdingAfterTrade(estimate: TradeEstimate, balances: LiveBalance
 	return held < estimate.quote.totalLongShares ? undefined : held - estimate.quote.totalLongShares
 }
 
-type TicketSelection = Readonly<{ mode: TradeMode; side: Side; amount: string; acknowledgedImpactBps: bigint | undefined }>
+/** What the trade ticket holds for one market between renders. */
+export type TicketInputs = Readonly<{
+	mode: TradeMode
+	side: Side
+	amount: string
+	/** The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment. */
+	acknowledgedImpactBps: bigint | undefined
+	/** Set when the last submission stopped because the chain re-quoted past the estimate; the ticket shows it as a prompt to review, not a failure. */
+	requoteNotice: string | undefined
+}>
 
 /**
  * Changes what the ticket trades. The amount is ETH on a buy and shares of one outcome on a sell, so it is cleared
  * whenever the selection changes its unit; an accepted price impact named the previous trade, so it never carries over.
  * Selecting what is already selected returns the same inputs.
  */
-export function ticketInputsAfterSelection<TInputs extends TicketSelection>(previous: TInputs, selection: Partial<Pick<TicketSelection, 'mode' | 'side'>>): TInputs {
+export function ticketInputsAfterSelection(previous: TicketInputs, selection: Partial<Pick<TicketInputs, 'mode' | 'side'>>): TicketInputs {
 	const next = { ...previous, ...selection }
 	if (next.mode === previous.mode && next.side === previous.side) return previous
 	const amountUnitChanged = next.mode !== previous.mode || next.mode === 'exit'

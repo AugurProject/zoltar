@@ -81,6 +81,8 @@ describe('trade ticket states', () => {
 		const picker = container.querySelector('.outcome-picker')
 		expect(picker?.getAttribute('aria-label')).toBe('Outcome, with conditional odds')
 		expect(Array.from(picker?.querySelectorAll('button') ?? []).map(button => button.textContent)).toEqual(['Yes 50%', 'No 50%'])
+		// With no amount entered there is no odds preview, so the caption is what says the percentages are conditional.
+		expect(container.querySelector('.trade-ticket-switchers')?.textContent).toContain('Conditional odds')
 	})
 
 	test('switching to Sell selects the outcome the wallet holds', async () => {
@@ -116,6 +118,11 @@ describe('trade ticket states', () => {
 		}
 		const empty = await renderTicket(positionTicket({ submit }))
 		await pressEnter(empty)
+		expect(submitted).toBe(0)
+		await cleanup?.()
+		// A submission in flight disables the button, and Enter with it.
+		const submitting = await renderTicket(positionTicket({ amount: '0.5', state: 'submitting', submit }))
+		await pressEnter(submitting)
 		expect(submitted).toBe(0)
 		await cleanup?.()
 		const ready = await renderTicket(positionTicket({ amount: '0.5', submit }))

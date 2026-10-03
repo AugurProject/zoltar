@@ -125,6 +125,11 @@
 	flex-wrap: wrap;
 	gap: var(--space-3);
 }
+.trade-ticket-odds-caption {
+	align-self: center;
+	color: var(--muted);
+	font-size: 0.875rem;
+}
 .trade-amount-shortcuts {
 	display: flex;
 	flex-wrap: wrap;
