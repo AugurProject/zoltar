@@ -1,5 +1,6 @@
 import type { ContractRecord } from './browser-types.ts'
 import { contractDeploymentStatus, contractRegistrySection, type ContractRegistrySection } from './contract-registry-status.ts'
+import { utcDateTime } from './format.ts'
 
 export interface ContractsPageDeps {
 	readonly lookup: (selector: string) => HTMLElement
@@ -48,7 +49,7 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 		deploymentDetails.append(deployment)
 		head.append(element('strong', '', contract.label), deploymentDetails)
 		if (contract.deployment_timestamp) {
-			const deployed = element('time', 'data-note', `${contract.deployment_block_exact === false ? 'At or before ' : ''}${new Date(contract.deployment_timestamp).toLocaleDateString('en-GB')} · ${age(contract.deployment_timestamp)}`)
+			const deployed = element('time', 'data-note', `${contract.deployment_block_exact === false ? 'At or before ' : ''}${utcDateTime(contract.deployment_timestamp)} · ${age(contract.deployment_timestamp)}`)
 			deployed.dateTime = exactTimestamp(contract.deployment_timestamp)
 			deployed.title = exactTimestamp(contract.deployment_timestamp)
 			deploymentDetails.append(deployed)

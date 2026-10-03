@@ -122,7 +122,7 @@ describe('liquidator dashboard server', () => {
 						approvedUniverse: true,
 						botVault: {
 							address: 'vault-address-marker',
-							capacityOwnershipRep: '6',
+							capacityOwnershipEth: '6',
 							claimableFeesEth: '0.1',
 							healthBps: '12500',
 							openInterestDisplay: '2',
@@ -139,7 +139,7 @@ describe('liquidator dashboard server', () => {
 						questionId: '11',
 						selected: true,
 						systemState: '0',
-						totalCapacityOwnershipRep: '12',
+						totalCapacityOwnershipEth: '12',
 						totalPoolHeldRep: '13',
 						universeId: '14',
 						vaults: [{ address: 'nested-vault-marker', path: protectedPath }],
@@ -201,7 +201,7 @@ describe('liquidator dashboard server', () => {
 				address: '0x2222222222222222222222222222222222222222',
 				approvedUniverse: true,
 				bestCandidateBonusValueEth: '0.25',
-				botVault: { capacityOwnershipRep: '6', claimableFeesEth: '0.1', healthBps: '12500', openInterestDisplay: '2', vaultRepBacking: '7' },
+				botVault: { capacityOwnershipEth: '6', claimableFeesEth: '0.1', healthBps: '12500', openInterestDisplay: '2', vaultRepBacking: '7' },
 				candidateCount: 1,
 				centralizedPriceAllowed: true,
 				isPriceValid: true,
@@ -211,7 +211,7 @@ describe('liquidator dashboard server', () => {
 				questionId: '11',
 				selected: true,
 				systemState: '0',
-				totalCapacityOwnershipRep: '12',
+				totalCapacityOwnershipEth: '12',
 				totalPoolHeldRep: '13',
 				universeId: '14',
 			},
@@ -578,6 +578,10 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	expect((await fetch(new URL('/api/pool-catalog?scope=unknown', server.url))).status).toBe(400)
 	expect((await fetch(new URL('/api/pool-catalog?scope=monitored', server.url))).status).toBe(200)
 	expect(scopes).toEqual(['all', 'all', 'monitored'])
+	// Another site cannot start discovery through a subresource load; the dashboard's own requests and direct navigation can.
+	for (const site of ['cross-site', 'same-site']) expect((await fetch(catalog, { headers: { 'sec-fetch-site': site } })).status).toBe(403)
+	for (const site of ['same-origin', 'none']) expect((await fetch(catalog, { headers: { 'sec-fetch-site': site } })).status).toBe(200)
+	expect(scopes).toEqual(['all', 'all', 'monitored', 'all', 'all'])
 	fail = true
 	const failed = await fetch(catalog)
 	expect(failed.status).toBe(503)

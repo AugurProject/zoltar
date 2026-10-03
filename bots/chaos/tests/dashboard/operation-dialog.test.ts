@@ -160,6 +160,20 @@ test(
 		// A condition that throws is not yet true: right after a navigation the previous document still answers
 		// evaluations and its selectors resolve to null, so the poll keeps going until the timeout instead of failing once.
 		const waitFor = async (expression: string) => await session.waitFor(expression, { attempts: 150, message: `Browser condition timed out: ${expression}`, retryFailures: true })
+		const executeButton = "document.querySelector('#operation-dialog .operation-actions button:nth-child(2)')"
+		/** Clicks Execute; a live operation must first pass the final confirmation, which a dry run never shows. */
+		async function executeOperation(clicks = 1) {
+			const live = (await evaluate(`${executeButton}.textContent`)) === 'Execute operation'
+			await evaluate(Array.from({ length: clicks }, () => `${executeButton}.click()`).join('; '))
+			if (!live) {
+				expect(await evaluate("document.querySelector('.operator-confirm-dialog') === null")).toBe(true)
+				return
+			}
+			await waitFor("document.querySelector('.operator-confirm-dialog')?.open === true")
+			expect(await evaluate("document.querySelector('.operator-confirm-dialog h2')?.textContent")).toBe('Sign and submit live transactions')
+			await evaluate("document.querySelector('#operator-confirm-submit')?.click()")
+			await waitFor("document.querySelector('.operator-confirm-dialog') === null")
+		}
 		async function expectFullTokenAddress() {
 			expect(
 				await evaluate(`(() => {
@@ -231,7 +245,7 @@ test(
 				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
 				expect(await evaluate("document.querySelector('#operation-input-maxEthSpendAttoEth').value")).toBe('100')
 				expect(await evaluate("document.querySelector('#operation-input-amount').value")).toBe('0.000000000000000073')
-				expect(await evaluate("document.querySelector('.operation-transactions').textContent.includes('73 attoETH')")).toBe(true)
+				expect(await evaluate("document.querySelector('.operation-transactions').textContent.includes('ETH value: 0.000000000000000073 ETH')")).toBe(true)
 				await evaluate("document.querySelector('.operation-transactions details').open = true")
 				await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
 				await capture(`${viewport.label}-preview`)
@@ -248,7 +262,14 @@ test(
 				holdExecution = true
 				executionStatus = 'pending'
 				const before = executeCalls
-				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click(); document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				// Cancelling the live confirmation signs nothing and leaves the preview executable.
+				await evaluate(`${executeButton}.click()`)
+				await waitFor("document.querySelector('.operator-confirm-dialog')?.open === true")
+				expect(await evaluate("[...document.querySelectorAll('.operator-evidence-row dd')].map(row => row.textContent).join(' ').includes('ETH')")).toBe(true)
+				await evaluate("document.querySelector('.operator-confirm-dialog .dialog-actions button.secondary')?.click()")
+				await waitFor(`document.querySelector('.operator-confirm-dialog') === null && ${executeButton}.disabled === false`)
+				expect(executeCalls).toBe(before)
+				await executeOperation(2)
 				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent === 'Transaction submitted. Waiting for confirmation.'")
 				expect(executeCalls).toBe(before + 1)
 				expect(await evaluate("document.querySelector('.operation-receipts a').href")).toBe(`https://sepolia.etherscan.io/tx/${transactionHash}`)
@@ -272,7 +293,7 @@ test(
 					executionOutcome = outcome
 					await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
 					await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
-					await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+					await executeOperation()
 					await waitFor(`document.querySelector('#operation-dialog [role=status]').textContent.includes(${JSON.stringify(expectedMessage)})`)
 					if (outcome === 'skipped') {
 						expect(await evaluate("document.querySelector('.operation-receipts').textContent")).toContain('Stopped before signing')
@@ -292,7 +313,7 @@ test(
 				skipReason = gasLimitFailureReason()
 				await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
 				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
-				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				await executeOperation()
 				await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('estimated maximum 0.02402000049241 ETH; configured maximum 0.02 ETH')")
 				expect(await evaluate("document.querySelector('#operation-dialog [role=status]').textContent.includes('24020000492410000')")).toBe(false)
 				expect(await evaluate("document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
@@ -372,7 +393,7 @@ test(
 				seedIncluded = 0
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.closest('tr')?.dataset.operationId === 'trading.genesis-uniswap.seed-pool').click()")
 				await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
-				await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').click()")
+				await executeOperation()
 				await waitFor("document.querySelector('.operation-receipts li:last-child')?.textContent.includes('Queued') === true")
 				expect(await evaluate("document.querySelectorAll('.operation-receipts li').length")).toBe(3)
 				expect(await evaluate("document.querySelector('.operation-receipts').getAttribute('aria-busy')")).toBe('true')

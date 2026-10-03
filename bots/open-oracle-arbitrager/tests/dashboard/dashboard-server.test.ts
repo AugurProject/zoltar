@@ -188,8 +188,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="dex-market-price"')
 	expect(pageSource).toContain('id="guarded-market-price"')
 	expect(pageSource).not.toContain('public CCXT sources')
-	expect(pageSource).toContain('<th>Executable REP / ETH</th>')
-	expect(pageSource).toContain('<th>Reference deviation</th>')
+	expect(pageSource).toContain('<th scope="col">Executable REP / ETH</th>')
+	expect(pageSource).toContain('<th scope="col">Reference deviation</th>')
 	expect(pageSource).toContain('aria-describedby="signer-status"')
 	expect(pageSource).toContain('id="remember-signer" name="rememberSigner" type="checkbox"')
 	expect(pageSource).toContain('id="forget-signer-button"')
@@ -588,7 +588,7 @@ test('forwards operator-actionable pause and executor deployment refusals and hi
 	pauseFailure = new Error('Recover the pending executor deployment before resuming execution')
 	expect(await request('/api/paused', 'PUT', { paused: false })).toEqual({ body: { error: 'Recover the pending executor deployment before resuming execution' }, status: 400 })
 	pauseFailure = new Error('ENOENT: /var/lib/zoltar/operator.json')
-	expect(await request('/api/paused', 'PUT', { paused: false })).toEqual({ body: { error: 'The bot run state could not be changed. Refresh current state and check protected bot logs.' }, status: 400 })
+	expect(await request('/api/paused', 'PUT', { paused: false })).toEqual({ body: { error: 'The bot run state could not be changed. Wait for the next state update and check protected bot logs.' }, status: 400 })
 	pauseFailure = undefined
 	expect((await request('/api/paused', 'PUT', { paused: false })).status).toBe(200)
 
@@ -600,6 +600,39 @@ test('forwards operator-actionable pause and executor deployment refusals and hi
 	expect(await request('/api/executor-deployment', 'POST', {})).toEqual({ body: { error: 'Executor deployment could not be completed. Review chain state and protected bot logs.' }, status: 400 })
 	deploymentFailure = undefined
 	expect(await request('/api/executor-deployment', 'POST', {})).toEqual({ body: { address, alreadyDeployed: true }, status: 200 })
+})
+
+test('forwards field-level strategy, signer, submission, and chain switch refusals and hides everything else', async () => {
+	let failure = new Error('unset')
+	const fail = () => {
+		throw failure
+	}
+	const { origin } = startServer(dashboardControls({ switchNetworkProfile: fail, updateSigner: fail, updateStrategy: fail, updateSubmission: fail }))
+	const refusal = async (pathname: string, body: unknown, message: string) => {
+		failure = new Error(message)
+		const response = await jsonRequest(origin, pathname, 'PUT', body)
+		const value: unknown = await response.json()
+		expect(response.status).toBe(400)
+		return typeof value === 'object' && value !== null ? Reflect.get(value, 'error') : undefined
+	}
+	const hidden = 'ENOENT: /var/lib/zoltar/operator.json at https://user:secret@rpc.example/'
+
+	expect(await refusal('/api/settings', {}, 'Minimum remaining blocks must be a non-negative integer')).toBe('Minimum remaining blocks must be a non-negative integer')
+	expect(await refusal('/api/settings', {}, 'Minimum profit must not exceed 1000 WETH')).toBe('Minimum profit must not exceed 1000 WETH')
+	expect(await refusal('/api/settings', {}, `Minimum profit must be ${hidden}`)).toBe('Strategy settings could not be saved. Review the submitted values and protected bot logs.')
+	expect(await refusal('/api/settings', {}, hidden)).toBe('Strategy settings could not be saved. Review the submitted values and protected bot logs.')
+
+	expect(await refusal('/api/signer', {}, 'Private key must be null or a 32-byte 0x-prefixed value')).toBe('Private key must be null or a 32-byte 0x-prefixed value')
+	expect(await refusal('/api/signer', {}, 'Execution requires an active signer')).toBe('Live execution requires an active signer. Switch to dry run under Execution mode before removing it.')
+	expect(await refusal('/api/signer', {}, hidden)).toBe('Signer settings could not be changed. Review the submitted action and protected bot logs.')
+
+	expect(await refusal('/api/submission', {}, 'Private submission requires at least one relay URL')).toBe('Private submission requires at least one relay URL')
+	expect(await refusal('/api/submission', {}, 'Minimum bundle relay successes must be an integer between 1 and the configured private relay count')).toBe('Minimum bundle relay successes must be an integer between 1 and the configured private relay count')
+	expect(await refusal('/api/submission', {}, hidden)).toBe('Submission settings could not be saved. Review the submitted values and protected bot logs.')
+
+	expect(await refusal('/api/network-profile', {}, 'Recover the pending executor deployment before resuming execution')).toBe('Recover the pending executor deployment under Settings › Venues and executor before switching chains.')
+	expect(await refusal('/api/network-profile', {}, 'Chain profile switching is in progress; retry after the dashboard reconnects')).toBe('Chain profile switching is in progress; retry after the dashboard reconnects')
+	expect(await refusal('/api/network-profile', {}, hidden)).toBe('The chain profile could not be activated. Review protected bot logs.')
 })
 
 test('rejects every chain-specific mutation until network connectivity is configured', async () => {

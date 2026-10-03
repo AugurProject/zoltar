@@ -69,6 +69,7 @@ export const bindDetailControls = (context: ScannerContext, views: ScannerViews)
 		}
 		activityDetailState.preservePendingOnDialogClose = false
 		account.clearDetailUrl()
+		account.restoreDialogInvokerFocus()
 	})
 
 	window.addEventListener('resize', () => {
@@ -186,7 +187,6 @@ export const bindRichListControls = (context: ScannerContext, views: ScannerView
 		lookup('#richlist-status').hidden = false
 		lookup('#richlist-status').className = 'system-status'
 		lookup('#richlist-status').textContent = 'Loading known addresses…'
-		lookup('#rich-sort').disabled = true
 		lookup('#richlist-more').hidden = true
 		lookup('#richlist-more').disabled = true
 		lookup('#richlist-more-status').hidden = true

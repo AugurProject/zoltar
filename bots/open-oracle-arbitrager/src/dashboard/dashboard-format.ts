@@ -43,10 +43,6 @@ export function exactAmount(value: string | undefined, symbol: string) {
 	return formatAmount(value, symbol)
 }
 
-export function amount(value: string | undefined, symbol: string) {
-	return formatAmount(value, symbol)
-}
-
 export function isConfigurationEnvelope(value: unknown): value is { configuration: unknown; effectiveRpcQuorum: 1 | 2; revision: string } {
 	return typeof value === 'object' && value !== null && 'configuration' in value && 'revision' in value && typeof value.revision === 'string' && 'effectiveRpcQuorum' in value && (value.effectiveRpcQuorum === 1 || value.effectiveRpcQuorum === 2)
 }
@@ -160,7 +156,7 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 export function opportunityDecisionReason(opportunity: Pick<EvaluatedOpportunitySnapshot, 'decision' | 'tokenSymbol'> | Pick<SkippedOpportunitySnapshot, 'decision' | 'reason'>) {
 	if (opportunity.decision === 'skipped') return opportunity.reason
 	const reasons: Record<OpportunityDecision, string> = {
-		'dry-run-opportunity': 'All economic guards pass; execution mode is disabled',
+		'dry-run-opportunity': 'All economic guards pass; the bot is in dry-run mode',
 		eligible: 'Profit, timing, state, and inventory guards pass',
 		'execution-failed': 'Execution raised an error after selection',
 		'history-unavailable': 'Confirmed-history durability is unavailable',
@@ -170,7 +166,7 @@ export function opportunityDecisionReason(opportunity: Pick<EvaluatedOpportunity
 		'risk-limit': 'A concurrent-position, position-notional, total-locked-capital, or UTC-day gas-spend limit blocks execution',
 		selected: 'Highest modeled net profit in this scan',
 		'self-report': 'Current wallet is already the reporter',
-		'signer-unavailable': 'Execution mode is locked until a local signer is set',
+		'signer-unavailable': 'Live execution is locked until a local signer is set',
 		submitted: 'Signed dispute was accepted for delivery',
 		unprofitable: 'Modeled profit is below configured thresholds',
 	}
@@ -180,15 +176,15 @@ export function opportunityDecisionReason(opportunity: Pick<EvaluatedOpportunity
 export function settlementDecisionReason(decision: SettlementDecision) {
 	const reasons: Record<SettlementDecision, string> = {
 		disabled: 'Third-party settlement is disabled under Settings › Settlement',
-		'dry-run-settlement': 'Reward covers gas and the minimum net; execution mode is disabled',
+		'dry-run-settlement': 'Reward covers gas and the minimum net; the bot is in dry-run mode',
 		eligible: 'Reward covers gas and the minimum net',
 		'execution-failed': 'The settle transaction was skipped or reverted; see the operations log',
-		'gas-price-cap': 'Projected gas price exceeds the configured cap',
+		'gas-price-cap': 'Projected gas price exceeds the settlement fee cap',
 		'history-unavailable': 'Position recovery has not completed, so the daily gas budget is incomplete',
 		'in-flight': 'A settlement transaction for this report is already pending',
 		paused: 'Operator paused execution',
 		'risk-limit': 'The UTC-day gas-spend limit leaves no room for this settlement',
-		'signer-unavailable': 'Execution mode is locked until a local signer is set',
+		'signer-unavailable': 'Live execution is locked until a local signer is set',
 		settled: 'Settled in this scan',
 		unprofitable: 'Reward is below the worst-case gas budget plus minimum net; checked again each scan',
 	}
@@ -205,9 +201,9 @@ export function rewardWithdrawalLabel(settlements: Pick<SettlementSnapshot, 'set
 	const reasons: Record<RewardWithdrawalDecision, string> = {
 		'below-threshold': `withdraws at ${settlements.settings.rewardWithdrawThresholdEth} ETH`,
 		disabled: 'withdrawal disabled under Settings › Settlement',
-		'dry-run': 'withdrawal waits for execution mode',
+		'dry-run': 'withdrawal waits for live execution',
 		due: 'withdrawal due',
-		'gas-price-cap': 'withdrawal waits for gas below the cap',
+		'gas-price-cap': 'withdrawal waits for gas below the fee cap',
 		'history-unavailable': 'withdrawal waits for position recovery',
 		'in-flight': 'withdrawal pending',
 		paused: 'withdrawal paused',
@@ -229,13 +225,14 @@ export function marketPriceChartDescription(points: readonly Pick<MarketPricePoi
 export function requiredSignerPrivateKey(value: string) {
 	const privateKey = value.trim()
 	if (privateKey === '') throw new Error('Enter a private key before setting the signer.')
+	if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) throw new Error('The private key must be 0x followed by 64 hexadecimal characters.')
 	return privateKey
 }
 
 export function statePollingFailureMessage(error: unknown) {
 	if (error instanceof SyntaxError) return 'The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.'
 	const message = errorMessage(error)
-	return message.startsWith('The bot tried to ') ? `${message} Use Refresh to retry now.` : `The bot tried to load the latest operator state for the dashboard, but it failed: ${message}. Automatic retry remains active; use Refresh to retry now.`
+	return message.startsWith('The bot tried to ') ? message : `The bot tried to load the latest operator state for the dashboard, but it failed: ${message}. Automatic retry remains active.`
 }
 
 export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWallet: boolean; privateKey: string; requestPending: boolean }) {

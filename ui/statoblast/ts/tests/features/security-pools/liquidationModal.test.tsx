@@ -1,9 +1,10 @@
+import { createPreparedOperationFixture } from './workflow/preparedOperationFixture.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
@@ -100,13 +101,13 @@ describe('LiquidationModal', () => {
 	})
 
 	function createLiquidationModalProps(overrides: Partial<Parameters<typeof LiquidationModal>[0]> = {}): Parameters<typeof LiquidationModal>[0] {
+		const { onQueueLiquidation = () => undefined, ...otherOverrides } = overrides
 		return {
 			accountAddress: defaultCallerVaultAddress,
 			closeLiquidationModal: () => undefined,
 			currentPoolOracleManagerDetails: undefined,
 			isOnActiveAppChain: true,
 			liquidationDebtEthAmount: '1',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			liquidationManagerAddress: zeroAddress,
 			liquidationFundingPreview: undefined,
 			liquidationFundingPreviewError: undefined,
@@ -120,7 +121,7 @@ describe('LiquidationModal', () => {
 			onLoadPoolOracleManager: () => undefined,
 			onLiquidationAmountChange: () => undefined,
 			onLiquidationTimeoutMinutesChange: () => undefined,
-			onQueueLiquidation: () => undefined,
+			onQueueLiquidation: createPreparedOperationFixture('Queue liquidation', onQueueLiquidation),
 			onSelectedPoolViewChange: () => undefined,
 			poolOracleManagerError: undefined,
 			repPerEthPrice: 1n * 10n ** 18n,
@@ -132,7 +133,7 @@ describe('LiquidationModal', () => {
 			securityPoolOverviewResult: undefined,
 			callerVaultSummary: createTargetVaultSummary({ vaultAddress: defaultCallerVaultAddress }),
 			targetVaultSummary: createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress }),
-			...overrides,
+			...otherOverrides,
 		}
 	}
 
@@ -238,8 +239,9 @@ describe('LiquidationModal', () => {
 		const page = within(document.body)
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
 		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
+		await waitFor(() => expect(page.getByRole('button', { name: 'Queue liquidation' }).hasAttribute('disabled')).toBe(false))
 		fireEvent.click(page.getByRole('button', { name: 'Queue liquidation' }))
-		expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH)
+		await waitFor(() => expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH))
 	})
 
 	test('keeps queued liquidation inputs without a funding review panel', async () => {
@@ -283,7 +285,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
 	})
 
-	test('requires a queued liquidation timeout of at least 1 minute', async () => {
+	test('requires a queued liquidation timeout of 1–5 minutes', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
@@ -293,7 +295,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
-		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of at least 1 minute.')
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of 1–5 minutes.')
 	})
 
 	test('keeps liquidation disabled off Sepolia and explains recovery', async () => {
@@ -582,7 +584,6 @@ describe('LiquidationModal', () => {
 					currentPoolOracleManagerDetails={undefined}
 					isOnActiveAppChain
 					liquidationDebtEthAmount={liquidationDebtEthAmount}
-					maximumLiquidationDebtAttoEth={5n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -644,7 +645,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 9n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			liquidationTargetVault: zeroAddress,
 			onSelectedPoolViewChange: view => {
 				selectedViews.push(view ?? '')
@@ -718,7 +718,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 8n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			liquidationTargetVault: zeroAddress,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
@@ -747,7 +746,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 0n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
@@ -778,7 +776,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 0n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -856,11 +853,10 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
-		const queueButton = within(document.body).getByRole('button', { name: 'Queue liquidation' }) as HTMLButtonElement
-		expect(queueButton.disabled).toBe(false)
+		await waitFor(() => expect(within(document.body).getByRole('button', { name: 'Queue liquidation' }).hasAttribute('disabled')).toBe(false))
 	})
 
-	test('Max selects the executable liquidation debt supplied by the caller', async () => {
+	test('Max estimates the transferable commitment from the pool price while the liquidation queues', async () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -868,7 +864,6 @@ describe('LiquidationModal', () => {
 				lastPrice: 10n * 10n ** 18n,
 			}),
 			liquidationDebtEthAmount: '1',
-			maximumLiquidationDebtAttoEth: 100n * 10n ** 18n,
 			onLiquidationAmountChange: value => {
 				amountChanges.push(value)
 			},
@@ -901,7 +896,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 0n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
@@ -930,7 +924,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 0n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
@@ -958,7 +951,6 @@ describe('LiquidationModal', () => {
 				pendingOperationSlotId: 0n,
 			}),
 			liquidationDebtEthAmount: '5',
-			maximumLiquidationDebtAttoEth: 5n * 10n ** 18n,
 			securityPoolOverviewResult: {
 				action: 'queueLiquidation',
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ad',
@@ -976,7 +968,7 @@ describe('LiquidationModal', () => {
 		expect(within(document.body).getByText('The receiver vault would remain below the minimum commitment after liquidation.')).not.toBeNull()
 	})
 
-	test('keeps the dialog open and shows execution results when the parent closes it after submit', async () => {
+	test('keeps the open dialog showing execution results after submit until it is closed', async () => {
 		function LiquidationExecutionHarness() {
 			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
 			const [securityPoolOverviewResult, setSecurityPoolOverviewResult] = useState<SecurityPoolOverviewActionResult | undefined>(undefined)
@@ -996,7 +988,6 @@ describe('LiquidationModal', () => {
 					})}
 					isOnActiveAppChain
 					liquidationDebtEthAmount='1'
-					maximumLiquidationDebtAttoEth={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -1007,7 +998,6 @@ describe('LiquidationModal', () => {
 					onLiquidationAmountChange={() => undefined}
 					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => {
-						setLiquidationModalOpen(false)
 						setSecurityPoolOverviewResult({
 							action: 'queueLiquidation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000cd',
@@ -1075,7 +1065,7 @@ describe('LiquidationModal', () => {
 		container.remove()
 	})
 
-	test('keeps the dialog open and shows liquidation errors inside the dialog', async () => {
+	test('keeps the open dialog showing liquidation errors after submit', async () => {
 		function LiquidationErrorHarness() {
 			const [liquidationModalOpen, setLiquidationModalOpen] = useState(true)
 			const [securityPoolLiquidationError, setSecurityPoolLiquidationError] = useState<string | undefined>(undefined)
@@ -1095,7 +1085,6 @@ describe('LiquidationModal', () => {
 					})}
 					isOnActiveAppChain
 					liquidationDebtEthAmount='1'
-					maximumLiquidationDebtAttoEth={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen={liquidationModalOpen}
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -1106,7 +1095,6 @@ describe('LiquidationModal', () => {
 					onLiquidationAmountChange={() => undefined}
 					onLiquidationTimeoutMinutesChange={() => undefined}
 					onQueueLiquidation={() => {
-						setLiquidationModalOpen(false)
 						setSecurityPoolLiquidationError('Liquidation execution reverted')
 					}}
 					onSelectedPoolViewChange={() => undefined}
@@ -1163,7 +1151,6 @@ describe('LiquidationModal', () => {
 				lastPrice: 3n * 10n ** 18n,
 			}),
 			liquidationDebtEthAmount: '1',
-			maximumLiquidationDebtAttoEth: 25n * 10n ** 18n,
 			onLiquidationAmountChange: value => {
 				amountChanges.push(value)
 			},
@@ -1188,7 +1175,6 @@ describe('LiquidationModal', () => {
 		const amountChanges: string[] = []
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n }),
-			maximumLiquidationDebtAttoEth: 25n * 10n ** 18n,
 			onLiquidationAmountChange: value => amountChanges.push(value),
 			repPerEthPrice: 3n * 10n ** 18n,
 			targetVaultSummary: createTargetVaultSummary({
@@ -1211,7 +1197,6 @@ describe('LiquidationModal', () => {
 
 	test('disables Max when the configured Uniswap price is unavailable', async () => {
 		const renderedComponent = await renderLiquidationModal({
-			maximumLiquidationDebtAttoEth: 25n * 10n ** 18n,
 			repPerEthPrice: undefined,
 			uiPriceOracle: 'uniswap',
 		})
@@ -1230,7 +1215,6 @@ describe('LiquidationModal', () => {
 				lastPrice: 1000n * 10n ** 18n,
 			}),
 			liquidationDebtEthAmount: '1',
-			maximumLiquidationDebtAttoEth: 995n * 10n ** 17n,
 			onLiquidationAmountChange: value => {
 				amountChanges.push(value)
 			},
@@ -1316,9 +1300,10 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: false, reason: undefined })
+		// Max follows the protocol price the guard checks, so it stays available alongside the enabled action.
 		const maxButton = document.body.querySelector('.field-inline-action')
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
-		expect(maxButton.disabled).toBe(true)
+		expect(maxButton.disabled).toBe(false)
 	})
 
 	test('shows target-safe before post-liquidation REP floor warnings for a safe near-floor target vault', async () => {
@@ -1710,7 +1695,6 @@ describe('LiquidationModal', () => {
 					currentPoolOracleManagerDetails={undefined}
 					isOnActiveAppChain
 					liquidationDebtEthAmount='1'
-					maximumLiquidationDebtAttoEth={5n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -1752,7 +1736,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const button = within(document.body).getByRole('button', { name: 'Execute vault liquidation' })
 		expect(button.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent).toContain('expires too soon')
+		expect(document.body.textContent).toContain('The oracle price expires in 30 seconds, before this transaction could confirm.')
 		fireEvent.click(button)
 		expect(onQueueLiquidation).not.toHaveBeenCalled()
 	})
@@ -1778,7 +1762,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Execute vault liquidation' })).toBeNull()
 	})
 
-	test('uses a dedicated top-aligned action row when execute liquidation shows a disabled reason', async () => {
+	test('uses the shared action row when execute liquidation shows a disabled reason', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -1803,13 +1787,13 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		const cancelButton = documentQueries.getByRole('button', { name: 'Cancel' })
-		const actionContainer = cancelButton.closest('.liquidation-modal-actions')
+		const actionContainer = cancelButton.closest('.transaction-step-actions')
 
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByText('The receiver vault would become liquidatable after this liquidation.')).not.toBeNull()
 		expect(actionContainer).not.toBeNull()
 		expect(actionContainer?.className).toContain('actions')
-		expect(actionContainer?.className).toContain('liquidation-modal-actions')
+		expect(actionContainer?.className).toContain('transaction-step-actions')
 	})
 
 	test('distinguishes receiver vaults that remain liquidatable after the simulated liquidation', async () => {
@@ -1888,6 +1872,24 @@ describe('LiquidationModal', () => {
 		const targetVaultButton = documentQueries.getByRole('button', { name: `Copy address ${targetVaultAddress}` })
 		expect(targetVaultButton).not.toBeNull()
 		expect(targetVaultButton.textContent).toContain(targetVaultAddress)
+	})
+
+	test('names partial receiver input as invalid in the header instead of clipping it as an address', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const targetVaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			liquidationReceiverVault: '0x1234',
+			liquidationTargetVault: targetVaultAddress,
+			targetVaultSummary: createTargetVaultSummary({ vaultAddress: targetVaultAddress }),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const receiverHeading = document.body.querySelectorAll('.liquidation-party .decision-heading')[1]
+		if (!(receiverHeading instanceof HTMLElement)) throw new Error('Expected the receiver vault heading')
+		expect(receiverHeading.textContent).toBe('Invalid address')
+		expect(receiverHeading.querySelector('.address-value')).toBeNull()
+		expect(within(document.body).getAllByText('Enter a valid receiver vault address.').length).toBeGreaterThan(0)
 	})
 
 	test('shows a warning and disables liquidation when receiver and target vaults are the same', async () => {
@@ -2014,7 +2016,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Approval expiration')).not.toBeNull()
 		expect(documentQueries.getByText('1.25× protocol minimum')).not.toBeNull()
 		expect(documentQueries.getByText('Active')).not.toBeNull()
-		expect(documentQueries.getByText('The operator pays gas and oracle costs; the receiver receives REP backing units and underwriting commitments.')).not.toBeNull()
+		expect(documentQueries.getByText('The operator pays gas and oracle costs; the receiver receives REP backing units and commitments.')).not.toBeNull()
 		expect(
 			documentQueries.getByText(
 				'The staged commitment transfer is reserved against the approval’s cumulative ETH quota and cannot exceed its per-liquidation limit. Existing reservations survive revocation. The receiver’s live balances, minimum commitment, and signed minimum health factor are checked again at execution, so a queue-time estimate does not guarantee execution.',
@@ -2257,7 +2259,6 @@ describe('LiquidationModal', () => {
 					})}
 					isOnActiveAppChain
 					liquidationDebtEthAmount={liquidationDebtEthAmount}
-					maximumLiquidationDebtAttoEth={2_500n * 10n ** 18n}
 					liquidationManagerAddress={zeroAddress}
 					liquidationModalOpen
 					liquidationSecurityPoolAddress={zeroAddress}
@@ -2349,7 +2350,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText(/Uniswap V3 REP per ETH/)).not.toBeNull()
 	})
 
-	test('healthy vault details distinguish underwriting commitments, REP backing, and dispute stake', async () => {
+	test('healthy vault details distinguish commitments, REP backing, and dispute stake', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -2370,7 +2371,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
-		expect(documentQueries.getByText('Target underwriting commitments')).not.toBeNull()
+		expect(documentQueries.getByText('Target commitment')).not.toBeNull()
 		expect(documentQueries.getByText('Target vault REP backing')).not.toBeNull()
 		expect(documentQueries.getByText('Target dispute-staked REP')).not.toBeNull()
 		expect(documentQueries.queryByText(/Collateralization/)).toBeNull()
@@ -2425,6 +2426,151 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Failed to load price oracle details. Reason: RPC unavailable')).not.toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry price status' }))
 		expect(loadRequests).toEqual([managerAddress, managerAddress])
+	})
+
+	test('hides the dialog when it is closed while the liquidation is pending', async () => {
+		let closeCount = 0
+		const props = createLiquidationModalProps({
+			closeLiquidationModal: () => {
+				closeCount += 1
+			},
+			securityPoolOverviewActiveAction: 'queueLiquidation',
+		})
+		const renderedComponent = await renderIntoDocument(<LiquidationModal {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate vault' })
+		const closeButton = within(dialog).getByRole('button', { name: 'Close' }) as HTMLButtonElement
+		expect(closeButton.disabled).toBe(false)
+		await act(() => {
+			fireEvent.click(closeButton)
+		})
+		expect(closeCount).toBe(1)
+
+		// The parent closed the dialog; the running transaction keeps the dialog hidden and reports through the transaction toast.
+		await act(() => {
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<LiquidationModal {...props} liquidationModalOpen={false} />
+				</ChainTimestampContext.Provider>,
+				renderedComponent.container,
+			)
+		})
+		expect(document.body.querySelector("[role='dialog']")).toBeNull()
+
+		await act(() => {
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<LiquidationModal {...props} liquidationModalOpen={false} securityPoolOverviewActiveAction={undefined} securityPoolOverviewResult={{ action: 'queueLiquidation', hash: '0x00000000000000000000000000000000000000000000000000000000000000cd', securityPoolAddress: zeroAddress }} />
+				</ChainTimestampContext.Provider>,
+				renderedComponent.container,
+			)
+		})
+		expect(document.body.querySelector("[role='dialog']")).toBeNull()
+	})
+
+	test('keeps the shared Cancel action disabled while the liquidation is pending', async () => {
+		const renderedComponent = await renderLiquidationModal({ securityPoolOverviewActiveAction: 'queueLiquidation' })
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate vault' })
+		expect(within(dialog).getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+		expect(within(dialog).getAllByRole('button', { name: 'Close' })).toHaveLength(1)
+	})
+
+	test('shows an inline address error for a malformed receiver vault instead of a receiver-state reason', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 10n * 10n ** 18n }),
+			liquidationReceiverVault: '0x1234',
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const receiverInput = within(document.body).getByRole('textbox', { name: /^Receiver vault/ })
+		expect(receiverInput.getAttribute('placeholder')).toBe('0x...')
+		expect(receiverInput.getAttribute('aria-invalid')).toBe('true')
+		expect(within(document.body).getAllByText('Enter a valid receiver vault address.').length).toBeGreaterThan(0)
+		expect(document.body.textContent).not.toContain('Receiver vault state must be loaded')
+		expect(getTransactionButtonState(document.body, 'Execute vault liquidation').disabled).toBe(true)
+		// Invalid text is not another receiver yet, so the delegated-receiver warning and approval field stay hidden.
+		expect(document.body.textContent).not.toContain('Receiver accepts liquidation liabilities')
+		expect(within(document.body).queryByRole('textbox', { name: /^Bounded approval ID/ })).toBeNull()
+	})
+
+	test('shows an unset bounded approval ID as an empty field with a short placeholder', async () => {
+		const approvalIdChanges: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }),
+			liquidationReceiverVault: getAddress('0x0000000000000000000000000000000000000002'),
+			onLiquidationApprovalIdChange: value => {
+				approvalIdChanges.push(value)
+			},
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(document.body.textContent).toContain('Receiver accepts liquidation liabilities')
+		const approvalIdInput = within(document.body).getByRole('textbox', { name: /^Bounded approval ID/ })
+		if (!(approvalIdInput instanceof HTMLInputElement)) throw new Error('Expected the approval ID input')
+		expect(approvalIdInput.value).toBe('')
+		expect(approvalIdInput.getAttribute('placeholder')).toBe('0x...')
+		fireEvent.input(approvalIdInput, { target: { value: `0x${'22'.repeat(32)}` } })
+		fireEvent.input(approvalIdInput, { target: { value: ' ' } })
+		// Clearing the field restores the unset zero ID rather than submitting blank text.
+		expect(approvalIdChanges).toEqual([`0x${'22'.repeat(32)}`, `0x${'00'.repeat(32)}`])
+	})
+
+	test('explains in visible text why Max is unavailable while a liquidation queues without a price', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+			repPerEthPrice: undefined,
+			uiPriceOracle: 'uniswap',
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const maxButton = within(document.body).getByRole('button', { name: 'Max' })
+		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
+		expect(maxButton.disabled).toBe(true)
+		const hint = within(document.body).getByText(/^Max needs a REP price to estimate the transferable commitment\./)
+		expect(hint.classList.contains('field-hint')).toBe(true)
+	})
+
+	test('states the 1–5 minute timeout range and flags an out-of-range timeout inline', async () => {
+		const renderedComponent = await renderLiquidationModal({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }), liquidationTimeoutMinutes: '30' })
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const timeoutInput = within(document.body).getByRole('textbox', { name: /^Manual execution timeout/ })
+		expect(timeoutInput.getAttribute('max')).toBe('5')
+		expect(timeoutInput.getAttribute('aria-invalid')).toBe('true')
+		expect(document.body.textContent).toContain('Enter 1–5 whole minutes.')
+		expect(document.body.textContent).toContain('1–5 whole minutes after oracle settlement.')
+	})
+
+	test('bases Max on the pool oracle price that the guard uses and shows the transferable maximum', async () => {
+		const amountChanges: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 500n * 10n ** 18n, underwritingLimitAttoEth: 0n, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 100n * 10n ** 18n }),
+			liquidationDebtEthAmount: '',
+			onLiquidationAmountChange: value => amountChanges.push(value),
+			// The UI price makes the target look safe, but the pool oracle price the protocol checks makes it liquidatable.
+			repPerEthPrice: 1n * 10n ** 18n,
+			selectedPool: createSelectedPool({ minimumSecurityBondDebtAttoEth: 0n, minimumVaultRepDepositAttoRep: 0n, statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * 10n ** 18n, underwritingLimitAttoEth: 2n * 10n ** 18n, vaultAddress: defaultTargetVaultAddress }),
+			uiPriceOracle: 'uniswap',
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(document.body.textContent).toContain('Max transferable: 2')
+		const maxButton = document.body.querySelector('.field-inline-action')
+		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
+		expect(maxButton.disabled).toBe(false)
+		await act(() => {
+			fireEvent.click(maxButton)
+		})
+		expect(amountChanges).toEqual(['2'])
+	})
+
+	test('does not fall back to the whole commitment for Max when no price is available', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: undefined,
+			selectedPool: createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n }),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const maxButton = document.body.querySelector('.field-inline-action')
+		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
+		expect(maxButton.disabled).toBe(true)
 	})
 })
 

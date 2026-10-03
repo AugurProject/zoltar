@@ -136,6 +136,7 @@ export function createDashboardElements() {
 		resumeDialog: element('resume-dialog', HTMLDialogElement),
 		resumePreflight: element('resume-preflight', HTMLUListElement),
 		resumeRandomScopeWarning: element('resume-random-scope-warning', HTMLParagraphElement),
+		resumeStaleWarning: element('resume-stale-warning', HTMLParagraphElement),
 		cancelResume: element('cancel-resume', HTMLButtonElement),
 		confirmResume: element('confirm-resume', HTMLButtonElement),
 	}

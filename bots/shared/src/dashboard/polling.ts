@@ -61,6 +61,23 @@ export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Pr
 	}
 }
 
+/**
+ * Sends a dashboard request and decodes its JSON body under one deadline. The deadline covers the body as well as the
+ * headers, so a response that stalls after its headers still rejects with `timeoutMessage` instead of hanging the
+ * caller. The response is returned beside the decoded value so each dashboard maps a rejected status its own way.
+ */
+export function requestJson(path: string, timeoutMilliseconds: number, init?: RequestInit, timeoutMessage?: string) {
+	return requestWithTimeout(
+		async signal => {
+			const response = await fetch(path, { ...init, signal })
+			const value: unknown = await response.json()
+			return { response, value }
+		},
+		timeoutMilliseconds,
+		timeoutMessage,
+	)
+}
+
 /** What one reconnect check after a chain-profile switch found. */
 export type ProfileReconnectCheck = 'abandoned' | 'reconnected' | 'waiting'
 

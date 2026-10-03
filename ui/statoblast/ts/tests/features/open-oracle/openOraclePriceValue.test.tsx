@@ -17,6 +17,6 @@ test('labels the settled price as REP per ETH and counts down its validity windo
 	cleanup = rendered.cleanup
 
 	expect(document.body.textContent).toContain('3.00 REP per ETH')
-	expect(document.body.querySelector('.oracle-price-validity')?.textContent).toBe('(Valid for 1m)')
-	await waitFor(() => expect(document.body.querySelector('.oracle-price-validity')?.textContent).toBe('(Valid for less than a minute)'), { timeout: 4_000 })
+	expect(document.body.querySelector('.oracle-price-validity')?.textContent).toBe('(valid for 1m)')
+	await waitFor(() => expect(document.body.querySelector('.oracle-price-validity')?.textContent).toBe('(valid for less than a minute)'), { timeout: 4_000 })
 })

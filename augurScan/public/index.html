@@ -19,10 +19,10 @@
 					<h1>augurScan</h1>
 				</div>
 			</a>
-			<form id="global-search" class="global-search" role="search" autocomplete="off"><label class="sr-only" for="global-search-input">Search address, transaction, block, question, pool, or report</label><input id="global-search-input" type="search" placeholder="Search address, tx, block…  /" aria-controls="global-search-results" /><div id="global-search-results" class="global-search-results" role="status" hidden></div></form>
+			<form id="global-search" class="global-search" role="search" aria-label="Site" autocomplete="off"><label class="sr-only" for="global-search-input">Search address, transaction, block, question, pool, or report</label><input id="global-search-input" type="search" placeholder="Search address, tx, block…  /" aria-controls="global-search-results" /><div id="global-search-results" class="global-search-results" hidden></div></form>
 			<label class="global-network"
 				><span class="sr-only">Network</span
-				><select id="global-network-filter" aria-label="Network">
+				><select id="global-network-filter">
 					<option>Loading networks…</option>
 				</select></label
 			>
@@ -52,7 +52,7 @@
 						<h2 id="activity-heading">Project logs</h2>
 					</div>
 				</div>
-				<form id="filters" class="filters" role="search">
+				<form id="filters" class="filters" role="search" aria-label="Project logs">
 					<label><span>Event</span><input id="event-filter" type="search" placeholder="Transfer, Report…" /></label>
 					<label><span>Address</span><input id="address-filter" type="search" placeholder="0x…" spellcheck="false" /></label>
 					<button class="primary" type="submit">Apply filters</button>

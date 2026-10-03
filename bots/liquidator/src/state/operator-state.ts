@@ -263,7 +263,7 @@ function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint)
 	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.underwritingLimitAttoEth, multiplierBps, price, vault.disputeStakedAttoRep)
 	return {
 		address: vault.address,
-		capacityOwnershipRep: formatDecimalAmount(vault.underwritingLimitAttoEth),
+		capacityOwnershipEth: formatDecimalAmount(vault.underwritingLimitAttoEth),
 		openInterestDisplay: formatDecimalAmount(vault.openInterestAttoEth),
 		healthBps: healthBps?.toString(),
 		backingUnits: vault.backingUnits.toString(),
@@ -456,7 +456,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				selected: pool.selected,
 				securityPoolForker: pool.securityPoolForker,
 				systemState: pool.systemState.toString(),
-				totalCapacityOwnershipRep: formatDecimalAmount(pool.totalUnderwritingLimitAttoEth),
+				totalCapacityOwnershipEth: formatDecimalAmount(pool.totalUnderwritingLimitAttoEth),
 				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
 				universeId: pool.universeId.toString(),
 				vaults: pool.vaults.map(vault => vaultView(vault)),

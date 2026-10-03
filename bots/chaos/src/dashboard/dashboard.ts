@@ -14,7 +14,7 @@ import { createRecoveryContexts } from './dashboard-recovery-contexts.ts'
 import { registerRecoveryForms } from './dashboard-recovery-forms.ts'
 import { createDashboardRecoveryView } from './dashboard-recovery-view.js'
 import { createDashboardRefresh } from './dashboard-refresh.ts'
-import { put } from './dashboard-requests.ts'
+import { put, readThroughPut } from './dashboard-requests.ts'
 import { registerSettingsForms } from './dashboard-settings-forms.ts'
 import { createDashboardSettingsView } from './dashboard-settings-view.js'
 import { createDashboardState } from './dashboard-state.ts'
@@ -54,14 +54,23 @@ const executionModeForm = registerExecutionModeForm({
 	refresh: () => controller.refresh(),
 	snapshot: () => state.snapshot,
 })
-const retirementDashboard = createRetirementDashboard({ current: () => state.snapshot, put: async value => await put('/api/retirement', value), refresh: async () => await controller.refresh() })
+const retirementDashboard = createRetirementDashboard({
+	current: () => state.snapshot,
+	put: async value => await put('/api/retirement', value),
+	reconcile: (error, status) => controller.reconcileUnknownMutation(error, status, 'state'),
+	refresh: async () => await controller.refresh(),
+})
 const selectionControls = createSelectionControls({
 	put,
 	refresh: () => controller.refresh(),
 	reconcile: (error, status) => controller.reconcileUnknownMutation(error, status, 'configuration and state', 'settings'),
 })
 const latches = createMutationLatches({ state, elements, executionModeForm, selectionControls })
-const operationDialog = createOperationDialog({ request: value => put('/api/operation', value, 120_000) })
+const operationDialog = createOperationDialog({
+	// The 1.5 s status poll must not hold back state polling. Inspect and preview stay counted: the server runs a scan
+	// for them inside its mutation queue, so state reads sent meanwhile would time out; the settle wait is bounded.
+	request: (value, action) => (action === 'status' ? readThroughPut('/api/operation', value, 10_000) : put('/api/operation', value, 120_000)),
+})
 const renderCatalogGroups = createCatalogGroups(elements.catalogRows, ecosystemOrder, ecosystemLabel)
 
 const recoveryView = createDashboardRecoveryView({ state, elements })
@@ -91,7 +100,11 @@ const controller = createDashboardRefresh({
 const { refresh, reconcileUnknownMutation, requestRecoveryContextRefresh } = controller
 const recoveryContexts = createRecoveryContexts(elements)
 
-registerSectionNavigation()
+registerSectionNavigation(() => {
+	// The alert actions and the complete-configuration loader depend on the page shown.
+	if (state.snapshot !== undefined) renderOperatorAlerts(elements.operatorAlerts, state.snapshot.alerts)
+	completeConfigurationForm.renderAvailability()
+})
 
 elements.rpcHealthRetryButton.addEventListener('click', () => void refresh())
 for (const context of recoveryContexts.all) context.retryButton.addEventListener('click', () => void requestRecoveryContextRefresh(context))
@@ -124,6 +137,9 @@ window.addEventListener('focus', () => void refresh())
 document.addEventListener('visibilitychange', () => {
 	if (document.visibilityState === 'visible') void refresh()
 })
-window.setInterval(settingsView.renderCountdown, 1_000)
+window.setInterval(() => {
+	settingsView.renderCountdown()
+	healthView.renderScanAge()
+}, 1_000)
 window.setInterval(() => void refresh(), stateRefreshMilliseconds)
 void refresh()

@@ -24,11 +24,11 @@ function allowlistSummary(selection: string[] | null | undefined) {
 	return selection.join(', ')
 }
 
-/** Every field in the submitted policy patch has a matching review row. */
+/** Every field the policy form can change has a matching review row. */
 export function executionPolicyReviewRows(configuration: Configuration, patch: ExecutionPolicyPatch) {
+	// The patch carries the saved execution mode unchanged; the mode changes only through the Execution mode panel.
 	const { scheduler, strategy } = patch
 	return [
-		{ label: 'Execution mode', before: configuration.execute === true ? 'Live armed' : 'Dry run', after: patch.runtime.execute ? 'Live armed' : 'Dry run' },
 		{ label: 'Minimum random delay', before: `${configuration.minimumDelaySeconds ?? '—'} seconds`, after: `${scheduler.minimumDelaySeconds} seconds` },
 		{ label: 'Maximum random delay', before: `${configuration.maximumDelaySeconds ?? '—'} seconds`, after: `${scheduler.maximumDelaySeconds} seconds` },
 		{ label: 'High-risk operations', before: configuration.allowHighRiskOperations === true ? 'Allowed' : 'Blocked', after: strategy.allowHighRiskOperations ? 'Allowed' : 'Blocked' },

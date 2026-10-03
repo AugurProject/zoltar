@@ -10,25 +10,34 @@ export const networkIndicator = (input: {
 	readonly streamHasOpened: boolean
 	readonly now: number
 	readonly freshnessThresholdMs: number
-}): { tone: string; label: string; title: string } => {
+}): { tone: string; label: string; statusLabel: string; blockLabel: string; title: string } => {
 	const { network } = input
 	const stale = network !== undefined && (indexerHeadFreshness(network, input.now).stale || !network.last_success_at || input.now - new Date(network.last_success_at).getTime() > input.freshnessThresholdMs)
 	const title = network === undefined ? 'Network status unavailable' : `${network.name} · ${network.phase} · indexed block #${exactNumber(network.indexed_block)} · observed block #${exactNumber(network.observed_block)} · ${indexerLagLabel(network)}`
 	if (input.demo) {
-		if (input.failed) return { tone: 'error', label: 'Demo · unavailable', title: 'Demo fixture network status unavailable' }
-		if (network === undefined) return { tone: 'live', label: 'Demo · loading', title: 'Demo fixture status loading' }
+		if (input.failed) return { tone: 'error', label: 'Demo · unavailable', statusLabel: 'Demo · unavailable', blockLabel: '', title: 'Demo fixture network status unavailable' }
+		if (network === undefined) return { tone: 'live', label: 'Demo · loading', statusLabel: 'Demo · loading', blockLabel: '', title: 'Demo fixture status loading' }
 		const phase = stale ? 'stale' : network.phase
 		const displayPhase = phase === 'backfilling' ? 'syncing' : phase
+		const statusLabel = `Demo · ${displayPhase}`
+		const blockLabel = network.indexed_block ? ` · #${exactNumber(network.indexed_block)}` : ''
 		return {
 			tone: stale ? 'error' : 'live',
-			label: `Demo · ${displayPhase}${network.indexed_block ? ` · #${exactNumber(network.indexed_block)}` : ''}`,
+			label: `${statusLabel}${blockLabel}`,
+			statusLabel,
+			blockLabel,
 			title: `Demo fixture · ${stale ? 'stale · ' : ''}${title}`,
 		}
 	}
 	const status = indexerConnectionStatus(network, input.streamState, input.failed, input.streamHasOpened)
+	// The block number changes every block, so it is reported apart from the status that assistive technology announces.
+	const statusLabel = network?.indexed_block && stale ? 'Stale' : status.label
+	const blockLabel = network?.indexed_block ? ` · #${exactNumber(network.indexed_block)}` : ''
 	return {
 		tone: stale ? 'error' : status.tone,
-		label: network?.indexed_block ? `${stale ? 'Stale' : status.label} · #${exactNumber(network.indexed_block)}` : status.label,
+		label: `${statusLabel}${blockLabel}`,
+		statusLabel,
+		blockLabel,
 		title,
 	}
 }

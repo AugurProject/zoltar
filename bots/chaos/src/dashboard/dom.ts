@@ -68,3 +68,15 @@ export function replaceWhenChanged(parent: ParentNode, children: readonly Elemen
 	if (current.length === children.length && current.every((child, index) => child === children[index])) return
 	parent.replaceChildren(...children)
 }
+
+const renderedSignatures = new WeakMap<Element, string>()
+
+/**
+ * Runs `render` only when `signature` differs from the one last rendered into `target`. Rebuilding an unchanged block on
+ * every poll drops the operator's text selection and keyboard focus inside it.
+ */
+export function renderWhenChanged(target: Element, signature: string, render: () => void) {
+	if (renderedSignatures.get(target) === signature) return
+	renderedSignatures.set(target, signature)
+	render()
+}

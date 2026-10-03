@@ -116,6 +116,20 @@ function getFocusableElements(dialogElement: HTMLElement | null) {
 	})
 }
 
+/** A return target must still be in the document, enabled, and outside inert content, or focusing it silently drops focus to the body. */
+function canReturnFocusTo(element: HTMLElement | null | undefined): element is HTMLElement {
+	return element !== null && element !== undefined && element.isConnected && !element.matches(':disabled') && element.closest('[inert]') === null
+}
+
+/** Focuses the heading of the section that held the dialog's launcher, or the main landmark, so keyboard users keep their place. */
+function focusContainerFallback(launcher: HTMLElement | null) {
+	const container = (launcher?.isConnected === true ? launcher.closest<HTMLElement>('section, main, [role="main"]') : null) ?? document.querySelector<HTMLElement>('main, [role="main"]')
+	if (container === null) return
+	const target = container.querySelector<HTMLElement>('h1, h2, h3, h4, h5, h6') ?? container
+	if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1')
+	target.focus()
+}
+
 export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>({ dialogRef, getReturnFocusTarget, initialFocusRef, isOpen, onClose }: ModalFocusIsolationOptions<TInitialFocusElement>) {
 	const onCloseRef = useRef(onClose)
 	const getReturnFocusTargetRef = useRef(getReturnFocusTarget)
@@ -187,8 +201,9 @@ export function useModalFocusIsolation<TInitialFocusElement extends HTMLElement>
 				return
 			}
 			const returnFocusTarget = getReturnFocusTargetRef.current?.()
-			if (returnFocusTarget?.isConnected && !returnFocusTarget.matches(':disabled')) returnFocusTarget.focus()
-			else previouslyFocusedElement?.focus()
+			if (canReturnFocusTo(returnFocusTarget)) returnFocusTarget.focus()
+			else if (canReturnFocusTo(previouslyFocusedElement)) previouslyFocusedElement.focus()
+			else focusContainerFallback(previouslyFocusedElement)
 		}
 	}, [dialogRef, initialFocusRef, isOpen])
 }

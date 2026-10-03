@@ -1,6 +1,6 @@
 import type { createSelectionControls } from './selection-controls.js'
 import type { createOperationDialog } from './operation-dialog.js'
-import { node, setBadge, statusLabel } from './dom.js'
+import { node, renderWhenChanged, setBadge, statusLabel } from './dom.js'
 import { type OperationEvaluation } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, parsePositiveNumber, publicCandidateCount } from './dashboard-format.ts'
@@ -174,7 +174,7 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			if (summary !== undefined) card.append(summary)
 			return card
 		})
-		elements.ecosystemGrid.replaceChildren(...cards)
+		renderWhenChanged(elements.ecosystemGrid, JSON.stringify(cards.map(card => card.outerHTML)), () => elements.ecosystemGrid.replaceChildren(...cards))
 	}
 	return { renderCatalog, renderEcosystems }
 }

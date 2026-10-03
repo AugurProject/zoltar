@@ -1,6 +1,6 @@
 import { parseDecimalInput } from '../forms/decimal.js'
 import { sanitizeErrorDetail } from '../lib/errors.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
+import { formatAdditionalCeilingAmount, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
 const maxUint200 = 2n ** 200n - 1n
 export type TokenApprovalState = {
 	error: string | undefined
@@ -116,9 +116,10 @@ function formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
 	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount
 	if (targetAmount === undefined) return undefined
-	return `Need ${formatAdditionalCurrencyBalance(requirement.neededAmount, tokenLabel, tokenUnits)} approved before ${actionLabel}.`
+	return `Need ${formatAdditionalCeilingAmount(requirement.neededAmount, tokenLabel, tokenUnits)} approved before ${actionLabel}.`
 }
 function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {
 	if (nextApprovedAmount >= requiredAmount) return undefined
-	return `Approving ${formatCurrencyBalanceWithUnit(nextApprovedAmount, tokenLabel, tokenUnits)} will still leave ${formatAdditionalCurrencyBalance(requiredAmount - nextApprovedAmount, tokenLabel, tokenUnits)} needed before ${actionLabel}.`
+	// The amount being approved is shown exactly: rounding it up could read as covering a requirement it falls short of.
+	return `Approving ${formatCurrencyBalanceWithUnit(nextApprovedAmount, tokenLabel, tokenUnits)} will still leave ${formatAdditionalCeilingAmount(requiredAmount - nextApprovedAmount, tokenLabel, tokenUnits)} needed before ${actionLabel}.`
 }

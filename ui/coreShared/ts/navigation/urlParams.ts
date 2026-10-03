@@ -40,6 +40,12 @@ export function readUniverseQueryParam(search: string) {
 	return universeId !== undefined && universeId >= 0n && universeId < 1n << 256n ? universeId : undefined
 }
 
+/** True when `universe` is present but is not a non-negative integer, which `readUniverseQueryParam` would otherwise ignore. */
+export function hasInvalidUniverseQueryParam(search: string) {
+	if (!new URLSearchParams(search).has(UNIVERSE_QUERY_PARAM)) return false
+	return readUniverseQueryParam(search) === undefined
+}
+
 export function writeUniverseQueryParam(search: string, universeId: bigint | undefined) {
 	return writeStringQueryParam(search, UNIVERSE_QUERY_PARAM, universeId?.toString())
 }

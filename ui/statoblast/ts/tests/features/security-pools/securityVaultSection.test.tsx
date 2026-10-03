@@ -1,3 +1,4 @@
+import { createPreparedOperationFixture } from './workflow/preparedOperationFixture.js'
 /// <reference types="bun-types" />
 
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
@@ -8,7 +9,7 @@ import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/co
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
@@ -50,17 +51,18 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 }
 
 function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSectionProps> = {}): SecurityVaultSectionProps {
+	const { onSetVaultUnderwritingLimit = () => undefined, onWithdrawRep = () => undefined, ...otherOverrides } = overrides
 	return {
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
-		onSetVaultUnderwritingLimit: () => undefined,
+		onSetVaultUnderwritingLimit: createPreparedOperationFixture('Set commitment limit', onSetVaultUnderwritingLimit),
 		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
 		onRedeemRepFromVault: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
-		onWithdrawRep: () => undefined,
+		onWithdrawRep: createPreparedOperationFixture('Withdraw REP', onWithdrawRep),
 		oracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
@@ -86,7 +88,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		securityVaultResult: undefined,
 		selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 		showHeader: false,
-		...overrides,
+		...otherOverrides,
 		walletRepBalanceError: overrides.walletRepBalanceError,
 		walletRepBalanceLoading: overrides.walletRepBalanceLoading ?? false,
 	}
@@ -148,6 +150,42 @@ const terminalOrdinaryGameCases = [
 }>
 
 describe('SecurityVaultSection', () => {
+	test('keeps oracle approvals before the commitment action without a reveal click', async () => {
+		const prepared: string[] = []
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+						securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+						onSetVaultUnderwritingLimit: limit => {
+							prepared.push(limit)
+						},
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const buttons = within(dialog).getAllByRole('button')
+		const weth = within(dialog).getByRole('button', { name: 'Approve WETH' })
+		const rep = within(dialog).getByRole('button', { name: 'Approve REP' })
+		const send = within(dialog).getByRole('button', { name: 'Set commitment limit' })
+		expect(buttons.indexOf(weth)).toBeLessThan(buttons.indexOf(rep))
+		expect(buttons.indexOf(rep)).toBeLessThan(buttons.indexOf(send))
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		expect(prepared).toEqual([])
+		fireEvent.input(within(dialog).getByLabelText('Commitment limit'), { target: { value: '1' } })
+		fireEvent.input(within(dialog).getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '4' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
+		expect(prepared).toEqual([])
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+	})
+
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	installDomTestLifecycle({
@@ -210,7 +248,7 @@ describe('SecurityVaultSection', () => {
 		['executed', 'Commitment limit changed'],
 		['failed', 'Commitment limit change failed'],
 		['expired', 'Queued operation expired'],
-		['superseded', 'Target change replaced'],
+		['superseded', 'Commitment limit change replaced'],
 	] as const)('renders the reconciled %s state with the original queued receipt', async (status, title) => {
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection
@@ -270,11 +308,17 @@ describe('SecurityVaultSection', () => {
 		expect(input.getAttribute('aria-describedby')?.split(' ')[0]).toBe(limitError.id)
 		expect(dialog.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBe(limitError.id)
 		fireEvent.input(input, { target: { value: '1' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		expect(dialog.getByText('Current commitment')).toBeDefined()
 		expect(dialog.getByText('Resulting commitment')).toBeDefined()
 		expect(page.getByRole('dialog', { name: 'Set commitment limit' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/1(?:\.0+)?\s+ETH/)
 		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toBe('1')
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(submitted).toBe('1'))
 	})
 
 	test.each(['operational', 'ended'] as const)('closed admission keeps the commitment exit form available: %s', async lifecycleState => {
@@ -295,6 +339,9 @@ describe('SecurityVaultSection', () => {
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const input = within(dialog).getByLabelText('Commitment limit')
 		fireEvent.input(input, { target: { value: '3' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		const sharedReason = within(dialog).getAllByText(lifecycleState === 'ended' ? 'Commitments can only be lowered after the question resolves.' : 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
 		expect(sharedReason).toHaveLength(1)
@@ -303,9 +350,15 @@ describe('SecurityVaultSection', () => {
 		expect(within(dialog).getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')?.split(' ')).toContain(sharedReasonId)
 		expect(within(dialog).queryByRole('button', { name: 'Confirm backing for minting' })).toBeNull()
 		fireEvent.input(input, { target: { value: '0' } })
-		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
+		await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toBe('0')
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(submitted).toBe('0'))
 	})
 
 	test('lowers the commitment directly after resolution without oracle funding or a starting price', async () => {
@@ -334,9 +387,15 @@ describe('SecurityVaultSection', () => {
 		expect(dialog.queryByText('Minimum backing ratio')).toBeNull()
 		expectTransactionButtonDisabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit', 'Enter a commitment limit different from the current one.')
 		fireEvent.input(dialog.getByLabelText('Commitment limit'), { target: { value: '0' } })
-		expectTransactionButtonEnabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
+		await waitFor(() => expectTransactionButtonEnabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit'))
 		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toBe('0')
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(submitted).toBe('0'))
 	})
 
 	test('reports a direct commitment change after resolution as executed rather than a missing queue entry', async () => {
@@ -408,7 +467,7 @@ describe('SecurityVaultSection', () => {
 			)
 		).cleanup
 		expect(document.body.textContent?.replaceAll('\u00a0', ' ')).toContain('This leaves less than the 10 REP vault minimum, so the whole vault is withdrawn instead.')
-		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 	})
 
 	test('does not promise a whole-vault exit for a withdrawal the guard blocks', async () => {
@@ -427,6 +486,75 @@ describe('SecurityVaultSection', () => {
 		// 25 REP would leave 5 REP (below the minimum), but only 6 REP is withdrawable, so the only message is the blocker.
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Reduce the withdrawal to 6 REP or less.')
 		expect(document.body.textContent).not.toContain('so the whole vault is withdrawn instead')
+	})
+
+	test('treats an empty withdrawal as no amount yet, like the deposit field', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '' },
+					})}
+				/>,
+			)
+		).cleanup
+		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
+		expect(input.value).toBe('')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Enter an amount greater than zero.')
+	})
+
+	test('flags a withdrawal above the withdrawable maximum inline on the field', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '7' },
+					})}
+				/>,
+			)
+		).cleanup
+		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
+		await act(() => {
+			input.dispatchEvent(new window.Event('blur'))
+		})
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+	})
+
+	test('states the 1–5 minute range for the staged timeout and flags an out-of-range value inline', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails(),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, stagedOperationTimeoutMinutes: '30' },
+					})}
+				/>,
+			)
+		).cleanup
+		const input = within(document.body).getByLabelText(/^Manual execution timeout/)
+		expect(input.getAttribute('max')).toBe('5')
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		const describedBy = (input.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
+		expect(describedBy).toEqual(['Enter 1–5 whole minutes.', '1–5 whole minutes; expires after oracle settlement.'])
+	})
+
+	test('uses the pool’s REP token symbol for withdrawal amounts and labels', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, repTokenSymbol: 'REP4', underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+					})}
+				/>,
+			)
+		).cleanup
+		expect(within(document.body).getByLabelText('REP4 withdraw amount')).not.toBeNull()
+		expect(document.body.textContent?.replaceAll(' ', ' ')).toContain('6.00 REP4')
 	})
 
 	test('blocks REP redemption until the commitment is set to zero', async () => {
@@ -569,12 +697,21 @@ describe('SecurityVaultSection', () => {
 		expect(maximumValue).toMatch(/^[\d ]+\.\d{2} ETH/)
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'Enter a commitment limit different from the current one.')
 		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '3' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		fireEvent.click(queries.getByRole('checkbox', { name: /I understand/ }))
-		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
+		await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
 		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toBe('3')
+		await waitFor(() => expect(submitted).toBe('3'))
 		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '4' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 	})
 
@@ -595,14 +732,20 @@ describe('SecurityVaultSection', () => {
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const queries = within(dialog)
 		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: limit } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		if (limit === '3') {
-			expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+			await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
 			expect(queries.queryByRole('checkbox', { name: /I understand/ })).toBeNull()
 			expect(dialog.textContent).not.toContain('This limit would make your vault liquidatable')
 		} else {
 			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 			fireEvent.click(queries.getByRole('checkbox', { name: /I understand/ }))
-			expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+			await act(async () => {
+				await new Promise(resolve => setTimeout(resolve, 350))
+			})
+			await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
 		}
 	})
 
@@ -628,6 +771,9 @@ describe('SecurityVaultSection', () => {
 		const queries = within(dialog)
 		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull()
 		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '1' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		const input = queries.getByLabelText('OpenOracle REP per ETH starting price')
 		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
@@ -635,9 +781,12 @@ describe('SecurityVaultSection', () => {
 			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		}
 		fireEvent.input(input, { target: { value: '12.5' } })
-		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
+		await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
 		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toEqual({ limit: '1', price: 125n * 10n ** 17n })
+		await waitFor(() => expect(submitted).toEqual({ limit: '1', price: 125n * 10n ** 17n }))
 		fireEvent.input(input, { target: { value: '' } })
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 	})
@@ -660,9 +809,11 @@ describe('SecurityVaultSection', () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		fireEvent.input(within(document.body).getByLabelText('Commitment limit'), { target: { value: '1' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		expectTransactionButtonEnabled(document.body, 'Set commitment limit')
 	})
-
 	test('rejects an input whose resulting capacity leaves the vault undercollateralized', async () => {
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection
@@ -714,17 +865,22 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
 		fireEvent.input(within(dialog).getByLabelText('Commitment limit'), { target: { value: '3' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		const startingPrice = within(dialog).queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
 		if (startingPrice !== null) fireEvent.input(startingPrice, { target: { value: '3' } })
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 350))
+		})
 		const acknowledgement = within(dialog).queryByRole('checkbox', { name: /I understand/ })
 		if (acknowledgement !== null) {
 			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 			fireEvent.click(acknowledgement)
 		}
 		if (blocked) expectTransactionButtonDisabled(dialog, 'Set commitment limit')
-		else expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		else await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
 	})
-
 	test('uses a saved target as read-only context for later deposits', async () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
@@ -1275,7 +1431,7 @@ describe('SecurityVaultSection', () => {
 		const depositButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expect(depositButton.getAttribute('aria-describedby')).toBe(reasonElement.id)
-		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 		const withdrawAmountInput = within(withdrawDialog).getByLabelText('REP withdraw amount') as HTMLInputElement
@@ -1412,7 +1568,7 @@ describe('SecurityVaultSection', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositDialogQueries = within(depositDialog)
-		expect(depositDialog.querySelector('.transaction-object-context')).toBeNull()
+		expect(depositDialog.querySelectorAll('.transaction-object-context')).toHaveLength(1)
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
@@ -1566,7 +1722,7 @@ describe('SecurityVaultSection', () => {
 		if (withdrawal === null) throw new Error('Expected withdrawal section')
 		fireEvent.input(within(withdrawal).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
 
-		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 	})
 
 	test('withdrawal accepts a manual initial price and rejects an empty one', async () => {
@@ -1591,9 +1747,9 @@ describe('SecurityVaultSection', () => {
 		const page = within(withdrawal)
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
 		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
-		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 		fireEvent.click(page.getByRole('button', { name: 'Withdraw REP' }))
-		expect(submitted).toBe(3n * 10n ** 18n)
+		await waitFor(() => expect(submitted).toBe(3n * 10n ** 18n))
 		expect(page.getByText('Queues for execution after oracle settlement.')).toBeDefined()
 	})
 
@@ -1658,8 +1814,8 @@ describe('SecurityVaultSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Set commitment limit' }))
 			const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
 			fireEvent.input(within(dialog).getByRole('textbox', { name: 'Commitment limit' }), { target: { value: '1' } })
-			if (ended) expectTransactionButtonEnabled(dialog, 'Set commitment limit')
-			else expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'The oracle price expires too soon. Retry after it expires and review report funding.')
+			if (ended) await waitFor(() => expectTransactionButtonEnabled(dialog, 'Set commitment limit'))
+			else expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'The oracle price expires in 1 second, before this transaction could confirm. Wait 1 second for it to expire, then submit again and fund a new oracle report.')
 			await rendered.cleanup()
 		}
 	})
@@ -1719,7 +1875,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'The oracle price expires too soon. Retry after it expires and review report funding.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'The oracle price expires in 1 second, before this transaction could confirm. Wait 1 second for it to expire, then submit again and fund a new oracle report.')
 	})
 
 	test('does not infer immediate withdrawal execution from an expired raw validity flag', async () => {
@@ -2027,6 +2183,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 			controller = createTransactionStepController()
 			controller.setPlan([{ title: label, description: undefined, contractAddress: zeroAddress, contractLabel: undefined, spender: undefined, amount: '1 REP', ethValueAttoEth: 0n }])
 			review = controller.review()
+			return review.then(() => undefined)
 		}
 		function Harness() {
 			const props = createSecurityVaultSectionProps({
@@ -2042,6 +2199,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 		try {
 			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
 			const dialog = within(document.body).getByRole('dialog', { name: label })
+			await waitFor(() => expect(within(dialog).getByRole('button', { name: label }).hasAttribute('disabled')).toBe(false))
 			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 			await review
@@ -2057,8 +2215,8 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 				controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
 				active.value = undefined
 			})
-			expect(cancel.hasAttribute('disabled')).toBe(false)
-			await act(() => cancel.click())
+			await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(false))
+			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' })))
 			expect(dialog.isConnected).toBe(false)
 		} finally {
 			review?.catch(() => undefined)

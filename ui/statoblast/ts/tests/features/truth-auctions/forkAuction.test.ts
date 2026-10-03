@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView, getForkVaultMigrationRepAttoRep } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import { getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionPresentation.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {
@@ -956,5 +956,21 @@ describe('live underfunded truth auction reserve', () => {
 		expect(depthPoints.map(point => point.disposition.label)).toEqual(['In book', 'Below reserve'])
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 0n, tick: 0n }), liveAuction).label).toBe('In book')
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 1n, tick: -1n }), liveAuction).label).toBe('Below reserve')
+	})
+})
+
+describe('getForkVaultMigrationRepAttoRep', () => {
+	const vault = { repBackingUnits: 3n, totalRepBackingUnits: 4n, vaultAttoRepBacking: 0n }
+
+	test('mirrors migrateVault: the vault backing-unit share of the pool-held REP snapshotted at fork', () => {
+		expect(getForkVaultMigrationRepAttoRep({ auctionableAttoRepAtFork: 2_000n, systemState: 'poolForked' }, vault)).toBe(1_500n)
+		expect(getForkVaultMigrationRepAttoRep({ auctionableAttoRepAtFork: 5n, ownForkRepBuckets: { escalationChildRepPerSelectedOutcomeAttoRep: 0n, escrowSourceRepAtForkAttoRep: 0n, vaultRepAtForkAttoRep: 400n }, systemState: 'poolForked' }, vault)).toBe(300n)
+		expect(getForkVaultMigrationRepAttoRep({ auctionableAttoRepAtFork: 2_000n, systemState: 'poolForked' }, { ...vault, repBackingUnits: 0n })).toBe(0n)
+	})
+
+	test('uses current backing before the fork and is undefined when the share cannot be computed', () => {
+		expect(getForkVaultMigrationRepAttoRep({ auctionableAttoRepAtFork: 0n, systemState: 'operational' }, { ...vault, vaultAttoRepBacking: 7n })).toBe(7n)
+		expect(getForkVaultMigrationRepAttoRep({ auctionableAttoRepAtFork: 2_000n, systemState: 'poolForked' }, { vaultAttoRepBacking: 0n })).toBeUndefined()
+		expect(getForkVaultMigrationRepAttoRep(undefined, vault)).toBeUndefined()
 	})
 })

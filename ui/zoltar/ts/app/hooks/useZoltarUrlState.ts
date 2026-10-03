@@ -1,7 +1,7 @@
 import { useCallback } from 'preact/hooks'
 import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { readUniverseQueryParam, readZoltarViewQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { hasInvalidUniverseQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 
 type ZoltarUrlState = {
 	activeUniverseId: bigint
@@ -15,12 +15,15 @@ function readZoltarUrlState(search: string): ZoltarUrlState {
 	}
 }
 
-/** Drops query parameters owned by other products while keeping the shared environment parameters. */
+/**
+ * Drops query parameters owned by other products while keeping the shared environment parameters. A malformed
+ * universe is kept as written so route validation shows not-found instead of silently opening Genesis.
+ */
 function getZoltarSearch(search: string) {
 	const filteredSearch = getTopLevelRouteSearch('zoltar', search)
-	const universeId = readUniverseQueryParam(search)
 	const zoltarView = readZoltarViewQueryParam(search)
-	return writeZoltarViewQueryParam(writeUniverseQueryParam(filteredSearch, universeId), zoltarView)
+	const universeSearch = hasInvalidUniverseQueryParam(search) ? filteredSearch : writeUniverseQueryParam(filteredSearch, readUniverseQueryParam(search))
+	return writeZoltarViewQueryParam(universeSearch, zoltarView)
 }
 
 export function useZoltarUrlState() {

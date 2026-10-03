@@ -1,7 +1,9 @@
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { decodeOperationsResponseValue, type OperationsResponse } from './api-validation.ts'
 import { runSerializedOperationsLoad } from './live-refresh.ts'
+import { operationsFailureMessage } from './operations-presentation.ts'
 import type { OperationsRouteState } from './operations-state.ts'
+import { routeDataContext } from './routes.ts'
 import type { createOperationsData } from './operations-data.ts'
 
 interface OperationsLoaderDeps {
@@ -44,13 +46,13 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 		historyTargetOffset?: number
 		preservedContext?: OperationsRenderContext
 	} = {}): Promise<boolean> => {
-		const requestedContext = `${requiredChainId()}:${location.pathname}`
+		const requestedContext = routeDataContext(requiredChainId(), new URL(location.href))
 		return await runSerializedOperationsLoad(
 			operationsState.loadState,
 			requestedContext,
 			live,
 			catalogTargetCount !== undefined || riskPoolTargetCount !== undefined || riskVaultTargetCount !== undefined || detailTargetCount !== undefined || decisionTargetCount !== undefined || activityTargetCount !== undefined || historyTargetOffset !== undefined,
-			() => `${requiredChainId()}:${location.pathname}`,
+			() => routeDataContext(requiredChainId(), new URL(location.href)),
 			() => operationsState.requestVersion++,
 			async () => {
 				const requestVersion = ++operationsState.requestVersion
@@ -85,15 +87,15 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					return true
 				} catch (error) {
 					if (requestVersion !== operationsState.requestVersion) return false
+					const detail = error instanceof Error ? error.message : 'Unknown operations request failure'
+					status.dataset['errorDetail'] = detail
 					if (preserveRenderedContent) {
-						status.className = 'system-status'
-						status.dataset['errorDetail'] = error instanceof Error ? error.message : 'Unknown operations refresh failure'
-						renderRetryStatus(status, 'Could not refresh protocol operations. Existing evidence remains visible.', () => loadOperations({ live: true }))
+						renderRetryStatus(status, operationsFailureMessage(true, error instanceof Error ? error.status : undefined, detail), () => loadOperations({ live: true }))
 						content.setAttribute('aria-busy', 'false')
 						return false
 					}
-					status.dataset['errorDetail'] = error instanceof Error ? error.message : 'Unknown operations request failure'
-					renderRetryStatus(status, 'Could not load protocol operations.', loadOperations)
+					// The click event must not reach loadOperations, whose only parameter is its options object.
+					renderRetryStatus(status, operationsFailureMessage(false, error instanceof Error ? error.status : undefined, detail), () => loadOperations())
 					content.replaceChildren()
 					content.setAttribute('aria-busy', 'false')
 					return false

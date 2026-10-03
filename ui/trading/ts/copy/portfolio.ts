@@ -7,6 +7,10 @@ export const disconnectedGuidance = 'Connect a wallet to load the positions for 
 export const loadingPoolBalances = 'Loading balances separately for each security pool…'
 export const portfolioBalancesUnavailable = 'Portfolio balances could not be loaded.'
 export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in your saved pools.'
+
+export function noPositionsInUniverse(universe: string) {
+	return `No positions in ${universe}`
+}
 export const lpClaims = 'LP claims'
 export const insuredExits = 'Insured exits'
 export const balanceUnavailable = 'Balance unavailable'

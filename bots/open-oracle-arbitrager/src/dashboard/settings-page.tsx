@@ -20,7 +20,7 @@ function ConnectivityPanel() {
 	return (
 		<SettingsGroup formId='connectivity-form' id='network-connectivity' summary='Unknown network' summaryId='network-value' title='Chain and RPC connectivity'>
 			<p id='network-target-status' class='muted' role='status' aria-live='polite' hidden />
-			<p class='section-note'>Changing Chain saves the current profile, safely pauses the bot, and loads that chain's separate settings and journals without restarting the process. Every endpoint is checked against the selected chain before it is accepted.</p>
+			<p class='section-note'>Every endpoint is checked against the selected chain before it is accepted.</p>
 			<form id='connectivity-form'>
 				<fieldset id='connectivity-fieldset' disabled>
 					<RawMarkup html={rpcConnectivityFields({ independentQuorum: true, statusId: 'connectivity-status', statusText: '', submissionLimit: 8, submitLabel: 'Save RPC endpoints' })} />
@@ -31,7 +31,7 @@ function ConnectivityPanel() {
 					</button>
 				</div>
 			</form>
-			<div id='endpoint-checks' class='endpoint-checks' aria-label='Endpoint health checks' />
+			<div id='endpoint-checks' class='endpoint-checks' role='group' aria-label='Endpoint health checks' />
 		</SettingsGroup>
 	)
 }
@@ -39,11 +39,12 @@ function ConnectivityPanel() {
 function UniversesPanel() {
 	return (
 		<SettingsGroup formId='tokens-form' summary='Only explicitly approved universe REP can be traded' title='Approved universes'>
+			{/* The explorer's search, filter, and row checkboxes stay outside the form so only the approved selection marks it unsaved. */}
+			<div id='approved-universes' class='universe-explorer'>
+				Universe discovery has not completed.
+			</div>
 			<form id='tokens-form'>
 				<fieldset id='tokens-fieldset' disabled>
-					<div id='approved-universes' class='universe-explorer'>
-						Universe discovery has not completed.
-					</div>
 					<p class='section-note'>Existing positions continue recovery after a change.</p>
 					<FormActions statusId='tokens-status' submitLabel='Save universe approvals' />
 				</fieldset>
@@ -95,7 +96,7 @@ function VenuesPanel() {
 function MarketSourceTable() {
 	return (
 		<>
-			<div class='table-scroll' tabindex={0} aria-label='Centralized market sources'>
+			<div class='table-scroll' role='region' tabindex={0} aria-label='Centralized market sources'>
 				<table class='market-source-table'>
 					<thead>
 						<tr>
@@ -144,14 +145,14 @@ function VenueConsensusForm() {
 				))}
 			</div>
 			<SwitchField id='venue-allow-single-group-fallback' label='Allow one venue group when the other is unavailable' />
-			<div class='table-scroll'>
+			<div class='table-scroll' role='region' tabindex={0} aria-label='Venue consensus DEX sources'>
 				<table>
 					<thead>
 						<tr>
-							<th>Source ID</th>
-							<th>Pair address</th>
-							<th>Fee (bps)</th>
-							<th>Action</th>
+							<th scope='col'>Source ID</th>
+							<th scope='col'>Pair address</th>
+							<th scope='col'>Fee (bps)</th>
+							<th scope='col'>Action</th>
 						</tr>
 					</thead>
 					<tbody id='venue-dex-source-rows' />
@@ -223,7 +224,7 @@ function UsageMetric({ id, label }: { id: string; label: string }) {
 function RiskPanel() {
 	return (
 		<SettingsGroup formId='runtime-form' summary='Capital caps, gas budget, hedge slippage, event lookback, and polling' title='Risk limits and scanning'>
-			<div id='risk-usage' class='usage-row' aria-label='Current risk usage'>
+			<div id='risk-usage' class='usage-row' role='group' aria-label='Current risk usage'>
 				<UsageMetric id='usage-locked' label='Locked now' />
 				<UsageMetric id='usage-positions' label='Open positions' />
 				<UsageMetric id='usage-daily-gas' label='Gas spent today' />
@@ -234,8 +235,8 @@ function RiskPanel() {
 						<NumberField label='Maximum position notional (WETH)' name='maxPositionNotionalWeth' min='0' step='any' />
 						<NumberField label='Maximum total locked (WETH)' name='maxTotalLockedWeth' min='0' step='any' />
 						<NumberField label='Maximum concurrent positions' name='maxConcurrentPositions' min='1' max='1000' step='1' />
-						<NumberField label='Maximum daily gas spend (WETH)' name='maxDailyGasSpendWeth' min='0' step='any' />
-						<NumberField label='Lifecycle gas reserve (WETH)' name='lifecycleGasReserveWeth' min='0' step='any' />
+						<NumberField label='Maximum daily gas spend (ETH)' name='maxDailyGasSpendWeth' min='0' step='any' />
+						<NumberField label='Lifecycle gas reserve (ETH)' name='lifecycleGasReserveWeth' min='0' step='any' />
 						<NumberField label='Maximum hedge slippage (bps)' name='maxHedgeSlippageBps' min='0' max='1000' step='1' />
 						<NumberField label='Event lookback (blocks · 0 disables)' name='logLookbackBlocks' min='0' max='256' step='1' />
 						<NumberField label='Poll interval (milliseconds)' name='pollMilliseconds' min='1000' max='3600000' step='1' />

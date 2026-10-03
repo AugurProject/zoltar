@@ -64,7 +64,7 @@ const PAGE_HELPERS = `(() => {
 			return ''
 		},
 		enabled: text => labelled(text).some(element => !element.disabled && element.getAttribute('aria-disabled') !== 'true'),
-		cropRect: (selector, containing, padding) => {
+		cropRect: (selector, containing, padding, scrollIntoView) => {
 			const matches = [...document.querySelectorAll(selector)].filter(element => isVisible(element) && (containing === '' || element.innerText.includes(containing)))
 			if (matches.length === 0) return undefined
 			const smallest = matches.reduce((best, element) => (element.contains(best) ? best : best.contains(element) ? element : best))
@@ -73,6 +73,7 @@ const PAGE_HELPERS = `(() => {
 			for (const element of [smallest, ...smallest.querySelectorAll('*')]) if (element.scrollHeight > element.clientHeight) element.scrollTop = 0
 			for (let ancestor = smallest.parentElement; ancestor !== null; ancestor = ancestor.parentElement) ancestor.scrollTop = 0
 			window.scrollTo(0, 0)
+			if (scrollIntoView) smallest.scrollIntoView({ block: 'center', behavior: 'instant' })
 			// Hide everything beside the target so floating bars and overlapped page content stay out of the image.
 			for (let node = smallest; node.parentElement !== null; node = node.parentElement) {
 				for (const sibling of node.parentElement.children) if (sibling !== node && sibling instanceof HTMLElement) sibling.style.visibility = 'hidden'
@@ -139,7 +140,7 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 const isRect = (value: unknown): value is { x: number; y: number; width: number; height: number } => typeof value === 'object' && value !== null && ['x', 'y', 'width', 'height'].every(key => key in value && typeof Reflect.get(value, key) === 'number')
 
 async function cropRect(session: DevToolsSession, crop: UiScreenshotCrop, specId: string) {
-	const rect = await session.evaluate(`window.__docsScreenshot.cropRect(${quote(crop.selector)}, ${quote(crop.containing ?? '')}, ${(crop.padding ?? 16).toString()})`)
+	const rect = await session.evaluate(`window.__docsScreenshot.cropRect(${quote(crop.selector)}, ${quote(crop.containing ?? '')}, ${(crop.padding ?? 16).toString()}, ${crop.scrollIntoView ?? false})`)
 	if (!isRect(rect)) throw new Error(`Screenshot '${specId}': no visible element matches crop selector '${crop.selector}'${crop.containing === undefined ? '' : ` containing "${crop.containing}"`}`)
 	return { ...rect, scale: 1 }
 }

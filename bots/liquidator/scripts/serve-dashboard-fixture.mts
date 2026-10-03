@@ -76,7 +76,7 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 		approvedUniverse,
 		botVault: {
 			address: '0x9999999999999999999999999999999999999999',
-			capacityOwnershipRep: selected ? '650' : '0',
+			capacityOwnershipEth: selected ? '650' : '0',
 			openInterestDisplay: selected ? '32.5' : '0',
 			healthBps: selected ? '12500' : undefined,
 			backingUnits: '0',
@@ -117,7 +117,7 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 		securityPoolForker: '0xcccccccccccccccccccccccccccccccccccccccc',
 		stagedOperations: [],
 		systemState,
-		totalCapacityOwnershipRep: '1644.2',
+		totalCapacityOwnershipEth: '1644.2',
 		totalPoolHeldRep: '14628.817',
 		universeId,
 		vaults: [],

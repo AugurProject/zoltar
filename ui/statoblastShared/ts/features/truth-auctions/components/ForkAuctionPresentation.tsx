@@ -250,6 +250,7 @@ export function ForkAuctionMigrationSummaryCard({
 	forkAuctionDetails,
 	forkTypeDisplay,
 	migratedRepDisplay,
+	migratedRepLabel,
 	migrationEndsDisplay,
 	migrationStartedDisplay,
 	repAtForkDisplay,
@@ -259,6 +260,7 @@ export function ForkAuctionMigrationSummaryCard({
 	forkAuctionDetails: ForkAuctionDetails | undefined
 	forkTypeDisplay: ComponentChildren
 	migratedRepDisplay: ComponentChildren
+	migratedRepLabel: string
 	migrationEndsDisplay: ComponentChildren
 	migrationStartedDisplay: ComponentChildren
 	repAtForkDisplay: ComponentChildren
@@ -270,7 +272,7 @@ export function ForkAuctionMigrationSummaryCard({
 				<div className='fork-workflow-summary-primary migration-summary-primary'>
 					{[
 						{ label: forkAuctionCopy.repAtFork, value: repAtForkDisplay },
-						{ label: forkAuctionCopy.migratedAttoRep, value: migratedRepDisplay },
+						{ label: migratedRepLabel, value: migratedRepDisplay },
 						{ label: forkAuctionCopy.settlementCollateral, value: settlementCollateralDisplay },
 					].map(metric => (
 						<div className='fork-workflow-summary-stat-group' key={metric.label}>

@@ -1,4 +1,4 @@
-import { element } from './dom.ts'
+import { element, stickyShellHeight } from './dom.ts'
 
 const NARROW_VIEWPORT = '(max-width: 42rem)'
 
@@ -22,6 +22,8 @@ function isNarrow() {
 function markCurrent(sectionId: string) {
 	for (const chip of chips()) {
 		if (chip.dataset['settingsTarget'] === sectionId) {
+			// Re-marking the chip that is already current must not fight an operator scrolling the chip row sideways.
+			if (chip.getAttribute('aria-current') === 'true') continue
 			chip.setAttribute('aria-current', 'true')
 			// Keep the current chip visible inside the row when the row itself scrolls horizontally.
 			const nav = element('settings-nav')
@@ -55,9 +57,8 @@ function expandOnly(sectionId: string) {
 
 /** Height of the chrome pinned to the viewport top: the operator header plus the chip row wherever the row is sticky. */
 function stickyChromeHeight() {
-	const shell = document.querySelector('.operator-shell')
 	const nav = element('settings-nav')
-	const shellHeight = shell instanceof HTMLElement ? shell.getBoundingClientRect().height : 0
+	const shellHeight = stickyShellHeight(document)
 	const navSticky = typeof getComputedStyle === 'function' && getComputedStyle(nav).position === 'sticky'
 	return shellHeight + (navSticky ? nav.getBoundingClientRect().height : 0)
 }
@@ -86,8 +87,7 @@ export function createSettingsNavigation() {
 	let jumpTarget: string | undefined
 	// The chip row sticks directly under the sticky operator header, whose height depends on the viewport.
 	const placeUnderHeader = () => {
-		const shell = document.querySelector('.operator-shell')
-		nav.style.top = `${(shell instanceof HTMLElement ? shell.getBoundingClientRect().height : 0).toString()}px`
+		nav.style.top = `${stickyShellHeight(document).toString()}px`
 		// Anchored jumps must clear the sticky chrome, whose height depends on the viewport.
 		const margin = `${(stickyChromeHeight() + 16).toString()}px`
 		for (const section of sections()) section.style.scrollMarginTop = margin

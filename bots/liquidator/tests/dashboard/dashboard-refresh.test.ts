@@ -93,6 +93,7 @@ function state(
 	error?: string,
 	alerts: { message: string; severity: 'error' | 'warning' }[] = [],
 	options: {
+		configurationRevision?: string
 		deploymentCheckedBlock?: string
 		deploymentMissingName?: string
 		execute?: boolean
@@ -108,10 +109,12 @@ function state(
 		wallet?: string
 	} = {},
 ) {
+	const botVault: { address: string; capacityOwnershipEth: string; claimableFeesEth: string; healthBps?: string; openInterestDisplay: string; vaultRepBacking: string } = { address: '0x2', capacityOwnershipEth: '0', openInterestDisplay: '0', vaultRepBacking: '0', claimableFeesEth: '0' }
 	return {
 		activities: [],
 		operatorCapable: true,
 		alerts,
+		configurationRevision: options.configurationRevision,
 		deploymentCheckedBlock: options.deploymentCheckedBlock,
 		deploymentMissingName: options.deploymentMissingName,
 		error,
@@ -139,7 +142,7 @@ function state(
 				knownVaultCount: '0',
 				address: '0x1111111111111111111111111111111111111111',
 				approvedUniverse: true,
-				botVault: { address: '0x2', capacityOwnershipRep: '0', openInterestDisplay: '0', vaultRepBacking: '0', claimableFeesEth: '0' },
+				botVault,
 				candidateCount: 0,
 				settlementCollateralEth: '0',
 				centralizedPriceAllowed: true,
@@ -149,7 +152,7 @@ function state(
 				questionId: '7',
 				selected: true,
 				systemState: '0',
-				totalCapacityOwnershipRep: '0',
+				totalCapacityOwnershipEth: '0',
 				totalPoolHeldRep: '0',
 				universeId: '1',
 			},
@@ -233,6 +236,16 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	const approvedUniverseRequests: string[][] = []
 	const selectedPoolRequests: string[][] = []
 	const supportedPoolRequests: unknown[] = []
+	const profileRequests: unknown[] = []
+	const signerRequests: unknown[] = []
+	const reconcileRequests: unknown[] = []
+	const strategyRequests: unknown[] = []
+	const networkConnectivityRequests: unknown[] = []
+	let configurationRequestCount = 0
+	let profileSwitchNeverApplies = false
+	let releaseSignerRequest: (() => void) | undefined
+	let releaseReconcileRequest: (() => void) | undefined
+	let releaseNetworkConnectivityRequest: (() => void) | undefined
 	let stateRequestCount = 0
 	let stateRequestFailure = initialStateRequestFailure
 	let hangNextStateRequest = false
@@ -304,6 +317,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			return new window.Response(JSON.stringify(currentConfiguration))
 		}
 		if (url.pathname === '/api/configuration') {
+			configurationRequestCount += 1
 			if (hangNextConfigurationRequest) {
 				hangNextConfigurationRequest = false
 				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
@@ -346,6 +360,19 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			currentConfiguration = { ...currentConfiguration, centralizedMarkets: Reflect.get(request, 'root'), childMarketConfigurations: Reflect.get(request, 'children'), desiredPools: Reflect.get(request, 'desiredPools') }
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
+		if (url.pathname === '/api/signer') {
+			signerRequests.push(JSON.parse(String(init?.body)))
+			if (releaseSignerRequest !== undefined) await new Promise<void>(resolve => (releaseSignerRequest = resolve))
+		}
+		if (url.pathname === '/api/reconcile-transaction') {
+			reconcileRequests.push(JSON.parse(String(init?.body)))
+			if (releaseReconcileRequest !== undefined) await new Promise<void>(resolve => (releaseReconcileRequest = resolve))
+		}
+		if (url.pathname === '/api/strategy') {
+			const request: unknown = JSON.parse(String(init?.body))
+			strategyRequests.push(request)
+			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
+		}
 		if (url.pathname === '/api/signer' && rejectSigner !== undefined) return new window.Response(JSON.stringify({ error: rejectSigner }), { headers: { 'content-type': 'application/json' }, status: 400 })
 		if (url.pathname === '/api/paused' && rejectPause) {
 			return new window.Response(JSON.stringify({ error: typeof rejectPause === 'string' ? rejectPause : 'Fixture rejected /api/paused with secret' }), { headers: { 'content-type': 'application/json' }, status: 400 })
@@ -373,6 +400,8 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/network-connectivity') {
+			networkConnectivityRequests.push(JSON.parse(String(init?.body)))
+			if (releaseNetworkConnectivityRequest !== undefined) await new Promise<void>(resolve => (releaseNetworkConnectivityRequest = resolve))
 			if (networkConnectivityFailureMessage !== undefined) {
 				return new window.Response(JSON.stringify({ error: networkConnectivityFailureMessage }), { headers: { 'content-type': 'application/json' }, status: 400 })
 			}
@@ -385,6 +414,13 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/network-profile') {
+			profileRequests.push(JSON.parse(String(init?.body)))
+			// The bot never answers and never leaves the active profile, as when its preflight of the other profile fails late.
+			if (profileSwitchNeverApplies) {
+				return await new Promise<InstanceType<typeof window.Response>>((_resolve, reject) => {
+					init?.signal?.addEventListener('abort', () => reject(new Error('fixture profile request aborted')), { once: true })
+				})
+			}
 			snapshot = { ...snapshot, network: 'sepolia' }
 			pendingProfileConfiguration = {
 				...currentConfiguration,
@@ -478,6 +514,54 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		approvedUniverseRequests,
 		selectedPoolRequests,
 		supportedPoolRequests,
+		profileRequests,
+		signerRequests,
+		reconcileRequests,
+		strategyRequests,
+		networkConnectivityRequests,
+		configurationRequestCount: () => configurationRequestCount,
+		setProfileSwitchNeverApplies: (never: boolean) => {
+			profileSwitchNeverApplies = never
+		},
+		suspendNextSignerRequest: () => {
+			releaseSignerRequest = () => undefined
+		},
+		releaseSignerRequest: () => {
+			const release = releaseSignerRequest
+			releaseSignerRequest = undefined
+			release?.()
+		},
+		suspendNextReconcileRequest: () => {
+			releaseReconcileRequest = () => undefined
+		},
+		releaseReconcileRequest: () => {
+			const release = releaseReconcileRequest
+			releaseReconcileRequest = undefined
+			release?.()
+		},
+		suspendNextNetworkConnectivityRequest: () => {
+			releaseNetworkConnectivityRequest = () => undefined
+		},
+		releaseNetworkConnectivityRequest: () => {
+			const release = releaseNetworkConnectivityRequest
+			releaseNetworkConnectivityRequest = undefined
+			release?.()
+		},
+		/** Waits for the shared confirmation dialog, types its phrase when one is required, and confirms it. */
+		confirmOperatorAction: async (phrase?: string) => {
+			for (let attempt = 0; attempt < 100 && window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+			const confirm = window.document.getElementById('operator-confirm-submit')
+			if (!(confirm instanceof window.HTMLButtonElement)) throw new Error('Expected an operator confirmation dialog')
+			if (phrase !== undefined) {
+				const input = window.document.getElementById('operator-confirm-phrase')
+				if (!(input instanceof window.HTMLInputElement)) throw new Error('Expected a confirmation phrase input')
+				input.value = phrase
+				input.dispatchEvent(new window.Event('input', { bubbles: true }))
+				await Bun.sleep(10)
+			}
+			confirm.click()
+			await Bun.sleep(10)
+		},
 		pauseRequests,
 		executionRequests,
 		submissionRequests,
@@ -830,7 +914,12 @@ describe('liquidator dashboard refresh behavior', () => {
 		await Bun.sleep(10)
 		networkName.value = 'sepolia'
 		networkName.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		// The select returns to the active profile and nothing is sent until the operator confirms the switch.
+		expect(networkName.value).toBe('mainnet')
+		expect(page.profileRequests).toHaveLength(0)
+		await page.confirmOperatorAction()
 		await Bun.sleep(50)
+		expect(page.profileRequests).toEqual([{ network: 'sepolia' }])
 		expect(networkName.value).toBe('mainnet')
 		expect(networkFields.disabled).toBe(true)
 		expect(strategyFields.disabled).toBe(true)
@@ -1054,8 +1143,10 @@ describe('liquidator dashboard refresh behavior', () => {
 		const globalError = page.window.document.getElementById('global-error')
 		const operatorAlerts = page.window.document.getElementById('operator-alerts')
 		if (globalError === null || operatorAlerts === null) throw new Error('Expected dashboard alerts')
-		expect(operatorAlerts.getAttribute('role')).toBe('alert')
-		expect(operatorAlerts.getAttribute('aria-live')).toBe('assertive')
+		// The live region wraps the list, so the list keeps its own semantics for its items.
+		expect(operatorAlerts.getAttribute('role')).toBeNull()
+		expect(operatorAlerts.parentElement?.getAttribute('role')).toBe('alert')
+		expect(operatorAlerts.parentElement?.getAttribute('aria-live')).toBe('assertive')
 		expect(globalError.textContent).toContain('Check the bot logs')
 		expect(globalError.textContent).not.toContain('/api/internal')
 		let mutations = 0
@@ -1215,7 +1306,7 @@ describe('liquidator go-live settings', () => {
 		const page = await dashboard()
 		expect(Array.from(page.window.document.querySelectorAll('#settings-nav a'), chip => chip.textContent)).toEqual(['1Connect', '2Markets', '3Liquidation policy', '4Go live'])
 		expect(Array.from(page.window.document.querySelectorAll('.settings-section'), section => section.id)).toEqual(['settings-connect', 'settings-markets', 'settings-policy', 'settings-go-live'])
-		expect(Array.from(page.window.document.querySelectorAll('#settings-go-live .settings-group > summary strong'), title => title.textContent)).toEqual(['Execution wallet', 'Submission', 'Execution mode'])
+		expect(Array.from(page.window.document.querySelectorAll('#settings-go-live .settings-group > summary strong'), title => title.textContent)).toEqual(['Execution signer', 'Submission', 'Execution mode'])
 		expect(page.window.document.querySelector('#settings-nav a[aria-current="true"]')?.getAttribute('data-settings-target')).toBe('settings-connect')
 		expect(page.window.document.querySelector('.settings-badges[data-form="strategy-form"]')).not.toBeNull()
 		const strategySave = page.window.document.querySelector('#strategy-form button[type="submit"]')
@@ -1372,13 +1463,13 @@ describe('liquidator go-live settings', () => {
 	test('lists every live-execution prerequisite and locks the switch until they hold', async () => {
 		const page = await dashboard(configuration(), state(undefined, [], { lastScannedBlock: '120' }))
 		expect(readiness(page)).toEqual([
-			'false:Execution signer=Set one under Execution wallet',
+			'false:Execution signer=Set one under Execution signer',
 			'false:Chain and RPC endpoints=Save the chain and RPC endpoints under Connect',
 			'true:Independent quorum RPCs=0 configured · 0 required',
 			'true:Canonical contracts=Verified at block 120',
 			'true:Delivery=Public mempool',
 			'true~:Approved universes=1 approved',
-			'true~:Monitored pools=1 selected · 1 eligible',
+			'true~:Supported pools=1 supported · 1 eligible',
 			'false~:Market evidence=No market sources configured · optional',
 		])
 		const toggle = page.window.document.getElementById('execution-enabled')
@@ -1409,7 +1500,7 @@ describe('liquidator go-live settings', () => {
 			'false:Canonical contracts=Missing Security pool factory at block 121',
 			'false:Delivery=Private · 0 relays',
 			'true~:Approved universes=1 approved',
-			'true~:Monitored pools=1 selected · 1 eligible',
+			'true~:Supported pools=1 supported · 1 eligible',
 			'false~:Market evidence=No market sources configured · optional',
 		])
 		expect(toggle.disabled).toBe(true)
@@ -2092,4 +2183,311 @@ test('links confirmed liquidation activity from its durable transaction hash', a
 	await page.refresh()
 	const link = page.window.document.querySelector('#activity-list a')
 	expect(link?.getAttribute('href')).toBe(`https://etherscan.io/tx/${hash}`)
+})
+
+describe('liquidator dashboard operator safeguards', () => {
+	const pending: PendingTransaction = {
+		hash: `0x${'1'.repeat(64)}`,
+		kind: 'liquidate',
+		label: 'Liquidate pool',
+		maxBlockNumber: '120',
+		mode: 'private',
+		nonce: '8',
+		requiresMarketEvidence: true,
+		submissionBlock: '100',
+	}
+
+	function control<T>(page: Awaited<ReturnType<typeof dashboard>>, selector: string, constructor: new (...parameters: never[]) => T) {
+		const found = page.window.document.querySelector(selector)
+		if (!(found instanceof constructor)) throw new Error(`Expected dashboard control ${selector}`)
+		return found
+	}
+
+	test('keeps unsaved strategy, network, and market edits when another panel saves', async () => {
+		const saved = { ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 as const } }
+		saved.strategy = { ...example.strategy }
+		saved.centralizedMarkets = { ...example.centralizedMarkets }
+		const page = await dashboard(saved, state())
+		const reserve = control(page, '#strategy-form input[name="walletReserveRep"]', page.window.HTMLInputElement)
+		const readRpcUrl = control(page, '#read-rpc-url', page.window.HTMLInputElement)
+		const symbol = control(page, '#market-configuration-editor input:not([type])', page.window.HTMLInputElement)
+		reserve.value = '321'
+		reserve.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		readRpcUrl.value = 'https://edited.example'
+		readRpcUrl.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		symbol.value = 'EDITED'
+		symbol.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		await Bun.sleep(10)
+
+		const relays = control(page, '#relay-urls', page.window.HTMLTextAreaElement)
+		relays.value = 'https://relay.example'
+		relays.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		control(page, '#submission-form', page.window.HTMLFormElement).dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		await Bun.sleep(1)
+		expect(page.submissionRequests).toHaveLength(1)
+		// A poll that notices the new operator-file revision reloads in the background without touching the edits either.
+		page.setSnapshot({ ...state(), configurationRevision: 'revision-a' })
+		await page.refresh()
+		page.setSnapshot({ ...state(), configurationRevision: 'revision-b' })
+		await page.refresh()
+
+		expect(reserve.value).toBe('321')
+		expect(readRpcUrl.value).toBe('https://edited.example')
+		expect(control(page, '#market-configuration-editor input:not([type])', page.window.HTMLInputElement).value).toBe('EDITED')
+		for (const formId of ['strategy-form', 'network-form', 'market-configuration-form']) {
+			expect(Array.from(page.window.document.querySelectorAll(`.settings-badges[data-form="${formId}"] .settings-badge`), badge => badge.textContent)).toEqual(['Unsaved changes'])
+		}
+	})
+
+	test('reloads the configuration when the bot reports a newer operator file', async () => {
+		const page = await dashboard(mainnetConfiguration(), { ...state(), configurationRevision: 'revision-a' })
+		await page.refresh()
+		const loads = page.configurationRequestCount()
+		await page.refresh()
+		expect(page.configurationRequestCount()).toBe(loads)
+		// The scan loop added a supported pool on its own: the snapshot's revision changes and the page follows.
+		page.setConfiguration({ ...mainnetConfiguration(), selectedPools: [], strategy: { walletReserveRep: '77' } })
+		page.setSnapshot({ ...state(), configurationRevision: 'revision-b' })
+		await page.refresh()
+		expect(page.configurationRequestCount()).toBe(loads + 1)
+		expect(control(page, '#strategy-form input[name="walletReserveRep"]', page.window.HTMLInputElement).value).toBe('77')
+		await page.refresh()
+		expect(page.configurationRequestCount()).toBe(loads + 1)
+	})
+
+	test('resume preflight names the saved automatic actions instead of unsaved form edits', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy, allowAutomaticDeposits: true, allowAutomaticPoolCreation: false, allowAutomaticVaultMigrations: false, allowAutomaticWithdrawals: true }
+		const page = await dashboard(saved, state(undefined, [], { execute: true, paused: true }))
+		for (const name of ['allowAutomaticDeposits', 'allowAutomaticWithdrawals']) {
+			const toggle = control(page, `#strategy-form input[name="${name}"]`, page.window.HTMLInputElement)
+			toggle.checked = false
+			toggle.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		}
+		control(page, '#pause-button', page.window.HTMLButtonElement).click()
+		await page.waitUntilComplete()
+		const preflight = page.window.document.getElementById('resume-preflight')?.textContent ?? ''
+		expect(preflight).toContain('Automatic actions enabled2 · REP deposits, REP withdrawals')
+		expect(preflight).toContain('unsaved strategy edits are not applied')
+	})
+
+	test('keeps a reconcile card, its typed hash, and its progress across polls during confirmation', async () => {
+		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { paused: true, pendingTransactions: [pending] }))
+		const input = control(page, '#recovery-list input', page.window.HTMLInputElement)
+		const form = control(page, '#recovery-list form', page.window.HTMLFormElement)
+		expect(page.window.document.querySelector('#recovery-list a')?.getAttribute('href')).toBe(`https://etherscan.io/tx/${pending.hash}`)
+		const replacement = `0x${'2'.repeat(64)}`
+		input.value = replacement
+		// Focus leaves the list, as it does when the confirmation dialog opens, and polls keep arriving.
+		control(page, '#activity-filter', page.window.HTMLSelectElement).focus()
+		await page.refresh()
+		expect(page.window.document.querySelector('#recovery-list input')).toBe(input)
+		expect(input.value).toBe(replacement)
+
+		page.suspendNextReconcileRequest()
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(10)
+		await page.refresh()
+		await page.confirmOperatorAction('RECONCILE')
+		for (let attempt = 0; attempt < 100 && page.reconcileRequests.length === 0; attempt++) await Bun.sleep(10)
+		expect(page.reconcileRequests).toEqual([{ intentHash: pending.hash, replacementHash: replacement }])
+		await page.refresh()
+		const button = control(page, '#recovery-list button[type="submit"]', page.window.HTMLButtonElement)
+		expect(page.window.document.querySelector('#recovery-list input')).toBe(input)
+		expect(page.window.document.querySelector('#recovery-list .action-status')?.textContent).toBe('Checking RPC quorum and canonical finality…')
+		expect(button.disabled).toBe(true)
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(10)
+		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
+		page.releaseReconcileRequest()
+		await page.waitUntilComplete()
+		await Bun.sleep(10)
+		expect(page.reconcileRequests).toHaveLength(1)
+		expect(page.window.document.querySelector('#recovery-list .action-status')?.textContent).toBe('Reconciled')
+		expect(button.disabled).toBe(false)
+	})
+
+	test('shows a configuration failure on every page and recovers on the next poll', async () => {
+		const page = await dashboard(mainnetConfiguration(), state(), false, true)
+		const status = control(page, '#configuration-status', page.window.HTMLDivElement)
+		expect(status.closest('[data-page-content]')).toBeNull()
+		expect(status.classList.contains('hidden')).toBe(false)
+		expect(status.textContent).toContain('Configuration is unavailable')
+		expect(status.querySelector('button')?.textContent).toBe('Retry configuration')
+		// Failed background retries leave the notice alone, so it is not re-announced and Retry keeps keyboard focus.
+		const retry = status.querySelector('button')
+		await page.refresh()
+		await page.refresh()
+		expect(status.classList.contains('hidden')).toBe(false)
+		// Compared by identity: a failed element comparison would print both DOM trees.
+		expect(status.querySelector('button') === retry).toBe(true)
+		page.setConfigurationRequestFailure(false)
+		await page.refresh()
+		expect(status.classList.contains('hidden')).toBe(true)
+		expect(page.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
+		expect(page.window.document.getElementById('strategy-fields')?.hasAttribute('disabled')).toBe(false)
+	})
+
+	test('asks before switching chain profiles and requires a typed phrase while live', async () => {
+		const page = await dashboard(mainnetConfiguration(), state(undefined, [], { execute: true }))
+		const networkName = control(page, '#network-name', page.window.HTMLSelectElement)
+		networkName.value = 'sepolia'
+		networkName.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		for (let attempt = 0; attempt < 100 && page.window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+		const dialog = page.window.document.querySelector('.operator-confirm-dialog')
+		expect(dialog?.textContent).toContain('pauses the bot')
+		expect(control(page, '#operator-confirm-submit', page.window.HTMLButtonElement).disabled).toBe(true)
+		expect(networkName.value).toBe('mainnet')
+		const cancel = dialog?.querySelector('button[type="button"]')
+		if (!(cancel instanceof page.window.HTMLButtonElement)) throw new Error('Expected a cancel button')
+		cancel.click()
+		await Bun.sleep(10)
+		expect(page.profileRequests).toHaveLength(0)
+		expect(control(page, '#network-fields', page.window.HTMLFieldSetElement).disabled).toBe(false)
+
+		networkName.value = 'sepolia'
+		networkName.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await page.confirmOperatorAction('SWITCH CHAIN')
+		expect(page.profileRequests).toEqual([{ network: 'sepolia' }])
+	})
+
+	test('unlocks on the active profile when a switch request times out and never takes effect', async () => {
+		const page = await dashboard(mainnetConfiguration(), state())
+		page.setProfileSwitchNeverApplies(true)
+		// The reconnect wait polls every half second; the test shortens only that delay.
+		const originalSetTimeout = page.window.setTimeout.bind(page.window)
+		page.window.setTimeout = (handler, delay, ...rest) => originalSetTimeout(handler, delay === 500 ? 5 : delay, ...rest)
+		const networkName = control(page, '#network-name', page.window.HTMLSelectElement)
+		const networkFields = control(page, '#network-fields', page.window.HTMLFieldSetElement)
+		networkName.value = 'sepolia'
+		networkName.dispatchEvent(new page.window.Event('change', { bubbles: true }))
+		await page.confirmOperatorAction()
+		expect(networkFields.disabled).toBe(true)
+		const status = page.window.document.getElementById('network-status')
+		for (let attempt = 0; attempt < 600 && status?.textContent?.includes('did not take effect') !== true; attempt++) await Bun.sleep(10)
+		expect(status?.textContent).toBe('The switch to the Sepolia profile did not take effect; the bot still runs the Ethereum mainnet profile. Check the bot logs before retrying.')
+		expect(status?.textContent).not.toContain('was saved')
+		await page.refresh()
+		expect(networkFields.disabled).toBe(false)
+		expect(networkName.value).toBe('mainnet')
+		expect(page.window.document.getElementById('network-scope-summary')?.textContent).toBe('Ethereum mainnet profile · switchable')
+		// State keeps rendering instead of being dropped as belonging to the wrong chain.
+		page.setSnapshot(state(undefined, [], { lastScannedBlock: '777' }))
+		await page.refresh()
+		expect(page.window.document.getElementById('block-status')?.textContent).toContain('Block 777')
+	}, 30_000)
+
+	test('keeps in-flight network saves and source probes locked across polls', async () => {
+		const page = await dashboard({ ...mainnetConfiguration(), connectivity: { publicRpcUrls: ['https://public.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 } }, state())
+		const networkForm = control(page, '#network-form', page.window.HTMLFormElement)
+		const networkFields = control(page, '#network-fields', page.window.HTMLFieldSetElement)
+		const readRpcUrl = control(page, '#read-rpc-url', page.window.HTMLInputElement)
+		readRpcUrl.value = 'https://next.example'
+		readRpcUrl.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		page.suspendNextNetworkConnectivityRequest()
+		networkForm.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(10)
+		const testSources = control(page, '#test-market-sources', page.window.HTMLButtonElement)
+		page.suspendNextMarketSourceRequest()
+		testSources.click()
+		await Bun.sleep(10)
+		await page.refresh()
+		expect(networkFields.disabled).toBe(true)
+		expect(testSources.disabled).toBe(true)
+		networkForm.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(10)
+		expect(page.networkConnectivityRequests).toHaveLength(1)
+		page.releaseNetworkConnectivityRequest()
+		page.releaseMarketSourceRequest()
+		await page.waitUntilComplete()
+		await Bun.sleep(10)
+		expect(networkFields.disabled).toBe(false)
+		expect(testSources.disabled).toBe(false)
+	})
+
+	test('locks the strategy form through its review so it cannot be sent twice', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy }
+		const page = await dashboard(saved, state())
+		const form = control(page, '#strategy-form', page.window.HTMLFormElement)
+		const fields = control(page, '#strategy-fields', page.window.HTMLFieldSetElement)
+		const reserve = control(page, '#strategy-form input[name="walletReserveRep"]', page.window.HTMLInputElement)
+		reserve.value = '120'
+		reserve.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		for (let attempt = 0; attempt < 100 && page.window.document.querySelector('.operator-confirm-dialog') === null; attempt++) await Bun.sleep(10)
+		await page.refresh()
+		expect(fields.disabled).toBe(true)
+		await page.confirmOperatorAction()
+		await page.waitUntilComplete()
+		await Bun.sleep(10)
+		expect(page.strategyRequests).toHaveLength(1)
+		expect(page.strategyRequests[0]).toMatchObject({ walletReserveRep: '120' })
+		expect(fields.disabled).toBe(false)
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toBe('Saved')
+	})
+
+	test('sends a signer once and refreshes the snapshot before reporting it', async () => {
+		const page = await dashboard(mainnetConfiguration(), state())
+		const input = control(page, '#private-key', page.window.HTMLInputElement)
+		const form = control(page, '#signer-form', page.window.HTMLFormElement)
+		input.value = `0x${'22'.repeat(32)}`
+		input.dispatchEvent(new page.window.Event('input', { bubbles: true }))
+		page.suspendNextSignerRequest()
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(10)
+		await page.refresh()
+		expect(input.disabled).toBe(true)
+		expect(control(page, '#clear-signer-button', page.window.HTMLButtonElement).disabled).toBe(true)
+		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+		await Bun.sleep(10)
+		expect(page.signerRequests).toHaveLength(1)
+		const polls = page.stateRequestCount()
+		page.releaseSignerRequest()
+		await page.waitUntilComplete()
+		await Bun.sleep(10)
+		expect(page.stateRequestCount()).toBeGreaterThan(polls)
+		expect(input.disabled).toBe(false)
+		expect(input.value).toBe('')
+	})
+
+	test('tells a bot that answers with unreadable state apart from an unreachable one', async () => {
+		const page = await dashboard(mainnetConfiguration(), state())
+		const errors = spyOn(page.window.console, 'error').mockImplementation(() => undefined)
+		page.setStateResponse({ ...state(), execute: 'false' })
+		await page.refresh()
+		expect(page.window.document.getElementById('global-error')?.textContent).toContain('Reload the page')
+		expect(errors).toHaveBeenCalled()
+		page.setStateResponse(undefined)
+		page.setStateRequestFailure(true)
+		await page.refresh()
+		expect(page.window.document.getElementById('global-error')?.textContent).toContain('State polling failed')
+	})
+
+	test('labels desired-pool fields, recovery refresh, and activity filters in operator terms', async () => {
+		const saved = mainnetConfiguration()
+		const noPriorityFee = '0'
+		saved.desiredPools = [{ universeId: '1', questionId: '7', statoblastSecurityMultiplierBps: 12_500, initialReportPriorityFeeAttoEthPerGas: noPriorityFee }]
+		const page = await dashboard(saved, state())
+		const labels = Array.from(page.window.document.querySelectorAll('#market-configuration-editor .market-editor-row label span'), label => label.textContent)
+		expect(labels).toEqual(expect.arrayContaining(['Universe ID', 'Question ID', 'Security multiplier (bps)', 'Initial report priority fee (attoETH per gas)']))
+		expect(page.window.document.getElementById('recheck-recovery')?.textContent).toBe('Refresh')
+		expect(Array.from(page.window.document.querySelectorAll('#activity-filter option'), option => option.getAttribute('value'))).toEqual(['all', 'failed', 'pending', 'confirmed', 'reverted', 'dry-run', 'info'])
+		expect(Array.from(page.window.document.querySelectorAll('#metrics dt'), term => term.textContent).slice(0, 2)).toEqual(['Monitored pools', 'Supported pools'])
+	})
+
+	test('judges bot vault health against the strategy top-up threshold and labels capacity in ETH', async () => {
+		const saved = mainnetConfiguration()
+		saved.strategy = { ...example.strategy, vaultTopUpHealthBps: 12_000 }
+		const snapshot = state()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Expected a monitored pool')
+		const page = await dashboard(saved, { ...snapshot, pools: [{ ...pool, totalCapacityOwnershipEth: '12', botVault: { ...pool.botVault, capacityOwnershipEth: '6', healthBps: '10500', openInterestDisplay: '1', vaultRepBacking: '5' } }] })
+		await page.openMonitoredPools()
+		const details = page.window.document.querySelector('.catalog-monitoring')?.textContent ?? ''
+		expect(details).toContain('Bot vaultTop-up required · 105% health, below the 120% top-up threshold')
+		expect(details).toContain('Capacity ownership12 ETH')
+		expect(details).toContain('Vault capacity ownership6 ETH')
+	})
 })

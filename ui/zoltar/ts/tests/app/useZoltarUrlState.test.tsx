@@ -84,4 +84,24 @@ describe('useZoltarUrlState', () => {
 		expect(window.location.hash).toContain('zoltarView=create')
 		expect(window.history.length).toBe(historyLengthBeforeRecovery)
 	})
+
+	test('keeps a malformed universe in the URL so route validation can reject it instead of opening Genesis', async () => {
+		for (const universe of ['abc', '-1', '']) {
+			window.history.replaceState({}, '', `/#/zoltar?universe=${universe}&zoltarView=questions`)
+			let hookState: ZoltarUrlState | undefined
+			function Harness() {
+				hookState = useZoltarUrlState()
+				return <div />
+			}
+			const rendered = await renderIntoDocument(<Harness />)
+			try {
+				expect(requireState(hookState).activeUniverseId).toBe(0n)
+				expect(new URLSearchParams(window.location.hash.split('?')[1]).get('universe')).toBe(universe)
+				await act(() => requireState(hookState).setActiveUniverseId(3n))
+				expect(window.location.hash).toBe('#/zoltar?universe=3&zoltarView=questions')
+			} finally {
+				await rendered.cleanup()
+			}
+		}
+	})
 })

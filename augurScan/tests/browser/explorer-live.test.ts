@@ -18,8 +18,9 @@ browserTest(
 				transactionUrl.searchParams.set('reorgDemo', '1')
 				await session.send('Page.navigate', { url: transactionUrl.href })
 				await waitFor(`document.querySelector('#explorer-content .static-grid') !== null`)
-				await evaluate(`window.qaExplorerRefreshes = 0; new MutationObserver(() => window.qaExplorerRefreshes++).observe(document.querySelector('#explorer-content'), { childList: true })`)
-				await waitFor(`window.qaExplorerRefreshes > 0`)
+				await evaluate(`window.qaExplorerRefreshes = 0; new MutationObserver(() => window.qaExplorerRefreshes++).observe(document.querySelector('#explorer-content'), { attributes: true, attributeFilter: ['aria-busy'] })`)
+				// Unchanged evidence keeps its nodes; each refresh is still observable as the busy state it sets and clears.
+				await waitFor(`window.qaExplorerRefreshes > 0 && !document.querySelector('#explorer-content').hasAttribute('aria-busy')`)
 				expect(await evaluate(`document.querySelector('#explorer-content .static-grid') !== null`)).toBe(true)
 				await waitFor(`document.querySelector('#freshness-banner').hidden`)
 			},

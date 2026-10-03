@@ -2,7 +2,7 @@ import path from 'node:path'
 import { handleApi } from './api.ts'
 import { runtimeConfig } from './config.ts'
 import { readIndexerHealth, ScannerDatabase } from './database.ts'
-import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, liveStreamResponse, metricRoute, requestAccessGuard, staticAssetResponse } from './http.ts'
+import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, liveStreamResponse, metricRoute, requestAccessGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from './http.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { createLiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
@@ -31,19 +31,7 @@ void pruneLiveEvents()
 const pruneTimer = setInterval(() => void pruneLiveEvents(), 60 * 60 * 1_000)
 const publicRoot = path.resolve(import.meta.dir, '../public')
 
-const contentType = (pathname: string): string => {
-	if (pathname.endsWith('.css')) return 'text/css; charset=utf-8'
-	if (pathname.endsWith('.js')) return 'text/javascript; charset=utf-8'
-	if (pathname.endsWith('.svg')) return 'image/svg+xml'
-	return 'text/html; charset=utf-8'
-}
-
-const securityHeaders = {
-	'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'",
-	'referrer-policy': 'no-referrer',
-	'x-content-type-options': 'nosniff',
-	'x-frame-options': 'DENY',
-}
+const securityHeaders = SECURITY_HEADERS
 
 const API_TRANSACTION_TIMEOUT_MS = 8_000
 const HEALTH_CONCURRENCY_LIMIT = 2
@@ -89,7 +77,7 @@ const server = Bun.serve({
 		const startedAt = performance.now()
 		const respond = (response: Response): Response => {
 			requestMetrics.observe(route, response, (performance.now() - startedAt) / 1_000)
-			return response
+			return withSecurityHeaders(response, securityHeaders)
 		}
 		if (url.pathname === '/health/live') return respond(Response.json({ status: 'ok' }))
 		if (url.pathname === '/health/ready') {
@@ -173,7 +161,7 @@ const server = Bun.serve({
 			if (!requested.includes('.')) return respond(staticAssetResponse(Bun.file(path.join(publicRoot, 'index.html')), securityHeaders, 'text/html; charset=utf-8'))
 			return respond(new Response('Not found', { status: 404, headers: securityHeaders }))
 		}
-		return respond(staticAssetResponse(file, securityHeaders, contentType(requested)))
+		return respond(staticAssetResponse(file, securityHeaders, staticContentType(requested)))
 	},
 })
 

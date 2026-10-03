@@ -53,7 +53,7 @@ function summaryRow(label: string, value: string) {
 export function renderSettlements(settlements: SettlementSnapshot, link: ExplorerLink) {
 	const { settings } = settlements
 	element('settlement-summary').replaceChildren(
-		summaryRow('Settlement', settings.enabled ? `enabled · minimum net ${settings.minimumProfitWeth} ETH · gas cap ${settings.maxGasPriceNanoEth} nanoETH` : 'disabled · enable it under Settings › Settlement'),
+		summaryRow('Settlement', settings.enabled ? `enabled · minimum net ${settings.minimumProfitWeth} ETH · fee cap ${settings.maxGasPriceNanoEth} nanoETH` : 'disabled · enable it under Settings › Settlement'),
 		summaryRow('Unclaimed reward in OpenOracle', rewardWithdrawalLabel(settlements)),
 		summaryRow('Realized settlement income', exactAmount(settlements.realizedIncomeEth, 'ETH')),
 	)

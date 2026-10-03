@@ -20,6 +20,9 @@ export const classifyLiveRecords = (previous: ReadonlyMap<string, string>, curre
 		state: liveRecordState(previous.get(record.key), record.signature),
 	}))
 
+/** True when two ordered record lists carry the same keys and signatures, so a re-render would change nothing. */
+export const liveRecordsMatch = (previous: readonly LiveRecord[], current: readonly LiveRecord[]): boolean => previous.length === current.length && previous.every((record, index) => record.key === current[index]?.key && record.signature === current[index]?.signature)
+
 const operationsLoadDisposition = (activeContext: string, requestedContext: string, live: boolean, hasPaginationTarget: boolean): 'join' | 'queue' | 'supersede' => {
 	if (activeContext !== requestedContext) return 'supersede'
 	return live || hasPaginationTarget ? 'queue' : 'join'
@@ -149,3 +152,12 @@ const createLatestRefreshCoordinator = <T>(refresh: (count: number, force: boole
 }
 
 export const createLiveRouteRefreshCoordinator = <T, R>(refresh: (count: number, force: boolean, recovery: R) => Promise<T>, currentRecovery: () => R) => createLatestRefreshCoordinator((count, force) => refresh(count, force, currentRecovery()))
+
+const streamReconnectBaseDelayMs = 1_000
+const streamReconnectMaxDelayMs = 30_000
+
+/** Delay before reopening a permanently closed event stream; doubles per consecutive failure up to a ceiling. */
+export const streamReconnectDelay = (attempt: number): number => Math.min(streamReconnectMaxDelayMs, streamReconnectBaseDelayMs * 2 ** Math.min(Math.max(0, attempt), 10))
+
+/** The periodic poll refreshes the route only when the open event stream has not already done so within one poll interval. */
+export const shouldPollRouteRefresh = (streamOpen: boolean, lastStreamRefreshAt: number | undefined, now: number, pollIntervalMs: number): boolean => !streamOpen || lastStreamRefreshAt === undefined || now - lastStreamRefreshAt >= pollIntervalMs

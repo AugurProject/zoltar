@@ -5,6 +5,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails, SecurityVaultDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 
 export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
@@ -149,6 +151,14 @@ export function doesVaultWithdrawalExitEntireVault(withdrawAmount: bigint | unde
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {
 	if (timeoutMinutes === undefined || timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return undefined
 	return timeoutMinutes * 60n
+}
+
+/** The inline error for a staged operation timeout field; an empty field has no error yet. */
+export function getStagedOperationTimeoutFieldError(value: string) {
+	if (value.trim() === '') return undefined
+	const minutes = tryParseBigIntInput(value)
+	if (minutes === undefined || minutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || minutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return securityPoolCopy.stagedOperationTimeoutRangeError
+	return undefined
 }
 
 export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'managerAddress' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint) {

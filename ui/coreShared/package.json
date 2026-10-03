@@ -738,6 +738,10 @@
 			"bun": "./ts/lib/errors.ts",
 			"default": "./js/lib/errors.js"
 		},
+		"./lib/ethGasReserve.js": {
+			"bun": "./ts/lib/ethGasReserve.ts",
+			"default": "./js/lib/ethGasReserve.js"
+		},
 		"./lib/formatters.js": {
 			"bun": "./ts/lib/formatters.ts",
 			"default": "./js/lib/formatters.js"
@@ -1089,6 +1093,10 @@
 		"./tests/universeIdentity.test.js": {
 			"bun": "./ts/tests/universeIdentity.test.tsx",
 			"default": "./js/tests/universeIdentity.test.js"
+		},
+		"./components/TransactionFundingActionsPlaceholder.js": {
+			"bun": "./ts/components/TransactionFundingActionsPlaceholder.tsx",
+			"default": "./js/components/TransactionFundingActionsPlaceholder.js"
 		}
 	},
 	"version": "1.0.0"

@@ -2,7 +2,7 @@ import type { ChaosDashboardController } from './dashboard-controller-contract.t
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
 import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
-import { dashboardRequestIsSameOrigin, boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { CONFIGURATION_COMMIT_INDETERMINATE } from '../runtime/configuration-commit.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
@@ -827,7 +827,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 			['<!-- settings-page -->', settingsPageMarkup],
 		],
 		port,
-		route: async (request, { acceptedAuthorities, url }) => {
+		route: async (request, { url }) => {
 			if (request.method === 'GET') {
 				if (url.pathname === '/readyz' || url.pathname === '/metrics') {
 					try {
@@ -865,7 +865,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					)
 			}
 			if (request.method === 'PUT') {
-				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				// The shared server has already rejected cross-origin non-GET requests.
 				const handler = mutationRoutes(controller).get(url.pathname)
 				if (handler !== undefined) {
 					return await enqueueMutation(async () => {

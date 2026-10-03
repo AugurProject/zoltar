@@ -17,7 +17,8 @@ type PauseControlsContext = {
 
 /** The header pause button and the resume preflight dialog. */
 export function registerPauseControls({ state, elements, put, refresh, reconcileUnknownMutation, renderHeader }: PauseControlsContext) {
-	const { pauseStatus, resumeDialog, resumePreflight, resumeRandomScopeWarning, cancelResume, confirmResume } = elements
+	const { pauseStatus, resumeDialog, resumePreflight, resumeRandomScopeWarning, resumeStaleWarning, cancelResume, confirmResume } = elements
+	let resumeDialogOpening = false
 
 	async function mutatePaused(paused: boolean) {
 		state.pauseMutationPending = true
@@ -38,9 +39,22 @@ export function registerPauseControls({ state, elements, put, refresh, reconcile
 		}
 	}
 
-	function openResumeDialog() {
+	/** Loads current state first: the checklist decides whether to resume, so it must not describe an older snapshot. */
+	async function openResumeDialog() {
+		if (resumeDialogOpening || resumeDialog.open) return
+		resumeDialogOpening = true
+		elements.pauseButton.disabled = true
+		pauseStatus.textContent = 'Loading current state…'
+		try {
+			await refresh()
+		} finally {
+			resumeDialogOpening = false
+			pauseStatus.textContent = ''
+			if (state.snapshot !== undefined) renderHeader(state.snapshot)
+			else elements.pauseButton.disabled = false
+		}
 		const value = state.snapshot
-		if (value === undefined) return
+		if (value === undefined || value.paused !== true) return
 		const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
 		const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true).length
 		const signerDetail = value.signerReady === true && value.wallet !== undefined ? fullIdentifier(value.wallet, 'recovery signer address') : 'Missing'
@@ -78,18 +92,20 @@ export function registerPauseControls({ state, elements, put, refresh, reconcile
 		else if (selectionPolicy === undefined) randomScopeWarning = 'The current random-selection policy is unavailable. Reload configuration before resuming.'
 		resumeRandomScopeWarning.classList.toggle('hidden', !unrestricted && selectionPolicy !== undefined)
 		resumeRandomScopeWarning.textContent = randomScopeWarning
-		confirmResume.disabled = selectionPolicy === undefined
+		resumeStaleWarning.classList.toggle('hidden', !state.snapshotStale)
+		confirmResume.disabled = selectionPolicy === undefined || state.snapshotStale || state.configurationCommitIndeterminate
 		confirmResume.textContent = unrestricted ? 'Resume unrestricted bot' : 'Resume bot'
 		resumeDialog.showModal()
 		cancelResume.focus()
 	}
 
 	elements.pauseButton.addEventListener('click', () => {
-		if (state.snapshot?.paused === true) openResumeDialog()
+		if (state.snapshot?.paused === true) void openResumeDialog()
 		else void mutatePaused(true)
 	})
 	cancelResume.addEventListener('click', () => resumeDialog.close())
 	confirmResume.addEventListener('click', () => {
+		if (confirmResume.disabled) return
 		resumeDialog.close()
 		void mutatePaused(false)
 	})

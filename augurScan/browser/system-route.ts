@@ -59,12 +59,16 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		if (systemRouteState.selectedKey !== nextEntityKey) systemRouteState.historyOffset = 0
 		systemRouteState.selectedKey = nextEntityKey
 		const targetHistoryOffset = historyTargetOffset ?? systemRouteState.historyOffset
-		for (const row of document.querySelectorAll<HTMLElement>('.entity-row')) row.setAttribute('aria-selected', String(row.dataset['key'] === systemRouteState.selectedKey))
+		for (const row of document.querySelectorAll<HTMLElement>('.entity-row')) row.setAttribute('aria-pressed', String(row.dataset['key'] === systemRouteState.selectedKey))
 		const requestVersion = ++systemRouteState.detailRequestVersion
 		const detail = $('#state-detail')
 		const presentation = refreshPresentation({ live: quiet })
 		detail.setAttribute('aria-busy', String(presentation.busy))
-		const replaceWithLoading = presentation.loadingState && (!preserveDetail || detail.childElementCount === 0)
+		const detailKey = `${systemRouteState.activeType}:${nextEntityKey}`
+		// Details rendered for another entity must never stay visible under the newly selected one.
+		const showsOtherEntity = systemRouteState.renderedDetailKey !== undefined && systemRouteState.renderedDetailKey !== detailKey
+		if (showsOtherEntity) systemRouteState.renderedDetailKey = undefined
+		const replaceWithLoading = showsOtherEntity || (presentation.loadingState && (!preserveDetail || detail.childElementCount === 0))
 		const existingRefreshStatus = detail.querySelector<HTMLElement>('.detail-refresh-status')
 		if (presentation.loadingState) existingRefreshStatus?.remove()
 		let refreshStatus = presentation.loadingState ? undefined : existingRefreshStatus
@@ -87,7 +91,10 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 			if (systemRouteState.activeType === 'questions' && 'outcome_options' in item) await renderQuestionDetail(item, requestVersion, canonicalGeneration, loadedHistory)
 			if (systemRouteState.activeType === 'universes' && 'reputation_token_address' in item) await renderUniverseDetail(item, requestVersion, canonicalGeneration, loadedHistory)
 			const current = isCurrentContextRequest(contextVersion, systemRouteState.detailContextVersion, requestVersion, systemRouteState.detailRequestVersion) && isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)
-			if (current) systemRouteState.historyOffset = loadedHistory.loadedOffset ?? 0
+			if (current) {
+				systemRouteState.historyOffset = loadedHistory.loadedOffset ?? 0
+				systemRouteState.renderedDetailKey = detailKey
+			}
 			return current
 		} catch (error) {
 			if (isCurrentContextRequest(contextVersion, systemRouteState.detailContextVersion, requestVersion, systemRouteState.detailRequestVersion) && isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) {
@@ -163,6 +170,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		loadMore.textContent = `Show more ${systemRouteState.activeType}`
 		const list = $('#entity-list')
 		const previousRows = liveSnapshot(list, '.entity-row[data-live-key]')
+		const focusedEntityKey = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement.dataset['key'] : undefined
 		list.replaceChildren()
 		for (const item of items) {
 			const [title, meta] = entityCopy(systemRouteState.activeType, item)
@@ -178,6 +186,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 			list.append(row)
 		}
 		applyLiveChanges(list, previousRows, { live, selector: '.entity-row[data-live-key]' })
+		if (focusedEntityKey !== undefined) [...list.querySelectorAll<HTMLElement>('.entity-row')].find(row => row.dataset['key'] === focusedEntityKey)?.focus({ preventScroll: true })
 		list.setAttribute('aria-busy', 'false')
 		const selected = items.find(item => entityKey(systemRouteState.activeType, item) === systemRouteState.selectedKey)
 		if (selected !== undefined) {
@@ -189,6 +198,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		}
 		if (systemRouteState.selectedKey !== undefined && !items.some(item => entityKey(systemRouteState.activeType, item) === systemRouteState.selectedKey)) {
 			$('#state-detail').setAttribute('aria-busy', 'false')
+			systemRouteState.renderedDetailKey = undefined
 			$('#state-detail').replaceChildren(element('div', 'state-error', catalogItems.some(item => entityKey(systemRouteState.activeType, item) === systemRouteState.selectedKey) ? 'The current filter hides this entity.' : 'Entity not found in this network.'))
 			return true
 		}
@@ -199,6 +209,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		systemRouteState.detailContextVersion++
 		systemRouteState.detailRequestVersion++
 		systemRouteState.selectedKey = undefined
+		systemRouteState.renderedDetailKey = undefined
 		$('#state-detail').setAttribute('aria-busy', 'false')
 		$('#state-detail').replaceChildren(element('div', 'state-placeholder', `No ${systemRouteState.activeType} match this view.`))
 		return true
@@ -226,7 +237,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 	}
 
 	const setSystemControlsDisabled = (disabled: boolean) => {
-		$('#entity-search').disabled = disabled
+		// The search field stays enabled: disabling a focused input drops keystrokes and blurs it, and stale responses are already discarded by request version.
 		for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-state-tab]')) tab.disabled = disabled
 		for (const row of document.querySelectorAll<HTMLButtonElement>('.entity-row')) row.disabled = disabled
 	}
@@ -244,6 +255,11 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 			tab.tabIndex = selected ? 0 : -1
 		}
 		$('#state-detail').setAttribute('aria-labelledby', `tab-${type}`)
+		if (restoredEntityKey !== undefined && systemRouteState.renderedDetailKey !== undefined && systemRouteState.renderedDetailKey !== `${type}:${restoredEntityKey}`) {
+			// A route that names another entity must not keep showing the previous entity while its own details load.
+			systemRouteState.renderedDetailKey = undefined
+			$('#state-detail').replaceChildren(element('div', 'state-placeholder', 'Loading historical checkpoints…'))
+		}
 		if (systemRouteState.data !== undefined) void renderEntityList()
 	}
 

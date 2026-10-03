@@ -2,6 +2,8 @@ import type { PublicOperatorSnapshot } from '#state/operator-state'
 
 export type NetworkProfile = 'mainnet' | 'sepolia'
 
+type SavedConnectivity = { publicRpcUrls: readonly string[]; quorumRpcUrls: readonly string[]; readRpcUrl: string; rpcQuorum: 1 | 2 }
+
 /** The dashboard page's mutable data and request latches; every view and controller reads and writes this one record. */
 export type DashboardState = {
 	latestSnapshot: PublicOperatorSnapshot | undefined
@@ -25,6 +27,10 @@ export type DashboardState = {
 	profileRequestEpoch: number
 	initialFragmentApplied: boolean
 	approvedUniverseIds: Set<string>
+	/** The approved universes the operator file holds, which the save review diffs the selection against. */
+	savedUniverseIds: ReadonlySet<string>
+	/** The saved RPC settings of a configured profile, which the save review diffs the form against. */
+	savedConnectivity: SavedConnectivity | undefined
 	universeSavePending: boolean
 	signerFeedback: { error: boolean; message: string } | undefined
 	signerRequestPending: boolean
@@ -59,6 +65,8 @@ export function createDashboardState(): DashboardState {
 		profileRequestEpoch: 0,
 		initialFragmentApplied: false,
 		approvedUniverseIds: new Set<string>(),
+		savedUniverseIds: new Set<string>(),
+		savedConnectivity: undefined,
 		universeSavePending: false,
 		signerFeedback: undefined,
 		signerRequestPending: false,

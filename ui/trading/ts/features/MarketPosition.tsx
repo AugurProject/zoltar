@@ -1,4 +1,5 @@
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatOutcomeQuantity } from '../lib/shareValue.js'
 import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
@@ -14,12 +15,11 @@ function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, ba
 	if (value !== undefined) return formatOutcomeQuantity(value, outcome)
 	if (balanceState === 'loading') return appCopy.loadingBalances
 	if (balanceState === 'error') return appCopy.unavailable
-	// The ticket's primary button already offers to connect; the holdings stay quiet until a wallet is known.
 	return ticketCopy.noBalance
 }
 
 /**
- * The wallet's YES, NO, and INVALID shares in this market, shown in the reading column so every ticket view keeps them in sight.
+ * The wallet's Yes, No, and Invalid shares in this market, shown in the reading column so every ticket view keeps them in sight.
  * `ownsBalanceError` is false while the open ticket view (liquidity or settlement) already reports a failed balance read with its retry.
  */
 export function MarketPosition({ market, holdings, wallet, disabled, ownsBalanceError }: { market: LiveMarket; holdings: TicketBalances; wallet: Pick<TicketWallet, 'networkMismatchReason'>; disabled: boolean; ownsBalanceError: boolean }) {
@@ -31,14 +31,19 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 	return (
 		<section className='market-position' aria-labelledby='market-position-heading' aria-busy={holdings.balanceState === 'loading'}>
 			<h3 id='market-position-heading'>{marketsCopy.yourPosition}</h3>
-			<ul className='portfolio-holdings market-holdings'>
-				{outcomes.map(item => (
-					<li key={item.outcome} className={item.className} data-outcome={item.outcome}>
-						<span className='holding-quantity'>{walletBalanceLabel(item.value, item.quantityOutcome, holdings.balanceState)}</span>
-						<small className='payout-caption'>{item.caption}</small>
-					</li>
-				))}
-			</ul>
+			{/* Without a wallet there is no position to show; the ticket's primary button offers to connect. */}
+			{holdings.balanceState === 'disconnected' && holdings.balances === undefined ? (
+				<UserMessage className='market-position-disconnected' detail={marketsCopy.connectToSeePosition} />
+			) : (
+				<ul className='portfolio-holdings market-holdings'>
+					{outcomes.map(item => (
+						<li key={item.outcome} className={item.className} data-outcome={item.outcome}>
+							<span className='holding-quantity'>{walletBalanceLabel(item.value, item.quantityOutcome, holdings.balanceState)}</span>
+							<small className='payout-caption'>{item.caption}</small>
+						</li>
+					))}
+				</ul>
+			)}
 			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
 			{ownsBalanceError && holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={disabled} /> : null}
 			<BackingDetails market={market} />

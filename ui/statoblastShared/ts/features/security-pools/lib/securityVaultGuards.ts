@@ -77,8 +77,7 @@ export function getVaultWithdrawGuardMessage({
 	if (withdrawableRepAmountAttoRep === undefined) return 'A REP price is needed to estimate how much REP your commitment keeps locked. Request a new oracle price or lower the commitment limit first.'
 	if (withdrawableRepAmountAttoRep <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalanceWithUnit(withdrawableRepAmountAttoRep, 'REP')} or less.`
-	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
-	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
+	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 1–5 minutes.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this REP withdrawal',
 		includeBuffer: bufferRequiredEthCost,
@@ -137,18 +136,23 @@ export function getVaultExecutePendingOperationGuardMessage({
 	hasLoadedOracleManager,
 	isOnActiveAppChain,
 	isPriceValid,
+	pendingSettlementOperationIds = [],
 	resolvedPendingOperationId,
 }: {
 	accountAddress: Address | undefined
 	hasLoadedOracleManager: boolean
 	isOnActiveAppChain: boolean
 	isPriceValid: boolean | undefined
+	pendingSettlementOperationIds?: readonly bigint[] | undefined
 	resolvedPendingOperationId: bigint | undefined
 }) {
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('executing a staged operation') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
-	if (isPriceValid === false) return 'Request a new price in Price oracle before executing this operation.'
+	if (isPriceValid === false) {
+		if (resolvedPendingOperationId !== undefined && pendingSettlementOperationIds.includes(resolvedPendingOperationId)) return securityPoolCopy.autoExecAfterSettlement
+		return 'Request a new price in Price oracle before executing this operation.'
+	}
 	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation ID.'
 	return undefined
 }

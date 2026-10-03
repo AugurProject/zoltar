@@ -132,7 +132,7 @@ for (const timestamp of [3600n, 3541n]) {
 			throw new Error(`Unexpected read ${request.functionName}`)
 		})
 		const client = { readContract, getBlock: async () => ({ timestamp, transactions: [], baseFeePerGas: 0n }) }
-		await expect(loadOracleManagerQueueOperationEthValue(client, MANAGER_ADDRESS)).rejects.toThrow('expires too soon')
+		await expect(loadOracleManagerQueueOperationEthValue(client, MANAGER_ADDRESS)).rejects.toThrow('The oracle price expires within a minute')
 	})
 }
 

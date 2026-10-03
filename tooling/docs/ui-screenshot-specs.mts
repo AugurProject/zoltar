@@ -32,6 +32,8 @@ export type UiScreenshotCrop = {
 	readonly containing?: string
 	/** Extra CSS pixels around the element. Defaults to 16. */
 	readonly padding?: number
+	/** Scroll the target into view before measuring, for an action area inside a dialog. */
+	readonly scrollIntoView?: boolean
 }
 
 export type UiScreenshotSpec = {

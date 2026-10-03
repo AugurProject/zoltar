@@ -41,8 +41,8 @@ test('market cards lead with odds and one-click outcome buttons that keep the en
 		expect(yes?.textContent).toBe('Yes 62%')
 		expect(no?.textContent).toBe('No 38%')
 		expect(yes?.getAttribute('aria-label')).toBe('Buy Yes at a conditional 62%')
-		expect(yes?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&side=yes`)
-		expect(no?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&side=no`)
+		expect(yes?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&ticket=buy-yes`)
+		expect(no?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&ticket=buy-no`)
 		expect(rain?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Conditional odds: Yes 62%, No 38%')
 		expect(rain?.textContent).toContain('Liquidity')
 		expect(rain?.textContent).toContain('in 30 days')
@@ -75,6 +75,47 @@ test('search and status filters narrow saved favorites and offer a way back from
 		await act(() => clear.click())
 		expect(cardTitles(rendered.container)).toHaveLength(2)
 		expect(rendered.container.querySelector('.market-list-filters button[aria-pressed="true"]')?.textContent).toBe('All')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('search, status filter, and sort live in the hash query, so Back and refresh restore them', async () => {
+	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&q=paris&status=open&sort=liquidity')
+	const rendered = await renderBrowser('market')
+	try {
+		expect(rendered.container.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('paris')
+		expect(rendered.container.querySelector('.market-list-filters button[aria-pressed="true"]')?.textContent).toBe('Open')
+		expect(rendered.container.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
+		expect(cardTitles(rendered.container)).toEqual(['Will it rain in Paris?'])
+		const historyLength = window.history.length
+		await typeSearch(rendered.container, 'bridge')
+		await pressFilter(rendered.container, 'Closing soon')
+		// The list options replace the current entry: Back still leaves the list.
+		expect(window.history.length).toBe(historyLength)
+		expect(window.location.hash).toBe('#/market?simulate=1&q=bridge&status=closing-soon&sort=liquidity')
+		// Market links leave the list's options behind.
+		expect(rendered.container.querySelector('.market-record .outcome-button--yes')?.getAttribute('href')).toBe(`#/market/${fixtureAddress('02')}?simulate=1&ticket=buy-yes`)
+		const clear = async () => {
+			await typeSearch(rendered.container, '')
+			await pressFilter(rendered.container, 'All')
+		}
+		await clear()
+		expect(window.location.hash).toBe('#/market?simulate=1&sort=liquidity')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('list options written before the app has a route hash keep the page query that selects the simulation', async () => {
+	const dom = installDomEnvironment('http://localhost/?simulate=1&simScenario=trading-funded')
+	const rendered = await renderBrowser('market')
+	try {
+		await typeSearch(rendered.container, 'bridge')
+		expect(window.location.search).toBe('?simulate=1&simScenario=trading-funded')
+		expect(window.location.hash).toBe('#/market?q=bridge')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

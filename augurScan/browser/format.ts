@@ -23,6 +23,8 @@ export const utcDateTime = (value: string | number | Date | null | undefined): s
 
 export const exactUnit = (value: string | number | bigint | null | undefined, decimals = 18, symbol = ''): string => {
 	if (value === null || value === undefined) return '—'
+	// Atomic token amounts are whole numbers; anything else ('null', '1.5', '1e+21') cannot be scaled exactly.
+	if (!/^-?\d+$/.test(String(value))) return '—'
 	const negative = String(value).startsWith('-')
 	const digits = String(value)
 		.replace('-', '')

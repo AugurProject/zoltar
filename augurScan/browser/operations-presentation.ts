@@ -163,3 +163,29 @@ const approvalFieldDefinitions = [
 ] as const
 
 export const approvalTransitionFields = (data: Readonly<Record<string, unknown>>): Array<{ readonly label: string; readonly value: string; readonly unit: string }> => approvalFieldDefinitions.flatMap(([key, label, unit]) => (typeof data[key] === 'string' ? [{ label, value: data[key], unit }] : []))
+
+/** The URL a filter form opens: its action path plus every field the user actually filled in. */
+export const filterFormDestination = (actionPath: string, origin: string, fields: Iterable<readonly [string, string]>): URL => {
+	const destination = new URL(actionPath, origin)
+	for (const [name, value] of fields) {
+		const trimmed = value.trim()
+		if (trimmed !== '') destination.searchParams.set(name, trimmed)
+	}
+	return destination
+}
+
+export const blockRangeError = (fromBlock: string, toBlock: string): { readonly field: 'fromBlock' | 'toBlock'; readonly message: string } | undefined => {
+	for (const [field, value] of [
+		['fromBlock', fromBlock.trim()],
+		['toBlock', toBlock.trim()],
+	] as const)
+		if (value !== '' && !/^\d+$/.test(value)) return { field, message: 'Enter a whole non-negative block number' }
+	if (fromBlock.trim() !== '' && toBlock.trim() !== '' && BigInt(fromBlock.trim()) > BigInt(toBlock.trim())) return { field: 'toBlock', message: 'To block must be at or after from block' }
+	return undefined
+}
+
+/** Explains an operations failure with its cause; a missing entity is reported as such instead of as a generic outage. */
+export const operationsFailureMessage = (refresh: boolean, status: number | undefined, detail: string): string => {
+	if (refresh) return `Could not refresh protocol operations; existing evidence remains visible: ${detail}`
+	return status === 404 ? `No indexed record matches this address or identifier on the selected network: ${detail}` : `Could not load protocol operations: ${detail}`
+}

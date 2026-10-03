@@ -4,7 +4,7 @@ import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { ScannerLiveState } from './scanner-live-state.ts'
 import { historyInvalidationNotice, isHistoryInvalidationReason } from './history-evidence.ts'
-import { createLiveRouteRefreshCoordinator } from './live-refresh.ts'
+import { createLiveRouteRefreshCoordinator, streamReconnectDelay } from './live-refresh.ts'
 import { activityRefreshRetention } from './refresh-presentation.ts'
 import { renderExplorerPage } from './explorer-page.ts'
 import { classifyRoute } from './routes.ts'
@@ -263,8 +263,11 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 				})
 				return
 			}
+			// A hidden tab keeps its pending count; the visibility handler refreshes the route when the tab is shown again.
+			if (document.hidden) return
 			const count = liveState.pendingBlockUpdates
 			liveState.pendingBlockUpdates = 0
+			liveState.lastStreamRefreshAt = Date.now()
 			void requestRouteRefresh(count)
 		}, 1_000)
 	}
@@ -280,6 +283,8 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 			return
 		}
 		if (liveState.stream !== undefined) return
+		if (liveState.streamReconnectTimer !== undefined) clearTimeout(liveState.streamReconnectTimer)
+		liveState.streamReconnectTimer = undefined
 		const streamQuery = new URLSearchParams()
 		if (isDemo && deps.getPageUrl().searchParams.get('reorgDemo') === '1') streamQuery.set('reorg', '1')
 		if (isDemo && deps.getPageUrl().searchParams.get('burstDemo') === '1') streamQuery.set('burst', '1')
@@ -287,11 +292,23 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 		const nextStream = new EventSource(streamPath)
 		liveState.stream = nextStream
 		nextStream.addEventListener('open', () => {
+			liveState.streamReconnectAttempts = 0
 			updateConnectionStatus()
 			if (liveState.streamHasOpened) void requestRouteRefresh(1)
 			liveState.streamHasOpened = true
 		})
 		nextStream.addEventListener('error', () => {
+			// The browser retries transient failures itself; a closed stream (rejected response) is never retried, so reopen it here.
+			if (nextStream.readyState === EventSource.CLOSED && liveState.stream === nextStream) {
+				nextStream.close()
+				liveState.stream = undefined
+				const delay = streamReconnectDelay(liveState.streamReconnectAttempts)
+				liveState.streamReconnectAttempts++
+				liveState.streamReconnectTimer = window.setTimeout(() => {
+					liveState.streamReconnectTimer = undefined
+					connectStream()
+				}, delay)
+			}
 			updateConnectionStatus()
 		})
 		const eventPayload = (event: MessageEvent, label: string): LiveEventPayload | undefined => {

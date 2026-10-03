@@ -24,7 +24,7 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 	function renderHeader(value: Snapshot) {
 		const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
 		elements.lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
-		elements.lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
+		renderScanAge()
 		if (value.execute === true) setBadge(elements.modeBadge, 'Live armed', 'warning')
 		else setBadge(elements.modeBadge, 'Dry run', 'info')
 		renderHealth(value)
@@ -46,11 +46,19 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		elements.pauseButton.disabled = state.pauseMutationPending || state.pauseMutationUnreconciled || state.configurationCommitIndeterminate
 	}
 
+	/** Runs every second as well as on each snapshot, so the age keeps advancing while state refreshes fail. */
+	function renderScanAge() {
+		const value = state.snapshot
+		if (value === undefined) return
+		const age = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
+		if (elements.lastScan.textContent !== age) elements.lastScan.textContent = age
+	}
+
 	function renderHealth(value: Snapshot) {
 		renderOperatorHealth(element('operator-health', HTMLDivElement), {
 			mode: value.execute === true ? 'Live armed' : 'Dry run',
 			lastScanAt: value.lastScanAt,
-			capitalAtRisk: state.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Unknown / ${state.configuration.maximumEthPerOperation} ETH per operation`,
+			capitalAtRisk: state.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Not tracked · limit ${state.configuration.maximumEthPerOperation} ETH per operation`,
 			recoveryItems: recoveryItemCount(value),
 			lastAction: value.activities[0]?.label ?? value.activities[0]?.summary ?? 'No action yet',
 			paused: value.paused === true || value.safetyPaused === true,
@@ -176,5 +184,5 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 	function originCount(value: number | undefined) {
 		return value === undefined ? '—' : `${value.toString()} origin${value === 1 ? '' : 's'}`
 	}
-	return { renderHeader, renderHealth, renderOverview, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth }
+	return { renderHeader, renderHealth, renderOverview, renderScanAge, renderUnavailableRpcHealth, renderUnavailableSubmissionHealth }
 }

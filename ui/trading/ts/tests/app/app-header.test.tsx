@@ -97,6 +97,18 @@ describe('trading header', () => {
 		expect(universeSwitcher?.querySelector('.universe-switcher-browse')?.getAttribute('href')).toContain('#/universe')
 	})
 
+	test('rewrites a malformed or empty universe request to the discovered universe instead of keeping a value the routes ignore', async () => {
+		for (const universe of ['abc', '-1', '']) {
+			window.history.replaceState(undefined, '', `/#/universe?universe=${universe}&simulate=1`)
+			await renderConfiguredApp({
+				discoverUniverses: async () => emptyDiscoveryPage([0n, 2n], 0n),
+			})
+			await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		}
+	})
+
 	test('follows an addressed market into its universe and rewrites a disagreeing parameter', async () => {
 		const pool = `0x${'ab'.repeat(20)}`
 		window.history.replaceState(undefined, '', `/#/market/${pool}?universe=0`)

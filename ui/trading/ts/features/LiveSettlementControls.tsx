@@ -2,9 +2,9 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
-import { collateralAttoEthToAttoShares } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
@@ -16,18 +16,19 @@ import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } 
 import { createTradingPublicClient, publicErrorMessage, settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
 import * as workflowCopy from '../copy/workflows.js'
-import { resolvedShareOutcome } from '../lib/marketLabels.js'
+import { resolvedShareOutcome } from '../protocol/settlement.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from './LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
+import { operationOption } from './live/operationOption.js'
+import { OperationSwitcher } from './OperationSwitcher.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
 import { resolveSettlementAvailability } from './live/actionAvailability.js'
 
@@ -58,6 +59,8 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const [forkContextError, setForkContextError] = useState<string>()
 	const [forkContextNonce, setForkContextNonce] = useState(0)
 	const [selectedForkTargets, setSelectedForkTargets] = useState<readonly ForkTarget[]>([])
+	// Migration moves the whole source balance and locks it in the parent universe, so it needs an explicit acknowledgment of those inputs.
+	const [migrationAcknowledgedKey, setMigrationAcknowledgedKey] = useState<string>()
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
 	const winningOutcome = resolvedShareOutcome(market.questionOutcome)
@@ -65,13 +68,12 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
-	let operationAvailable = availability.canMigrateShares
-	if (operation === 'redeem-complete-set') operationAvailable = availability.canRedeemCompleteSets
-	else if (operation === 'redeem-winning-shares') operationAvailable = availability.canRedeemWinningShares
+	const unavailableReason = settlementUnavailableReason(operation, market, balances)
+	const operationAvailable = unavailableReason === undefined
 	let sourceBalance = balances?.no
 	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
-	let inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
+	let inputBlocker = settlementInputBlocker(operation, unavailableReason, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
 	if (operation === 'migrate-shares' && operationAvailable) {
 		if (forkContextState === 'loading' || forkContextState === 'idle') inputBlocker = settlementCopy.loadingForkDetailsReason
 		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailableReason
@@ -91,14 +93,18 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		onMigrationConfirmed: () => setForkContextNonce(current => current + 1),
 		services,
 	})
-	const { transaction, invalidateInputs: invalidateSettlementInputs, submitCurrent } = workflowController
+	const { transaction, invalidateInputs: invalidateSettlementInputs } = workflowController
 	const { quote, state, workflowLocked } = transaction
 	const walletConnected = account !== undefined && walletClient !== undefined
+	// The acknowledgment covers this exact source, balance, and branch set; changing any of them asks again.
+	const migrationKey = `${account ?? ''}\u0000${sourceOutcome}\u0000${(sourceBalance ?? 0n).toString()}\u0000${targetOutcomeKey}`
+	const migrationAcknowledged = migrationAcknowledgedKey === migrationKey
+	const acknowledgmentBlocker = operation === 'migrate-shares' && !migrationAcknowledged ? settlementCopy.acknowledgeMigrationReason : undefined
 	const actionAvailability = resolveSettlementAvailability({
 		walletConnected,
 		networkMismatchReason,
 		balanceState,
-		inputBlocker,
+		inputBlocker: inputBlocker ?? acknowledgmentBlocker,
 		inputBlockerLoading: operation === 'migrate-shares' && operationAvailable && (forkContextState === 'loading' || forkContextState === 'idle'),
 		workflowLocked,
 		quoteState: transaction.quoteState,
@@ -148,26 +154,28 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		invalidateSettlementInputs()
 		setOperation(next)
 	}
+	const submitCurrent = async () => {
+		if (operation === 'migrate-shares' && !migrationAcknowledged) return
+		await workflowController.submitCurrent()
+	}
+	const forked = market.universeForkTime !== 0n
 	const operationOptions = [
-		{ value: 'redeem-complete-set' as const, label: settlementCopy.completeSetAction, disabled: workflowLocked },
-		...(winningOutcome === undefined ? [] : [{ value: 'redeem-winning-shares' as const, label: settlementCopy.redeemOutcomeAction(winningOutcome), disabled: workflowLocked }]),
-		{ value: 'migrate-shares' as const, label: settlementCopy.forkMigrationAction, disabled: workflowLocked },
+		operationOption('redeem-complete-set', settlementCopy.completeSetAction, workflowLocked || forked, forked ? settlementCopy.universeForkedReason : undefined),
+		...(winningOutcome === undefined ? [] : [operationOption('redeem-winning-shares', settlementCopy.redeemOutcomeAction(winningOutcome), workflowLocked, undefined)]),
+		operationOption('migrate-shares', settlementCopy.forkMigrationAction, workflowLocked || !forked, forked ? undefined : settlementCopy.universeNotForkedReason),
 	]
+	// Shown before the action once there is a balance to move and a branch to move it to.
+	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeQuantity(sourceBalance, sourceOutcome) : undefined
+	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
+	const completeSetHint = redeemableAttoEth === undefined ? undefined : settlementCopy.completeSetsHeld(formatCompleteSetQuantity(availability.completeSets, 4, 'down'), formatCollateralEth(availability.completeSets, market, 'down'))
 	return (
 		<div className='settlement-controls'>
-			<ViewTabs ariaLabel={settlementCopy.operationLabel} semantics='switcher' variant='segmented' size='compact' value={operation} onChange={selectOperation} options={operationOptions} />
+			<OperationSwitcher ariaLabel={settlementCopy.operationLabel} value={operation} onChange={selectOperation} options={operationOptions} />
 			{(() => {
 				if (operation === 'redeem-complete-set')
 					return (
 						<>
-							<UserMessage
-								className='detail'
-								detail={
-									<>
-										{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets, market)}.
-									</>
-								}
-							/>
+							<UserMessage className='detail' detail={settlementCopy.completeSetRedemptionGuidance} />
 							<FormField id={amountId} label={settlementCopy.completeSetValueToRedeem}>
 								<FormInput
 									id={amountId}
@@ -178,6 +186,22 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 									disabled={workflowLocked}
 									inputMode='decimal'
 									adornment={settlementCopy.eth}
+									hint={completeSetHint}
+									action={
+										redeemableAttoEth === undefined || redeemableAttoEth === 0n ? undefined : (
+											<button
+												type='button'
+												className='secondary'
+												disabled={workflowLocked}
+												onClick={() => {
+													invalidateSettlementInputs()
+													setAmount(formatCurrencyInputBalance(redeemableAttoEth, 18))
+												}}
+											>
+												{settlementCopy.max}
+											</button>
+										)
+									}
 									error={amount.trim() !== '' && operationAvailable ? inputBlocker : undefined}
 									onInput={event => {
 										invalidateSettlementInputs()
@@ -234,6 +258,17 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 								<p>{forkMigrationBatchWarning(selectedForkTargets)}</p>
 							</WarningSurface>
 						)}
+						{migrationBalance === undefined ? null : (
+							<WarningSurface role='status' surface='flat' variant='compact'>
+								<p>
+									<strong>{settlementCopy.migrationAmount(migrationBalance)}</strong>
+								</p>
+								<label className='trade-impact-acknowledge'>
+									<input type='checkbox' checked={migrationAcknowledged} disabled={workflowLocked} onChange={event => setMigrationAcknowledgedKey(event.currentTarget.checked ? migrationKey : undefined)} />
+									<span>{settlementCopy.acknowledgeMigration(migrationBalance, sourceOutcome)}</span>
+								</label>
+							</WarningSurface>
+						)}
 					</>
 				)
 			})()}
@@ -250,7 +285,6 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 						<UserMessage className='detail trade-estimate-note' detail={<>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</>} />
 					</section>
 				) : null}
-				{quote?.operation === 'migrate-shares' ? <UserMessage className='detail' detail={<>{migrationSimulationSummary(quote.blockNumber, quote.sourceOutcome, BigInt(quote.targetOutcomeIndexes.length))}</>} /> : null}
 			</QuotedTransactionPanel>
 		</div>
 	)

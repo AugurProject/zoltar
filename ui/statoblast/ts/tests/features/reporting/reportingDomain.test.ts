@@ -17,6 +17,8 @@ import {
 	getRemainingSelectedOutcomeContributionCapacity,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
+	getReportingForkTriggerAmount,
+	getSecondLargestEscalationBalance,
 	previewReportingContribution,
 	previewReportingDeadline,
 } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
@@ -168,9 +170,9 @@ describe('reportingDomain', () => {
 			nonDecisionThresholdAttoRep: rep(21n) / 10n,
 			sides: [side('invalid', 0n), side('yes', rep(21n) / 10n), side('no', rep(2n))],
 		})
-		for (const suggest of [getReportingMinimumOutcomeChangeContribution, getReportingMaxProfitContribution]) {
-			expect(suggest(details, 'no')).toEqual({ amountAttoRep: rep(11n) / 10n, reason: undefined })
-		}
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'no')).toEqual({ amountAttoRep: rep(11n) / 10n, reason: undefined })
+		// Yes already sits at the threshold, so filling No would trigger the fork rather than earn a reward.
+		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({ amountAttoRep: undefined, reason: 'Max reward is unavailable because matching the other side would trigger the universe fork.' })
 	})
 
 	test('getReportingMinimumOutcomeChangeContribution respects startBondAttoRep when the lead delta is smaller than the minimum report', () => {
@@ -491,6 +493,30 @@ describe('deposit deadline preview', () => {
 	test('respects the fresh response window for resumed games', () => {
 		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
 		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+	})
+})
+
+describe('fork-triggering reports', () => {
+	const forkReadyDetails = () => createReportingDetails({ nonDecisionThresholdAttoRep: rep(20n), sides: [side('invalid', 0n), side('yes', rep(20n)), side('no', rep(12n))], startBondAttoRep: rep(1n) })
+	test('a side reaching the threshold while another side is already there triggers the fork', () => {
+		expect(getReportingForkTriggerAmount(forkReadyDetails(), 'no')).toBe(rep(8n))
+		expect(getReportingForkTriggerAmount(forkReadyDetails(), 'invalid')).toBe(rep(20n))
+	})
+	test('filling a side to the threshold alone does not trigger the fork', () => {
+		const details = createReportingDetails({ nonDecisionThresholdAttoRep: rep(20n), sides: [side('invalid', 0n), side('yes', rep(19n)), side('no', rep(12n))] })
+		expect(getReportingForkTriggerAmount(details, 'no')).toBeUndefined()
+		expect(getReportingForkTriggerAmount(details, 'yes')).toBeUndefined()
+		expect(getReportingForkTriggerAmount(forkReadyDetails(), 'yes')).toBeUndefined()
+		expect(getReportingForkTriggerAmount(createNotStartedReportingDetails(), 'yes')).toBeUndefined()
+		expect(getReportingForkTriggerAmount({ ...forkReadyDetails(), hasReachedNonDecision: true }, 'no')).toBeUndefined()
+	})
+	test('max reward never fills a fork-triggering amount', () => {
+		expect(getReportingMaxProfitContribution(forkReadyDetails(), 'no')).toEqual({ amountAttoRep: undefined, reason: 'Max reward is unavailable because matching the other side would trigger the universe fork.' })
+	})
+	test('fork progress follows the second-largest side', () => {
+		expect(getSecondLargestEscalationBalance([side('invalid', rep(1n)), side('yes', rep(5n)), side('no', rep(8n))])).toBe(rep(5n))
+		expect(getSecondLargestEscalationBalance([side('invalid', rep(8n)), side('yes', rep(8n)), side('no', 0n)])).toBe(rep(8n))
+		expect(getSecondLargestEscalationBalance([side('yes', rep(3n))])).toBe(0n)
 	})
 })
 

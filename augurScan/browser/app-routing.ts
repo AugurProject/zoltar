@@ -1,12 +1,13 @@
 import type { OperationsRoutePosition, StateTab } from './browser-types.ts'
 import type { ScannerContext } from './app-context.ts'
 import { lookup, type HistoryRangeElements } from './app-dom.ts'
+import { firstVisibleHeading } from './app-presentation.ts'
 import { invalidateStateRequestVersions, isStateTab, abortActivityRequests } from './app-state.ts'
 import type { ScannerViews } from './app-views.ts'
 import { renderExplorerPage } from './explorer-page.ts'
-import { classifyRoute, routeTitle, type ScannerRoute } from './routes.ts'
+import { classifyRoute, routeDataContext, routeTitle, type ScannerRoute } from './routes.ts'
 
-const routeContextKey = (context: ScannerContext): string => `${context.selectedChainId()}:${location.pathname}`
+const routeContextKey = (context: ScannerContext): string => routeDataContext(context.selectedChainId(), new URL(location.href))
 
 const systemRouteSelection = (context: ScannerContext): { tab: StateTab; entity?: string | undefined } => {
 	const parts = location.pathname.split('/').filter(Boolean)
@@ -87,7 +88,8 @@ export const syncVisibleRoute = (context: ScannerContext): void => {
 	document.title = routeTitle(location.pathname)
 	lookup('.skip-link').href = skipTargets[state.route]
 	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a')) {
-		const current = new URL(link.href).pathname === location.pathname || (isOperations && new URL(link.href).pathname === '/operations')
+		const linkPath = new URL(link.href).pathname
+		const current = linkPath === location.pathname || (isOperations && linkPath === '/operations') || (state.route === 'system' && linkPath === '/system')
 		if (current) link.setAttribute('aria-current', 'page')
 		else link.removeAttribute('aria-current')
 	}
@@ -208,12 +210,22 @@ export const invalidateRouteRequests = (context: ScannerContext, views: ScannerV
 	abortActivityRequests(state)
 }
 
-export const focusNewRoute = (): void => {
-	window.scrollTo({ top: 0 })
-	const heading = document.querySelector<HTMLElement>('main > section:not([hidden]) h1, main > section:not([hidden]) h2')
-	if (heading === null) return
+const hasLayoutBox = (heading: HTMLElement): boolean => heading.getClientRects().length > 0
+
+export const focusNewRoute = ({ scrollToTop = true }: { scrollToTop?: boolean } = {}): HTMLElement | undefined => {
+	if (scrollToTop) window.scrollTo({ top: 0 })
+	const heading = firstVisibleHeading(document, hasLayoutBox)
+	if (heading === undefined) return undefined
 	heading.tabIndex = -1
 	heading.focus({ preventScroll: true })
+	return heading
+}
+
+/** After the route's data arrives, moves focus to its heading unless the user has already moved focus elsewhere. */
+export const refocusLoadedRoute = (focusedBeforeLoad: HTMLElement | undefined): void => {
+	const active = document.activeElement
+	// Focus left on a control of the route that was just hidden counts as unmoved.
+	if (active === null || active === document.body || active === focusedBeforeLoad || active.getClientRects().length === 0) focusNewRoute({ scrollToTop: false })
 }
 
 /** Opens the log or account detail named by the current URL, or drops a stale deep link. */

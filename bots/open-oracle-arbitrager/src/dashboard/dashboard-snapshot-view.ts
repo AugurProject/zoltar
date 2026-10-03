@@ -12,6 +12,7 @@ import type { DashboardState } from './dashboard-state.ts'
 import { explorerLink, type ExplorerLink, setText } from './dom.ts'
 import { createMarketPanels } from './market-panels.ts'
 import { renderMarketPriceChart } from './market-price-chart.ts'
+import { refreshOpenResumePreflight } from './resume-preflight-rows.ts'
 import { renderBalances, renderHealth, renderTransactions } from './overview-panels.ts'
 import { renderSettingsInsights } from './settings-insights.ts'
 import { renderSettlements } from './settlement-panel.ts'
@@ -149,7 +150,8 @@ export function createSnapshotView({ state, elements, controls, applyInitialFrag
 		renderChangedPanel('tokens', [snapshot.tokenMarkets, snapshot.tokenAddresses, snapshot.universes, snapshot.network, snapshot.explorerUrl, [...state.approvedUniverseIds], elements.tokensFieldset.disabled], () => markets.renderTokenMarkets(snapshot))
 		renderChangedPanel('market', [snapshot.centralizedMarket, snapshot.marketConsensus], () => renderRepMarketConsensus(document, snapshot.centralizedMarket, snapshot.marketConsensus))
 		renderChangedPanel('paths', [snapshot.reportPaths, snapshot.explorerUrl], () => markets.renderDisputePaths(snapshot))
-		renderMarketPriceChart(snapshot)
+		// The chart, its token selector, and the samples table rebuild only when the samples, the charted token, or the width changed, so a poll never resets an open selector or a scrolled table.
+		renderChangedPanel('price-chart', [snapshot.priceHistory, elements.priceToken.value, elements.marketPriceChart.clientWidth], () => renderMarketPriceChart(snapshot))
 	}
 
 	function render(snapshot: PublicOperatorSnapshot) {
@@ -169,11 +171,13 @@ export function createSnapshotView({ state, elements, controls, applyInitialFrag
 		renderOperatorNotice(snapshot)
 		renderExecutorRecovery(snapshot.executorDeploymentRecovery)
 		renderPanels(snapshot)
+		refreshOpenResumePreflight(snapshot, false)
 		if (focusKey !== undefined) {
 			const target = Array.from(document.querySelectorAll<HTMLElement>('[data-focus-key]')).find(candidate => candidate.dataset['focusKey'] === focusKey)
 			target?.focus({ preventScroll: true })
 		}
-		window.scrollTo(scrollPosition)
+		// Restoring an unchanged position would abort a smooth scroll the operator started, such as a Settings step jump.
+		if (window.scrollX !== scrollPosition.left || window.scrollY !== scrollPosition.top) window.scrollTo(scrollPosition)
 		if (!state.initialFragmentApplied) {
 			state.initialFragmentApplied = true
 			const fragment = decodeURIComponent(window.location.hash.slice(1))
@@ -186,6 +190,7 @@ export function createSnapshotView({ state, elements, controls, applyInitialFrag
 		if (state.latestSnapshot !== undefined) renderHealth(state.latestSnapshot, state.configuredScanIntervalMilliseconds, true)
 		controls.setControlsEnabled(false)
 		header.renderDisconnected(error, state.latestSnapshot)
+		if (state.latestSnapshot !== undefined) refreshOpenResumePreflight(state.latestSnapshot, true)
 	}
 
 	/** Re-renders the filtered tables and the price chart when the operator changes a filter or the charted token. */
@@ -195,7 +200,9 @@ export function createSnapshotView({ state, elements, controls, applyInitialFrag
 		})
 		elements.operationFilter.addEventListener('change', () => activity.renderOperations(state.latestSnapshot?.operationLog ?? []))
 		elements.priceToken.addEventListener('change', () => {
-			if (state.latestSnapshot !== undefined) renderMarketPriceChart(state.latestSnapshot)
+			if (state.latestSnapshot === undefined) return
+			renderedPanelSignatures.delete('price-chart')
+			renderMarketPriceChart(state.latestSnapshot)
 		})
 	}
 
