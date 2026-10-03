@@ -171,12 +171,13 @@ describe('ZoltarRoutes', () => {
 		expect(document.body.textContent).toContain('Switch network')
 	})
 
-	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {
+	test('offers Fork and a migration preview in an unforked universe', async () => {
 		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false, relatedUniversesLoaded: false }))
 		expect(queries.getByRole('heading', { name: 'Universes' })).toBeTruthy()
-		expect(queries.queryByRole('button', { name: 'Migrate REP' })).toBeNull()
+		fireEvent.click(queries.getByRole('button', { name: 'Preview REP migration' }))
+		expect(viewChanges).toEqual(['migrate'])
 		fireEvent.click(queries.getByRole('button', { name: 'Fork universe' }))
-		expect(viewChanges).toEqual(['fork'])
+		expect(viewChanges).toEqual(['migrate', 'fork'])
 		expect(queries.queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
 		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
@@ -211,12 +212,12 @@ describe('ZoltarRoutes', () => {
 		expect(viewChanges).toEqual(['migrate'])
 	})
 
-	test('explains that migration waits for a fork', async () => {
-		const { queries, viewChanges } = await renderRoute('migrate', createUniverse({ childUniverses: [], hasForked: false }))
-		expect(queries.getByText('No fork yet')).toBeTruthy()
-		expect(document.querySelector('.migration-wizard')).toBeNull()
-		fireEvent.click(queries.getByRole('button', { name: 'Browse universes' }))
-		expect(viewChanges).toEqual(['universes'])
+	test('shows a disabled migration preview before a fork', async () => {
+		const { queries } = await renderRoute('migrate', createUniverse({ childUniverses: [], hasForked: false }))
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(queries.getByText('This universe must fork before REP can be migrated.')).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+		for (const button of document.querySelectorAll<HTMLButtonElement>('.migration-wizard-steps button')) expect(button.disabled).toBe(true)
 	})
 
 	test('shows an explicit not-found state with a Genesis link for a missing universe', async () => {

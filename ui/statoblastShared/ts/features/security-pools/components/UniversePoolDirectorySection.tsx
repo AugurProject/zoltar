@@ -47,9 +47,9 @@ export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse,
 	return (
 		<UniverseBrowser
 			actions={
-				zoltarUniverse.hasForked && onMigrateRep !== undefined ? (
-					<button className='primary' type='button' onClick={onMigrateRep}>
-						{zoltarCopy.migrateRep}
+				onMigrateRep !== undefined ? (
+					<button className={zoltarUniverse.hasForked ? 'primary' : 'secondary'} type='button' onClick={onMigrateRep}>
+						{zoltarUniverse.hasForked ? zoltarCopy.migrateRep : zoltarCopy.previewMigration}
 					</button>
 				) : undefined
 			}

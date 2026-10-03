@@ -33,9 +33,14 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 		)
 	} else if (canFork) {
 		actions = (
-			<button className='secondary' type='button' onClick={() => onViewChange('fork')}>
-				{zoltarCopy.forkZoltar}
-			</button>
+			<>
+				<button className='secondary' type='button' onClick={() => onViewChange('fork')}>
+					{zoltarCopy.forkZoltar}
+				</button>
+				<button className='secondary' type='button' onClick={() => onViewChange('migrate')}>
+					{zoltarCopy.previewMigration}
+				</button>
+			</>
 		)
 	}
 	return (

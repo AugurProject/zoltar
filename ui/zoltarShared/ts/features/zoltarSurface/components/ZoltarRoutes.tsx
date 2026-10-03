@@ -45,18 +45,6 @@ function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange }: { gate: E
 					}
 				/>
 			)
-		case 'migrate-unavailable':
-			return (
-				<EmptyState
-					title={zoltarCopy.migrateUnavailableTitle}
-					detail={zoltarCopy.migrateUnavailableDetail}
-					actions={
-						<button className='primary' type='button' onClick={() => onViewChange('universes')}>
-							{zoltarCopy.browseUniversesAction}
-						</button>
-					}
-				/>
-			)
 		default:
 			return assertNever(gate)
 	}

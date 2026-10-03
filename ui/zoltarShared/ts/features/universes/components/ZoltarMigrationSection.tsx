@@ -103,6 +103,7 @@ export function ZoltarMigrationSection({
 }: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
 	const hasForked = rootUniverse?.hasForked === true
+	const isPreview = rootUniverse !== undefined && !hasForked
 	const requiresApproval = rootUniverse?.reputationTokenKind !== 'child'
 	const tokenSymbol = rootUniverse?.reputationTokenSymbol ?? commonCopy.rep
 	const wizard = useMemo(
@@ -114,13 +115,14 @@ export function ZoltarMigrationSection({
 				balancesLoading: loadingZoltarForkAccess,
 				childHeldAttoRep: zoltarMigrationChildRepBalancesAttoRep,
 				childMigratedAttoRep: zoltarMigrationChildSplitAmountsAttoRep,
-				childUniverses: rootUniverse?.childUniverses ?? [],
+				childUniverses: hasForked ? (rootUniverse?.childUniverses ?? []) : [],
 				migrationBalanceAttoRep: zoltarMigrationPreparedRepBalanceAttoRep,
 				requiresApproval,
 				selectedOutcomeIndexes: zoltarMigrationForm.outcomeIndexes,
 				walletRepAttoRep: zoltarForkRepBalanceAttoRep,
 			}),
 		[
+			hasForked,
 			loadingZoltarForkAccess,
 			requiresApproval,
 			rootUniverse?.childUniverses,
@@ -135,7 +137,7 @@ export function ZoltarMigrationSection({
 		],
 	)
 	const [requestedStepId, setRequestedStepId] = useState<MigrationWizardStepId>('outcomes')
-	const currentStepId = resolveMigrationWizardStep(requestedStepId, wizard.reachableStepId)
+	const currentStepId = isPreview ? 'outcomes' : resolveMigrationWizardStep(requestedStepId, wizard.reachableStepId)
 	// When balances or input change so that the open step is no longer reachable, stay on the earlier
 	// step instead of jumping forward again once it becomes reachable.
 	useEffect(() => {
@@ -186,6 +188,7 @@ export function ZoltarMigrationSection({
 	const migrateWalletBlocked = migrateAvailability.walletBlocker !== undefined
 	// One reason line beside the forward action. The approval control states its own requirement, so the approve step does not repeat it.
 	const navigationHint = (() => {
+		if (isPreview) return zoltarCopy.migrationForkRequired
 		if (currentStepId === 'review') return migrateWalletBlocked ? undefined : migrateHint
 		if (currentStepSatisfied || (currentStepId === 'approve' && currentStep?.status === 'incomplete')) return undefined
 		return accountAddress === undefined && currentStep?.reason === zoltarCopy.migrationBalancesReadFailed ? zoltarCopy.migrationWalletBalancesReason : currentStep?.reason
@@ -199,6 +202,7 @@ export function ZoltarMigrationSection({
 	) : undefined
 
 	const renderStepBody = () => {
+		if (isPreview) return <p className='detail'>{zoltarCopy.migrationOutcomesAfterFork}</p>
 		switch (currentStepId) {
 			case 'outcomes':
 				return (
@@ -309,11 +313,18 @@ export function ZoltarMigrationSection({
 						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalanceAttoRep === undefined} value={zoltarMigrationPreparedRepBalanceAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
-				{wizard.migrationComplete ? (
+				{!isPreview && wizard.migrationComplete ? (
 					<EmptyState detail={zoltarCopy.migrationCompleteDetail} title={zoltarCopy.migrationCompleteTitle} />
 				) : (
 					<div className='migration-wizard'>
-						<MigrationWizardProgress currentStepId={currentStepId} disabled={zoltarMigrationPending} onSelectStep={setRequestedStepId} reachableStepId={wizard.reachableStepId} steps={wizard.steps} summaries={summaries} />
+						<MigrationWizardProgress
+							currentStepId={currentStepId}
+							disabled={isPreview || zoltarMigrationPending}
+							onSelectStep={setRequestedStepId}
+							reachableStepId={wizard.reachableStepId}
+							steps={isPreview ? wizard.steps.map(step => ({ ...step, status: 'blocked' as const, reason: zoltarCopy.migrationForkRequired })) : wizard.steps}
+							summaries={isPreview ? {} : summaries}
+						/>
 						<WorkflowSubsection className='migration-wizard-panel' title={getMigrationStepTitle(currentStepId)}>
 							{renderStepBody()}
 							<div className='migration-wizard-nav'>
@@ -337,7 +348,7 @@ export function ZoltarMigrationSection({
 										showDisabledReason={migrateWalletBlocked}
 									/>
 								) : (
-									<button aria-describedby={currentStepSatisfied || navigationHint === undefined ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={zoltarMigrationPending || !currentStepSatisfied}>
+									<button aria-describedby={(!isPreview && currentStepSatisfied) || navigationHint === undefined ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={isPreview || zoltarMigrationPending || !currentStepSatisfied}>
 										{zoltarCopy.migrationContinue}
 									</button>
 								)}

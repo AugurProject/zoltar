@@ -11,6 +11,23 @@ import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUt
 
 installTestRouting()
 describe('UniversePoolDirectorySection', () => {
+	test('offers a migration preview before a fork', async () => {
+		let opened = false
+		const rendered = await renderIntoDocument(
+			h(UniversePoolDirectorySection, {
+				activeUniverseId: 1n,
+				zoltarUniverse: createForkedUniverseSummary({ hasForked: false, childUniverses: [], forkTime: 0n }),
+				onMigrateRep: () => {
+					opened = true
+				},
+			}),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const button = within(document.body).getByRole('button', { name: 'Preview REP migration' })
+		button.click()
+		expect(opened).toBe(true)
+	})
+
 	test('renders universe details without loading a global pool or vault directory', async () => {
 		const rendered = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, zoltarUniverse: createForkedUniverseSummary() }))
 		try {

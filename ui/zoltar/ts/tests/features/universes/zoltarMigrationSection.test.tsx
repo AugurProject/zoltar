@@ -97,6 +97,33 @@ describe('ZoltarMigrationSection', () => {
 		},
 	})
 
+	test('keeps every migration control disabled before a fork and unlocks after a fork', async () => {
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const props = createProps({ zoltarUniverse: createUniverse({ hasForked: false, childUniverses: [], forkTime: 0n }), onZoltarMigrationFormChange: update => updates.push(update) })
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(queries.getByText('Outcome choices appear after this universe forks.')).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+		for (const button of document.querySelectorAll<HTMLButtonElement>('.migration-wizard button')) {
+			expect(button.disabled).toBe(true)
+			await act(() => button.click())
+		}
+		expect(updates).toEqual([])
+		await act(() => render(h(ZoltarMigrationSection, { ...props, zoltarUniverse: createUniverse() }), rendered.container))
+		expect(queries.queryByText('Outcome choices appear after this universe forks.')).toBeNull()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false)
+	})
+
+	test('shows the pre-fork preview with no wallet REP instead of claiming migration is complete', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ accountAddress: undefined, zoltarForkRepBalanceAttoRep: 0n, zoltarMigrationPreparedRepBalanceAttoRep: 0n, zoltarUniverse: createUniverse({ hasForked: false, childUniverses: [], forkTime: 0n }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(within(document.body).queryByText('All your REP here is migrated')).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+	})
+
 	test('starts on outcome selection with outcome names, destination status, and no raw ids', async () => {
 		const updates: Partial<ZoltarMigrationFormState>[] = []
 		const deployed: bigint[] = []

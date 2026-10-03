@@ -16,7 +16,7 @@ export function getZoltarUniverseActions(universe: Pick<ZoltarUniverseSummary, '
 	}
 }
 
-export type ZoltarRouteGate = 'ready' | 'loading' | 'universe-unavailable' | 'universe-missing' | 'fork-unavailable' | 'migrate-unavailable'
+export type ZoltarRouteGate = 'ready' | 'loading' | 'universe-unavailable' | 'universe-missing' | 'fork-unavailable'
 
 /** True when the universe read failed: no summary, no read in flight, and an error to report. */
 function isUniverseUnavailable(universeError: string | undefined, universeState: LoadableValueState) {
@@ -33,7 +33,6 @@ export function resolveZoltarRouteGate({ universe, universeError, universeState,
 	if (universe === undefined) return isUniverseUnavailable(universeError, universeState) ? 'universe-unavailable' : 'loading'
 	const actions = getZoltarUniverseActions(universe)
 	if (view === 'fork' && !actions.canFork) return 'fork-unavailable'
-	if (view === 'migrate' && !actions.canMigrate) return 'migrate-unavailable'
 	return 'ready'
 }
 

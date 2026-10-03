@@ -83,7 +83,7 @@ describe('resolveZoltarRouteGate', () => {
 	test('waits for the universe and blocks the workflow that does not apply', () => {
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: undefined, universeState: 'loading', view: 'universes' })).toBe('loading')
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: true }, universeState: 'ready', view: 'fork' })).toBe('fork-unavailable')
-		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'migrate' })).toBe('migrate-unavailable')
+		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'migrate' })).toBe('ready')
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: false }, universeState: 'ready', view: 'fork' })).toBe('ready')
 		expect(resolveZoltarRouteGate({ universeError: undefined, universe: { hasForked: true }, universeState: 'ready', view: 'migrate' })).toBe('ready')
 	})
