@@ -3,7 +3,6 @@ import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/ac
 import type { LiquidityOperation } from '../../protocol/live.js'
 import * as copy from '../../copy/availability.js'
 import type { BalanceState } from './liveTradingTypes.js'
-import type { QuoteState } from './useQuotedTransaction.js'
 
 // No trading flow needs an ERC-20 or ERC-1155 approval: entries pay ETH directly, and exits, liquidity
 // removal, and settlement hand shares to the router through ERC-1155 transfer callbacks that the router
@@ -20,8 +19,7 @@ type BalanceInputs = Readonly<{ balanceState: BalanceState }>
 
 type WorkflowInputs = Readonly<{ workflowLocked: boolean }>
 
-/** The automatic quote behind the panel: the action waits for it and explains a failed quote. */
-type QuoteInputs = Readonly<{ quoteState: QuoteState; quoteError: string | undefined }>
+type PreviewInputs = Readonly<{ previewBlocker: string | undefined }>
 
 function walletReason({ walletConnected, networkMismatchReason }: WalletInputs) {
 	if (!walletConnected && networkMismatchReason === undefined) return copy.connectWalletReason
@@ -50,12 +48,6 @@ function workflowReason({ workflowLocked }: WorkflowInputs) {
 	return workflowLocked ? copy.transactionInProgressReason : undefined
 }
 
-function quoteReason({ quoteState, quoteError }: QuoteInputs) {
-	if (quoteState === 'loading' || quoteState === 'idle') return copy.quoteLoadingReason
-	if (quoteState === 'error') return quoteError ?? copy.quoteUnavailableReason
-	return undefined
-}
-
 /** Marks the availability as in progress when its reason is a wait rather than a blocker, so the notice shows loading feedback. */
 function withLoading(availability: ActionAvailability, loadingReasons: ReadonlyArray<string | undefined>): ActionAvailability {
 	if (availability.reason === undefined || !loadingReasons.includes(availability.reason)) return availability
@@ -65,7 +57,7 @@ function withLoading(availability: ActionAvailability, loadingReasons: ReadonlyA
 export type LiquidityAvailabilityInputs = WalletInputs &
 	BalanceInputs &
 	WorkflowInputs &
-	QuoteInputs &
+	PreviewInputs &
 	Readonly<{
 		operation: LiquidityOperation
 		marketClosed: boolean
@@ -89,16 +81,16 @@ export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs
 			insufficient,
 			inputs.operation === 'initialize' && !inputs.initializePriceValid ? copy.initializePriceInvalidReason : undefined,
 			workflowReason(inputs),
-			quoteReason(inputs),
+			inputs.previewBlocker,
 		),
-		[copy.balancesLoadingReason, copy.quoteLoadingReason],
+		[copy.balancesLoadingReason],
 	)
 }
 
 export type SettlementAvailabilityInputs = WalletInputs &
 	BalanceInputs &
 	WorkflowInputs &
-	QuoteInputs &
+	PreviewInputs &
 	Readonly<{
 		/** Operation, amount, balance, and fork-target blockers already resolved by the settlement model. */
 		inputBlocker: string | undefined
@@ -107,5 +99,5 @@ export type SettlementAvailabilityInputs = WalletInputs &
 	}>
 
 export function resolveSettlementAvailability(inputs: SettlementAvailabilityInputs): ActionAvailability {
-	return withLoading(createActionAvailability(walletReason(inputs), balanceReason(inputs), inputs.inputBlocker, workflowReason(inputs), quoteReason(inputs)), [copy.balancesLoadingReason, copy.quoteLoadingReason, inputs.inputBlockerLoading === true ? inputs.inputBlocker : undefined])
+	return withLoading(createActionAvailability(walletReason(inputs), balanceReason(inputs), inputs.inputBlocker, workflowReason(inputs), inputs.previewBlocker), [copy.balancesLoadingReason, inputs.inputBlockerLoading === true ? inputs.inputBlocker : undefined])
 }

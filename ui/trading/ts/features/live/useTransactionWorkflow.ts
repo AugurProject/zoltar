@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'preact/hooks'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import * as workflowCopy from '../../copy/workflows.js'
 import { transactionMarketKey } from './transactionWorkflow.js'
-import { useQuotedTransaction } from './useQuotedTransaction.js'
+import { useTransactionSubmission } from './useTransactionSubmission.js'
 
 export type TradeMode = 'entry' | 'exit'
 
@@ -20,7 +20,7 @@ type TicketInputs = Readonly<{
 const emptyTicketInputs: TicketInputs = { mode: 'entry', side: 'YES', amount: '', acknowledgedImpactBps: undefined, requoteNotice: undefined }
 
 /**
- * Trade-ticket inputs plus the shared quoted-transaction engine, both kept per market: a trade running on one market
+ * Trade-ticket inputs plus the shared transaction-submission engine, both kept per market: a trade running on one market
  * leaves every other market's ticket free. The liquidity or settlement panel on screen reports its own lock, which
  * holds that market's trade ticket too.
  */
@@ -67,7 +67,7 @@ export function useTransactionWorkflow({
 		},
 		[reportLock],
 	)
-	const transaction = useQuotedTransaction({
+	const transaction = useTransactionSubmission({
 		operation: 'trade',
 		label: workflowCopy.tradeLabel,
 		activityTitle: marketTitle === undefined ? undefined : workflowCopy.formatTradeActivity(marketTitle),

@@ -17,8 +17,8 @@ import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from '
 
 export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId, waitForActiveEnvironmentReady } from './runtimeClients.js'
 export { publicErrorMessage } from './publicError.js'
-export { settlementAvailability, settlementUnavailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from './settlement.js'
-export { simulateLiquidity, submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
+export { settlementAvailability, settlementUnavailability, submitFreshSettlement, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from './settlement.js'
+export { submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
 import { publicErrorMessage } from './publicError.js'
 
 export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'

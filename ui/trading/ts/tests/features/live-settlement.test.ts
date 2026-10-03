@@ -1,6 +1,7 @@
+import { simulateSettlement } from '../../protocol/settlementSimulation.js'
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { simulateSettlement, submitFreshSettlement } from '../../protocol/live.js'
+import { submitFreshSettlement } from '../../protocol/live.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
 import { receiveBasedExitArguments } from '../../protocol/authorization.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
@@ -112,6 +113,27 @@ describe('live settlement contract encoding', () => {
 			expect(request).toEqual([1n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n])
 		})
 	}
+
+	test('normalizes local migration targets before both simulation and submission', async () => {
+		const { client, transactionData, counts } = recordingSettlementClient()
+		await submitFreshSettlement(
+			client,
+			configuration,
+			account,
+			{
+				operation: 'migrate-shares',
+				market,
+				sourceOutcome: 'YES',
+				targetOutcomeIndexes: [42n, 12n, 99n],
+			},
+			async write => await write(),
+		)
+		expect(counts.simulations).toBe(1)
+		expect(counts.sends).toBe(1)
+		for (const data of transactionData) {
+			expect(decodeFunctionData({ abi: migrateAbi, data }).args).toEqual([(7n << 8n) | 1n, [12n, 42n, 99n]])
+		}
+	})
 
 	test('encodes and submits ShareToken migration with the ShareToken ABI', async () => {
 		const { client, transactionData } = recordingSettlementClient()

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -17,16 +17,12 @@ const openMarket = etherScaleMarketFixture()
 // The question ended: the pool still holds liquidity but takes no new risk.
 const closedMarket = etherScaleMarketFixture({ tradingStatus: 1, endTime: 1n })
 const services: LiveLiquidityServices = {
-	publicErrorMessage: String,
-	simulateLiquidity: async () => {
-		throw new Error('A disconnected panel must not request a wallet simulation')
-	},
 	submitFreshLiquidity: async () => {
 		throw new Error('Unexpected send')
 	},
 }
 
-function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalances | undefined = undefined) {
+function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalances | undefined = undefined, quoteServices = services, walletClient: ReturnType<typeof createWalletClient> | undefined = undefined) {
 	return renderIntoDocument(
 		<LiveLiquidityControls
 			configuration={configuration}
@@ -35,7 +31,7 @@ function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalan
 			balanceState={connected ? 'ready' : 'disconnected'}
 			balanceError={undefined}
 			account={connected ? account : undefined}
-			walletClient={undefined}
+			walletClient={walletClient}
 			networkMismatchReason={undefined}
 			walletEthAttoEth={connected ? 10n ** 18n : undefined}
 			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
@@ -48,7 +44,7 @@ function renderPanel(market: LiveMarket, connected: boolean, balances: LiveBalan
 			createGuardedWalletWrite={() => async write => await write()}
 			retryBalances={async () => undefined}
 			onWorkflowLockChange={() => undefined}
-			services={services}
+			services={quoteServices}
 		/>,
 	)
 }
@@ -87,6 +83,58 @@ function amountErrorText() {
 
 describe('liquidity panel', () => {
 	installDomTestLifecycle()
+
+	test('previews additions instantly without wallet requests', async () => {
+		let requests = 0
+		const walletClient = createWalletClient({
+			account,
+			transport: custom({
+				request: async () => {
+					requests++
+					throw new Error('Unexpected wallet read')
+				},
+			}),
+		})
+		const rendered = await renderPanel(openMarket, true, undefined, services, walletClient)
+		try {
+			await typeAmount('0.1')
+			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
+			expect(document.body.textContent).not.toContain('Getting a quote…')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 LP')
+			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Add liquidity')
+			expect(action?.disabled).toBe(false)
+			expect(requests).toBe(0)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('previews initialization instantly without any wallet quote requests', async () => {
+		let requests = 0
+		const walletClient = createWalletClient({
+			account,
+			transport: custom({
+				request: async () => {
+					requests++
+					throw new Error('Unexpected wallet read')
+				},
+			}),
+		})
+		const rendered = await renderPanel({ ...openMarket, pair: undefined, lpTotalSupply: 0n }, true, undefined, services, walletClient)
+		try {
+			await typeAmount('0.1')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 Invalid')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Estimate from your price and the current collateral rate. Rechecked before submitting.')
+			expect(document.body.textContent).not.toContain('Getting a quote…')
+			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
+			expect(requests).toBe(0)
+			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Initialize pool')
+			expect(action?.disabled).toBe(false)
+			expect(requests).toBe(0)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
 
 	test('explains malformed and over-precise amounts instead of asking for a positive amount', async () => {
 		const rendered = await renderPanel(openMarket, true)
@@ -148,7 +196,8 @@ describe('liquidity panel', () => {
 			const estimate = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(estimate?.textContent).toContain('1 LP')
 			expect(estimate?.textContent).toContain('1 Invalid')
-			expect(estimate?.textContent).toContain('Connect a wallet for an exact quote.')
+			expect(estimate?.textContent).toContain('Estimate from the current pool state.')
+			expect(estimate?.textContent).not.toContain('Connect a wallet to submit.')
 			await act(() => operationButton('Remove').click())
 			await typeAmount('5')
 			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')

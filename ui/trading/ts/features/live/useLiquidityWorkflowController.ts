@@ -1,16 +1,15 @@
 import * as workflowCopy from '../../copy/workflows.js'
 import { useEffect, useState } from 'preact/hooks'
-import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
 import { marketAcceptsNewRisk, type LiquidityOperation, type LiveMarket } from '../../protocol/live.js'
 import * as liquidityCopy from '../../copy/liquidity.js'
 import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
-import { useQuotedTransaction } from './useQuotedTransaction.js'
+import { useTransactionSubmission } from './useTransactionSubmission.js'
+import { liquidityHoldingFeeBlocker } from '../../protocol/holdingFees.js'
+import { maximumAfterSlippage } from '../../protocol/tradeQuote.js'
 import { estimateLiquidity } from './liquidityEstimate.js'
-
-type LiquidityQuote = Awaited<ReturnType<LiveLiquidityServices['simulateLiquidity']>>
 
 export function liquidityOperationAvailable(operation: LiquidityOperation, market: LiveMarket, nowSeconds: bigint) {
 	return operation === 'remove' || marketAcceptsNewRisk(market, nowSeconds)
@@ -24,11 +23,6 @@ function poolInitialized(market: LiveMarket) {
 function defaultLiquidityOperation(market: LiveMarket, nowSeconds: bigint): LiquidityOperation {
 	if (!poolInitialized(market)) return 'initialize'
 	return marketAcceptsNewRisk(market, nowSeconds) ? 'add' : 'remove'
-}
-
-/** Everything a liquidity quote prices: the exact reserves, LP supply, pool rate, and lifecycle state. */
-function liquidityQuoteBasis(market: LiveMarket) {
-	return [market.pool, market.pair ?? '', market.yesReserve, market.noReserve, market.lpTotalSupply, market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares, market.tradingStatus ?? '', market.systemState, market.questionOutcome, market.universeForkTime, market.awaitingForkContinuation ? 1 : 0].join(':')
 }
 
 export function useLiquidityWorkflowController({
@@ -59,10 +53,7 @@ export function useLiquidityWorkflowController({
 	const parsedProbability = tryParseNonNegativeDecimalInput(probability.trim(), 2)
 	const conditionalBps = parsedProbability !== undefined && parsedProbability > 0n && parsedProbability < 10_000n ? parsedProbability : undefined
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
-	const quotable = account !== undefined && walletClient !== undefined && balanceState === 'ready' && operationAvailable && parsed !== undefined && parsed > 0n && (operation !== 'initialize' || conditionalBps !== undefined)
-	// The key names every input the quote prices, so a background refresh that moves the pool retires the quote and re-quotes.
-	const quoteKey = quotable ? [account, configuration.chainId, configuration.router, liquidityQuoteBasis(market), operation, parsed, conditionalBps ?? '', settings.slippageBps, settings.validityMinutes].join('|') : undefined
-	const transaction = useQuotedTransaction<LiquidityQuote>({
+	const transaction = useTransactionSubmission({
 		operation: 'liquidity',
 		label: liquidityCopy.liquidityTransaction,
 		activityTitle: workflowCopy.formatLiquidityActivity(market.title),
@@ -71,21 +62,19 @@ export function useLiquidityWorkflowController({
 		market: market.pool,
 		walletClient,
 		externallyLocked,
-		quoteSource: {
-			key: quoteKey,
-			load: async () => {
-				if (account === undefined || walletClient === undefined || parsed === undefined) throw new Error(liquidityCopy.quoteUnavailable)
-				return await services.simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n, settings.validityMinutes, settings.slippageBps)
-			},
-		},
 		onWorkflowLockChange,
 		onKnownReceipt,
 		failureFallback: liquidityCopy.transactionFailed,
-		quoteFailureFallback: liquidityCopy.quoteFailed,
 	})
-	const { quote } = transaction
-	// Without a wallet quote, the public pool state still prices the amount.
-	const estimate = quotable || parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
+	const estimate = parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
+	let previewBlocker: string | undefined
+	if (estimate === undefined) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
+	else if (estimate.operation === 'add')
+		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, maximumAfterSlippage(estimate.yesUsed, settings.slippageBps), maximumAfterSlippage(estimate.noUsed, settings.slippageBps), nowSeconds + settings.validityMinutes * 60n, {
+			completeSetShares: estimate.completeSets,
+			yesUsed: estimate.yesUsed,
+			noUsed: estimate.noUsed,
+		})
 	const initialized = poolInitialized(market)
 	const acceptsNewRisk = marketAcceptsNewRisk(market, nowSeconds)
 	useEffect(() => {
@@ -100,23 +89,35 @@ export function useLiquidityWorkflowController({
 	}, [acceptsNewRisk, initialized, operation, transaction.workflowLocked])
 
 	async function submit() {
-		if (walletClient === undefined || account === undefined || quote === undefined || transaction.workflowLocked) return
-		if (!liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)) {
+		if (walletClient === undefined || account === undefined || transaction.workflowLocked || balanceState !== 'ready') return
+		if (estimate === undefined || previewBlocker !== undefined) return
+		if (!liquidityOperationAvailable(operation, market, nowSeconds)) {
 			transaction.dispatchWorkflow({ type: 'failed', operation: 'liquidity', message: liquidityCopy.closedToAdditions })
 			return
 		}
 		await transaction.submit({
 			prepare: async () => {
 				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
-				// Simulate again right before signing: the quoted minimums stay, the deadline starts now.
-				const fresh = await withReadTimeout(services.simulateLiquidity(walletClient, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps, settings.validityMinutes, quote.slippageBps))
-				return { ...quote, deadline: fresh.deadline }
+				return {
+					market,
+					operation,
+					amount: estimate.amount,
+					conditionalYesBps: conditionalBps ?? 5_000n,
+					deadline: { validityMinutes: settings.validityMinutes },
+					slippageBps: settings.slippageBps,
+					expectedLiquidity: estimate.operation === 'remove' ? 0n : estimate.liquidity,
+					expectedYes: estimate.operation === 'remove' ? estimate.yesOut : 0n,
+					expectedNo: estimate.operation === 'remove' ? estimate.noOut : 0n,
+					expectedYesDeposit: estimate.operation === 'remove' ? 0n : estimate.yesUsed,
+					expectedNoDeposit: estimate.operation === 'remove' ? 0n : estimate.noUsed,
+				}
 			},
 			send: async (prepared, requestSignature) => {
 				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during liquidity revalidation; reconnect and try again', 'Wallet account changed during liquidity revalidation; reconnect and try again')
-				// submitFreshLiquidity re-simulates at the latest block and keeps the quoted minimums.
+				// submitFreshLiquidity re-simulates at the latest block and keeps the approved minimums.
 				return await services.submitFreshLiquidity(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},
+			afterSlippageRejected: async () => await refresh({ background: true }),
 			afterConfirmed: async () => {
 				setAmount('')
 				await refresh()
@@ -132,6 +133,7 @@ export function useLiquidityWorkflowController({
 		conditionalBps,
 		operationAvailable,
 		estimate,
+		previewBlocker,
 		transaction,
 		selectOperation(next: LiquidityOperation) {
 			if (!transaction.invalidate()) return

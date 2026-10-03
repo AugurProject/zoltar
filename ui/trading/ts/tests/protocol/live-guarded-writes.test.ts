@@ -1,8 +1,9 @@
+import { simulateLiquidity } from '../../protocol/liquiditySimulation.js'
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity } from '../../protocol/live.js'
+import { createTradingPublicClient, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, submitFreshLiquidity } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
@@ -217,7 +218,7 @@ describe('live guarded transaction writes', () => {
 			{ operation: 'remove', market },
 		] as const
 		for (const scenario of operations) {
-			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n, 5_000n, validityMinutes, slippageBps)
+			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n, 5_000n, { validityMinutes }, slippageBps)
 			expect(quote.deadline).toBe(deadline)
 			expect(quote.slippageBps).toBe(slippageBps)
 			expect(await submitFreshLiquidity(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
@@ -236,7 +237,7 @@ describe('live guarded transaction writes', () => {
 			} else expect(call.args.at(-3)).toBe(9n)
 			if (call.functionName === 'addLiquidityWithEth') expect(call.args.slice(1, 3)).toEqual([6n, 6n])
 		}
-		const chainTimedQuote = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_440n, slippageBps)
+		const chainTimedQuote = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 1_440n }, slippageBps)
 		expect(chainTimedQuote.deadline).toBe(86_401n)
 		expect(await submitFreshLiquidity(client, configuration, account, chainTimedQuote, async write => await write())).toBe(transactionHash)
 		for (const call of calls.slice(-3)) {
@@ -244,9 +245,9 @@ describe('live guarded transaction writes', () => {
 			expect(call.args.at(-1)).toBe(86_401n)
 		}
 		const callsBeforeRejectedSlippage = calls.length
-		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, validityMinutes, 501n)).rejects.toThrow('between 0.01% and 5%')
-		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 0n, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
-		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_441n, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
+		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes }, 501n)).rejects.toThrow('between 0.01% and 5%')
+		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 0n }, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
+		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 1_441n }, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
 		expect(calls).toHaveLength(callsBeforeRejectedSlippage)
 	})
 
@@ -262,7 +263,7 @@ describe('live guarded transaction writes', () => {
 			if (decoded.functionName !== 'addLiquidityWithEth') throw new Error(`Unexpected simulation ${decoded.functionName}`)
 			return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 20n, 10n]])
 		})
-		const quote = await simulateLiquidity(client, configuration, market, account, 'add', 20n, 5_000n, 7n, 50n)
+		const quote = await simulateLiquidity(client, configuration, market, account, 'add', 20n, 5_000n, { validityMinutes: 7n }, 50n)
 		chain.noUsed = 20n
 		await expect(submitFreshLiquidity(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved maximum NO deposit')
 		expect(chain.sends).toBe(0)

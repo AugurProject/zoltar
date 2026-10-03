@@ -62,11 +62,11 @@ export async function simulateWithDeadline<T>(
 }
 
 export function retainApprovedMinimum(approved: bigint, refreshed: bigint, label: string) {
-	if (refreshed < approved) throw new Error(`Refreshed quote no longer satisfies the approved minimum ${label}`)
+	if (refreshed < approved) throw new Error(`Refreshed estimate no longer satisfies the approved minimum ${label}`)
 	return approved
 }
 
 export function retainApprovedMaximum(approved: bigint, refreshed: bigint, label: string) {
-	if (refreshed > approved) throw new Error(`Refreshed quote no longer satisfies the approved maximum ${label}`)
+	if (refreshed > approved) throw new Error(`Refreshed estimate no longer satisfies the approved maximum ${label}`)
 	return approved
 }

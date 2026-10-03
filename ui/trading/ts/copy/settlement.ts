@@ -51,10 +51,7 @@ export const loadingForkDetailsReason = 'Loading the universe fork question and 
 export const forkDetailsUnavailableReason = 'Fork question details are unavailable.'
 export const forkDetailsLoadFailed = 'Fork question details failed to load'
 export const transactionFailed = 'Settlement transaction failed'
-export const quoteFailed = 'Settlement quote failed'
-export const quoteUnavailable = 'Settlement quote unavailable'
-export const gettingQuote = 'Getting a quote…'
-export const quoteHeading = 'Redemption quote'
+export const estimateHeading = 'Redemption estimate'
 export { youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const minimumReceived = 'Minimum received'
 export const redeemCompleteSetsAction = 'Redeem complete sets'
@@ -62,3 +59,7 @@ export const redeemCompleteSetsAction = 'Redeem complete sets'
 export function migrationAction(count: number) {
 	return count === 0 ? 'Migrate shares' : `Migrate to ${count.toString()} ${count === 1 ? 'branch' : 'branches'}`
 }
+
+export const zeroRedemptionReason = 'Complete-set redemption would return zero ETH.'
+
+export const estimateNote = 'Estimate from the current collateral rate. Rechecked before submitting.'

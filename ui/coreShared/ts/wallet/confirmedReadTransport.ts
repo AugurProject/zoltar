@@ -1,6 +1,6 @@
 import { createPublicClient, custom, requestRpc, type Transport } from '@zoltar/core-shared/evm/ethereum'
 
-function blockParameterIndex(method: string) {
+export function blockParameterIndex(method: string) {
 	if (method === 'eth_getBlockByNumber') return 0
 	if (method === 'eth_call' || method === 'eth_getBalance' || method === 'eth_getCode' || method === 'eth_getTransactionCount') return 1
 	if (method === 'eth_getStorageAt') return 2
