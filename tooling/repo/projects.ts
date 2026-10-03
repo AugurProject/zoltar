@@ -59,9 +59,10 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
  * Advisories every dependency audit accepts, each with the reason it cannot be fixed by an upgrade or override. Remove an
  * entry as soon as a patched release exists.
  *
- * GHSA-vfj7-8cjw-p6xm: braces <= 3.0.3 exhausts the stack on deeply nested brace patterns and has no patched release. It
- * arrives only through @tevm's compiler tooling (solc-typed-ast > findup-sync > micromatch), which expands glob patterns
- * written in this repository at build time and never a pattern supplied by a user or a remote party.
+ * GHSA-vfj7-8cjw-p6xm: braces <= 3.0.3 exhausts the stack on deeply nested brace patterns and has no patched release. Its
+ * only path is @tevm/compiler > solc-typed-ast > findup-sync > micromatch, and the only caller is solc-typed-ast's import
+ * resolver, which passes the constant pattern `node_modules/`. No pattern from this repository, a user, or a remote party
+ * reaches braces.
  */
 export const acceptedAuditAdvisories = ['GHSA-vfj7-8cjw-p6xm'] as const
 
