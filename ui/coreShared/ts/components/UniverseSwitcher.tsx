@@ -3,6 +3,7 @@ import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 import { formatUniverseLineageLabel, formatUniverseStepName } from '../lib/universeLineage.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
+import { UniverseIdentity } from './UniverseIdentity.js'
 import { UniverseLink } from './UniverseLink.js'
 
 type UniverseSwitcherProps = {
@@ -68,6 +69,7 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: Uni
 			}}
 		>
 			<summary aria-label={universeCopy.formatSwitcherAriaLabel(universeLabel)} title={universeLabel}>
+				<UniverseIdentity universeId={activeUniverseId} variant='swatch' />
 				<span className='universe-switcher-label'>{universeLabel}</span>
 				<span aria-hidden='true' className='universe-switcher-caret'>
 					{universeCopy.switcherCaret}
