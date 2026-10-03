@@ -92,6 +92,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		let refreshes = 0
 		const rendered = await renderIntoDocument(
 			<LiveSettlementControls
+				nowSeconds={100n}
 				configuration={configuration}
 				market={market}
 				balances={balances}

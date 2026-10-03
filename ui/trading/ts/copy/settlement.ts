@@ -61,3 +61,5 @@ export function migrationAction(count: number) {
 }
 
 export const zeroRedemptionReason = 'Complete-set redemption would return zero ETH.'
+
+export const estimateNote = 'Estimate from the current collateral rate. Rechecked before submitting.'

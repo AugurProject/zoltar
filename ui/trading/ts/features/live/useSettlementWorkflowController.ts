@@ -22,6 +22,7 @@ export function useSettlementWorkflowController({
 	targetOutcomeIndexes,
 	inputBlocker,
 	settings,
+	nowSeconds,
 	refresh,
 	onKnownReceipt,
 	executeWithCurrentWalletContext,
@@ -41,17 +42,17 @@ export function useSettlementWorkflowController({
 		onRedemptionConfirmed?(): void
 		services: LiveSettlementServices
 	}>) {
-	let approval: SettlementApproval | undefined
+	let previewApproval: SettlementApproval | undefined
 	if (inputBlocker === undefined) {
 		if (operation === 'redeem-complete-set' && parsedAmount !== undefined && market.shareTokenSupplyAttoShares > 0n) {
 			const expectedAttoEth = (parsedAmount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
-			if (expectedAttoEth > 0n) approval = { operation, market, amount: parsedAmount, expectedAttoEth, minimumAttoEth: minimumAfterSlippage(expectedAttoEth, settings.slippageBps), slippageBps: settings.slippageBps, deadline: { validityMinutes: settings.validityMinutes } }
-		} else if (operation === 'migrate-shares') approval = { operation, market, sourceOutcome, targetOutcomeIndexes }
-		else if (operation === 'redeem-winning-shares') approval = { operation, market }
+			if (expectedAttoEth > 0n) previewApproval = { operation, market, amount: parsedAmount, expectedAttoEth, minimumAttoEth: minimumAfterSlippage(expectedAttoEth, settings.slippageBps), slippageBps: settings.slippageBps, deadline: { validityMinutes: settings.validityMinutes } }
+		} else if (operation === 'migrate-shares') previewApproval = { operation, market, sourceOutcome, targetOutcomeIndexes }
+		else if (operation === 'redeem-winning-shares') previewApproval = { operation, market }
 	}
 	let previewBlocker: string | undefined
-	if (approval === undefined) previewBlocker = settlementCopy.zeroRedemptionReason
-	else if (approval.operation === 'redeem-complete-set') previewBlocker = sellHoldingFeeBlocker(market, approval.amount, approval.minimumAttoEth, (market.valuation?.timestamp ?? 0n) + settings.validityMinutes * 60n)
+	if (previewApproval === undefined) previewBlocker = settlementCopy.zeroRedemptionReason
+	else if (previewApproval.operation === 'redeem-complete-set') previewBlocker = sellHoldingFeeBlocker(market, previewApproval.amount, previewApproval.minimumAttoEth, nowSeconds + settings.validityMinutes * 60n)
 	const transaction = useTransactionSubmission({
 		operation: 'settlement',
 		label: settlementCopy.settlementTransaction,
@@ -67,18 +68,19 @@ export function useSettlementWorkflowController({
 	})
 
 	async function submitCurrent() {
-		const selectedQuote = approval
-		if (walletClient === undefined || account === undefined || selectedQuote === undefined || balanceState !== 'ready' || previewBlocker !== undefined || transaction.workflowLocked) return
+		const approval = previewApproval
+		if (walletClient === undefined || account === undefined || approval === undefined || balanceState !== 'ready' || previewBlocker !== undefined || transaction.workflowLocked) return
 		await transaction.submit({
 			prepare: async () => {
 				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
-				return selectedQuote
+				return approval
 			},
 			send: async (prepared, requestSignature) => {
 				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and try again', 'Wallet account changed during settlement revalidation; reconnect and try again')
 				// The settlement services re-simulate at the latest block before writing and keep the approved minimums.
 				return await services.submit(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},
+			afterSlippageRejected: async () => await refresh({ background: true }),
 			afterConfirmed: async prepared => {
 				if (prepared.operation !== 'migrate-shares') onRedemptionConfirmed?.()
 				await refresh()
@@ -87,5 +89,5 @@ export function useSettlementWorkflowController({
 		})
 	}
 
-	return { approval, previewBlocker, transaction, invalidateInputs: () => transaction.invalidate(), submitCurrent }
+	return { approval: previewApproval, previewBlocker, transaction, invalidateInputs: () => transaction.invalidate(), submitCurrent }
 }

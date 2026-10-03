@@ -124,6 +124,7 @@ describe('liquidity panel', () => {
 		try {
 			await typeAmount('0.1')
 			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 Invalid')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Estimate from your price and the current collateral rate. Rechecked before submitting.')
 			expect(document.body.textContent).not.toContain('Getting a quote…')
 			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
 			expect(requests).toBe(0)
@@ -195,7 +196,8 @@ describe('liquidity panel', () => {
 			const estimate = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(estimate?.textContent).toContain('1 LP')
 			expect(estimate?.textContent).toContain('1 Invalid')
-			expect(estimate?.textContent).toContain('Connect a wallet to submit.')
+			expect(estimate?.textContent).toContain('Estimate from the current pool state.')
+			expect(estimate?.textContent).not.toContain('Connect a wallet to submit.')
 			await act(() => operationButton('Remove').click())
 			await typeAmount('5')
 			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')

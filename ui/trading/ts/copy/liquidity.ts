@@ -25,7 +25,7 @@ export const poolNotInitializedReason = 'Initialize the pool first.'
 export const noLiquidityToRemoveReason = 'The pool has no liquidity yet.'
 export const invalidLpAmount = 'Enter an LP amount with at most 18 decimal places.'
 export { invalidEthAmount } from './tradeTicket.js'
-export const estimateNote = 'Estimate from the current pool state. Connect a wallet to submit.'
+export const estimateNote = 'Estimate from the current pool state.'
 export const estimateHeading = 'Liquidity estimate'
 export const completeSetSharesCreated = 'Complete sets created'
 export const sharesDeposited = 'Yes / No deposited'
@@ -58,3 +58,6 @@ export const localEstimateNote = 'Estimate from the current pool state. Rechecke
 export const initialAmountTooSmall = 'Increase the amount to mint liquidity.'
 
 export const removalAmountTooSmall = 'Increase the amount to receive Yes and No shares.'
+
+export const initializeEstimateNote = 'Estimate from your price and the current collateral rate.'
+export const initializeLocalEstimateNote = 'Estimate from your price and the current collateral rate. Rechecked before submitting.'

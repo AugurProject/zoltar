@@ -59,6 +59,7 @@ describe('live fork settlement context', () => {
 		let submissions = 0
 		const rendered = await renderIntoDocument(
 			<LiveSettlementControls
+				nowSeconds={100n}
 				configuration={configuration}
 				market={liveMarket}
 				balances={{ scope: shareBalanceScope(liveMarket), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 0n }}
@@ -146,6 +147,7 @@ describe('live fork settlement context', () => {
 		const balances = { scope: actualLive.shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, lp: 0n }
 		const settlementView = (currentAccount: typeof account, currentWalletClient: typeof walletClient, currentBalances: typeof balances) => (
 			<LiveSettlementControls
+				nowSeconds={100n}
 				configuration={configuration}
 				market={market}
 				balances={currentBalances}

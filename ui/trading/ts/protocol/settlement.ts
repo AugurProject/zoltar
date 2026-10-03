@@ -85,7 +85,7 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 		const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, refreshed.deadline)
 		return await guardedWrite(async () => {
 			const block = await latestBlockIdentity(client)
-			if (block.blockTimestamp >= refreshed.deadline) throw new Error('Transaction deadline has passed; simulate again')
+			if (block.blockTimestamp >= refreshed.deadline) throw new Error('Transaction deadline has passed; try again')
 			const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
 			const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.amount, minimumEth, refreshed.deadline)
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)

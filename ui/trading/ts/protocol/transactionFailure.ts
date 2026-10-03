@@ -6,11 +6,13 @@ export type TransactionFailureExplanation = Readonly<{ cause: string; nextStep: 
 
 type RevertExplanation = TransactionFailureExplanation & Readonly<{ reasons: readonly string[] }>
 
+const SLIPPAGE_REASONS = ['Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed estimate no longer satisfies']
+
 // Contracts revert with plain strings (see solidity/contracts/trading and SecurityPool); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	{
 		// The last reason is the client-side check that the pre-signing simulation still meets the quoted limits.
-		reasons: ['Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed quote no longer satisfies'],
+		reasons: SLIPPAGE_REASONS,
 		cause: 'The price moved past your slippage limit.',
 		nextStep: 'Try again at the new price, or raise the slippage tolerance in Settings.',
 	},
@@ -74,4 +76,11 @@ export function formatTransactionFailure(explanation: TransactionFailureExplanat
 export function describeTransactionFailure(error: unknown, fallback: string) {
 	const explanation = explainTransactionFailure(error)
 	return explanation === undefined ? publicErrorMessage(error, fallback) : formatTransactionFailure(explanation)
+}
+
+/** A pre-broadcast slippage rejection means the loaded preview needs fresh market state. */
+export function isSlippageFailure(error: unknown) {
+	if (isWalletRejection(error)) return false
+	const reason = knownRevertReason(error)
+	return reason !== undefined && SLIPPAGE_REASONS.includes(reason)
 }

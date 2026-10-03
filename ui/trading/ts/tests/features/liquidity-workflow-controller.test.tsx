@@ -29,10 +29,17 @@ const market = smallReserveMarketFixture({
 
 type Controller = ReturnType<typeof useLiquidityWorkflowController>
 
-type ProbeProps = Readonly<{ walletClient: Parameters<typeof useLiquidityWorkflowController>[0]['walletClient']; services: LiveLiquidityServices; onController: (controller: Controller) => void; onLockChange: (locked: boolean) => void; market: LiveMarket }>
+type ProbeProps = Readonly<{
+	walletClient: Parameters<typeof useLiquidityWorkflowController>[0]['walletClient']
+	services: LiveLiquidityServices
+	onController: (controller: Controller) => void
+	onLockChange: (locked: boolean) => void
+	market: LiveMarket
+	refresh?: (options?: Readonly<{ background?: boolean }>) => Promise<void>
+}>
 
 // One stable component type so re-rendering with a new market object updates the hook instead of remounting it.
-function Probe({ walletClient, services, onController, onLockChange, market: probeMarket }: ProbeProps) {
+function Probe({ walletClient, services, onController, onLockChange, market: probeMarket, refresh = async () => undefined }: ProbeProps) {
 	const controller = useLiquidityWorkflowController({
 		configuration,
 		market: probeMarket,
@@ -42,7 +49,7 @@ function Probe({ walletClient, services, onController, onLockChange, market: pro
 		externallyLocked: false,
 		nowSeconds: 1n,
 		settings: DEFAULT_TRADE_SETTINGS,
-		refresh: async () => undefined,
+		refresh,
 		onKnownReceipt: () => undefined,
 		executeWithCurrentWalletContext: async (_account, _networkFailure, _accountFailure, action) => await action(),
 		createGuardedWalletWrite: () => async write => await write(),
@@ -323,13 +330,85 @@ describe('liquidity workflow controller state', () => {
 		await rendered.cleanup()
 	})
 
+	test('refreshes rejected slippage bounds before retry while keeping the amount and error', async () => {
+		let controller: Controller | undefined
+		let refreshes = 0
+		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const submitted: bigint[] = []
+		const services: LiveLiquidityServices = {
+			submitFreshLiquidity: async (_client, _config, _account, approval) => {
+				submitted.push(approval.expectedLiquidity)
+				throw new Error('Refreshed estimate no longer satisfies the approved minimum LP tokens')
+			},
+		}
+		const first = { ...market, yesReserve: 10n ** 18n, noReserve: 10n ** 18n, lpTotalSupply: 10n ** 18n }
+		const onController = (value: Controller) => {
+			controller = value
+		}
+		const onLockChange = () => undefined
+		const refresh = async (options?: Readonly<{ background?: boolean }>) => {
+			expect(options).toEqual({ background: true })
+			refreshes++
+			render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={{ ...first, lpTotalSupply: 2n * 10n ** 18n }} refresh={refresh} />, rendered.container)
+		}
+		const rendered = await renderIntoDocument(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={first} refresh={refresh} />)
+		try {
+			await act(() => controller?.updateAmount('0.01'))
+			await act(async () => await controller?.submit())
+			expect(refreshes).toBe(1)
+			expect(controller?.amount).toBe('0.01')
+			expect(controller?.transaction.error).toContain('The price moved past your slippage limit.')
+			await act(async () => await controller?.submit())
+			expect(submitted).toEqual([10n ** 16n, 2n * 10n ** 16n])
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('holds the workflow lock during refresh and preserves the rejection when refresh fails', async () => {
+		let controller: Controller | undefined
+		const refreshing = createDeferred<void>()
+		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const services: LiveLiquidityServices = {
+			submitFreshLiquidity: async () => {
+				throw new Error('Refreshed estimate no longer satisfies the approved minimum LP tokens')
+			},
+		}
+		const rendered = await renderIntoDocument(
+			<Probe
+				walletClient={walletClient}
+				services={services}
+				onController={value => {
+					controller = value
+				}}
+				onLockChange={() => undefined}
+				market={market}
+				refresh={async () => await refreshing.promise}
+			/>,
+		)
+		try {
+			await act(() => controller?.updateAmount('0.01'))
+			const submission = controller?.submit()
+			await flush()
+			expect(controller?.transaction.workflowLocked).toBeTrue()
+			await act(() => controller?.updateAmount('0.02'))
+			expect(controller?.amount).toBe('0.01')
+			refreshing.reject(new Error('Refresh RPC unavailable'))
+			await act(async () => await submission)
+			expect(controller?.transaction.workflowLocked).toBeFalse()
+			expect(controller?.transaction.error).toContain('The price moved past your slippage limit.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('keeps the local preview after a failed validation without requesting background quotes', async () => {
 		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
 		let submissions = 0
 		const services: LiveLiquidityServices = {
 			submitFreshLiquidity: async () => {
 				submissions++
-				throw new Error('Refreshed quote no longer satisfies the approved minimum LP tokens')
+				throw new Error('Refreshed estimate no longer satisfies the approved minimum LP tokens')
 			},
 		}
 		let controller: Controller | undefined

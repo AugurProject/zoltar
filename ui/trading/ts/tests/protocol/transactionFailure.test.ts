@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { describeTransactionFailure } from '../../protocol/transactionFailure.js'
+import { describeTransactionFailure, isSlippageFailure } from '../../protocol/transactionFailure.js'
 
 // Shaped like viem's ContractFunctionExecutionError wrapping a ContractFunctionRevertedError.
 function revertError(reason: string) {
@@ -25,12 +25,19 @@ describe('transaction failure explanations', () => {
 
 	test('finds a revert string in a plain message and in the pre-signing limit check', () => {
 		expect(describeTransactionFailure(new Error('execution reverted: Swap slippage'), 'Trade failed')).toContain('The price moved past your slippage limit.')
-		expect(describeTransactionFailure(new Error('Refreshed quote no longer satisfies the approved minimum LP tokens'), 'Trade failed')).toContain('The price moved past your slippage limit.')
+		expect(describeTransactionFailure(new Error('Refreshed estimate no longer satisfies the approved minimum LP tokens'), 'Trade failed')).toContain('The price moved past your slippage limit.')
 	})
 
 	test('explains wallet cancellations and missing gas funds', () => {
 		expect(describeTransactionFailure(Object.assign(new Error('User rejected the request.'), { code: 4001 }), 'Trade failed')).toBe('Action canceled in wallet. Nothing was sent. Press the button again when ready.')
 		expect(describeTransactionFailure(new Error('insufficient funds for gas * price + value'), 'Trade failed')).toBe('Your wallet does not have enough ETH for this amount plus gas. Lower the amount or add ETH to your wallet.')
+	})
+
+	test('refreshes only slippage failures, excluding wallet cancellations and RPC failures', () => {
+		expect(isSlippageFailure(revertError('Swap slippage'))).toBeTrue()
+		expect(isSlippageFailure(new Error('Refreshed estimate no longer satisfies the approved maximum NO deposit'))).toBeTrue()
+		expect(isSlippageFailure(Object.assign(new Error('Swap slippage'), { code: 4001 }))).toBeFalse()
+		expect(isSlippageFailure(new Error('RPC timed out'))).toBeFalse()
 	})
 
 	test('keeps unknown failures on the sanitized public message', () => {

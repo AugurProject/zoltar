@@ -269,13 +269,20 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={actionAvailability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submitCurrent()}>
 				{approval?.operation === 'redeem-complete-set' ? (
-					<section className='trade-estimate' aria-label={settlementCopy.estimateHeading} aria-busy={false}>
+					<section className='trade-estimate' aria-label={settlementCopy.estimateHeading}>
 						<TransactionReview
 							variant='inline'
 							primary={[{ label: settlementCopy.youReceive, value: formatValueWithUnit(formatRoundedUnits(approval.expectedAttoEth), settlementCopy.eth) }]}
 							details={[{ label: settlementCopy.minimumReceived, value: formatValueWithUnit(formatTrimmedUnits(approval.minimumAttoEth), settlementCopy.eth) }]}
 						/>
-						<UserMessage className='detail trade-estimate-note' detail={<>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</>} />
+						<UserMessage
+							className='detail trade-estimate-note'
+							detail={
+								<>
+									{settlementCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}
+								</>
+							}
+						/>
 					</section>
 				) : null}
 			</QuotedTransactionPanel>

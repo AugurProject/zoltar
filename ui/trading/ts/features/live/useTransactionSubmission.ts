@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
-import { describeTransactionFailure, formatTransactionFailure, REVERTED_ON_CHAIN } from '../../protocol/transactionFailure.js'
+import { describeTransactionFailure, isSlippageFailure, formatTransactionFailure, REVERTED_ON_CHAIN } from '../../protocol/transactionFailure.js'
 import { broadcastUncertainMessage, positionControlsWorkflowLocked } from '../liveTradingControllerHelpers.js'
 import { createMarketTransactionActivity } from './marketTransactionActivity.js'
 import { marketTransactionWorkflow, marketTransactionWorkflowsReducer, transactionMarketKey, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, type TransactionContext, type TransactionWorkflowEvent } from './transactionWorkflow.js'
@@ -16,6 +17,8 @@ export type SubmissionPlan<Prepared> = Readonly<{
 	prepare(): Promise<Prepared>
 	send(prepared: Prepared, requestSignature: RequestSignature): Promise<Hash>
 	afterConfirmed?(prepared: Prepared): Promise<void>
+	/** Reload the preview before releasing its lock; this callback must only perform reads. */
+	afterSlippageRejected?(): Promise<void>
 }>
 
 /**
@@ -170,6 +173,15 @@ export function useTransactionSubmission({
 				keepLocked = true
 				dispatch({ type: 'uncertain', context, reason: broadcastUncertainMessage(label, broadcastHash) })
 			} else {
+				if (!signatureRequested && isSlippageFailure(caught) && plan.afterSlippageRejected !== undefined) {
+					try {
+						await withReadTimeout(plan.afterSlippageRejected())
+					} catch (refreshError) {
+						console.warn('Market refresh after slippage rejection failed:', describeTransactionFailure(refreshError, 'Market refresh failed'))
+						// Preserve the original rejection even when refreshing the market fails.
+					}
+				}
+				if (!mounted.current) return
 				dispatch({ type: 'failed', context, operation, message: describeTransactionFailure(caught, failureFallback) })
 			}
 		} finally {

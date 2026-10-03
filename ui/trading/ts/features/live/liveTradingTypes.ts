@@ -48,7 +48,8 @@ export type LiveWorkflowContext = Readonly<{
 	walletClient: WalletClient | undefined
 	externallyLocked: boolean
 	settings: TradeSettings
-	refresh(): Promise<void>
+	nowSeconds: bigint
+	refresh(options?: Readonly<{ background?: boolean }>): Promise<void>
 	onKnownReceipt(): void
 	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite

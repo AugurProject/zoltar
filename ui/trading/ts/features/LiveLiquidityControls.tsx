@@ -95,7 +95,6 @@ export function LiveLiquidityControls({
 		operationOption('add', liquidityCopy.addAction, !initialized || closedForAdding || workflowLocked, addOptionReason(initialized, newRiskBlocker)),
 		operationOption('remove', liquidityCopy.removeAction, !initialized || workflowLocked, initialized ? undefined : liquidityCopy.noLiquidityToRemoveReason),
 	]
-	const preview = estimate
 	return (
 		<div className='liquidity-controls'>
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
@@ -122,7 +121,7 @@ export function LiveLiquidityControls({
 			) : null}
 			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.removalGuidance(!closedForAdding) : liquidityCopy.additionGuidance} />
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={availability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submit()}>
-				{preview === undefined ? null : <LiquidityPreviewSection preview={preview} market={market} connected={walletConnected} protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />}
+				{estimate === undefined ? null : <LiquidityPreviewSection preview={estimate} market={market} connected={walletConnected} protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />}
 			</QuotedTransactionPanel>
 		</div>
 	)
@@ -135,7 +134,8 @@ function addOptionReason(initialized: boolean, newRiskBlocker: string | undefine
 
 /** What the operation gives and returns, computed from the loaded pool state. */
 function LiquidityPreviewSection({ preview, market, connected, protection }: { preview: LiquidityPreview; market: LiveMarket; connected: boolean; protection: string }) {
-	const estimateNote = connected ? liquidityCopy.localEstimateNote : liquidityCopy.estimateNote
+	let estimateNote = connected ? liquidityCopy.localEstimateNote : liquidityCopy.estimateNote
+	if (preview.operation === 'initialize') estimateNote = connected ? liquidityCopy.initializeLocalEstimateNote : liquidityCopy.initializeEstimateNote
 	const removalValue = preview.operation === 'remove' ? outcomeSharesValueAttoEth(market, preview.yesOut, preview.noOut) : undefined
 	return (
 		<section className='trade-estimate' aria-label={liquidityCopy.estimateHeading}>
@@ -170,12 +170,10 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 			{preview.operation === 'remove' ? null : (
 				<ReadOnlyDetailAccordion title={liquidityCopy.previewDetails}>
 					<DataGrid dense>
-						<>
-							<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(preview.completeSets)}</MetricField>
-							<MetricField label={liquidityCopy.sharesDeposited}>
-								{formatOutcomeQuantity(preview.yesUsed, shareOutcome.yes)} / {formatOutcomeQuantity(preview.noUsed, shareOutcome.no)}
-							</MetricField>
-						</>
+						<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(preview.completeSets)}</MetricField>
+						<MetricField label={liquidityCopy.sharesDeposited}>
+							{formatOutcomeQuantity(preview.yesUsed, shareOutcome.yes)} / {formatOutcomeQuantity(preview.noUsed, shareOutcome.no)}
+						</MetricField>
 					</DataGrid>
 				</ReadOnlyDetailAccordion>
 			)}

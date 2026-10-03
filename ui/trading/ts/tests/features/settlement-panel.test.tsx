@@ -36,7 +36,7 @@ const walletClient = createWalletClient({
 	}),
 })
 
-function renderPanel(market: LiveMarket, holdings: Readonly<{ invalid: bigint; yes: bigint; no: bigint }>) {
+function renderPanel(market: LiveMarket, holdings: Readonly<{ invalid: bigint; yes: bigint; no: bigint }>, nowSeconds = 100n, settings = DEFAULT_TRADE_SETTINGS, options: Readonly<{ services?: LiveSettlementServices; refresh?(options?: Readonly<{ background?: boolean }>): Promise<void> }> = {}) {
 	return renderIntoDocument(
 		<LiveSettlementControls
 			configuration={configuration}
@@ -48,15 +48,16 @@ function renderPanel(market: LiveMarket, holdings: Readonly<{ invalid: bigint; y
 			walletClient={walletClient}
 			networkMismatchReason={undefined}
 			wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
-			settings={DEFAULT_TRADE_SETTINGS}
+			settings={settings}
+			nowSeconds={nowSeconds}
 			externallyLocked={false}
-			refresh={async () => undefined}
+			refresh={options.refresh ?? (async () => undefined)}
 			onKnownReceipt={() => undefined}
 			executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
 			createGuardedWalletWrite={() => async write => await write()}
 			retryBalances={async () => undefined}
 			onWorkflowLockChange={() => undefined}
-			services={services}
+			services={options.services ?? services}
 		/>,
 	)
 }
@@ -83,6 +84,49 @@ function describedText(element: HTMLElement) {
 describe('settlement panel', () => {
 	installDomTestLifecycle()
 
+	test('projects redemption holding fees from current chain time without a quote read', async () => {
+		const collateral = 10n * 10n ** 18n
+		const feeAccounting = { settlementCollateralAttoEth: collateral, totalUnderwritingLimitAttoEth: collateral, feeEligibleUnderwritingLimitAttoEth: collateral, currentRetentionRate: 999_990_000_000_000_000n, lastUpdatedFeeAccumulator: 100n, feeIndexRemainder: 0n, totalFeesOwedRemainder: 0n }
+		const market = { ...closedMarket, currentRetentionRate: feeAccounting.currentRetentionRate, valuation: { timestamp: 100n, feeEndTime: 10000n, projectedCollateralAttoEth: collateral, feeAccounting } }
+		const rendered = await renderPanel(market, { invalid: 2n * 10n ** 18n, yes: 2n * 10n ** 18n, no: 2n * 10n ** 18n }, 2000n, { ...DEFAULT_TRADE_SETTINGS, validityMinutes: 1n })
+		try {
+			await act(() => buttonByLabel('Max').click())
+			expect(buttonByLabel('Redeem complete sets').disabled).toBe(true)
+			expect(document.body.textContent).toContain('Holding fees')
+			expect(walletRequests).toBe(0)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('refreshes a rejected redemption estimate without clearing the entered amount or error', async () => {
+		let refreshes = 0
+		const rendered = await renderPanel(closedMarket, { invalid: 2n * 10n ** 18n, yes: 2n * 10n ** 18n, no: 2n * 10n ** 18n }, 100n, DEFAULT_TRADE_SETTINGS, {
+			services: {
+				...services,
+				submit: async () => {
+					throw new Error('Refreshed estimate no longer satisfies the approved minimum ETH')
+				},
+			},
+			refresh: async options => {
+				expect(options).toEqual({ background: true })
+				refreshes++
+			},
+		})
+		try {
+			await act(() => buttonByLabel('Max').click())
+			await act(async () => {
+				buttonByLabel('Redeem complete sets').click()
+				await Bun.sleep(10)
+			})
+			expect(refreshes).toBe(1)
+			expect(amountInput().value).toBe('2')
+			expect(document.body.textContent).toContain('The price moved past your slippage limit.')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('shows the complete sets held and fills the full redemption value with Max', async () => {
 		const rendered = await renderPanel(closedMarket, { invalid: 2n * 10n ** 18n, yes: 3n * 10n ** 18n, no: 25n * 10n ** 17n })
 		try {
@@ -91,6 +135,7 @@ describe('settlement panel', () => {
 			expect(amountInput().value).toBe('2')
 			expect(buttonByLabel('Redeem complete sets').disabled).toBe(false)
 			expect(document.querySelector('.trade-estimate')?.textContent?.replaceAll('\u00a0', ' ')).toContain('2 ETH')
+			expect(document.querySelector('.trade-estimate')?.textContent).toContain('Estimate from the current collateral rate. Rechecked before submitting.')
 			expect(document.body.textContent).not.toContain('Getting a quote')
 			await act(async () => await Bun.sleep(400))
 			expect(walletRequests).toBe(0)

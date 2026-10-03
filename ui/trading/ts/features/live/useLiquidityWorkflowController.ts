@@ -117,6 +117,7 @@ export function useLiquidityWorkflowController({
 				// submitFreshLiquidity re-simulates at the latest block and keeps the approved minimums.
 				return await services.submitFreshLiquidity(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},
+			afterSlippageRejected: async () => await refresh({ background: true }),
 			afterConfirmed: async () => {
 				setAmount('')
 				await refresh()
