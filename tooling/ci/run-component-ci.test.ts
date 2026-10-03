@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { createComponentCiPlan } from './run-component-ci.mts'
-import { projects, type Project } from '../repo/projects.ts'
+import { dependencyAuditCommand, projects, type Project } from '../repo/projects.ts'
 
 const task = (script: string) => ({ command: ['bun', 'run', script], cwd: 'package', inputs: ['package/**'] })
 
@@ -51,18 +51,8 @@ test('bot component CI builds its shared dashboard UI dependency before checking
 test('registered AugurScan CI runs its complete non-database suite while bots avoid duplicate tests', () => {
 	const augurScanPlan = createComponentCiPlan('augur-scan')
 	expect(augurScanPlan[0]?.command).toEqual(['bun', 'run', 'typecheck'])
-	expect(augurScanPlan.map(entry => entry.command.slice(0, 3))).toEqual([
-		['bun', 'run', 'typecheck'],
-		['bun', 'run', 'build'],
-		['bun', 'run', 'test:ci'],
-		['bun', 'run', 'check'],
-		['bun', 'audit'],
-	])
-	expect(createComponentCiPlan('chaos').map(entry => entry.command.slice(0, 3))).toEqual([
-		['bun', 'run', 'tsc'],
-		['bun', 'run', 'check'],
-		['bun', 'audit'],
-	])
+	expect(augurScanPlan.map(entry => entry.command.slice(0, 3))).toEqual([['bun', 'run', 'typecheck'], ['bun', 'run', 'build'], ['bun', 'run', 'test:ci'], ['bun', 'run', 'check'], [...dependencyAuditCommand]])
+	expect(createComponentCiPlan('chaos').map(entry => entry.command.slice(0, 3))).toEqual([['bun', 'run', 'tsc'], ['bun', 'run', 'check'], [...dependencyAuditCommand]])
 
 	const manifest: unknown = JSON.parse(readFileSync(path.resolve(import.meta.dir, '../../augurScan/package.json'), 'utf8'))
 	if (typeof manifest !== 'object' || manifest === null) throw new Error('augurScan/package.json must contain an object')
