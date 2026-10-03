@@ -165,3 +165,25 @@ test('waiting without a known block and failures during idle polls remain visibl
 	expect(lines).toHaveLength(1)
 	expect(lines[0]).toContain('status=failed')
 })
+
+test('heartbeat reports current progress during a fast batch and stops on completion', async () => {
+	const lines: string[] = []
+	const report = startScanReport({ network, blockTimeMs: 12_000, heartbeatIntervalMs: 5, write: line => lines.push(line) })
+	try {
+		report.update({ fromBlock: 100n, block: 199n, observedHead: 1_000n, status: 'backfilling', details: { progress: '10.00%', etaSeconds: 80 } })
+		await Bun.sleep(20)
+		expect(lines.length).toBeGreaterThan(0)
+		expect(lines[0]).toContain('progress=10.00% etaSeconds=80 status=backfilling')
+		expect(lines[0]).toContain('blocksBehind=801')
+		report.update({ block: 299n, details: { progress: '20.00%', etaSeconds: 70 } })
+		await Bun.sleep(20)
+		expect(lines.at(-1)).toContain('progress=20.00% etaSeconds=70')
+		await report.finish('failed')
+		const count = lines.length
+		await Bun.sleep(20)
+		expect(lines).toHaveLength(count)
+		expect(lines.at(-1)).toContain('status=failed')
+	} finally {
+		await report.finish()
+	}
+})

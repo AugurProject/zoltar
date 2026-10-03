@@ -182,6 +182,7 @@ export async function poll(state: NetworkIndexerState, operations: PollOperation
 		network: state.network,
 		blockTimeMs: scanBlockTimeMs(state.network.chainId, runtimeConfig.scanBlockTimeMsOverride),
 		readHead: () => state.providers.client.getBlockNumber(),
+		heartbeatIntervalMs: 30_000,
 	})
 	try {
 		return await pollWithReport(state, operations, scanReport)
@@ -224,7 +225,13 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	const batchStart = nextBlock
 	const maximumBatchEnd = nextBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
 	const batchEnd = maximumBatchEnd < observedHead ? maximumBatchEnd : observedHead
-	scanReport.update({ fromBlock: batchStart, block: batchEnd, status: 'incomplete' })
+	// Heartbeats describe durable progress, never the end of a merely planned or fetched range.
+	scanReport.update({
+		fromBlock: batchStart,
+		block: nextBlock - 1n,
+		status: 'backfilling',
+		details: indexerProgressDetails(batchStart, nextBlock - 1n, observedHead, state.network.startBlock, state.progress.sample?.blocksPerSecond),
+	})
 	let contracts = withManifestDeploymentBlocks(state.network, await state.database.contracts(state.network.chainId, requireLease(state)))
 	let tokenMetadata = await state.database.tokenMetadata(state.network.chainId, requireLease(state))
 	const storedCursors = await state.database.logScanCursors(state.network.chainId, requireLease(state))
@@ -246,11 +253,13 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		segment = await operations.getNextLogSegment(state, nextBlock, batchEnd, initialContracts)
 		if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 	} catch (error) {
-		if (error instanceof ChainContinuityError) return false
+		if (error instanceof ChainContinuityError) {
+			scanReport.update({ status: 'incomplete' })
+			return false
+		}
 		throw error
 	}
 	const end = segment.toBlock
-	scanReport.update({ block: end })
 	for (const observation of segment.deploymentObservations) {
 		const key = observation.contractAddress.toLowerCase()
 		const contract = contracts.get(key)

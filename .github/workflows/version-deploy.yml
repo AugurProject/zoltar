@@ -60,14 +60,16 @@ jobs:
           target: publisher
           cache-scope: zoltar-version-ipfs
 
-      - name: Read content identifier
+      - name: Read content identifiers
         env:
           PUBLISHER_IMAGE: ${{ steps.image.outputs.image }}
         shell: bash
         run: |
-          IPFS_CID=$(docker run --rm --entrypoint /bin/sh "${PUBLISHER_IMAGE}" -c 'cat /ipfs_hash.txt')
-          [[ "${IPFS_CID}" =~ ^bafy[a-z2-7]+$ ]]
-          echo "IPFS_CID=${IPFS_CID}" >> "$GITHUB_ENV"
+          for APP in zoltar statoblast trading; do
+            IPFS_CID=$(docker run --rm --entrypoint /bin/sh "${PUBLISHER_IMAGE}" -c "cat /ipfs_hash_${APP}.txt")
+            [[ "${IPFS_CID}" =~ ^bafy[a-z2-7]+$ ]]
+            echo "${APP^^}_IPFS_CID=${IPFS_CID}" >> "$GITHUB_ENV"
+          done
 
       - name: Push versioned publisher image
         env:
@@ -86,16 +88,11 @@ jobs:
           cat > release-notes.md <<EOF
           ## IPFS applications
 
-          The versioned publisher image contains the exact static files represented by this content identifier:
+          The versioned publisher image contains the exact static files represented by these per-application content identifiers:
 
-          \`${IPFS_CID}\`
-
-          - [Zoltar — ipfs://${IPFS_CID}/zoltar/](ipfs://${IPFS_CID}/zoltar/)
-          - [Augur Statoblast — ipfs://${IPFS_CID}/statoblast/](ipfs://${IPFS_CID}/statoblast/)
-          - [Trading — ipfs://${IPFS_CID}/trading/](ipfs://${IPFS_CID}/trading/)
-          - [Zoltar gateway](https://${IPFS_CID}.ipfs.w3s.link/zoltar/)
-          - [Augur Statoblast gateway](https://${IPFS_CID}.ipfs.w3s.link/statoblast/)
-          - [Trading gateway](https://${IPFS_CID}.ipfs.w3s.link/trading/)
+          - [Zoltar — ipfs://${ZOLTAR_IPFS_CID}/](ipfs://${ZOLTAR_IPFS_CID}/)
+          - [Augur Statoblast — ipfs://${STATOBLAST_IPFS_CID}/](ipfs://${STATOBLAST_IPFS_CID}/)
+          - [Trading — ipfs://${TRADING_IPFS_CID}/](ipfs://${TRADING_IPFS_CID}/)
 
           ${GENERATED_NOTES}
           EOF
