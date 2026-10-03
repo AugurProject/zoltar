@@ -103,7 +103,8 @@ export function useZoltarUniverse(
 	const zoltarChildUniversePendingOutcomeIndex = useSignal<bigint | undefined>(undefined)
 	const isMounted = useRef(true)
 	const currentZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses })
-	const previousZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses })
+	const previousZoltarContextRef = useRef({ activeUniverseId, environmentRefreshKey, zoltarDeployed })
+	const previousAutoLoadContextRef = useRef<{ activeUniverseId: bigint; environmentRefreshKey: number; zoltarDeployed: boolean; includeRelatedUniverses: boolean; autoLoadInitialData: boolean }>()
 	const currentQuestionContextRef = useRef({ environmentRefreshKey, zoltarDeployed })
 	const previousQuestionContextRef = useRef({ environmentRefreshKey, zoltarDeployed })
 	const questionLoadGenerationRef = useRef(0)
@@ -519,10 +520,10 @@ export function useZoltarUniverse(
 
 	useLayoutEffect(() => {
 		const previousContext = previousZoltarContextRef.current
-		const contextChanged = previousContext.activeUniverseId !== activeUniverseId || previousContext.environmentRefreshKey !== environmentRefreshKey || previousContext.zoltarDeployed !== zoltarDeployed || previousContext.includeRelatedUniverses !== includeRelatedUniverses
-		previousZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
+		const contextChanged = previousContext.activeUniverseId !== activeUniverseId || previousContext.environmentRefreshKey !== environmentRefreshKey || previousContext.zoltarDeployed !== zoltarDeployed
+		previousZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 		if (contextChanged) resetZoltarUniverseState()
-	}, [activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses])
+	}, [activeUniverseId, environmentRefreshKey, zoltarDeployed])
 
 	useLayoutEffect(() => {
 		const previousContext = previousQuestionContextRef.current
@@ -532,9 +533,21 @@ export function useZoltarUniverse(
 	}, [environmentRefreshKey, zoltarDeployed])
 
 	useLayoutEffect(() => {
+		const previous = previousAutoLoadContextRef.current
+		previousAutoLoadContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses, autoLoadInitialData }
+		const scopeOnlyChanged =
+			previous !== undefined && previous.activeUniverseId === activeUniverseId && previous.environmentRefreshKey === environmentRefreshKey && previous.zoltarDeployed === zoltarDeployed && previous.autoLoadInitialData === autoLoadInitialData && previous.includeRelatedUniverses !== includeRelatedUniverses
+		if (scopeOnlyChanged) {
+			// Retire reads from the old view, even if a later toggle returns to that same scope.
+			nextUniverseLoad()
+			universeLoad.invalidate()
+			universeCommitVersionRef.current += 1
+		}
 		if (!autoLoadInitialData) return
-		const initialLoads: Promise<unknown>[] = [loadZoltarUniverse()]
-		if (zoltarDeployed) {
+		const currentUniverse = zoltarUniverse.value
+		if (scopeOnlyChanged && currentUniverse !== undefined && (!includeRelatedUniverses || currentUniverse.relatedUniversesLoaded !== false)) return
+		const initialLoads: Promise<unknown>[] = [loadZoltarUniverse({ clearCurrentState: !scopeOnlyChanged })]
+		if (zoltarDeployed && !scopeOnlyChanged) {
 			const page = requestedQuestionPage.current
 			initialLoads.push(page === undefined ? loadZoltarQuestionCountData() : loadQuestionsPage(page.pageIndex, page.pageSize))
 		}

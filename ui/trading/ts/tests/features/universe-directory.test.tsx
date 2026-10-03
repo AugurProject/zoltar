@@ -151,6 +151,19 @@ describe('universe directory', () => {
 		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(2)
 	})
 
+	test.each([undefined, '0', '0x0', '00', '1'])('offers Genesis recovery only for a nonzero requested universe (%s)', async selectedUniverseId => {
+		const services = {
+			...offlineControllerServices,
+			discoverUniverses: async () => {
+				throw new Error('registry RPC unavailable')
+			},
+		}
+		const rendered = await renderIntoDocument(<LiveTrading route='universe' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverseId} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed'))
+		expect(within(rendered.container).queryByRole('link', { name: 'Go to Genesis universe' }) !== null).toBe(selectedUniverseId === '1')
+	})
+
 	test('redacts an address-bearing discovery error to the universe lead without prefixing it twice', async () => {
 		const services = {
 			...offlineControllerServices,

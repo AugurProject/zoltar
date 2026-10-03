@@ -1,3 +1,4 @@
+import { parsedUniverseId } from './live/useLiveTradingState.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
@@ -210,7 +211,7 @@ export function LiveTrading({
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}
-					{discoveryState === 'error' && selectedUniverseId !== '0' ? (
+					{discoveryState === 'error' && (parsedUniverseId(selectedUniverseId) ?? 0n) !== 0n ? (
 						<UniverseLink className='button-link secondary-link' universeId={0n}>
 							{commonCopy.goToGenesisUniverse}
 						</UniverseLink>

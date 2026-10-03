@@ -1,9 +1,9 @@
 /// <reference types='bun-types' />
 
-import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, createWalletClient, publicActions, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -123,13 +123,110 @@ describe('useZoltarUniverse', () => {
 		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse).toEqual(overview))
 		await act(() => render(<Harness includeRelatedUniverses />, rendered.container))
 		await waitFor(() => expect(scopes).toEqual([false, true]))
+		expect(requireHookState(hookState).zoltarUniverse).toEqual(overview)
 		await act(() => render(<Harness includeRelatedUniverses={false} />, rendered.container))
-		await waitFor(() => expect(scopes).toEqual([false, true, false]))
+		await waitFor(() => expect(scopes).toEqual([false, true]))
 		await act(async () => {
 			delayedFullRead.resolve(createUniverseSummary({ relatedUniversesLoaded: true }))
 			await delayedFullRead.promise
 		})
 		expect(requireHookState(hookState).zoltarUniverse).toEqual(overview)
+	})
+
+	test.each(['success', 'failure'] as const)('keeps deployment state through migration view toggles and applies %s feedback', async result => {
+		const transaction = createDeferred<Awaited<ReturnType<UseZoltarUniverseDependencies['createZoltarChildUniverse']>>>()
+		const universe = createUniverseSummary({ universeId: 1n, hasForked: true, relatedUniversesLoaded: true })
+		const createZoltarChildUniverse = mock(async () => await transaction.promise)
+		const onTransactionFinished = mock(() => undefined)
+		const dependencies = createZoltarUniverseDependencies({
+			createWalletWriteClient: () => createWalletClient({ account: NEXT_WALLET_ADDRESS, chain: getActiveBackend().profile.chain, transport: http('http://127.0.0.1:8545') }).extend(publicActions),
+			createZoltarChildUniverse,
+			loadZoltarUniverseSummary: async () => universe,
+			loadZoltarQuestionCount: async () => 0n,
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness({ includeRelatedUniverses, activeUniverseId = 1n }: { includeRelatedUniverses: boolean; activeUniverseId?: bigint }) {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: NEXT_WALLET_ADDRESS,
+					activeUniverseId,
+					autoLoadInitialData: true,
+					includeRelatedUniverses,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Harness includeRelatedUniverses />)
+		trackCleanup(rendered.cleanup)
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse).toEqual(universe))
+		let write: Promise<void> | undefined
+		await act(() => {
+			write = requireHookState(hookState).createChildUniverse(1n)
+		})
+		await waitFor(() => expect(createZoltarChildUniverse).toHaveBeenCalledTimes(1))
+		const pendingFeedback = requireHookState(hookState).zoltarChildUniverseFeedback
+		for (const full of [false, true]) {
+			await act(() => render(<Harness includeRelatedUniverses={full} />, rendered.container))
+			expect(requireHookState(hookState).zoltarUniverse).toEqual(universe)
+			expect(requireHookState(hookState).zoltarChildUniversePendingOutcomeIndex).toBe(1n)
+			expect(requireHookState(hookState).zoltarChildUniverseFeedback).toEqual(pendingFeedback)
+		}
+		await act(async () => {
+			if (result === 'success') transaction.resolve({ action: 'createChildUniverse', hash: TEST_HASH, outcomeIndex: 1n, universeId: 1n })
+			else transaction.reject(new Error('RPC transaction failed'))
+			await write
+		})
+		expect(requireHookState(hookState).zoltarChildUniversePendingOutcomeIndex).toBeUndefined()
+		expect(requireHookState(hookState).zoltarChildUniverseFeedback?.status.title).toBe(result === 'success' ? 'Child universe deployed' : 'Child universe deployment failed')
+		expect(onTransactionFinished).toHaveBeenCalledTimes(1)
+		const feedback = requireHookState(hookState).zoltarChildUniverseFeedback
+		await act(() => render(<Harness includeRelatedUniverses={false} />, rendered.container))
+		expect(requireHookState(hookState).zoltarChildUniverseFeedback).toEqual(feedback)
+		await act(() => render(<Harness includeRelatedUniverses={false} activeUniverseId={2n} />, rendered.container))
+		expect(requireHookState(hookState).zoltarChildUniverseFeedback).toBeUndefined()
+		expect(requireHookState(hookState).zoltarChildUniversePendingOutcomeIndex).toBeUndefined()
+	})
+
+	test.each(['view', 'universe', 'environment', 'deployment'] as const)('preserves child-universe errors only for a %s change', async change => {
+		const universe = createUniverseSummary({ universeId: 1n, hasForked: true, relatedUniversesLoaded: true })
+		let hookState: UseZoltarUniverseState | undefined
+		const dependencies = createZoltarUniverseDependencies({ loadZoltarUniverseSummary: async () => universe })
+		function Harness({ changed = false }: { changed?: boolean }) {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: undefined,
+					activeUniverseId: changed && change === 'universe' ? 2n : 1n,
+					autoLoadInitialData: false,
+					includeRelatedUniverses: !changed,
+					deploymentStatuses: changed && change === 'deployment' ? [] : [createZoltarDeploymentStatus()],
+					environmentRefreshKey: changed && change === 'environment' ? 1 : 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		trackCleanup(rendered.cleanup)
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarUniverse()
+			await requireHookState(hookState).createChildUniverse(1n)
+		})
+		const error = requireHookState(hookState).zoltarChildUniverseError
+		expect(error).toBeDefined()
+		await act(() => render(<Harness changed />, rendered.container))
+		expect(requireHookState(hookState).zoltarChildUniverseError).toBe(change === 'view' ? error : undefined)
+		expect(requireHookState(hookState).zoltarUniverse).toEqual(change === 'view' ? universe : undefined)
 	})
 
 	test('does not request a child-universe transaction when the active wallet account changed', async () => {
