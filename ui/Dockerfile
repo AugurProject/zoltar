@@ -207,12 +207,15 @@ COPY --from=ipfs-export /export/ /export/
 
 RUN ipfs init
 
-# Store the hash to a file
-RUN ipfs add --cid-version 1 --quieter --only-hash --recursive /export > ipfs_hash.txt
+# Compute each app root CID with the same options as the upload script.
+RUN for app in zoltar statoblast trading; do \
+	ipfs add --cid-version 1 --pin=true --quieter --only-hash --recursive "/export/$app" > "/ipfs_hash_${app}.txt" || exit 1; \
+	done
 
-# Print the hash for visibility
-RUN cat ipfs_hash.txt
+# Print the app CIDs for visibility
+RUN cat /ipfs_hash_*.txt
 
+COPY --chmod=755 ./tooling/ui/docker-local-publisher-entrypoint.sh /publish.sh
 COPY --chmod=755 ./tooling/ui/docker-publisher-entrypoint.sh /entrypoint.sh
 
 WORKDIR /temp

@@ -717,13 +717,47 @@ ${command}`,
 		}
 	})
 
+	test('release reads and validates each app CID from the publisher image', async () => {
+		const jobs = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
+		const step = workflowSteps(jobs['deploy']).find(step => step['name'] === 'Read content identifiers')
+		const command = step?.['run']
+		if (typeof command !== 'string') throw new Error('Missing CID extraction command')
+		const result = spawnSync(
+			'bash',
+			[
+				'-e',
+				'-c',
+				`
+ docker() {
+     case "$*" in
+         *ipfs_hash_zoltar.txt*) echo bafyabc ;;
+         *ipfs_hash_statoblast.txt*) echo bafydef ;;
+         *ipfs_hash_trading.txt*) echo bafyghi ;;
+         *) return 1 ;;
+     esac
+ }
+ GITHUB_ENV=$(mktemp)
+ trap 'rm -f "$GITHUB_ENV"' EXIT
+ ${command}
+ cat "$GITHUB_ENV"
+ `,
+			],
+			{ env: { PUBLISHER_IMAGE: 'test-image', GITHUB_ENV: '/dev/stdout' }, encoding: 'utf8' },
+		)
+		expect(result.status).toBe(0)
+		expect(result.stdout).toBe('ZOLTAR_IPFS_CID=bafyabc\nSTATOBLAST_IPFS_CID=bafydef\nTRADING_IPFS_CID=bafyghi\n')
+		const invalid = spawnSync('bash', ['-e', '-c', `docker() { echo invalid; }\n${command}`], { env: { PUBLISHER_IMAGE: 'test-image', GITHUB_ENV: '/dev/stdout' }, encoding: 'utf8' })
+		expect(invalid.status).not.toBe(0)
+		expect(invalid.stdout).toBe('')
+	})
+
 	test('one tag workflow owns releases and advertises every published app', async () => {
 		const ipfsWorkflow = await readFile(ipfsDeployWorkflowPath, 'utf8')
 		const versionWorkflow = await readFile(versionDeployWorkflowPath, 'utf8')
 		expect(ipfsWorkflow).not.toMatch(/push:\s*\n\s*tags:/)
 		expect(versionWorkflow).toContain('push:\n    tags:')
 		expect(versionWorkflow).toContain('Create or update GitHub release')
-		for (const appId of ['zoltar', 'statoblast', 'trading']) expect(versionWorkflow).toContain(`/\${IPFS_CID}/${appId}/`)
+		for (const appId of ['zoltar', 'statoblast', 'trading']) expect(versionWorkflow).toContain(`ipfs://\${${appId.toUpperCase()}_IPFS_CID}/`)
 	})
 
 	test('CI cache keys reference existing files or intentional globs', async () => {
