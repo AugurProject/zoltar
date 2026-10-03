@@ -115,7 +115,7 @@ export function useSelectedPoolRefreshEffects({
 	useEffect(() => {
 		if (pendingReportRefreshActive) refreshPendingReport()
 	}, [pendingReportId, pendingReportRefreshActive, selectedPoolManagerAddress])
-	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive)
+	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive || view === 'vault-operations')
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return

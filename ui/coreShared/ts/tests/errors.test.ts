@@ -50,7 +50,7 @@ void describe('error helpers', () => {
 			'Transaction failed after using its full gas limit. Open the transaction details before retrying.',
 			'Transaction canceled or replaced.',
 			'Could not confirm the transaction. Check its status before retrying.',
-			'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.',
+			'Approval confirmed, but it is below the required amount. Review funding again to approve the required total before continuing.',
 		]) {
 			for (const error of [new Error(message), new Error('Provider failed', { cause: new Error(message) })]) {
 				expect(getErrorMessage(error, 'Transaction failed.')).toBe(message)

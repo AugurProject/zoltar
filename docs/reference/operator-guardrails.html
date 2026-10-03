@@ -503,7 +503,7 @@
 							</tr>
 							<tr>
 								<td>Pending report bound</td>
-								<td>At most four operations are attached to one settlement callback. Operations can still be tracked as active even when they do not fit into the pending callback batch.</td>
+								<td>At most four price actions are attached to one settlement callback, counting each commitment change, liquidation, or withdrawal within a vault bundle separately. Deposits use no slot. Bundles must fit the remaining callback capacity; single operations can still be tracked as active outside the callback batch.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>
@@ -525,6 +525,11 @@
 								<td>Consumed failures</td>
 								<td>Expired operations, stale liquidations, zero-effect withdrawals, and liquidations too close to threshold are consumed and emitted as failed executions rather than retried forever.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
+							</tr>
+							<tr>
+								<td>Vault operation bundle</td>
+								<td><code>submitVaultOperations</code> applies a deposit, commitment change, liquidations of other vaults, and withdrawal to one pool. At most four price actions fit a bundle. A fresh-price failure reverts the submission; with a stale price the deposit remains while the remaining actions execute atomically after settlement. Any change to a queued liquidation target's REP backing units or underwriting commitment fails the whole bundle, including the owner's commitment change and withdrawal. See <a href="./contracts/openoraclepricecoordinator.html">coordinator execution and funding</a>.</td>
+								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/VaultOperations.sol">VaultOperations.sol</a></td>
 							</tr>
 							<tr>
 								<td>Liquidation snapshot</td>

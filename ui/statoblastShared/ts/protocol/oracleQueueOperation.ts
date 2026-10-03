@@ -11,6 +11,8 @@ export function decodeOracleQueueOperation(operation: bigint | number): OracleQu
 			return 'liquidation'
 		case 1n:
 			return 'withdrawRep'
+		case 3n:
+			return 'vaultOperations'
 		case 2n:
 			return 'setVaultUnderwritingLimit'
 		default:
@@ -24,6 +26,8 @@ export function encodeOracleQueueOperation(operation: OracleQueueOperation): num
 			return LIQUIDATION_OPERATION_TYPE
 		case 'withdrawRep':
 			return WITHDRAW_REP_OPERATION_TYPE
+		case 'vaultOperations':
+			return 3
 		case 'setVaultUnderwritingLimit':
 			return 2
 		default:

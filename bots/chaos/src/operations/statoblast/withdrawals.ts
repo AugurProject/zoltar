@@ -53,7 +53,7 @@ export const queueWithdrawal: OperationDefinition = {
 					encodePreflightCall({
 						abi: securityPoolAbi,
 						args: [snapshot.wallet.address, requested],
-						caller: pool.coordinator,
+						caller: pool.vaultOperations,
 						expectedResult: '0x',
 						functionName: 'withdrawRepFromVault',
 						label: 'withdraw queued REP directly',

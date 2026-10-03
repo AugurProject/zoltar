@@ -3882,6 +3882,122 @@ span.rep-price-status.stale,
 	font-size: 0.875rem;
 }
 
+.vault-operations-flow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
+	gap: var(--space-4);
+}
+
+.vault-operations-flow .state-hint {
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
+}
+
+.vault-operations-flow .state-hint > * {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.vault-operations-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.55fr);
+	gap: var(--space-5);
+	align-items: start;
+}
+
+.vault-operations-fields {
+	display: grid;
+	align-items: start;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-4);
+}
+
+.vault-operations-targets {
+	list-style: none;
+	margin: var(--space-4) 0;
+	padding: 0;
+}
+
+.vault-operations-targets li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(9rem, 0.6fr);
+	gap: var(--space-4);
+	padding: var(--space-4) 0;
+	border-bottom: 1px solid var(--border-default);
+}
+
+.vault-operations-target-choice {
+	display: flex;
+	gap: var(--space-3);
+	align-items: center;
+	min-height: var(--touch-target-min);
+}
+
+.vault-operations-target-choice span {
+	min-width: 0;
+}
+
+.vault-operations-target-choice small {
+	display: block;
+	color: var(--text-secondary);
+	margin-top: var(--space-1);
+}
+
+.vault-operations-summary {
+	margin: 0;
+}
+
+.vault-operations-summary > div {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--space-4);
+	padding: var(--space-3) 0;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.vault-operations-summary dd {
+	margin: 0;
+	text-align: right;
+	font-family: var(--font-family-mono);
+	white-space: nowrap;
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.vault-operations-preview {
+	min-width: 0;
+}
+
+.vault-operations-preview .section-block-body {
+	grid-template-columns: minmax(0, 1fr);
+	display: grid;
+	gap: var(--space-3);
+}
+
+@media (max-width: 64rem) {
+	.vault-operations-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 40rem) {
+	.vault-operations-lookup .field-inline {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.vault-operations-fields,
+	.vault-operations-targets li {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.vault-operations-form .field-inline > input {
+	align-self: start;
+}
+
 /* Security pool UX fixes: next-action buttons, vault liquidation reasons, and the abbreviated vault address. */
 .pool-action-open {
 	display: inline-flex;

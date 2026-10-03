@@ -48,6 +48,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				awaitingForkContinuation: false,
 				canonicalVaultCount: '1',
 				coordinator,
+				vaultOperations: address(70),
 				currentMintingCapacityAttoEth: (10n ** 19n).toString(),
 				escalationCanTriggerOwnFork: false,
 				escalationForkContinuation: false,

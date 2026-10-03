@@ -459,6 +459,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return true
 				case 'getRequestPriceCostAttoEth':
 					return 8n * callBaseFee + 101n
+				case 'vaultOperations':
+					return address(70)
 				case 'settlementTime':
 					return 100n
 				case 'lastPrice':
@@ -1464,7 +1466,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(forkMigrationWindowIsOpen(1n, 0n, activation)).toBe(false)
 	})
 
-	test('marks a staged liquidation executable only after exact coordinator-context simulation', async () => {
+	test('marks a staged liquidation executable only after exact executor-context simulation', async () => {
 		const fixture = snapshotFixture()
 		const fixturePool = fixture.pools[0]
 		if (fixturePool === undefined) throw new Error('Pool fixture missing')
@@ -1576,7 +1578,7 @@ describe('anchored ecosystem discovery', () => {
 		const executable = await discoverStagedOperations(client, pool, anchor, 10, [])
 		expect(executable[0]?.executionExpectedSuccess).toBe(true)
 		expect(executable[0]?.executionExpectedResult).toBe(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [80n, 20n, 0n]))
-		expect(simulations[0]?.account).toBe(pool.coordinator)
+		expect(simulations[0]?.account).toBe(pool.vaultOperations)
 		expect(simulations[0]?.blockNumber).toBe(anchor)
 		expect(simulations[0]?.functionName).toBe('performLiquidation')
 		expect(simulations[0]?.args?.[0]).toMatchObject({ minimumReceiverHealthFactorBps: 12_000n, operationId: 42n, requestedDebtAttoEth: 80n })
@@ -1685,7 +1687,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(executable[0]).toMatchObject({ executionExpectedResult: '0x', executionExpectedSuccess: true, operation: operationType })
 		expect(executable).toHaveLength(2)
 		expect(pageRequests).toEqual([[0n, 2n]])
-		expect(simulations[0]).toMatchObject({ account: pool.coordinator, args: [fixture.wallet.address, 100n], functionName: operationType === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit' })
+		expect(simulations[0]).toMatchObject({ account: pool.vaultOperations, args: [fixture.wallet.address, 100n], functionName: operationType === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit' })
 		simulationFailure = new Error('execution reverted: stale withdrawal')
 		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
 		simulationFailure = new Error('RPC connection closed')

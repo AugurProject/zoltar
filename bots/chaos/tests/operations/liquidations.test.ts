@@ -85,18 +85,19 @@ describe('safe liquidation operations', () => {
 
 		const pool = withdrawal.snapshot.pools[0]
 		if (pool === undefined) throw new Error('Withdrawal pool missing')
+		expect(withdrawalCall.caller).toBe(pool.vaultOperations)
 		pool.lastOracleSettlementTimestamp = (BigInt(withdrawal.snapshot.anchor.timestamp) - 240n).toString()
 		pool.oraclePriceValid = true
 		expect(urgentOperationPlans(withdrawal.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
 	})
 
-	test('plans manual target adjustments with an exact coordinator-context preflight', () => {
+	test('plans manual target adjustments with an exact executor-context preflight', () => {
 		const { snapshot, pool, staged } = stagedFixture(2)
 		staged.amount = '30000'
 		const plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')
 		const preflight = plan?.steps[0]?.preflightCalls?.[0]
 		if (preflight === undefined) throw new Error('Target adjustment preflight missing')
-		expect(preflight.caller).toBe(pool.coordinator)
+		expect(preflight.caller).toBe(pool.vaultOperations)
 		expect(decodeFunctionData({ abi: securityPoolAbi, data: preflight.data })).toEqual({ args: [snapshot.wallet.address, 30_000n], functionName: 'setVaultUnderwritingLimit' })
 		expect(canonicalLifecyclePresence(snapshot, options).some(item => item.definitionId === 'statoblast.staged.execute' && item.blocksNovelty)).toBe(true)
 		staged.executionExpectedSuccess = false

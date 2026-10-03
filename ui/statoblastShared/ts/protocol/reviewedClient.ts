@@ -11,7 +11,7 @@ import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/t
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 
-async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
+async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
 	const details: TransactionStepDetails = {
 		proposedRepPerEthPrice: preview.functionName === 'requestPrice' && typeof preview.args?.[0] === 'bigint' ? preview.args[0] : undefined,
@@ -66,7 +66,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		details.amount = formatValueWithUnit(formatApprovalAmount(amount), symbol)
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
-			details.approval = { requiredAmount: requiredApprovalAmount, recommendedAmount: amount > requiredApprovalAmount ? amount : undefined, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
+			details.approval = { purpose: preview.approvalPurpose, requiredAmount: requiredApprovalAmount, recommendedAmount: amount > requiredApprovalAmount ? amount : undefined, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
 			details.amount = formatValueWithUnit(formatApprovalAmount(requiredApprovalAmount), symbol)
 		}
 	} catch (error) {
@@ -79,6 +79,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 	let controller = createTransactionStepController(signal, false)
 	const prepareInForm = isTransactionPreparationScope(signal)
 	const environment = createActiveEnvironmentGuard()
+	const requiresReview = () => prepareInForm || (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0
@@ -89,14 +90,14 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		if (!initialized) {
 			if (plan === undefined) throw new Error('Missing transaction plan.')
 			// Multi-transaction actions expose a separate control for every write, including the first funding step.
-			controller = createTransactionStepController(signal, plan.length > 1)
+			controller = createTransactionStepController(signal, plan.length > 1 || plan.some(step => step.requireReview))
 			controller.setPlan(
 				await Promise.all(
 					plan.map(step =>
 						describeTransaction(
 							client,
 							{ account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step },
-							plan?.find(candidate => candidate.tokenFunding !== undefined && candidate.contractAddress === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
+							step.requiredApprovalAmount ?? plan?.find(candidate => candidate.tokenFunding !== undefined && (candidate.fundingSpender ?? candidate.contractAddress) === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
 						),
 					),
 				),
@@ -123,7 +124,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
-				selectedAmount = prepareInForm || plan.length > 1 ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
+				selectedAmount = requiresReview() ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
 			}
 			selectedFunding = undefined
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
@@ -131,7 +132,12 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				const [spender] = transaction.args ?? []
 				if (transaction.functionName !== 'approve' || typeof spender !== 'string' || selectedAmount < 0n || selectedAmount > maxUint256) throw new Error('Invalid token approval selection.')
 				approvalArgs = [getAddress(spender), selectedAmount]
-				const requiredAmount = plan?.flatMap(step => step.tokenFunding ?? []).find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
+				const requiredAmount =
+					expected.requiredApprovalAmount ??
+					plan
+						?.filter(step => (step.fundingSpender ?? step.contractAddress) === spender)
+						.flatMap(step => step.tokenFunding ?? [])
+						.find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
 				partialApproval = requiredAmount !== undefined && selectedAmount < requiredAmount
 				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
 			}
@@ -139,7 +145,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
+			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation' || transaction.functionName === 'submitVaultOperations') {
 				const gasPrice = await client.getGasPrice()
 				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
 				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
@@ -151,7 +157,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			}
 			const currentFunding = await expected.refreshFundingRequirements?.()
 			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
-				const spender = expected.contractAddress
+				const spender = expected.fundingSpender ?? expected.contractAddress
 				if (spender === undefined) throw new Error('Missing funding recipient.')
 				const [balance, allowance] = await Promise.all([
 					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
@@ -186,7 +192,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				controller.assertActive()
 				await validate()
 				await initialize()
-				selectedFunding = await controller.chooseFunding(requiredIndices, !prepareInForm && plan?.length === 1)
+				selectedFunding = await controller.chooseFunding(requiredIndices, !requiresReview() && plan?.length === 1)
 				stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
 				if (selectedFunding === undefined) return false
 				await execute(selectedFunding.index)

@@ -41,6 +41,8 @@ export type GlobalTransactionRow = {
 }
 
 export type TransactionIntent = {
+	/** False when the initiating workflow renders its own transaction status. */
+	showStatusDialog?: boolean
 	action: string
 	failedTitle?: ComponentChildren
 	requiresWalletConfirmation?: boolean | undefined
@@ -55,6 +57,7 @@ export type TransactionIntent = {
 }
 
 export type GlobalTransactionPresentation = {
+	showStatusDialog?: boolean
 	detail?: ComponentChildren
 	dismissKey?: string
 	hash?: Hash

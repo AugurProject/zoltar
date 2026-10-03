@@ -4,7 +4,7 @@ export const securityPoolContractReference: ContractReference = {
 	compiledAbiFingerprint: '08e3c1adfd5e6f2dd4f476f8f462bc7c2ca0e29ceeceb97c0009cd46bbb976d0',
 	name: 'SecurityPool',
 	delegatedInteractions:
-		'Vault owners set their [underwriting commitments](./glossary.html#underwriting-commitment) with `setUnderwritingLimit(limitAttoEth)` or coordinator operation `SetVaultUnderwritingLimit` (2). The coordinator-only fallback is `setVaultUnderwritingLimit(vault, limitAttoEth)`. Increases require fresh-price backing for the entire resulting underwriting commitment and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. Limits survive empty settlement epochs. `UnderwritingLimitSet` and accounting checkpoints report successful changes.',
+		'Vault owners set their [underwriting commitments](./glossary.html#underwriting-commitment) with `setUnderwritingLimit(limitAttoEth)` or coordinator operation `SetVaultUnderwritingLimit` (2). Only the immutable vault executor may use the fallback `setVaultUnderwritingLimit(vault, limitAttoEth)`. Increases require fresh-price backing for the entire resulting underwriting commitment and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. The executor may also deposit wallet REP through `depositRepToVaultFromExecutor(owner, amount)`, using the wallet allowance to this pool and preserving its commitment. Limits survive empty settlement epochs. `UnderwritingLimitSet` and accounting checkpoints report successful changes.',
 	purpose: 'Holds ETH [settlement collateral](./glossary.html#settlement-collateral) and REP underwriting, accounts for [vaults](./glossary.html#vault) and fees, mints [outcome shares](./glossary.html#outcome-share), and routes local escalation.',
 	readAbiFingerprint: '9a1fd89f52b252ecbe5f71586c5396279656674e65e3fcf13473f751fc270bc3',
 	readSurface:
@@ -198,7 +198,7 @@ export const securityPoolContractReference: ContractReference = {
 		},
 		{
 			call: '`withdrawRepFromVault(vault, amountAttoRep)`',
-			caller: "This pool's `OpenOraclePriceCoordinator` only",
+			caller: "This pool's immutable `VaultOperations` executor only",
 			effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; preserves the vault and aggregate underwriting commitments; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
 			declarations: [{ name: 'withdrawRepFromVault' }],
 			preconditions:
@@ -207,7 +207,7 @@ export const securityPoolContractReference: ContractReference = {
 		},
 		{
 			call: '`performLiquidation(request)`',
-			caller: "This pool's `OpenOraclePriceCoordinator` only",
+			caller: "This pool's immutable `VaultOperations` executor only",
 			effect:
 				'Transfers up to the requested ETH commitment from target to authorized receiver, conserving total commitments. REP awards are capped by available target backing. A sufficiently backed receiver can accept the full limit even when the nominal award is underfunded. Fees checkpoint first and remain with their earners; escalation claims remain with their owners. Residual commitments remain visible and continue earning fees. Liquidation creates no write-off.',
 			declarations: [{ name: 'performLiquidation' }],

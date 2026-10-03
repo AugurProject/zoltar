@@ -80,7 +80,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(tabList.getAttribute('data-size')).toBe('compact')
 		expect(tabList.compareDocumentPosition(objectHeader) & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
 		const tabs = within(tabList).getAllByRole('tab')
-		expect(tabs.map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
+		expect(tabs.map(tab => tab.textContent)).toEqual(['Vaults', 'Vault operations', 'Shares', 'Reporting'])
 		const workflowPanel = document.body.querySelector('.selected-pool-workflow-content')
 		if (!(workflowPanel instanceof HTMLElement)) throw new Error('Expected the selected-pool workflow panel')
 		expect(workflowPanel.getAttribute('role')).toBe('tabpanel')
@@ -163,7 +163,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tablist')).toBeNull()
 		expect(document.body.querySelectorAll('[role="tab"]')).toHaveLength(0)
-		for (const label of ['Vaults', 'Shares', 'Reporting']) {
+		for (const label of ['Vaults', 'Vault operations', 'Shares', 'Reporting']) {
 			expect(documentQueries.queryByText(label)).toBeNull()
 		}
 		expect(document.body.querySelector('.selected-pool-object-header')).toBeNull()

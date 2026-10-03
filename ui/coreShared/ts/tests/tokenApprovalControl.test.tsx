@@ -19,6 +19,33 @@ describe('TokenApprovalControl', () => {
 		},
 	})
 
+	for (const purpose of ['Vault deposit', 'Oracle report']) {
+		for (const completed of [false, true]) {
+			test(`keeps ${purpose} identifiable after approval: ${completed}`, async () => {
+				const rendered = await renderIntoDocument(
+					<TokenApprovalControl
+						actionLabel='Submit vault operations'
+						approvalPurpose={purpose}
+						allowanceError={undefined}
+						allowanceLoading={false}
+						approvedAmount={completed ? 1000n : 0n}
+						completedLabel={completed ? 'Approved' : undefined}
+						guardMessage={undefined}
+						onApprove={() => undefined}
+						pending={false}
+						pendingLabel='Approving REP'
+						requiredAmount={500n}
+						resetKey='purpose'
+						tokenSymbol='REP'
+						tokenUnits={0}
+					/>,
+				)
+				cleanupRenderedComponent = rendered.cleanup
+				expect(within(document.body).getByRole('textbox', { name: `${purpose}: REP approval amount` })).toBeTruthy()
+			})
+		}
+	}
+
 	test.each([
 		[1791988085676923080n, 18, '≈ 1.8', '1.79198808567692308'],
 		[1000000000000000001n, 18, '≈ 1.01', '1.000000000000000001'],

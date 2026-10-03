@@ -77,6 +77,26 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
 	})
 
+	void test('applies a confirmed vault pool total before the lineage refresh completes', async () => {
+		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const initial = createListedSecurityPool('0x01', selectedAddress)
+		const refresh = createDeferred<ListedSecurityPool[]>()
+		let reads = 0
+		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolLineage: async () => (++reads === 1 ? [initial] : await refresh.promise) }))
+		await act(async () => await state().loadSecurityPools(selectedAddress))
+		let pending: Promise<void> | undefined
+		await act(() => {
+			pending = state().refreshSecurityPools()
+		})
+		await act(() => state().updatePoolCommitment(selectedAddress, 388n * 10n ** 18n))
+		expect(state().securityPools[0]?.totalUnderwritingLimitAttoEth).toBe(388n * 10n ** 18n)
+		await act(async () => {
+			refresh.resolve([initial])
+			await pending
+		})
+		expect(state().securityPools[0]?.totalUnderwritingLimitAttoEth).toBe(388n * 10n ** 18n)
+	})
+
 	void test.each(['explicit load', 'background refresh'])('a slow lineage refresh never overwrites a newer %s', async newerRead => {
 		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const staleRefresh = createDeferred<ListedSecurityPool[]>()

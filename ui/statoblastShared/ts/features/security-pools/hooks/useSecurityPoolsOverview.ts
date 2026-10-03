@@ -122,6 +122,16 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return result !== undefined
 	}
 
+	/** Applies the pool total from a completed vault read while the full lineage refresh is still loading. */
+	const updatePoolCommitment = (address: string, totalUnderwritingLimitAttoEth: bigint) => {
+		const matchingPool = securityPools.value.find(pool => pool.securityPoolAddress.toLowerCase() === address.toLowerCase())
+		if (matchingPool === undefined || matchingPool.totalUnderwritingLimitAttoEth === totalUnderwritingLimitAttoEth) return
+		securityPoolsCommitVersion.current += 1
+		securityPools.value = securityPools.value.map(pool => (pool === matchingPool ? { ...pool, totalUnderwritingLimitAttoEth } : pool))
+		const queryKey = getLineageQueryKey(checkedSecurityPoolAddress.value)
+		if (queryKey !== undefined) securityPoolLineageQueries.set(queryKey, securityPools.value)
+	}
+
 	/** Re-reads the selected pool's lineage in place, keeping the loaded pools visible until the read lands. */
 	const refreshSecurityPools = async () => {
 		const address = checkedSecurityPoolAddress.value
@@ -456,6 +466,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		},
 		loadSecurityPools,
 		refreshSecurityPools,
+		updatePoolCommitment,
 		securityPoolsFreshness: { refreshing: lineageQuery?.fetching === true, updatedAt: lineageQuery?.updatedAt },
 	}
 }

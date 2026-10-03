@@ -130,6 +130,7 @@ export interface PoolSnapshot {
 	repToken: Address
 	shareToken: Address
 	coordinator: Address
+	vaultOperations: Address
 	escalationGame: Address
 	/** Canonical operational-resolution state used to classify inherited carry work. */
 	escalationResolved: boolean

@@ -86,7 +86,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	modifier onlyValidOracle() {
-		require(msg.sender == address(openOraclePriceCoordinator), 'Unauthorized');
+		require(msg.sender == address(openOraclePriceCoordinator.vaultOperations()), 'Unauthorized');
 		_requireValidPrice();
 		_;
 	}
@@ -283,7 +283,7 @@ contract SecurityPool is SecurityPoolStorage {
 		feeIndexRemainder = 0;
 	}
 
-	/// @notice Coordinator-only: withdraws up to `amountAttoRep` of REP to `vault` if the vault and pool stay backed.
+	/// @notice Executor-only: withdraws up to `amountAttoRep` of REP to `vault` if the vault and pool stay backed.
 	/// @dev Withdraws the vault's full backing when the remainder would fall below the minimum vault REP deposit.
 	function withdrawRepFromVault(address vault, uint256 amountAttoRep) external isOperational onlyValidOracle {
 		if (isEscalationResolved()) revert('Escalation resolved');
@@ -437,7 +437,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	// liquidating vault
 
-	/// @notice Coordinator-only: executes a staged liquidation, moving commitment and capped REP from the target to the receiver vault.
+	/// @notice Executor-only: executes a staged liquidation, moving commitment and capped REP from the target to the receiver vault.
 	/// @dev Liquidation transfers standing ETH commitment and a capped REP award. Residual commitments remain visible.
 	function performLiquidation(LiquidationRequest calldata request)
 		external
@@ -774,10 +774,10 @@ contract SecurityPool is SecurityPoolStorage {
 		require(msg.sender == securityPoolForker || msg.sender == truthAuction || msg.sender == address(parent), 'Bad ETH sender');
 	}
 
-	/// @notice Forwards the underwriting-limit, permit, and authorization vault operations to the operations delegate; rejects other selectors.
+	/// @notice Forwards depositRepToVaultFromExecutor, underwriting-limit, permit, and authorization vault operations to the operations delegate; rejects other selectors.
 	fallback() external {
 		bytes4 selector = msg.sig;
-		require(selector == SecurityPoolOperationsDelegate.setVaultUnderwritingLimit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector, 'Unsupported pool operation');
+		require(selector == SecurityPoolOperationsDelegate.depositRepToVaultFromExecutor.selector || selector == SecurityPoolOperationsDelegate.setVaultUnderwritingLimit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector, 'Unsupported pool operation');
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, msg.data);
 	}
 }
