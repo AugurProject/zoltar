@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { expectedSchemaLayout, schemaLayoutDifferences } from '../../src/schema-layout.ts'
-import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, pendingSchemaMigrations, runSchemaTransaction, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
+import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, pendingSchemaMigrations, runSchemaTransaction, type SupportedSchemaVersion, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
 
 // The PostgreSQL release that produced schema.sql; the policy module pins it as the only supported server.
 const SUPPORTED_POSTGRES_VERSION = '17.11'
@@ -17,23 +17,30 @@ test('accepts the PostgreSQL release used to generate the schema fingerprint acr
 test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
 	expect(schemaInitializationAction(undefined, [])).toBe('initialize')
 	expect(schemaInitializationAction(CURRENT_SCHEMA_VERSION, ['augurscan_schema', 'networks'])).toBe('current')
+	expect(schemaInitializationAction('4', ['augurscan_schema', 'networks'])).toBe('migrate-from-4')
 	expect(schemaInitializationAction('3', ['augurscan_schema', 'networks'])).toBe('migrate-from-3')
 	expect(schemaInitializationAction('2', ['augurscan_schema', 'networks'])).toBe('migrate-from-2')
 	expect(schemaInitializationAction('1', ['augurscan_schema', 'networks'])).toBe('migrate-from-1')
 })
 
 test('records every applied migration version when upgrading an older schema', () => {
-	const versions = (startingVersion: '1' | '2' | '3' | '4') => pendingSchemaMigrations(startingVersion).map(migration => [migration.version, migration.file])
+	const versions = (startingVersion: SupportedSchemaVersion) => pendingSchemaMigrations(startingVersion).map(migration => [migration.version, migration.file])
 	expect(versions('1')).toEqual([
 		['2', '002-historical-integrity.sql'],
 		['3', '003-indexer-ownership.sql'],
 		['4', '004-question-seconds.sql'],
+		['5', '005-invalidation-counts.sql'],
 	])
 	expect(versions('2')).toEqual([
 		['3', '003-indexer-ownership.sql'],
 		['4', '004-question-seconds.sql'],
+		['5', '005-invalidation-counts.sql'],
 	])
-	expect(versions('3')).toEqual([['4', '004-question-seconds.sql']])
+	expect(versions('3')).toEqual([
+		['4', '004-question-seconds.sql'],
+		['5', '005-invalidation-counts.sql'],
+	])
+	expect(versions('4')).toEqual([['5', '005-invalidation-counts.sql']])
 	expect(versions(CURRENT_SCHEMA_VERSION)).toEqual([])
 	expect(pendingSchemaMigrations('1').at(-1)?.version).toBe(CURRENT_SCHEMA_VERSION)
 })

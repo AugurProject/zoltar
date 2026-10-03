@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { apiFailureLog } from '../api-failure-log.ts'
 import { actionCatalog, contractCatalog, contractDetail, networkCatalog } from '../repositories/catalog.ts'
 import { addressIdentity, addressInteractions, addressTransactions } from './address-history.ts'
 import { directObservationsResponse } from './direct-observations.ts'
@@ -18,6 +19,7 @@ import { tradingCatalogResponse } from './trading-catalog.ts'
 import { tradingDetailResponse } from './trading-detail.ts'
 
 export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs = 48_000): Promise<Response | undefined> => {
+	const startedAt = performance.now()
 	const url = new URL(request.url)
 	if (request.method !== 'GET') return json({ error: 'Read-only API' }, 405)
 	try {
@@ -93,7 +95,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (error instanceof URIError) return json({ error: 'Invalid URI encoding' }, 400)
 		if (error instanceof ApiRequestError) return json({ error: error.message }, 400)
 		if (error instanceof ApiConflictError) return json({ error: error.message }, 409)
-		console.error(`augurScan API request failed (${error instanceof Error ? error.name : typeof error})`)
+		console.error(apiFailureLog(request, error, startedAt, 'request'))
 		return json({ error: 'Internal server error' }, 500)
 	}
 	return undefined
