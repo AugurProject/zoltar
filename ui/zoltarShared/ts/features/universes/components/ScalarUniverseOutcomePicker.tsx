@@ -6,7 +6,6 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { UniverseScalarPicker, resolveScalarUniverseSelection } from './UniverseScalarPicker.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -58,7 +57,6 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 		<div className='form-grid'>
 			<UniverseScalarPicker question={question} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} />
 			{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChild, detailIsLoading: true }} /> : undefined}
-			{outcomeIndex === undefined ? <UserMessage placement='field' tone='error' detail={copy.invalidScalarTick} /> : undefined}
 			<RetryableNotice message={current?.error} retryLabel={copy.formatRetryChildOutcome(label)} onRetry={() => setRefresh(count => count + 1)} />
 			<div className='actions'>
 				{outcome === undefined ? undefined : (

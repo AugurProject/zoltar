@@ -30,6 +30,7 @@ export function ZoltarMigrationWorkflow({ universeBrowserHref, accountState, act
 						onMigrateInternalRep={maxPreparationAttoRep => void operations.migrateInternalRep(maxPreparationAttoRep)}
 						onRetryMigrationBalances={() => void operations.loadZoltarForkAccess()}
 						onZoltarMigrationFormChange={update => operations.setZoltarMigrationForm(current => ({ ...current, ...update }))}
+						onScalarOutcomesChange={operations.selectScalarOutcomeIndexes}
 						pendingChildUniverseOutcomeIndex={operations.zoltarChildUniversePendingOutcomeIndex}
 						zoltarForkActiveAction={operations.zoltarForkActiveAction}
 						zoltarForkApproval={operations.zoltarForkApproval}

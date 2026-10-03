@@ -28,7 +28,6 @@ function ScalarOutcomePickerHarness() {
 			onSelectedTickChange={setSelectedTick}
 			selectedOutcomeLabel={isInvalid ? 'Invalid' : `Tick ${selectedTick}`}
 			selectedTick={selectedTick}
-			selectedTickLabel={isInvalid ? 'Invalid' : `${selectedTick} / 10`}
 		/>
 	)
 }
@@ -41,14 +40,13 @@ function ExactScalarOutcomePickerHarness() {
 
 	return (
 		<ScalarOutcomePicker
-			details={{ answerUnit: '', displayValueMax: 1n, displayValueMin: 0n, maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
+			details={{ answerUnit: '', displayValueMax: UNSAFE_TICK_COUNT * 10n ** 18n, displayValueMin: 0n, maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
 			isInvalid={false}
 			label='Select exact scalar target'
 			onInvalidChange={() => undefined}
 			onSelectedTickChange={setSelectedTick}
 			selectedOutcomeLabel={`Tick ${selectedTickValue.toString()}`}
 			selectedTick={selectedTick}
-			selectedTickLabel={selectedTick}
 		/>
 	)
 }
@@ -73,7 +71,8 @@ describe('ScalarOutcomePicker', () => {
 
 		expect(documentQueries.getByText('0 USD')).not.toBeNull()
 		expect(documentQueries.getByText('100 USD')).not.toBeNull()
-		expect(documentQueries.getByText('2 / 10')).not.toBeNull()
+		expect(documentQueries.queryByText('Selected tick')).toBeNull()
+		expect(documentQueries.queryByText('2 / 10')).toBeNull()
 		expect(slider.getAttribute('aria-valuetext')).toBe('Tick 2')
 
 		await act(() => {
@@ -82,7 +81,7 @@ describe('ScalarOutcomePicker', () => {
 			})
 		})
 
-		expect(documentQueries.getByText('7 / 10')).not.toBeNull()
+		expect(documentQueries.queryByText('7 / 10')).toBeNull()
 		expect(slider.value).toBe('7')
 		expect(slider.getAttribute('aria-valuetext')).toBe('Tick 7')
 
@@ -125,7 +124,7 @@ describe('ScalarOutcomePicker', () => {
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '75' } })
 		})
-		expect(slider.value).toBe('7')
+		expect(slider.value).toBe('0')
 		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
 		expect(documentQueries.queryByText('Enter a value on an increment.')).toBeNull()
 	})
@@ -155,27 +154,54 @@ describe('ScalarOutcomePicker', () => {
 		expect(documentQueries.queryByText('Enter a value between the minimum and maximum that falls on an increment.')).toBeNull()
 	})
 
-	test('uses a bigint-safe exact tick input when the native slider range is unsafe', async () => {
+	test('uses human values without exposing tick inputs or counts for enormous ranges', async () => {
 		const renderedComponent = await renderIntoDocument(<ExactScalarOutcomePickerHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		const q = within(document.body)
+		const scalarValueInput = q.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
+		expect(q.queryByRole('slider')).toBeNull()
+		expect(q.queryByRole('textbox', { name: 'Select exact scalar target' })).toBeNull()
+		expect(q.queryByText('Selected tick')).toBeNull()
+		expect(document.querySelector('.scalar-exact-tick-input')).toBeNull()
+		expect(scalarValueInput.value).toBe(UNSAFE_TICK_COUNT.toString())
+		await act(() => fireEvent.input(scalarValueInput, { target: { value: '25' } }))
+		expect(scalarValueInput.value).toBe('25')
+		await act(() => fireEvent.input(scalarValueInput, { target: { value: '-' } }))
+		expect(scalarValueInput.value).toBe('-')
+		expect(scalarValueInput.getAttribute('aria-invalid')).toBe('true')
+		await act(() => fireEvent.input(scalarValueInput, { target: { value: '26' } }))
+		expect(scalarValueInput.value).toBe('26')
+		expect(scalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
+	})
 
-		const exactInput = within(document.body).getByRole('textbox', { name: 'Select exact scalar target' }) as HTMLInputElement
-		const scalarValueInput = within(document.body).getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
-		expect(within(document.body).queryByRole('slider')).toBeNull()
-		expect(exactInput.value).toBe(UNSAFE_TICK_COUNT.toString())
-		expect(scalarValueInput.value).toBe('0.000000000000000001')
-
-		await act(() => {
-			fireEvent.input(exactInput, { target: { value: '-' } })
-		})
-		expect(exactInput.value).toBe('-')
-		expect(scalarValueInput.value).toBe('0.000000000000000001')
-
-		await act(() => {
-			fireEvent.input(exactInput, { target: { value: (UNSAFE_TICK_COUNT - 1n).toString() } })
-		})
-		expect(exactInput.value).toBe((UNSAFE_TICK_COUNT - 1n).toString())
-		expect(scalarValueInput.value).toBe('0')
+	test('accepts negative fractional values and rejects values between increments', async () => {
+		function FractionalHarness() {
+			const [selectedTick, setSelectedTick] = useState('50')
+			return (
+				<ScalarOutcomePicker
+					details={{ answerUnit: '°C', displayValueMin: -5n * 10n ** 18n, displayValueMax: 5n * 10n ** 18n, numTicks: 100n }}
+					isInvalid={false}
+					label='Temperature'
+					onInvalidChange={() => undefined}
+					onSelectedTickChange={setSelectedTick}
+					selectedOutcomeLabel='Temperature'
+					selectedTick={selectedTick}
+				/>
+			)
+		}
+		const view = await renderIntoDocument(<FractionalHarness />)
+		cleanupRenderedComponent = view.cleanup
+		const q = within(document.body)
+		const input = q.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
+		const slider = q.getByRole('slider', { name: 'Temperature' }) as HTMLInputElement
+		await act(() => fireEvent.input(input, { target: { value: '-2.5' } }))
+		expect(input.value).toBe('-2.5')
+		expect(slider.value).toBe('25')
+		await act(() => fireEvent.input(input, { target: { value: '-2.55' } }))
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		await act(() => fireEvent.input(input, { target: { value: '5' } }))
+		expect(slider.value).toBe('100')
+		expect(input.getAttribute('aria-invalid')).not.toBe('true')
 	})
 
 	test('maps both endpoints of a non-divisible scalar range to canonical ticks', async () => {
@@ -190,7 +216,6 @@ describe('ScalarOutcomePicker', () => {
 					onSelectedTickChange={setSelectedTick}
 					selectedOutcomeLabel={`Tick ${selectedTick}`}
 					selectedTick={selectedTick}
-					selectedTickLabel={`${selectedTick} / 3`}
 				/>
 			)
 		}

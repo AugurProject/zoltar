@@ -60,7 +60,7 @@ function ScalarTargets({ disabled, onToggle, question, selectedOutcomeIndexes, s
 	const [tickInput, setTickInput] = useState('0')
 	const [invalid, setInvalid] = useState(false)
 	const { details } = question
-	// The exact tick input is never clamped: an out-of-range tick is reported instead of silently moved.
+	// An invalid human value clears the candidate instead of selecting another outcome.
 	const tick = useMemo(() => {
 		const normalized = normalizeNumericInput(tickInput)
 		if (!/^\d+$/.test(normalized)) return undefined
@@ -72,12 +72,9 @@ function ScalarTargets({ disabled, onToggle, question, selectedOutcomeIndexes, s
 	else if (tick !== undefined) candidateOutcomeIndex = getScalarOutcomeIndex(details, tick)
 	const candidate = candidateOutcomeIndex === undefined ? undefined : question.resolveTarget(candidateOutcomeIndex)
 	const candidateSelected = candidate !== undefined && selectedSet.has(candidate.outcomeIndex.toString())
-	let candidateLabel = forkTargetCopy.exactTickPrompt
+	let candidateLabel = forkTargetCopy.scalarValuePrompt
 	if (invalid) candidateLabel = commonCopy.invalid
 	else if (tick !== undefined) candidateLabel = formatScalarOutcomeLabel(details, tick)
-	let selectedTickLabel = forkTargetCopy.exactTickPrompt
-	if (invalid) selectedTickLabel = commonCopy.invalid
-	else if (tick !== undefined) selectedTickLabel = commonCopy.formatSelectedTickLabel(tick.toString(), details.numTicks.toString())
 
 	return (
 		<div className='fork-target-scalar-picker'>
@@ -88,7 +85,6 @@ function ScalarTargets({ disabled, onToggle, question, selectedOutcomeIndexes, s
 						{candidateSelected ? forkTargetCopy.removeTarget : forkTargetCopy.addTarget}
 					</button>
 				}
-				clampExactTickInput={false}
 				details={{ answerUnit: details.answerUnit, displayValueMax: details.displayValueMax, displayValueMin: details.displayValueMin, maxValueLabel: formatScalarOutcomeLabel(details, details.numTicks), minValueLabel: formatScalarOutcomeLabel(details, 0n), numTicks: details.numTicks }}
 				disabled={disabled}
 				isInvalid={invalid}
@@ -97,7 +93,6 @@ function ScalarTargets({ disabled, onToggle, question, selectedOutcomeIndexes, s
 				onSelectedTickChange={setTickInput}
 				selectedOutcomeLabel={candidateLabel}
 				selectedTick={tickInput}
-				selectedTickLabel={selectedTickLabel}
 			/>
 			{question.deployedTargets.length === 0 ? undefined : (
 				<div className='fork-target-shortcuts'>

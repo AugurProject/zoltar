@@ -471,7 +471,13 @@ describe('MarketCreateQuestionSection', () => {
 		await act(() => {
 			fireEvent.input(slider, { target: { value: '5' } })
 		})
-		expect(document.body.textContent).toContain('5 / 90')
+		expect((within(document.body).getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement).value).toBe('1.5')
+		expect(within(document.body).queryByText('Selected tick')).toBeNull()
+		const valueInput = within(document.body).getByRole('textbox', { name: 'Scalar value' })
+		await act(() => fireEvent.input(valueInput, { target: { value: '1.55' } }))
+		expect(valueInput.getAttribute('aria-invalid')).toBe('true')
+		await act(() => fireEvent.input(valueInput, { target: { value: '2.5' } }))
+		expect(valueInput.getAttribute('aria-invalid')).not.toBe('true')
 	})
 
 	test('shows loading and missing-question detail states', async () => {

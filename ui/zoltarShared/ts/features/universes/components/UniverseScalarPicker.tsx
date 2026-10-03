@@ -6,11 +6,11 @@ import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/ui-core
 import * as copy from '../../../copy/universeNavigation.js'
 
 export function resolveScalarUniverseSelection(question: ScalarQuestionDetails, tickInput: string, invalid: boolean) {
-	if (invalid) return { outcomeIndex: 0n, label: commonCopy.invalid, tickLabel: commonCopy.invalid }
-	if (!/^\d+$/.test(tickInput)) return { outcomeIndex: undefined, label: commonCopy.none, tickLabel: tickInput }
+	if (invalid) return { outcomeIndex: 0n, label: commonCopy.invalid }
+	if (!/^\d+$/.test(tickInput)) return { outcomeIndex: undefined, label: commonCopy.none }
 	const tick = BigInt(tickInput)
-	if (tick > question.numTicks) return { outcomeIndex: undefined, label: commonCopy.none, tickLabel: tickInput }
-	return { outcomeIndex: getScalarOutcomeIndex(question, tick), label: formatScalarOutcomeLabel(question, tick), tickLabel: commonCopy.formatSelectedTickLabel(tick.toString(), question.numTicks.toString()) }
+	if (tick > question.numTicks) return { outcomeIndex: undefined, label: commonCopy.none }
+	return { outcomeIndex: getScalarOutcomeIndex(question, tick), label: formatScalarOutcomeLabel(question, tick) }
 }
 
 /** Controlled scalar selector shared by universe traversal and REP migration. */
@@ -31,10 +31,9 @@ export function UniverseScalarPicker({
 	disabled?: boolean
 	action?: ComponentChildren
 }) {
-	const { label, tickLabel } = resolveScalarUniverseSelection(question, tickInput, invalid)
+	const { label } = resolveScalarUniverseSelection(question, tickInput, invalid)
 	return (
 		<ScalarOutcomePicker
-			clampExactTickInput={false}
 			details={{ ...question, minValueLabel: formatScalarOutcomeLabel(question, 0n), maxValueLabel: formatScalarOutcomeLabel(question, question.numTicks) }}
 			disabled={disabled}
 			isInvalid={invalid}
@@ -43,7 +42,6 @@ export function UniverseScalarPicker({
 			onSelectedTickChange={onTickChange}
 			selectedOutcomeLabel={label}
 			selectedTick={tickInput}
-			selectedTickLabel={tickLabel}
 			action={action}
 		/>
 	)

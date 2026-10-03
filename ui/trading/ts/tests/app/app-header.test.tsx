@@ -93,8 +93,8 @@ describe('trading header', () => {
 		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Genesis')
 		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
 		expect(rendered.container.querySelector('main')?.style.getPropertyValue('--universe-band-light')).toContain('data:image/svg+xml')
-		expect(universeSwitcher?.querySelector('summary')?.getAttribute('aria-label')).toBe('Universe: Genesis. Switch universe')
-		expect(universeSwitcher?.querySelector('.universe-switcher-browse')?.getAttribute('href')).toContain('#/universe')
+		expect(universeSwitcher?.getAttribute('aria-label')).toBe('Universe: Genesis. Browse universes')
+		expect(universeSwitcher?.getAttribute('href')).toContain('#/universe')
 	})
 
 	test('rewrites a malformed or empty universe request to the discovered universe instead of keeping a value the routes ignore', async () => {
