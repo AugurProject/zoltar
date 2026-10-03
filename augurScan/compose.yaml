@@ -64,7 +64,8 @@ services:
       SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS: ${SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       LOG_SCAN_RANGE_SIZE: ${LOG_SCAN_RANGE_SIZE:-100000}
-      SCAN_BLOCK_TIME_MS: ${SCAN_BLOCK_TIME_MS:-12000}
+      # Passed through only when set, so an unset value keeps the per-network default.
+      SCAN_BLOCK_TIME_MS:
       TRACE_SELECTED_TRANSACTIONS: ${TRACE_SELECTED_TRANSACTIONS:-0}
       RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl
     volumes:

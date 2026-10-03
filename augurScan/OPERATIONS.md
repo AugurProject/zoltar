@@ -244,7 +244,7 @@ docker compose up --build --force-recreate --detach
 until curl --fail --silent --show-error "$AUGURSCAN_URL/health/ready"; do sleep 2; done
 ```
 
-If access control is enabled, export both credentials in the operator shell. This helper, for the manual requests in this guide, rejects a half-configured pair and keeps credentials out of the URL:
+If access control is enabled, export both credentials in the operator shell. This helper, for the manual requests in this guide, rejects a half-configured pair and keeps credentials out of the URL and the process arguments:
 
 ```bash
 augurscan_curl() {
@@ -253,7 +253,10 @@ augurscan_curl() {
       echo 'Set both AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD.' >&2
       return 2
     }
-    curl --user "$AUGURSCAN_ACCESS_USERNAME:$AUGURSCAN_ACCESS_PASSWORD" "$@"
+    local credentials="$AUGURSCAN_ACCESS_USERNAME:$AUGURSCAN_ACCESS_PASSWORD"
+    credentials=${credentials//\\/\\\\}
+    credentials=${credentials//\"/\\\"}
+    curl --config <(printf 'user = "%s"\n' "$credentials") "$@"
   else
     curl "$@"
   fi
