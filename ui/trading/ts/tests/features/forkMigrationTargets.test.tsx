@@ -91,22 +91,19 @@ describe('fork migration target selection', () => {
 		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .migration-outcome-label')).map(target => target.textContent)).toEqual(['-50 °C', '-25 °C', '0 °C', '25 °C', '50 °C', 'Invalid'])
 	})
 
-	test('rejects a scalar tick beyond the fork question range instead of silently changing it', async () => {
+	test('rejects a human value beyond the range without selecting another outcome', async () => {
 		const rendered = await renderIntoDocument(<Harness context={{ ...scalarContext(), numTicks: BigInt(Number.MAX_SAFE_INTEGER) + 1n }} />)
 		cleanup = rendered.cleanup
-		const tickInput = inputByLabel(rendered.container, 'Select scalar target')
-		const outOfRangeTick = (BigInt(Number.MAX_SAFE_INTEGER) + 2n).toString()
-		await input(tickInput, outOfRangeTick)
-		const selectedOutcomeLabel = Array.from(rendered.container.querySelectorAll('.metric-label')).find(label => label.textContent === 'Selected outcome')
-		const selectedOutcomeValue = selectedOutcomeLabel?.parentElement?.querySelector('.metric-field-value')
-
-		expect(tickInput.value).toBe(outOfRangeTick)
+		const valueInput = inputByLabel(rendered.container, 'Scalar value')
+		await input(valueInput, '51')
+		expect(valueInput.value).toBe('51')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()
-		expect(rendered.container.textContent).toContain('Enter an exact tick')
-		expect(selectedOutcomeValue?.textContent).toBe('Enter an exact tick')
-		await act(() => tickInput.dispatchEvent(new Event('blur', { bubbles: true })))
-		expect(tickInput.value).toBe(outOfRangeTick)
-		expect(selectedOutcomeValue?.textContent).toBe('Enter an exact tick')
+		expect(rendered.container.textContent).toContain('Enter a value between the minimum and maximum that falls on an increment.')
+		await act(() => valueInput.dispatchEvent(new Event('blur', { bubbles: true })))
+		expect(valueInput.value).toBe('51')
+		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()
+		await input(valueInput, '50')
+		expect(buttonByText(rendered.container, 'Add target').disabled).toBeFalse()
 	})
 
 	test('exposes selected child shortcuts without redundant candidate status copy', async () => {

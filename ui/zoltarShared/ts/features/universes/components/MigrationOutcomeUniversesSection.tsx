@@ -4,9 +4,7 @@ import { useEffect, useState } from 'preact/hooks'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { UniverseScalarPicker, resolveScalarUniverseSelection } from './UniverseScalarPicker.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
-import * as navigationCopy from '../../../copy/universeNavigation.js'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
@@ -75,7 +73,6 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 				</div>
 			) : undefined}
 			{scalarQuestion === undefined ? undefined : <UniverseScalarPicker question={scalarQuestion} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} disabled={disabled || pendingOutcomeIndex !== undefined} />}
-			{selection !== undefined && selection.outcomeIndex === undefined ? <UserMessage placement='field' tone='error' detail={navigationCopy.invalidScalarTick} /> : undefined}
 			{selection?.outcomeIndex !== undefined && selectedChild === undefined ? (
 				<div className='actions'>
 					<Badge tone={resolvingSelection ? 'loading' : 'muted'}>{resolvingSelection ? commonCopy.loading : commonCopy.notDeployed}</Badge>

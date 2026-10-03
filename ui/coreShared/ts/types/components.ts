@@ -282,11 +282,10 @@ export type OutcomeChipRowProps = {
 
 export type ScalarOutcomePickerProps = {
 	action?: ComponentChildren
-	clampExactTickInput?: boolean
 	details: {
 		answerUnit?: string
-		displayValueMax?: bigint
-		displayValueMin?: bigint
+		displayValueMax: bigint
+		displayValueMin: bigint
 		maxValueLabel?: ComponentChildren
 		minValueLabel?: ComponentChildren
 		numTicks: bigint
@@ -295,10 +294,10 @@ export type ScalarOutcomePickerProps = {
 	isInvalid: boolean
 	label: ComponentChildren
 	onInvalidChange: (invalid: boolean) => void
+	/** An empty tick clears the selection while a human value is invalid. */
 	onSelectedTickChange: (tick: string) => void
 	selectedOutcomeLabel: ComponentChildren
 	selectedTick: string
-	selectedTickLabel: ComponentChildren
 	showMinMax?: boolean
 }
 

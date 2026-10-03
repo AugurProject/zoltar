@@ -996,7 +996,8 @@ void describe('TradingSection', () => {
 			})
 		})
 
-		expect(modalQueries.getByText('7 / 10')).not.toBeNull()
+		expect((modalQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement).value).toBe('0.00000000000000007')
+		expect(modalQueries.queryByText('Selected tick')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(modalQueries.getByRole('button', { name: 'Add target' }))
