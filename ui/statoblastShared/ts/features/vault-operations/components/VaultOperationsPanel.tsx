@@ -28,6 +28,8 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 	const operationalFieldsDisabled = fieldsDisabled || model.resolved === true
 	const priceActions = model.input === undefined ? 0 : countVaultPriceActions(model.input)
 	const fresh = model.quote?.validPrice ?? model.manager?.isPriceValid ?? false
+	let actionHint: string | undefined = copy.limits
+	if (model.resolved) actionHint = (model.owned?.underwritingLimitAttoEth ?? 0n) > 0n ? copy.resolvedHint : undefined
 	let disabledReason: string | undefined
 	if (model.busy) disabledReason = copy.busyAction
 	else if (parameters.accountAddress === undefined) disabledReason = copy.noWallet
@@ -268,7 +270,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 							{copy.estimateHint} {fresh ? copy.freshFailure : copy.queuedFailure} {!fresh && (model.input?.depositAttoRep ?? 0n) > 0n ? copy.laterFailure : ''}
 						</p>
 					)}
-					{model.resolved ? <p className='detail'>{copy.resolvedHint}</p> : <p className='detail'>{copy.limits}</p>}
+					{actionHint === undefined ? undefined : <p className='detail'>{actionHint}</p>}
 					{model.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.error} />}
 					<TransactionActionButton
 						idleLabel={model.resolved ? copy.reviewCommitment : copy.review}
