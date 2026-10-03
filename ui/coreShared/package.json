@@ -1086,6 +1086,14 @@
 			"bun": "./ts/tests/app/appSettingsMenu.test.tsx",
 			"default": "./js/tests/app/appSettingsMenu.test.js"
 		},
+		"./components/UniverseIdentity.js": {
+			"bun": "./ts/components/UniverseIdentity.tsx",
+			"default": "./js/components/UniverseIdentity.js"
+		},
+		"./tests/universeIdentity.test.js": {
+			"bun": "./ts/tests/universeIdentity.test.tsx",
+			"default": "./js/tests/universeIdentity.test.js"
+		},
 		"./components/TransactionFundingActionsPlaceholder.js": {
 			"bun": "./ts/components/TransactionFundingActionsPlaceholder.tsx",
 			"default": "./js/components/TransactionFundingActionsPlaceholder.js"
