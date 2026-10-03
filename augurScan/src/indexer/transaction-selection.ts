@@ -1,23 +1,11 @@
 import { requestRpc, type PublicClient } from '../ethereum.ts'
 
-export const protocolCallDestination = (contract: { kind: string } | undefined): boolean => contract !== undefined && !['weth', 'usdc', 'multicall3', 'proxyDeployer', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'uniswapV2Pair', 'uniswapV3Pool'].includes(contract.kind)
-
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 
-export const relevantCallTrace = (value: unknown, targets: ReadonlySet<string>): boolean => {
-	if (!record(value)) return false
-	if (typeof value['to'] === 'string' && targets.has(value['to'].toLowerCase())) return true
-	if (typeof value['from'] === 'string' && targets.has(value['from'].toLowerCase())) return true
-	return Array.isArray(value['calls']) && value['calls'].some(call => relevantCallTrace(call, targets))
-}
-
-export const blockCallTraces = async (client: PublicClient, blockHash: string): Promise<readonly { hash: string; trace: Record<string, unknown> }[]> => {
-	const response = await requestRpc<unknown>(client.transport, { method: 'debug_traceBlockByHash', params: [blockHash, { tracer: 'callTracer', timeout: '15s' }] })
-	if (!Array.isArray(response)) throw new Error('Block call trace response is not an array')
-	return response.map(item => {
-		if (!record(item) || typeof item['txHash'] !== 'string' || !/^0x[\da-f]{64}$/i.test(item['txHash']) || !record(item['result'])) throw new Error('Block call trace is missing its transaction hash or result')
-		return { hash: item['txHash'].toLowerCase(), trace: item['result'] }
-	})
+export const transactionCallTrace = async (client: PublicClient, hash: string): Promise<Record<string, unknown>> => {
+	const response = await requestRpc<unknown>(client.transport, { method: 'debug_traceTransaction', params: [hash, { tracer: 'callTracer', timeout: '15s' }] })
+	if (!record(response)) throw new Error('Transaction call trace response is not an object')
+	return response
 }
 
 export const unsupportedTraceError = (error: unknown): boolean => {

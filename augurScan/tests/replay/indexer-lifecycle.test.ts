@@ -1884,10 +1884,13 @@ describe('network indexer lifecycle', () => {
 		const metadataQueryBlocks: bigint[] = []
 		const codeQueryBlocks: bigint[] = []
 		const headerQueryBlocks: bigint[] = []
+		const fullBlockQueryBlocks: bigint[] = []
+		let transactionQueryCount = 0
 		const rpcServer = Bun.serve({
 			port: 0,
 			fetch: async rpcRequest => {
 				const request = parseRpcRequestBody(await rpcRequest.json())
+				if (request.method === 'eth_getTransactionByHash') transactionQueryCount++
 				if (request.method === 'eth_getBalance') {
 					const blockNumber = BigInt(String(request.params?.[1]))
 					stateQueries.push(blockNumber)
@@ -1919,14 +1922,25 @@ describe('network indexer lifecycle', () => {
 					if (request.method === 'eth_getBlockByNumber') {
 						const blockNumber = BigInt(String(request.params?.[0]))
 						headerQueryBlocks.push(blockNumber)
+						if (request.params?.[1] === true) fullBlockQueryBlocks.push(blockNumber)
 						const blockHash = blockHashes.get(blockNumber)
 						if (blockHash === undefined) throw new Error(`Unexpected block ${blockNumber}`)
+						const transactions =
+							blockNumber === 11n
+								? eventless
+								: [
+										...new Map(
+											allLogs
+												.filter(log => BigInt(log.blockNumber) === blockNumber)
+												.map(log => [log.transactionHash, { blockHash: log.blockHash, blockNumber: log.blockNumber, from: sender, gas: '0x5208', hash: log.transactionHash, input: '0x', nonce: '0x0', to: log.address, transactionIndex: log.transactionIndex, type: '0x2', value: '0x0' }]),
+										).values(),
+									]
 						return {
 							hash: blockHash,
 							number: toHex(blockNumber),
 							parentHash: blockNumber === 10n ? hash('9') : blockHashes.get(blockNumber - 1n),
 							timestamp: toHex(1_700_000_000n + blockNumber),
-							transactions: blockNumber === 11n ? eventless : [],
+							transactions: request.params?.[1] === true ? transactions : transactions.map(transaction => transaction.hash),
 						}
 					}
 					if (request.method === 'eth_getLogs') {
@@ -2028,12 +2042,13 @@ describe('network indexer lifecycle', () => {
 			}
 			await Promise.all(startIndexers([network], database, controller.signal))
 			expect(error.mock.calls).toEqual([])
-			expect(storedBlocks.map(block => block.number)).toEqual([10n, 11n, 12n])
-			expect(headerQueryBlocks).toContain(11n)
-			expect(storedBlocks[1]?.transactions.map(tx => tx.status)).toEqual(['reverted', 'success', 'success'])
-			expect(storedBlocks[1]?.transactions[2]?.receipt).toMatchObject({ callTraceStatus: 'available', callTrace: { calls: [{ to: zoltarAddress }] } })
-			expect(storedBlocks[1]?.logs).toEqual([])
-			expect(storedBlocks[1]?.addressActivity).toContainEqual(expect.objectContaining({ transactionHash: hash('8'), address: zoltarAddress, role: 'referenced' }))
+			expect(storedBlocks.map(block => block.number)).toEqual([10n, 12n])
+			expect(headerQueryBlocks).not.toContain(11n)
+			expect(fullBlockQueryBlocks).toEqual([])
+			expect(transactionQueryCount).toBe(includePool ? 5 : 3)
+			expect(storedBlocks.flatMap(block => block.transactions).every(tx => tx.status === 'success')).toBe(true)
+			expect(storedBlocks.flatMap(block => block.transactions).every(tx => typeof tx.receipt === 'object' && tx.receipt !== null && Reflect.get(tx.receipt, 'callTraceStatus') === 'not-requested')).toBe(true)
+			expect(storedBlocks.flatMap(block => block.transactions).map(tx => tx.hash)).not.toContain(hash('8'))
 			if (includePool)
 				expect(storedBlocks[0]?.logs.map(log => [log.logIndex, log.decoded.name])).toEqual([
 					[0, 'DeployChild'],
@@ -2049,7 +2064,7 @@ describe('network indexer lifecycle', () => {
 			expect(rpcLogQueries.some(query => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
 			expect(rpcLogQueries.every(query => !query.addresses.includes(wethAddress))).toBe(true)
 			expect(stateQueries).toEqual([10n, 12n, 11n])
-			expect(metadataQueryBlocks).toEqual([11n])
+			expect(metadataQueryBlocks).toEqual([12n])
 			expect(codeQueryBlocks).toEqual([12n, 11n])
 			expect(codeQueryBlocks.every(blockNumber => blockNumber >= 11n)).toBe(true)
 			expect(recordContractDeployment.mock.calls[0]?.[3]).toMatchObject({ block: 12n, exact: true })

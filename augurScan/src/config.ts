@@ -158,6 +158,7 @@ export const runtimeConfig = {
 	logScanRangeSize: requirePositiveInteger(process.env['LOG_SCAN_RANGE_SIZE'] ?? '100000', 'LOG_SCAN_RANGE_SIZE'),
 	postgresUrl: process.env['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
 	rpcLogPath: resolveRpcLogPath(process.env['RPC_LOG_PATH']),
+	traceSelectedTransactions: process.env['TRACE_SELECTED_TRANSACTIONS'] === '1',
 	disableIndexer: process.env['DISABLE_INDEXER'] === '1',
 	accessCredentials: parseBasicAccessCredentials(process.env['AUGURSCAN_ACCESS_USERNAME'], process.env['AUGURSCAN_ACCESS_PASSWORD']),
 	apiRateLimitPerMinute: requirePositiveInteger(process.env['API_RATE_LIMIT_PER_MINUTE'] ?? '600', 'API_RATE_LIMIT_PER_MINUTE', true),
