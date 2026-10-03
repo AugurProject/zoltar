@@ -1401,17 +1401,6 @@ button.tx-action-wallet-fix {
 		max-width: 100%;
 		margin-top: var(--space-2);
 	}
-
-	/* The popover spans the viewport under its trigger instead of overflowing the left edge. */
-	.header-toolbar .universe-switcher-popover {
-		position: fixed;
-		top: auto;
-		right: 0.75rem;
-		left: 0.75rem;
-		width: auto;
-		max-width: calc(100vw - 1.5rem);
-		margin-top: 0.5rem;
-	}
 }
 
 /* Favorite star: bright and filled when favorited, a dim outline otherwise. The pressed state is also exposed through aria-pressed. */

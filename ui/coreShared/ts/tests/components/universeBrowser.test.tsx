@@ -226,6 +226,36 @@ describe('UniverseSwitcher', () => {
 		}
 	})
 
+	test('keeps the menu within the viewport and flips above a low trigger', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
+		const details = document.querySelector('details.universe-switcher')
+		const summary = details?.querySelector('summary')
+		const popover = details?.querySelector('.universe-switcher-popover')
+		if (!(details instanceof HTMLElement) || !(summary instanceof HTMLElement) || !(popover instanceof HTMLElement)) throw new Error('Expected the switcher and its menu')
+		Object.defineProperty(popover, 'scrollHeight', { value: 300 })
+		let triggerTop = 80
+		let triggerLeft = 0
+		summary.getBoundingClientRect = () => new window.DOMRect(triggerLeft, triggerTop, 100, 32)
+		popover.getBoundingClientRect = () => new window.DOMRect(0, 0, 240, 300)
+		details.setAttribute('open', '')
+		await act(async () => details.dispatchEvent(new Event('toggle')))
+		expect(popover.style.left).toBe('12px')
+		expect(popover.style.top).toBe('120px')
+		expect(Number.parseFloat(popover.style.maxHeight)).toBeLessThanOrEqual(window.innerHeight - 132)
+		triggerLeft = window.innerWidth - 40
+		window.dispatchEvent(new Event('resize'))
+		expect(Number.parseFloat(popover.style.left) + 240).toBe(window.innerWidth - 12)
+		triggerTop = window.innerHeight - 60
+		window.dispatchEvent(new Event('resize'))
+		expect(Number.parseFloat(popover.style.top)).toBe(triggerTop - 308)
+		window.dispatchEvent(new Event('scroll'))
+		expect(Number.parseFloat(popover.style.top)).toBe(triggerTop - 308)
+		Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: 195, height: 422, offsetLeft: 0, offsetTop: 0 } })
+		window.dispatchEvent(new Event('resize'))
+		expect(popover.style.minWidth).toBe('min(16rem, 171px)')
+		expect(popover.style.maxWidth).toBe('171px')
+	})
+
 	test('omits the child section for a universe that has not forked', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], hasForked: false })} />)).cleanup
 		expect(within(document.body).queryByText('Child universes')).toBeNull()

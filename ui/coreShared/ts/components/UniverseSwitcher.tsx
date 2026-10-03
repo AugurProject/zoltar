@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 import { formatUniverseLineageLabel, formatUniverseStepName, formatUniverseViewLabel } from '../lib/universeLineage.js'
@@ -14,6 +14,41 @@ type UniverseSwitcherProps = {
 	browseHref?: string | undefined
 	/** The loaded active universe; its lineage and deployed children are the switch targets. */
 	universe: Pick<ZoltarUniverseSummary, 'parentUniverseId' | 'outcomeLabel' | 'childUniverses' | 'hasForked' | 'lineage' | 'universeId' | 'relatedUniversesLoaded'> | undefined
+}
+
+/** Fit the disclosure to the visible viewport while keeping it beside its trigger. */
+function positionPopover(details: HTMLDetailsElement | null) {
+	if (details === null || !details.hasAttribute('open')) return
+	const summary = details.querySelector('summary')
+	const popover = details.querySelector('.universe-switcher-popover')
+	if (!(summary instanceof HTMLElement) || !(popover instanceof HTMLElement)) return
+	const viewport = window.visualViewport
+	const viewportLeft = viewport?.offsetLeft ?? 0
+	const viewportTop = viewport?.offsetTop ?? 0
+	const viewportWidth = viewport?.width ?? window.innerWidth
+	const viewportHeight = viewport?.height ?? window.innerHeight
+	const margin = 12
+	const gap = 8
+	const leftEdge = viewportLeft + margin
+	const topEdge = viewportTop + margin
+	const rightEdge = viewportLeft + viewportWidth - margin
+	const bottomEdge = viewportTop + viewportHeight - margin
+	const trigger = summary.getBoundingClientRect()
+	const availableWidth = Math.max(0, viewportWidth - 2 * margin)
+	popover.style.minWidth = `min(16rem, ${availableWidth}px)`
+	popover.style.maxWidth = `${availableWidth}px`
+	const width = popover.getBoundingClientRect().width
+	popover.style.left = `${Math.max(leftEdge, Math.min(trigger.right - width, rightEdge - width))}px`
+	const belowTop = Math.max(topEdge, Math.min(trigger.bottom + gap, bottomEdge))
+	const aboveBottom = Math.max(topEdge, Math.min(trigger.top - gap, bottomEdge))
+	const below = Math.max(0, bottomEdge - belowTop)
+	const above = Math.max(0, aboveBottom - topEdge)
+	const desiredHeight = Math.min(448, popover.scrollHeight + 2)
+	const openAbove = below < desiredHeight && above > below
+	const availableHeight = openAbove ? above : below
+	popover.style.maxHeight = `${Math.min(448, availableHeight)}px`
+	const height = popover.getBoundingClientRect().height
+	popover.style.top = `${openAbove ? Math.max(topEdge, aboveBottom - height) : belowTop}px`
 }
 
 /** Navigation follows one edge of the universe tree at a time. */
@@ -52,6 +87,26 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe, inclu
 			document.removeEventListener('pointerdown', onPointerDown)
 			window.removeEventListener('hashchange', close)
 			window.removeEventListener('popstate', close)
+		}
+	}, [])
+
+	useLayoutEffect(() => positionPopover(detailsRef.current))
+
+	useEffect(() => {
+		const reposition = () => positionPopover(detailsRef.current)
+		const details = detailsRef.current
+		details?.addEventListener('toggle', reposition)
+		window.addEventListener('resize', reposition)
+		window.addEventListener('scroll', reposition, true)
+		const viewport = window.visualViewport
+		viewport?.addEventListener('resize', reposition)
+		viewport?.addEventListener('scroll', reposition)
+		return () => {
+			details?.removeEventListener('toggle', reposition)
+			window.removeEventListener('resize', reposition)
+			window.removeEventListener('scroll', reposition, true)
+			viewport?.removeEventListener('resize', reposition)
+			viewport?.removeEventListener('scroll', reposition)
 		}
 	}, [])
 
