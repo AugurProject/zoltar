@@ -67,6 +67,7 @@ export function LiveTrading({
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
 	tradeSettings = DEFAULT_TRADE_SETTINGS,
+	onTradeSettingsChange,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -90,6 +91,8 @@ export function LiveTrading({
 	walletConnectRequestNonce?: number
 	/** Slippage and validity from the application Settings menu; every Trading transaction uses them. */
 	tradeSettings?: TradeSettings
+	/** Lets the trade ticket change the same settings in place; without it the ticket only points to the Settings menu. */
+	onTradeSettingsChange?: ((settings: TradeSettings) => void) | undefined
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -408,7 +411,17 @@ export function LiveTrading({
 								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 								{activeView === 'trade' && selectedPairInitialized ? (
-									<LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={ticketLocked} onOpenSettlement={marketOpen ? undefined : () => openView('settlement')} />
+									<LivePositionControls
+										market={selected}
+										nowSeconds={nowSeconds}
+										settings={tradeSettings}
+										onSettingsChange={onTradeSettingsChange}
+										ticket={position}
+										wallet={ticketWallet}
+										holdings={ticketHoldings}
+										externallyLocked={ticketLocked}
+										onOpenSettlement={marketOpen ? undefined : () => openView('settlement')}
+									/>
 								) : null}
 							</div>
 						</SectionBlock>

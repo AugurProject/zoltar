@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
-import { authoritativeQuoteMoved, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
+import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, ticketInputsAfterSelection, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
@@ -108,6 +108,25 @@ describe('trade ticket estimate', () => {
 		expect(estimate.quote.conditionalYesBpsAfter).toBeLessThan(estimate.quote.conditionalYesBpsBefore)
 	})
 
+	test('reports the profit a buy makes if its outcome wins, the fee in ETH, and the holding after the trade', () => {
+		const buy = ticketEstimateFor(market, 'entry', '1')
+		if (buy.kind !== 'entry') throw new Error('Expected a buy estimate')
+		const { payoutAttoEth, profitAttoEth, returnBps } = buyReturn(buy, market)
+		// One ETH backs one share here, so the payout is the Yes received and the profit is what it exceeds the ETH paid by.
+		expect(payoutAttoEth).toBe(buy.quote.totalLongShares)
+		expect(profitAttoEth).toBe(buy.quote.totalLongShares - eth)
+		expect(returnBps).toBe((profitAttoEth * 10_000n) / eth)
+		// A buy pays the fee in the opposite outcome, priced at 50% before the trade.
+		expect(poolFeeAttoEth(buy, market)).toBe(buy.quote.feeAmount / 2n)
+		expect(holdingAfterTrade(buy, balances)).toBe(balances.yes + buy.quote.totalLongShares)
+		expect(holdingAfterTrade(buy, undefined)).toBeUndefined()
+		const sell = ticketEstimateFor(market, 'exit', '2', { ...balances, invalid: 10n * shares })
+		expect(poolFeeAttoEth(sell, market)).toBe(sell.quote.feeAmount / 2n)
+		expect(holdingAfterTrade(sell, balances)).toBe(balances.yes - sell.quote.totalLongShares)
+		// A sale above the holding leaves nothing to report.
+		expect(holdingAfterTrade(sell, { ...balances, yes: shares })).toBeUndefined()
+	})
+
 	test('reports amounts too small to trade instead of an estimate', () => {
 		const expensive = liveMarketFixture({ shareTokenSupplyAttoShares: 1n, settlementCollateralAttoEth: eth })
 		expect(ticketModelFor(expensive, 'entry', '0.000000000000000001')).toMatchObject({ estimate: undefined, estimateProblem: ticketCopy.amountTooSmall })
@@ -148,13 +167,32 @@ describe('trade ticket inputs', () => {
 		expect(ticketModelFor(market, 'exit', '', { ...balances, yes: 0n }).shortcuts).toEqual([])
 	})
 
-	test('offers a buy Max that spends the wallet ETH less the gas reserve', () => {
-		const buyMax = (walletEthAttoEth: bigint | undefined) => tradeTicketModel({ ...ready, amount: '', walletEthAttoEth }).shortcuts
-		expect(buyMax(5n * eth)).toEqual([{ label: ticketCopy.max, value: 5n * eth - ETH_GAS_RESERVE_ATTO_ETH }])
-		// The amount is trimmed to eight decimals like the sell shortcuts, never above what can be spent.
-		expect(buyMax(5n * eth + 123_456_789n)).toEqual([{ label: ticketCopy.max, value: 5n * eth - ETH_GAS_RESERVE_ATTO_ETH }])
-		expect(buyMax(ETH_GAS_RESERVE_ATTO_ETH)).toEqual([])
-		expect(buyMax(undefined)).toEqual([])
+	test('offers buy shortcuts for 25%, 50%, and all of the wallet ETH less the gas reserve', () => {
+		const buyShortcuts = (walletEthAttoEth: bigint | undefined) => tradeTicketModel({ ...ready, amount: '', walletEthAttoEth }).shortcuts
+		const spendable = 5n * eth - ETH_GAS_RESERVE_ATTO_ETH
+		const expected = [
+			{ label: ticketCopy.quarter, value: spendable / 4n },
+			{ label: ticketCopy.half, value: spendable / 2n },
+			{ label: ticketCopy.max, value: spendable },
+		]
+		expect(buyShortcuts(5n * eth)).toEqual(expected)
+		// The amounts are trimmed to eight decimals like the sell shortcuts, never above what can be spent.
+		expect(buyShortcuts(5n * eth + 123_456_789n)).toEqual(expected)
+		expect(buyShortcuts(ETH_GAS_RESERVE_ATTO_ETH)).toEqual([])
+		expect(buyShortcuts(undefined)).toEqual([])
+	})
+
+	test('clears the amount when its unit changes and never carries an accepted price impact to another trade', () => {
+		const buyYes = { mode: 'entry', side: 'YES', amount: '0.5', acknowledgedImpactBps: 800n, requoteNotice: undefined } as const
+		// ETH buys either outcome, so the amount survives a side change on a buy; the acknowledgment named the other trade.
+		expect(ticketInputsAfterSelection(buyYes, { side: 'NO' })).toEqual({ ...buyYes, side: 'NO', acknowledgedImpactBps: undefined })
+		// 0.5 ETH must not become 0.5 shares.
+		expect(ticketInputsAfterSelection(buyYes, { mode: 'exit' })).toEqual({ ...buyYes, mode: 'exit', amount: '', acknowledgedImpactBps: undefined })
+		const sellYes = { ...buyYes, mode: 'exit' } as const
+		expect(ticketInputsAfterSelection(sellYes, { side: 'NO' })).toEqual({ ...sellYes, side: 'NO', amount: '', acknowledgedImpactBps: undefined })
+		expect(ticketInputsAfterSelection(sellYes, { mode: 'entry' }).amount).toBe('')
+		// Selecting what is already selected changes nothing.
+		expect(ticketInputsAfterSelection(buyYes, { mode: 'entry', side: 'YES' })).toBe(buyYes)
 	})
 })
 
@@ -175,6 +213,10 @@ describe('trade ticket model', () => {
 		expect(tradeTicketModel({ ...ready, amountSettling: true }).availability).toEqual({ disabled: true, loading: true, reason: ticketCopy.updatingEstimate })
 		expect(tradeTicketModel({ ...ready, amount: '' }).availability.reason).toBe(availabilityCopy.amountRequiredReason)
 		expect(tradeTicketModel({ ...ready, amount: '6' }).availability.reason).toBe(availabilityCopy.insufficientEthReason)
+		// The amount field says the same, so the cause sits next to the number that caused it.
+		expect(tradeTicketModel({ ...ready, amount: '6' }).insufficientReason).toBe(availabilityCopy.insufficientEthReason)
+		expect(tradeTicketModel({ ...ready, mode: 'exit', amount: '11' }).insufficientReason).toBe(availabilityCopy.formatInsufficientOutcomeReason('YES'))
+		expect(tradeTicketModel(ready).insufficientReason).toBeUndefined()
 		expect(tradeTicketModel({ ...ready, marketClosed: true }).availability.reason).toBe(ticketCopy.tradingEndedReason)
 		expect(tradeTicketModel({ ...ready, workflowLocked: true }).availability.reason).toBe(availabilityCopy.transactionInProgressReason)
 	})

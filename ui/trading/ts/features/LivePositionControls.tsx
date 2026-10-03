@@ -7,19 +7,21 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
+import { marketsCopy } from '../copy/markets.js'
+import { marketOddsPercent } from '../lib/marketListing.js'
+import { transactionInFlight } from './live/transactionPresentation.js'
 import { positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { TradeEstimatePanel } from './TradeEstimatePanel.js'
-import { probabilityPercent, roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
+import { roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
 import { useDebouncedValue } from './live/useDebouncedValue.js'
 
 const ESTIMATE_DEBOUNCE_MILLISECONDS = 250
@@ -91,6 +93,7 @@ export function LivePositionControls({
 	market,
 	nowSeconds,
 	settings,
+	onSettingsChange,
 	ticket,
 	wallet,
 	holdings,
@@ -100,6 +103,8 @@ export function LivePositionControls({
 	market: LiveMarket
 	nowSeconds: bigint
 	settings: TradeSettings
+	/** Lets the estimate change slippage and validity in place. */
+	onSettingsChange?: ((settings: TradeSettings) => void) | undefined
 	ticket: PositionTicket
 	wallet: TicketWallet
 	holdings: TicketBalances
@@ -136,6 +141,16 @@ export function LivePositionControls({
 	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
 	const requoted = state === 'error' && ticket.requoteNotice !== undefined
+	const odds = marketOddsPercent(market)
+	const selectMode = (next: TradeMode) => {
+		ticket.setMode(next)
+		// Selling starts on the outcome the wallet holds, instead of an empty holding of the outcome last bought.
+		const held = side === 'YES' ? holdings.balances?.yes : holdings.balances?.no
+		const otherHeld = side === 'YES' ? holdings.balances?.no : holdings.balances?.yes
+		if (next === 'exit' && held === 0n && otherHeld !== undefined && otherHeld > 0n) ticket.setSide(side === 'YES' ? 'NO' : 'YES')
+	}
+	const submit = () => void ticket.submit(estimate)
+	const canSubmit = walletStep === undefined && !model.availability.disabled && !transactionInFlight(state)
 	return (
 		<div className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
@@ -151,8 +166,6 @@ export function LivePositionControls({
 					}
 				/>
 			) : null}
-			{/* The reading column shows the resting odds; the ticket adds the bar only to preview how this trade moves them. */}
-			{estimate === undefined ? null : <ProbabilityBar yesPercent={probabilityPercent(estimate.quote.conditionalYesBpsAfter)} beforePercent={probabilityPercent(estimate.quote.conditionalYesBpsBefore)} />}
 			<div className='trade-ticket-switchers'>
 				<ViewTabs
 					ariaLabel={ticketCopy.tradeDirection}
@@ -160,14 +173,14 @@ export function LivePositionControls({
 					variant='segmented'
 					size='compact'
 					value={mode}
-					onChange={ticket.setMode}
+					onChange={selectMode}
 					options={[
 						{ value: 'entry', label: ticketCopy.buy, disabled: controlsDisabled },
 						{ value: 'exit', label: ticketCopy.sell, disabled: controlsDisabled },
 					]}
 				/>
 				<ViewTabs
-					ariaLabel={workflowCopy.outcome}
+					ariaLabel={odds === undefined ? workflowCopy.outcome : ticketCopy.outcomeWithOdds}
 					className='outcome-picker'
 					semantics='switcher'
 					variant='segmented'
@@ -175,8 +188,8 @@ export function LivePositionControls({
 					value={side}
 					onChange={ticket.setSide}
 					options={[
-						{ value: 'YES', label: workflowCopy.yes, disabled: controlsDisabled },
-						{ value: 'NO', label: workflowCopy.no, disabled: controlsDisabled },
+						{ value: 'YES', label: odds === undefined ? workflowCopy.yes : marketsCopy.outcomeOdds(workflowCopy.yes, odds.yes), disabled: controlsDisabled },
+						{ value: 'NO', label: odds === undefined ? workflowCopy.no : marketsCopy.outcomeOdds(workflowCopy.no, odds.no), disabled: controlsDisabled },
 					]}
 				/>
 			</div>
@@ -190,9 +203,12 @@ export function LivePositionControls({
 					inputMode='decimal'
 					autoComplete='off'
 					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
-					error={model.amountError}
+					error={model.amountError ?? model.insufficientReason}
 					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
+					onKeyDown={event => {
+						if (event.key === 'Enter' && canSubmit) submit()
+					}}
 				/>
 			</FormField>
 			{model.shortcuts.length === 0 ? null : (
@@ -206,19 +222,19 @@ export function LivePositionControls({
 			)}
 			<InvalidCoverageExplanation model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
 			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
-			<QuotedTransactionPanel
-				phase={state}
-				actionLabel={model.actionLabel}
-				availability={model.availability}
-				statusText={confirmedText}
-				transactionHash={ticket.positionHash}
-				receiptWarning={ticket.positionReceiptWarning}
-				error={requoted ? undefined : ticket.message}
-				walletStep={walletStep}
-				onSubmit={() => void ticket.submit(estimate)}
-			>
+			<QuotedTransactionPanel phase={state} actionLabel={model.actionLabel} availability={model.availability} statusText={confirmedText} transactionHash={ticket.positionHash} receiptWarning={ticket.positionReceiptWarning} error={requoted ? undefined : ticket.message} walletStep={walletStep} onSubmit={submit}>
 				{estimate === undefined || model.impactTier === undefined ? null : (
-					<TradeEstimatePanel estimate={estimate} market={market} settings={settings} impactTier={model.impactTier} impactAcknowledged={model.impactAcknowledged} disabled={controlsDisabled} onAcknowledgeImpact={checked => ticket.setAcknowledgedImpactBps(checked ? estimate.impactBps : undefined)} />
+					<TradeEstimatePanel
+						estimate={estimate}
+						market={market}
+						settings={settings}
+						balances={holdings.balances}
+						onSettingsChange={onSettingsChange}
+						impactTier={model.impactTier}
+						impactAcknowledged={model.impactAcknowledged}
+						disabled={controlsDisabled}
+						onAcknowledgeImpact={checked => ticket.setAcknowledgedImpactBps(checked ? estimate.impactBps : undefined)}
+					/>
 				)}
 			</QuotedTransactionPanel>
 		</div>

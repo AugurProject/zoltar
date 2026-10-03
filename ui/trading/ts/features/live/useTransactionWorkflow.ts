@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'preact/hooks'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import * as workflowCopy from '../../copy/workflows.js'
+import { ticketInputsAfterSelection } from './tradeTicketModel.js'
 import { transactionMarketKey } from './transactionWorkflow.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
 
@@ -43,6 +44,12 @@ export function useTransactionWorkflow({
 	const [ticketInputs, setTicketInputs] = useState<Readonly<Record<string, TicketInputs>>>({})
 	const inputs = ticketInputs[currentMarket] ?? emptyTicketInputs
 	const updateInputs = (target: string, update: Partial<TicketInputs>) => setTicketInputs(current => ({ ...current, [target]: { ...(current[target] ?? emptyTicketInputs), ...update } }))
+	const selectTrade = (selection: Partial<Pick<TicketInputs, 'mode' | 'side'>>) =>
+		setTicketInputs(current => {
+			const previous = current[currentMarket] ?? emptyTicketInputs
+			const next = ticketInputsAfterSelection(previous, selection)
+			return next === previous ? current : { ...current, [currentMarket]: next }
+		})
 	const liquidityWorkflowLockedRef = useRef(false)
 	const knownReceiptRef = useRef<() => void>(() => undefined)
 	// The ref answers synchronous checks inside callbacks; the state re-renders the tickets when a lock changes.
@@ -84,8 +91,8 @@ export function useTransactionWorkflow({
 
 	return {
 		...inputs,
-		setMode: (mode: TradeMode) => updateInputs(currentMarket, { mode }),
-		setSide: (side: 'YES' | 'NO') => updateInputs(currentMarket, { side }),
+		setMode: (mode: TradeMode) => selectTrade({ mode }),
+		setSide: (side: 'YES' | 'NO') => selectTrade({ side }),
 		setAmount: (amount: string) => updateInputs(currentMarket, { amount }),
 		setAcknowledgedImpactBps: (acknowledgedImpactBps: bigint | undefined) => updateInputs(currentMarket, { acknowledgedImpactBps }),
 		/** Clears the amount a confirmed trade used on its own market, whichever market is on screen by then. */
