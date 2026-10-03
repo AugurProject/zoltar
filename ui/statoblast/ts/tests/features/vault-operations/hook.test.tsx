@@ -85,9 +85,11 @@ describe('vault operations lifecycle', () => {
 		await act(() => {
 			submission = first.state().submit()
 		})
+		first.poolChanged.mockClear()
 		await first.cleanup()
 		write.resolve(confirmed)
 		await submission
+		expect(first.poolChanged).not.toHaveBeenCalled()
 		const second = await mount(deps, first.key)
 		await waitFor(() => expect(second.state().loading).toBe(false))
 		expect(second.state().result?.hash).toBe(confirmed.hash)

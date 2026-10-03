@@ -224,7 +224,7 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 					session.presentedTerminal = false
 					draft.value = emptyVaultOperationsDraft()
 					refresh()
-					onPoolChanged()
+					if (active.current) onPoolChanged()
 					let title = copy.confirmedDeposit
 					if (next.stagedExecution?.success === true) title = copy.success
 					else if (next.queuedOperation !== undefined) title = copy.awaiting
