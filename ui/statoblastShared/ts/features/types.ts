@@ -235,6 +235,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	extraReadinessActions?: Omit<ReadinessAction, 'title'>[]
 	modalFirst?: boolean
 	onViewPriceOracle?: () => void
+	showIndividualActions?: boolean
 	onViewStagedOperations?: () => void
 	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined

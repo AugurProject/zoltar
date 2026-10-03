@@ -101,7 +101,10 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 			traces.append(node('h3', '', 'Calls and ETH value flows'))
 			const calls = callTraceRows(receipt['callTrace'])
 			for (const call of calls) traces.append(node('p', 'data-note', call))
-			if (calls.length === 0) traces.append(node('p', 'data-note', 'Call traces unavailable for this transaction. Transaction value is an attempted value for reverted transactions.'))
+			if (calls.length === 0) {
+				const unavailable = receipt['callTraceStatus'] === 'not-requested' ? 'Call traces were not requested for this transaction.' : 'Call traces unavailable for this transaction.'
+				traces.append(node('p', 'data-note', record['status'] === 'reverted' ? `${unavailable} Transaction value is an attempted value for reverted transactions.` : unavailable))
+			}
 			summary.append(traces)
 		}
 		const rows = result[kind === 'tx' ? 'logs' : 'transactions']

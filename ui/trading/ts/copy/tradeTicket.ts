@@ -57,6 +57,10 @@ export function sellOutcome(outcome: 'YES' | 'NO') {
 	return `Sell ${outcomeLabel(outcome)}`
 }
 
+export function profitIfWins(outcome: 'YES' | 'NO') {
+	return `Profit if ${outcomeLabel(outcome)} wins`
+}
+
 export function holdingAfter(outcome: 'YES' | 'NO') {
 	return `${outcomeLabel(outcome)} after trade`
 }

@@ -8,7 +8,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { TradeSettingsPanel } from '../components/TradeSettingsPanel.js'
 import { formatRoundedUnits } from '../lib/format.js'
-import { averagePriceBps, formatCompleteSetQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
+import { averagePriceBps, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
@@ -19,6 +19,8 @@ import { buyReturn, holdingAfterTrade, poolFeeAttoEth, probabilityPercent, type 
 
 // Six digits keep small trades' estimate and slippage minimum distinguishable.
 const ESTIMATE_DIGITS = 6
+// Payouts beside share amounts show four digits; the profit derived from one matches it.
+const PAYOUT_DIGITS = 4
 
 function formatImpactPercent(impactBps: bigint) {
 	return formatTrimmedUnits(impactBps, 2, 2)
@@ -50,19 +52,13 @@ function formatEstimateEth(amountAttoEth: bigint) {
 	return `${formatRoundedUnits(amountAttoEth, 18, ESTIMATE_DIGITS)} ${workflowCopy.eth}`
 }
 
-/** The payout if the bought outcome wins and the gain or loss it leaves against the ETH paid, at one precision so the two reconcile. */
-function BuyPayout({ estimate, market }: { estimate: Extract<TradeEstimate, { kind: 'entry' }>; market: LiveMarket }) {
-	const { payoutAttoEth, profitAttoEth, returnBps } = buyReturn(estimate, market)
-	const formatProfit = profitAttoEth < 0n ? payoutCopy.loss : payoutCopy.profit
-	return (
-		<>
-			<strong>{payoutCopy.conditionalPayout(formatEstimateEth(payoutAttoEth), estimate.side)}</strong>
-			{' · '}
-			{formatProfit(formatEstimateEth(absolute(profitAttoEth)), formatScaledPercentage(absolute(returnBps), 2, 1))}
-			{' · '}
-			{payoutCopy.otherwiseZero}
-		</>
-	)
+/**
+ * The gain or loss a winning buy leaves against the ETH paid, with the same figure as a return on that ETH. It uses the
+ * digits of the payout shown beside the shares received, so the two reconcile.
+ */
+function formatProfit({ profitAttoEth, returnBps }: { profitAttoEth: bigint; returnBps: bigint }) {
+	const format = profitAttoEth < 0n ? payoutCopy.loss : payoutCopy.gain
+	return format(`${formatRoundedUnits(absolute(profitAttoEth), 18, PAYOUT_DIGITS)} ${workflowCopy.eth}`, formatScaledPercentage(absolute(returnBps), 2, 1))
 }
 
 /** The approximate fee, or the smallest shown amount as an upper bound when the fee rounds to nothing. */
@@ -103,9 +99,9 @@ export function TradeEstimatePanel({
 	const opposite = side === 'YES' ? 'NO' : 'YES'
 	const primary =
 		estimate.kind === 'entry'
-			? [{ label: ticketCopy.youReceiveEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS) }]
+			? [{ label: ticketCopy.youReceiveEstimate, value: `${formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS)} · ${payoutCopy.otherwiseZero}` }]
 			: [
-					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS) },
+					{ label: ticketCopy.youSellEstimate, value: formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS) },
 					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth) },
 				]
 	const average = averagePriceBps(estimate.kind === 'entry' ? estimate.payAttoEth : estimate.receiveAttoEth, quote.totalLongShares, market)
@@ -116,9 +112,9 @@ export function TradeEstimatePanel({
 		// A low price impact needs no attention, so it waits here until it reaches the caution tier.
 		...(impactTier === 'low' ? [impactRow] : []),
 		{ label: ticketCopy.poolFee, value: ticketCopy.poolFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market))) },
-		...(estimate.kind === 'entry' ? [{ label: ticketCopy.invalidInsurance, value: formatOutcomeQuantity(estimate.quote.invalidInsurance, shareOutcome.invalid) }] : []),
-		{ label: ticketCopy.completeSets, value: formatCompleteSetQuantity(quote.completeSetShares) },
-		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite) } : { label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side) },
+		...(estimate.kind === 'entry' ? [{ label: ticketCopy.invalidInsurance, value: formatOutcomeWithValue(estimate.quote.invalidInsurance, shareOutcome.invalid, market) }] : []),
+		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(quote.completeSetShares, market) },
+		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeWithValue(estimate.quote.oppositeSharesSwapped, opposite, market) } : { label: ticketCopy.swapped(side), value: formatOutcomeWithValue(estimate.quote.longSharesSwapped, side, market) },
 	]
 	return (
 		<section className='trade-estimate' aria-label={ticketCopy.estimateHeading}>
@@ -129,18 +125,18 @@ export function TradeEstimatePanel({
 				primary={primary}
 				details={[
 					{ label: ticketCopy.averagePrice, value: average === undefined ? '—' : formatScaledPercentage(average, 2) },
-					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
+					...(estimate.kind === 'entry' ? [{ label: ticketCopy.profitIfWins(side), value: formatProfit(buyReturn(estimate, market)) }] : []),
+					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeWithValue(estimate.minimumLongShares, side, market, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
 					// A sale spends Invalid shares, so what it uses stays in view; the Invalid a buy adds is a detail.
-					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.quote.invalidRequired, shareOutcome.invalid) }] : []),
+					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeWithValue(estimate.quote.invalidRequired, shareOutcome.invalid, market) }] : []),
 					...(impactTier === 'low' ? [] : [impactRow]),
-					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.holdingAfter(side), value: formatOutcomeQuantity(holdingAfter, side) }]),
+					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.holdingAfter(side), value: formatOutcomeWithValue(holdingAfter, side, market) }]),
 				]}
 			/>
 			<p className='visually-hidden' role='status'>
 				{ticketCopy.priceImpactTierAnnouncement(impactTier)}
 			</p>
 			<ImpactNotice tier={impactTier} impactBps={estimate.impactBps} acknowledged={impactAcknowledged} disabled={disabled} onAcknowledge={onAcknowledgeImpact} />
-			{estimate.kind === 'entry' ? <UserMessage className='detail payout-note' detail={<BuyPayout estimate={estimate} market={market} />} /> : null}
 			<ReadOnlyDetailAccordion title={ticketCopy.moreDetails}>
 				<DataGrid dense>
 					{detailRows.map(row => (

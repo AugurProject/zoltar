@@ -7,7 +7,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
+import { formatOutcomeWithValue, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -61,24 +61,24 @@ export type TicketBalances = Readonly<{
 	retry(): Promise<void>
 }>
 
-function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined) {
+function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined, market: LiveMarket) {
 	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : ticketCopy.walletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
 	// The sellable amount only needs saying when INVALID coverage or pool depth holds it below the holding.
-	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeQuantity(holding, side, 4, 'down'))
-	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side, 4, 'down'), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
+	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeWithValue(holding, side, market, 4, 'down'))
+	return ticketCopy.sellableHint(formatOutcomeWithValue(holding, side, market, 4, 'down'), formatOutcomeWithValue(model.sellable, side, market, 4, 'down'))
 }
 
-function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { model: TradeTicketModel; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
+function InvalidCoverageExplanation({ model, side, disabled, onUseSellable, market }: { model: TradeTicketModel; market: LiveMarket; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
 	if (model.shortfall === undefined) return null
 	const sellable = model.sellable ?? 0n
 	return (
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
-			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid), formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid), formatOutcomeQuantity(sellable, side, 4, 'down'), side)}</p>
+			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeWithValue(model.shortfall.invalidRequired, shareOutcome.invalid, market), formatOutcomeWithValue(model.shortfall.invalidHeld, shareOutcome.invalid, market), formatOutcomeWithValue(sellable, side, market, 4, 'down'), side)}</p>
 			{sellable > 0n ? (
 				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable), SHARE_QUANTITY_DECIMALS))}>
-					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down'))}
+					{ticketCopy.sellInsteadAction(formatOutcomeWithValue(sellable, side, market, 4, 'down'))}
 				</button>
 			) : null}
 		</WarningSurface>
@@ -204,7 +204,7 @@ export function LivePositionControls({
 					autoComplete='off'
 					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
 					error={model.amountError ?? model.insufficientReason}
-					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth)}
+					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth, market)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
 					onKeyDown={event => {
 						if (event.key === 'Enter' && canSubmit) submit()
@@ -220,7 +220,7 @@ export function LivePositionControls({
 					))}
 				</div>
 			)}
-			<InvalidCoverageExplanation model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
+			<InvalidCoverageExplanation market={market} model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
 			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
 			<QuotedTransactionPanel phase={state} actionLabel={model.actionLabel} availability={model.availability} statusText={confirmedText} transactionHash={ticket.positionHash} receiptWarning={ticket.positionReceiptWarning} error={requoted ? undefined : ticket.message} walletStep={walletStep} onSubmit={submit}>
 				{estimate === undefined || model.impactTier === undefined ? null : (

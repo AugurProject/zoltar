@@ -127,8 +127,8 @@ describe('trade ticket states', () => {
 		const container = await renderTicket(positionTicket({ amount: '0.5' }))
 		const visible = container.querySelector('.transaction-review-details')?.textContent
 		for (const phrase of ['Average price', 'Minimum received', 'Yes after trade']) expect(visible).toContain(phrase)
-		// The payout states the profit it leaves over the ETH paid, in one sentence.
-		expect(container.querySelector('.payout-note')?.textContent).toMatch(/^[\d.]+ ETH if Yes wins · \+[\d.]+ ETH profit \(\+[\d.]+%\) · 0 ETH otherwise$/)
+		// The profit is the payout shown beside the shares received less the ETH paid, with the return it makes.
+		expect(visible).toMatch(/Profit if Yes wins\+[\d.]+ ETH \(\+[\d.]+%\)/)
 		expect(visible).not.toContain('Price impact')
 		const details = container.querySelector('.trade-estimate details')?.textContent
 		for (const phrase of ['Price impact', 'Pool fee', '0.3% · ≈ 0.00', 'Invalid insurance', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)

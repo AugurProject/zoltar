@@ -40,14 +40,16 @@ describe('essential trading copy', () => {
 		const buy = ticketEstimateFor(market, 'entry', '1')
 		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n * 10n ** 18n, no: 0n, invalid: 10n * 10n ** 18n, lp: 0n })
 		const entry = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
-		for (const phrase of ['You receive ≈', 'Average price', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'Invalid insurance', 'ETH if Yes wins', 'profit (+', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
+		for (const phrase of ['You receive ≈', 'Average price', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'Invalid insurance', 'ETH if Yes wins', 'Profit if Yes wins', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
 		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
 		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()
 		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
 		for (const phrase of ['You sell', 'You receive ≈', 'Average price', 'Minimum received', 'Invalid used', 'Pool fee']) expect(exit.container.textContent).toContain(phrase)
-		expect(exit.container.textContent).not.toContain('if Yes wins')
+		expect(exit.container.textContent).toContain('2 Yes (1.9684 ETH if Yes wins)')
+		expect(exit.container.textContent).not.toContain('0 ETH otherwise')
+		expect(exit.container.textContent).not.toContain('Profit if Yes wins')
 		expect(exit.container.textContent).not.toContain('Holding fees reduce')
 	})
 

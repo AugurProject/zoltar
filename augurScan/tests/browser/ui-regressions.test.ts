@@ -6,7 +6,7 @@ import { clearRetryStatus, firstVisibleHeading, setTextIfChanged, tickRelativeTi
 import { createCanonicalState } from '../../browser/canonical-state.ts'
 import { renderExplorerPage } from '../../browser/explorer-page.ts'
 import { exactUnit } from '../../browser/format.ts'
-import { createForegroundRefreshGate, liveRecordsMatch, shouldPollRouteRefresh, streamReconnectDelay } from '../../browser/live-refresh.ts'
+import { createForegroundRefreshGate, liveRecordsMatch, shouldPollRouteRefresh, shouldRefreshRouteOnLiveEvent, streamReconnectDelay } from '../../browser/live-refresh.ts'
 import { nativeSymbolFor, unavailableNetworkNotice } from '../../browser/network-freshness.ts'
 import { networkIndicator } from '../../browser/network-indicator.ts'
 import { blockRangeError, filterFormDestination, operationsFailureMessage } from '../../browser/operations-presentation.ts'
@@ -72,6 +72,14 @@ test('the periodic poll leaves route refreshes to an event stream that is delive
 	expect(shouldPollRouteRefresh(true, undefined, 2_000, 12_000)).toBe(true)
 	expect(shouldPollRouteRefresh(true, 1_000, 2_000, 12_000)).toBe(false)
 	expect(shouldPollRouteRefresh(true, 1_000, 13_000, 12_000)).toBe(true)
+})
+
+test('integrity history skips block refreshes but accepts invalidations, periodic polls and empty-view retries', () => {
+	expect(shouldRefreshRouteOnLiveEvent('/operations/integrity', false, true)).toBe(false)
+	expect(shouldRefreshRouteOnLiveEvent('/operations/integrity/', false, true)).toBe(false)
+	expect(shouldRefreshRouteOnLiveEvent('/operations/integrity', true, true)).toBe(true)
+	expect(shouldRefreshRouteOnLiveEvent('/operations/integrity', false, false)).toBe(true)
+	expect(shouldRefreshRouteOnLiveEvent('/operations/reports', false, true)).toBe(true)
 })
 
 test('unchanged live records are recognised so their rows are not rebuilt', () => {
@@ -447,3 +455,16 @@ test("loading the registry keeps the entity search usable and never leaves anoth
 		},
 	)
 })
+
+for (const traceStatus of ['not-requested', 'unavailable'] as const) {
+	for (const status of ['success', 'reverted'] as const) {
+		test(`explorer distinguishes trace availability and attempted values (${traceStatus}, ${status})`, async () => {
+			await withBrowser('https://scanner.test/tx/0xabc?chainId=1', '<div id="explorer-content"></div>', async () => {
+				await renderExplorerPage('/tx/0xabc', '1', async () => ({ transaction: { hash: '0xabc', block_number: '1', block_timestamp: '2026-09-23T00:00:00Z', explorer_base_url: 'https://etherscan.io', value: '0', gas_used: '21000', status, receipt: { callTraceStatus: traceStatus } }, logs: [] }))
+				const text = document.querySelector('#explorer-content')?.textContent ?? ''
+				expect(text).toContain(traceStatus === 'not-requested' ? 'Call traces were not requested' : 'Call traces unavailable')
+				expect(text.includes('attempted value')).toBe(status === 'reverted')
+			})
+		})
+	}
+}

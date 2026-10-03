@@ -29,7 +29,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'trading',
 		scenario: 'trading-funded',
 		steps: [...openFirstMarket, { fill: 'You pay', value: '0.001' }, { waitForEnabled: 'Buy Yes' }],
-		expectText: ['Trade', 'Buy', 'Sell', 'You pay', 'You receive ≈', 'Average price', 'Minimum received', 'profit', 'Trade details', 'Buy Yes'],
+		expectText: ['Trade', 'Buy', 'Sell', 'You pay', 'You receive ≈', 'Average price', 'Profit if Yes wins', 'Minimum received', 'Trade details', 'Buy Yes'],
 		viewport: tallViewport,
 		crop: tradePanel,
 		usedBy: ['tutorials/trading-first-trade.html'],

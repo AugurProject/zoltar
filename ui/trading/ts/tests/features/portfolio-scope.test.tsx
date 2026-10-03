@@ -1,5 +1,6 @@
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { OutcomeHolding } from '../../features/OutcomeHolding.js'
+import { MarketPosition } from '../../features/MarketPosition.js'
 import { BackingDetails } from '../../features/BackingDetails.js'
 import { TradeEstimatePanel } from '../../features/TradeEstimatePanel.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
@@ -146,7 +147,7 @@ describe('live portfolio scope', () => {
 		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
 		await unavailable.cleanup()
 		const zero = await renderIntoDocument(<OutcomeHolding amount={0n} outcome='YES' market={valuedMarket} />)
-		expect(zero.container.textContent).toBe('0 Yes')
+		expect(zero.container.textContent).toBe('0 Yes (0 ETH)')
 		await zero.cleanup()
 	})
 
@@ -157,20 +158,73 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={valued} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('1.987158 Yes')
-		expect(rendered.container.textContent).toContain('1.955761 ETH if Yes wins')
-		expect(rendered.container.textContent).toContain('0 ETH otherwise')
-		expect(rendered.container.textContent?.match(/if Yes wins/g)).toHaveLength(1)
+		expect(rendered.container.textContent).toContain('1.9558 ETH if Yes wins')
+		expect(rendered.container.textContent).toContain('if Yes wins')
+		expect(rendered.container.textContent).toContain('Yes (1.9558 ETH if Yes wins)')
 		expect(rendered.container.textContent).not.toContain('sale')
 	})
 
-	test('discloses dated backing and a fee estimate clamped to the fee end', async () => {
+	test('shows only the holding fee estimate clamped to the fee end', async () => {
 		const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('details')?.open).toBe(false)
-		expect(rendered.container.textContent).toContain('Holding fee over next 30 days10%')
-		expect(rendered.container.textContent).toContain('stopping at the fee end date')
-		expect(rendered.container.textContent).toContain('Backing as of')
+		expect(rendered.container.querySelector('details')).toBeNull()
+		expect(rendered.container.textContent).toBe('Holding fee over next 30 days10%')
+		expect(rendered.container.textContent).not.toContain('Backing as of')
 	})
+
+	for (const [holdings, expected] of [
+		[{ yes: 5n, no: 5n, invalid: 15n, lp: 0n }, '10% · 0.25 ETH–0.75 ETH depending on outcome'],
+		[{ yes: 2n, no: 2n, invalid: 2n, lp: 0n }, '10% · 0.1 ETH'],
+		[{ yes: 0n, no: 0n, invalid: 0n, lp: 0n }, '10% · 0 ETH'],
+		[{ yes: 0n, no: 0n, invalid: 2n, lp: 1n }, '10% · 0.1 ETH–0.15 ETH depending on outcome'],
+	] as const) {
+		test(`shows the fee on wallet outcome holdings and LP claims: ${expected}`, async () => {
+			const valued = { ...market, shareTokenSupplyAttoShares: 2n * 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, yesReserve: 4n * 10n ** 18n, noReserve: 6n * 10n ** 18n, lpTotalSupply: 2n * 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }
+			const balances = { scope: shareBalanceScope(valued), yes: holdings.yes * 10n ** 18n, no: holdings.no * 10n ** 18n, invalid: holdings.invalid * 10n ** 18n, lp: holdings.lp * 10n ** 18n }
+			const rendered = await renderIntoDocument(<BackingDetails market={valued} balances={balances} />)
+			cleanupRendered = rendered.cleanup
+			expect(rendered.container.textContent).toBe(`Holding fee on your holdings over next 30 days${expected}`)
+		})
+	}
+
+	for (const [questionOutcome, projected, amount, expected] of [
+		[1, 9n * 10n ** 17n, 2n * 10n ** 18n, '10% · 0.2 ETH'],
+		[2, 9n * 10n ** 17n, 2n * 10n ** 18n, '10% · 0 ETH'],
+		[3, 10n ** 18n, 2n * 10n ** 18n, '0% · 0 ETH'],
+		[1, 9n * 10n ** 17n, 10n, '10% · <0.000001 ETH'],
+	] as const) {
+		test(`handles resolved, ended, and tiny holding fees: ${expected}`, async () => {
+			const valued = { ...market, questionOutcome, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: projected } }
+			const balances = { scope: shareBalanceScope(valued), yes: amount, no: 0n, invalid: 0n, lp: 0n }
+			const rendered = await renderIntoDocument(<BackingDetails market={valued} balances={balances} />)
+			cleanupRendered = rendered.cleanup
+			expect(rendered.container.textContent).toBe(`Holding fee on your holdings over next 30 days${expected}`)
+		})
+	}
+
+	test('connects the market fee metric to the current wallet balances', async () => {
+		const valued = { ...market, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 19n } }
+		const balances = { scope: shareBalanceScope(valued), yes: 10n ** 18n, no: 10n ** 18n, invalid: 10n ** 18n, lp: 0n }
+		const rendered = await renderIntoDocument(<MarketPosition market={valued} holdings={{ balances, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }} wallet={{ networkMismatchReason: undefined }} disabled={false} ownsBalanceError={false} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toContain('Holding fee on your holdings over next 30 days10% · 0.1 ETH')
+	})
+
+	test('does not show fees for holdings from another market', async () => {
+		const valued = { ...market, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 19n } }
+		const balances = { scope: shareBalanceScope({ ...valued, pool: secondPool }), yes: 10n ** 18n, no: 0n, invalid: 0n, lp: 0n }
+		const rendered = await renderIntoDocument(<BackingDetails market={valued} balances={balances} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toBe('Holding fee over next 30 days10%')
+	})
+
+	for (const unavailable of [{ loadError: 'RPC unavailable' }, { valuation: undefined }, { shareTokenSupplyAttoShares: 0n }, { settlementCollateralAttoEth: 0n }]) {
+		test(`does not invent a holding fee when ${Object.keys(unavailable)[0]} is unavailable`, async () => {
+			const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n }, ...unavailable }} />)
+			cleanupRendered = rendered.cleanup
+			expect(rendered.container.textContent).toBe('')
+		})
+	}
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, feeBps: 47n, initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)

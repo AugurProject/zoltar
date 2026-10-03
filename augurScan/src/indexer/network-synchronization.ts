@@ -1,3 +1,4 @@
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { runtimeConfig } from '../config.ts'
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type IndexedBlock } from '../database.ts'
@@ -19,6 +20,7 @@ import {
 	leaseFailureNames,
 	readHistoricalCodeWithPermanentFallback,
 	scanDiscoveredLogCoverage,
+	requireLogPosition,
 } from '../indexer-runtime.ts'
 import { rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
@@ -180,6 +182,7 @@ export async function poll(state: NetworkIndexerState, operations: PollOperation
 		network: state.network,
 		blockTimeMs: scanBlockTimeMs(state.network.chainId, runtimeConfig.scanBlockTimeMsOverride),
 		readHead: () => state.providers.client.getBlockNumber(),
+		heartbeatIntervalMs: 30_000,
 	})
 	try {
 		return await pollWithReport(state, operations, scanReport)
@@ -222,7 +225,13 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	const batchStart = nextBlock
 	const maximumBatchEnd = nextBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
 	const batchEnd = maximumBatchEnd < observedHead ? maximumBatchEnd : observedHead
-	scanReport.update({ fromBlock: batchStart, block: batchEnd, status: 'incomplete' })
+	// Heartbeats describe durable progress, never the end of a merely planned or fetched range.
+	scanReport.update({
+		fromBlock: batchStart,
+		block: nextBlock - 1n,
+		status: 'backfilling',
+		details: indexerProgressDetails(batchStart, nextBlock - 1n, observedHead, state.network.startBlock, state.progress.sample?.blocksPerSecond),
+	})
 	let contracts = withManifestDeploymentBlocks(state.network, await state.database.contracts(state.network.chainId, requireLease(state)))
 	let tokenMetadata = await state.database.tokenMetadata(state.network.chainId, requireLease(state))
 	const storedCursors = await state.database.logScanCursors(state.network.chainId, requireLease(state))
@@ -244,11 +253,13 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		segment = await operations.getNextLogSegment(state, nextBlock, batchEnd, initialContracts)
 		if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 	} catch (error) {
-		if (error instanceof ChainContinuityError) return false
+		if (error instanceof ChainContinuityError) {
+			scanReport.update({ status: 'incomplete' })
+			return false
+		}
 		throw error
 	}
 	const end = segment.toBlock
-	scanReport.update({ block: end })
 	for (const observation of segment.deploymentObservations) {
 		const key = observation.contractAddress.toLowerCase()
 		const contract = contracts.get(key)
@@ -276,13 +287,15 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		headerPromises.set(blockNumber, pending)
 		return await pending
 	}
+	let pendingBlocks = [...new Set([...logsByBlock.keys(), end])].sort(compareBigint)
+	let pendingBlockIndex = 0
 	let processedBlockCount = 0
 	let committedLogs = 0
 	let commitCheckpoint = checkpoint === undefined ? undefined : { number: checkpoint.number, hash: checkpoint.hash }
 	const blocksToStore: IndexedBlock[] = []
 	let previousStoredNumber = checkpoint?.number
 	let previousStoredHash = checkpoint?.hash
-	// Keep durable progress and memory bounded while the RPC scan covers up to 100,000 blocks.
+	// Commit up to 100 event blocks at a time, including the empty range-end checkpoint.
 	const commitPendingBlocks = async (): Promise<boolean> => {
 		state.signal.throwIfAborted()
 		const lastBlock = blocksToStore.at(-1)
@@ -292,7 +305,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 			await operations.reconcileReorg(state)
 			return false
 		}
-		const anchors = [...(commitCheckpoint === undefined ? [] : [{ number: commitCheckpoint.number, hash: commitCheckpoint.hash }]), { number: lastBlock.number, hash: indexedEndHash }, ...(segment.endBlockHash === undefined || lastBlock.number === end ? [] : [{ number: end, hash: segment.endBlockHash }])]
+		const anchors = [...(commitCheckpoint === undefined ? [] : [{ number: commitCheckpoint.number, hash: commitCheckpoint.hash }]), ...blocksToStore.map(({ number, hash }) => ({ number, hash })), ...(segment.endBlockHash === undefined || lastBlock.number === end ? [] : [{ number: end, hash: segment.endBlockHash }])]
 		try {
 			await commitSparseCanonicalBatch(
 				anchors,
@@ -320,7 +333,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		return true
 	}
 	while (previousStoredNumber !== end && !state.signal.aborted) {
-		const targetBlock = previousStoredNumber !== undefined && previousStoredNumber >= batchStart ? previousStoredNumber + 1n : batchStart
+		const targetBlock = pendingBlocks[pendingBlockIndex++]
+		if (targetBlock === undefined) throw new Error('Missing event block or scan boundary')
 		const header = await headerAt(targetBlock)
 		const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
 		let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
@@ -344,6 +358,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 						(fromBlock, toBlock, addresses) => getAllLogs(state, fromBlock, toBlock, addresses, discoveredContracts, async blockNumber => (await headerAt(blockNumber)).hash),
 					)
 					mergeLogs(logsByBlock, coverage.remainingLogs)
+					pendingBlocks = [...new Set([...pendingBlocks.slice(pendingBlockIndex), ...coverage.remainingLogs.map(log => requireLogPosition(log).blockNumber)])].sort(compareBigint)
+					pendingBlockIndex = 0
 					return coverage.currentBlockLogs
 				},
 				operations.getBlockHeader,

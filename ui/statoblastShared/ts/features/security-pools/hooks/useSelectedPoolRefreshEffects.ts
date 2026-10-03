@@ -125,7 +125,7 @@ export function useSelectedPoolRefreshEffects({
 		lastStagedViewRefreshManager.current = selectedPoolManagerAddress
 		refreshPendingReport()
 	}, [view, selectedPoolManagerAddress, loadingPoolOracleManager])
-	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive || view === 'vault-operations' || view === 'staged-operations')
+	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive || view === 'vaults' || view === 'staged-operations')
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return

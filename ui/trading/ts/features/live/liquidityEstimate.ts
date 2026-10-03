@@ -4,7 +4,7 @@ import type { LiquidityOperation, LiveMarket } from '../../protocol/live.js'
 
 const BPS = 10_000n
 /** Mirrors TwoWayConstantProductPair.MINIMUM_LIQUIDITY, the LP locked forever by the first deposit. */
-const MINIMUM_LIQUIDITY = 1_000n
+export const MINIMUM_LIQUIDITY = 1_000n
 
 type PoolState = Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
 

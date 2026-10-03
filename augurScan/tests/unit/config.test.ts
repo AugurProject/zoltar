@@ -52,6 +52,17 @@ describe('network configuration', () => {
 		expect(await new Response(child.stderr).text()).toBe('')
 	})
 
+	test('selected-transaction tracing defaults to disabled and accepts an explicit opt-in', async () => {
+		for (const configured of [undefined, '1']) {
+			const environment = { ...process.env }
+			if (configured === undefined) delete environment['TRACE_SELECTED_TRANSACTIONS']
+			else environment['TRACE_SELECTED_TRANSACTIONS'] = configured
+			const child = Bun.spawn([process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(runtimeConfig.traceSelectedTransactions)"], { cwd: projectRoot, env: environment, stdout: 'pipe', stderr: 'pipe' })
+			expect(await child.exited).toBe(0)
+			expect(await new Response(child.stdout).text()).toBe(`${configured === '1'}\n`)
+		}
+	})
+
 	test('indexes the canonical deterministic deployments', () => {
 		for (const { id, deployment, manifest } of [
 			{ id: 'mainnet', deployment: mainnetDeployment, manifest: mainnetManifest },

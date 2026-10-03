@@ -101,11 +101,12 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 			const column = quotedColumn ?? plainColumn
 			if (column === undefined || type === undefined) continue
 			if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityColumns.has(`${table}.${column}`)) continue
+			if (version !== CURRENT_SCHEMA_VERSION && table === 'chain_reorganizations' && column === 'occurrence_counts') continue
 			const remainder = remainderValue ?? ''
 			const defaultMatch = /\bDEFAULT ([\s\S]*?)(?=\s+NOT NULL|\s+GENERATED (?:ALWAYS|BY DEFAULT) AS IDENTITY|$)/.exec(remainder)
 			const identity = identityGeneration(remainder)
 			const defaultExpression = defaultOverrides.get(`${table}.${column}`) ?? defaultMatch?.[1]
-			const columnType = version !== CURRENT_SCHEMA_VERSION && table === 'questions' && (column === 'start_time' || column === 'end_time') ? 'timestamp with time zone' : type
+			const columnType = Number(version) < 4 && table === 'questions' && (column === 'start_time' || column === 'end_time') ? 'timestamp with time zone' : type
 			columns.add(columnSignature(table, column, columnType, /\bNOT NULL\b/.test(remainder), identity, defaultExpression))
 			if (identity !== '') relations.add(`sequence:${table}_${column}_seq`)
 		}

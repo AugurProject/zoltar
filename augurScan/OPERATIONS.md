@@ -18,6 +18,7 @@ The most important runtime settings are:
 - `MAINNET_RPC_URL` and `SEPOLIA_RPC_URL` provide RPC pools;
 - `MAINNET_START_BLOCK` and `SEPOLIA_START_BLOCK` set the lower bound for deployment discovery;
 - `LOG_SCAN_RANGE_SIZE` caps each inclusive `eth_getLogs` request;
+- `TRACE_SELECTED_TRANSACTIONS=1` enables optional `debug_traceTransaction` enrichment for log-selected transactions. It defaults to disabled, requires provider support for `callTracer`, and adds RPC work. It does not index failed or eventless calls. Changing this setting affects subsequent ingestion and does not replay existing receipts;
 - `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables override the Uniswap activity sources; an unset or empty value selects the network default, and `none` disables that source. The Uniswap V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`;
 - `SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging; Mainnet and Sepolia default to 12000;
 - `POSTGRES_URL` connects directly to PostgreSQL or through a session-mode pooler;
@@ -31,6 +32,8 @@ API requests and failed Basic-authentication attempts share one per-client quota
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
 Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are version-specific.
+
+Upgrading to event-first indexing changes the application source hash and triggers the existing source replay. Current views are rebuilt from log-selected activity; prior occurrences and interpretations remain retained for audit.
 
 Changing a tracked manifest address, label, kind, or deployment boundary can replay the affected network. ABI changes cause an `abi-redecode`; application or projection changes cause a conservative `projection-rebuild`. A deployment earlier than the stored coverage boundary requires a new database rather than silently presenting partial history. Review [STATE_MODEL.md](STATE_MODEL.md) before a source or manifest upgrade.
 

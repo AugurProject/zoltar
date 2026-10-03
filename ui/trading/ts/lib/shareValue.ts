@@ -1,6 +1,7 @@
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from './format.js'
 import type { LiveMarket } from '../protocol/liveMarket.js'
+import * as payoutCopy from '../copy/payout.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 
 /** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
@@ -29,7 +30,8 @@ export type ShareValueRounding = 'nearest' | 'down'
 
 function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, maximumFractionDigits: number, rounding: ShareValueRounding) {
 	const value = attoSharesToCollateralAttoEth(amountAttoShares, rate)
-	return rounding === 'down' ? formatTrimmedUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
+	const formatted = rounding === 'down' ? formatTrimmedUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
+	return value > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
 /** Shares and LP tokens have 18 decimal places, independent of collateral backing. */
@@ -68,4 +70,49 @@ export function averagePriceBps(amountAttoEth: bigint, longSharesAttoShares: big
 	const payoutAttoEth = attoSharesToCollateralAttoEth(longSharesAttoShares, rate)
 	if (payoutAttoEth === 0n) return undefined
 	return (amountAttoEth * 10_000n) / payoutAttoEth
+}
+
+type OutcomeValueMarket = ShareValueRate & Partial<Pick<LiveMarket, 'loadError' | 'questionOutcome' | 'systemState' | 'universeForkTime'>>
+
+/** Current payout with its resolution and redemption conditions. */
+export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, rounding: ShareValueRounding = 'nearest') {
+	if (market.loadError !== undefined) return payoutCopy.unavailable
+	if (amount === 0n) return '0 ETH'
+	const value = formatCollateralEth(amount, market, rounding)
+	const index = { INVALID: 0, YES: 1, NO: 2 }[outcome]
+	if (market.questionOutcome !== undefined && market.questionOutcome !== 3) {
+		if (market.questionOutcome !== index) return payoutCopy.zeroPayout
+		return market.systemState === 0 ? payoutCopy.redeemable(value) : payoutCopy.winningPayout(value)
+	}
+	const payout = payoutCopy.conditionalPayout(value, outcome)
+	return (market.universeForkTime !== undefined && market.universeForkTime !== 0n) || (market.systemState !== undefined && market.systemState !== 0) ? `${payout}; ${payoutCopy.redemptionUnavailable}` : payout
+}
+
+/** Display current backing as a conditional payout, never as an executable sale quote. */
+export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest') {
+	return `${formatOutcomeQuantity(amount, outcome, digits, rounding)} (${formatOutcomePayout(amount, outcome, market, rounding)})`
+}
+
+export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRate & Partial<Pick<LiveMarket, 'loadError'>>, digits = 4, rounding: ShareValueRounding = 'nearest') {
+	return `${formatCompleteSetQuantity(amount, digits, rounding)} (${market.loadError === undefined ? formatCollateralEth(amount, market, rounding) : payoutCopy.unavailable})`
+}
+
+/** LP tokens represent reserve claims, not a fixed number of complete sets. */
+export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: ShareValueRounding = 'nearest') {
+	if (amount === 0n) return '0 ETH'
+	if (market.loadError !== undefined || market.lpTotalSupply === 0n) return 'Value unavailable'
+	const yes = (market.yesReserve * amount) / market.lpTotalSupply
+	const no = (market.noReserve * amount) / market.lpTotalSupply
+	if (market.questionOutcome !== 3) {
+		let winning = 0n
+		if (market.questionOutcome === 1) winning = yes
+		else if (market.questionOutcome === 2) winning = no
+		return `${formatCollateralEth(winning, market, rounding)} winning payout`
+	}
+	if (yes === no) return `${formatCollateralEth(yes, market, rounding)} if resolved valid`
+	return `${formatCollateralEth(yes, market, rounding)} if Yes wins; ${formatCollateralEth(no, market, rounding)} if No wins`
+}
+
+export function formatLpWithValue(amount: bigint, market: LiveMarket, digits = 4, rounding: ShareValueRounding = 'nearest') {
+	return `${formatLpQuantity(amount, digits, rounding)} (${formatLpPayout(amount, market, rounding)})`
 }

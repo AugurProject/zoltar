@@ -52,6 +52,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
           tag: sha-${{ steps.candidate.outputs.candidate-sha }}
           file: ui/Dockerfile
+          target: publisher
           cache-scope: zoltar-ipfs
 
       - name: Push image

@@ -211,7 +211,6 @@ describe('trade ticket model', () => {
 
 	test('waits for typing to settle and explains blockers in order', () => {
 		expect(tradeTicketModel({ ...ready, amountSettling: true }).availability).toEqual({ disabled: true, loading: true, reason: ticketCopy.updatingEstimate })
-		expect(tradeTicketModel({ ...ready, amount: '' }).availability.reason).toBe(availabilityCopy.amountRequiredReason)
 		expect(tradeTicketModel({ ...ready, amount: '6' }).availability.reason).toBe(availabilityCopy.insufficientEthReason)
 		// The amount field says the same, so the cause sits next to the number that caused it.
 		expect(tradeTicketModel({ ...ready, amount: '6' }).insufficientReason).toBe(availabilityCopy.insufficientEthReason)

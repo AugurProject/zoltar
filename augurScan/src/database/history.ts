@@ -39,37 +39,66 @@ export const recordChainReorganization = async (
 	return id
 }
 
+// Count only newly inserted evidence, so repeated capture is idempotent and never recounts old rows.
+const captureOccurrences = async (transaction: SQL, invalidationId: string, insert: SQL.Query<unknown>): Promise<void> => {
+	await transaction`
+		WITH captured AS (${insert} RETURNING occurrence_kind),
+		counts AS (SELECT occurrence_kind, count(*) AS total FROM captured GROUP BY occurrence_kind)
+		UPDATE chain_reorganizations reorganization SET occurrence_counts = reorganization.occurrence_counts ||
+			(SELECT jsonb_object_agg(counts.occurrence_kind,
+				(COALESCE((reorganization.occurrence_counts ->> counts.occurrence_kind)::bigint, 0) + counts.total)::text)
+			FROM counts)
+		WHERE reorganization.id = ${invalidationId} AND EXISTS (SELECT 1 FROM counts)
+	`
+}
+
 export const captureHistoryInvalidation = async (transaction: SQL, invalidationId: string, chainId: number, afterBlock?: bigint): Promise<void> => {
 	const blockBoundary = afterBlock === undefined ? transaction`` : transaction`AND number > ${afterBlock.toString()}`
 	const transactionBoundary = afterBlock === undefined ? transaction`` : transaction`AND block_number > ${afterBlock.toString()}`
-	await transaction`
+	await captureOccurrences(
+		transaction,
+		invalidationId,
+		transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
 		SELECT ${invalidationId}, 'block', chain_id, hash, hash, 0
 		FROM blocks WHERE chain_id = ${chainId} AND canonical ${blockBoundary}
 		ON CONFLICT DO NOTHING
-	`
-	await transaction`
+	`,
+	)
+	await captureOccurrences(
+		transaction,
+		invalidationId,
+		transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
 		SELECT ${invalidationId}, 'transaction', chain_id, block_hash, hash, transaction_index
 		FROM transactions WHERE chain_id = ${chainId} AND canonical ${transactionBoundary}
 		ON CONFLICT DO NOTHING
-	`
-	await transaction`
+	`,
+	)
+	await captureOccurrences(
+		transaction,
+		invalidationId,
+		transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
 		SELECT ${invalidationId}, 'log', chain_id, block_hash, tx_hash, log_index
 		FROM logs WHERE chain_id = ${chainId} AND canonical ${transactionBoundary}
 		ON CONFLICT DO NOTHING
-	`
-	await transaction`
+	`,
+	)
+	await captureOccurrences(
+		transaction,
+		invalidationId,
+		transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
 		SELECT ${invalidationId}, 'entity-state', chain_id, block_hash, id::text, 0
 		FROM entity_state_observations WHERE chain_id = ${chainId} AND canonical ${transactionBoundary}
 		ON CONFLICT DO NOTHING
-	`
+	`,
+	)
 }
 
 export const captureDirectObservationInvalidation = async (transaction: SQL, invalidationId: string, chainId: number, boundary: { readonly afterBlock?: bigint; readonly beforeBlock?: bigint }): Promise<void> => {
@@ -83,20 +112,28 @@ export const captureDirectObservationInvalidation = async (transaction: SQL, inv
 		balanceBoundary = transaction`AND block_number < ${boundary.beforeBlock.toString()}`
 		metadataBoundary = transaction`AND read_block < ${boundary.beforeBlock.toString()}`
 	}
-	await transaction`
+	await captureOccurrences(
+		transaction,
+		invalidationId,
+		transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
 		SELECT ${invalidationId}, 'address-balance', chain_id, block_hash, id::text, 0
 		FROM address_balance_observations WHERE chain_id = ${chainId} AND canonical ${balanceBoundary}
 		ON CONFLICT DO NOTHING
-	`
-	await transaction`
+	`,
+	)
+	await captureOccurrences(
+		transaction,
+		invalidationId,
+		transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
 		SELECT ${invalidationId}, 'token-metadata', chain_id, block_hash, id::text, 0
 		FROM token_metadata_observations WHERE chain_id = ${chainId} AND canonical ${metadataBoundary}
 		ON CONFLICT DO NOTHING
-	`
+	`,
+	)
 }
 
 const derivedProjectionTables = [

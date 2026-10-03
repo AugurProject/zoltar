@@ -1605,6 +1605,7 @@ CREATE TABLE public.augurscan_schema_migrations (
 );
 
 CREATE TABLE public.chain_reorganizations (
+    occurrence_counts jsonb DEFAULT '{}'::jsonb NOT NULL,
     id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
     chain_id bigint NOT NULL,
     previous_block bigint,
