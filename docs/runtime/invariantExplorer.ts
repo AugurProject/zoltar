@@ -19,7 +19,7 @@ const reset = requiredElement(explorer, '[data-invariant-reset]', HTMLButtonElem
 
 const entries = Array.from(document.querySelectorAll<HTMLDetailsElement>('details.invariant-entry'))
 const entrySections = new Set<HTMLElement>()
-const catalogContextSections = Array.from(document.querySelectorAll<HTMLElement>('#standing, section.callout'))
+const catalogContextSections = Array.from(document.querySelectorAll<HTMLElement>('#standing, #invariant-index, section.callout'))
 
 function normalizedText(value: string): string {
 	return value
@@ -156,32 +156,43 @@ expand.addEventListener('click', () => {
 collapse.addEventListener('click', () => {
 	for (const entry of entries) entry.open = false
 })
-reset.addEventListener('click', () => {
+const clearFilters = (): void => {
 	keywordInput.value = ''
 	typeSelect.value = ''
 	statusSelect.value = ''
 	subsystemSelect.value = ''
 	applyFilters()
+}
+reset.addEventListener('click', () => {
+	clearFilters()
 	keywordInput.focus()
 })
 
-let targetId = window.location.hash.slice(1)
-try {
-	targetId = decodeURIComponent(targetId)
-} catch (error) {
-	if (!(error instanceof URIError)) throw error
-}
-const target = document.getElementById(targetId)
-if (target instanceof HTMLDetailsElement && target.classList.contains('invariant-entry')) {
-	const syncTargetScrollMargin = (): void => {
-		if (getComputedStyle(explorer).position === 'sticky') {
-			target.style.scrollMarginTop = `${explorer.getBoundingClientRect().height + 16}px`
-			return
-		}
-		target.style.removeProperty('scroll-margin-top')
+let scrollMarginTarget: HTMLDetailsElement | undefined
+const syncTargetScrollMargin = (): void => {
+	if (scrollMarginTarget === undefined) return
+	if (getComputedStyle(explorer).position === 'sticky') {
+		scrollMarginTarget.style.scrollMarginTop = `${explorer.getBoundingClientRect().height + 16}px`
+		return
 	}
+	scrollMarginTarget.style.removeProperty('scroll-margin-top')
+}
+window.addEventListener('resize', syncTargetScrollMargin)
+
+// Opens the entry the URL fragment names and scrolls it clear of the sticky explorer controls.
+const revealFragmentEntry = (): void => {
+	let targetId = window.location.hash.slice(1)
+	try {
+		targetId = decodeURIComponent(targetId)
+	} catch (error) {
+		if (!(error instanceof URIError)) throw error
+	}
+	const target = entries.find(entry => entry.id === targetId)
+	if (target === undefined) return
+	if (target.hidden) clearFilters()
+	scrollMarginTarget?.style.removeProperty('scroll-margin-top')
+	scrollMarginTarget = target
 	syncTargetScrollMargin()
-	window.addEventListener('resize', syncTargetScrollMargin)
 	target.open = true
 	requestAnimationFrame(() => {
 		target.scrollIntoView({ behavior: 'instant', block: 'start' })
@@ -193,4 +204,8 @@ if (target instanceof HTMLDetailsElement && target.classList.contains('invariant
 	})
 }
 
+// Index and cross-reference links change only the fragment, so reveal the entry they point at.
+window.addEventListener('hashchange', revealFragmentEntry)
+
 applyFilters()
+revealFragmentEntry()

@@ -47,7 +47,7 @@ COPY ui/zoltarShared/package.json /app/ui/zoltarShared/package.json
 RUN bun install --frozen-lockfile --production --filter @zoltar/open-oracle-arbitrager
 
 COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
-COPY bots/open-oracle-arbitrager/README.md ./bots/open-oracle-arbitrager/README.md
+COPY bots/open-oracle-arbitrager/README.md bots/open-oracle-arbitrager/EXECUTION.md bots/open-oracle-arbitrager/CONFIGURATION.md bots/open-oracle-arbitrager/MARKETS.md bots/open-oracle-arbitrager/RECOVERY.md ./bots/open-oracle-arbitrager/
 COPY bots/open-oracle-arbitrager/config/ ./bots/open-oracle-arbitrager/config/
 COPY bots/open-oracle-arbitrager/docs/ ./bots/open-oracle-arbitrager/docs/
 COPY bots/open-oracle-arbitrager/scripts/check-market-fixture.mts ./bots/open-oracle-arbitrager/scripts/check-market-fixture.mts

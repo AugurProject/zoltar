@@ -32,7 +32,7 @@
 			<section id="limitations">
 				<h2>Limitations and non-goals</h2>
 				<p>The MVP intentionally does not implement a three-way invariant, Invalid-share trading, an invalidity-probability oracle, weighted reserves, quadratic solvers, flash swaps, a protocol fee, governance controls, upgradeable proxies, automatic branch selection, automatic LP migration, an insured-position NFT, or per-user on-chain position accounting.</p>
-				<p>It also has no TWAP, routing across markets, guaranteed deep liquidity, or mechanism to withdraw more early ETH than complete-set insurance and reserves permit. Spot prices are manipulable and must not be used as protocol oracles. Trading is unaudited; the <a href="../../reference/trading/security-model.html">Trading security model</a> states what it defends against and what it assumes.</p>
+				<p>It also has no TWAP, routing across markets, guaranteed deep liquidity, or mechanism to withdraw more early ETH than complete-set insurance and reserves permit. Trading is unaudited; the <a href="../../reference/trading/security-model.html">Trading security model</a> states what it defends against and what it assumes.</p>
 				<p>Future work may add separate Invalid markets, safer oracle observations, routing, or bounded convenience flows. Those are distinct designs and must not weaken the invariant that this pair never accepts or holds Invalid shares.</p>
 			</section>
 		</main>

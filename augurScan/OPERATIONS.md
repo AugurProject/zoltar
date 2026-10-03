@@ -12,20 +12,32 @@ Log availability is discovered separately. If an `eth_getLogs` request reports p
 
 `config/networks.json` selects each network's manifest. Manifest entries are `[address, label, kind]` or `[address, label, kind, deploymentBlock]`. A verified deployment block avoids historical bytecode discovery and gives later replay a deterministic boundary. Keep an old address in the manifest while it remains a valid activity source.
 
-The most important runtime settings are:
+### Runtime settings
 
-- `NETWORKS` selects enabled networks;
-- `MAINNET_RPC_URL` and `SEPOLIA_RPC_URL` provide RPC pools;
-- `MAINNET_START_BLOCK` and `SEPOLIA_START_BLOCK` set the lower bound for deployment discovery;
-- `LOG_SCAN_RANGE_SIZE` caps each inclusive `eth_getLogs` request;
-- `TRACE_SELECTED_TRANSACTIONS=1` enables optional `debug_traceTransaction` enrichment for log-selected transactions. It defaults to disabled, requires provider support for `callTracer`, and adds RPC work. It does not index failed or eventless calls. Changing this setting affects subsequent ingestion and does not replay existing receipts;
-- `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables override the Uniswap activity sources; an unset or empty value selects the network default, and `none` disables that source. The Uniswap V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`;
-- `SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging; Mainnet and Sepolia default to 12000;
-- `POSTGRES_URL` connects directly to PostgreSQL or through a session-mode pooler;
-- `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` enable HTTP Basic access control when both are set;
-- `API_RATE_LIMIT_PER_MINUTE` changes the default per-client API limit of 600 and also limits failed Basic-authentication attempts on protected non-API routes, while `0` disables both limits when a trusted upstream enforces them;
-- `LIVE_BACKPRESSURE_TIMEOUT_MS` changes the default 60-second limit for a live-stream client that makes no write progress before its slot is closed and released;
-- `DISABLE_INDEXER=1` disables the dedicated indexer process. The web app already runs without indexing, but it still initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
+Every setting is an environment variable. The Compose column names the service that receives it; Compose substitutes the value from the host shell or `.env`, and falls back to the default shown.
+
+| Variable | Default | Compose service | Effect |
+| --- | --- | --- | --- |
+| `NETWORKS` | every network in `config/networks.json` (`mainnet,sepolia`) | `app`, `indexer` | Comma-separated enabled networks. An unknown id stops startup. |
+| `MAINNET_RPC_URL`, `SEPOLIA_RPC_URL` | `https://mainnet.gateway.tenderly.co`, `https://sepolia.gateway.tenderly.co` | `indexer` | Ordered comma-separated HTTP(S) provider pool. |
+| `MAINNET_START_BLOCK`, `SEPOLIA_START_BLOCK` | `0` | `indexer` | Lower bound for deployment discovery. A manifest deployment block must not precede it. |
+| `MAINNET_AMM_FACTORY_ADDRESS`, `SEPOLIA_AMM_FACTORY_ADDRESS` | unset | `indexer` | Adds an Augur AMM factory as a tracked contract when the manifest does not already list that address. |
+| `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables | network default | `indexer` | Override the Uniswap activity sources. An unset or empty value selects the network default, and `none` disables that source. The V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`. |
+| `LOG_SCAN_RANGE_SIZE` | `100000` | `indexer` | Caps each inclusive `eth_getLogs` request, in blocks. |
+| `TRACE_SELECTED_TRANSACTIONS` | `0` | `indexer` | `1` enables optional `debug_traceTransaction` enrichment for log-selected transactions. It requires provider support for `callTracer` and adds RPC work. It does not index failed or eventless calls. Changing it affects subsequent ingestion and does not replay existing receipts. |
+| `POLL_INTERVAL_MS` | `12000` | `app`, `indexer` | Indexer polling interval. The web app treats an indexer as stale after four intervals, or 45 seconds if that is longer. |
+| `SCAN_BLOCK_TIME_MS` | `12000` on Mainnet and Sepolia | `indexer` | Block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging. |
+| `RPC_LOG_PATH` | `augurScan/logs/rpc.jsonl` | `indexer`, fixed to `/var/log/augurscan/rpc.jsonl` in the `augurscan-logs` volume | Rotating JSONL log of RPC exchanges. |
+| `POSTGRES_URL` | `postgres://augurscan:augurscan@localhost:5432/augurscan`; in Compose, the bundled `postgres` service | `app`, `indexer` | Connects directly to PostgreSQL or through a session-mode pooler. |
+| `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Password of the bundled database. Compose only. |
+| `PORT` | `3000` | `app`, fixed to `3000` | Port the web app listens on. |
+| `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |
+| `AUGURSCAN_ACCESS_USERNAME`, `AUGURSCAN_ACCESS_PASSWORD` | unset | `app` | Enable HTTP Basic access control when both are set. Setting only one stops startup. |
+| `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. It also limits failed Basic-authentication attempts on protected non-API routes. `0` disables both limits when a trusted upstream enforces them. |
+| `LIVE_BACKPRESSURE_TIMEOUT_MS` | `60000` | `app` | How long a live-stream client may make no write progress before its slot is closed and released. |
+| `DISABLE_INDEXER` | unset | `indexer` (`0`); fixed to `1` on `app` | `1` starts the indexer process without indexing. See below. |
+
+`DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
 
 API requests and failed Basic-authentication attempts share one per-client quota. When Basic authentication is enabled, exhausting that quota temporarily blocks all protected routes for the client, including requests with valid credentials, until the window resets. Successful non-API requests do not consume quota.
 
@@ -232,7 +244,7 @@ docker compose up --build --force-recreate --detach
 until curl --fail --silent --show-error "$AUGURSCAN_URL/health/ready"; do sleep 2; done
 ```
 
-If access control is enabled, export both credentials in the operator shell. This helper rejects a half-configured pair and keeps credentials out of the URL:
+If access control is enabled, export both credentials in the operator shell. This helper, for the manual requests in this guide, rejects a half-configured pair and keeps credentials out of the URL and the process arguments:
 
 ```bash
 augurscan_curl() {
@@ -241,7 +253,10 @@ augurscan_curl() {
       echo 'Set both AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD.' >&2
       return 2
     }
-    curl --user "$AUGURSCAN_ACCESS_USERNAME:$AUGURSCAN_ACCESS_PASSWORD" "$@"
+    local credentials="$AUGURSCAN_ACCESS_USERNAME:$AUGURSCAN_ACCESS_PASSWORD"
+    credentials=${credentials//\\/\\\\}
+    credentials=${credentials//\"/\\\"}
+    curl --config <(printf 'user = "%s"\n' "$credentials") "$@"
   else
     curl "$@"
   fi
@@ -260,7 +275,7 @@ This route returns HTTP 503 when the indexer is stale or the audit finds a probl
 
 Open `$AUGURSCAN_URL/operations/integrity?chainId=$AUGURSCAN_CHAIN_ID`. Load records until **All indexed records are shown.** Each replacement includes its primary reason, complete cause set, affected occurrence counts, old and replacement boundaries, and the exact indexer run and source hashes that initiated it.
 
-API clients should follow `data.nextCursor` while `data.hasMore` is true. The integrity cursor fixes the greatest visible replacement ID and materialization generation. A later invalidation returns HTTP 409; restart at page one rather than combining generations. `/api/v1/provenance` is also paged and identifies the indexer run plus its ABI, application, and projection hashes.
+API clients should follow `data.nextCursor` while `data.hasMore` is true. The integrity cursor fixes the greatest visible replacement ID and materialization generation. A later invalidation returns HTTP 409; restart from the first page rather than combining generations. `/api/v1/provenance` is also paged and identifies the indexer run plus its ABI, application, and projection hashes.
 
 The `/api/v1/reorgs` view uses a chain- and generation-bound cursor. A new invalidation returns `409` so an operator restarts instead of combining generations. Use the deterministic export below for durable audit files with per-page proofs. The [API reference](API_REFERENCE.md) owns the exact response, cursor, and pagination contracts.
 
@@ -287,13 +302,17 @@ export AUGURSCAN_EXPORT_DIRECTORY="$(pwd)/augurscan-export-$(date -u +%Y%m%dT%H%
 scripts/export-history.sh
 ```
 
+The script accepts two further optional variables: `AUGURSCAN_EXPORT_PORT` (default `3002`) is the host loopback port of the isolated app, and `AUGURSCAN_EXPORT_CONTAINER` (default `augurscan-export-<pid>`) is its container name.
+
+If access control is enabled, export `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` in this shell before running the script. It starts the isolated app with exactly this shell's values, not the ones in `.env`, and sends them as HTTP Basic credentials through a curl configuration file descriptor, so they appear in neither the URL nor the process arguments. With both unset, the isolated app runs without access control; it is published only on host loopback. Setting only one is rejected.
+
 The script validates the restore target and request scope, starts the isolated process, follows every continuation, verifies each page with the pinned app image, and stops the container after success. Its `EXIT` trap force-removes only the exact named export container after a readiness, transport, HTTP, or verifier failure. It does not delete the restore database or any pending, failed, invalidated, or validated evidence directory, so those remain available for diagnosis.
 
-Each successful response is atomically renamed from a hidden pending directory to a numbered page containing `evidence.ndjson`, `headers`, and `validation.json`; the script refuses to overwrite one. The pinned image validates one complete set of snapshot and source headers, valid non-empty JSON objects on every NDJSON line, an exact line count, a cursor exactly when `truncated=true`, and the exact prior continuation cursor on every later request. It also requires every row to match the requested dataset, chain, canonical scope, and range; requires dataset-specific row identities to increase strictly across page boundaries; binds each response cursor to the final row; keeps the snapshot boundary fixed; and requires the final cumulative count to equal the first page's exact total. A cursor binds the dataset, chain, canonical scope, requested range, indexed block/hash, invalidation ID, exact total, applied source hashes, and last-row identity. HTTP 409 means that boundary changed: quarantine every page from that attempt and restart from page zero. Do not concatenate pages across attempts. Change `AUGURSCAN_EXPORT_FROM_BLOCK` and `AUGURSCAN_EXPORT_TO_BLOCK` to constrain the interval. For a replacement range, compare `canonical=orphaned` and `canonical=canonical` log exports by block hash.
+Each successful response is atomically renamed from a hidden pending directory to a numbered page directory, starting at `page-0`, containing `evidence.ndjson`, `headers`, and `validation.json`; the script refuses to overwrite one. The pinned image validates one complete set of snapshot and source headers, valid non-empty JSON objects on every NDJSON line, an exact line count, a cursor exactly when `truncated=true`, and the exact prior continuation cursor on every later request. It also requires every row to match the requested dataset, chain, canonical scope, and range; requires dataset-specific row identities to increase strictly across page boundaries; binds each response cursor to the final row; keeps the snapshot boundary fixed; and requires the final cumulative count to equal the first page's exact total. A cursor binds the dataset, chain, canonical scope, requested range, indexed block/hash, invalidation ID, exact total, applied source hashes, and last-row identity. HTTP 409 means that boundary changed: the script quarantines the response as `INVALIDATED-page-N` and exits. Quarantine every page from that attempt and start again from the first page in a new export directory. Do not concatenate pages across attempts. Change `AUGURSCAN_EXPORT_FROM_BLOCK` and `AUGURSCAN_EXPORT_TO_BLOCK` to constrain the interval. For a replacement range, compare `canonical=orphaned` and `canonical=canonical` log exports by block hash.
 
-For unattended exports, also persist the current cursor after each page. An interrupted request remains in a hidden pending directory; do not treat it as committed evidence. Keep the restore database until every dataset is complete.
+The script cannot resume an interrupted attempt: it keeps the continuation cursor only in the running process and refuses to overwrite an existing page directory. After an interruption, start again with a new `AUGURSCAN_EXPORT_DIRECTORY`. Each committed page's `headers` file records the cursor that produced the next page. An interrupted request remains in a hidden pending directory; do not treat it as committed evidence. Keep the restore database until every dataset is complete.
 
-Stop the isolated process and remove the temporary restore only after checking the exported files. Cleanup first verifies the restored database's identity again. The `postgres` branch deletes that explicit name through the administrative connection. The `provider` branch never runs `dropdb`; delete that exact database with the same provider control used to create it.
+The script has already stopped the isolated container. Remove the temporary restore database only after checking the exported files. Cleanup first verifies the restored database's identity again. The `postgres` branch deletes that explicit name through the administrative connection. The `provider` branch never runs `dropdb`; delete that exact database with the same provider control used to create it.
 
 ```bash
 set -euo pipefail

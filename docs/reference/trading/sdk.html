@@ -13,13 +13,13 @@
 			<header>
 				<p class="kicker">Reference</p>
 				<h1>Trading SDK</h1>
-				<p>The shared TypeScript package <code>@zoltar/trading-shared</code> holds the pure Trading math that the UI and the Solidity parity tests share. All chain quantities are <code>bigint</code>.</p>
+				<p>The private workspace package <code>@zoltar/trading-shared</code> holds the pure Trading math that the UI and the Solidity parity tests share. All chain quantities are <code>bigint</code>.</p>
 			</header>
 			<section id="pure-math">
 				<h2>Pure math</h2>
-				<p>Module <code>@zoltar/trading-shared/trading/math</code> mirrors <code>TwoWayConstantProductMath</code>:</p>
+				<p>Module <code>@zoltar/trading-shared/trading/math</code> mirrors the quote and price functions of <code>TwoWayConstantProductMath</code>. It has no counterpart of the library's initial-odds and proportional-deposit functions; the UI estimates those in <code>ui/trading/ts/features/live/liquidityEstimate.ts</code>.</p>
 				<ul>
-					<li><code>quoteExactInput(reserveIn, reserveOut, amountIn, feeBps)</code> and <code>quoteExactOutput(reserveIn, reserveOut, amountOut, feeBps)</code> return <code>{ amountIn, amountOut, netInput, feeAmount }</code> with the contract's floor (exact input) and ceil (exact output) rounding. They throw on empty reserves, an out-of-range output, or <code>feeBps ≥ 10,000</code>.</li>
+					<li><code>quoteExactInput(reserveIn, reserveOut, amountIn, feeBps)</code> and <code>quoteExactOutput(reserveIn, reserveOut, amountOut, feeBps)</code> return a <code>SwapQuote</code>, <code>{ amountIn, amountOut, netInput, feeAmount }</code>, with the contract's floor (exact input) and ceil (exact output) rounding. They throw on empty reserves, an out-of-range output, or <code>feeBps ≥ 10,000</code>.</li>
 					<li><code>conditionalYesBps(yesReserve, noReserve)</code> returns the Conditional Yes price in basis points, floor-rounded.</li>
 				</ul>
 			</section>
@@ -27,23 +27,23 @@
 				<h2>Position quotes</h2>
 				<p>Module <code>@zoltar/trading-shared/trading/positions</code> takes <code>{ yesReserve, noReserve, feeBps }</code> and a <code>longOutcome</code> of <code>'YES'</code> or <code>'NO'</code>:</p>
 				<ul>
-					<li><code>quoteEnterPosition(longOutcome, completeSetShares, reserves)</code> mirrors <code>enterPosition</code> after minting and returns the swapped, additional, and total long shares, the Invalid received, the fee, and Conditional Yes before and after.</li>
-					<li><code>quoteExitPosition(longOutcome, completeSetShares, reserves)</code> mirrors the <a href="./router.html#approval-free">insured exit</a> and returns the long shares swapped, total long shares consumed, Invalid required, fee, and Conditional Yes before and after.</li>
+					<li><code>quoteEnterPosition(longOutcome, completeSetShares, reserves)</code> mirrors <code>enterPosition</code> after minting and returns an <code>EnterPositionQuote</code>: <code>longOutcome</code>, <code>completeSetShares</code>, <code>oppositeSharesSwapped</code>, <code>additionalLongShares</code>, <code>totalLongShares</code>, <code>invalidInsurance</code>, <code>feeAmount</code>, <code>conditionalYesBpsBefore</code>, and <code>conditionalYesBpsAfter</code>.</li>
+					<li><code>quoteExitPosition(longOutcome, completeSetShares, reserves)</code> mirrors the <a href="./router.html#approval-free">insured exit</a> and returns an <code>ExitPositionQuote</code>: <code>longOutcome</code>, <code>completeSetShares</code>, <code>longSharesSwapped</code>, <code>totalLongShares</code>, <code>invalidRequired</code>, <code>feeAmount</code>, <code>conditionalYesBpsBefore</code>, and <code>conditionalYesBpsAfter</code>.</li>
 					<li><code>largestExitForLongShares({ ...reserves, longOutcome, longShares, completeSetCap? })</code> binary-searches the largest complete-set amount whose total long-share cost fits within <code>longShares</code> and stays below the opposite reserve. The optional <code>completeSetCap</code> bounds the result further.</li>
 					<li><code>maximumInsuredExit({ ...reserves, longOutcome, longBalance, invalidBalance })</code> calls <code>largestExitForLongShares</code> with the long balance as <code>longShares</code> and the Invalid balance as <code>completeSetCap</code>.</li>
 				</ul>
 			</section>
 			<section id="receive-request">
 				<h2>Receive request encoding</h2>
-				<p>Module <code>@zoltar/trading-shared/trading/receiveRequest</code> exports <code>encodeReceiveRequest(request)</code>, which ABI-encodes the <code>data</code> argument for a share transfer to the router. The request is a positional tuple in the field order of the router's <code>ReceiveRequest</code> struct, which the <a href="./router.html#approval-free">router reference</a> lists.</p>
+				<p>Module <code>@zoltar/trading-shared/trading/receiveRequest</code> exports <code>encodeReceiveRequest(request)</code>, which ABI-encodes the <code>data</code> argument for a share transfer to the router. The request, typed <code>ReceiveRequest</code>, is a positional tuple in the field order of the router's <code>ReceiveRequest</code> struct, which the <a href="./router.html#approval-free">router reference</a> lists.</p>
 			</section>
 			<section id="transaction-helpers">
 				<h2>Transaction helpers</h2>
 				<p>Transaction-facing helpers live in the Trading UI at <code>ui/trading/ts/protocol/tradeQuote.ts</code>, not in the shared package:</p>
 				<ul>
-					<li><code>minimumAfterSlippage(amount, slippageBps?)</code> floors and <code>maximumAfterSlippage(amount, slippageBps?)</code> ceils a bound; slippage defaults to <code>UI_SLIPPAGE_BPS</code> (50) and must be between 0 and 500 basis points.</li>
-					<li><code>stableSimulation(client, simulate)</code> reads the latest block and passes its <code>blockNumber</code>, <code>blockHash</code>, and <code>blockTimestamp</code> to <code>simulate</code>, whose reads must all pin that block hash.</li>
-					<li><code>simulateWithDeadline(client, expiry, simulate, resolveDeadline?)</code> does the same and also resolves <code>expiry</code>, either an absolute deadline or <code>{ validityMinutes }</code> between 1 and 1,440, against the pinned block's timestamp. The optional <code>resolveDeadline(block, requestedDeadline)</code> can replace that deadline, and <code>simulate</code> receives <code>(block, deadline)</code>.</li>
+					<li><code>minimumAfterSlippage(amount, slippageBps?)</code> floors and <code>maximumAfterSlippage(amount, slippageBps?)</code> ceils a bound; slippage defaults to <code>UI_SLIPPAGE_BPS</code> (50). <code>requireTransactionSlippageBps</code> throws outside <code>MINIMUM_SLIPPAGE_BPS</code> (1) to <code>MAXIMUM_SLIPPAGE_BPS</code> (500).</li>
+					<li><code>stableSimulation(client, simulate)</code> reads the latest block with <code>latestBlockIdentity(client)</code> and passes its <code>blockNumber</code>, <code>blockHash</code>, and <code>blockTimestamp</code> to <code>simulate</code>, whose reads must all use that block number. A reorg during those reads is not detected.</li>
+					<li><code>simulateWithDeadline(client, expiry, simulate, resolveDeadline?)</code> does the same and also resolves <code>expiry</code>, a <code>TransactionExpiry</code> that is either an absolute deadline or <code>{ validityMinutes }</code> between 1 and 1,440 (<code>requireTransactionValidityMinutes</code>), against the pinned block's timestamp. The optional <code>resolveDeadline(block, requestedDeadline)</code> can replace that deadline, and <code>simulate</code> receives <code>(block, deadline)</code>.</li>
 					<li><code>retainApprovedMinimum(approved, refreshed, label)</code> and <code>retainApprovedMaximum(approved, refreshed, label)</code> return the approved bound, or throw when the submission-time simulation no longer satisfies it.</li>
 				</ul>
 				<p>Pure math is a responsive preview only. A quote does not expire when a new block arrives: immediately before wallet submission the client simulates the actual call again at the latest block, and submits with the bounds and deadline approved in the quote only if that simulation succeeds within them.</p>

@@ -13,6 +13,7 @@ services:
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
       # flock coordinates containers on this Docker host through the shared volume.
       ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks
+      ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}
     ports:
       - 127.0.0.1:4173:4173
     healthcheck:

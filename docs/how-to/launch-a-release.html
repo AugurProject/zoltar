@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="The pre-tag checklist for shipping an immutable Zoltar and Statoblast release, and the genesis REP review for Sepolia and deterministic testnets." />
-		<title>Launch a protocol release</title>
+		<title>Prepare a protocol release</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -13,8 +13,8 @@
 			<article>
 				<header>
 					<p class="kicker">How-to guide</p>
-					<h1>Launch a protocol release</h1>
-					<p>Follow this guide before tagging a release of Zoltar, the fork oracle, and Statoblast, the prediction-market layer built on it (see the <a href="../explanation/system-overview.html">system overview</a>). It lists the checks that must pass before the tag and, for Sepolia and deterministic testnets, the genesis <a href="../reference/glossary.html#rep">REP</a> review that determines every deterministic address there. Mainnet uses the existing REPv2 token and deploys no genesis REP.</p>
+					<h1>Prepare a protocol release</h1>
+					<p>Follow this guide before tagging a Zoltar and Statoblast release. It lists the checks that must pass before the tag and, for Sepolia and deterministic testnets, the genesis <a href="../reference/glossary.html#rep">REP</a> review that determines every deterministic address there. Mainnet uses the existing REPv2 token and deploys no genesis REP.</p>
 				</header>
 				<section id="immutable-protocol-release-posture">
 					<h2>Know what a release cannot do</h2>
@@ -37,19 +37,24 @@
 						<li>
 							Review the pinned runtime-code hashes: the <code>EXPECTED_*_RUNTIME_CODE_HASHES</code> maps in <a href="https://github.com/AugurProject/zoltar/blob/main/ui/zoltarShared/ts/protocol/deployment.ts"><code>ui/zoltarShared/ts/protocol/deployment.ts</code></a
 							> and <a href="https://github.com/AugurProject/zoltar/blob/main/ui/statoblastShared/ts/protocol/deployment.ts"><code>ui/statoblastShared/ts/protocol/deployment.ts</code></a
-							>. <code>bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/deployment.test.ts ui/statoblast/ts/tests/protocol/deployment.test.ts</code> confirms that a clean local build still matches the pinned hashes of the directly compiled steps (the deployment status oracle, Multicall3, ZoltarQuestionData, and five Statoblast artifacts); it does not cover the other pinned contracts. On Sepolia, rerunning <code>bun run deploy:testnet</code> checks the runtime code of every installed contract against its pinned hash; it is not read-only, because it needs <code>PRIVATE_KEY</code>, deploys any missing step, and then runs explorer verification. For any other deployed address, compare the keccak-256 hash of its <code>eth_getCode</code> result with the pinned hash by hand before marking the release canonical, and publish the reviewed hashes with the release.
+							>. Check them in three ways, then publish the reviewed hashes with the release:
+							<ul>
+								<li>Run <code>bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/deployment.test.ts ui/statoblast/ts/tests/protocol/deployment.test.ts</code>. It confirms that a clean local build still matches the pinned hashes of the directly compiled steps (the deployment status oracle, Multicall3, ZoltarQuestionData, and five Statoblast artifacts); it does not cover the other pinned contracts.</li>
+								<li>On Sepolia, rerun <code>bun run deploy:testnet</code>. It checks the runtime code of every installed contract against its pinned hash. It is not read-only: it needs <code>PRIVATE_KEY</code>, deploys any missing step, and then runs explorer verification.</li>
+								<li>For any other deployed address, compare the keccak-256 hash of its <code>eth_getCode</code> result with the pinned hash by hand before marking the release canonical.</li>
+							</ul>
 						</li>
 						<li>Push the final tag only after the CI gate succeeds on the same commit. The tag must match <code>v&lt;number&gt;</code> (for example <code>v12</code>); the <strong>Version deploy</strong> workflow rejects any other form. That workflow reruns CI, builds the InterPlanetary File System (IPFS) publisher image, reads the content identifier (CID) from that image, checks only that it has the <code>bafy…</code> form, and creates or updates the GitHub release with that CID in its notes. Confirm the release exists and records the CID before announcing.</li>
-						<li>In the production UI release notes, state that <code>?simulate=1</code> is a browser-local sandbox. Mainnet and Sepolia quote-dependent actions use live RPC data plus available network-local Uniswap liquidity; simulation uses its configured mock where supported. Stale, unavailable, or unsupported quotes are production blockers for the affected client action, never inputs to replace with simulation prices. RPC and client integrity remain covered by <a href="../reference/security-model.html#assumption-a24">A24</a>; quote availability is an official-client limitation, not a protocol security assumption.</li>
+						<li>In the production UI release notes, state that <code>?simulate=1</code> is a browser-local sandbox. Treat a stale, unavailable, or unsupported live quote as a blocker for the affected client action; never substitute a simulation price for it.</li>
 					</ol>
 				</section>
 				<section id="genesis-rep-deployment">
 					<h2>Review genesis REP allocations (Sepolia and deterministic testnets)</h2>
 					<p>
 						Sepolia genesis REP allocations are canonical source data in <a href="https://github.com/AugurProject/zoltar/blob/main/shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a
-						>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The <code>GenesisReputationToken</code> constructor requires at least one allocation, matching holder and balance array lengths, unique nonzero holders, nonzero balances, and a total supply no greater than 11 million REP. It emits the standard ERC-20 mint <code>Transfer</code> event once for each allocation.
+						>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The constructor of <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> rejects an empty list, a zero address, a repeated holder, a zero balance, and a total above the cap.
 					</p>
-					<p>The sum of the constructor balances is immutable and is returned by the REPv2-compatible <code>getTotalTheoreticalSupply()</code> selector. There is no administrator, post-deployment mint, allocation correction, or recovery entrypoint. An incorrect allocation must be fixed in the source list before deployment and the deterministic manifests must then be regenerated. Because constructor arguments are part of CREATE2 init code, any allocation change produces a new genesis REP address and new addresses for every deployment step whose constructor wiring depends on it. Never continue a deployment from a manifest generated for a different allocation list. A future release that intentionally changes starting holders must follow the same source review and full-manifest regeneration procedure.</p>
+					<p>There is no administrator, post-deployment mint, allocation correction, or recovery entrypoint, so fix an incorrect allocation in the source list before deployment and then regenerate the deterministic manifests. Because constructor arguments are part of CREATE2 init code, any allocation change produces a new genesis REP address and new addresses for every deployment step whose constructor wiring depends on it. Never continue a deployment from a manifest generated for a different allocation list.</p>
 				</section>
 			</article>
 		</main>

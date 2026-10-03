@@ -22,7 +22,7 @@
 			<section id="prices">
 				<h2>What the prices mean</h2>
 				<p>Yes and No prices are conditional on valid resolution. They describe the relative price of the two directional outcomes; they are not estimates of invalidity. Interfaces should therefore label the Yes and No values directly and present Invalid separately.</p>
-				<p>Spot prices come from current reserves and can be manipulated. Protocol contracts never use them as truth or solvency oracles. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/ETH operations use OpenOracle.</p>
+				<p>Spot prices come from current reserves and are <a href="./trading/pricing.html#not-an-oracle">not an oracle</a>. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/ETH operations use OpenOracle.</p>
 			</section>
 			<section id="market-isolation">
 				<h2>One pair per SecurityPool</h2>

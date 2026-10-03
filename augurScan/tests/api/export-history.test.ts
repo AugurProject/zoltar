@@ -106,4 +106,61 @@ test('rejects a bundled restore URL that does not identify the verified database
 	}
 })
 
+test('rejects half-configured access credentials before starting the isolated container', async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-export-history-access-'))
+	try {
+		const process = Bun.spawn(['bash', exportScript], {
+			cwd: projectRoot,
+			env: {
+				...processEnv(),
+				AUGURSCAN_DATABASE_MODE: 'external',
+				AUGURSCAN_RESTORE_URL: 'postgres://restore.invalid/augurscan_restore',
+				AUGURSCAN_CHAIN_ID: '1',
+				AUGURSCAN_EXPORT_DIRECTORY: path.join(directory, 'evidence'),
+				AUGURSCAN_ACCESS_USERNAME: 'operator',
+				AUGURSCAN_ACCESS_PASSWORD: '',
+			},
+			stdout: 'pipe',
+			stderr: 'pipe',
+		})
+		expect(await process.exited).toBe(2)
+		expect(await new Response(process.stdout).text()).toBe('')
+		expect(await new Response(process.stderr).text()).toContain('Set both AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD, or neither.')
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
+})
+
+test('sends access credentials through a curl configuration instead of the URL or arguments', async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), 'augurscan-export-history-curl-'))
+	const trace = path.join(directory, 'curl.trace')
+	try {
+		const process = Bun.spawn(
+			[
+				'bash',
+				'-c',
+				`set -euo pipefail
+source "$1"
+curl_trace=$2
+curl() {
+  local configuration=
+  if test "$1" = --config; then configuration=$(cat "$2"); shift 2; fi
+  printf 'configuration=%s\\narguments=%s\\n' "$configuration" "$*" >> "$curl_trace"
+}
+AUGURSCAN_ACCESS_USERNAME=operator AUGURSCAN_ACCESS_PASSWORD='pa"ss\\word' augurscan_curl --silent http://localhost:3002/health/ready
+augurscan_curl --silent http://localhost:3002/health/ready`,
+				'augurscan-export-history-test',
+				exportScript,
+				trace,
+			],
+			{ cwd: projectRoot, env: { ...processEnv(), AUGURSCAN_ACCESS_USERNAME: '', AUGURSCAN_ACCESS_PASSWORD: '' }, stdout: 'pipe', stderr: 'pipe' },
+		)
+		expect(await process.exited).toBe(0)
+		expect(await new Response(process.stderr).text()).toBe('')
+		expect(await readFile(trace, 'utf8')).toBe(['configuration=user = "operator:pa\\"ss\\\\word"', 'arguments=--silent http://localhost:3002/health/ready', 'configuration=', 'arguments=--silent http://localhost:3002/health/ready', ''].join('\n'))
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
+})
+
 const processEnv = (): Record<string, string> => Object.fromEntries(Object.entries(process.env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])))

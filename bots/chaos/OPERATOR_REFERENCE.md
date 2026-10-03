@@ -1,6 +1,25 @@
 # Chaos bot operator reference
 
-Use this reference after completing the linear setup and dry-run walkthrough in the [README](./README.md). It owns the exact network forms, trust checks, operation boundary, and runtime controls that are useful during configuration or incident response.
+Use this reference after completing the linear setup and dry-run walkthrough in the [README](./README.md). It owns the exact network forms, trust checks, operation boundary, configuration keys, and runtime controls that are useful during configuration or incident response. Behaviour shared with the other bots is in the [shared bot guide](../README.md).
+
+## Contents
+
+- [Network and deployment profile](#network-and-deployment-profile)
+- [RPC and submission configuration](#rpc-and-submission-configuration)
+- [Operation coverage](#operation-coverage)
+- [Scheduler and execution controls](#scheduler-and-execution-controls)
+  - [Discovery and cache safety envelopes](#discovery-and-cache-safety-envelopes)
+  - [Runtime controls](#runtime-controls)
+  - [Reserves and principal caps](#reserves-and-principal-caps)
+  - [Drain and retirement controls](#drain-and-retirement-controls)
+  - [Signing, inclusion, and rollback](#signing-inclusion-and-rollback)
+- [Configuration keys](#configuration-keys)
+- [Configuration and durable state](#configuration-and-durable-state)
+  - [Launch preflight](#launch-preflight)
+  - [Health, readiness, and metrics](#health-readiness-and-metrics)
+  - [State unit](#state-unit)
+- [Command-line entry points](#command-line-entry-points)
+- [Upgrading](#upgrading)
 
 ## Network and deployment profile
 
@@ -42,9 +61,40 @@ Another EVM chain uses the explicit custom form:
 
 `kind` must be exactly `"custom"`. The chain ID must be a positive JavaScript-safe integer and cannot reuse a preset ID. The name is a display label of 1–64 valid Unicode characters; it cannot have surrounding whitespace, contain control-like characters, or impersonate a preset. Custom durable profiles use `custom-chain-<chainId>`, not the label. The chain must expose an EIP-1559 base fee and accept type-2 transactions, and its native currency must have the 18-decimal Ether semantics required by WETH and the rest of this ecosystem. Canonical-anchor preflight rejects readers that omit `baseFeePerGas`. `explorerUrl` is operator metadata, not a trust signal.
 
-`maximumBlockIntervalSeconds` is the operator's block-delay risk envelope used only to convert timestamp deadlines into a conservative wall-clock safety margin. It accepts 1–86,400 seconds. It does not change transaction transport validity, which remains a 25-block horizon. Block-clock deadline eligibility instead requires the deadline to be strictly later than `current block + 25 + prerequisite count × (25 + 96)` blocks: the supported margins are 25, 146, or 267 blocks for zero, one, or two prerequisites. The 96-block planning horizon is three Ethereum epochs; this remains a conservative planning buffer, while transaction execution now advances at quorum-verified block inclusion. The deadline check is separate from `strategy.workflowValidForBlocks`, which bounds the freshness of the whole prepared workflow. Timestamp planning reserves one interval for each prerequisite's inclusion, 96 additional intervals of conservative planning headroom, and a terminal submission margin equal to the larger of one interval or 60 seconds; its deadline boundary is also strict. No finite setting guarantees a block will arrive within the interval: missed slots, delayed finality, or chain disruption can always exceed it. Larger values reduce deadline-expiry risk but make fewer timestamp-bound operations eligible. Custom networks must set it explicitly from their observed and adversarial timing envelope and must expose the standard `finalized` block tag for live execution. Mainnet and Sepolia default to 60 seconds (five nominal Ethereum slots) when the field is absent, and the committed preset examples use that value; operators may choose a larger value for a more conservative posture.
+### Block interval and deadline margins
 
-Chaos derives the expected core addresses for a new profile from the repository's generated CREATE2 deployment manifests and derives TradingFactory and TradingRouter from their canonical deployment plans. Mainnet uses its canonical existing REP and WETH dependencies; Sepolia and custom chains use the canonical test deployment profile at first setup. The private configuration pins the selected addresses and Uniswap V3 factory in `deploymentPin` before the operator starts work. On Sepolia, that factory must be Uniswap's published `0x0227628f3F023bb0B980b67D528571c95c6DaC1c`, even for older core deployments; a pin with another factory is rejected. Direct bot and Compose restarts retain that pin. The Windows `start.bat` launcher rebuilds and selects the current manifest immediately. When the deployment changes, it archives the old configuration and preserves the old journal and companion stores, then writes the new pin with a distinct state file. `retirement.bat ARCHIVE_ID` runs retirement against an explicitly selected archive while the current service is stopped; it leaves the current configuration intact. An existing Sepolia state from the earlier core deployment manifest is recognized from its durable profile ID and pinned on direct restart when the configuration has no `deploymentPin`. An existing pin remains authoritative until an explicit launcher upgrade; a different or unknown operated profile requires a separate state file or completed retirement that authorizes profile replacement. Obsolete saved `deployment` fields are ignored and removed when settings are saved.
+`network.maximumBlockIntervalSeconds` is the operator's block-delay risk envelope. It is used only to convert timestamp deadlines into a conservative wall-clock safety margin. It does not change transaction transport validity, which remains a 25-block horizon.
+
+| Property | Value |
+| --- | --- |
+| Range | 1–86,400 seconds |
+| Mainnet and Sepolia | Default to 60 seconds (five nominal Ethereum slots) when the field is absent; the committed preset examples use that value. Operators may choose a larger value for a more conservative posture. |
+| Custom networks | Must set it explicitly from their observed and adversarial timing envelope, and must expose the standard `finalized` block tag for live execution. |
+
+Deadline eligibility applies one of two strict boundaries:
+
+- **Block-clock deadlines** must be strictly later than `current block + 25 + prerequisite count × (25 + 96)` blocks. The supported margins are 25, 146, or 267 blocks for zero, one, or two prerequisites. The 96-block planning horizon is three Ethereum epochs. It is a conservative planning buffer: transaction execution advances at quorum-verified block inclusion.
+- **Timestamp deadlines** reserve one interval for each prerequisite's inclusion, 96 additional intervals of conservative planning headroom, and a terminal submission margin equal to the larger of one interval or 60 seconds.
+
+Both checks are separate from `strategy.workflowValidForBlocks`, which bounds the freshness of the whole prepared workflow.
+
+No finite setting guarantees a block will arrive within the interval: missed slots, delayed finality, or chain disruption can always exceed it. Larger values reduce deadline-expiry risk but make fewer timestamp-bound operations eligible.
+
+### Deployment pin
+
+Chaos derives the expected core addresses for a new profile from the repository's generated CREATE2 deployment manifests and derives TradingFactory and TradingRouter from their canonical deployment plans. Mainnet uses its canonical existing REP and WETH dependencies; Sepolia and custom chains use the canonical test deployment profile at first setup.
+
+The private configuration pins the selected addresses and Uniswap V3 factory in `deploymentPin` before the operator starts work:
+
+- On Sepolia, that factory must be Uniswap's published `0x0227628f3F023bb0B980b67D528571c95c6DaC1c`, even for older core deployments; a pin with another factory is rejected.
+- Direct bot and Compose restarts retain the pin. An existing pin remains authoritative until an explicit launcher upgrade.
+- A different or unknown operated profile requires a separate state file or completed retirement that authorizes profile replacement.
+- The Windows `start.bat` launcher rebuilds and selects the current manifest immediately. When the deployment changes, it archives the old configuration and preserves the old journal and companion stores, then writes the new pin with a distinct state file.
+- `retirement.bat ARCHIVE_ID` runs retirement against an explicitly selected archive while the current service is stopped; it leaves the current configuration intact.
+
+The README's [Windows launchers](./README.md#windows-launchers) section owns the launcher procedure.
+
+### Deployment checks
 
 Before discovery, Chaos checks for code at the expected addresses using the RPC quorum. Missing core scan roots produce an informational waiting notice with automatic rechecks. TradingFactory and TradingRouter are optional for discovery, independently of genesis initialization. Missing trading roots disable only the operations that need them: pair creation requires the factory, and router-backed operations require the router. Other eligible operations continue under the normal scheduler and execution policies, including direct pair operations when only the router is absent. The dashboard identifies missing deployments and the block checked. Existing pending transactions and lifecycle recovery state are retained. RPC failures and inconsistent deployed graphs remain errors.
 
@@ -108,12 +158,12 @@ The dashboard's Operation catalog projects the complete canonical mutation inven
 
 Every canonical mutating or special entry is classified as selectable random work, a workflow prerequisite, a lifecycle obligation, role-restricted, or excluded-dangerous. The bot does not impersonate privileged callers, invoke delegate modules directly, invent recipients or authorizations, redeploy infrastructure, or treat receive/fallback routing as ordinary random work.
 
-| Ecosystem   | Supported permissionless families                                                                                                                                                                                                                                                                                                                               |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Zoltar      | Create binary, categorical, and scalar questions; approve REP; deploy child universes; fork universes; prepare, split, and continue REP migration; optional direct REP burn                                                                                                                                                                                     |
-| Statoblast  | Deploy pools; deposit, withdraw, and redeem vault REP; update or redeem fees; create and redeem complete sets; redeem winning shares; vault-backed and direct wallet-funded escalation deposits and withdrawals; pool forks and vault migrations; truth-auction bid, refund, finalize, and settle; staged REP-withdrawal execution and staged-operation expiry; permissionless lifecycle maintenance |
-| OpenOracle  | Wrap and unwrap WETH; report, randomly selected dispute, and lifecycle settlement; canonical WETH/REP ERC-20 deposit; WETH/REP withdrawal, self-recipient `withdrawTo`, both push-or-credit overloads, wallet-to-self internal allowance management, and dust initialization                                                                                    |
-| Trading     | Create and initialize pairs; create, initialize, and seed canonical child-universe REP/WETH Uniswap V3 pools; enter and exit YES or NO; add and remove liquidity; exact-input and exact-output swaps with 1% quote protection; approvals; synchronization; complete-set redemption; fork share migration                                                               |
+| Ecosystem | Supported permissionless families |
+| --- | --- |
+| Zoltar | Create binary, categorical, and scalar questions; approve REP; deploy child universes; fork universes; prepare, split, and continue REP migration; optional direct REP burn |
+| Statoblast | Deploy pools; deposit, withdraw, and redeem vault REP; update or redeem fees; create and redeem complete sets; redeem winning shares; vault-backed and direct wallet-funded escalation deposits and withdrawals; pool forks and vault migrations; truth-auction bid, refund, finalize, and settle; staged REP-withdrawal execution and staged-operation expiry; permissionless lifecycle maintenance |
+| OpenOracle | Wrap and unwrap WETH; report, randomly selected dispute, and lifecycle settlement; canonical WETH/REP ERC-20 deposit; WETH/REP withdrawal, self-recipient `withdrawTo`, both push-or-credit overloads, wallet-to-self internal allowance management, and dust initialization |
+| Trading | Create and initialize pairs; create, initialize, and seed canonical child-universe REP/WETH Uniswap V3 pools; enter and exit YES or NO; add and remove liquidity; exact-input and exact-output swaps with 1% quote protection; approvals; synchronization; complete-set redemption; fork share migration |
 
 Eligibility is narrower than coverage. Balances, reserves, approvals, lifecycle phase, deadlines, submission mode, missing candidates, disabled ecosystems, and risk gates can block a supported operation.
 
@@ -135,20 +185,21 @@ At every complete anchor, Uniswap discovery derives exactly one configured 1% fe
 
 Planning reserves the complete post-transaction topology for every route that may add a question, universe, pool, or vault registration. This includes implicit creation during REP migration, child-pool migration, auction settlement, and escalation claims. A question reserves its record, outcome-label fan-out, and serialized resident bytes. A route that reuses an existing child or registered vault remains available at an exact limit because it adds no topology. When a lifecycle action lacks headroom, its raw identity remains visible and blocks novel work until capacity is safely increased or another actor completes it.
 
-| Envelope                                           | Exact limit                                                                                                                                                      | Failure behavior                                                                                                                                         |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Configured discovery fields                       | `maxPools`, `maxQuestions`, `maxStagedOperationsPerPool`, `maxUniverses`, and `maxVaultsPerPool` are each `1`–`10,000`                                           | The configuration is rejected outside the range. Reaching a configured work or resident bound keeps discovery incomplete and execution paused.           |
-| Configured aggregate products                      | Each of `maxPools × maxUniverses`, `maxPools × maxVaultsPerPool`, and `maxPools × maxStagedOperationsPerPool` must be at most `10,000`                            | The configuration is rejected before it can be activated.                                                                                                |
-| Actual share-inventory fan-out                     | At most `10,000` approval and fork-migration relations                                                                                                           | Discovery warns before issuing the fan-out RPCs; indexing, lifecycle completion, and execution remain paused.                                            |
-| Outcome labels for one question                    | At most `4,096` labels and `4 MiB` total label UTF-8 bytes                                                                                                       | Question discovery fails closed.                                                                                                                         |
-| All resident question snapshots and outcome labels | At most `10,000` items and `32 MiB` of serialized snapshots                                                                                                      | The question registry switches to overflow mode, retains no partial executable registry, and reports the exact total and progress.                       |
-| Discovery RPC work                                 | Per configured reader: `12` active requests and at most `48` queued requests. For `N = 1 + quorumRpcUrls.length`, the aggregate ceilings are `12 × N` active and `48 × N` queued; at the nine-reader maximum these are `108` and `432`. | Additional queued work fails the scan; bounded mappers stop assigning new work and drain the workers they already started.                                |
-| Immutable topology cache                           | At most `100,000` resident items and `64 MiB` of committed chunk data; each chunk has at most `256` records and `32 MiB`; its manifest is at most `64 KiB`         | Loading and writing validate these limits incrementally and reject the cache before retaining excess data.                                                |
-| One immutable topology record                      | At most `33,553,408` bytes (`32 MiB - 1 KiB`); a cached question still has the independent `4 MiB` outcome-label limit                                            | The record is rejected before it can enter the resident cache.                                                                                            |
-| Protocol event index                               | At most `100,000` records, `512` chunks, and `64 MiB` of chunk payload across all six collections. Each chunk contains at most `256` records and `1 MiB`; the authenticated manifest is at most `64 KiB`. | A scan that would cross the envelope is rejected before replacing the last persistable in-memory index. Unchanged content-addressed chunks are hard-linked into the new generation, while every loaded byte, count, digest, owner, mode, and path remains validated. |
+
+| Envelope | Exact limit | Failure behavior |
+| --- | --- | --- |
+| Configured discovery fields | `maxPools`, `maxQuestions`, `maxStagedOperationsPerPool`, `maxUniverses`, and `maxVaultsPerPool` are each `1`–`10,000` | The configuration is rejected outside the range. Reaching a configured work or resident bound keeps discovery incomplete and execution paused. |
+| Configured aggregate products | Each of `maxPools × maxUniverses`, `maxPools × maxVaultsPerPool`, and `maxPools × maxStagedOperationsPerPool` must be at most `10,000` | The configuration is rejected before it can be activated. |
+| Actual share-inventory fan-out | At most `10,000` approval and fork-migration relations | Discovery warns before issuing the fan-out RPCs; indexing, lifecycle completion, and execution remain paused. |
+| Outcome labels for one question | At most `4,096` labels and `4 MiB` total label UTF-8 bytes | Question discovery fails closed. |
+| All resident question snapshots and outcome labels | At most `10,000` items and `32 MiB` of serialized snapshots | The question registry switches to overflow mode, retains no partial executable registry, and reports the exact total and progress. |
+| Discovery RPC work | Per configured reader: `12` active requests and at most `48` queued requests. For `N = 1 + quorumRpcUrls.length`, the aggregate ceilings are `12 × N` active and `48 × N` queued; at the nine-reader maximum these are `108` and `432`. | Additional queued work fails the scan; bounded mappers stop assigning new work and drain the workers they already started. |
+| Immutable topology cache | At most `100,000` resident items and `64 MiB` of committed chunk data; each chunk has at most `256` records and `32 MiB`; its manifest is at most `64 KiB` | Loading and writing validate these limits incrementally and reject the cache before retaining excess data. |
+| One immutable topology record | At most `33,553,408` bytes (`32 MiB - 1 KiB`); a cached question still has the independent `4 MiB` outcome-label limit | The record is rejected before it can enter the resident cache. |
+| Protocol event index | At most `100,000` records, `512` chunks, and `64 MiB` of chunk payload across all six collections. Each chunk contains at most `256` records and `1 MiB`; the authenticated manifest is at most `64 KiB`. | A scan that would cross the envelope is rejected before replacing the last persistable in-memory index. Unchanged content-addressed chunks are hard-linked into the new generation, while every loaded byte, count, digest, owner, mode, and path remains validated. |
 | Carry storage reconstruction | At most `10,000` work items across storage reads and reconstructed evidence; stored leaves and consumed indexes are paged in batches of `30`. | Reads share one canonical anchor. Invalid ancestry, exhausted limits, or evidence that does not reproduce the on-chain snapshot and nullifier roots rejects the scan. |
 | Carry proof page | At most `32` inherited-deposit proofs are generated and simulated per scan. | The page rotates with the canonical anchor. The complete lightweight set of known unconsumed wallet identities remains available for lifecycle tracking, including off-page claims. |
-| Unplanned lifecycle-presence guard                 | At most `1,000,000` raw identities are deduplicated and at most `256` active obligations are materialized. Raw presence retains identity and tombstones; a separate complete canonical phase set marks only identities that are currently due. Every bounded deposit or bid call contributes all deterministic batches. Unrepresented due identities are reduced to one fixed-size count, commitment, reason, provenance flag, and bounded first-item summary in the main state. | Exceeding the raw identity limit, exhausting the active-obligation budget, or finding an actionable plan outside either set fails novel work closed without growing the main journal without bound. Latent identities do not stop unrelated work. An incomplete scan may latch but never clear the guard; only complete canonical coverage can recompute, clear, or defer it. A completed identity that returns after confirmed absence is classified as a possible canonical reorganization and requires explicit reconciliation or a later complete absence. Actionable materialized obligations retain priority. |
+| Unplanned lifecycle-presence guard | At most `1,000,000` raw identities are deduplicated and at most `256` active obligations are materialized. Raw presence retains identity and tombstones; a separate complete canonical phase set marks only identities that are currently due. Every bounded deposit or bid call contributes all deterministic batches. Unrepresented due identities are reduced to one fixed-size count, commitment, reason, provenance flag, and bounded first-item summary in the main state. | Exceeding the raw identity limit, exhausting the active-obligation budget, or finding an actionable plan outside either set fails novel work closed without growing the main journal without bound. Latent identities do not stop unrelated work. An incomplete scan may latch but never clear the guard; only complete canonical coverage can recompute, clear, or defer it. A completed identity that returns after confirmed absence is classified as a possible canonical reorganization and requires explicit reconciliation or a later complete absence. Actionable materialized obligations retain priority. |
 
 Raise a configured bound only while paused. A newly sufficient bound may restart an affected counted cursor rather than trust a formerly nonresident prefix, so leave execution disabled until a warning-free canonical scan finishes. Counted registry warnings expose exact totals and progress; staged-operation warnings expose an exact total without a durable cursor; universe warnings expose only the retained count at the limit; share fan-out warnings expose a conservative lower bound. If an exact counted total exceeds `10,000`, required configured values violate an aggregate product, or a non-counted scan still exceeds a fixed question, RPC, record, fan-out, cache, or carry-storage envelope, no supported setting can make that deployment executable. Keep the bot paused and in dry-run mode; do not bypass an envelope. For a carry-capacity failure, inspect the storage reconstruction limit reported by the scan. Rebuilding is not a general recovery mechanism; use a reviewed software/storage design change or a fresh deployment when the canonical retained state itself exceeds the supported envelope.
 
@@ -157,16 +208,46 @@ Raise a configured bound only while paused. A newly sufficient bound may restart
 - `paused` blocks novel scheduling, workflow continuation, and automatic resubmission. It retains `nextRunAt`; wall-clock time keeps advancing, so resume marks an elapsed countdown due instead of sampling a replacement delay. Read-only reconciliation continues so a canonical outcome remains observable.
 - `runtime.execute` selects dry-run (`false`) or live signing and submission (`true`). Live mode requires `strategy.minimumRepReserve` to be greater than zero and retains `strategy.minimumEthReserve` as a safety floor at least as large as one complete `strategy.maximumGasCostEth` budget. That floor is not itself spendable: a normal or recovery transaction still needs its ETH value plus gas above the reserve. The smallest positive 18-decimal unit is `0.000000000000000001`.
 - `runtime.pollMilliseconds` is the main loop interval between lifecycle scan cycles, from `1000` through `60000`.
-- The operator file is `version: 2`. A saved `version: 1` file still loads: its `runtime.lifecyclePollMilliseconds` becomes `runtime.pollMilliseconds`, and the next save writes version 2.
-- `runtime.protocolLogBlockSpan` bounds the event range processed in one cycle.
+- `runtime.protocolLogBlockSpan` bounds the event range processed in one cycle, from `1` through `50000`.
 - `strategy.enabledEcosystems` accepts one or more of `zoltar`, `statoblast`, `open-oracle`, and `trading`.
-- `strategy.selectableOperationAllowlist` controls only new random selections. `null` permits every selectable definition that passes the other policy and eligibility checks. An array permits only the exact selectable definition IDs it contains; `[]` is a lifecycle-only canary unless genesis initialization is enabled, in which case the ordered initializer definitions remain exempt. A configuration that predates this field is migrated to `[]`, so only an explicit `null` can enable the full selectable catalog. Duplicate IDs, unknown IDs, and lifecycle-definition IDs are rejected when configuration loads or saves. Lifecycle discovery, durable obligations, and their execution ignore this allowlist. A selectable workflow that began while its definition was allowed remains recoverable and may complete or clean up after the ID is removed. Ecosystem, risk, irreversible, reserve, and principal controls still apply independently.
+- `strategy.selectableOperationAllowlist` controls only new random selections. `null` permits every selectable definition that passes the other policy and eligibility checks. An array permits only the exact selectable definition IDs it contains; `[]` is a lifecycle-only canary unless genesis initialization is enabled, in which case the ordered initializer definitions remain exempt. A configuration without this field is read as `[]`, so only an explicit `null` can enable the full selectable catalog. Duplicate IDs, unknown IDs, and lifecycle-definition IDs are rejected when configuration loads or saves. Lifecycle discovery, durable obligations, and their execution ignore this allowlist. A selectable workflow that began while its definition was allowed remains recoverable and may complete or clean up after the ID is removed. Ecosystem, risk, irreversible, reserve, and principal controls still apply independently.
 - `strategy.initializeGenesisUniverse` gives only its ordered initializer definition IDs an allowlist exemption. While an initializer prerequisite is missing but temporarily ineligible, the bot reports that prerequisite and blocks unrelated random work instead of skipping ahead. Each scan binds the sequence to the lowest binary question ID, its universe-`0` security pool, the wallet vault for that pool, and that pool's canonical trading pair. It also authenticates the canonical Uniswap V3 factory, creates and initializes the genesis REP/WETH 1% pool, uses the [`GenesisUniswapV3Seeder`](../../solidity/contracts/chaos/GenesisUniswapV3Seeder.sol) helper to seed a bounded full-range position, and deterministically deploys the canonical Statoblast trading factory and router. Anchored completion checks make every stage retryable without allowing unrelated competing topology to satisfy or redirect the initializer.
-- ETH and REP reserves protect retained inventory while eligibility checks hold. Zero reserves are permitted only in dry-run mode; live ETH reserve must also retain a maximum-gas-cost-sized safety floor. Enabling or resuming live mode requires a complete signer-scoped scan whose ETH balance covers the reserve, one maximum ETH principal, and one maximum gas budget. At least one canonical universe must also contain REP covering the REP reserve plus one maximum REP principal. Every later live scan reapplies those inventory checks to novel selectable work, so an external drain blocks new random operations without hiding lifecycle reconciliation. The floor does not guarantee recovery funding because transaction value and gas must remain available above it. An invalid reserve cannot enable live signing, workflow continuation, or automatic resubmission. Read-only reconciliation still observes canonical outcomes while dry. Each ETH/REP principal cap applies separately to one workflow and is cumulative across all of that workflow's steps; the cap resets for every later workflow. Wallet, WETH, REP, OpenOracle internal-credit, and SecurityPool vault-backed REP debits contribute to the relevant cap. Vault-backed escalation deposits are rechecked against fresh canonical vault backing before signing or resubmission. A direct wallet-funded escalation deposit is eligible only for an already registered wallet vault when one full start bond is accepted exactly and reaches the non-decision threshold. If its allowance is insufficient, it approves only that exact amount. Any same-outcome predecessor then fills the threshold and makes the bot's call revert instead of accepting a smaller transfer; after approval, any changed quote, registration, or policy converts the workflow to an exact allowance revocation. Repeated workflows can consume additional principal down to the reserves, so the dedicated account's holdings—not a per-workflow cap—are the total asset-risk envelope. Before the first remaining workflow transaction, a fresh canonical balance check requires enough ETH for the reserve, every remaining transaction value, and one complete maximum-gas-cost budget per remaining step plus every declared workflow-owned cleanup transaction. The executor then revalidates the exact gas ceiling and balance before each signature. The configured gas ceiling remains a per-transaction limit.
+
 - `strategy.workflowValidForBlocks` must be at least 243. The floor covers both supported approval prerequisites consuming their full 25-block transport validity and conservative 96-block finality planning horizons, plus one block to begin the terminal step. The committed 288-block setting spans nine Ethereum epochs and adds 45 blocks of operational headroom. Receipt acceptance requires canonical block inclusion; the retained planning horizon is conservative headroom, not an execution wait.
 - High-risk and irreversible operations use independent explicit gates. The dashboard locks the complete execution-policy form and the execution-mode switch while the bot is unpaused, so risk gates, reserves, caps, timing, ecosystem scope, and live mode cannot be changed in a running browser session. `PUT /api/execution` carries only `execute` and the loaded `revision`; enabling live mode runs the same readiness assertion as before (signer, fresh signer-scoped scan, funded inventory) and the dashboard's Execution mode checklist mirrors those prerequisites so the switch stays locked until they hold.
 
 For dry-run validation, resume with `runtime.execute: false`, observe several randomized selections, then pause again before changing live controls. Inspect `nextRunAt` before live resume because due random work can begin immediately; deadline-bound lifecycle recovery can also take priority.
+
+### Reserves and principal caps
+
+**Reserves.**
+
+- ETH and REP reserves protect retained inventory while eligibility checks hold. Zero reserves are permitted only in dry-run mode.
+- A live ETH reserve must also retain a safety floor at least as large as one `strategy.maximumGasCostEth` budget. The floor does not guarantee recovery funding, because transaction value and gas must remain available above it.
+- An invalid reserve cannot enable live signing, workflow continuation, or automatic resubmission. Read-only reconciliation still observes canonical outcomes while dry.
+
+**Funding required to go live.**
+
+- Enabling or resuming live mode requires a complete signer-scoped scan whose ETH balance covers the reserve, one maximum ETH principal, and one maximum gas budget.
+- At least one canonical universe must also contain REP covering the REP reserve plus one maximum REP principal.
+- Every later live scan reapplies those inventory checks to novel selectable work, so an external drain blocks new random operations without hiding lifecycle reconciliation.
+
+**Principal caps.**
+
+- Each ETH or REP principal cap applies separately to one workflow and is cumulative across all of that workflow's steps; the cap resets for every later workflow.
+- Wallet, WETH, REP, OpenOracle internal-credit, and SecurityPool vault-backed REP debits contribute to the relevant cap.
+- Repeated workflows can consume additional principal down to the reserves, so the dedicated account's holdings, not a per-workflow cap, are the total asset-risk envelope.
+
+**Escalation deposits.**
+
+- Vault-backed escalation deposits are rechecked against fresh canonical vault backing before signing or resubmission.
+- A direct wallet-funded escalation deposit is eligible only for an already registered wallet vault when one full start bond is accepted exactly and reaches the non-decision threshold. If its allowance is insufficient, it approves only that exact amount.
+- Any same-outcome predecessor then fills the threshold and makes the bot's call revert instead of accepting a smaller transfer. After approval, any changed quote, registration, or policy converts the workflow to an exact allowance revocation.
+
+**Gas.**
+
+- Before the first remaining workflow transaction, a fresh canonical balance check requires enough ETH for the reserve, every remaining transaction value, and one complete maximum-gas-cost budget per remaining step plus every declared workflow-owned cleanup transaction.
+- The executor then revalidates the exact gas ceiling and balance before each signature. The configured gas ceiling remains a per-transaction limit.
 
 ### Drain and retirement controls
 
@@ -180,6 +261,8 @@ The retirement catalog covers claim and withdrawal recovery, full custom LP remo
 
 Profile replacement remains forbidden until exact completion or an explicitly recorded residual override; cancellation ends when the first retirement WETH unwrap begins. CLI mutations require the bot to stop so they can acquire its state lock; a memory-only signer can use the running dashboard. CLI and dashboard mutations require exact typed confirmations. A residual override additionally requires a 12–2048 character rationale and is bound to the source profile, target deployment ID, retirement recipient, and completion block. The `factory:v1:` target ID binds both the new core profile and its Uniswap factory, so changing either requires fresh acceptance. Later assessments preserve the override while the residuals and profile, signer, and recipient bindings remain the same; a changed assessment clears it for fresh review.
 
+### Signing, inclusion, and rollback
+
 Before each signature, live mode rechecks the canonical plan, reserves, cumulative principal, gas ceiling, nonce, and exact call against the quorum anchor. A changed anchor discards the unsigned attempt. Signed bytes and the intent are persisted before broadcast; identical-byte resubmission repeats durable preflights and never crosses its stored transport horizon. Receipt acceptance requires the configured independent-reader quorum to agree on successful inclusion and the canonical receipt-block hash. The block identity is checked again after operation-specific semantic evidence is read. This applies on every network: dependent steps can start before consensus finality.
 
 Included transactions remain in a durable rollback journal until their receipt blocks are finalized. Recovery checks those block identities before new work and before each dependent signature. If an inclusion disappears in a reorganization, the bot rolls back the affected workflow progress and dependent transaction outcomes, invalidates derived discovery state, and reconciles the retained signed transactions in nonce order before allowing new operations. It does not erase or blindly re-sign transactions. Current policy, semantic checks, and stored submission windows still govern any identical-byte resubmission; changed nonces or expired windows may require the existing Recovery controls. Queued attempts retain separate workflow snapshots, including retries of the same step. Already-consumed automatic retry budgets remain consumed across rollback. A rollback cannot undo a transaction that remains on the canonical chain. The journal retains at most 100 unfinalized transaction outcomes; at that bound new signing waits for records to finalize, rather than discarding rollback evidence.
@@ -189,6 +272,74 @@ A lifecycle retry budget counts only canonically included `receipt-reverted` or 
 Timestamp-bound calls require private next-block inclusion with a safety margin. Block-clock calls use the last valid inclusion block. An expired transport or refreshable planning window does not falsely mark a still-present lifecycle obligation complete; raw canonical presence keeps it deferred until it becomes actionable again or complete discovery proves that the identity left the protocol.
 
 Statoblast oracle sponsorship uses a durable funding envelope instead of recomputing amounts after approvals. The plan records an exact WETH amount, exact REP amount, committed ETH bounty (retained in full as the settler reward), collateral ceiling, and maximum supported inclusion fee; any needed approvals reach canonical inclusion before only the terminal request receives a private next-block constraint. Existing allowances at least as large as the required amounts are reused. Funding preparation conservatively reserves the configured maximum gas budget for two approvals, the request, and two possible revocations, even when some approvals are unnecessary. A changed price, pending report, collateral increase, fee ceiling, principal policy, submission mode, insufficient funding inventory, or expired original workflow-validity window converts every confirmed workflow-created approval into exact `approve(0)` cleanup. An approval that was never confirmed is never treated as workflow-owned and is not revoked. Pausing or disabling Statoblast still blocks that cleanup, so retain enough ETH for recovery and do not change those controls until Recovery shows no partial workflow.
+
+## Configuration keys
+
+The operator file is `version: 2`. Every key is required unless the Default column gives a value; the Example column shows `config/operator.example.json`. Amounts are decimal strings in 18-decimal ETH or REP units. `connectivity` and `submission` use the [shared sections](../README.md#shared-configuration-sections).
+
+### Top level
+
+| Key | Type | Range | Default | Example | Effect |
+| --- | --- | --- | --- | --- | --- |
+| `version` | number | `2` | required | `2` | File format version. |
+| `paused` | boolean | — | required | `true` | See [runtime controls](#runtime-controls). |
+| `privateKey` | string or `null` | 32-byte `0x` hex | required | `null` | Saved signer; `null` when none is remembered. |
+| `networkConfigured` | boolean | must be `true` exactly when `connectivity` is not `null` | required | `false` | An unconfigured network requires paused dry-run mode. |
+| `connectivity` | object or `null` | [shared](../README.md#connectivity) | required | `null` | RPC endpoints and the agreement requirement. |
+| `network` | object | see [network and deployment profile](#network-and-deployment-profile) | required | Sepolia preset | Chain identity and block-interval envelope. |
+| `deploymentPin` | object | written by the bot | canonical deployment for the chain | absent | Pinned addresses, `profileId`, and `factoryId`. |
+| `submission` | object | [shared](../README.md#submission) | required | public | Delivery mode and relays. |
+
+### `discovery`
+
+| Key | Type | Range | Example | Effect |
+| --- | --- | --- | --- | --- |
+| `maxPools` | number | 1–10,000 | `100` | Pools scanned and retained. |
+| `maxQuestions` | number | 1–10,000 | `100` | Questions scanned and retained. |
+| `maxStagedOperationsPerPool` | number | 1–10,000 | `100` | Staged operations per pool. |
+| `maxUniverses` | number | 1–10,000 | `100` | Universes scanned and retained. |
+| `maxVaultsPerPool` | number | 1–10,000 | `100` | Vaults per pool. |
+
+`maxPools` multiplied by each of `maxUniverses`, `maxVaultsPerPool`, and `maxStagedOperationsPerPool` must not exceed 10,000. See [discovery and cache safety envelopes](#discovery-and-cache-safety-envelopes).
+
+### `runtime`
+
+| Key | Type | Range | Example | Effect |
+| --- | --- | --- | --- | --- |
+| `execute` | boolean | — | `false` | Dry-run (`false`) or live signing and submission (`true`). |
+| `once` | boolean | cannot be `true` together with `ui` | `false` | Runs one cycle and exits. |
+| `ui` | boolean | cannot be `true` together with `once` | `true` | Serves the dashboard. |
+| `uiHost` | string | `127.0.0.1` or `0.0.0.0` | `127.0.0.1` | Dashboard bind address. |
+| `uiPort` | number | 1–65,535 | `4193` | Dashboard port. |
+| `pollMilliseconds` | number | 1,000–60,000 | `12000` | Main loop interval between lifecycle scan cycles. |
+| `protocolLogBlockSpan` | number | 1–50,000 | `50000` | Event range processed in one cycle. |
+| `protocolStartBlock` | integer string | uint256 | `"0"` | Earliest block that can contain protocol deployment or carry events. |
+| `stateFile` | path | — | `.state/chaos.sepolia.json` | Main runtime state; see [state unit](#state-unit). |
+
+### `scheduler`
+
+| Key | Type | Range | Example | Effect |
+| --- | --- | --- | --- | --- |
+| `minimumDelaySeconds` | number | 60–3,599 | `60` | Shortest randomized delay between workflows. |
+| `maximumDelaySeconds` | number | above the minimum, at most 3,600 | `3600` | Longest randomized delay between workflows. |
+
+### `strategy`
+
+| Key | Type | Range | Default | Example | Effect |
+| --- | --- | --- | --- | --- | --- |
+| `allowHighRiskOperations` | boolean | — | required | `false` | High-risk operation gate. |
+| `allowIrreversibleOperations` | boolean | — | required | `false` | Irreversible operation gate. |
+| `initializeGenesisUniverse` | boolean | — | `false` | `false` | Enables the ordered genesis initializer. |
+| `enabledEcosystems` | string array | one or more of `zoltar`, `statoblast`, `open-oracle`, `trading`, without duplicates | required | all four | Ecosystems eligible for work. |
+| `maximumEthPerOperation` | decimal string | above 0 | required | `"0.05"` | ETH principal cap for one workflow. |
+| `maximumRepPerOperation` | decimal string | above 0 | required | `"10"` | REP principal cap for one workflow. |
+| `maximumGasCostEth` | decimal string | above 0 | required | `"0.02"` | Gas cost ceiling for one transaction. |
+| `minimumEthReserve` | decimal string | above 0 and at least `maximumGasCostEth` in live mode | required | `"0.05"` | Retained ETH. |
+| `minimumRepReserve` | decimal string | above 0 in live mode | required | `"10"` | Retained REP. |
+| `selectableOperationAllowlist` | string array or `null` | selectable definition IDs without duplicates | `[]` | `[]` | Limits new random selections; `null` permits every selectable definition. |
+| `workflowValidForBlocks` | number | 243–1,000,000 | required | `288` | Freshness bound of a prepared workflow. |
+
+Field names are the operator-facing ones; despite their `PerOperation` suffix, the two principal caps apply to a whole workflow, as [reserves and principal caps](#reserves-and-principal-caps) explains.
 
 ## Configuration and durable state
 
@@ -200,11 +351,92 @@ Mutation outcomes have three distinct recovery paths:
 - `configuration_committed_safely_paused` confirms that the owner configuration committed but activation did not complete. The durable safety pause remains set. Reload and verify the committed configuration and recovery state, correct the reported activation problem, and explicitly resume only after that review.
 - `configuration_commit_indeterminate` means the owner-file save may have committed and its exact outcome cannot be proven. Treat the request as committed. The server rejects every later dashboard mutation for the rest of that process, so Refresh reads can aid diagnosis but cannot unlock mutation controls. Stop the bot, inspect and reconcile the owner configuration and runtime-state files offline, restart, and reverify the signer, revision, pause, and recovery state before making another change.
 
-The public configuration summary keeps configured RPC URLs visible and omits relay URLs and deployment details. The Complete configuration editor uses a separate `/api/configuration-document` response that includes RPC and relay URLs, deployment addresses, and all other editable settings; it excludes the private key. Signed transactions and calldata remain excluded from dashboard responses. Dashboard pages and mutation APIs have no built-in authentication, so every client that can reach the listener can read these settings and invoke mutations. RPC URLs can contain provider credentials, and relay URLs may include private endpoint paths: keep the dashboard loopback-only unless it is explicitly published through an access-controlled encrypted tunnel. Chaos reads but ignores `ZOLTAR_BOT_DASHBOARD_PASSWORD` and `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY`, which enable HTTP Basic authentication only in the liquidator and OpenOracle arbitrager dashboards; setting them cannot protect a chaos listener. A `runtime.uiHost` of `0.0.0.0` stops startup unless `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED=true` asserts that the container port is published only on host loopback, as the shipped Compose service does.
+### Dashboard exposure
 
-`bun run doctor` is the stopped-process launch preflight. It acquires the operator's state lock and, for live configuration, its chain-and-signer lock; a concurrent operator therefore makes the preflight fail. It fully parses the durable journal and referenced protocol-index generation. When companion state exists, it authenticates the immutable-topology pointer and compatible generation. A cache with an incompatible deployment identity or payload schema is reported as `rebuild-required` and left untouched; the scanner ignores it and rebuilds topology from the pinned deployment. It then validates chain, deployment-profile, signer, index-root, start-block, index-wallet, deployment identity, and configured resident limits before any network probe. It is read-only with respect to configuration, durable state, companion stores, and chain state; only ephemeral lock-owner metadata is written and released. It authenticates bytecode and root graph bindings, finalized-tag support, at most 96 blocks of finalized-checkpoint lag, every initial and rechecked finalized-tag identity, a stable common finalized block across every reader, bounded adaptive coverage of the configured initial log span, and public or private submission capability. It never signs transaction bytes or supplies broadcastable bytes: public and private capability checks send only the fixed impossible-signature envelope. Authenticated JSON bodies use the configured signer solely for relay authentication. The Flashbots controls ask to cancel only the impossible envelope's hash, which the relay has never admitted, and prove the configured-signer authorization contrast with the identical unsigned cancellation request. For normal operation, a configured signer must fund the ETH reserve plus one maximum ETH principal and one maximum gas budget, and canonical REP must fund the REP reserve plus one maximum REP principal. An active retirement skips those trading-inventory minimums so a partial drain can restart; remaining recovery transactions still need ETH for gas. Private-mode doctor capability proof requires that signer so the relay evidence is bound to the account that will submit. When the required roots exist, a normal-operation funding shortfall fails the command with a nonzero exit status. Live mode without a signer, malformed or mismatched durable state, corruption in compatible topology and a missing referenced index generation also fail. Unsafe topology-store directories, pointers, or manifests fail their file checks; payload files are checked only for compatible generations. Missing core scan roots instead produce a successful waiting result with operations unavailable, after configuration, durable-state, submission, and canonical-anchor checks. Root-graph authentication, finalized-checkpoint proofs, log coverage, and signer inventory are not completed in that waiting result. An absent optional companion store remains absent; the doctor does not create it. The shipped Compose service, image's default `bun run run` command, and Windows launcher automatically run this gate before starting a persisted live-capable configuration; the paused dry-run first-boot template skips it. An alternate container operator command must invoke the gate explicitly. Operation-family counts in the report prove catalog and deployment reachability only; the paused dry-run indexes must complete before the dashboard can establish exact transaction eligibility.
+- The public configuration summary keeps configured RPC URLs visible and omits relay URLs and deployment details.
+- The Complete configuration editor uses a separate `/api/configuration-document` response that includes RPC and relay URLs, deployment addresses, and all other editable settings; it excludes the private key.
+- Signed transactions and calldata remain excluded from dashboard responses.
+- Dashboard pages and mutation APIs have no built-in authentication, so every client that can reach the listener can read these settings and invoke mutations. RPC URLs can contain provider credentials, and relay URLs may include private endpoint paths: keep the dashboard loopback-only unless it is explicitly published through an access-controlled encrypted tunnel.
+- Chaos reads but ignores `ZOLTAR_BOT_DASHBOARD_PASSWORD` and `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY`, which enable HTTP Basic authentication only in the liquidator and OpenOracle arbitrager dashboards; setting them cannot protect a chaos listener.
+- A `runtime.uiHost` of `0.0.0.0` stops startup unless `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED=true` asserts that the container port is published only on host loopback, as the shipped Compose service does.
 
-`/healthz` is process liveness and intentionally ignores pause/readiness state. `/readyz` and `/metrics` are also unauthenticated and must remain loopback-only or behind the same access-controlled encrypted tunnel as the dashboard. Readiness scan and live submission evidence age are bounded by three lifecycle polls plus two configured maximum block intervals; neither inherits the random scheduler delay. While complete canonical scans are available, the runtime refreshes submission evidence in both execution modes once the prior checks reach the larger of two lifecycle polls and two configured maximum block intervals, so the Execution mode checklist's Delivery row can be satisfied before the bot is armed rather than only after. In dry run a failed refresh is recorded as endpoint evidence and retried at that same cadence instead of failing the scan cycle, and a private-relay probe waits until the signer is loaded because its evidence must authenticate the submitting account; in live mode a failed refresh remains a scan-cycle error. That cadence limits non-broadcastable capability probes while retaining at least one lifecycle poll of readiness-age scheduling margin. A successful endpoint check is timestamped when all of its probes finish, and an aggregate batch that is already due at completion is rejected. Execution refreshes the same protocol-specific evidence at the final pre-sign and pre-broadcast or resubmission boundaries, re-attests the canonical anchor and nonce after a late network refresh, and performs one final local freshness assertion immediately before signing or submission. Evidence that expires during those checks prevents signing or network submission. Live submission readiness requires fresh evidence for every configured public-RPC or private-relay target. A safety-classified endpoint failure blocks readiness; connectivity-degraded targets are tolerated only while public mode retains at least one origin that proves `eth_sendRawTransaction` dispatch or private mode retains the configured number of healthy distinct relay origins with evidence bound to the current signer. Readiness also fails for intentional or safety pause, a stale/incomplete scan, unhealthy read quorum, incomplete, stale, invalid, wrong-chain, wrong-signer, or method-inconclusive submission evidence, a submission-origin threshold shortfall, a missing live signer, inventory below the full ETH/REP principal, reserve, and gas envelope, unresolved transaction/workflow recovery, pending/blocked/failed lifecycle work, a scheduled automatic retry, an unrepresented lifecycle-presence guard, an active runtime error, or an unreadable runtime snapshot. Metrics expose every named readiness check—including `submission`—plus workflow, pending-transaction, obligation, retry, presence, pause, and scan-age gauges. Compose checks liveness so a deliberate safety stop does not create a restart loop; alerting should scrape readiness and metrics only through that protected transport.
+The dashboard reads through `GET /api/state`, `/api/configuration`, and `/api/configuration-document`. Every other `/api/*` route is a mutation that the dashboard forms call: `/api/settings`, `/api/connectivity`, `/api/signer`, `/api/execution`, `/api/paused`, `/api/schedule`, `/api/selection`, `/api/operation`, `/api/retirement`, and the `/api/reconciliation/*` recovery controls. They are not a stable external interface.
+
+### Launch preflight
+
+`bun run doctor` is the stopped-process launch preflight.
+
+**Locks and side effects.**
+
+- It acquires the operator's state lock and, for live configuration, its chain-and-signer lock; a concurrent operator therefore makes the preflight fail.
+- It is read-only with respect to configuration, durable state, companion stores, and chain state; only ephemeral lock-owner metadata is written and released.
+- It never signs transaction bytes or supplies broadcastable bytes: public and private capability checks send only the fixed impossible-signature envelope. Authenticated JSON bodies use the configured signer solely for relay authentication.
+- An absent optional companion store remains absent; the doctor does not create it.
+
+**Local checks, before any network probe.**
+
+- It fully parses the durable journal and the referenced protocol-index generation.
+- When companion state exists, it authenticates the immutable-topology pointer and compatible generation. A cache with an incompatible deployment identity or payload schema is reported as `rebuild-required` and left untouched; the scanner ignores it and rebuilds topology from the pinned deployment.
+- It validates chain, deployment-profile, signer, index-root, start-block, index-wallet, deployment identity, and configured resident limits.
+
+**Network checks.**
+
+- Bytecode and root graph bindings.
+- Finalized-tag support, at most 96 blocks of finalized-checkpoint lag, every initial and rechecked finalized-tag identity, and a stable common finalized block across every reader.
+- Bounded adaptive coverage of the configured initial log span.
+- Public or private submission capability. The Flashbots controls ask to cancel only the impossible envelope's hash, which the relay has never admitted, and prove the configured-signer authorization contrast with the identical unsigned cancellation request. A private-mode capability proof requires that signer, so the relay evidence is bound to the account that will submit.
+
+**Funding.**
+
+- For normal operation, a configured signer must fund the ETH reserve plus one maximum ETH principal and one maximum gas budget, and canonical REP must fund the REP reserve plus one maximum REP principal.
+- An active retirement skips those trading-inventory minimums so a partial drain can restart; remaining recovery transactions still need ETH for gas.
+
+**Results.**
+
+| Condition | Result |
+| --- | --- |
+| A normal-operation funding shortfall when the required roots exist | Fails with a nonzero exit status. |
+| Live mode without a signer; malformed or mismatched durable state; corruption in compatible topology; a missing referenced index generation | Fails. |
+| Unsafe topology-store directories, pointers, or manifests | Fail their file checks. Payload files are checked only for compatible generations. |
+| Missing core scan roots | Succeeds as a waiting result with operations unavailable, after the configuration, durable-state, submission, and canonical-anchor checks. Root-graph authentication, finalized-checkpoint proofs, log coverage, and signer inventory are not completed. |
+
+Operation-family counts in the report prove catalog and deployment reachability only; the paused dry-run indexes must complete before the dashboard can establish exact transaction eligibility.
+
+**Who runs it.** The shipped Compose service, the image's default `bun run run` command, and the Windows launcher automatically run this gate (`bun src/cli/doctor.ts --if-live-capable`) before starting a persisted live-capable configuration; the paused dry-run first-boot template skips it. An alternate container operator command must invoke the gate explicitly.
+
+### Health, readiness, and metrics
+
+| Endpoint | Reports | Authentication |
+| --- | --- | --- |
+| `/healthz` | Process liveness. It intentionally ignores pause and readiness state. Compose checks it, so a deliberate safety stop does not create a restart loop. | None |
+| `/readyz` | Execution readiness: HTTP 200 only while the bot is ready and idle. | None |
+| `/metrics` | Every named readiness check, including `submission`, plus workflow, pending-transaction, obligation, retry, presence, pause, and scan-age gauges. | None |
+
+`/readyz` and `/metrics` must remain loopback-only or behind the same access-controlled encrypted tunnel as the dashboard; alerting should scrape them only through that protected transport.
+
+**Readiness fails for any of:**
+
+- an intentional or safety pause;
+- a stale or incomplete scan, or an unhealthy read quorum;
+- incomplete, stale, invalid, wrong-chain, wrong-signer, or method-inconclusive submission evidence, or a submission-origin threshold shortfall;
+- a missing live signer, or inventory below the full ETH/REP principal, reserve, and gas envelope;
+- unresolved transaction or workflow recovery, pending, blocked, or failed lifecycle work, or a scheduled automatic retry;
+- an unrepresented lifecycle-presence guard;
+- an active runtime error or an unreadable runtime snapshot.
+
+**Evidence age.** Readiness scan and live submission evidence age are bounded by three lifecycle polls plus two configured maximum block intervals; neither inherits the random scheduler delay.
+
+**Submission evidence refresh.**
+
+- While complete canonical scans are available, the runtime refreshes submission evidence in both execution modes once the prior checks reach the larger of two lifecycle polls and two configured maximum block intervals. The Execution mode checklist's Delivery row can therefore be satisfied before the bot is armed rather than only after. That cadence limits non-broadcastable capability probes while retaining at least one lifecycle poll of readiness-age scheduling margin.
+- In dry run, a failed refresh is recorded as endpoint evidence and retried at that same cadence instead of failing the scan cycle. A private-relay probe waits until the signer is loaded, because its evidence must authenticate the submitting account.
+- In live mode, a failed refresh remains a scan-cycle error.
+- A successful endpoint check is timestamped when all of its probes finish, and an aggregate batch that is already due at completion is rejected.
+- Execution refreshes the same protocol-specific evidence at the final pre-sign and pre-broadcast or resubmission boundaries, re-attests the canonical anchor and nonce after a late network refresh, and performs one final local freshness assertion immediately before signing or submission. Evidence that expires during those checks prevents signing or network submission.
+
+**Submission targets.** Live submission readiness requires fresh evidence for every configured public-RPC or private-relay target. A safety-classified endpoint failure blocks readiness. Connectivity-degraded targets are tolerated only while public mode retains at least one origin that proves `eth_sendRawTransaction` dispatch, or private mode retains the configured number of healthy distinct relay origins with evidence bound to the current signer.
+
+### State unit
 
 Treat the main runtime state and its companion stores as one backup unit:
 
@@ -212,4 +444,44 @@ Treat the main runtime state and its companion stores as one backup unit:
 - `<runtime.stateFile>.protocol-index-v1`
 - `<runtime.stateFile>.immutable-topology-v1`
 
-The main runtime state is atomically written, structurally validated, owner-only, and symlink-rejecting; it does not have a whole-file checksum. A state path is scoped to its chain ID, all eight deployment roots, the Uniswap V3 factory, and first signer. The factory is written into new state; older operated state without that field can bind only when its profile has an explicit historical deployment mapping. The current manifest alone cannot prove the factory used by an older operated journal, so other missing-factory states fail closed. A changed chain or signer requires a separate state path. Transaction signer and Complete configuration in the dashboard handle this transition: when the selected identity changes while retaining the active path, they allocate a new unused path, preserve the old configuration as an owner-only `operator.json.retired-ARCHIVE_ID.json` alongside `operator.json`, and preserve the old state unit. Complete configuration also permits explicitly selecting an existing state file after checking its chain, deployment, factory, signer, and exclusive lock. These changes require the bot to be paused and restart it paused with live execution off; pending recovery blocks identity switches. The old run keeps its state and signer locks until it stops, and the new run reacquires its own locks before starting. Memory-only keys remain memory-only during the internal restart. Private keys and live execution remain controlled by Transaction signer and Execution mode. An operated deployment profile also requires a separate state path unless completed retirement authorizes replacement on the same path. Ordinarily, only an unsigned bootstrap journal with no durable activity, scheduler, index, workflow, obligation, lifecycle-presence blocker, tombstone, pending transaction, or safety history can adopt corrected deployment roots automatically. An upgrade from the shipped zero-root configuration also permits migration when no execution or recovery state exists and the audit contains only configuration, wallet, or failed scan entries. That migration preserves the signer and audit entries, retains unrelated safety stops, and clears only the previous missing-root safety latch. The companion protocol index and topology cache add checksummed content tied to the deployment identity. Carry proofs are rebuilt from anchored contract storage, following the Statoblast UI approach; historical carry logs and old carry-proof journal files are not required for operation or recovery. Cursor-hash or identity mismatches otherwise fail closed or rebuild only the derived cache. Live balances and lifecycle state are always refreshed from the canonical anchor.
+**Integrity.** The main runtime state is atomically written, structurally validated, owner-only, and symlink-rejecting; it does not have a whole-file checksum. The companion protocol index and topology cache add checksummed content tied to the deployment identity. Cursor-hash or identity mismatches fail closed or rebuild only the derived cache. Live balances and lifecycle state are always refreshed from the canonical anchor.
+
+**Scope.** A state path is scoped to its chain ID, all eight deployment roots, the Uniswap V3 factory, and first signer. The factory is written into new state.
+
+- A changed chain or signer requires a separate state path.
+- An operated deployment profile also requires a separate state path unless completed retirement authorizes replacement on the same path.
+- Ordinarily, only an unsigned bootstrap journal with no durable activity, scheduler, index, workflow, obligation, lifecycle-presence blocker, tombstone, pending transaction, or safety history can adopt corrected deployment roots automatically.
+
+**Changing the signer or chain in the dashboard.** Transaction signer and Complete configuration handle the transition:
+
+- When the selected identity changes while retaining the active path, they allocate a new unused path, preserve the old configuration as an owner-only `operator.json.retired-ARCHIVE_ID.json` alongside `operator.json`, and preserve the old state unit.
+- Complete configuration also permits explicitly selecting an existing state file after checking its chain, deployment, factory, signer, and exclusive lock.
+- These changes require the bot to be paused and restart it paused with live execution off; pending recovery blocks identity switches.
+- The old run keeps its state and signer locks until it stops, and the new run reacquires its own locks before starting.
+- Memory-only keys remain memory-only during the internal restart. Private keys and live execution remain controlled by Transaction signer and Execution mode.
+
+**Carry proofs.** Carry proofs are rebuilt from anchored contract storage, following the Statoblast UI approach; historical carry logs and old carry-proof journal files are not required for operation or recovery.
+
+## Command-line entry points
+
+| Command | Purpose |
+| --- | --- |
+| `bun run run` | Starts the operator. With arguments it runs one [retirement command](./README.md#drain--retire-a-deployment) and exits. |
+| `bun run doctor` | The [launch preflight](#launch-preflight). |
+| `bun src/cli/doctor.ts --if-live-capable` | The same preflight as a launch gate: it runs only when the persisted configuration is live-capable. |
+| `bun src/cli/deployment-upgrade.ts prepare` | Selects the current deployment manifest, archiving the old configuration when the deployment changed. `start.bat` runs it. |
+| `bun src/cli/deployment-upgrade.ts archives` | Lists archived deployment IDs and their retirement status. |
+| `bun src/cli/deployment-upgrade.ts retire ARCHIVE_ID` | Prepares one archive for retirement. `retirement.bat ARCHIVE_ID` runs it. |
+| `bun src/cli/deployment-upgrade.ts status` | Reports retirement completion for the configuration selected by `ZOLTAR_CHAOS_CONFIG`; exit status `10` means still in progress. |
+
+`ZOLTAR_CHAOS_CONFIG` selects the operator file for every command; it defaults to `.state/operator.json`. The image sets `ZOLTAR_BOT_CONTAINER=true`, which makes container packaging require `ZOLTAR_BOT_SIGNER_LOCK_ROOT` inside the persistent state volume.
+
+## Upgrading
+
+State and configuration written by earlier releases still load:
+
+- **Operator file `version: 1`.** Its `runtime.lifecyclePollMilliseconds` becomes `runtime.pollMilliseconds`, and the next save writes version 2.
+- **Saved `deployment` fields.** They are obsolete: they are ignored and removed when settings are saved.
+- **Sepolia state from the earlier core deployment manifest.** It is recognized from its durable profile ID and pinned on direct restart when the configuration has no `deploymentPin`.
+- **State without a recorded Uniswap V3 factory.** It can bind only when its profile has an explicit historical deployment mapping. The current manifest alone cannot prove the factory used by an older operated journal, so other missing-factory states fail closed.
+- **The shipped zero-root configuration.** An upgrade from it permits migration when no execution or recovery state exists and the audit contains only configuration, wallet, or failed scan entries. That migration preserves the signer and audit entries, retains unrelated safety stops, and clears only the previous missing-root safety latch.
