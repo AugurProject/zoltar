@@ -7,7 +7,7 @@ export function blockParameterIndex(method: string) {
 	return undefined
 }
 
-/** Wallets can cache `latest` even after returning a mined receipt. Use an explicit block at least as new as that receipt. */
+/** Wallets can cache `latest` even after returning a transaction receipt. Use an explicit block at least as new as that receipt. */
 export function createConfirmedReadTransport(transport: Transport, getConfirmedBlock: () => bigint | undefined): Transport {
 	const client = createPublicClient({ transport })
 	let pendingHead: Promise<bigint> | undefined

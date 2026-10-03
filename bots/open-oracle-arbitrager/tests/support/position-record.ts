@@ -23,7 +23,7 @@ export function executionIntentFixture(overrides: Partial<ExecutionIntent> = {})
 	}
 }
 
-/** An open report-7 position whose only gas is its mined entry; tests override only the fields they exercise. */
+/** An open report-7 position whose only gas is its confirmed entry; tests override only the fields they exercise. */
 export function openPositionFixture(overrides: Partial<PositionRecord> = {}): PositionRecord {
 	return {
 		account: positionAccount,
@@ -33,7 +33,7 @@ export function openPositionFixture(overrides: Partial<PositionRecord> = {}): Po
 		direction: 'sell-rep',
 		entryTransactionHash,
 		entryTransactionHashes: [entryTransactionHash],
-		gasExpenditures: [{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: entryTransactionHash }],
+		gasExpenditures: [{ costEth: '0.001', includedAt: '2026-01-01T00:00:00.000Z', transactionHash: entryTransactionHash }],
 		historyOutbox: undefined,
 		hedgeAmountToken: '2',
 		hedgeWeth: '1',

@@ -71,7 +71,7 @@ describe('simulation Uniswap quotes', () => {
 			isBootstrapped: true,
 			isBootstrapping: false,
 			mintRep: async () => undefined,
-			mineBlock: async () => undefined,
+			advanceBlock: async () => undefined,
 			queryDelayMilliseconds: 0,
 			repPerEthPrice: 2n * 10n ** 18n,
 			repPerUsdcPrice: 5n * 10n ** 6n,

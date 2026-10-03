@@ -3,7 +3,7 @@
 import { createMemoryClient } from '@tevm/memory-client'
 import { describe, expect, test } from 'bun:test'
 import { bytesToHex, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from '../../simulation/clock.js'
+import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, advanceNextSimulationBlock, includePendingSimulationTransactionAtTimestamp } from '../../simulation/clock.js'
 
 // The simulation clock starts at 2025-01-01T00:00:00Z and advances one second per block.
 const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
@@ -122,7 +122,7 @@ describe('simulation clock', () => {
 	test('advances by explicit seconds and by default interval', async () => {
 		const memoryClient = createMemoryClient()
 		await initializeSimulationClock(memoryClient)
-		await mineNextSimulationBlock(memoryClient)
+		await advanceNextSimulationBlock(memoryClient)
 		expect(await getSimulationChainTimestamp(memoryClient)).toBe(SIMULATION_INITIAL_TIMESTAMP + SIMULATION_BLOCK_INTERVAL_SECONDS)
 
 		await advanceSimulationTime(memoryClient, 5n)
@@ -138,10 +138,10 @@ describe('simulation clock', () => {
 			transport: {},
 		} as never
 
-		await expect(mineNextSimulationBlock(memoryClient)).rejects.toThrow('Simulation transport did not expose a compatible Tevm node')
+		await expect(advanceNextSimulationBlock(memoryClient)).rejects.toThrow('Simulation transport did not expose a compatible Tevm node')
 	})
 
-	test('throws when mining a pending transaction that is missing from the tx pool', async () => {
+	test('throws when including a pending transaction that is missing from the tx pool', async () => {
 		const { node } = createSimulationNode({
 			blockStateRootHex: SIMULATION_STATE_ROOT,
 			includeStateRoot: true,
@@ -161,10 +161,10 @@ describe('simulation clock', () => {
 
 		const txHash = '0x1234' as `0x${string}`
 
-		await expect(minePendingSimulationTransactionAtTimestamp(memoryClient as never, txHash, SIMULATION_INITIAL_TIMESTAMP)).rejects.toThrow(`Simulation transaction ${txHash} was not found in the tx pool`)
+		await expect(includePendingSimulationTransactionAtTimestamp(memoryClient as never, txHash, SIMULATION_INITIAL_TIMESTAMP)).rejects.toThrow(`Simulation transaction ${txHash} was not found in the tx pool`)
 	})
 
-	test('throws when a mined simulation block has an unknown state root', async () => {
+	test('throws when a simulation block has an unknown state root', async () => {
 		const { node } = createSimulationNode({
 			blockStateRootHex: SIMULATION_STATE_ROOT,
 			includeStateRoot: false,
@@ -179,6 +179,6 @@ describe('simulation clock', () => {
 			setCode: async () => undefined,
 			tevmReady: async () => undefined,
 		}
-		await expect(advanceSimulationTime(memoryClient as never, 1n)).rejects.toThrow('Simulation state root was not found after mining a block')
+		await expect(advanceSimulationTime(memoryClient as never, 1n)).rejects.toThrow('Simulation state root was not found after advancing a block')
 	})
 })

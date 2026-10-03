@@ -277,7 +277,7 @@ test("ignores another transaction's failure while its own multi-step review runs
 		expect(dialog.querySelector('.operation-modal-steps')).not.toBeNull()
 		expect(dialog.querySelector('.operation-modal-steps')?.textContent).not.toContain('Transaction reverted.')
 		await act(() => {
-			presentation.value = { hash: approvalHash, operationKey: 'mine', title: 'Approval failed', tone: 'error', detail: 'Transaction reverted.' }
+			presentation.value = { hash: approvalHash, operationKey: 'approval', title: 'Approval failed', tone: 'error', detail: 'Transaction reverted.' }
 		})
 		// Retry is available in the form, while failed transaction controls stay visible and disabled.
 		expect(transactionSteps.value).toBeUndefined()

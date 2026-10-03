@@ -7,7 +7,7 @@ import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient 
 import { withTransactionCallbacks } from './writeClientCallbacks.js'
 import { createSimulationProfile } from '../wallet/networkProfile.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
-import { advanceSimulationTime, mineNextSimulationBlock, minePendingSimulationTransaction } from './clock.js'
+import { advanceSimulationTime, advanceNextSimulationBlock, includePendingSimulationTransaction } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization, type SimulationSource } from './savedStates.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
@@ -110,11 +110,11 @@ function createTevmTransactionRequest({ data, from, gas, gasPrice, maxFeePerGas,
 		...(value === undefined ? {} : { value }),
 	}
 }
-/** Adds an impersonated transaction to the Tevm mempool and mines it into the next simulation block. */
+/** Adds an impersonated transaction to the Tevm mempool and includes it in the next simulation block. */
 async function submitTevmTransaction(memoryClient: MemoryClientLike, parameters: TevmTransactionParameters, label: string) {
 	const result = await memoryClient.tevmCall(createTevmTransactionRequest(parameters))
 	const hash = requireTransactionHash(result.txHash, label)
-	await minePendingSimulationTransaction(memoryClient, hash)
+	await includePendingSimulationTransaction(memoryClient, hash)
 	return hash
 }
 async function submitSimulationTransaction(memoryClient: MemoryClientLike, from: Address, { data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: SimulationSendTransactionRequest, label: string) {
@@ -163,7 +163,7 @@ type SimulationEngine = {
 	getState(): SimulationWorkerState
 	installSimulationProxyDeployer(parameters: { address: Address; runtimeCode: Hex }): Promise<void>
 	mintRep(amount: bigint): Promise<void>
-	mineBlock(): Promise<void>
+	advanceBlock(): Promise<void>
 	patchSimulationGenesisRepToken(parameters: { repAddress: Address; zoltarAddress: Address }): Promise<void>
 	request(parameters: RequestArguments): Promise<unknown>
 	reset(): Promise<void>
@@ -509,7 +509,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 					return receipt
 				} catch (error) {
 					if (!isMissingTransactionReceiptError(error)) throw error
-					await mineNextSimulationBlock(memoryClient)
+					await advanceNextSimulationBlock(memoryClient)
 				}
 			}
 			const receipt = await receiptClient.getTransactionReceipt({
@@ -691,8 +691,8 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 			await refreshSimulationState()
 			emitState()
 		},
-		mineBlock: async () => {
-			await mineNextSimulationBlock(memoryClient)
+		advanceBlock: async () => {
+			await advanceNextSimulationBlock(memoryClient)
 			await refreshSimulationState()
 			emitState()
 		},

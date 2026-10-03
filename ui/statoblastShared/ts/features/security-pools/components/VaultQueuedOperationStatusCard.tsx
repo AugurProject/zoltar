@@ -39,7 +39,7 @@ function getQueuedVaultOperationStatus({
 	securityVaultResult,
 }: {
 	currentPoolOracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
-	/** A direct pool call is mined when its result arrives; it never enters the oracle queue. */
+	/** A direct pool call is included when its result arrives; it never enters the oracle queue. */
 	directExecution?: boolean
 	loadingSecurityVault: boolean
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>

@@ -22,7 +22,7 @@ export async function confirmedGasExpenditures(readClients: readonly ReadClient[
 	const expenditures = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, receipts, config.rpcQuorum)
 	return expenditures.map(expenditure => ({
 		costEth: decimalWeth(expenditure.costAttoEth),
-		minedAt: expenditure.minedAt,
+		includedAt: expenditure.includedAt,
 		transactionHash: expenditure.transactionHash,
 	}))
 }

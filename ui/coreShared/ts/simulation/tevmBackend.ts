@@ -416,8 +416,8 @@ export async function createSimulationBackend(
 		mintRep: async amount => {
 			await callWorker('mintRep', { amount })
 		},
-		mineBlock: async () => {
-			await callWorker('mineBlock', undefined)
+		advanceBlock: async () => {
+			await callWorker('advanceBlock', undefined)
 		},
 		profile,
 		get queryDelayMilliseconds() {

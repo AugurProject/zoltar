@@ -121,10 +121,10 @@ export function normalizeBlock(value: unknown, includeTransactions: boolean, pen
 	const hash = block['hash'] === undefined || block['hash'] === null ? undefined : normalizeHash(block['hash'])
 	const number = block['number'] === undefined || block['number'] === null ? undefined : normalizeRpcBigInt(block['number'])
 	if (pending) {
-		if (hash !== undefined || number !== undefined) throw new Error('RPC returned a pending block with mined identifiers')
+		if (hash !== undefined || number !== undefined) throw new Error('RPC returned a pending block with confirmed block identifiers')
 	} else {
-		if (hash === undefined) throw new Error('RPC returned a mined block without a hash')
-		if (number === undefined) throw new Error('RPC returned a mined block without a number')
+		if (hash === undefined) throw new Error('RPC returned a non-pending block without a hash')
+		if (number === undefined) throw new Error('RPC returned a non-pending block without a number')
 	}
 	const rawTransactions = block['transactions']
 	if (!Array.isArray(rawTransactions)) throw new Error('RPC returned a block without transactions')
@@ -133,7 +133,7 @@ export function normalizeBlock(value: unknown, includeTransactions: boolean, pen
 		const normalizedTransactions = rawTransactions.map(transaction => normalizeTransaction(transaction))
 		for (const [index, transaction] of normalizedTransactions.entries()) {
 			if (pending) {
-				if (transaction.blockHash !== undefined || transaction.blockNumber !== undefined || transaction.transactionIndex !== undefined) throw new Error('RPC returned a pending block with a transaction containing mined metadata')
+				if (transaction.blockHash !== undefined || transaction.blockNumber !== undefined || transaction.transactionIndex !== undefined) throw new Error('RPC returned a pending block with a transaction containing block inclusion metadata')
 				continue
 			}
 			if (transaction.blockHash !== hash) throw new Error('RPC returned a block with a transaction whose blockHash does not match the block')

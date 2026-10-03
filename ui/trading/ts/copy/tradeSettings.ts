@@ -10,7 +10,7 @@ export const customValidity = 'Custom validity, minutes'
 export const percent = '%'
 export const minutes = 'min'
 export const validityValidation = 'Enter a whole number from 1 to 1440 minutes.'
-export const settingsHelp = 'Transactions revert if the price moves further than this or they are not mined in time.'
+export const settingsHelp = 'Transactions revert if the price moves further than this or they are included after their deadline.'
 
 export function minutesLabel(minutes: bigint) {
 	return `${minutes.toString()} min`
