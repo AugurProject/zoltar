@@ -12,7 +12,7 @@ import { TransactionReview } from '@zoltar/ui-core-shared/components/Transaction
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
-import { createTradingPublicClient, publicErrorMessage, settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
+import { createTradingPublicClient, publicErrorMessage, settlementAvailability, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { resolvedShareOutcome } from '../protocol/settlement.js'
@@ -34,14 +34,12 @@ import { resolveSettlementAvailability } from './live/actionAvailability.js'
 export type LiveSettlementServices = Readonly<{
 	createPublicClient(configuration: DeploymentConfiguration): PublicClient
 	loadForkContext: typeof loadForkMigrationContext
-	simulate: typeof simulateSettlement
 	submit: typeof submitFreshSettlement
 }>
 
 export const liveSettlementServices: LiveSettlementServices = {
 	createPublicClient: createTradingPublicClient,
 	loadForkContext: loadForkMigrationContext,
-	simulate: simulateSettlement,
 	submit: submitFreshSettlement,
 }
 
@@ -78,8 +76,6 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailableReason
 		else inputBlocker ??= forkMigrationBatchBlocker(selectedForkTargets)
 	}
-	// The pool rate is part of the quote basis: a background refresh that moves it retires the quote deliberately.
-	const contextKey = `${account ?? ''}\u0000${configuration.chainId.toString()}\u0000${market.pool}\u0000${market.settlementCollateralAttoEth.toString()}\u0000${market.shareTokenSupplyAttoShares.toString()}\u0000${market.systemState}\u0000${market.awaitingForkContinuation ? '1' : '0'}\u0000${market.universeForkTime.toString()}\u0000${market.questionOutcome.toString()}\u0000${operation}\u0000${amount}\u0000${sourceOutcome}\u0000${targetOutcomeKey}`
 	const workflowController = useSettlementWorkflowController({
 		...context,
 		operation,
@@ -87,13 +83,13 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		sourceOutcome,
 		targetOutcomeIndexes,
 		inputBlocker,
-		contextKey,
 		onRedemptionConfirmed: () => setAmount(''),
 		onMigrationConfirmed: () => setForkContextNonce(current => current + 1),
 		services,
 	})
 	const { transaction, invalidateInputs: invalidateSettlementInputs } = workflowController
-	const { quote, state, workflowLocked } = transaction
+	const { state, workflowLocked } = transaction
+	const approval = workflowController.approval
 	const walletConnected = account !== undefined && walletClient !== undefined
 	// The acknowledgment covers this exact source, balance, and branch set; changing any of them asks again.
 	const migrationKey = `${account ?? ''}\u0000${sourceOutcome}\u0000${(sourceBalance ?? 0n).toString()}\u0000${targetOutcomeKey}`
@@ -106,8 +102,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		inputBlocker: inputBlocker ?? acknowledgmentBlocker,
 		inputBlockerLoading: operation === 'migrate-shares' && operationAvailable && (forkContextState === 'loading' || forkContextState === 'idle'),
 		workflowLocked,
-		quoteState: transaction.quoteState,
-		quoteError: transaction.quoteError,
+		previewBlocker: workflowController.previewBlocker,
 	})
 	const walletStep = panelWalletStep(wallet, walletConnected && networkMismatchReason === undefined, workflowLocked)
 	let actionLabel = settlementCopy.redeemCompleteSetsAction
@@ -273,12 +268,12 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 			})()}
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={actionAvailability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submitCurrent()}>
-				{quote?.operation === 'redeem-complete-set' ? (
-					<section className='trade-estimate' aria-label={settlementCopy.quoteHeading} aria-busy={transaction.quoteState === 'loading'}>
+				{approval?.operation === 'redeem-complete-set' ? (
+					<section className='trade-estimate' aria-label={settlementCopy.estimateHeading} aria-busy={false}>
 						<TransactionReview
 							variant='inline'
-							primary={[{ label: settlementCopy.youReceive, value: formatValueWithUnit(formatRoundedUnits(quote.expectedAttoEth), settlementCopy.eth) }]}
-							details={[{ label: settlementCopy.minimumReceived, value: formatValueWithUnit(formatTrimmedUnits(quote.minimumAttoEth), settlementCopy.eth) }]}
+							primary={[{ label: settlementCopy.youReceive, value: formatValueWithUnit(formatRoundedUnits(approval.expectedAttoEth), settlementCopy.eth) }]}
+							details={[{ label: settlementCopy.minimumReceived, value: formatValueWithUnit(formatTrimmedUnits(approval.minimumAttoEth), settlementCopy.eth) }]}
 						/>
 						<UserMessage className='detail trade-estimate-note' detail={<>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</>} />
 					</section>

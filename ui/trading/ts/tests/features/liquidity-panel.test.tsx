@@ -17,10 +17,6 @@ const openMarket = etherScaleMarketFixture()
 // The question ended: the pool still holds liquidity but takes no new risk.
 const closedMarket = etherScaleMarketFixture({ tradingStatus: 1, endTime: 1n })
 const services: LiveLiquidityServices = {
-	publicErrorMessage: String,
-	simulateLiquidity: async () => {
-		throw new Error('A disconnected panel must not request a wallet simulation')
-	},
 	submitFreshLiquidity: async () => {
 		throw new Error('Unexpected send')
 	},
@@ -88,44 +84,52 @@ function amountErrorText() {
 describe('liquidity panel', () => {
 	installDomTestLifecycle()
 
-	test('shows one loading status while an addition simulation is pending', async () => {
-		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
-		const rendered = await renderPanel(openMarket, true, undefined, { ...services, simulateLiquidity: async () => await new Promise<never>(() => undefined) }, walletClient)
+	test('previews additions instantly without wallet requests', async () => {
+		let requests = 0
+		const walletClient = createWalletClient({
+			account,
+			transport: custom({
+				request: async () => {
+					requests++
+					throw new Error('Unexpected wallet read')
+				},
+			}),
+		})
+		const rendered = await renderPanel(openMarket, true, undefined, services, walletClient)
 		try {
 			await typeAmount('0.1')
 			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
-			expect(document.body.textContent?.match(/Getting a quote…/g)).toHaveLength(1)
+			expect(document.body.textContent).not.toContain('Getting a quote…')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 LP')
 			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Add liquidity')
-			expect(action?.disabled).toBe(true)
+			expect(action?.disabled).toBe(false)
+			expect(requests).toBe(0)
 		} finally {
 			await rendered.cleanup()
 		}
 	})
 
 	test('previews initialization instantly without any wallet quote requests', async () => {
-		let simulations = 0
-		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
-		const rendered = await renderPanel(
-			{ ...openMarket, pair: undefined, lpTotalSupply: 0n },
-			true,
-			undefined,
-			{
-				...services,
-				simulateLiquidity: async () => {
-					simulations += 1
-					throw new Error('Unexpected quote request')
+		let requests = 0
+		const walletClient = createWalletClient({
+			account,
+			transport: custom({
+				request: async () => {
+					requests++
+					throw new Error('Unexpected wallet read')
 				},
-			},
-			walletClient,
-		)
+			}),
+		})
+		const rendered = await renderPanel({ ...openMarket, pair: undefined, lpTotalSupply: 0n }, true, undefined, services, walletClient)
 		try {
 			await typeAmount('0.1')
 			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 Invalid')
 			expect(document.body.textContent).not.toContain('Getting a quote…')
 			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
-			expect(simulations).toBe(0)
+			expect(requests).toBe(0)
 			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Initialize pool')
 			expect(action?.disabled).toBe(false)
+			expect(requests).toBe(0)
 		} finally {
 			await rendered.cleanup()
 		}
@@ -191,7 +195,7 @@ describe('liquidity panel', () => {
 			const estimate = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(estimate?.textContent).toContain('1 LP')
 			expect(estimate?.textContent).toContain('1 Invalid')
-			expect(estimate?.textContent).toContain('Connect a wallet for an exact quote.')
+			expect(estimate?.textContent).toContain('Connect a wallet to submit.')
 			await act(() => operationButton('Remove').click())
 			await typeAmount('5')
 			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')

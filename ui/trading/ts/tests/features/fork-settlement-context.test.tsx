@@ -6,7 +6,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
 import { shareBalanceScope } from '../../protocol/live.js'
-// Longer than the automatic quote debounce in useQuotedTransaction.
+// Wait past the former quote debounce to detect accidental background reads.
 const QUOTE_SETTLE_MILLISECONDS = 400
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -79,7 +79,6 @@ describe('live fork settlement context', () => {
 				services={{
 					createPublicClient: () => publicClient,
 					loadForkContext: async () => forkContext,
-					simulate: async (_client, _configuration, quoteMarket, _account, _operation, parameters) => ({ blockNumber: 12n, blockHash, operation: 'redeem-complete-set', market: quoteMarket, amount: parameters.amount ?? 0n, deadline: 1000n, slippageBps: 50n, expectedAttoEth: 1n, minimumAttoEth: 1n }),
 					submit: async () => {
 						submissions++
 						return transactionHash
@@ -120,14 +119,6 @@ describe('live fork settlement context', () => {
 				if (contextLoads === 1) throw new Error('fork metadata RPC unavailable')
 				return forkContext
 			},
-			simulate: async () => ({
-				blockNumber: 12n,
-				blockHash,
-				operation: 'migrate-shares' as const,
-				market,
-				sourceOutcome: 'YES' as const,
-				targetOutcomeIndexes: [1n],
-			}),
 			submit: async () => transactionHash,
 		}
 		const walletClient = createWalletClient({
@@ -190,7 +181,7 @@ describe('live fork settlement context', () => {
 		const target = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Red') === true)
 		if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
 		await act(() => target.click())
-		// Selecting a target quotes automatically; there is no separate simulate step.
+		// Selecting a target uses loaded metadata and balances without wallet simulation.
 		expect(document.body.textContent).not.toContain('Simulate authoritative settlement')
 		await act(async () => {
 			await Bun.sleep(QUOTE_SETTLE_MILLISECONDS)

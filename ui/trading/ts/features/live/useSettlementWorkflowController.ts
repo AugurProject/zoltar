@@ -1,12 +1,13 @@
 import * as workflowCopy from '../../copy/workflows.js'
-import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { SettlementOperation, ShareOutcome } from '../../protocol/live.js'
 import * as settlementCopy from '../../copy/settlement.js'
 import type { LiveSettlementServices } from '../LiveSettlementControls.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
-import { useQuotedTransaction } from './useQuotedTransaction.js'
+import { useTransactionSubmission } from './useTransactionSubmission.js'
 
-type SettlementSimulation = Awaited<ReturnType<LiveSettlementServices['simulate']>>
+import { sellHoldingFeeBlocker } from '../../protocol/holdingFees.js'
+import { minimumAfterSlippage } from '../../protocol/tradeQuote.js'
+import type { SettlementApproval } from '../../protocol/settlement.js'
 
 export function useSettlementWorkflowController({
 	configuration,
@@ -20,7 +21,6 @@ export function useSettlementWorkflowController({
 	sourceOutcome,
 	targetOutcomeIndexes,
 	inputBlocker,
-	contextKey,
 	settings,
 	refresh,
 	onKnownReceipt,
@@ -37,19 +37,22 @@ export function useSettlementWorkflowController({
 		sourceOutcome: ShareOutcome
 		targetOutcomeIndexes: readonly bigint[]
 		inputBlocker: string | undefined
-		/** Every input and pool field the settlement quote depends on; a change re-quotes. */
-		contextKey: string
 		onMigrationConfirmed(): void
 		onRedemptionConfirmed?(): void
 		services: LiveSettlementServices
 	}>) {
-	const simulationParameters = (): Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> => {
-		if (operation === 'redeem-complete-set' && parsedAmount !== undefined) return { amount: parsedAmount, validityMinutes: settings.validityMinutes, slippageBps: settings.slippageBps }
-		if (operation === 'migrate-shares') return { sourceOutcome, targetOutcomeIndexes }
-		return {}
+	let approval: SettlementApproval | undefined
+	if (inputBlocker === undefined) {
+		if (operation === 'redeem-complete-set' && parsedAmount !== undefined && market.shareTokenSupplyAttoShares > 0n) {
+			const expectedAttoEth = (parsedAmount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
+			if (expectedAttoEth > 0n) approval = { operation, market, amount: parsedAmount, expectedAttoEth, minimumAttoEth: minimumAfterSlippage(expectedAttoEth, settings.slippageBps), slippageBps: settings.slippageBps, deadline: { validityMinutes: settings.validityMinutes } }
+		} else if (operation === 'migrate-shares') approval = { operation, market, sourceOutcome, targetOutcomeIndexes }
+		else if (operation === 'redeem-winning-shares') approval = { operation, market }
 	}
-	const quotable = account !== undefined && walletClient !== undefined && balanceState === 'ready' && inputBlocker === undefined
-	const transaction = useQuotedTransaction<SettlementSimulation>({
+	let previewBlocker: string | undefined
+	if (approval === undefined) previewBlocker = settlementCopy.zeroRedemptionReason
+	else if (approval.operation === 'redeem-complete-set') previewBlocker = sellHoldingFeeBlocker(market, approval.amount, approval.minimumAttoEth, (market.valuation?.timestamp ?? 0n) + settings.validityMinutes * 60n)
+	const transaction = useTransactionSubmission({
 		operation: 'settlement',
 		label: settlementCopy.settlementTransaction,
 		activityTitle: workflowCopy.formatSettlementActivity(market.title),
@@ -58,32 +61,22 @@ export function useSettlementWorkflowController({
 		market: market.pool,
 		walletClient,
 		externallyLocked,
-		quoteSource: {
-			key: quotable ? `${contextKey}\u0000${settings.slippageBps.toString()}\u0000${settings.validityMinutes.toString()}` : undefined,
-			load: async () => {
-				if (account === undefined || walletClient === undefined) throw new Error(settlementCopy.quoteUnavailable)
-				return await services.simulate(walletClient, configuration, market, account, operation, simulationParameters())
-			},
-		},
 		onWorkflowLockChange,
 		onKnownReceipt,
 		failureFallback: settlementCopy.transactionFailed,
-		quoteFailureFallback: settlementCopy.quoteFailed,
 	})
 
 	async function submitCurrent() {
-		const selectedQuote = transaction.quote
-		if (walletClient === undefined || account === undefined || selectedQuote === undefined || transaction.workflowLocked) return
+		const selectedQuote = approval
+		if (walletClient === undefined || account === undefined || selectedQuote === undefined || balanceState !== 'ready' || previewBlocker !== undefined || transaction.workflowLocked) return
 		await transaction.submit({
 			prepare: async () => {
 				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
-				// Simulate again right before signing; a redemption keeps the quoted minimum but gets a fresh deadline.
-				const fresh = await withReadTimeout(services.simulate(walletClient, configuration, selectedQuote.market, account, selectedQuote.operation, simulationParameters()))
-				return selectedQuote.operation === 'redeem-complete-set' && fresh.operation === 'redeem-complete-set' ? { ...selectedQuote, deadline: fresh.deadline } : selectedQuote
+				return selectedQuote
 			},
 			send: async (prepared, requestSignature) => {
 				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and try again', 'Wallet account changed during settlement revalidation; reconnect and try again')
-				// The settlement services re-simulate at the latest block before writing and keep the quoted minimums.
+				// The settlement services re-simulate at the latest block before writing and keep the approved minimums.
 				return await services.submit(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},
 			afterConfirmed: async prepared => {
@@ -94,5 +87,5 @@ export function useSettlementWorkflowController({
 		})
 	}
 
-	return { transaction, invalidateInputs: () => transaction.invalidate(), submitCurrent }
+	return { approval, previewBlocker, transaction, invalidateInputs: () => transaction.invalidate(), submitCurrent }
 }

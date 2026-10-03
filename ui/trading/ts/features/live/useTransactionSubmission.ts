@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useReducer, useRef } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { describeTransactionFailure, formatTransactionFailure, REVERTED_ON_CHAIN } from '../../protocol/transactionFailure.js'
 import { broadcastUncertainMessage, positionControlsWorkflowLocked } from '../liveTradingControllerHelpers.js'
 import { createMarketTransactionActivity } from './marketTransactionActivity.js'
 import { marketTransactionWorkflow, marketTransactionWorkflowsReducer, transactionMarketKey, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, type TransactionContext, type TransactionWorkflowEvent } from './transactionWorkflow.js'
 
-export type QuotedOperation = 'trade' | 'liquidity' | 'settlement'
+export type TransactionOperation = 'trade' | 'liquidity' | 'settlement'
 
 /** Wraps the wallet write so the workflow shows "Confirm in wallet" exactly while the wallet is asked to sign. */
 type RequestSignature = <T>(write: () => Promise<T>) => Promise<T>
@@ -20,21 +18,13 @@ export type SubmissionPlan<Prepared> = Readonly<{
 	afterConfirmed?(prepared: Prepared): Promise<void>
 }>
 
-/** A quote the hook keeps current: `key` names the exact inputs it prices, and undefined means the inputs cannot be quoted yet. */
-export type QuoteSource<Quote> = Readonly<{ key: string | undefined; load(): Promise<Quote> }>
-
-export type QuoteState = 'idle' | 'loading' | 'ready' | 'error'
-
-const QUOTE_DEBOUNCE_MILLISECONDS = 350
-
 /**
- * The shared engine behind the trade, liquidity, and settlement panels. Quotes refresh automatically (debounced) as
- * inputs change, and a submission always re-simulates before the wallet is asked to sign, so no flow needs a separate
- * "simulate" step. The hook owns duplicate-submission guards, receipt tracking, stale-result rejection, and failure copy.
+ * The shared engine behind the trade, liquidity, and settlement panels. Previews are computed by each panel, and
+ * submission services validate against fresh chain state before requesting a signature. The hook owns duplicate-submission guards, receipt tracking, stale-result rejection, and failure copy.
  * Workflow state, duplicate-submission guards, and locks are kept per market, so one market's running transaction
  * neither blocks nor relabels another market's ticket; the returned state is the one for `market`.
  */
-export function useQuotedTransaction<Quote>({
+export function useTransactionSubmission({
 	operation,
 	label,
 	activityTitle,
@@ -43,14 +33,12 @@ export function useQuotedTransaction<Quote>({
 	market,
 	walletClient,
 	externallyLocked,
-	quoteSource,
 	onWorkflowLockChange,
 	onKnownReceipt,
 	failureFallback,
-	quoteFailureFallback = failureFallback,
 	resetOnIdentityChange = true,
 }: {
-	operation: QuotedOperation
+	operation: TransactionOperation
 	/** Names the transaction in the receipt-uncertainty warning. */
 	label: string
 	/** Names the transaction in the activity list, which keeps it (and its market's lock) after navigation or a reload. */
@@ -60,12 +48,10 @@ export function useQuotedTransaction<Quote>({
 	market: Address | undefined
 	walletClient: WalletClient | undefined
 	externallyLocked: boolean
-	quoteSource?: QuoteSource<Quote> | undefined
 	/** Reports each market's lock by its `transactionMarketKey`. */
 	onWorkflowLockChange(locked: boolean, market: string): void
 	onKnownReceipt(): void
 	failureFallback: string
-	quoteFailureFallback?: string
 	/** Clear a finished or failed result when the account, chain, or market changes. The trade ticket leaves this to the wallet session, which explains the change. */
 	resetOnIdentityChange?: boolean
 }) {
@@ -74,13 +60,10 @@ export function useQuotedTransaction<Quote>({
 	const currentMarketRef = useRef(currentMarket)
 	currentMarketRef.current = currentMarket
 	const workflowState = marketTransactionWorkflow(workflows, currentMarket)
-	const [quoted, setQuoted] = useState<Readonly<{ key: string; value: Quote }>>()
-	const [quoteLoad, setQuoteLoad] = useState<Readonly<{ key: string; state: 'loading' | 'error'; error?: string }>>()
 	// Markets with a submission between its start and its end, and markets whose transaction still holds its lock
 	// (an uncertain receipt keeps it after the submission ends).
 	const activeMarkets = useRef(new Set<string>()).current
 	const lockedMarkets = useRef(new Set<string>()).current
-	const quoteRequests = useRef(createLatestRequestGuard()).current
 	const mounted = useRef(true)
 	const revision = useRef(0)
 	const state = transactionPhase(workflowState)
@@ -88,40 +71,6 @@ export function useQuotedTransaction<Quote>({
 	const error = transactionWorkflowError(workflowState, formatTransactionFailure(REVERTED_ON_CHAIN))
 	const receiptWarning = transactionWorkflowReceiptWarning(workflowState)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
-	// A failed submission retires the cached quote, so pressing again prices the pool afresh instead of resubmitting stale bounds.
-	const [failureCount, setFailureCount] = useState(0)
-	const quoteKey = quoteSource?.key === undefined ? undefined : `${quoteSource.key}\u0001${failureCount.toString()}`
-	const loadRef = useRef(quoteSource?.load)
-	loadRef.current = quoteSource?.load
-
-	useEffect(() => {
-		quoteRequests.invalidate()
-		if (quoteKey === undefined) {
-			setQuoteLoad(undefined)
-			return
-		}
-		setQuoteLoad({ key: quoteKey, state: 'loading' })
-		const request = quoteRequests.begin()
-		const timer = setTimeout(() => {
-			const load = loadRef.current
-			if (load === undefined) return
-			void withReadTimeout(load())
-				.then(value => {
-					if (!mounted.current || !quoteRequests.isCurrent(request)) return
-					setQuoted({ key: quoteKey, value })
-					setQuoteLoad(undefined)
-				})
-				.catch((caught: unknown) => {
-					if (!mounted.current || !quoteRequests.isCurrent(request)) return
-					setQuoteLoad({ key: quoteKey, state: 'error', error: describeTransactionFailure(caught, quoteFailureFallback) })
-				})
-		}, QUOTE_DEBOUNCE_MILLISECONDS)
-		return () => {
-			clearTimeout(timer)
-			quoteRequests.invalidate()
-		}
-	}, [quoteKey])
-
 	// Active submissions retain their market locks across tab unmounts until their promises settle.
 	const lockChangeRef = useRef(onWorkflowLockChange)
 	lockChangeRef.current = onWorkflowLockChange
@@ -131,7 +80,6 @@ export function useQuotedTransaction<Quote>({
 		mounted.current = true
 		return () => {
 			mounted.current = false
-			quoteRequests.invalidate()
 			for (const locked of lockedMarkets) {
 				if (activeMarkets.has(locked)) continue
 				lockChangeRef.current(false, locked)
@@ -155,11 +103,6 @@ export function useQuotedTransaction<Quote>({
 		if (!resetOnIdentityChange || activeMarkets.has(currentMarket) || workflowState.kind === 'uncertain') return
 		if (workflowState.kind !== 'idle') dispatchWorkflow({ type: 'inputs-invalidated' })
 	}, [account, chainId, market, walletClient])
-
-	const quote = quoted !== undefined && quoteKey !== undefined && quoted.key === quoteKey ? quoted.value : undefined
-	let quoteState: QuoteState = 'idle'
-	if (quoteLoad !== undefined && quoteLoad.key === quoteKey) quoteState = quoteLoad.state
-	else if (quote !== undefined) quoteState = 'ready'
 
 	/** User edits clear an old failure or confirmation; nothing may disturb an active or uncertain transaction. */
 	function invalidate(preserveConfirmed = false) {
@@ -228,7 +171,6 @@ export function useQuotedTransaction<Quote>({
 				dispatch({ type: 'uncertain', context, reason: broadcastUncertainMessage(label, broadcastHash) })
 			} else {
 				dispatch({ type: 'failed', context, operation, message: describeTransactionFailure(caught, failureFallback) })
-				setFailureCount(count => count + 1)
 			}
 		} finally {
 			activeMarkets.delete(key)
@@ -244,16 +186,9 @@ export function useQuotedTransaction<Quote>({
 		error,
 		receiptWarning,
 		workflowLocked,
-		quote,
-		quoteState,
-		quoteError: quoteLoad !== undefined && quoteLoad.key === quoteKey ? quoteLoad.error : undefined,
 		resetUnlocked,
 		invalidateWalletContext,
 		invalidate,
-		retryQuote() {
-			if (workflowLocked || quoteKey === undefined || !invalidate()) return
-			setFailureCount(count => count + 1)
-		},
 		submit,
 	}
 }

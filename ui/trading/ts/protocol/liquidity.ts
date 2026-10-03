@@ -1,83 +1,44 @@
-import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
-import { maxUint256, type Address, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { simulateLiquidity, type LiquidityOperation } from './liquiditySimulation.js'
+import { requireFreshSubmissionWindow } from './submissionWindow.js'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import { loadTransactionFeeMarket, liquidityHoldingFeeBlocker } from './holdingFees.js'
 import type { LiveMarket } from './liveMarket.js'
-import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, latestBlockIdentity, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
+import { maximumAfterSlippage, minimumAfterSlippage, retainApprovedMaximum, retainApprovedMinimum, latestBlockIdentity, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-export type LiquidityOperation = 'initialize' | 'add' | 'remove'
+export type { LiquidityOperation } from './liquiditySimulation.js'
 
-async function simulateLiquidityWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
-	requireTransactionSlippageBps(slippageBps)
-	const pairAddress = market.pair
-	if (operation === 'initialize') {
-		const {
-			blockNumber,
-			blockHash,
-			deadline,
-			result: simulation,
-		} = await simulateWithDeadline(
-			client,
-			expiry,
-			async (block, deadline) =>
-				pairAddress === undefined
-					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
-					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockNumber: block.blockNumber }),
-			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
-		)
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
-	}
-	if (pairAddress === undefined) throw new Error('Pair is unavailable')
-	if (operation === 'add') {
-		const {
-			blockNumber,
-			blockHash,
-			deadline,
-			result: simulation,
-		} = await simulateWithDeadline(
-			client,
-			expiry,
-			async (block, deadline) => {
-				const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
-				const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
-				const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, amount, maximumAfterSlippage(simulation.result.yesUsed, slippageBps), maximumAfterSlippage(simulation.result.noUsed, slippageBps), deadline, simulation.result)
-				if (feeBlocker !== undefined) throw new Error(feeBlocker)
-				return simulation
-			},
-			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
-		)
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: simulation.result.yesUsed, expectedNoDeposit: simulation.result.noUsed }
-	}
-	const {
-		blockNumber,
-		blockHash,
-		deadline,
-		result: simulation,
-	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockNumber: block.blockNumber }))
-	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1], expectedYesDeposit: 0n, expectedNoDeposit: 0n }
-}
+/** The amounts approved in the local preview; a relative expiry starts at submission. */
+export type LiquidityApproval = Readonly<{
+	market: LiveMarket
+	operation: LiquidityOperation
+	amount: bigint
+	conditionalYesBps: bigint
+	deadline: TransactionExpiry
+	slippageBps: bigint
+	expectedLiquidity: bigint
+	expectedYes: bigint
+	expectedNo: bigint
+	expectedYesDeposit: bigint
+	expectedNoDeposit: bigint
+}>
 
-export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
-	requireTransactionValidityMinutes(validityMinutes)
-	return await simulateLiquidityWithExpiry(client, configuration, market, account, operation, amount, conditionalYesBps, { validityMinutes }, slippageBps)
-}
-
-export async function submitFreshLiquidity(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateLiquidity>>, guardedWrite: GuardedWalletWrite) {
-	const refreshed = await simulateLiquidityWithExpiry(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps, quote.deadline, quote.slippageBps)
+export async function submitFreshLiquidity(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: LiquidityApproval, guardedWrite: GuardedWalletWrite) {
+	const refreshed = await simulateLiquidity(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps, quote.deadline, quote.slippageBps)
 	if (quote.operation === 'initialize') {
 		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
 		const initializedPairAddress = quote.market.pair
 		return initializedPairAddress === undefined
 			? await guardedWrite(async () => {
-					await requireFreshSubmissionWindow(client, quote.market, quote.operation, quote.deadline)
-					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumLiquidity, account, quote.deadline], value: quote.amount })
+					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 			: await guardedWrite(async () => {
-					await requireFreshSubmissionWindow(client, quote.market, quote.operation, quote.deadline)
-					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, quote.conditionalYesBps, minimumLiquidity, account, quote.deadline], value: quote.amount })
+					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+					return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, quote.conditionalYesBps, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 				})
 	}
 	const pairAddress = quote.market.pair
@@ -90,14 +51,14 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		const maximumNo = retainApprovedMaximum(maximumAfterSlippage(quote.expectedNoDeposit, quote.slippageBps), refreshed.expectedNoDeposit, 'NO deposit')
 		const block = await latestBlockIdentity(client)
 		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
-		const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, quote.amount, maximumYes, maximumNo, quote.deadline, refreshed.result)
+		const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, quote.amount, maximumYes, maximumNo, refreshed.deadline, refreshed.result)
 		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		return await guardedWrite(async () => {
-			await requireFreshSubmissionWindow(client, quote.market, quote.operation, quote.deadline)
-			return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maximumYes, maximumNo, minimumLiquidity, account, quote.deadline], value: quote.amount })
+			await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+			return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 		})
 	}
 	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes, quote.slippageBps), refreshed.expectedYes, 'YES')
 	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo, quote.slippageBps), refreshed.expectedNo, 'NO')
-	return await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, quote.deadline] }))
+	return await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, refreshed.deadline] }))
 }

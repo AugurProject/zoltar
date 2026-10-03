@@ -33,8 +33,8 @@ function proportionalDeposit(yesReserve: bigint, noReserve: bigint, completeSets
 
 /**
  * A local liquidity preview from the last public pool state. It mirrors the router and pair arithmetic but
- * ignores holding fees and pool changes since the last refresh. Initialization uses this preview for its
- * approved LP bound and validates on chain at submission; other operations use a wallet quote when connected. Undefined when the pool state cannot price the amount.
+ * uses the loaded collateral projection and reserves. Its approved bounds are validated on chain at submission.
+ * Undefined when the pool state cannot price the amount.
  */
 export function estimateLiquidity(market: PoolState, operation: LiquidityOperation, amount: bigint, initialYesBps: bigint | undefined): LiquidityPreview | undefined {
 	if (amount <= 0n) return undefined

@@ -17,8 +17,7 @@ const readyLiquidity: LiquidityAvailabilityInputs = {
 	lpBalance: 2n * shares,
 	initializePriceValid: true,
 	workflowLocked: false,
-	quoteState: 'ready',
-	quoteError: undefined,
+	previewBlocker: undefined,
 }
 
 const readySettlement: SettlementAvailabilityInputs = {
@@ -27,8 +26,7 @@ const readySettlement: SettlementAvailabilityInputs = {
 	balanceState: 'ready',
 	inputBlocker: undefined,
 	workflowLocked: false,
-	quoteState: 'ready',
-	quoteError: undefined,
+	previewBlocker: undefined,
 }
 
 describe('liquidity action availability', () => {
@@ -46,30 +44,29 @@ describe('liquidity action availability', () => {
 		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: shares, marketClosed: true }).disabled).toBeFalse()
 	})
 
-	test('orders wallet, balance, amount, price, workflow, and quote blockers', () => {
-		const blocked: LiquidityAvailabilityInputs = { ...readyLiquidity, walletConnected: false, balanceState: 'disconnected', requestedAmount: undefined, operation: 'initialize', initializePriceValid: false, workflowLocked: true, quoteState: 'error', quoteError: 'Quote failed.' }
+	test('orders wallet, balance, amount, price, workflow, and preview blockers', () => {
+		const blocked: LiquidityAvailabilityInputs = { ...readyLiquidity, walletConnected: false, balanceState: 'disconnected', requestedAmount: undefined, operation: 'initialize', initializePriceValid: false, workflowLocked: true, previewBlocker: 'Amount is too small.' }
 		expect(resolveLiquidityAvailability(blocked).reason).toBe(copy.connectWalletReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, networkMismatchReason: 'Switch to Local.' }).reason).toBe('Switch to Local.')
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'loading' })).toEqual({ disabled: true, loading: true, reason: copy.balancesLoadingReason })
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready' }).reason).toBe(copy.amountRequiredReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth }).reason).toBe(copy.initializePriceInvalidReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth, initializePriceValid: true }).reason).toBe(copy.transactionInProgressReason)
-		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth, initializePriceValid: true, workflowLocked: false }).reason).toBe('Quote failed.')
-		expect(resolveLiquidityAvailability({ ...readyLiquidity, quoteState: 'loading' })).toEqual({ disabled: true, loading: true, reason: copy.quoteLoadingReason })
-		expect(resolveLiquidityAvailability({ ...readyLiquidity, quoteState: 'error', quoteError: undefined }).reason).toBe(copy.quoteUnavailableReason)
+		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth, initializePriceValid: true, workflowLocked: false }).reason).toBe('Amount is too small.')
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, previewBlocker: 'Amount is too small.' })).toEqual({ disabled: true, reason: 'Amount is too small.' })
 	})
 })
 
 describe('settlement action availability', () => {
-	test('orders wallet, balance, input, workflow, and quote blockers', () => {
+	test('orders wallet, balance, input, workflow, and preview blockers', () => {
 		expect(resolveSettlementAvailability(readySettlement).disabled).toBeFalse()
-		const blocked: SettlementAvailabilityInputs = { ...readySettlement, walletConnected: false, balanceState: 'error', inputBlocker: 'Select at least one child branch', workflowLocked: true, quoteState: 'idle' }
+		const blocked: SettlementAvailabilityInputs = { ...readySettlement, walletConnected: false, balanceState: 'error', inputBlocker: 'Select at least one child branch', workflowLocked: true, previewBlocker: 'Amount is too small.' }
 		expect(resolveSettlementAvailability(blocked).reason).toBe(copy.connectWalletReason)
 		expect(resolveSettlementAvailability({ ...blocked, networkMismatchReason: 'Switch to Local.' }).reason).toBe('Switch to Local.')
 		expect(resolveSettlementAvailability({ ...blocked, walletConnected: true }).reason).toBe(copy.balancesUnavailableReason)
 		expect(resolveSettlementAvailability({ ...blocked, walletConnected: true, balanceState: 'ready' }).reason).toBe('Select at least one child branch')
 		expect(resolveSettlementAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', inputBlocker: undefined }).reason).toBe(copy.transactionInProgressReason)
-		expect(resolveSettlementAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', inputBlocker: undefined, workflowLocked: false })).toEqual({ disabled: true, loading: true, reason: copy.quoteLoadingReason })
+		expect(resolveSettlementAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', inputBlocker: undefined, workflowLocked: false })).toEqual({ disabled: true, reason: 'Amount is too small.' })
 		expect(resolveSettlementAvailability({ ...readySettlement, balanceState: 'loading' })).toEqual({ disabled: true, loading: true, reason: copy.balancesLoadingReason })
 		expect(resolveSettlementAvailability({ ...readySettlement, inputBlocker: 'Loading fork details…', inputBlockerLoading: true })).toEqual({ disabled: true, loading: true, reason: 'Loading fork details…' })
 		expect(resolveSettlementAvailability({ ...readySettlement, inputBlocker: 'Select at least one child branch' }).loading).toBeUndefined()

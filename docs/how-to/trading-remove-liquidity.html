@@ -20,10 +20,10 @@
 				<ol>
 					<li>Open the market and select the <strong>Liquidity</strong> tab, then <strong>Remove</strong>.</li>
 					<li>Enter an amount in <strong>LP tokens</strong>. <strong>You receive ≈</strong> shows the Yes and No you get back.</li>
-					<li>Select <strong>Remove liquidity</strong> and confirm. The transaction reverts if it would return less than the quote allows after your slippage tolerance.</li>
+					<li>Select <strong>Remove liquidity</strong> and confirm. The transaction reverts if it would return less than the estimate allows after your slippage tolerance.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-remove-liquidity" aria-labelledby="fig-trading-remove-liquidity-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/remove-liquidity.png"><img width="480" height="843" src="../assets/screenshots/trading/remove-liquidity.png" alt="The Liquidity tab with Remove selected, 0.001 LP tokens entered, the note that removal returns Yes and No shares to the wallet rather than ETH, an expected 0.001 Yes and 0.001 No worth about 0.001 ETH at the current pool price, and an enabled Remove liquidity button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/remove-liquidity.png"><img width="480" height="817" src="../assets/screenshots/trading/remove-liquidity.png" alt="The Liquidity tab with Remove selected, 0.001 LP tokens entered, the note that removal returns Yes and No shares to the wallet rather than ETH, an expected 0.001 Yes and 0.001 No worth about 0.001 ETH at the current pool price, and an enabled Remove liquidity button." loading="lazy" /></a>
 					<figcaption id="fig-trading-remove-liquidity-caption"><span class="figure-label">Removing liquidity.</span> The UI calls the trading pool directly, so it never asks for a router allowance.</figcaption>
 				</figure>
 			</section>

@@ -1,10 +1,12 @@
+import { simulateSettlement } from '../../protocol/settlementSimulation.js'
+import { simulateLiquidity } from '../../protocol/liquiditySimulation.js'
 import { describe, expect, test } from 'bun:test'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { shareTokenAbi } from '../../protocol/authorization.js'
-import { simulateEntry, simulateExit, simulateLiquidity, simulateSettlement, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement } from '../../protocol/live.js'
+import { simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
@@ -37,7 +39,7 @@ function transactionOf(params: unknown) {
 
 // A chain whose head advances on demand; `longSharesOut` lets a test move the price between blocks.
 function createAdvancingChain() {
-	const chain: { head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[] } = { head: 2n, feeMarket: market, longSharesOut: 10n, sends: [], simulatedBlocks: [], blockRequests: [] }
+	const chain: { head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[]; transactionSimulations: string[] } = { head: 2n, feeMarket: market, longSharesOut: 10n, sends: [], simulatedBlocks: [], blockRequests: [], transactionSimulations: [] }
 	const provider: InjectedEthereum = {
 		async request({ method, params }) {
 			if (method === 'eth_chainId') return '0xaa36a7'
@@ -56,15 +58,23 @@ function createAdvancingChain() {
 			if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
 			if (Array.isArray(params)) chain.simulatedBlocks.push(params[1])
 			const transaction = transactionOf(params)
-			if (transaction.to === pair.toLowerCase()) return decodeFunctionData({ abi: pairAbi, data: transaction.data }).functionName === 'removeLiquidity' ? encodeAbiParameters([uint256, uint256], [5n, 5n]) : encodeAbiParameters([uint256, uint256], [2n, 1n])
+			if (transaction.to === pair.toLowerCase()) {
+				const name = decodeFunctionData({ abi: pairAbi, data: transaction.data }).functionName
+				if (name === 'removeLiquidity') chain.transactionSimulations.push(name)
+				return name === 'removeLiquidity' ? encodeAbiParameters([uint256, uint256], [5n, 5n]) : encodeAbiParameters([uint256, uint256], [2n, 1n])
+			}
 			if (transaction.to === shareToken.toLowerCase()) {
 				const decoded = decodeFunctionData({ abi: shareTokenAbi, data: transaction.data })
 				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [100n])
-				if (decoded.functionName === 'safeBatchTransferFrom') return '0x'
+				if (decoded.functionName === 'safeBatchTransferFrom') {
+					chain.transactionSimulations.push(decoded.functionName)
+					return '0x'
+				}
 				throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
 			}
 			if (transaction.to === pool.toLowerCase()) return feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head) ?? '0x'
 			const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
+			chain.transactionSimulations.push(decoded.functionName)
 			if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
 			if (decoded.functionName === 'addLiquidityWithEth' || decoded.functionName === 'initializeWithEth' || decoded.functionName === 'createPairAndInitializeWithEth')
 				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
@@ -78,6 +88,64 @@ function createAdvancingChain() {
 const write = async <T>(send: () => Promise<T>) => await send()
 
 describe('submitting a quote after the chain advances', () => {
+	test('validates local liquidity approvals once and starts validity at the current block', async () => {
+		for (const operation of ['initialize', 'add', 'remove'] as const) {
+			const { chain, client } = createAdvancingChain()
+			chain.head = 9n
+			const localMarket = operation === 'initialize' ? { ...market, pair: undefined, lpTotalSupply: 0n } : market
+			await submitFreshLiquidity(
+				client,
+				configuration,
+				account,
+				{
+					market: localMarket,
+					operation,
+					amount: 10n,
+					conditionalYesBps: 5_000n,
+					deadline: { validityMinutes: 7n },
+					slippageBps: 500n,
+					expectedLiquidity: 10n,
+					expectedYes: 5n,
+					expectedNo: 5n,
+					expectedYesDeposit: 5n,
+					expectedNoDeposit: 5n,
+				},
+				write,
+			)
+			const name = { initialize: 'createPairAndInitializeWithEth', add: 'addLiquidityWithEth', remove: 'removeLiquidity' }[operation]
+			expect(chain.transactionSimulations.filter(value => value === name)).toHaveLength(1)
+			expect(chain.sends).toHaveLength(1)
+			const submitted = operation === 'remove' ? decodeFunctionData({ abi: pairAbi, data: chain.sends[0] ?? '0x' }) : decodeFunctionData({ abi: routerAbi, data: chain.sends[0] ?? '0x' })
+			expect(submitted.args?.at(-1)).toBe(9n + 7n * 60n)
+		}
+	})
+
+	test('retains a local redemption minimum with one fresh simulation and rejects a moved payout', async () => {
+		for (const minimumAttoEth of [9n, 11n]) {
+			const { chain, client } = createAdvancingChain()
+			chain.head = 9n
+			const pending = submitFreshSettlement(
+				client,
+				configuration,
+				account,
+				{
+					operation: 'redeem-complete-set',
+					market,
+					amount: 10n,
+					expectedAttoEth: 10n,
+					minimumAttoEth,
+					deadline: { validityMinutes: 7n },
+					slippageBps: 500n,
+				},
+				write,
+			)
+			if (minimumAttoEth > 10n) await expect(pending).rejects.toThrow('approved minimum')
+			else expect(await pending).toBe(transactionHash)
+			expect(chain.transactionSimulations).toEqual(['safeBatchTransferFrom'])
+			expect(chain.sends).toHaveLength(minimumAttoEth > 10n ? 0 : 1)
+		}
+	})
+
 	test('quotes and submits initialization with captured block numbers and no extra block queries', async () => {
 		for (const existingPair of [undefined, pair]) {
 			const { chain, provider } = createAdvancingChain()
@@ -191,14 +259,17 @@ describe('submitting a quote after the chain advances', () => {
 			},
 		}
 		chain.feeMarket = feeMarket
-		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, 7n, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
+		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
 		expect(chain.sends).toHaveLength(0)
 	})
 
 	test('reloads fee accounting after the user changes pool state and refuses unsafe approved bounds', async () => {
 		for (const operation of ['sell', 'add'] as const) {
 			const { chain, client } = createAdvancingChain()
-			const quote = operation === 'sell' ? { kind: 'sell' as const, value: await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, MINIMUM_SLIPPAGE_BPS) } : { kind: 'add' as const, value: await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 7n, MINIMUM_SLIPPAGE_BPS) }
+			const quote =
+				operation === 'sell'
+					? { kind: 'sell' as const, value: await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, MINIMUM_SLIPPAGE_BPS) }
+					: { kind: 'add' as const, value: await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS) }
 			chain.feeMarket = { ...market, currentRetentionRate: 999_000_000_000_000_000n }
 			const send = quote.kind === 'sell' ? submitFreshExit(client, configuration, account, quote.value, write) : submitFreshLiquidity(client, configuration, account, quote.value, write)
 			await expect(send).rejects.toThrow('Holding fees')
@@ -210,8 +281,8 @@ describe('submitting a quote after the chain advances', () => {
 		const { chain, client } = createAdvancingChain()
 		const entry = await simulateEntry(client, configuration, market, account, 'YES', 10n, 7n, 500n)
 		const exit = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
-		const liquidity = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 7n, 500n)
-		const removal = await simulateLiquidity(client, configuration, market, account, 'remove', 10n, 5_000n, 7n, 500n)
+		const liquidity = await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, { validityMinutes: 7n }, 500n)
+		const removal = await simulateLiquidity(client, configuration, market, account, 'remove', 10n, 5_000n, { validityMinutes: 7n }, 500n)
 		const settlement = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount: 10n, validityMinutes: 7n, slippageBps: 500n })
 		const winning = await simulateSettlement(client, configuration, market, account, 'redeem-winning-shares')
 

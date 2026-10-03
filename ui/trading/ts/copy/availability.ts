@@ -13,8 +13,6 @@ export const insufficientEthReason = 'Insufficient ETH balance.'
 export const insufficientLpReason = 'Insufficient LP balance.'
 export const initializePriceInvalidReason = conditionalYesPriceValidation
 export const transactionInProgressReason = 'Transaction in progress.'
-export const quoteLoadingReason = 'Getting a quote…'
-export const quoteUnavailableReason = 'Quote unavailable. Change the amount or try again.'
 
 export function formatInsufficientOutcomeReason(outcome: 'YES' | 'NO') {
 	return `Insufficient ${outcomeLabel(outcome)} balance.`
