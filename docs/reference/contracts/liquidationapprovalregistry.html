@@ -20,7 +20,7 @@
 
 				<h2 id="interactions">State-changing interactions</h2>
 				<!-- Validated read ABI fingerprint: 04465d90cef2bd37454bf8496fffcaccf07f0ec5808f31ffd6481d4cdc46f810 -->
-				<!-- Validated complete compiled ABI fingerprint: 24fef7375af443bf5477c0c4afa6d6ce6ef852f82a8b17d46bd1cea15bc3c264 -->
+				<!-- Validated complete compiled ABI fingerprint: c4c3b830e96f478974149aacb56eee2bb36bee4c0ef7f104ffa43239dcb28ada -->
 				<table>
 					<thead>
 						<tr>
@@ -37,7 +37,7 @@
 							<td>Anyone while the registry remains uninitialized; normal factory deployment initializes the clone atomically</td>
 							<td>Coordinator is nonzero and the registry has not been initialized.</td>
 							<td>Binds this registry clone to one coordinator and therefore one security pool.</td>
-							<td>No event; the public <code>coordinator</code> getter records the binding.</td>
+							<td><code>RegistryInitialized</code> identifies the configured coordinator.</td>
 						</tr>
 						<tr>
 							<td><code>setLiquidationApproval(params)</code></td>

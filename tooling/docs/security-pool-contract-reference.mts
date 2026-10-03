@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: '08e3c1adfd5e6f2dd4f476f8f462bc7c2ca0e29ceeceb97c0009cd46bbb976d0',
+	compiledAbiFingerprint: '55af283fc44f7e5f092698af7fd25a7a60e03670fc57067245b645b25d3e4beb',
 	name: 'SecurityPool',
 	delegatedInteractions:
 		'Vault owners set their [underwriting commitments](./glossary.html#underwriting-commitment) with `setUnderwritingLimit(limitAttoEth)` or coordinator operation `SetVaultUnderwritingLimit` (2). Only the immutable vault executor may use the fallback `setVaultUnderwritingLimit(vault, limitAttoEth)`. Increases require fresh-price backing for the entire resulting underwriting commitment and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. The executor may also deposit wallet REP through `depositRepToVaultFromExecutor(owner, amount)`, using the wallet allowance to this pool and preserving its commitment. Limits survive empty settlement epochs. `UnderwritingLimitSet` and accounting checkpoints report successful changes.',
@@ -351,7 +351,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than settlement collateral or fees.',
 			declarations: [{ kind: 'receive', name: 'receive' }],
 			preconditions: 'Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.',
-			signals: 'No dedicated receive event; the calling protocol step emits its own event',
+			signals: '`EthReceived` identifies the authorized sender and amount received; forced ETH bypasses `receive()` and emits no such event',
 		},
 	],
 }

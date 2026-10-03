@@ -49,6 +49,7 @@ contract LiquidationApprovalRegistry {
 	mapping(address => uint256) public minimumLiquidationApprovalNonce;
 	mapping(uint256 => LiquidationReservation) public liquidationReservations;
 
+	event RegistryInitialized(address indexed coordinator);
 	event LiquidationApprovalSet(bytes32 indexed approvalId, address indexed receiverVault, address indexed operator, address securityPool, address targetVault, uint256 maxCumulativeDebtAttoEth, uint256 maxDebtPerLiquidationAttoEth, uint256 minPostLiquidationHealthFactorBps, uint256 validAfter, uint256 validUntil, uint256 nonce);
 	event LiquidationApprovalRevoked(bytes32 indexed approvalId, address indexed receiverVault, uint256 availableDebtAttoEth, uint256 reservedDebtAttoEth, uint256 consumedDebtAttoEth);
 	event LiquidationApprovalNonceInvalidated(address indexed receiverVault, uint256 previousNonce, uint256 newNonce);
@@ -64,6 +65,7 @@ contract LiquidationApprovalRegistry {
 	function initialize(address _coordinator) external {
 		require(coordinator == address(0) && _coordinator != address(0), 'Registry already initialized');
 		coordinator = _coordinator;
+		emit RegistryInitialized(_coordinator);
 	}
 
 	function DOMAIN_SEPARATOR() public view returns (bytes32) {

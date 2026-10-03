@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Vault owners set their <a href="../glossary.html#underwriting-commitment">underwriting commitments</a> with <code>setUnderwritingLimit(limitAttoEth)</code> or coordinator operation <code>SetVaultUnderwritingLimit</code> (2). Only the immutable vault executor may use the fallback <code>setVaultUnderwritingLimit(vault, limitAttoEth)</code>. Increases require fresh-price backing for the entire resulting underwriting commitment and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. The executor may also deposit wallet REP through <code>depositRepToVaultFromExecutor(owner, amount)</code>, using the wallet allowance to this pool and preserving its commitment. Limits survive empty settlement epochs. <code>UnderwritingLimitSet</code> and accounting checkpoints report successful changes.</p>
 				<!-- Validated read ABI fingerprint: 9a1fd89f52b252ecbe5f71586c5396279656674e65e3fcf13473f751fc270bc3 -->
-				<!-- Validated complete compiled ABI fingerprint: 08e3c1adfd5e6f2dd4f476f8f462bc7c2ca0e29ceeceb97c0009cd46bbb976d0 -->
+				<!-- Validated complete compiled ABI fingerprint: 55af283fc44f7e5f092698af7fd25a7a60e03670fc57067245b645b25d3e4beb -->
 				<table>
 					<thead>
 						<tr>
@@ -270,7 +270,7 @@
 							<td>Forker, this pool's Truth Auction, or parent pool only</td>
 							<td>Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.</td>
 							<td>Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than settlement collateral or fees.</td>
-							<td>No dedicated receive event; the calling protocol step emits its own event</td>
+							<td><code>EthReceived</code> identifies the authorized sender and amount received; forced ETH bypasses <code>receive()</code> and emits no such event</td>
 						</tr>
 					</tbody>
 				</table>

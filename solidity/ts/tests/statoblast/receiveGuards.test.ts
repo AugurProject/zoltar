@@ -11,7 +11,8 @@ import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import assert from '../../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, getAddress, keccak256, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { useStatoblastReceiveGuardsFixture } from './fixture'
 
@@ -31,6 +32,36 @@ describe('Statoblast: receive guards', () => {
 		)
 		strictEqualTypeSafe(await getETHBalance(client, to), targetBalanceBefore, 'Rejected ETH send must preserve the target balance')
 	}
+
+	test('coordinator deployment emits its liquidation approval registry wiring', async () => {
+		const { client, securityPoolAddresses } = fixture
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
+		const registry = await client.readContract({ address: coordinator, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'liquidationApprovalRegistry' })
+		const topic = keccak256(new TextEncoder().encode('LiquidationApprovalRegistrySet(address)'))
+		const logs = (await client.getLogs({ address: coordinator, fromBlock: 0n, toBlock: await client.getBlockNumber() })).filter(log => log.topics[0] === topic)
+		strictEqualTypeSafe(logs.length, 1, 'Registry wiring emits once')
+		const log = logs[0]
+		if (log === undefined) throw new Error('Registry wiring event missing')
+		const event = decodeEventLog({ abi: parseAbi(['event LiquidationApprovalRegistrySet(address indexed registry)']), data: log.data, topics: log.topics })
+		assert.deepStrictEqual(event.args, { registry: getAddress(registry) })
+	})
+
+	test('authorized ETH receipt emits the sender and received amount', async () => {
+		const { mockWindow, client, securityPoolAddresses } = fixture
+		const forkerAddress = getInfraContractAddresses().securityPoolForker
+		const poolAddress = securityPoolAddresses.securityPool
+		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
+		await mockWindow.impersonateAccount(forkerAddress)
+		const fromBlock = await client.getBlockNumber()
+		await sendEthAndWait(forkerAddress, poolAddress, 1000n)
+		const logs = await client.getLogs({ address: poolAddress, fromBlock: fromBlock + 1n, toBlock: await client.getBlockNumber() })
+		strictEqualTypeSafe(logs.length, 1, 'ETH receipt emits once')
+		const log = logs[0]
+		if (log === undefined) throw new Error('ETH receipt event missing')
+		const event = decodeEventLog({ abi: parseAbi(['event EthReceived(address indexed sender, uint256 amountAttoEth)']), data: log.data, topics: log.topics })
+		assert.deepStrictEqual(event.args, { sender: getAddress(forkerAddress), amountAttoEth: 1000n })
+		strictEqualTypeSafe(await getETHBalance(client, poolAddress), 1000n, 'Received ETH remains in pool')
+	})
 
 	test('SecurityPool receive restricts unauthorized senders', async () => {
 		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
@@ -80,6 +111,7 @@ describe('Statoblast: receive guards', () => {
 
 		// Record initial child balance
 		const initialChildBal = await getETHBalance(client, childPoolAddress)
+		const fromBlock = await client.getBlockNumber()
 
 		// 5. Send from forker to child
 		await mockWindow.impersonateAccount(forkerAddress)
@@ -92,6 +124,19 @@ describe('Statoblast: receive guards', () => {
 		await sendEthAndWait(truthAuctionAddress, childPoolAddress, 3000n)
 		const afterAuctionBal = await getETHBalance(client, childPoolAddress)
 		strictEqualTypeSafe(afterAuctionBal - initialChildBal, 5000n, 'Child balance total increase from both')
+
+		// 7. The parent pool is also an authorized child-pool sender.
+		await mockWindow.impersonateAccount(poolAddress)
+		await sendEthAndWait(poolAddress, childPoolAddress, 100n)
+		const receiveTopic = keccak256(new TextEncoder().encode('EthReceived(address,uint256)'))
+		const logs = (await client.getLogs({ address: childPoolAddress, fromBlock: fromBlock + 1n, toBlock: await client.getBlockNumber() })).filter(log => log.topics[0] === receiveTopic)
+		const events = logs.map(log => decodeEventLog({ abi: parseAbi(['event EthReceived(address indexed sender, uint256 amountAttoEth)']), data: log.data, topics: log.topics }).args)
+		assert.deepStrictEqual(events, [
+			{ sender: getAddress(forkerAddress), amountAttoEth: 2000n },
+			{ sender: getAddress(truthAuctionAddress), amountAttoEth: 3000n },
+			{ sender: getAddress(poolAddress), amountAttoEth: 100n },
+		])
+		strictEqualTypeSafe(await getETHBalance(client, childPoolAddress), initialChildBal + 5100n, 'Child balance includes parent transfer')
 	})
 
 	test('SecurityPoolForker receive restricts unauthorized senders', async () => {

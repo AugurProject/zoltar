@@ -1,4 +1,7 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
+	{ name: 'RegistryInitialized', parameters: 'address indexed coordinator', sourcePath: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol' },
+	{ name: 'LiquidationApprovalRegistrySet', parameters: 'LiquidationApprovalRegistry indexed registry', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol' },
+	{ name: 'EthReceived', parameters: 'address indexed sender,uint256 amountAttoEth', sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol' },
 	{
 		name: 'Transfer',
 		parameters: 'address indexed from,address indexed to,uint256 value',
@@ -189,4 +192,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = 'df4964e4f91bbe9749dccb3b2de9e0a152af2157db109cff60bd31b227963608'
+export const referencedEventAbiFingerprint = '1cea6a33459224884c546010dfce8f35cace7198d0134a31d2dd305fad8f75eb'
