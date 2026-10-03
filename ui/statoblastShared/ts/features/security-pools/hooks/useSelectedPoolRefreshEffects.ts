@@ -87,6 +87,7 @@ export function useSelectedPoolRefreshEffects({
 	const lastReportingAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingOutcomeRefreshHash = useRef<string | undefined>(undefined)
 	const lastVaultStatusRefreshHash = useRef<string | undefined>(undefined)
+	const lastStagedViewRefreshManager = useRef<Address | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
@@ -115,7 +116,16 @@ export function useSelectedPoolRefreshEffects({
 	useEffect(() => {
 		if (pendingReportRefreshActive) refreshPendingReport()
 	}, [pendingReportId, pendingReportRefreshActive, selectedPoolManagerAddress])
-	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive || view === 'vault-operations')
+	useEffect(() => {
+		if (view !== 'staged-operations') {
+			lastStagedViewRefreshManager.current = undefined
+			return
+		}
+		if (selectedPoolManagerAddress === undefined || loadingPoolOracleManager || lastStagedViewRefreshManager.current === selectedPoolManagerAddress) return
+		lastStagedViewRefreshManager.current = selectedPoolManagerAddress
+		refreshPendingReport()
+	}, [view, selectedPoolManagerAddress, loadingPoolOracleManager])
+	useBlockRefresh(refreshPendingReport, pendingReportRefreshActive || view === 'vault-operations' || view === 'staged-operations')
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return

@@ -1,4 +1,6 @@
-import { useLayoutEffect, useId, useState } from 'preact/hooks'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { formatSettleCountdown, readyToSettle } from '../../../copy/openOracle.js'
+import { useLayoutEffect, useId, useState, useEffect } from 'preact/hooks'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -14,7 +16,6 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { transactionPending } from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '../../../types/contracts.js'
@@ -87,6 +88,20 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 	)
 }
 
+function StagedOperationOracleCountdown({ readyAt }: { readyAt: bigint }) {
+	const chainTimestamp = useChainTimestamp()
+	const [elapsed, setElapsed] = useState(0n)
+	useEffect(() => {
+		setElapsed(0n)
+		const startedAt = Date.now()
+		const timer = setInterval(() => setElapsed(BigInt(Math.floor((Date.now() - startedAt) / 1000))), 1000)
+		return () => clearInterval(timer)
+	}, [chainTimestamp, readyAt])
+	if (chainTimestamp === undefined) return undefined
+	const remaining = readyAt - chainTimestamp - elapsed
+	return <p className='detail'>{remaining > 0n ? formatSettleCountdown(remaining, true) : readyToSettle}</p>
+}
+
 export function SecurityPoolStagedOperationsSection({
 	activeOperationCount,
 	canExecute,
@@ -129,7 +144,14 @@ export function SecurityPoolStagedOperationsSection({
 	universeId: bigint
 }) {
 	const [executingOperationId, setExecutingOperationId] = useState<bigint>()
-	const getExecutionGuardMessage = (operationId: bigint | undefined, guardMessage: string | undefined) => (executionPending && operationId !== executingOperationId ? transactionPending : guardMessage)
+	const selectedOperationListed = stagedOperations.some(operation => operation.operationId.toString() === manualOperationId)
+	useLayoutEffect(() => {
+		if (!selectedOperationListed) return
+		const card = document.getElementById(`staged-operation-${manualOperationId}`)
+		card?.focus({ preventScroll: true })
+		card?.scrollIntoView?.({ block: 'nearest' })
+	}, [manualOperationId, selectedOperationListed])
+	const getExecutionGuardMessage = (operationId: bigint | undefined, guardMessage: string | undefined) => (executionPending && operationId !== executingOperationId ? undefined : guardMessage)
 	const lookupOperationListed = stagedOperations.some(operation => operation.operationId === resolvedOperationId)
 	const executionAction = (operationId: bigint | undefined, guardMessage: string | undefined) =>
 		managerDetails === undefined ? undefined : (
@@ -156,11 +178,12 @@ export function SecurityPoolStagedOperationsSection({
 						const amount = getPendingOperationAmountPresentation(operation.operation)
 						const guardMessage = getExecutionGuardMessage(operation.operationId, operationGuardMessages.get(operation.operationId))
 						return (
-							<article key={operation.operationId.toString()} className='staged-operation-card'>
+							<article key={operation.operationId.toString()} className='staged-operation-card' id={`staged-operation-${operation.operationId}`} tabIndex={-1}>
 								<div className='entity-card-header'>
 									<div className='entity-card-copy'>
 										<h3>{getPendingOperationLabel(operation.operation)}</h3>
 										<p className='detail'>{getStagedOperationExecutionModeLabel(operation.operationId, pendingSettlementOperationIds)}</p>
+										{pendingSettlementOperationIds.includes(operation.operationId) && managerDetails?.pendingReportId !== 0n && managerDetails?.pendingReportReadyAtTimestamp !== undefined ? <StagedOperationOracleCountdown readyAt={managerDetails.pendingReportReadyAtTimestamp} /> : undefined}
 									</div>
 								</div>
 								<div className='decision-summary'>
@@ -185,7 +208,7 @@ export function SecurityPoolStagedOperationsSection({
 					})}
 				</div>
 				{activeOperationCount > BigInt(stagedOperations.length) ? <p className='detail'>{securityPoolCopy.formatShowingActiveStagedOperationsLabel(stagedOperations.length.toString(), activeOperationCount.toString())}</p> : null}
-				{managerDetails === undefined || stagedOperations.length > 0 ? null : <StateHint presentation={{ key: 'empty', badgeLabel: securityPoolCopy.noneQueued, badgeTone: 'muted', detail: securityPoolCopy.stagedOperationsEmpty }} />}
+				{managerDetails === undefined || loadingManager || stagedOperations.length > 0 ? null : <StateHint presentation={{ key: 'empty', badgeLabel: securityPoolCopy.noneQueued, badgeTone: 'muted', detail: securityPoolCopy.stagedOperationsEmpty }} />}
 			</SectionBlock>
 			{managerDetails === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={securityPoolCopy.openOperationById}>

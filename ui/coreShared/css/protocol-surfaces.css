@@ -706,11 +706,21 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	grid-template-columns: minmax(0, 1fr);
 }
 
-/* Text with embedded addresses flows inline and wraps between values, never inside an abbreviated address.
+.global-transaction-detail-text {
+	display: block;
+}
+
+.global-transaction-detail-address {
+	display: inline-flex;
+	max-width: 100%;
+	vertical-align: baseline;
+}
+
+/* Text with embedded addresses flows inline and wraps between values; addresses shorten only when they cannot fit.
  * An inline address sits on the text baseline like a link, so it drops the standalone control's touch-target box. */
 .global-transaction-detail-text .copy-value-wrap,
 .global-transaction-detail-text .address-value.copyable {
-	display: inline;
+	display: inline-flex;
 	min-height: 0;
 	margin: 0;
 	padding: 0;
