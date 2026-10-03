@@ -46,7 +46,7 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 			)}
 			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
 			{ownsBalanceError && holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={disabled} /> : null}
-			<BackingDetails market={market} />
+			<BackingDetails market={market} balances={holdings.balances} />
 		</section>
 	)
 }

@@ -20,3 +20,15 @@ export function redeemable(value: string) {
 export function winningPayout(value: string) {
 	return `${value} · winning payout; redemption unavailable`
 }
+
+export const positionFeeProjection = 'Holding fee on your holdings over next 30 days'
+
+export function feeEth(amount: string) {
+	return `${amount} ETH`
+}
+
+export function holdingFeeValue(percent: string, fees: { minimum: string; maximum: string } | undefined) {
+	if (fees === undefined) return `${percent}%`
+	if (fees.minimum === fees.maximum) return `${percent}% · ${fees.minimum}`
+	return `${percent}% · ${fees.minimum}–${fees.maximum} depending on outcome`
+}
