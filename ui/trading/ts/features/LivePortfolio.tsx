@@ -3,10 +3,10 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import * as availabilityCopy from '../copy/availability.js'
 import type { ComponentChildren } from 'preact'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { OutcomeHolding } from './OutcomeHolding.js'
+import { LpHolding, OutcomeHolding } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
 import * as payoutCopy from '../copy/payout.js'
-import { formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
+import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -44,7 +44,7 @@ function PortfolioHoldings({ market, balances }: { market: LiveMarket; balances:
 					<OutcomeHolding amount={balances.invalid} outcome={shareOutcome.invalid} market={market} />
 				</li>
 			)}
-			{balances.lp === 0n ? undefined : <li>{formatLpQuantity(balances.lp, 4, 'down')}</li>}
+			{balances.lp === 0n ? undefined : <li>{<LpHolding amount={balances.lp} market={market} rounding='down' />}</li>}
 		</ul>
 	)
 }
@@ -78,9 +78,9 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 			{balances.lp === 0n ? undefined : (
 				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
-						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeQuantity(yesClaim, shareOutcome.yes)}</MetricField>
-						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeQuantity(noClaim, shareOutcome.no)}</MetricField>
-						<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
+						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValue(yesClaim, shareOutcome.yes, market)}</MetricField>
+						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValue(noClaim, shareOutcome.no, market)}</MetricField>
+						<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetWithValue(coveredSets, market)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>
 			)}

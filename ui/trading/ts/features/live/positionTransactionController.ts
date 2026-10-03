@@ -3,7 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
-import { formatOutcomeQuantity } from '../../lib/shareValue.js'
+import { formatOutcomeWithValue } from '../../lib/shareValue.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import type { LiveTradingControllerServices, Quote } from './liveTradingTypes.js'
 import type { TradeMode, useTransactionWorkflow } from './useTransactionWorkflow.js'
@@ -14,8 +14,8 @@ import { authoritativeQuoteMoved, type TradeEstimate } from './tradeTicketModel.
 type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>
 type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint, owner?: WorkflowOwner, options?: Readonly<{ ownerMarket?: Address }>) => Promise<void>
 
-function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigint) {
-	return estimate.kind === 'entry' ? `${ticketCopy.youReceiveEstimate} ${formatOutcomeQuantity(authoritativeLongShares, estimate.side)}` : `${ticketCopy.youSellEstimate} ${formatOutcomeQuantity(authoritativeLongShares, estimate.side)}`
+function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigint, market: LiveMarket) {
+	return estimate.kind === 'entry' ? `${ticketCopy.youReceiveEstimate} ${formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)}` : `${ticketCopy.youSellEstimate} ${formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)}`
 }
 
 /**
@@ -80,7 +80,7 @@ export function createPositionTransactionController({
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
 					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
 					void refresh(undefined, undefined, 'position', ownerRefresh)
-					const requote = ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares))
+					const requote = ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market))
 					// The submission still stops here; the ticket presents the stop as a prompt to review the new estimate.
 					workflow.setRequoteNotice(market.pool, requote)
 					throw new Error(requote)

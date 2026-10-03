@@ -146,7 +146,7 @@ describe('live portfolio scope', () => {
 		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
 		await unavailable.cleanup()
 		const zero = await renderIntoDocument(<OutcomeHolding amount={0n} outcome='YES' market={valuedMarket} />)
-		expect(zero.container.textContent).toBe('0 Yes')
+		expect(zero.container.textContent).toBe('0 Yes (0 ETH)')
 		await zero.cleanup()
 	})
 
@@ -158,18 +158,17 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('1.987158 Yes')
 		expect(rendered.container.textContent).toContain('1.9558 ETH if Yes wins')
-		expect(rendered.container.textContent).toContain('0 ETH otherwise')
-		expect(rendered.container.textContent?.match(/if Yes wins/g)).toHaveLength(1)
+		expect(rendered.container.textContent).toContain('if Yes wins')
+		expect(rendered.container.textContent).toContain('Yes (1.9558 ETH if Yes wins)')
 		expect(rendered.container.textContent).not.toContain('sale')
 	})
 
-	test('discloses dated backing and a fee estimate clamped to the fee end', async () => {
+	test('shows only the holding fee estimate clamped to the fee end', async () => {
 		const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('details')?.open).toBe(false)
-		expect(rendered.container.textContent).toContain('Holding fee over next 30 days10%')
-		expect(rendered.container.textContent).toContain('stopping at the fee end date')
-		expect(rendered.container.textContent).toContain('Backing as of')
+		expect(rendered.container.querySelector('details')).toBeNull()
+		expect(rendered.container.textContent).toBe('Holding fee over next 30 days10%')
+		expect(rendered.container.textContent).not.toContain('Backing as of')
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {

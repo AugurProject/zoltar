@@ -4,7 +4,7 @@ import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
+import { formatCompleteSetWithValue, formatLpWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import { marketNewRiskBlocker, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
@@ -20,7 +20,8 @@ import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
 import { resolveLiquidityAvailability } from './live/actionAvailability.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { outcomeSharesValueAttoEth, type LiquidityPreview } from './live/liquidityEstimate.js'
+import { LpHolding } from './OutcomeHolding.js'
+import { MINIMUM_LIQUIDITY, outcomeSharesValueAttoEth, type LiquidityPreview } from './live/liquidityEstimate.js'
 import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
 
@@ -86,7 +87,7 @@ export function LiveLiquidityControls({
 		return undefined
 	})()
 	let amountHint: string | undefined
-	if (operation === 'remove' && balances !== undefined) amountHint = liquidityCopy.lpHeld(formatLpQuantity(balances.lp, 4, 'down'))
+	if (operation === 'remove' && balances !== undefined) amountHint = liquidityCopy.lpHeld(formatLpWithValue(balances.lp, market, 4, 'down'))
 	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = liquidityCopy.walletEth(formatTrimmedUnits(walletEthAttoEth))
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n
 	// An initialized pool can never be initialized again, so the option is removed rather than disabled.
@@ -142,7 +143,7 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 			<div className='exchange-preview'>
 				<div>
 					<p className='detail'>{liquidityCopy.youProvide}</p>
-					<strong className='decision-amount'>{preview.operation === 'remove' ? formatLpQuantity(preview.amount) : formatValueWithUnit(formatRoundedUnits(preview.amount), workflowCopy.eth)}</strong>
+					<strong className='decision-amount'>{preview.operation === 'remove' ? <LpHolding amount={preview.amount} market={market} /> : formatValueWithUnit(formatRoundedUnits(preview.amount), workflowCopy.eth)}</strong>
 				</div>
 				<span className='exchange-arrow' aria-hidden='true'>
 					→
@@ -151,16 +152,18 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 					<p className='detail'>{liquidityCopy.youReceive}</p>
 					{preview.operation === 'remove' ? (
 						<ul className='portfolio-holdings'>
-							<li className='portfolio-holding-yes'>{formatOutcomeQuantity(preview.yesOut, shareOutcome.yes)}</li>
-							<li className='portfolio-holding-no'>{formatOutcomeQuantity(preview.noOut, shareOutcome.no)}</li>
+							<li className='portfolio-holding-yes'>{formatOutcomeWithValue(preview.yesOut, shareOutcome.yes, market)}</li>
+							<li className='portfolio-holding-no'>{formatOutcomeWithValue(preview.noOut, shareOutcome.no, market)}</li>
 						</ul>
 					) : (
 						<>
-							<strong className='decision-amount'>{formatLpQuantity(preview.liquidity)}</strong>
+							<strong className='decision-amount'>
+								<LpHolding amount={preview.liquidity} market={{ ...market, yesReserve: market.yesReserve + preview.yesUsed, noReserve: market.noReserve + preview.noUsed, lpTotalSupply: preview.operation === 'initialize' ? preview.liquidity + MINIMUM_LIQUIDITY : market.lpTotalSupply + preview.liquidity }} />
+							</strong>
 							<ul className='portfolio-holdings'>
-								<li>{formatOutcomeQuantity(preview.invalidReturned, shareOutcome.invalid)}</li>
-								{preview.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeQuantity(preview.yesReturned, shareOutcome.yes)}</li>}
-								{preview.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeQuantity(preview.noReturned, shareOutcome.no)}</li>}
+								<li>{formatOutcomeWithValue(preview.invalidReturned, shareOutcome.invalid, market)}</li>
+								{preview.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeWithValue(preview.yesReturned, shareOutcome.yes, market)}</li>}
+								{preview.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeWithValue(preview.noReturned, shareOutcome.no, market)}</li>}
 							</ul>
 						</>
 					)}
@@ -170,9 +173,9 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 			{preview.operation === 'remove' ? null : (
 				<ReadOnlyDetailAccordion title={liquidityCopy.previewDetails}>
 					<DataGrid dense>
-						<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(preview.completeSets)}</MetricField>
+						<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetWithValue(preview.completeSets, market)}</MetricField>
 						<MetricField label={liquidityCopy.sharesDeposited}>
-							{formatOutcomeQuantity(preview.yesUsed, shareOutcome.yes)} / {formatOutcomeQuantity(preview.noUsed, shareOutcome.no)}
+							{formatOutcomeWithValue(preview.yesUsed, shareOutcome.yes, market)} / {formatOutcomeWithValue(preview.noUsed, shareOutcome.no, market)}
 						</MetricField>
 					</DataGrid>
 				</ReadOnlyDetailAccordion>

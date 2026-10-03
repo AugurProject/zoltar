@@ -1,6 +1,3 @@
-import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { formatCollateralEth } from '../lib/shareValue.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { LiveMarket } from '../protocol/live.js'
 import * as payoutCopy from '../copy/payout.js'
@@ -11,30 +8,10 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 	if (market.loadError !== undefined) return null
 	const valuation = market.valuation
 	const feeReduction = valuation === undefined || market.settlementCollateralAttoEth === 0n ? undefined : ((market.settlementCollateralAttoEth - valuation.projectedCollateralAttoEth) * 1_000_000n) / market.settlementCollateralAttoEth
+	if (feeReduction === undefined) return null
 	return (
-		<details className='backing-details'>
-			<summary>{payoutCopy.backingValue}</summary>
-			<DataGrid dense>
-				<MetricField label={payoutCopy.backingPerSet}>{formatCollateralEth(10n ** 18n, market)}</MetricField>
-				{valuation === undefined ? undefined : (
-					<>
-						<MetricField label={payoutCopy.valuationTime}>
-							<TimestampValue timestamp={valuation.timestamp} relative={false} />
-						</MetricField>
-						<MetricField label={payoutCopy.feeEnd}>{valuation.feeEndTime === (1n << 256n) - 1n ? payoutCopy.feeEndUnknown : <TimestampValue timestamp={valuation.feeEndTime} relative={false} />}</MetricField>
-						{feeReduction === undefined ? undefined : <MetricField label={valuation.timestamp >= valuation.feeEndTime ? payoutCopy.feeEnded : payoutCopy.feeProjection}>{formatTrimmedUnits(feeReduction, 4, 4)}%</MetricField>}
-					</>
-				)}
-			</DataGrid>
-			<UserMessage
-				className='detail payout-note'
-				detail={
-					<>
-						{payoutCopy.holdingFeeNote}
-						{valuation === undefined || valuation.timestamp >= valuation.feeEndTime ? null : <> {payoutCopy.feeProjectionNote}</>}
-					</>
-				}
-			/>
-		</details>
+		<DataGrid dense>
+			<MetricField label={payoutCopy.feeProjection}>{formatTrimmedUnits(feeReduction, 4, 4)}%</MetricField>
+		</DataGrid>
 	)
 }
