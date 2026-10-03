@@ -1,3 +1,4 @@
+import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -23,7 +24,7 @@ function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange }: { gate: E
 		case 'universe-missing':
 			return (
 				<EmptyState
-					title={zoltarCopy.universeNotFoundTitle}
+					title={universeCopy.universeNotFoundTitle}
 					detail={zoltarCopy.universeNotFoundDetail}
 					actions={
 						<UniverseLink className='button-link' universeId={0n}>

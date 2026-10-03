@@ -32,7 +32,7 @@ export const migrationStepBlocked = 'Blocked'
 export const migrationBack = 'Back'
 export const migrationContinue = 'Continue'
 
-export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP. Universes that do not exist yet are created when you migrate.'
+export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP.'
 export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
 export const formatOpenOutcomeUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
@@ -96,7 +96,6 @@ export const universesTitle = 'Universes'
 export const universesDescription = 'Every Zoltar view follows the universe you open.'
 export const forkRouteDescription = 'Fork this universe with an ended question. A universe forks only once.'
 export const migrateRouteDescription = 'Split your REP into the outcome universes this fork created.'
-export const universeNotFoundTitle = 'Universe not found'
 export const universeUnavailableDetail = 'Universe details could not be loaded.'
 export const universeNotFoundDetail = 'No universe exists with this ID.'
 export const forkUnavailableTitle = 'Already forked'
@@ -111,3 +110,7 @@ export const forkRepBalanceUnavailableReason = 'Could not read your REP balance.
 export const forkWalletRep = 'Wallet REP'
 
 export const forkRepBalanceUnavailableShortReason = 'REP balance unavailable.'
+
+export const selectedOutcomes = 'Selected outcomes'
+export const formatRemoveOutcome = (outcome: CopyTemplateValue) => `Remove ${outcome}`
+export const formatDeployOutcomeUniverse = (outcome: CopyTemplateValue) => `Deploy ${outcome} universe`

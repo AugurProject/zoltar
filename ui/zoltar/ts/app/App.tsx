@@ -141,7 +141,7 @@ export function App() {
 								applicationTitle={zoltarCopy.applicationTitle}
 								activeUniverseId={activeUniverseId}
 								isLoadingUniverseRepBalance={loadingZoltarForkAccess}
-								migrateRepHref={getZoltarViewHref('migrate')}
+								migrateRepHref={activeRoute === 'zoltar' && activeZoltarView === 'migrate' ? undefined : getZoltarViewHref('migrate')}
 								onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 								universeForkTime={zoltarUniverse?.forkTime}
 								universeHasForked={zoltarUniverse?.hasForked}

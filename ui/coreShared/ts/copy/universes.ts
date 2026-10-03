@@ -17,3 +17,5 @@ export const lineageTitle = 'Lineage'
 export const currentUniverse = 'Current'
 export const noDeployedChildren = 'No deployed child universes.'
 export const browseUniverses = 'Browse universes'
+
+export const universeNotFoundTitle = 'Universe not found'

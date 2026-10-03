@@ -60,6 +60,8 @@ describe('universe directory', () => {
 		const missing = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => undefined} universeId={9n} />)
 		cleanupRendered = missing.cleanup
 		await waitFor(() => expect(missing.container.textContent).toContain('Universe 0x9 is not deployed on this network.'))
+		expect(missing.container.textContent).toContain('Universe not found')
+		expect(within(missing.container).getByRole('link', { name: 'Go to Genesis universe' })).toBeTruthy()
 	})
 
 	test.each(['universe', 'configuration', 'loader'] as const)('does not carry a missing universe into a new %s lookup', async change => {

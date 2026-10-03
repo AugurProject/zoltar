@@ -66,7 +66,7 @@ describe('UniverseBrowser', () => {
 
 	test('shows universe and child details without disclosure controls', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
-		const field = within(document.body).getByText('Fork YES Reputation').parentElement
+		const field = within(document.body).getByText('REP supply').parentElement
 		expect(field?.textContent).toContain('YESREP')
 		expect(field?.closest('details')).toBeNull()
 		expect(document.body.querySelector('.universe-browser details')).toBeNull()
@@ -92,10 +92,20 @@ describe('bounded universe overview', () => {
 			expect(queries.getByRole('heading', { name: 'Alpha' })).toBeTruthy()
 			expect(queries.queryByText('Child universes')).toBeNull()
 			expect(queries.queryByText('No deployed child universes.')).toBeNull()
-			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=0')
+			expect(
+				within(queries.getByText('Parent universe').parentElement ?? document.body)
+					.getByRole('link')
+					.getAttribute('href'),
+			).toContain('universe=0')
 			expect(document.body.querySelector('.universe-browser details')).toBeNull()
 			expect(queries.queryByRole('textbox')).toBeNull()
-			await act(() => queries.getByRole('link', { name: 'Parent universe' }).click())
+			expect(queries.getAllByText('Parent universe')).toHaveLength(1)
+			expect(document.body.querySelector('.universe-browser .button-link')).toBeNull()
+			await act(() =>
+				within(queries.getByText('Parent universe').parentElement ?? document.body)
+					.getByRole('link')
+					.click(),
+			)
 			expect(window.location.hash).toContain('universe=0')
 		} finally {
 			await rendered.cleanup()

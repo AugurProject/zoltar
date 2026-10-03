@@ -1,3 +1,4 @@
+import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
 import { useCallback } from 'preact/hooks'
 import { loadUniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
 import { createTradingPublicClient } from '../protocol/live.js'
@@ -42,7 +43,7 @@ export function UniverseDirectory({ configuration, connectionMessage, loadUniver
 			<ErrorNotice message={connectionMessage} />
 			{state.kind === 'loading' || state.kind === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} /> : undefined}
 			{state.kind === 'error' ? <RetryableNotice onRetry={retry} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: state.message }} /> : undefined}
-			{state.kind === 'ready' && state.universe === undefined ? <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}
+			{state.kind === 'ready' && state.universe === undefined ? <StateHint title={universeCopy.universeNotFoundTitle} presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}
 			{state.kind === 'ready' && state.universe !== undefined ? <UniverseBrowser activeUniverseId={universeId} navigation={state.universe.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={state.universe} loadPage={loadOutcomes} /> : undefined} universe={state.universe} /> : undefined}
 		</div>
 	)

@@ -199,7 +199,7 @@ describe('ZoltarRoutes', () => {
 	test('mounts the migration workflow on the Migrate route of a forked universe', async () => {
 		const { queries } = await renderRoute('migrate', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Choose outcomes' })).toBeTruthy()
-		expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Deploy No universe' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelectorAll('.migration-wizard-steps button')).toHaveLength(4)
 	})

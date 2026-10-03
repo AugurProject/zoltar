@@ -36,7 +36,8 @@ describe('UniversePoolDirectorySection', () => {
 		window.history.replaceState({}, '', '#/pools/universes?universe=999')
 		const rendered = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 999n, zoltarUniverse: undefined, universeMissing: true }))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('Choose another universe.')
+		expect(document.body.textContent).toContain('Universe not found')
+		expect(document.body.textContent).not.toContain('Choose another universe.')
 		expect(document.body.textContent).not.toContain('Loading')
 		expect(within(document.body).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
 		within(document.body).getByRole('button', { name: 'Go to Genesis universe' }).click()

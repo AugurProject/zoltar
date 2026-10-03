@@ -107,7 +107,7 @@ export function App() {
 	const overviewProps = {
 		...overviewWalletProps,
 		activeUniverseId,
-		...getStatoblastOverviewUniverse(marketCreation),
+		...getStatoblastOverviewUniverse({ ...marketCreation, migrationActive: route === 'pools' && activeSecurityPoolsView === 'migrate' }),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		repPrices: {
 			isLoading: isLoadingRepPrices,

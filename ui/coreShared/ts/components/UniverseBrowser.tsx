@@ -129,19 +129,12 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 							<span className='universe-id-value'>{formatUniverseIdHex(universe.universeId)}</span>
 						</MetricField>
 						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink universeId={universe.parentUniverseId} />}</MetricField>
-						<MetricField label={universe.reputationTokenName ?? universeCopy.repSupply}>
+						<MetricField label={universeCopy.repSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>
 					</MetricGrid>
 				</div>
 			</SectionBlock>
-			{universe.universeId === 0n ? undefined : (
-				<div className='actions'>
-					<UniverseLink className='button-link secondary-link' universeId={universe.parentUniverseId}>
-						{universeCopy.parentUniverse}
-					</UniverseLink>
-				</div>
-			)}
 			{navigation}
 			{universe.relatedUniversesLoaded === false ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>

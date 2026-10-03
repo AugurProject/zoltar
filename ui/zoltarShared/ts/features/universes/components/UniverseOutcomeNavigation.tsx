@@ -1,3 +1,4 @@
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { OutcomeUniverseList } from './OutcomeUniverseList.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { useEffect, useState } from 'preact/hooks'
@@ -35,7 +36,8 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 	const [refresh, setRefresh] = useState(0)
 	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; page?: UniverseOutcomePage | undefined; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadPage === loadPage && snapshot.start === start && snapshot.retry === retry ? snapshot : undefined
-	const page = current?.page
+	const retained = snapshot?.backend === backend && snapshot.loadPage === loadPage ? snapshot.page : undefined
+	const page = current?.page ?? retained
 	const loading = current === undefined
 	useBlockRefresh(() => setRefresh(count => count + 1), page?.scalarQuestion === undefined)
 	useEffect(() => {
@@ -53,7 +55,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 						loadPage,
 						start,
 						retry,
-						page: previous?.backend === backend && previous.loadPage === loadPage && previous.start === start && previous.retry === retry ? previous.page : undefined,
+						page: previous?.backend === backend && previous.loadPage === loadPage ? previous.page : undefined,
 						error: copy.outcomesUnavailable,
 					}))
 			}
@@ -63,15 +65,27 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 		}
 	}, [address, backend, loadPage, refresh, retry, start, universeId])
 	return (
-		<SectionBlock title={commonCopy.childUniverses} variant='plain'>
+		<SectionBlock
+			title={
+				<span className='universe-outcome-heading'>
+					{commonCopy.childUniverses}
+					<span aria-hidden={!loading || page === undefined} className={loading && page !== undefined ? undefined : 'universe-outcome-status-idle'}>
+						<Badge tone='loading'>{commonCopy.loading}</Badge>
+					</span>
+				</span>
+			}
+			variant='plain'
+			busy={loading}
+		>
 			<div className='form-grid'>
 				{page?.title === undefined ? undefined : <p className='detail'>{page.title}</p>}
-				{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingOutcomes, detailIsLoading: true }} /> : undefined}
+				{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingOutcomes, detailIsLoading: true }} /> : undefined}
 				{page?.scalarQuestion === undefined ? (
 					<OutcomeUniverseList
 						emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
 						outcomes={(page?.choices ?? []).map(candidate => ({
 							...candidate,
+							disabled: loading || !candidate.exists,
 							onSelect: () => {
 								if (candidate.exists) navigateToUniverse(candidate.universeId)
 							},

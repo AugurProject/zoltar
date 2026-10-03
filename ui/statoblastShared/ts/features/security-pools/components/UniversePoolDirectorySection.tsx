@@ -1,3 +1,4 @@
+import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { UniverseOutcomeNavigation } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
@@ -30,7 +31,8 @@ export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse,
 		const hint =
 			presentation === undefined ? undefined : (
 				<StateHint
-					presentation={withoutActionHint(presentation)}
+					title={universeMissing ? universeCopy.universeNotFoundTitle : undefined}
+					presentation={universeMissing ? { key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked' } : withoutActionHint(presentation)}
 					actions={
 						universeMissing ? (
 							<button type='button' className='secondary' onClick={() => navigateToUniverse(0n)}>

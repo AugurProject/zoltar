@@ -113,7 +113,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(queries.getByRole('button', { name: /^Yes/ }).getAttribute('aria-pressed')).toBe('true')
 		queries.getByRole('button', { name: /^No/ }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [1n, 2n] }])
-		queries.getByRole('button', { name: 'Deploy universe' }).click()
+		queries.getByRole('button', { name: 'Deploy No universe' }).click()
 		expect(deployed).toEqual([2n])
 	})
 
@@ -129,7 +129,7 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const q = within(document.body)
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
-		q.getByRole('button', { name: 'Deploy universe' }).click()
+		q.getByRole('button', { name: 'Deploy 0 °C universe' }).click()
 		expect(deployments).toEqual([getScalarOutcomeIndex(question, 0n)])
 		await act(() => fireEvent.input(q.getByLabelText('Scalar value'), { target: { value: '100' } }))
 		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(1)
@@ -137,10 +137,10 @@ describe('ZoltarMigrationSection', () => {
 		expect(updates).toEqual([{ outcomeIndexes: [maxIndex] }])
 		expect(q.getByRole('link', { name: 'Open 100 °C universe' }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
 		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Select outcome' }), { target: { value: (question.numTicks + 1n).toString() } }))
-		expect(q.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
+		expect(q.queryByRole('button', { name: /^Deploy .* universe$/ })).toBeNull()
 		expect(document.body.textContent).toContain('Enter an exact tick within')
 		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
-		q.getByRole('button', { name: 'Deploy universe' }).click()
+		q.getByRole('button', { name: 'Deploy Invalid universe' }).click()
 		expect(deployments.at(-1)).toBe(0n)
 	})
 
@@ -157,6 +157,55 @@ describe('ZoltarMigrationSection', () => {
 		expect(updates).toEqual([{ outcomeIndexes: [1n, 11n] }])
 		await act(() => q.getByRole('button', { name: 'Previous page' }).click())
 		expect(q.getByRole('button', { name: 'Option 1' }).getAttribute('aria-pressed')).toBe('true')
+	})
+
+	test('keeps scalar selections visible and removable after moving the picker', async () => {
+		const question = createMarketDetails({ marketType: 'scalar', outcomeLabels: [], numTicks: 20n, displayValueMax: 100n * ATTO_REP, answerUnit: '°C' })
+		const index = getScalarOutcomeIndex(question, 10n)
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const child = { ...yesChild, outcomeIndex: index, outcomeLabel: '50 °C' }
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [index] }), onZoltarMigrationFormChange: update => updates.push(update) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } }))
+		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '1' } }))
+		expect(q.getByRole('button', { name: 'Remove 50 °C' })).toBeTruthy()
+		expect(q.getByRole('button', { name: 'Deploy 5 °C universe' })).toBeTruthy()
+		expect(q.getByText('Not deployed')).toBeTruthy()
+		q.getByRole('button', { name: 'Remove 50 °C' }).click()
+		expect(updates).toEqual([{ outcomeIndexes: [] }])
+		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [] }) })), rendered.container))
+		expect(q.queryByRole('button', { name: 'Remove 50 °C' })).toBeNull()
+	})
+
+	test('keeps selections from other categorical pages visible and removable', async () => {
+		const children = Array.from({ length: 12 }, (_, i) => ({ ...yesChild, universeId: BigInt(i + 2), outcomeIndex: BigInt(i + 1), outcomeLabel: `Option ${i + 1}` }))
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), zoltarMigrationForm: createForm({ outcomeIndexes: [1n, 11n] }), onZoltarMigrationFormChange: update => updates.push(update) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		expect(q.getByRole('button', { name: 'Remove Option 11' })).toBeTruthy()
+		await act(() => q.getByRole('button', { name: 'Next page' }).click())
+		q.getByRole('button', { name: 'Remove Option 1' }).click()
+		expect(updates).toEqual([{ outcomeIndexes: [11n] }])
+		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), zoltarMigrationForm: createForm({ outcomeIndexes: [11n] }) })), rendered.container))
+		expect(q.queryByRole('button', { name: 'Remove Option 1' })).toBeNull()
+		expect(q.getByRole('button', { name: 'Remove Option 11' })).toBeTruthy()
+	})
+
+	test('enables Continue when the first outcome selection reaches the form', async () => {
+		let props = createProps({ zoltarMigrationForm: createForm({ outcomeIndexes: [] }) })
+		props.onZoltarMigrationFormChange = update => {
+			props = { ...props, zoltarMigrationForm: { ...props.zoltarMigrationForm, ...update } }
+			render(h(ZoltarMigrationSection, props), rendered.container)
+		}
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Continue', 'Select at least one outcome.')
+		await act(() => within(document.body).getByRole('button', { name: 'Yes' }).click())
+		expectTransactionButtonEnabled(document.body, 'Continue')
+		await act(() => within(document.body).getByRole('button', { name: 'Continue' }).click())
+		expect(getCurrentStepTitle()).toBe('Amount')
 	})
 
 	test('blocks Continue until an outcome is selected', async () => {

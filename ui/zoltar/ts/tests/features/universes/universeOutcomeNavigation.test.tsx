@@ -76,6 +76,42 @@ describe('outcome-based universe traversal', () => {
 		expect(calls).toBe(3)
 	})
 
+	test('keeps cards busy through paging failures and Retry until the replacement loads', async () => {
+		const next = createDeferred<UniverseOutcomePage>()
+		const retry = createDeferred<UniverseOutcomePage>()
+		let calls = 0
+		const loader: LoadUniverseOutcomes = async () => {
+			calls++
+			if (calls === 1) return { ...page, hasNextPage: true }
+			return await (calls === 2 ? next.promise : retry.promise)
+		}
+		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
+		await waitFor(() => expect(calls).toBe(2))
+		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(true)
+		expect(view.container.querySelector('[aria-busy="true"]')).toBeTruthy()
+		expect(q.getByText('Loading')).toBeTruthy()
+		await act(async () => {
+			next.reject(new Error('RPC unavailable'))
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(q.queryByText('Unable to load child outcomes.')).not.toBeNull())
+		expect(q.getByRole('button', { name: 'Open Alpha universe' })).toBeTruthy()
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
+		await waitFor(() => expect(calls).toBe(3))
+		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(true)
+		await act(async () => {
+			retry.resolve({ ...page, choices: [{ label: 'Gamma', universeId: 30n, exists: true }] })
+			await retry.promise
+		})
+		await waitFor(() => expect(q.queryByText('Gamma')).not.toBeNull())
+		expect(q.queryByText('Alpha')).toBeNull()
+		expect(q.getByRole('button', { name: 'Open Gamma universe' }).hasAttribute('disabled')).toBe(false)
+		expect(q.getByText('Loading').closest('[aria-hidden]')?.getAttribute('aria-hidden')).toBe('true')
+	})
+
 	test('opens a deployed outcome directly from a migration-style card without requiring an ID', async () => {
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={async () => page} />))
 		const q = within(view.container)
@@ -128,6 +164,31 @@ describe('outcome-based universe traversal', () => {
 		fireEvent.click(q.getByRole('button', { name: 'Previous page' }))
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
 		expect(starts).toEqual([0n, 10n, 0n])
+	})
+
+	test('does not retain cards across a loader change or accept the old loader reply', async () => {
+		const old = createDeferred<UniverseOutcomePage>()
+		const replacement = createDeferred<UniverseOutcomePage>()
+		let calls = 0
+		const loader: LoadUniverseOutcomes = async () => (++calls === 1 ? { ...page, hasNextPage: true } : await old.promise)
+		const nextLoader: LoadUniverseOutcomes = async () => await replacement.promise
+		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
+		await waitFor(() => expect(calls).toBe(2))
+		await act(() => render(<UniverseOutcomeNavigation universe={universe} loadPage={nextLoader} />, view.container))
+		expect(q.queryByText('Alpha')).toBeNull()
+		await act(async () => {
+			old.resolve(page)
+			await old.promise
+		})
+		expect(q.queryByText('Alpha')).toBeNull()
+		await act(async () => {
+			replacement.resolve({ ...page, choices: [{ label: 'Delta', universeId: 40n, exists: true }] })
+			await replacement.promise
+		})
+		await waitFor(() => expect(q.queryByText('Delta')).not.toBeNull())
 	})
 
 	test('a late read cannot replace outcomes after moving to another universe', async () => {

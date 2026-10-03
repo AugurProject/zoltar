@@ -3,6 +3,7 @@ import { writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlPa
 import { useState } from 'preact/hooks'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { UniverseScalarPicker, resolveScalarUniverseSelection } from './UniverseScalarPicker.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import * as navigationCopy from '../../../copy/universeNavigation.js'
@@ -49,19 +50,36 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 	const deploymentReason = deploymentDisabledReason({ exists: false })
 	return (
 		<div className='form-grid'>
+			{outcomes.some(outcome => outcome.selected) ? (
+				<div className='field'>
+					<span className='field-label'>{zoltarCopy.selectedOutcomes}</span>
+					<div className='actions'>
+						{outcomes
+							.filter(outcome => outcome.selected)
+							.map(outcome => (
+								<button key={outcome.outcomeIndex.toString()} type='button' className='secondary' disabled={disabled} onClick={() => onToggleOutcomeIndex(outcome.outcomeIndex)} aria-label={zoltarCopy.formatRemoveOutcome(outcome.label)}>
+									{outcome.label} <span aria-hidden='true'>×</span>
+								</button>
+							))}
+					</div>
+				</div>
+			) : undefined}
 			{scalarQuestion === undefined ? undefined : <UniverseScalarPicker question={scalarQuestion} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} disabled={disabled || pendingOutcomeIndex !== undefined} />}
 			{selection !== undefined && selection.outcomeIndex === undefined ? <UserMessage placement='field' tone='error' detail={navigationCopy.invalidScalarTick} /> : undefined}
 			{selection?.outcomeIndex !== undefined && selectedChild === undefined ? (
-				<TransactionActionButton
-					tone='secondary'
-					idleLabel={marketCopy.deployUniverse}
-					pendingLabel={marketCopy.deployingUniverse}
-					pending={pendingOutcomeIndex === selection.outcomeIndex}
-					onClick={() => {
-						if (selection.outcomeIndex !== undefined) onDeployChildUniverse(selection.outcomeIndex)
-					}}
-					availability={{ disabled: disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: deploymentReason }}
-				/>
+				<div className='actions'>
+					<Badge tone='muted'>{commonCopy.notDeployed}</Badge>
+					<TransactionActionButton
+						tone='secondary'
+						idleLabel={zoltarCopy.formatDeployOutcomeUniverse(selection.label)}
+						pendingLabel={marketCopy.deployingUniverse}
+						pending={pendingOutcomeIndex === selection.outcomeIndex}
+						onClick={() => {
+							if (selection.outcomeIndex !== undefined) onDeployChildUniverse(selection.outcomeIndex)
+						}}
+						availability={{ disabled: disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: deploymentReason }}
+					/>
+				</div>
 			) : undefined}
 			<OutcomeUniverseList
 				selection
@@ -78,7 +96,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 							<TransactionActionButton
 								tone='secondary'
 								showDisabledReason={false}
-								idleLabel={marketCopy.deployUniverse}
+								idleLabel={zoltarCopy.formatDeployOutcomeUniverse(outcome.label)}
 								pendingLabel={marketCopy.deployingUniverse}
 								pending={pendingOutcomeIndex === outcome.outcomeIndex}
 								onClick={() => onDeployChildUniverse(outcome.outcomeIndex)}
