@@ -395,6 +395,7 @@ export function LiveTrading({
 						settings: tradeSettings,
 						nowSeconds,
 						externallyLocked: ticketLocked,
+						// An explicit background workflow refresh supersedes any block poll already in flight.
 						refresh: options => refresh(configuration, marketPage.start, 'liquidity', { ...options, ownerMarket: selected.pool, explicit: options?.background === true }),
 						onKnownReceipt: refreshWalletSummaryAfterReceipt,
 						executeWithCurrentWalletContext,

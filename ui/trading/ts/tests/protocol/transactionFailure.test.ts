@@ -28,6 +28,10 @@ describe('transaction failure explanations', () => {
 		expect(describeTransactionFailure(new Error('Refreshed estimate no longer satisfies the approved minimum LP tokens'), 'Trade failed')).toContain('The price moved past your slippage limit.')
 	})
 
+	test('explains a pre-signing settlement deadline failure with expiration guidance', () => {
+		expect(describeTransactionFailure(new Error('Transaction deadline has passed; try again'), 'Settlement transaction failed')).toBe('The transaction expired before it was mined. Try again, or allow more time in Settings.')
+	})
+
 	test('explains wallet cancellations and missing gas funds', () => {
 		expect(describeTransactionFailure(Object.assign(new Error('User rejected the request.'), { code: 4001 }), 'Trade failed')).toBe('Action canceled in wallet. Nothing was sent. Press the button again when ready.')
 		expect(describeTransactionFailure(new Error('insufficient funds for gas * price + value'), 'Trade failed')).toBe('Your wallet does not have enough ETH for this amount plus gas. Lower the amount or add ETH to your wallet.')

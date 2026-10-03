@@ -11,12 +11,12 @@ const SLIPPAGE_REASONS = ['Minimum long shares', 'Maximum long shares', 'Minimum
 // Contracts revert with plain strings (see solidity/contracts/trading and SecurityPool); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	{
-		// The last reason is the client-side check that the pre-signing simulation still meets the quoted limits.
+		// The last reason is the client-side check that the pre-signing simulation still meets the approved estimate bounds.
 		reasons: SLIPPAGE_REASONS,
 		cause: 'The price moved past your slippage limit.',
 		nextStep: 'Try again at the new price, or raise the slippage tolerance in Settings.',
 	},
-	{ reasons: ['Deadline expired'], cause: 'The transaction expired before it was mined.', nextStep: 'Try again, or allow more time in Settings.' },
+	{ reasons: ['Deadline expired', 'Transaction deadline has passed'], cause: 'The transaction expired before it was mined.', nextStep: 'Try again, or allow more time in Settings.' },
 	{
 		reasons: ['Question ended', 'Question resolved', 'Universe forked', 'Fork continuation pending', 'Pool inactive', 'Forked', 'Fork await', 'Fork paused'],
 		cause: 'This market no longer accepts this action.',
