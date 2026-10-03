@@ -171,6 +171,26 @@ describe('outcome-based universe traversal', () => {
 		await waitFor(() => expect(starts).toEqual([0n, 10n, 10n, 20n]))
 	})
 
+	test('can return to page one after the next page fails', async () => {
+		const starts: bigint[] = []
+		const loader: LoadUniverseOutcomes = async (_address, _id, start) => {
+			starts.push(start)
+			if (start > 0n) throw new Error('RPC unavailable')
+			return { ...page, hasNextPage: true }
+		}
+		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
+		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		expect(q.getByRole('button', { name: 'Previous page' }).hasAttribute('disabled')).toBe(false)
+		expect(q.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
+		fireEvent.click(q.getByRole('button', { name: 'Previous page' }))
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).toBeNull()
+		expect(starts).toEqual([0n, 10n, 0n])
+	})
+
 	test('paging replaces outcome cards and requests only the next page', async () => {
 		const starts: bigint[] = []
 		const loader: LoadUniverseOutcomes = async (_address, _universeId, start) => {

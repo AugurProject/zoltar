@@ -99,7 +99,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 				<RetryableNotice message={current?.error} retryLabel={copy.retryOutcomes} onRetry={() => setRetry(count => count + 1)} />
 				<PaginationControls
 					loading={loading}
-					hasPreviousPage={current?.error === undefined && start > 0n}
+					hasPreviousPage={start > 0n}
 					hasNextPage={current?.error === undefined && (page?.hasNextPage ?? false)}
 					onPreviousPage={() => setStart(current => (current >= UNIVERSE_OUTCOME_PAGE_SIZE ? current - UNIVERSE_OUTCOME_PAGE_SIZE : 0n))}
 					onNextPage={() => setStart(current => current + UNIVERSE_OUTCOME_PAGE_SIZE)}
