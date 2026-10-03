@@ -8,7 +8,7 @@ import type { MarketFilter, MarketListOptions, MarketSort } from './marketListin
  * These parameters describe one route, so links to another route drop them, and they never select the environment.
  */
 
-export type TicketSide = 'YES' | 'NO'
+type TicketSide = 'YES' | 'NO'
 type TicketMode = 'entry' | 'exit'
 export type TicketSelection = Readonly<{ mode: TicketMode; side: TicketSide }>
 export type MarketWorkspaceView = 'trade' | 'settlement'

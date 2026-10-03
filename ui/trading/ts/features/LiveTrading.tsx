@@ -1,6 +1,6 @@
 import { parsedUniverseId } from './live/useLiveTradingState.js'
 import * as portfolioCopy from '../copy/portfolio.js'
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -35,12 +35,8 @@ import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { LiveMarketBrowser } from './LiveMarketBrowser.js'
 import { MarketContracts, MarketFacts, MarketOverview, MarketPageHeader } from './MarketOverview.js'
 import { MarketPosition } from './MarketPosition.js'
-import { MarketTicketSheet, type TicketActivity } from './MarketTicketSheet.js'
-import { marketOddsPercent } from '../lib/marketListing.js'
-import { marketViewHref, readMarketViewParam, readTicketParam, replaceRouteHashSearch, writeMarketViewParam, writeTicketParam, type TicketSelection } from '../lib/routeState.js'
-import { transactionInFlight, transactionStatusText } from './live/transactionPresentation.js'
-import * as ticketCopy from '../copy/tradeTicket.js'
-import { marketsCopy } from '../copy/markets.js'
+import { MarketTicketPanel } from './MarketTicketPanel.js'
+import { marketViewHref, readMarketViewParam, readTicketParam, replaceRouteHashSearch, writeMarketViewParam, writeTicketParam } from '../lib/routeState.js'
 import { liveCopy } from '../copy/live.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 import { useDownloadedEntities, useFavorites, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
@@ -143,27 +139,22 @@ export function LiveTrading({
 		for (const update of marketCacheUpdates) recordedMarkets.current.set(update.id, update.data)
 		downloadedMarkets.record(marketCacheUpdates)
 	})
-	// Arriving on a market with a `ticket` parameter (a market-card, portfolio, or refreshed link) opens the ticket on
-	// that direction and side; the ticket then keeps its current selection in the parameter so a refresh restores it.
-	const [ticketOpenRequested, setTicketOpenRequested] = useState(false)
+	// Arriving on a market with a `ticket` parameter (a market-card, portfolio, or refreshed link) selects the ticket’s
+	// direction and side; the ticket then keeps its current selection in the parameter so a refresh restores it.
 	const positionInputRef = useRef({ mode, side, setMode, setSide })
 	positionInputRef.current = { mode, side, setMode, setSide }
 	useEffect(() => {
-		// A request left unconsumed by a market that never loaded must not open the sheet on the next market.
-		setTicketOpenRequested(false)
 		if (routePool === undefined || workflowRoute !== 'market') return
 		const requested = readTicketParam(parseRouteHash(window.location.hash).search)
 		if (requested === undefined) return
 		const current = positionInputRef.current
 		if (current.mode !== requested.mode) current.setMode(requested.mode)
 		if (current.side !== requested.side) current.setSide(requested.side)
-		setTicketOpenRequested(true)
 	}, [routePool, workflowRoute])
 	useEffect(() => {
 		if (routePool === undefined || workflowRoute !== 'market') return
 		replaceRouteHashSearch(search => writeTicketParam(search, { mode, side }))
 	}, [mode, side, routePool, workflowRoute])
-	const handleTicketOpenRequest = useCallback(() => setTicketOpenRequested(false), [])
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
@@ -318,29 +309,6 @@ export function LiveTrading({
 		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity },
 		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement }]),
 	]
-	const odds = selected === undefined ? undefined : marketOddsPercent(selected)
-	// On narrow screens the collapsed ticket offers one-tap YES / NO entry while the trade view can take a new position,
-	// and a holder also gets a Sell entry on the outcome they hold (the larger holding when they hold both).
-	let sellSide: 'YES' | 'NO' | undefined
-	if (selectedBalances !== undefined && (selectedBalances.yes > 0n || selectedBalances.no > 0n)) sellSide = selectedBalances.no > selectedBalances.yes ? 'NO' : 'YES'
-	const quickPick =
-		odds !== undefined && marketOpen && activeView === 'trade' && selectedPairInitialized
-			? {
-					yesPercent: odds.yes,
-					noPercent: odds.no,
-					sellSide,
-					pick: (selection: TicketSelection) => {
-						setMode(selection.mode)
-						setSide(selection.side)
-					},
-				}
-			: undefined
-	// Closing the sheet must not hide a running transaction: the collapsed bar shows its progress until it settles.
-	let ticketActivity: TicketActivity | undefined
-	const tradeActionLabel = mode === 'entry' ? ticketCopy.buyOutcome(side) : ticketCopy.sellOutcome(side)
-	const tradeStatus = transactionStatusText(position.state, tradeActionLabel)
-	if (tradeStatus !== undefined && (transactionInFlight(position.state) || position.state === 'confirmed')) ticketActivity = { text: tradeStatus, settled: position.state === 'confirmed' && !ticketLocked }
-	else if (ticketLocked) ticketActivity = { text: marketsCopy.transactionInProgress, settled: false }
 	// A loaded market's trade and liquidity pages are titled by the market question itself, with a way back to the list;
 	// other states name the workflow and let the object header below carry the question. Focus lands on whichever
 	// heading names the market when the addressed market changes.
@@ -415,12 +383,10 @@ export function LiveTrading({
 					)
 					return (
 						<div key={selected.pool} className='market-layout'>
+							<MarketTicketPanel>{ticket}</MarketTicketPanel>
 							<SectionBlock className='market-layout__main' variant='plain'>
 								<MarketOverview market={selected} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
 							</SectionBlock>
-							<MarketTicketSheet viewLabel={viewOptions.find(option => option.value === activeView)?.label ?? appCopy.trade} quickPick={quickPick} activity={ticketActivity} openRequested={ticketOpenRequested} onOpenRequestHandled={handleTicketOpenRequest}>
-								{ticket}
-							</MarketTicketSheet>
 						</div>
 					)
 				})()}
