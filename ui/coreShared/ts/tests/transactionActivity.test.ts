@@ -99,9 +99,9 @@ describe('transaction activity list', () => {
 	})
 
 	test('merges entries another tab stored and never lets a pending copy undo a settled one', () => {
-		const mine = [entry(3, 'pending'), entry(1, 'confirmed'), entry(4, 'pending')]
+		const currentEntries = [entry(3, 'pending'), entry(1, 'confirmed'), entry(4, 'pending')]
 		const stored = [entry(2, 'pending'), entry(1, 'pending'), { ...entry(4, 'failed'), failureKind: 'dropped' as const }]
-		const merged = mergeStoredTransactionActivity(mine, stored)
+		const merged = mergeStoredTransactionActivity(currentEntries, stored)
 
 		expect(merged.map(item => [item.hash, item.status])).toEqual([
 			[hashOf(4), 'failed'],
@@ -109,7 +109,7 @@ describe('transaction activity list', () => {
 			[hashOf(2), 'pending'],
 			[hashOf(1), 'confirmed'],
 		])
-		expect(mergeStoredTransactionActivity(mine, [entry(1), entry(3, 'pending')])).toBe(mine)
+		expect(mergeStoredTransactionActivity(currentEntries, [entry(1), entry(3, 'pending')])).toBe(currentEntries)
 	})
 
 	test('keeps a transaction one tab stopped tracking from coming back through another tab', () => {
@@ -197,7 +197,7 @@ describe('transaction activity store', () => {
 			if (storageKey === undefined) throw new Error('Expected persisted activity for a connected account')
 			// The other tab stored its pending transaction after this tab loaded the list.
 			window.localStorage.setItem(storageKey, serializeTransactionActivity([{ ...entry(7, 'pending'), submittedAt: Date.now() - 1 }]))
-			recordTransactionSubmitted({ hash: hashOf(8), scope: [], title: 'Mine' })
+			recordTransactionSubmitted({ hash: hashOf(8), scope: [], title: 'Pending transaction' })
 			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 			setTransactionActivityOwner('0x00000000000000000000000000000000000000a1')
 			expect(transactionActivity.value.entries.map(item => item.hash).sort()).toEqual([hashOf(7), hashOf(8)])

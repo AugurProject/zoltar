@@ -18,7 +18,7 @@ export type SimulationController = {
 	isBootstrapped: boolean
 	isBootstrapping: boolean
 	mintRep(amount: bigint): Promise<void>
-	mineBlock(): Promise<void>
+	advanceBlock(): Promise<void>
 	queryDelayMilliseconds: number
 	repPerEthPrice: bigint
 	repPerUsdcPrice: bigint

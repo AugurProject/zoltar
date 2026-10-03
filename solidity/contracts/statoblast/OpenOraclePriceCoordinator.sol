@@ -211,7 +211,7 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	// The cap inverts getRequestPriceCostAttoEth for the committed bounty instead of reading block.basefee,
-	// so a fee-free simulation writes the same storage as the mined transaction and estimates the same gas.
+	// so a fee-free simulation writes the same storage as the included transaction and estimates the same gas.
 	function _settlementBaseFeeCapForBounty(uint256 bountyAttoEth) private view returns (uint256) {
 		uint256 impliedRequestBaseFeeAttoEthPerGas =
 			(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH) / _requestGasUnits();

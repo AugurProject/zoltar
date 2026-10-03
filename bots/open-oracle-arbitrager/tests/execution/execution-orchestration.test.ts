@@ -57,7 +57,7 @@ function lifecyclePosition(): PositionRecord {
 		direction: 'sell-rep',
 		entryTransactionHash: originalHash,
 		entryTransactionHashes: [originalHash],
-		gasExpenditures: [{ costEth: '0.001', minedAt: '2026-07-24T00:00:00.000Z', transactionHash: originalHash }],
+		gasExpenditures: [{ costEth: '0.001', includedAt: '2026-07-24T00:00:00.000Z', transactionHash: originalHash }],
 		historyOutbox: undefined,
 		hedgeAmountToken: '1',
 		hedgeWeth: '2',
@@ -248,8 +248,8 @@ describe('funded execution orchestration', () => {
 			},
 		}))
 		expect(await receiptGasExpendituresWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'lifecycle 7', [firstReceipt, secondReceipt], 1)).toEqual([
-			{ costAttoEth: 210_000n, minedAt: '2026-03-20T23:59:59.000Z', transactionHash: replacementHash },
-			{ costAttoEth: 420_000n, minedAt: '2026-03-21T00:00:01.000Z', transactionHash: originalHash },
+			{ costAttoEth: 210_000n, includedAt: '2026-03-20T23:59:59.000Z', transactionHash: replacementHash },
+			{ costAttoEth: 420_000n, includedAt: '2026-03-21T00:00:01.000Z', transactionHash: originalHash },
 		])
 	})
 
@@ -598,7 +598,7 @@ describe('funded execution orchestration', () => {
 		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example/private'], 'pending entry 7', 100n, 1)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending entry 7 canonical block is missing its hash')
 	})
 
-	test('rejects receipt recovery when mined gas price is missing', async () => {
+	test('rejects receipt recovery when effective gas price from the receipt is missing', async () => {
 		const receipt = { ...transactionReceipt(), effectiveGasPrice: undefined }
 		const readers = [{ getTransactionReceipt: () => Promise.resolve(receipt) }, { getTransactionReceipt: () => Promise.resolve(receipt) }]
 		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash], 1)).rejects.toThrow('effective gas price')

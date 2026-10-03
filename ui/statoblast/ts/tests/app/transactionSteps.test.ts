@@ -250,8 +250,8 @@ test('describes an unlabeled Multicall3 batch instead of exposing aggregate3', a
 
 test('a chained action waits for receipts and a separate click for each wallet request', async () => {
 	const { client, sendTransaction, receipt } = setup()
-	const mined = createDeferred<TransactionReceipt>()
-	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => await mined.promise })
+	const receiptReady = createDeferred<TransactionReceipt>()
+	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => await receiptReady.promise })
 	reviewed.onTransactionPlan?.([1n, 2n].map(value => ({ functionName: 'Transfer ETH', to: account, value })))
 	const action = (async () => {
 		await reviewed.sendTransaction({ to: account, value: 1n })
@@ -262,7 +262,7 @@ test('a chained action waits for receipts and a separate click for each wallet r
 	await new Promise(resolve => setTimeout(resolve, 10))
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['pending', 'upcoming'])
-	mined.resolve({ ...receipt, transactionHash: hash })
+	receiptReady.resolve({ ...receipt, transactionHash: hash })
 	await clickTransactionStep(1)
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	await action
@@ -358,7 +358,7 @@ test('review wrapping preserves live simulation state getters', () => {
 })
 
 for (const reason of ['repriced', 'cancelled', 'replaced'] as const) {
-	test(`tracks the mined replacement hash when a transaction is ${reason}`, async () => {
+	test(`tracks the replacement hash from the receipt when a transaction is ${reason}`, async () => {
 		const { reviewed, replacementHash } = setup(reason)
 		const sending = reviewed.sendTransaction({ to: account, value: 1n })
 		await waitForStarted()

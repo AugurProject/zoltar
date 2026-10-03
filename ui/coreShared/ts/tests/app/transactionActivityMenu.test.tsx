@@ -25,7 +25,7 @@ const failedHash: Hash = '0x2222000000000000000000000000000000000000000000000000
 
 const originalTransaction = { from: account, gas: 21_000n, hash: pendingHash, input: '0x', nonce: 7n, to: account, value: 0n } as const
 
-function minedReceipt(transactionHash: Hash) {
+function includedReceipt(transactionHash: Hash) {
 	return { blockHash: transactionHash, blockNumber: 5n, cumulativeGasUsed: 21_000n, effectiveGasPrice: 1n, from: account, gasUsed: 21_000n, logs: [], status: 'success' as const, to: account, transactionHash, transactionIndex: 0, type: 'eip1559' as const }
 }
 
@@ -89,11 +89,11 @@ test('follows a transaction replaced outside the app after a reload and settles 
 		createReadClient: () => ({
 			...baseClient,
 			waitForTransactionReceipt: async (parameters: Parameters<typeof baseClient.waitForTransactionReceipt>[0]) => {
-				// The wallet first sped the transaction up, then cancelled it; the cancellation is what gets mined.
-				parameters.onReplaced?.({ reason: 'repriced', replacedTransaction: { hash: restoredHash }, transaction: { ...originalTransaction, hash: speedUpHash }, transactionReceipt: minedReceipt(speedUpHash) })
+				// The wallet first sped the transaction up, then cancelled it; the cancellation is what gets included.
+				parameters.onReplaced?.({ reason: 'repriced', replacedTransaction: { hash: restoredHash }, transaction: { ...originalTransaction, hash: speedUpHash }, transactionReceipt: includedReceipt(speedUpHash) })
 				expect(transactionActivity.value.entries[0]?.hash).toBe(speedUpHash)
-				parameters.onReplaced?.({ reason: 'cancelled', replacedTransaction: { hash: speedUpHash }, transaction: { ...originalTransaction, hash: cancellationHash }, transactionReceipt: minedReceipt(cancellationHash) })
-				return minedReceipt(cancellationHash)
+				parameters.onReplaced?.({ reason: 'cancelled', replacedTransaction: { hash: speedUpHash }, transaction: { ...originalTransaction, hash: cancellationHash }, transactionReceipt: includedReceipt(cancellationHash) })
+				return includedReceipt(cancellationHash)
 			},
 		}),
 	}

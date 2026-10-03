@@ -317,7 +317,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 		}
 	})
 
-	test('recovers a mined Statoblast deposit after a lost submission acknowledgement without replaying it', async () => {
+	test('recovers an included Statoblast deposit after a lost submission acknowledgement without replaying it', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()
 		const proxy = current.createRpcProxy({ lostAcknowledgementOrdinal: 2 })

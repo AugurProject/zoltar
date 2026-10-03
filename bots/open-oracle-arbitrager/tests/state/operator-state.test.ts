@@ -64,7 +64,7 @@ async function historyPath(prefix = 'zoltar-arbitrager-test-', ...segments: stri
 const entryHash = `0x${'ab'.repeat(32)}` as const
 const lifecycleHash = `0x${'cd'.repeat(32)}` as const
 
-/** A one-unit open position on the fixture token with no mined gas; tests override the accounting they exercise. */
+/** A one-unit open position on the fixture token with no receipt gas costs; tests override the accounting they exercise. */
 function position(overrides: Partial<PositionRecord>): PositionRecord {
 	return openPositionFixture({
 		account: address,
@@ -84,8 +84,8 @@ function position(overrides: Partial<PositionRecord>): PositionRecord {
 }
 
 const entryAndLifecycleGas = [
-	{ costEth: '0.01', minedAt: new Date(0).toISOString(), transactionHash: entryHash },
-	{ costEth: '0.005', minedAt: new Date(1).toISOString(), transactionHash: lifecycleHash },
+	{ costEth: '0.01', includedAt: new Date(0).toISOString(), transactionHash: entryHash },
+	{ costEth: '0.005', includedAt: new Date(1).toISOString(), transactionHash: lifecycleHash },
 ]
 
 function capabilityState(): OperatorState {
@@ -126,7 +126,7 @@ test('publishes skipped reports beside evaluated opportunities with only their s
 				finalized: false,
 				kind: 'reward-withdrawal',
 				lastValidBlockNumber: '125',
-				minedAt: undefined,
+				includedAt: undefined,
 				nonce: '4',
 				projectedGasCostEth: '0.0001',
 				receiptBlock: undefined,
@@ -484,7 +484,7 @@ describe('operator execution history', () => {
 						finalized: true,
 						kind: 'settlement',
 						lastValidBlockNumber: '125',
-						minedAt: new Date().toISOString(),
+						includedAt: new Date().toISOString(),
 						nonce: '5',
 						projectedGasCostEth: '0.005',
 						receiptBlock: { hash: `0x${'7'.repeat(64)}`, number: '101' },

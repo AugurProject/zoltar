@@ -6,7 +6,7 @@ async function waitForMilliseconds(milliseconds: number) {
 	await new Promise(resolve => setTimeout(resolve, milliseconds))
 }
 
-/** Re-reads until `isReady` accepts the value or the retry schedule is exhausted, so freshly mined state can propagate through RPC caches. */
+/** Re-reads until `isReady` accepts the value or the retry schedule is exhausted, so newly confirmed state can propagate through RPC caches. */
 export async function readWithRpcStateRetries<T>(read: () => Promise<T>, isReady: (value: T) => boolean, wait: RpcStateRetryWait = waitForMilliseconds) {
 	let value = await read()
 	for (const delayMilliseconds of RPC_STATE_RETRY_DELAYS_MILLISECONDS) {

@@ -51,7 +51,7 @@ export type PositionRecord = {
 	expiredTransactionAttempts?: readonly ExpiredTransactionAttempt[] | undefined
 	gasExpenditures: readonly {
 		costEth: string
-		minedAt: string
+		includedAt: string
 		transactionHash: Hex
 	}[]
 	historyOutbox: ExecutionRecord | undefined
@@ -242,10 +242,12 @@ function parsePosition(value: unknown): PositionRecord {
 	const gasTransactionHashes = new Set<string>()
 	const parsedGasExpenditures = gasExpenditures.map(value => {
 		const expenditure = validateRecord(value, 'Position journal value', 'Position journal gas expenditure is invalid')
-		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('minedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
+		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('includedAt' in expenditure || 'minedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
+		// Normalize receipt timestamps from version 2/3 journals before validating accounting.
+		const includedAt = 'includedAt' in expenditure ? expenditure['includedAt'] : expenditure['minedAt']
 		const costEth = decimalField(expenditure, 'costEth')
-		if (typeof expenditure['minedAt'] !== 'string' || !Number.isFinite(Date.parse(expenditure['minedAt'])) || new Date(expenditure['minedAt']).toISOString() !== expenditure['minedAt']) {
-			throw new Error('Position journal gas expenditure minedAt must be canonical UTC ISO')
+		if (typeof includedAt !== 'string' || !Number.isFinite(Date.parse(includedAt)) || new Date(includedAt).toISOString() !== includedAt) {
+			throw new Error('Position journal gas expenditure includedAt must be canonical UTC ISO')
 		}
 		if (typeof expenditure['transactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(expenditure['transactionHash'])) throw new Error('Position journal gas expenditure transaction hash is invalid')
 		const transactionHash = expenditure['transactionHash'].toLowerCase()
@@ -253,7 +255,7 @@ function parsePosition(value: unknown): PositionRecord {
 		gasTransactionHashes.add(transactionHash)
 		return {
 			costEth,
-			minedAt: expenditure['minedAt'],
+			includedAt,
 			transactionHash: hash32(expenditure['transactionHash'], 'Position journal gas expenditure transaction hash'),
 		}
 	})
@@ -479,7 +481,7 @@ function parsePositionJournalArchive(value: unknown): PositionJournalArchive {
 function archivePosition(archive: PositionJournalArchive, position: PositionRecord): PositionJournalArchive {
 	const gasSpentByUtcDay = { ...archive.gasSpentByUtcDay }
 	for (const expenditure of position.gasExpenditures) {
-		const day = expenditure.minedAt.slice(0, 10)
+		const day = expenditure.includedAt.slice(0, 10)
 		gasSpentByUtcDay[day] = formatDecimalAmount(decimalAmountAttoEth(gasSpentByUtcDay[day] ?? '0') + decimalAmountAttoEth(expenditure.costEth))
 	}
 	const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
@@ -526,7 +528,7 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 		throw error
 	}
 	const root = validateRecord(parsed, 'Position journal value', 'Invalid position journal root')
-	if ((root['version'] !== 2 && root['version'] !== 3) || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
+	if ((root['version'] !== 2 && root['version'] !== 3 && root['version'] !== 4) || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
 	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const positions = root['positions'].map(parsePosition)
 	const ids = new Set<string>()
@@ -559,6 +561,6 @@ export async function savePositionJournalState(path: string, state: PositionJour
 		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
 		ids.add(position.reportId)
 	}
-	await writeFileAtomically(path, `${JSON.stringify({ archived: compacted.archived, chainId, positions: compacted.positions, version: 3 }, undefined, 2)}\n`, { filesystem })
+	await writeFileAtomically(path, `${JSON.stringify({ archived: compacted.archived, chainId, positions: compacted.positions, version: 4 }, undefined, 2)}\n`, { filesystem })
 	return compacted
 }

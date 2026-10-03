@@ -146,7 +146,7 @@ async function signAndSubmit(context: SettlementExecutionContext, call: Settleme
 	}
 	const outcome = await receiptOutcome(context.readClients, context.config, observed.transactionHash)
 	const final: SettlementRecord = { ...record, ...outcome, finalized: false, transactionHash: observed.transactionHash, updatedAt: new Date().toISOString() }
-	// The mined outcome is journaled before the replaced hash is retired, so an interruption between the two writes leaves
+	// The included outcome is journaled before the replaced hash is retired, so an interruption between the two writes leaves
 	// a pending original that recovery retires against the already journaled replacement, never an unaccounted receipt.
 	await context.persist(final)
 	if (final.transactionHash.toLowerCase() !== record.transactionHash.toLowerCase()) {
@@ -157,7 +157,7 @@ async function signAndSubmit(context: SettlementExecutionContext, call: Settleme
 	return final
 }
 
-/** Status, gas, and mined time come from quorum-confirmed receipts and canonical blocks, like the position ledger. */
+/** Status, gas, and receipt block time come from quorum-confirmed receipts and canonical blocks, like the position ledger. */
 async function receiptOutcome(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, transactionHash: Hex) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const [receipt] = await transactionReceiptsWithQuorum(readClients, endpoints, 'settlement journal', [transactionHash], config.rpcQuorum)
@@ -165,11 +165,11 @@ async function receiptOutcome(readClients: readonly ReadClient[], config: Pick<C
 	return receiptExpenditure(readClients, config, receipt)
 }
 
-/** Gas and mined time come from the canonical receipt block through the same quorum read the position ledger uses. */
+/** Gas and receipt block time come from the canonical receipt block through the same quorum read the position ledger uses. */
 async function receiptExpenditure(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, receipt: Parameters<typeof receiptGasExpendituresWithQuorum>[3][number] & { status: 'reverted' | 'success' }) {
 	const [expenditure] = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'settlement journal', [receipt], config.rpcQuorum)
 	if (expenditure === undefined) throw new Error(`Settlement receipt ${receipt.transactionHash} produced no gas expenditure`)
-	return { actualGasCostEth: decimalWeth(expenditure.costAttoEth), minedAt: expenditure.minedAt, receiptBlock: { hash: receipt.blockHash, number: receipt.blockNumber.toString() }, status: receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const) }
+	return { actualGasCostEth: decimalWeth(expenditure.costAttoEth), includedAt: expenditure.includedAt, receiptBlock: { hash: receipt.blockHash, number: receipt.blockNumber.toString() }, status: receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const) }
 }
 
 /** Simulates at the head first so a report settled by someone else costs nothing instead of a reverted transaction. */
@@ -192,7 +192,7 @@ export async function executeSettlement(context: SettlementExecutionContext, pla
 		finalized: false,
 		kind: 'settlement',
 		lastValidBlockNumber: attempt.lastValidBlockNumber,
-		minedAt: undefined,
+		includedAt: undefined,
 		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(plan.projectedGasCostAttoEth),
 		receiptBlock: undefined,
@@ -221,7 +221,7 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
 		finalized: false,
 		kind: 'reward-withdrawal',
 		lastValidBlockNumber: attempt.lastValidBlockNumber,
-		minedAt: undefined,
+		includedAt: undefined,
 		nonce: attempt.nonce,
 		projectedGasCostEth: decimalWeth(projectedGasCostAttoEth),
 		receiptBlock: undefined,
@@ -245,10 +245,10 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
  * receipt is adopted under the new hash, otherwise the attempt is `expired`. A private relay stops including at the
  * signed horizon, so a private attempt whose horizon has finalized without a receipt is `dropped`: it releases the report
  * and the budget but keeps being rechecked here, while a dropped public attempt (never accepted anywhere) leaves the
- * recheck set once its own horizon has finalized. A mined outcome is rechecked until its receipt is verified canonical
+ * recheck set once its own horizon has finalized. A included outcome is rechecked until its receipt is verified canonical
  * twelve blocks deep; a receipt that moved to another block is re-read and one a reorg orphaned returns the attempt to
  * `pending`. An expired attempt is rechecked the same way against the transaction that replaced it: if that replacement
- * is orphaned the original is live again, or mined after all. Age alone never finalizes anything, because the bot may
+ * is orphaned the original is live again, or included after all. Age alone never finalizes anything, because the bot may
  * have been down while the reorg happened. Adopted outcomes precede the hash they retire so a partial write never loses
  * the receipt.
  */
@@ -289,7 +289,7 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 		}
 		if (record.status === 'confirmed' || record.status === 'reverted') {
 			// The receipt's block was orphaned: the attempt is live again until a receipt or a consumed nonce says otherwise.
-			resolved.push({ ...record, actualGasCostEth: undefined, finalized: false, minedAt: undefined, receiptBlock: undefined, status: 'pending', updatedAt })
+			resolved.push({ ...record, actualGasCostEth: undefined, finalized: false, includedAt: undefined, receiptBlock: undefined, status: 'pending', updatedAt })
 			continue
 		}
 		if (record.status === 'expired') {

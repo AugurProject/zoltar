@@ -64,7 +64,7 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		isBootstrapped: true,
 		isBootstrapping: false,
 		mintRep: async () => undefined,
-		mineBlock: async () => undefined,
+		advanceBlock: async () => undefined,
 		queryDelayMilliseconds: 0,
 		repPerEthPrice: 10n ** 18n,
 		repPerUsdcPrice: 10n ** 6n,
@@ -956,8 +956,8 @@ describe('SimulationBanner', () => {
 	test('restores the route and shows an alert when scenario navigation fails', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1&simScenario=baseline')
 		const initialHistoryLength = domEnvironment.window.history.length
-		const mineBlock = mock(async () => undefined)
-		const controller = createSimulationController({ mineBlock })
+		const advanceBlock = mock(async () => undefined)
+		const controller = createSimulationController({ advanceBlock })
 		const onEnvironmentChanged = mock(async () => {
 			throw new Error('replacement environment failed')
 		})
@@ -979,8 +979,8 @@ describe('SimulationBanner', () => {
 			expect(getElementValue(picker)).toBe('scenario:baseline')
 
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Mine block' }))
-			await waitFor(() => expect(mineBlock).toHaveBeenCalledTimes(1))
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Advance block' }))
+			await waitFor(() => expect(advanceBlock).toHaveBeenCalledTimes(1))
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -1263,10 +1263,10 @@ describe('SimulationBanner', () => {
 			},
 		])
 		domEnvironment.window.localStorage.setItem('zoltar.simulation.savedStates', serializedRecords)
-		const mineBlock = mock(async () => undefined)
+		const advanceBlock = mock(async () => undefined)
 		const environmentReplacement = createDeferred<void>()
 		const controller = createSimulationController({
-			mineBlock,
+			advanceBlock,
 			simulationSource: {
 				baseScenario: 'baseline',
 				kind: 'saved-state',
@@ -1298,8 +1298,8 @@ describe('SimulationBanner', () => {
 				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).toBe(serializedRecords)
 				expect(within(deleteDialog).getByRole('button', { name: 'Delete save' }).hasAttribute('disabled')).toBe(false)
 			})
-			await controller.mineBlock()
-			expect(mineBlock).toHaveBeenCalledTimes(1)
+			await controller.advanceBlock()
+			expect(advanceBlock).toHaveBeenCalledTimes(1)
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

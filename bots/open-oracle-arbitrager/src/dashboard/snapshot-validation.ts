@@ -323,7 +323,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 				coordinator: optional(hexValue),
 				finalized: booleanValue,
 				kind: oneOf('reward-withdrawal', 'settlement'),
-				minedAt: optional(stringValue),
+				includedAt: optional(stringValue),
 				projectedGasCostEth: stringValue,
 				receiptBlock: optional(object({ hash: hexValue, number: stringValue })),
 				replacedBy: optional(hexValue),

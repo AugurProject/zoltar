@@ -662,7 +662,7 @@ The dashboard shows:
   and trend are bounded to the latest 500 records; durable position totals use the
   retained recovery records plus the journal's compacted accounting summary.
 - Signed transaction status, public/private delivery, accepted and failed relay
-  targets, mined replacement hash, actual gas, and ETH profit estimates.
+  targets, replacement hash from the receipt, actual gas, and ETH profit estimates.
 - A read-only active risk envelope showing configured position, locked-capital,
   daily-gas, and lifecycle-reserve limits alongside current usage and remaining
   capacity.
@@ -809,7 +809,7 @@ automatically receive chain-named history, price, and position paths.
 
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,
-total executor-funded inventory, mined executor transaction hash, block, actual transaction gas,
+total executor-funded inventory, confirmed executor transaction hash, block, actual transaction gas,
 modeled net profit, profit before gas, and tracked net profit in ETH. Both modes
 submit one parent-bound executor transaction per entry. Private submissions provide
 no allowed reverting hashes, so a compliant relay/builder omits a reverting call.
@@ -845,8 +845,8 @@ realized net = hedged P&L before gas + exact settler reward − actual entry gas
 
 The old confirmed-submission table keeps quote-time modeled and tracked values for
 diagnostics. They are not realized P&amp;L. After entry receipt quorum, the durable
-position table derives hedge economics from the executor event and includes mined
-entry and lifecycle gas. A finalized lifecycle adds the exact ETH settler reward
+position table derives hedge economics from the executor event and includes actual
+entry and lifecycle gas costs. A finalized lifecycle adds the exact ETH settler reward
 from its executor event; a zero reward is recorded when the executor did not settle.
 Before that quorum, staged quote values remain recovery
 metadata, render as awaiting evidence, and are excluded from actual P&amp;L totals.
@@ -1098,7 +1098,7 @@ that late gas once, updates the UTC-day gas budget and realized P&amp;L where
 applicable, and then removes the archived attempt. An absent hash is also retired
 once the configured RPC quorum proves at the finalized height that a later canonical
 transaction consumed its nonce, because the retained signature can no longer be
-mined. Unexpected successful evidence fails closed. Inter-reader disagreement rejects
+included. Unexpected successful evidence fails closed. Inter-reader disagreement rejects
 the quorum read, leaves the journal in its current state, and blocks execution until
 the readers agree. Once the quorum agrees, a successful receipt without the expected
 executor event, exact durable transaction intent, or attributable assets remains
@@ -1187,12 +1187,19 @@ before signing, so a report settled by someone else costs nothing. Projected gas
 the minimum net, and the daily budget are all judged at the fee ceiling the
 transaction is signed with (the 25-block validity maximum, bounded by the gas price
 cap), not at the lower price expected at submission, so the queue's net is the worst
-case the signature can pay. Settlement gas is charged to the UTC day of its mined
+case the signature can pay.
+
+Receipt timestamps use `includedAt`. Existing position journals (versions 2/3)
+are normalized on load and written as version 4 on the next save. Existing
+settlement history is normalized on read; new append-only records use `includedAt`,
+preserving earlier audit lines.
+
+Settlement gas is charged to the UTC day of its receipt
 block and shares the daily gas budget with positions in both directions: it blocks
 further settlements and dispute entries once the budget is spent, and an attempt that
 is still pending charges its signed exposure to whichever day is being judged until
 its outcome is known. A report or reward withdrawal with an attempt that may still be
-mined is never re-sent; that hold is scoped to the OpenOracle the attempt was sent to
+included is never re-sent; that hold is scoped to the OpenOracle the attempt was sent to
 (and, for withdrawals, to the signing wallet), so an attempt journaled before a
 contract or signer change keeps its recovery and gas accounting without blocking the
 new contract's report of the same id or the new wallet's withdrawals. Pausing blocks
@@ -1230,7 +1237,7 @@ so a refusal that repeats re-signs at that cadence rather than on every scan. A
 dropped private attempt keeps being rechecked so a late receipt or a consumed nonce
 still lands in the journal; a dropped public attempt, which no node accepted, leaves
 the recheck set once its horizon has finalized. No outcome is final on age alone:
-a mined attempt records its receipt block and is rechecked until recovery has
+an included attempt records its receipt block and is rechecked until recovery has
 verified that block canonical twelve blocks deep (a receipt that moved to another
 block is re-read, one a reorg orphaned returns the attempt to `pending`), and an
 expired attempt remembers the transaction that replaced it and is rechecked the
@@ -1292,7 +1299,7 @@ pending-entry → open → withdrawing → closed-pending-finality → closed
 The bot records every entry transaction hash before submission. Private and public
 entry each have one guarded executor transaction. After a restart the bot requires
 the configured RPC quorum to agree on every required receipt and on that receipt
-block's current canonical hash. Every receipt must include its mined effective gas price.
+block's current canonical hash. Every receipt must include its effective gas price.
 The bot then decodes the executor event and reconstructs actual entry gas and hedge
 economics before leaving `pending-entry`. A current atomic public or private attempt
 proven absent after the 12-block window becomes `expired-not-included`; a
@@ -1467,7 +1474,7 @@ entry from depending on wallet inventory already committed to recovery.
   and rebuilt against a fresh parent rather than replaying its signed transaction.
 - The owner-only position journal is written immediately before entry and lifecycle
   submission and recovered on restart. A pending entry advances only after every
-  recorded bundle receipt, mined gas price, canonical receipt-block hash, and
+  recorded bundle receipt, effective gas price, canonical receipt-block hash, and
   executor event agree; a lifecycle attempt realizes profit and releases risk only
   after its canonical receipt and exact executor event agree and the configured
   number of available read RPCs serve the same twelfth-descendant block hash. Insufficient, lagging, or
