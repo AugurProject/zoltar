@@ -30,6 +30,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await renderWorkflow(createLoadedPoolProps({ checkedSecurityPoolAddress: securityPoolAddress, securityPoolAddress, securityPools: [createSelectedPool({ securityPoolAddress, ...pool })], ...overrides }))
 	const filledVaultForm = (securityPoolAddress: Address, selectedVaultOwner: Address = zeroAddress) => createSecurityVaultForm({ depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2', securityPoolAddress, selectedVaultOwner })
 	const validOracle = () => createOracleManagerDetails({ isPriceValid: true })
+	const vaultOperationsParameters = { accountAddress: zeroAddress, refreshState: async () => undefined, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined }
 	const openMyVault = async () => {
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /^(My vault|Vault details)$/ })))
 	}
@@ -50,6 +51,31 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(section.classList.contains(variant)).toBe(true)
 		expect(section.classList.contains('default')).toBe(false)
 	}
+
+	test('shows vault operations directly in My vault without a separate tab or launcher', async () => {
+		await renderLoadedPool({
+			vaultOperationsParameters,
+			securityVault: createSecurityVaultProps({ securityVaultDetails: createSecurityVaultDetails(), securityVaultForm: createSecurityVaultForm() }),
+		})
+		const page = within(document.body)
+		expect(page.queryByRole('tab', { name: 'Vault operations' })).toBeNull()
+		expect(page.queryByRole('button', { name: /^Vault operations$/ })).toBeNull()
+		for (const label of ['Deposit REP', 'Set commitment limit', 'Withdraw REP', 'Open price oracle']) expect(page.queryByRole('button', { name: label })).toBeNull()
+		expect(page.queryByRole('heading', { name: 'Vault actions' })).toBeNull()
+		expect(document.body.textContent).not.toContain('A valid OpenOracle price is required for commitment changes')
+		expect(page.getByRole('heading', { name: 'My vault' })).not.toBeNull()
+		expect(page.getByRole('textbox', { name: 'Deposit REP (optional)' })).not.toBeNull()
+		expect(page.getByRole('button', { name: 'Review vault operations' })).not.toBeNull()
+		expect(page.queryByText('Current commitment')).toBeNull()
+		expect(page.queryByText('Current REP backing')).toBeNull()
+		expect(page.getByText('Wallet REP balance')).not.toBeNull()
+		await openAllVaults()
+		expect(page.queryByRole('textbox', { name: 'Deposit REP (optional)' })).toBeNull()
+		const readinessLink = page.getAllByRole('button', { name: 'Open vaults' })[0]
+		if (readinessLink === undefined) throw new Error('Expected vault readiness link')
+		await act(() => fireEvent.click(readinessLink))
+		expect(page.getByRole('textbox', { name: 'Deposit REP (optional)' })).not.toBeNull()
+	})
 
 	test('uses one selected-pool surface with unframed direct structural sections', async () => {
 		await renderLoadedPool()
@@ -80,7 +106,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(tabList.getAttribute('data-size')).toBe('compact')
 		expect(tabList.compareDocumentPosition(objectHeader) & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
 		const tabs = within(tabList).getAllByRole('tab')
-		expect(tabs.map(tab => tab.textContent)).toEqual(['Vaults', 'Vault operations', 'Shares', 'Reporting'])
+		expect(tabs.map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
 		const workflowPanel = document.body.querySelector('.selected-pool-workflow-content')
 		if (!(workflowPanel instanceof HTMLElement)) throw new Error('Expected the selected-pool workflow panel')
 		expect(workflowPanel.getAttribute('role')).toBe('tabpanel')
@@ -163,7 +189,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tablist')).toBeNull()
 		expect(document.body.querySelectorAll('[role="tab"]')).toHaveLength(0)
-		for (const label of ['Vaults', 'Vault operations', 'Shares', 'Reporting']) {
+		for (const label of ['Vaults', 'Shares', 'Reporting']) {
 			expect(documentQueries.queryByText(label)).toBeNull()
 		}
 		expect(document.body.querySelector('.selected-pool-object-header')).toBeNull()
@@ -549,13 +575,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
-	test('explains why liquidation requires a connected wallet', async () => {
+	test.each([false, true])('explains why liquidation requires a connected wallet (vault operations: %s)', async bundled => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b6')
 		await renderPoolAt(
 			selectedPoolAddress,
 			{},
 			{
 				accountState: createAccountState({ address: undefined }),
+				...(bundled ? { vaultOperationsParameters: { ...vaultOperationsParameters, accountAddress: undefined } } : {}),
 				poolOracleManagerDetails: validOracle(),
 				securityVault: createSecurityVaultProps({
 					securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
@@ -578,7 +605,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
-	test('enables liquidation of another account’s vault', async () => {
+	test.each([false, true])('enables liquidation of another account’s vault by address (vault operations: %s)', async bundled => {
 		let openedTarget: string | undefined
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b7')
 		const otherVaultAddress = getAddress('0x00000000000000000000000000000000000000b8')
@@ -587,6 +614,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			{},
 			{
 				accountState: createAccountState({ address: zeroAddress }),
+				...(bundled ? { vaultOperationsParameters } : {}),
 				onOpenLiquidationModal: (_manager, _pool, target) => {
 					openedTarget = target
 				},
@@ -600,7 +628,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 
 		const documentQueries = within(document.body)
-		await openMyVault()
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'By address' })))
 		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Liquidate vault' }) as HTMLButtonElement
 		expect(reviewLiquidationButton.disabled).toBe(false)
 		expect(getTransactionButtonState(document.body, 'Liquidate vault').reason).toBeUndefined()
