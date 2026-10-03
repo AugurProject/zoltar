@@ -11,11 +11,6 @@ export const forkedOnLabel = 'Forked'
 export const childrenBeforeForkDetail = 'Child universes appear after this universe forks.'
 export const openUniverse = 'Open'
 
-export const switcherCaret = '▾'
-export const formatSwitcherAriaLabel = (universeLabel: CopyTemplateValue) => `Universe: ${universeLabel}. Switch universe`
-export const lineageTitle = 'Lineage'
-export const currentUniverse = 'Current'
-export const noDeployedChildren = 'No deployed child universes.'
-export const browseUniverses = 'Browse universes'
+export const formatSwitcherAriaLabel = (universeLabel: CopyTemplateValue) => `Universe: ${universeLabel}. Browse universes`
 
 export const universeNotFoundTitle = 'Universe not found'

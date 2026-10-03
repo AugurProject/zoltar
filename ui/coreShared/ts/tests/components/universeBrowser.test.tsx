@@ -9,7 +9,7 @@ import { UniverseNamesProvider } from '../../components/UniverseNames.js'
 import { UniverseSwitcher } from '../../components/UniverseSwitcher.js'
 import type { ZoltarUniverseSummary } from '../../types/contracts.js'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '../testUtils/queries.js'
+import { within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
 import { createUniverseSummary } from '../testUtils/universeFixtures.js'
@@ -113,17 +113,6 @@ describe('bounded universe overview', () => {
 		}
 	})
 
-	test('the bounded header traverses only to the immediate parent', async () => {
-		const rendered = await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} universe={createUniverse({ universeId: alphaUniverseId, parentUniverseId: yesUniverseId, lineage: undefined, relatedUniversesLoaded: false })} />)
-		try {
-			const queries = within(document.body)
-			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=11')
-			expect(queries.queryByRole('link', { name: 'Genesis' })).toBeNull()
-		} finally {
-			await rendered.cleanup()
-		}
-	})
-
 	test('summary scope ignores cached ancestry and children and keeps header and parent names stable', async () => {
 		const full = createUniverse({
 			universeId: alphaUniverseId,
@@ -139,7 +128,7 @@ describe('bounded universe overview', () => {
 		const tree = (universe: ZoltarUniverseSummary) => (
 			<UniverseNamesProvider includeRelatedUniverses={false} universe={universe}>
 				<UniverseBrowser activeUniverseId={alphaUniverseId} includeRelatedUniverses={false} universe={universe} />
-				<UniverseSwitcher activeUniverseId={alphaUniverseId} includeRelatedUniverses={false} universe={universe} />
+				<UniverseSwitcher browseHref='#/zoltar?zoltarView=universes' activeUniverseId={alphaUniverseId} includeRelatedUniverses={false} universe={universe} />
 			</UniverseNamesProvider>
 		)
 		const rendered = await renderIntoDocument(tree(full))
@@ -170,13 +159,12 @@ describe('bounded universe overview', () => {
 		const rendered = await renderIntoDocument(
 			<>
 				<UniverseBrowser activeUniverseId={alphaUniverseId} universe={universe} />
-				<UniverseSwitcher activeUniverseId={alphaUniverseId} universe={universe} />
+				<UniverseSwitcher browseHref='#/zoltar?zoltarView=universes' activeUniverseId={alphaUniverseId} universe={universe} />
 			</>,
 		)
 		try {
 			const queries = within(document.body)
 			expect(queries.queryByRole('link', { name: 'Genesis' })).toBeNull()
-			expect(queries.getByRole('link', { name: 'Genesis › Yes' }).getAttribute('href')).toContain('universe=11')
 			expect(queries.getByRole('link', { name: 'Yes' }).getAttribute('href')).toContain('universe=11')
 		} finally {
 			await rendered.cleanup()
@@ -184,7 +172,7 @@ describe('bounded universe overview', () => {
 	})
 
 	test('does not label omitted child information as an empty tree in the header', async () => {
-		const rendered = await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
+		const rendered = await renderIntoDocument(<UniverseSwitcher browseHref='#/zoltar?zoltarView=universes' activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
 		try {
 			expect(within(document.body).queryByText('Child universes')).toBeNull()
 			expect(within(document.body).queryByText('No deployed child universes.')).toBeNull()
@@ -196,7 +184,6 @@ describe('bounded universe overview', () => {
 
 describe('UniverseSwitcher', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
 	installDomTestLifecycle({
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()
@@ -204,69 +191,20 @@ describe('UniverseSwitcher', () => {
 		},
 	})
 
-	test('names the active universe by lineage and offers its parent, deployed children, and the browser', async () => {
-		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={createUniverse()} />)).cleanup
-		const details = document.body.querySelector('details.universe-switcher')
-		if (!(details instanceof HTMLElement)) throw new Error('Expected the switcher disclosure')
-		const summary = details.querySelector('summary')
-		expect(summary?.getAttribute('aria-label')).toBe('Universe: Genesis › Yes. Switch universe')
-		const queries = within(details)
-		expect(queries.getByRole('link', { name: 'Genesis' })).toBeTruthy()
-		expect(queries.getByRole('link', { name: 'Alpha' })).toBeTruthy()
-		expect(queries.queryByRole('link', { name: 'Beta' })).toBeNull()
-		expect(queries.getByRole('link', { name: 'Browse universes' }).getAttribute('href')).toBe('#/zoltar?zoltarView=universes')
-
-		details.setAttribute('open', '')
-		fireEvent.click(queries.getByRole('link', { name: 'Alpha' }))
-		expect(details.hasAttribute('open')).toBe(false)
-		for (const navigationEvent of ['hashchange', 'popstate']) {
-			details.setAttribute('open', '')
-			window.dispatchEvent(new Event(navigationEvent))
-			expect(details.hasAttribute('open')).toBe(false)
-		}
+	test('links directly to the browser for the active universe without a dropdown or child list', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes&simulate=1&universe=999' universe={createUniverse()} />)).cleanup
+		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes. Browse universes' })
+		expect(link.getAttribute('href')).toBe('#/zoltar?zoltarView=universes&simulate=1&universe=11')
+		expect(document.querySelector('details')).toBeNull()
+		expect(document.querySelector('.universe-switcher-popover')).toBeNull()
+		expect(within(document.body).queryByRole('link', { name: 'Alpha' })).toBeNull()
 	})
 
-	test('keeps the menu within the viewport and flips above a low trigger', async () => {
-		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
-		const details = document.querySelector('details.universe-switcher')
-		const summary = details?.querySelector('summary')
-		const popover = details?.querySelector('.universe-switcher-popover')
-		if (!(details instanceof HTMLElement) || !(summary instanceof HTMLElement) || !(popover instanceof HTMLElement)) throw new Error('Expected the switcher and its menu')
-		Object.defineProperty(popover, 'scrollHeight', { value: 300 })
-		let triggerTop = 80
-		let triggerLeft = 0
-		summary.getBoundingClientRect = () => new window.DOMRect(triggerLeft, triggerTop, 100, 32)
-		popover.getBoundingClientRect = () => new window.DOMRect(0, 0, 240, 300)
-		details.setAttribute('open', '')
-		await act(async () => details.dispatchEvent(new Event('toggle')))
-		expect(popover.style.left).toBe('12px')
-		expect(popover.style.top).toBe('120px')
-		expect(Number.parseFloat(popover.style.maxHeight)).toBeLessThanOrEqual(window.innerHeight - 132)
-		triggerLeft = window.innerWidth - 40
-		window.dispatchEvent(new Event('resize'))
-		expect(Number.parseFloat(popover.style.left) + 240).toBe(window.innerWidth - 12)
-		triggerTop = window.innerHeight - 60
-		window.dispatchEvent(new Event('resize'))
-		expect(Number.parseFloat(popover.style.top)).toBe(triggerTop - 308)
-		window.dispatchEvent(new Event('scroll'))
-		expect(Number.parseFloat(popover.style.top)).toBe(triggerTop - 308)
-		Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: 195, height: 422, offsetLeft: 0, offsetTop: 0 } })
-		window.dispatchEvent(new Event('resize'))
-		expect(popover.style.minWidth).toBe('min(16rem, 171px)')
-		expect(popover.style.maxWidth).toBe('171px')
-	})
-
-	test('omits the child section for a universe that has not forked', async () => {
-		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], hasForked: false })} />)).cleanup
-		expect(within(document.body).queryByText('Child universes')).toBeNull()
-		expect(within(document.body).queryByText('No deployed child universes.')).toBeNull()
-	})
-
-	test('falls back to a short id until the active universe summary loads', async () => {
-		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} universe={createUniverse()} />)).cleanup
-		const summary = document.body.querySelector('details.universe-switcher summary')
-		expect(summary?.getAttribute('title')).toBe('Universe 0x15')
-		expect(within(document.body).queryByRole('link', { name: 'Browse universes' })).toBeNull()
+	test('falls back to a short id while the active summary loads', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={createUniverse()} />)).cleanup
+		const link = within(document.body).getByRole('link', { name: 'Universe: Universe 0x15. Browse universes' })
+		expect(link.getAttribute('title')).toBe('Universe 0x15')
+		expect(link.getAttribute('href')).toContain('universe=21')
 	})
 })
 

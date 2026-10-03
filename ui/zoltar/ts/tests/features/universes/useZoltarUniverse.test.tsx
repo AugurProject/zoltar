@@ -87,6 +87,45 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 describe('useZoltarUniverse', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
+	test('refreshes only picker-selected scalar outcomes and replaces previous selections', async () => {
+		const reads: bigint[][] = []
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => 0n,
+			loadZoltarUniverseSummary: async (_client, _id, _address, options) => {
+				reads.push([...(options?.scalarOutcomeIndexes ?? [])])
+				return createUniverseSummary({ relatedUniversesLoaded: true })
+			},
+		})
+		let state: UseZoltarUniverseState | undefined
+		function Harness() {
+			state = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					includeRelatedUniverses: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 91,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		trackCleanup(rendered.cleanup)
+		await waitFor(() => expect(reads).toEqual([[]]))
+		await act(() => requireHookState(state).selectScalarOutcomeIndexes([0n, 123n]))
+		await waitFor(() => expect(reads).toEqual([[], [0n, 123n]]))
+		await act(() => requireHookState(state).selectScalarOutcomeIndexes([456n]))
+		await waitFor(() => expect(reads).toEqual([[], [0n, 123n], [456n]]))
+		await act(() => requireHookState(state).selectScalarOutcomeIndexes([456n, 456n]))
+		expect(reads).toHaveLength(3)
+	})
+
 	test('loads related universe details only for migration and discards a stale full read on return', async () => {
 		const delayedFullRead = createDeferred<ZoltarUniverseSummary>()
 		const scopes: boolean[] = []

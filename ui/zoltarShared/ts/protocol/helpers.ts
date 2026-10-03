@@ -12,14 +12,6 @@ type StagedOperationTuple = {
 	operation: IntegerLike
 	targetVault: Address
 }
-type DeployedChildUniverseTuple = {
-	forkQuestionId: bigint
-	forkTime: bigint
-	forkingOutcomeIndex: bigint
-	parentUniverseId: bigint
-	reputationToken: Address
-}
-
 export function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 }
@@ -73,12 +65,6 @@ function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
 }
 
 export const requireStagedOperationTupleArray = requireArrayOf(isStagedOperationTuple)
-
-function isDeployedChildUniverseTuple(value: unknown): value is DeployedChildUniverseTuple {
-	return isObjectRecord(value) && typeof value['forkQuestionId'] === 'bigint' && typeof value['forkTime'] === 'bigint' && typeof value['forkingOutcomeIndex'] === 'bigint' && typeof value['parentUniverseId'] === 'bigint' && typeof value['reputationToken'] === 'string'
-}
-
-export const requireDeployedChildUniverseTupleArray = requireArrayOf(isDeployedChildUniverseTuple)
 
 export function getForkOutcomeKey(outcome: bigint | number, parentSecurityPoolAddress: Address): ForkOutcomeKey {
 	if (parentSecurityPoolAddress === zeroAddress) return 'none'

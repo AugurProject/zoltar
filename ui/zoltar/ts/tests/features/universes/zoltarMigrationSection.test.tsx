@@ -4,7 +4,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -199,6 +199,21 @@ describe('ZoltarMigrationSection', () => {
 		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
 		q.getByRole('button', { name: 'Deploy Invalid universe' }).click()
 		expect(deployments.at(-1)).toBe(0n)
+	})
+
+	test('reads only the picker outcome plus chosen scalar outcomes and disables deployment while resolving', async () => {
+		const question = createMarketDetails({ marketType: 'scalar', outcomeLabels: [], numTicks: 10n ** 25n, displayValueMax: 100n * ATTO_REP, answerUnit: '°C' })
+		const selectedIndex = getScalarOutcomeIndex(question, question.numTicks)
+		const reads: (readonly bigint[])[] = []
+		const onScalarOutcomesChange = (indexes: readonly bigint[]) => reads.push(indexes)
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [] }), zoltarMigrationForm: createForm({ outcomeIndexes: [selectedIndex] }), onScalarOutcomesChange })))
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		expect(q.getByRole('button', { name: 'Deploy 0 °C universe' }).hasAttribute('disabled')).toBe(true)
+		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex, getScalarOutcomeIndex(question, 0n)]))
+		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
+		await waitFor(() => expect(reads.at(-1)).toEqual([selectedIndex, 0n]))
+		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
 	})
 
 	test('pages categorical choices without losing selected outcomes', async () => {
@@ -436,6 +451,18 @@ describe('ZoltarMigrationSection', () => {
 		form = createForm()
 		await act(() => render(h(Harness, {}), rendered.container))
 		expect(getCurrentStepTitle()).toBe('Amount')
+	})
+
+	test('offers retry when selected universe details fail with a retained summary', async () => {
+		let retries = 0
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({
+			zoltarUniverseError: 'Selected outcome lookup failed',
+			onRetryUniverse: () => { retries += 1 },
+		})))
+		expect(within(document.body).getByText('Selected outcome lookup failed')).toBeTruthy()
+		await act(() => within(document.body).getByRole('button', { name: 'Retry' }).click())
+		expect(retries).toBe(1)
+		await rendered.cleanup()
 	})
 
 	test('recovers from a failed wallet balance read with Retry', async () => {

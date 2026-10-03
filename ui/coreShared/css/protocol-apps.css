@@ -79,7 +79,7 @@ html[data-theme="dark"] .universe-identity {
 		height: var(--space-5);
 	}
 
-	.header-toolbar .universe-switcher > summary {
+	.header-toolbar .universe-switcher {
 		max-width: 40vw;
 	}
 }

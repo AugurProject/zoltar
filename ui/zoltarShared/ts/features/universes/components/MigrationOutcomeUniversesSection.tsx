@@ -1,6 +1,6 @@
 import { buildRouteHref, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { UniverseScalarPicker, resolveScalarUniverseSelection } from './UniverseScalarPicker.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -21,6 +21,8 @@ type MigrationOutcomeUniversesSectionProps = {
 	deploymentDisabledReason: (outcome: Pick<MigrationWizardOutcome, 'exists'>) => string | undefined
 	universeBrowserHref?: string | undefined
 	scalarQuestion?: ScalarQuestionDetails | undefined
+	selectedOutcomeIndexes?: readonly bigint[]
+	onScalarOutcomesChange?: ((indexes: readonly bigint[]) => void) | undefined
 	disabled: boolean
 	loadingBalances: boolean
 	onDeployChildUniverse: (outcomeIndex: bigint) => void
@@ -39,14 +41,22 @@ function OutcomeMetric({ label, children }: { label: string; children: Component
 }
 
 /** The "choose outcomes" step: one checkbox card per outcome universe, named by its outcome. */
-export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQuestion, deploymentDisabledReason, disabled, loadingBalances, onDeployChildUniverse, onToggleOutcomeIndex, outcomes, pendingOutcomeIndex }: MigrationOutcomeUniversesSectionProps) {
+export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQuestion, selectedOutcomeIndexes = [], onScalarOutcomesChange, deploymentDisabledReason, disabled, loadingBalances, onDeployChildUniverse, onToggleOutcomeIndex, outcomes, pendingOutcomeIndex }: MigrationOutcomeUniversesSectionProps) {
 	const browser = universeBrowserHref === undefined ? undefined : parseRouteHash(universeBrowserHref)
 	const [tickInput, setTickInput] = useState('0')
 	const [invalid, setInvalid] = useState(false)
 	const [page, setPage] = useState(0)
 	const selection = scalarQuestion === undefined ? undefined : resolveScalarUniverseSelection(scalarQuestion, tickInput, invalid)
 	const visibleOutcomes = selection === undefined ? outcomes.slice(page * 10, (page + 1) * 10) : outcomes.filter(outcome => outcome.outcomeIndex === selection.outcomeIndex)
+	const selectionKey = selectedOutcomeIndexes.join(',')
+	useEffect(() => {
+		if (scalarQuestion === undefined || onScalarOutcomesChange === undefined) return
+		const indexes = [...selectedOutcomeIndexes, ...(selection?.outcomeIndex === undefined ? [] : [selection.outcomeIndex])]
+		const timer = setTimeout(() => onScalarOutcomesChange(indexes), 150)
+		return () => clearTimeout(timer)
+	}, [scalarQuestion, onScalarOutcomesChange, selection?.outcomeIndex, selectionKey])
 	const selectedChild = visibleOutcomes[0]
+	const resolvingSelection = onScalarOutcomesChange !== undefined && selection?.outcomeIndex !== undefined && selectedChild === undefined
 	const deploymentReason = deploymentDisabledReason({ exists: false })
 	return (
 		<div className='form-grid'>
@@ -68,7 +78,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 			{selection !== undefined && selection.outcomeIndex === undefined ? <UserMessage placement='field' tone='error' detail={navigationCopy.invalidScalarTick} /> : undefined}
 			{selection?.outcomeIndex !== undefined && selectedChild === undefined ? (
 				<div className='actions'>
-					<Badge tone='muted'>{commonCopy.notDeployed}</Badge>
+					<Badge tone={resolvingSelection ? 'loading' : 'muted'}>{resolvingSelection ? commonCopy.loading : commonCopy.notDeployed}</Badge>
 					<TransactionActionButton
 						tone='secondary'
 						idleLabel={zoltarCopy.formatDeployOutcomeUniverse(selection.label)}
@@ -77,7 +87,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 						onClick={() => {
 							if (selection.outcomeIndex !== undefined) onDeployChildUniverse(selection.outcomeIndex)
 						}}
-						availability={{ disabled: disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: deploymentReason }}
+						availability={{ disabled: resolvingSelection || disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: resolvingSelection ? commonCopy.loading : deploymentReason }}
 					/>
 				</div>
 			) : undefined}
