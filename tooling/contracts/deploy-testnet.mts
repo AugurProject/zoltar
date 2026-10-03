@@ -638,14 +638,14 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 export function getDeploymentHelp() {
 	return `Deploy the complete deterministic Zoltar infrastructure to an EVM testnet
 
-Load PRIVATE_KEY into the environment from a secret manager or hidden prompt,
-or pass --private-key=0x... if shell history exposure is acceptable.
+Load PRIVATE_KEY from a secret manager or hidden prompt; --private-key=0x... risks shell history exposure.
 Pass RPC and cost limits as flags, or as uppercase assignments such as RPC_URL=...:
   bun run deploy:testnet -- --rpc-url=https://... --max-fee-per-gas-nanoeth=100 --max-total-cost-eth=20
 
   --private-key=0x...    Required unless PRIVATE_KEY is set
   --rpc-url=https://...   Required unless RPC_URL is set
   --chain-id=11155111     Defaults to Sepolia chain ID 11155111
+  --etherscan-api-key=...  Optional key for post-deploy verification; defaults to ETHERSCAN_API_KEY
   --max-fee-per-gas-nanoeth=100  Rejects higher RPC fee suggestions
   --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
