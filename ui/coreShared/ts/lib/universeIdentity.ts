@@ -66,10 +66,10 @@ export function createUniverseIdentity(universeId: bigint) {
 		return `${curve(points, 'M', roundness)} L3500 3500 L-2000 3500 Z`
 	})
 	const renderImage = (dark: boolean, miniature: boolean, band: boolean) => {
-		const palette = dark ? { ground: 17, fold: 23, miniature: 32, miniatureGround: 27, foldChroma: 0.03 } : { ground: 97, fold: 92, miniature: 84, miniatureGround: 93, foldChroma: 0.022 }
+		const palette = dark ? { ground: 17, fold: 24, miniature: 32, miniatureGround: 27, foldChroma: 0.075, foldRange: 2.5 } : { ground: 94, fold: 88, miniature: 84, miniatureGround: 93, foldChroma: 0.055, foldRange: 3 }
 		const groundL = miniature ? palette.miniatureGround : palette.ground
 		const baseL = miniature ? palette.miniature : palette.fold
-		const rangeL = miniature ? 8 : 3
+		const rangeL = miniature ? 8 : palette.foldRange
 		const chroma = miniature ? 0.065 : palette.foldChroma
 		let width = 1600
 		let height = 1000
@@ -96,15 +96,18 @@ export function createUniverseIdentity(universeId: bigint) {
 			.join('')
 		const paths = edges.map((d, index) => `<path d="${d}" fill="url(#fold${index})"/>`).join('')
 		const crossing = compositionIndex === 2 ? `<g opacity=".5" transform="rotate(${55 + value(12) * 35} 800 500)">${paths}</g>` : ''
-		// Top-aligned content stays nearly flat; folds grow gently toward the bottom and outside the content column.
+		// Keep a visible silhouette from the first screen, with gentler shading in the content column.
+		// A nonzero center also preserves recognition when portrait viewports crop the artwork.
 		const quiet =
 			miniature || band
 				? ''
-				: '<linearGradient id="quiet" x2="0" y2="1"><stop stop-color="#000"/><stop offset=".45" stop-color="#000"/><stop offset=".7" stop-color="#555"/><stop offset="1" stop-color="#fff"/></linearGradient><linearGradient id="margins"><stop stop-color="#fff"/><stop offset=".12" stop-color="#333"/><stop offset=".25" stop-color="#222"/><stop offset=".75" stop-color="#222"/><stop offset=".88" stop-color="#333"/><stop offset="1" stop-color="#fff"/></linearGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask><mask id="column"><rect width="1600" height="1000" fill="url(#margins)"/></mask>'
+				: '<linearGradient id="quiet" x2="0" y2="1"><stop stop-color="#ddd"/><stop offset=".45" stop-color="#ddd"/><stop offset=".7" stop-color="#ddd"/><stop offset="1" stop-color="#fff"/></linearGradient><linearGradient id="margins"><stop stop-color="#fff"/><stop offset=".12" stop-color="#aaa"/><stop offset=".25" stop-color="#aaa"/><stop offset=".75" stop-color="#aaa"/><stop offset=".88" stop-color="#aaa"/><stop offset="1" stop-color="#fff"/></linearGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask><mask id="column"><rect width="1600" height="1000" fill="url(#margins)"/></mask>'
+		// One bounded filter softens the entire composition; never allocate a full-viewport filter per fold.
+		const softness = miniature || band ? '' : '<filter id="soften" filterUnits="userSpaceOnUse" x="-72" y="-72" width="1744" height="1144" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="12"/></filter>'
 		const art = `<g transform="rotate(${angle} 800 500)">${paths}${crossing}</g>`
-		const composed = miniature || band ? art : `<g mask="url(#space)"><g mask="url(#column)">${art}</g></g>`
+		const composed = miniature || band ? art : `<g mask="url(#space)"><g mask="url(#column)"><g filter="url(#soften)">${art}</g></g></g>`
 		return encodeSvg(
-			`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" data-composition="${composition}"><defs>${gradients}${quiet}</defs><rect x="-2000" y="-2000" width="6000" height="6000" fill="${color(hue, groundL, miniature ? 0.04 : 0.008)}"/>${composed}</svg>`,
+			`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" data-composition="${composition}"><defs>${gradients}${quiet}${softness}</defs><rect x="-2000" y="-2000" width="6000" height="6000" fill="${color(hue, groundL, miniature ? 0.04 : 0.035)}"/>${composed}</svg>`,
 		)
 	}
 	const variants = (miniature: boolean, band: boolean) => ({ light: renderImage(false, miniature, band), dark: renderImage(true, miniature, band) })

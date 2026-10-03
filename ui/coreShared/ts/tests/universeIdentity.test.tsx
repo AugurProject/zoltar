@@ -50,6 +50,24 @@ test('page colors use uniform OKLCH roles with AA contrast for theme text and tr
 	}
 })
 
+test('page recognition retains at least half of the fold shading in the top content column', () => {
+	for (let id = 0; id < 32; id++) {
+		const identity = createUniverseIdentity(BigInt(id))
+		for (const image of [identity.image.light, identity.image.dark]) {
+			const svg = decodeURIComponent(image)
+			const maskOpacity = (name: string) => {
+				const gradient = new RegExp(`<linearGradient id="${name}"[^>]*>(.*?)</linearGradient>`).exec(svg)?.[1]
+				if (gradient === undefined) throw new Error('Expected a content shading mask')
+				const stops = [...gradient.matchAll(/stop-color="#([0-9a-f])\1\1"/g)].map(match => Number.parseInt(match[1] ?? '', 16) / 15)
+				if (stops.length === 0) throw new Error('Expected neutral mask stops')
+				return Math.min(...stops)
+			}
+			// The masks multiply. Keeping each individually visible is insufficient on cropped mobile artwork.
+			expect(maskOpacity('quiet') * maskOpacity('margins')).toBeGreaterThanOrEqual(0.5)
+		}
+	}
+})
+
 test('visual identity is deterministic, full-width, and independent of app and theme', () => {
 	const id = (1n << 255n) + 37n
 	expect(createUniverseIdentity(id)).toEqual(createUniverseIdentity(id))
@@ -75,7 +93,8 @@ test('neighboring IDs produce diverse palettes and geometry instead of a sequent
 	const pathCounts = images.map(image => [...image.matchAll(/<path\b/g)].length)
 	expect(new Set(pathCounts).size).toBeGreaterThan(5)
 	expect(images.every(image => new Set([...image.matchAll(/oklch\([^)]+\)/g)].map(match => match[0])).size > 12)).toBe(true)
-	expect(images.every(image => !image.includes('<filter') && !image.includes('stroke='))).toBe(true)
+	expect(images.every(image => [...image.matchAll(/<filter\b/g)].length === 1 && !image.includes('stroke='))).toBe(true)
+	expect(images.every(image => [...image.matchAll(/filter="url\(#soften\)"/g)].length === 1 && !image.includes('<feDropShadow'))).toBe(true)
 	expect(images.every(image => image.length < 1_000_000 && !/NaN|Infinity|undefined/.test(image))).toBe(true)
 	expect(images.every(image => image.includes('viewBox="0 0 1600 1000"'))).toBe(true)
 	expect(images.some(image => /--\d/.test(image))).toBe(false)
