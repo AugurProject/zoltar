@@ -33,9 +33,6 @@ export const migrationBack = 'Back'
 export const migrationContinue = 'Continue'
 
 export const chooseOutcomesDetail = 'Pick every outcome universe that should receive your REP. Universes that do not exist yet are created when you migrate.'
-export const outcomeUniverseStatus = 'Universe'
-export const outcomeUniverseCreated = 'Created'
-export const outcomeUniverseNotCreated = 'Not created yet'
 export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
 export const formatOpenOutcomeUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`

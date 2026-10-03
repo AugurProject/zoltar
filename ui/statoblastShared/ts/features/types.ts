@@ -57,7 +57,7 @@ export type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
+export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes' | 'migrate'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
@@ -185,6 +185,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 } & RepPerEthPriceProps
 
 export type SecurityPoolsSectionProps = {
+	migration?: import('preact').ComponentChildren
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
 	onActiveViewChange: (view: SecurityPoolsView) => void

@@ -110,6 +110,10 @@ describe('useStatoblastUrlState', () => {
 
 		await act(() => state().setSecurityPoolsView('universes'))
 		expect(window.location.hash).toBe('#/pools/universes?universe=7')
+
+		await act(() => state().setSecurityPoolsView('migrate'))
+		expect(window.location.hash).toBe('#/pools/migrate?universe=7')
+		expect(state().securityPoolsView).toBe('migrate')
 		expect(state().securityPoolAddress).toBe('')
 
 		await act(() => state().setSecurityPoolQuestionId('0x99'))

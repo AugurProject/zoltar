@@ -2,14 +2,13 @@ import { useEffect, useId, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
+import { UniverseScalarPicker, resolveScalarUniverseSelection } from './UniverseScalarPicker.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -22,14 +21,6 @@ const loadConnectedOutcome: LoadScalarUniverseOutcome = (address, universeId, ou
 
 type Props = { address: Address; universeId: bigint; question: ScalarQuestionDetails; loadOutcome?: LoadScalarUniverseOutcome | undefined }
 
-function resolveSelection(question: ScalarQuestionDetails, tickInput: string, invalid: boolean) {
-	if (invalid) return { outcomeIndex: 0n, label: commonCopy.invalid, tickLabel: commonCopy.invalid }
-	if (!/^\d+$/.test(tickInput)) return { outcomeIndex: undefined, label: commonCopy.none, tickLabel: tickInput }
-	const tick = BigInt(tickInput)
-	if (tick > question.numTicks) return { outcomeIndex: undefined, label: commonCopy.none, tickLabel: tickInput }
-	return { outcomeIndex: getScalarOutcomeIndex(question, tick), label: formatScalarOutcomeLabel(question, tick), tickLabel: commonCopy.formatSelectedTickLabel(tick.toString(), question.numTicks.toString()) }
-}
-
 export function ScalarUniverseOutcomePicker({ address, universeId, question, loadOutcome = loadConnectedOutcome }: Props) {
 	const statusId = useId()
 	const backend = getActiveBackend()
@@ -37,7 +28,7 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 	const [invalid, setInvalid] = useState(false)
 	const [refresh, setRefresh] = useState(0)
 	useBlockRefresh(() => setRefresh(count => count + 1))
-	const { outcomeIndex, label, tickLabel } = resolveSelection(question, tickInput, invalid)
+	const { outcomeIndex, label } = resolveScalarUniverseSelection(question, tickInput, invalid)
 	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadOutcome: LoadScalarUniverseOutcome; outcomeIndex: bigint; outcome?: UniverseOutcome | undefined; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadOutcome === loadOutcome && snapshot.outcomeIndex === outcomeIndex ? snapshot : undefined
 	const outcome = current?.outcome
@@ -64,17 +55,7 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 	}, [address, backend, loadOutcome, outcomeIndex, refresh, universeId])
 	return (
 		<div className='form-grid'>
-			<ScalarOutcomePicker
-				clampExactTickInput={false}
-				details={{ ...question, minValueLabel: formatScalarOutcomeLabel(question, 0n), maxValueLabel: formatScalarOutcomeLabel(question, question.numTicks) }}
-				isInvalid={invalid}
-				label={copy.selectScalarOutcome}
-				onInvalidChange={setInvalid}
-				onSelectedTickChange={setTickInput}
-				selectedOutcomeLabel={label}
-				selectedTick={tickInput}
-				selectedTickLabel={tickLabel}
-			/>
+			<UniverseScalarPicker question={question} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} />
 			{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChild, detailIsLoading: true }} /> : undefined}
 			{outcomeIndex === undefined ? <UserMessage placement='field' tone='error' detail={copy.invalidScalarTick} /> : undefined}
 			<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRefresh(count => count + 1)} />

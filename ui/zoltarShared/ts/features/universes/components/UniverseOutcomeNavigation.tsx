@@ -1,8 +1,6 @@
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
+import { OutcomeUniverseList } from './OutcomeUniverseList.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { formatOpenOutcomeUniverse } from '../../../copy/zoltar.js'
-import { useEffect, useId, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -31,7 +29,6 @@ export function UniverseOutcomeNavigation({ universe, loadPage = loadConnectedOu
 }
 
 function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { address: Address; universeId: bigint; loadPage: LoadUniverseOutcomes; loadOutcome: LoadScalarUniverseOutcome | undefined }) {
-	const statusId = useId()
 	const backend = getActiveBackend()
 	const [start, setStart] = useState(0n)
 	const [retry, setRetry] = useState(0)
@@ -71,24 +68,10 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 				{page?.title === undefined ? undefined : <p className='detail'>{page.title}</p>}
 				{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingOutcomes, detailIsLoading: true }} /> : undefined}
 				{page?.scalarQuestion === undefined ? (
-					<OutcomeSelectionList
+					<OutcomeUniverseList
 						emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
-						items={(page?.choices ?? []).map(candidate => ({
-							ariaLabel: formatOpenOutcomeUniverse(candidate.label),
-							describedById: `${statusId}-${candidate.universeId}`,
-							key: candidate.universeId.toString(),
-							label: (
-								<>
-									{candidate.label}
-									{candidate.exists ? <span aria-hidden='true'>{copy.openOutcomeArrowTail}</span> : undefined}
-								</>
-							),
-							details: (
-								<span id={`${statusId}-${candidate.universeId}`}>
-									<Badge tone={candidate.exists ? 'ok' : 'muted'}>{candidate.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
-								</span>
-							),
-							disabled: !candidate.exists,
+						outcomes={(page?.choices ?? []).map(candidate => ({
+							...candidate,
 							onSelect: () => {
 								if (candidate.exists) navigateToUniverse(candidate.universeId)
 							},

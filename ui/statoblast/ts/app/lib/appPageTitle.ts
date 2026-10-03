@@ -18,6 +18,7 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 	if (route === 'pools') {
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool
 		if (activeSecurityPoolsView === 'operate') return statoblastAppCopy.poolPageTitle
+		if (activeSecurityPoolsView === 'migrate') return appCopy.migrateRep
 		if (activeSecurityPoolsView === 'universes') return commonCopy.universe
 		return commonCopy.securityPools
 	}

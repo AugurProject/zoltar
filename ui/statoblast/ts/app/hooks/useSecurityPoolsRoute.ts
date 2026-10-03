@@ -1,3 +1,7 @@
+import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
+import { getPoolsViewHref } from '../lib/appNavigation.js'
+import { ZoltarMigrationWorkflow } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationWorkflow.js'
+import { h } from 'preact'
 import { RequestPriceModal } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/RequestPriceModal.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -59,7 +63,7 @@ type SecurityPoolsRouteParameters = {
 	urlState: SecurityPoolsUrlState
 }
 
-const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes', 'migrate']
 
 export function useSecurityPoolsRoute({ context, marketCreation, openOracle, repPrices, selectedPoolRefresh, urlState }: SecurityPoolsRouteParameters) {
 	const { accountState, activeEnvironmentNonce, activeUniverseId, canReadOnchainData, currentTimestamp, deploymentStatuses, route, uiPriceOracle, walletBootstrapComplete, walletScopedHookConfig } = context
@@ -184,6 +188,13 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 	const pricedSection = { accountState, ...uiRepPrice }
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
+		migration: h(ZoltarMigrationWorkflow, {
+			universeBrowserHref: getPoolsViewHref('universes'),
+			accountState,
+			activeUniverseId,
+			operations: marketCreation,
+			universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }),
+		}),
 		universeMissing: marketCreation.zoltarUniverseMissing,
 		universeError: marketCreation.zoltarUniverseError,
 		onRetryUniverse: () => void marketCreation.loadZoltarUniverse(),

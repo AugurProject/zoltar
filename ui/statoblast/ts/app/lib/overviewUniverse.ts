@@ -11,7 +11,7 @@ type UniverseAccess = {
 export function getStatoblastOverviewUniverse({ loadingZoltarForkAccess, zoltarForkRepBalanceAttoRep, zoltarUniverse }: UniverseAccess) {
 	return {
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
-		migrateRepHref: buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools')),
+		migrateRepHref: buildRouteHref('#/pools/migrate', getTopLevelRouteSearch('pools')),
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universeRepBalanceAttoRep: zoltarForkRepBalanceAttoRep,

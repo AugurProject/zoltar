@@ -25,7 +25,7 @@ import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-co
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
-import { deriveMigrationWizard, formatOutcomeList, migrationWizardStepIds, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardOutcome, type MigrationWizardStepId } from '../lib/migrationWizard.js'
+import { deriveMigrationWizard, formatOutcomeList, migrationWizardStepIds, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardStepId } from '../lib/migrationWizard.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -40,6 +40,7 @@ function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForke
 }
 
 type ZoltarMigrationSectionProps = {
+	universeBrowserHref?: string | undefined
 	onDeployChildUniverse: (outcomeIndex: bigint) => void
 	pendingChildUniverseOutcomeIndex: bigint | undefined
 	accountAddress: Address | undefined
@@ -76,6 +77,7 @@ function formatRep(value: bigint) {
  * that do not exist yet).
  */
 export function ZoltarMigrationSection({
+	universeBrowserHref,
 	onDeployChildUniverse,
 	pendingChildUniverseOutcomeIndex,
 	accountAddress,
@@ -189,7 +191,7 @@ export function ZoltarMigrationSection({
 		return accountAddress === undefined && currentStep?.reason === zoltarCopy.migrationBalancesReadFailed ? zoltarCopy.migrationWalletBalancesReason : currentStep?.reason
 	})()
 	const heldOutcomes = wizard.outcomes.filter(outcome => outcome.exists && (outcome.heldAttoRep ?? 0n) > 0n)
-	const deploymentDisabledReason = (outcome: MigrationWizardOutcome) => getChildDeploymentAvailabilityReason({ accountAddress, exists: outcome.exists, hasForked, isOnActiveAppChain })
+	const deploymentDisabledReason = (outcome: { exists: boolean }) => getChildDeploymentAvailabilityReason({ accountAddress, exists: outcome.exists, hasForked, isOnActiveAppChain })
 	const retryButton = showRetry ? (
 		<button className='quiet' type='button' onClick={onRetryMigrationBalances} disabled={zoltarMigrationPending || !isOnActiveAppChain}>
 			{commonCopy.retry}
@@ -203,6 +205,9 @@ export function ZoltarMigrationSection({
 					<>
 						<p className='detail'>{zoltarCopy.chooseOutcomesDetail}</p>
 						<MigrationOutcomeUniversesSection
+							universeBrowserHref={universeBrowserHref}
+							key={rootUniverse?.universeId.toString()}
+							scalarQuestion={rootUniverse?.forkQuestionDetails?.marketType === 'scalar' ? rootUniverse.forkQuestionDetails : undefined}
 							deploymentDisabledReason={deploymentDisabledReason}
 							disabled={zoltarMigrationPending}
 							loadingBalances={loadingZoltarForkAccess}

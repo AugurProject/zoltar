@@ -60,6 +60,7 @@ export const coreSharedStylesheets = ['index.css', 'tokens.css', 'base.css', 'si
 const featureStylesheetSources: Record<string, (paths: UiAppPaths) => string> = {
 	'zoltar-questions.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'questions.css'),
 	'zoltar-deployment.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'deployment.css'),
+	'zoltar-migration.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'migration.css'),
 	'zoltar-shared.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'index.css'),
 	'price-oracle.css': paths => path.join(paths.uiRoot, 'statoblastShared', 'css', 'priceOracle.css'),
 	'statoblast-shared.css': paths => path.join(paths.uiRoot, 'statoblastShared', 'css', 'index.css'),

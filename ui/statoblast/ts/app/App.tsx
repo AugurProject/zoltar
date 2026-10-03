@@ -79,6 +79,7 @@ export function App() {
 		...walletScopedHookConfig,
 		activeUniverseId,
 		autoLoadInitialData: walletBootstrapComplete && canReadOnchainData,
+		includeRelatedUniverses: route === 'pools' && urlState.securityPoolsView === 'migrate',
 		deploymentStatuses,
 		environmentRefreshKey: activeEnvironmentNonce,
 	})

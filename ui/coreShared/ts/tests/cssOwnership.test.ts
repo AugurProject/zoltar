@@ -78,6 +78,10 @@ test('feature stylesheets own their product rules and load after the shared shee
 	const sharedLink = '<link rel="stylesheet" href="/ui/coreShared/css/index.css" />'
 	const zoltarQuestionsLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/questions.css" />'
 	const zoltarDeploymentLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/deployment.css" />'
+	const migrationLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/migration.css" />'
+	const migration = readFileSync('ui/zoltarShared/css/migration.css', 'utf8')
+	expect(migration).toContain('.migration-wizard-steps {')
+	expect(zoltar).not.toContain('.migration-wizard-steps {')
 	const zoltarLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/index.css" />'
 	const priceOracleLink = '<link rel="stylesheet" href="/ui/statoblastShared/css/priceOracle.css" />'
 	const statoblastLink = '<link rel="stylesheet" href="/ui/statoblastShared/css/index.css" />'
@@ -89,13 +93,14 @@ test('feature stylesheets own their product rules and load after the shared shee
 		expect(offsets.every(offset => offset >= 0)).toBe(true)
 		expect([...offsets].sort((left, right) => left - right)).toEqual(offsets)
 	}
-	expectLinkOrder(zoltarPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, zoltarLink])
+	expectLinkOrder(zoltarPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, migrationLink, zoltarLink])
 	expect(zoltarPage).not.toContain(statoblastLink)
 	// Statoblast renders Zoltar question previews, the question create form, and the deployment route, but none of the Zoltar-only rules.
-	expectLinkOrder(statoblastPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, priceOracleLink, statoblastLink])
+	expectLinkOrder(statoblastPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, migrationLink, priceOracleLink, statoblastLink])
 	expect(statoblastPage).not.toContain(zoltarLink)
 	// Trading shares question previews and the oracle price request without the full Statoblast stylesheet.
 	expectLinkOrder(tradingPage, [sharedLink, zoltarQuestionsLink, priceOracleLink])
+	expect(tradingPage).not.toContain(migrationLink)
 	expect(tradingPage).not.toContain(zoltarDeploymentLink)
 	expect(tradingPage).not.toContain(zoltarLink)
 	expect(tradingPage).not.toContain(statoblastLink)

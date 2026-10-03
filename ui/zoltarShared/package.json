@@ -209,6 +209,10 @@
 		"./protocol/universeNavigation.js": {
 			"bun": "./ts/protocol/universeNavigation.ts",
 			"default": "./js/protocol/universeNavigation.js"
+		},
+		"./features/universes/components/ZoltarMigrationWorkflow.js": {
+			"bun": "./ts/features/universes/components/ZoltarMigrationWorkflow.tsx",
+			"default": "./js/features/universes/components/ZoltarMigrationWorkflow.js"
 		}
 	},
 	"version": "1.0.0"

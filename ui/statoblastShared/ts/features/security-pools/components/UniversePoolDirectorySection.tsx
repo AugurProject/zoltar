@@ -1,3 +1,4 @@
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { UniverseOutcomeNavigation } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -13,6 +14,7 @@ type UniversePoolDirectorySectionProps = {
 	universeMissing?: boolean | undefined
 	universeError?: string | undefined
 	onRetryUniverse?: (() => void) | undefined
+	onMigrateRep?: (() => void) | undefined
 }
 
 function withoutActionHint(presentation: UserMessagePresentation) {
@@ -22,7 +24,7 @@ function withoutActionHint(presentation: UserMessagePresentation) {
 }
 
 /** Universe details require no scan of the pool or vault registries. */
-export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse, universeMissing = false, universeError, onRetryUniverse }: UniversePoolDirectorySectionProps) {
+export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse, universeMissing = false, universeError, onRetryUniverse, onMigrateRep }: UniversePoolDirectorySectionProps) {
 	if (zoltarUniverse === undefined) {
 		const presentation = getUniversePresentation(universeMissing ? 'missing' : 'loading')
 		const hint =
@@ -40,5 +42,18 @@ export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse,
 			)
 		return universeError === undefined ? hint : <RetryableNotice onRetry={onRetryUniverse} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: universeError }} />
 	}
-	return <UniverseBrowser activeUniverseId={activeUniverseId} navigation={zoltarUniverse.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={zoltarUniverse} /> : undefined} universe={zoltarUniverse} />
+	return (
+		<UniverseBrowser
+			actions={
+				zoltarUniverse.hasForked && onMigrateRep !== undefined ? (
+					<button className='primary' type='button' onClick={onMigrateRep}>
+						{zoltarCopy.migrateRep}
+					</button>
+				) : undefined
+			}
+			activeUniverseId={activeUniverseId}
+			navigation={zoltarUniverse.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={zoltarUniverse} /> : undefined}
+			universe={zoltarUniverse}
+		/>
+	)
 }

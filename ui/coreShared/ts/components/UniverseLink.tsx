@@ -5,6 +5,8 @@ import { getUniverseLinkHref, navigateToUniverse } from '../navigation/universeN
 import { useUniverseName } from './UniverseNames.js'
 
 type UniverseLinkProps = {
+	/** An explicit destination when opening a universe also changes the current view. */
+	href?: string | undefined
 	children?: ComponentChildren
 	className?: string
 	format?: 'default' | 'hex'
@@ -13,8 +15,8 @@ type UniverseLinkProps = {
 }
 
 /** Link that switches the shared `universe` query parameter; it is named by lineage when the application knows it. */
-export function UniverseLink({ children, className = '', format = 'default', onNavigate, universeId }: UniverseLinkProps) {
-	const href = getUniverseLinkHref(universeId)
+export function UniverseLink({ href: destinationHref, children, className = '', format = 'default', onNavigate, universeId }: UniverseLinkProps) {
+	const href = destinationHref ?? getUniverseLinkHref(universeId)
 	const universeName = useUniverseName(universeId)
 	const fullLabel = format === 'hex' ? formatUniverseIdHex(universeId) : formatUniverseLabel(universeId)
 	const label = children ?? (format === 'hex' ? fullLabel : universeName)
@@ -30,6 +32,10 @@ export function UniverseLink({ children, className = '', format = 'default', onN
 			title={children === undefined && format === 'default' ? fullLabel : undefined}
 			onClick={event => {
 				if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+				if (destinationHref !== undefined) {
+					onNavigate?.()
+					return
+				}
 				event.preventDefault()
 				onNavigate?.()
 				navigateToUniverse(universeId)

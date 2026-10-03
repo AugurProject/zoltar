@@ -24,10 +24,10 @@ describe('Statoblast top bar universe', () => {
 		expect(overview.isLoadingUniverseRepBalance).toBe(true)
 	})
 
-	test('links a forked universe notice to the universe directory in the current universe', () => {
+	test('links a forked universe notice to REP migration in the current universe', () => {
 		const overview = getStatoblastOverviewUniverse({ loadingZoltarForkAccess: false, zoltarForkRepBalanceAttoRep: undefined, zoltarUniverse: { forkTime: 5n, hasForked: true } })
 		expect(overview.universeHasForked).toBe(true)
 		expect(overview.universeForkTime).toBe(5n)
-		expect(overview.migrateRepHref).toBe('#/pools/universes?universe=7')
+		expect(overview.migrateRepHref).toBe('#/pools/migrate?universe=7')
 	})
 })

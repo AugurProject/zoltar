@@ -71,3 +71,10 @@ test('treats a malformed pools path as not found instead of falling back to Brow
 	for (const routeHash of ['#/pools/browse/x', '#/pools/create/extra', '#/pools/operate', '#/pools/0xabc/tab/extra']) expect(statoblastRouting.resolve(routeHash)).toBe('not-found')
 	expect(statoblastRouting.resolve('#/pools/0xa83562266e1514927697d5118C8777828860aD73/vaults')).toBe('pools')
 })
+
+test('keeps the active migration screen in navigation with the same universe', () => {
+	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'migrate', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })
+	expect(navigation?.value).toBe('migrate')
+	expect(navigation?.options.find(option => option.value === 'migrate')?.href).toBe('#/pools/migrate?universe=7')
+	expect(getTransactionRouteKey({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'migrate', route: 'pools' })).toBe('pools:migrate')
+})
