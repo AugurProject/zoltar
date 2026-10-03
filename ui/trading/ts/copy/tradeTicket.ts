@@ -2,6 +2,7 @@ import { outcomeLabel } from './outcomes.js'
 export const buy = 'Buy'
 export const sell = 'Sell'
 export const tradeDirection = 'Trade direction'
+export const outcomeWithOdds = 'Outcome, with conditional odds'
 export const youPay = 'You pay'
 export const sharesToSell = 'Shares to sell'
 export const quarter = '25%'
@@ -20,9 +21,10 @@ export const averagePrice = 'Average price'
 export const invalidInsurance = 'Invalid insurance'
 export const invalidUsed = 'Invalid used'
 export const poolFee = 'Pool fee'
-export const poolFeePaid = 'Pool fee paid'
 export const completeSets = 'Complete sets'
 export const moreDetails = 'Trade details'
+export const invalidInsuranceNote = 'Buying mints complete sets, and you keep their Invalid shares. Selling for ETH later needs 1 Invalid share per complete set.'
+export const invalidUsedNote = 'Selling redeems complete sets for ETH, and each set uses 1 Invalid share.'
 export const updatingEstimate = 'Updating estimate…'
 export const amountTooSmall = 'Amount too small to trade.'
 export const invalidEthAmount = 'Enter an ETH amount with at most 18 decimal places.'
@@ -53,6 +55,19 @@ export function buyOutcome(outcome: 'YES' | 'NO') {
 
 export function sellOutcome(outcome: 'YES' | 'NO') {
 	return `Sell ${outcomeLabel(outcome)}`
+}
+
+export function profitIfWins(outcome: 'YES' | 'NO') {
+	return `Profit if ${outcomeLabel(outcome)} wins`
+}
+
+export function holdingAfter(outcome: 'YES' | 'NO') {
+	return `${outcomeLabel(outcome)} after trade`
+}
+
+/** The pool fee as its rate and its ETH value, which arrives already marked as approximate or as an upper bound. */
+export function poolFeeValue(rate: string, ethAmount: string) {
+	return `${rate} · ${ethAmount} ETH`
 }
 
 export function swapped(outcome: 'YES' | 'NO') {
