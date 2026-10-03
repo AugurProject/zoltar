@@ -872,13 +872,23 @@ async function readButtonDisabledReason(driver: ProductionBrowserDriver, label: 
 
 productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&simScenario=ended-pool-commitment', { height: 900, width: 1440 }, async driver => {
 	const { completeTransactionReview, openSeededPool } = createWorkflowActions(driver)
-	const readWalletRepAttoRep = async () => {
+	const readWalletRepAttoRep = async (expected?: bigint) => {
 		const accountMenu = 'Account menu 0x000000…0000A1'
 		await driver.clickButton(accountMenu)
 		await driver.waitForBodyText('REP/ETH')
-		const balance = await driver.evaluate(`document.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')`)
-		await driver.clickButton(accountMenu)
-		return parseDisplayedAttoAmount(balance, 'REP')
+		let lastBalance: unknown
+		for (let attempt = 0; attempt < 600; attempt += 1) {
+			lastBalance = await driver.evaluate(`document.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')`)
+			if (typeof lastBalance === 'string' && lastBalance.endsWith(' REP')) {
+				const balance = parseDisplayedAttoAmount(lastBalance, 'REP')
+				if (expected === undefined || balance === expected) {
+					await driver.clickButton(accountMenu)
+					return balance
+				}
+			}
+			await Bun.sleep(50)
+		}
+		throw new Error(`Wallet REP balance did not finish updating: ${String(lastBalance)}; expected ${String(expected)}`)
 	}
 	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (ended pool)')
@@ -924,7 +934,8 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	await driver.clickButton('Dismiss')
 	const redeemedBody = await driver.waitForBodyText('No redeemable REP is available for this vault.')
 	expect(redeemedBody).not.toContain('Vault REP backing\n10\u00a0000.00 REP')
-	expect(await readWalletRepAttoRep()).toBe(walletRepBeforeRedemption + 10_000n * 10n ** 18n)
+	const expectedWalletRep = walletRepBeforeRedemption + 10_000n * 10n ** 18n
+	expect(await readWalletRepAttoRep(expectedWalletRep)).toBe(expectedWalletRep)
 })
 
 productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?simulate=1&simScenario=liquidation-distance', { height: 900, width: 1440 }, async driver => {
