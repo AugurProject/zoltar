@@ -218,12 +218,23 @@ async function loadUniverseLineage(client: ReadClient, universeId: bigint, unive
 	return [{ outcomeLabel: undefined, universeId: 0n }, ...ancestry.reverse()]
 }
 
+/** Resolves just this generation's name, independently of the depth or size of the universe tree. */
+async function loadUniverseOutcomeName(client: ReadClient, zoltarAddress: Address, parentUniverseId: bigint, outcomeIndex: bigint) {
+	const [parent, questionDataAddress] = await readRequiredMulticall(client, [
+		{ abi: Zoltar_Zoltar.abi, address: zoltarAddress, functionName: 'universes', args: [parentUniverseId] },
+		{ abi: Zoltar_Zoltar.abi, address: zoltarAddress, functionName: 'zoltarQuestionData', args: [] },
+	])
+	const [, questionId] = parent
+	if (questionId === 0n) return undefined
+	return await client.readContract({ abi: ANSWER_OPTION_ABI, address: questionDataAddress, functionName: 'getAnswerOptionName', args: [questionId, outcomeIndex] })
+}
+
 /**
  * Reads a universe from Zoltar. Callers with their own deployment configuration pass its Zoltar address so the universe reads
  * target that deployment; the fork question, outcome labels, and lineage outcome names still come from the active profile's question data, so the
  * address must belong to the same canonical deployment as the active network profile.
  */
-export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar')): Promise<ZoltarUniverseSummary | undefined> {
+export async function loadZoltarUniverseSummary(client: ReadClient, universeId: bigint, zoltarAddress: Address = getDeploymentStepAddress('zoltar'), { includeRelatedUniverses = true }: { includeRelatedUniverses?: boolean } = {}): Promise<ZoltarUniverseSummary | undefined> {
 	const [repToken, universe, forkTime, forkThresholdAttoRep, forkBurnDivisor] = await readRequiredMulticall(client, [
 		{
 			abi: Zoltar_Zoltar.abi,
@@ -263,12 +274,15 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	const [reputationTokenMetadata, totalTheoreticalSupplyAttoRep, lineage] = await Promise.all([
 		loadReputationTokenMetadata(client, repToken, universeId === 0n),
 		client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', address: zoltarAddress, args: [universeId] }),
-		loadUniverseLineage(client, universeId, universeData, zoltarAddress),
+		includeRelatedUniverses ? loadUniverseLineage(client, universeId, universeData, zoltarAddress) : undefined,
 	])
+
+	let outcomeLabel = lineage?.at(-1)?.outcomeLabel
+	if (!includeRelatedUniverses && universeId !== 0n) outcomeLabel = await loadUniverseOutcomeName(client, zoltarAddress, parentUniverseId, forkingOutcomeIndex)
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
 	let forkQuestionDetails: MarketDetails | undefined = undefined
-	if (hasForked && forkQuestionId > 0n) {
+	if (includeRelatedUniverses && hasForked && forkQuestionId > 0n) {
 		const marketDetails = await loadMarketDetails(client, forkQuestionId)
 		forkQuestionDetails = marketDetails
 		if (marketDetails.marketType === 'scalar') {
@@ -386,6 +400,8 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 
 	return {
 		childUniverses,
+		outcomeLabel,
+		relatedUniversesLoaded: includeRelatedUniverses,
 		forkBurnDivisor,
 		forkQuestionDetails,
 		forkThresholdAttoRep,

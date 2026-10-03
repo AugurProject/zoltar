@@ -1,3 +1,7 @@
+import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
+import { getPoolsViewHref } from '../lib/appNavigation.js'
+import { ZoltarMigrationWorkflow } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationWorkflow.js'
+import { h } from 'preact'
 import { RequestPriceModal } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/RequestPriceModal.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -16,7 +20,6 @@ import { resolveRepPrice, type UiPriceOracle } from '@zoltar/ui-statoblast-share
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
-import { getUniverseDirectoryContextKey, isUniverseDirectoryLoadedForContext, shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { createSecurityPoolsRouteFormSync } from '../lib/routeFormSync.js'
 import { buildForkAuctionSectionProps, buildLiquidationSectionProps, buildPoolCreationSectionProps, buildReportingSectionProps, buildSecurityVaultSectionProps, buildTradingSectionProps } from '../lib/securityPoolsRouteSections.js'
 import { useBlockRefresh, useRefreshOnEnable } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -60,10 +63,10 @@ type SecurityPoolsRouteParameters = {
 	urlState: SecurityPoolsUrlState
 }
 
-const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes', 'migrate']
 
 export function useSecurityPoolsRoute({ context, marketCreation, openOracle, repPrices, selectedPoolRefresh, urlState }: SecurityPoolsRouteParameters) {
-	const { accountState, activeEnvironmentNonce, activeUniverseId, canReadOnchainData, currentTimestamp, deploymentStatuses, route, uiPriceOracle, walletBootstrapComplete, walletScopedAccountAddress, walletScopedHookConfig } = context
+	const { accountState, activeEnvironmentNonce, activeUniverseId, canReadOnchainData, currentTimestamp, deploymentStatuses, route, uiPriceOracle, walletBootstrapComplete, walletScopedHookConfig } = context
 	const { securityPoolAddress, securityPoolsView, setSecurityPoolsView } = urlState
 	const { priceCoordinator } = openOracle
 	const [questionAndPoolCreating, setQuestionAndPoolCreating] = useState(false)
@@ -87,7 +90,7 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		reporting.setReportingForm((current: ReportingFormState) => applyReportingFormUpdate(current, update))
 	}
 	const overview = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
-	const { checkedSecurityPoolAddress, hasLoadedUniverseDirectoryPools, loadingUniverseDirectoryPools, loadSecurityPools, loadUniverseDirectoryPools, refreshSecurityPools, securityPools, securityPoolUniverseDirectoryError } = overview
+	const { checkedSecurityPoolAddress, loadSecurityPools, refreshSecurityPools, securityPools } = overview
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload, and again
 	// when the view returns, because a report settled from another route can change it without a new block arriving.
 	const poolViewActive = route === 'pools' && securityPoolsView === 'operate'
@@ -106,15 +109,6 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const forkAuction = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
-	const lastUniverseDirectoryAutoLoadContextKeyRef = useRef<string | undefined>(undefined)
-	const universeDirectoryContextKey = getUniverseDirectoryContextKey({ accountAddress: walletScopedAccountAddress, environmentNonce: activeEnvironmentNonce, universeId: activeUniverseId })
-	// The overview hook keys its loaded directory on the environment only; the figures are per account and universe, so the route keys them on the full context.
-	const [loadedUniverseDirectoryContextKey, setLoadedUniverseDirectoryContextKey] = useState<string | undefined>(undefined)
-	const universeDirectoryLoadedForContext = isUniverseDirectoryLoadedForContext({ currentContextKey: universeDirectoryContextKey, hasLoadedUniverseDirectoryPools, loadedContextKey: loadedUniverseDirectoryContextKey })
-	const loadUniverseDirectoryPoolsForContext = async () => {
-		const requestedContextKey = universeDirectoryContextKey
-		if (await loadUniverseDirectoryPools()) setLoadedUniverseDirectoryContextKey(requestedContextKey)
-	}
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails: priceCoordinator.poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
@@ -191,22 +185,6 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 			setQuestionAndPoolCreating(false)
 		}
 	}
-	useEffect(() => {
-		if (
-			!shouldAutoLoadUniverseDirectory({
-				activeSecurityPoolsView,
-				canReadOnchainData,
-				currentContextKey: universeDirectoryContextKey,
-				hasLoadedUniverseDirectoryPools: universeDirectoryLoadedForContext,
-				lastAutoLoadContextKey: lastUniverseDirectoryAutoLoadContextKeyRef.current,
-				loadingUniverseDirectoryPools,
-				securityPoolUniverseDirectoryError,
-			})
-		)
-			return
-		lastUniverseDirectoryAutoLoadContextKeyRef.current = universeDirectoryContextKey
-		void loadUniverseDirectoryPoolsForContext()
-	}, [activeSecurityPoolsView, canReadOnchainData, universeDirectoryLoadedForContext, loadingUniverseDirectoryPools, securityPoolUniverseDirectoryError, universeDirectoryContextKey])
 	// One navigation moves both the universe and the pool; the route effect loads a pool that is not listed yet, so only a listed pool is refreshed here.
 	const openPoolInUniverse = (universeId: bigint, poolAddress: string) => {
 		urlState.openSecurityPoolInUniverse(universeId, poolAddress)
@@ -215,7 +193,16 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 	const pricedSection = { accountState, ...uiRepPrice }
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
-		loadingUniverseDirectoryPools,
+		migration: h(ZoltarMigrationWorkflow, {
+			universeBrowserHref: getPoolsViewHref('universes'),
+			accountState,
+			activeUniverseId,
+			operations: marketCreation,
+			universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }),
+		}),
+		universeMissing: marketCreation.zoltarUniverseMissing,
+		universeError: marketCreation.zoltarUniverseError,
+		onRetryUniverse: () => void marketCreation.loadZoltarUniverse(),
 		createPool: {
 			...buildPoolCreationSectionProps(poolCreation),
 			...pricedSection,
@@ -237,7 +224,6 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 			onResetMarket: resetMarket,
 		},
 		onActiveViewChange: setSecurityPoolsView,
-		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPoolsForContext(),
 		onOpenSecurityPool: (poolAddress, universeId) => openPoolInUniverse(universeId, poolAddress),
 		overview: {
 			browseState: urlState.poolBrowseState,
@@ -247,9 +233,7 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 			securityPools,
 		},
 		securityPools,
-		securityPoolUniverseDirectoryError,
 		selectedPoolRepPrice,
-		universeDirectoryPools: universeDirectoryLoadedForContext ? overview.universeDirectoryPools : undefined,
 		workflow: {
 			vaultOperationsParameters: walletScopedHookConfig,
 			vaultOperationsContextKey: activeEnvironmentNonce,

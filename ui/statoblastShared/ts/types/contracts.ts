@@ -262,13 +262,6 @@ export type ListedSecurityPool = {
 	vaults: SecurityPoolVaultSummary[]
 }
 
-export type SecurityPoolPage = {
-	pageIndex: number
-	pageSize: number
-	poolCount: bigint
-	pools: ListedSecurityPool[]
-}
-
 export type SecurityPoolVaultSummary = {
 	badDebtAttoEth?: bigint
 	openInterestAttoEth?: bigint

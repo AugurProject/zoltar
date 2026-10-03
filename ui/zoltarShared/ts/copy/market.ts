@@ -3,7 +3,6 @@ export const childUniverseDeployedReason = 'Child universe already deployed.'
 export const childUniversesNotForkedReason = 'Child universes are unavailable because this universe has not forked.'
 export const childDeploymentWalletRequiredReason = commonCopy.formatConnectWalletBefore('deploying a child universe')
 export const deployingUniverse = 'Deploying universe…'
-export const deployUniverse = 'Deploy universe'
 export const noQuestions = 'No questions'
 export const noQuestionsDetail = 'Create the first reusable question for this registry.'
 export const retryQuestions = 'Retry questions'

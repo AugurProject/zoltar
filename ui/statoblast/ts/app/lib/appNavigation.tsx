@@ -1,5 +1,6 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -20,7 +21,7 @@ function getOpenOracleViewOptions(routeHash: string, search: string): ViewTabOpt
 	]
 }
 
-function getPoolsViewHref(view: PoolsListView) {
+export function getPoolsViewHref(view: PoolsListView) {
 	const search = writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(parseRouteHash(window.location.hash).routeHash), { view })
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
@@ -63,6 +64,7 @@ export function getRouteSecondaryNavigation({
 						{ href: getPoolsViewHref('browse'), label: commonCopy.browsePools, value: 'browse' },
 						{ href: getPoolsViewHref('create'), label: commonCopy.createPool, value: 'create' },
 						{ href: getPoolsViewHref('universes'), label: commonCopy.universe, value: 'universes' },
+						...(activeSecurityPoolsView === 'migrate' ? [{ href: getPoolsViewHref('migrate'), label: zoltarCopy.migrateRep, value: 'migrate' as const }] : []),
 					],
 				})
 	const openOracleViews = createSecondaryNavigation<OpenOracleView>({ ariaLabel: statoblastAppCopy.oracleReportViews, value: activeOpenOracleView, onChange: setOpenOracleView, options: getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch()) })

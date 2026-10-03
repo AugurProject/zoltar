@@ -1,3 +1,4 @@
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
@@ -28,21 +29,12 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 			),
 			title: commonCopy.createPool,
 		}
-	if (view === 'universes')
-		return {
-			description: (
-				<>
-					{securityPoolCopy.universesDescriptionLead}
-					<GlossaryTerm id='universe'>{glossaryCopy.universeTerm.toLowerCase()}</GlossaryTerm>
-					{securityPoolCopy.universesDescriptionTail}
-				</>
-			),
-			title: commonCopy.universe,
-		}
+	if (view === 'migrate') return { description: zoltarCopy.migrateRouteDescription, title: zoltarCopy.migrateRep }
+	if (view === 'universes') return { description: undefined, title: commonCopy.universe }
 	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveViewChange, onLoadUniverseDirectoryPools, onOpenSecurityPool, overview, securityPoolUniverseDirectoryError, selectedPoolRepPrice, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, migration, createPool, onActiveViewChange, onOpenSecurityPool, overview, selectedPoolRepPrice, workflow, zoltarUniverse, universeMissing, universeError, onRetryUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
@@ -64,9 +56,9 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 				/>
 			) : undefined}
 
-			{view === 'universes' ? (
-				<UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
-			) : undefined}
+			{view === 'universes' ? <UniversePoolDirectorySection onMigrateRep={() => onActiveViewChange('migrate')} activeUniverseId={overview.activeUniverseId} zoltarUniverse={zoltarUniverse} universeMissing={universeMissing} universeError={universeError} onRetryUniverse={onRetryUniverse} /> : undefined}
+
+			{view === 'migrate' ? migration : undefined}
 
 			{/* A pending transaction on this pool locks only this pool's actions. */}
 			{view === 'operate' ? (

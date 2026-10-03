@@ -66,7 +66,8 @@ export function App() {
 		onchainStateDependencies,
 	})
 	const { transactionState } = transactionTray
-	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	const includeRelatedUniverses = activeRoute === 'zoltar' && activeZoltarView === 'migrate'
+	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, includeRelatedUniverses, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const { loadingZoltarForkAccess, loadingZoltarUniverse, loadZoltarUniverse, zoltarForkRepBalanceAttoRep, zoltarUniverse, zoltarUniverseError, zoltarUniverseMissing } = operations
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
@@ -113,7 +114,7 @@ export function App() {
 	const transactionRouteKey = route === 'zoltar' ? `${route}:${activeZoltarView}` : route
 
 	return (
-		<UniverseNamesProvider universe={zoltarUniverse}>
+		<UniverseNamesProvider includeRelatedUniverses={includeRelatedUniverses} universe={zoltarUniverse}>
 			<ProtocolAppFrame
 				activeUniverseId={activeUniverseId}
 				accountAddress={accountState.address}
@@ -142,12 +143,12 @@ export function App() {
 								applicationTitle={zoltarCopy.applicationTitle}
 								activeUniverseId={activeUniverseId}
 								isLoadingUniverseRepBalance={loadingZoltarForkAccess}
-								migrateRepHref={getZoltarViewHref('migrate')}
+								migrateRepHref={activeRoute === 'zoltar' && activeZoltarView === 'migrate' ? undefined : getZoltarViewHref('migrate')}
 								onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 								universeForkTime={zoltarUniverse?.forkTime}
 								universeHasForked={zoltarUniverse?.hasForked}
 								universePresentation={universePresentation}
-								universeControl={<UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
+								universeControl={<UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
 								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 							/>
 						)}

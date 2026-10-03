@@ -1,10 +1,11 @@
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { UniverseOutcomeNavigation } from '../../universes/components/UniverseOutcomeNavigation.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { UniverseBrowser } from '@zoltar/ui-core-shared/components/UniverseBrowser.js'
@@ -12,7 +13,7 @@ import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contrac
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
-import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
+import { ZoltarMigrationWorkflow } from '../../universes/components/ZoltarMigrationWorkflow.js'
 import { getZoltarUniverseActions } from '../lib/zoltarViewModels.js'
 import { useZoltarWorkspace } from './ZoltarWorkspace.js'
 
@@ -31,9 +32,14 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 		)
 	} else if (canFork) {
 		actions = (
-			<button className='secondary' type='button' onClick={() => onViewChange('fork')}>
-				{zoltarCopy.forkZoltar}
-			</button>
+			<>
+				<button className='secondary' type='button' onClick={() => onViewChange('fork')}>
+					{zoltarCopy.forkZoltar}
+				</button>
+				<button className='secondary' type='button' onClick={() => onViewChange('migrate')}>
+					{zoltarCopy.previewMigration}
+				</button>
+			</>
 		)
 	}
 	return (
@@ -47,14 +53,10 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 					</>
 				}
 				activeUniverseId={activeUniverseId}
+				includeRelatedUniverses={false}
+				navigation={<UniverseOutcomeNavigation universe={universe} />}
 				universe={universe}
-			>
-				{universe.forkQuestionDetails === undefined ? undefined : (
-					<div className='loaded-question-preview'>
-						<Question question={universe.forkQuestionDetails} variant='preview' />
-					</div>
-				)}
-			</UniverseBrowser>
+			/>
 		</>
 	)
 }
@@ -113,36 +115,7 @@ export function ZoltarMigrateRoute({ universe }: UniverseRouteProps) {
 	return (
 		<>
 			<RouteHeader description={zoltarCopy.migrateRouteDescription} title={zoltarCopy.migrateRep} />
-			{/* A pending fork or migration locks only this universe's actions. */}
-			<TransactionScopeProvider scope={universeTransactionScope(universe.universeId)}>
-				<SectionBlock variant='plain'>
-					<ZoltarMigrationSection
-						accountAddress={accountState.address}
-						isOnActiveAppChain={isActiveAppChain(accountState.chainId)}
-						loadingZoltarForkAccess={operations.loadingZoltarForkAccess}
-						loadingZoltarUniverse={operations.loadingZoltarUniverse}
-						onApproveZoltarForkRep={amount => void operations.approveZoltarForkRep(amount)}
-						onDeployChildUniverse={outcomeIndex => void operations.createChildUniverse(outcomeIndex)}
-						onMigrateInternalRep={maxPreparationAttoRep => void operations.migrateInternalRep(maxPreparationAttoRep)}
-						onRetryMigrationBalances={() => void operations.loadZoltarForkAccess()}
-						onZoltarMigrationFormChange={update => operations.setZoltarMigrationForm(current => ({ ...current, ...update }))}
-						pendingChildUniverseOutcomeIndex={operations.zoltarChildUniversePendingOutcomeIndex}
-						zoltarForkActiveAction={operations.zoltarForkActiveAction}
-						zoltarForkApproval={operations.zoltarForkApproval}
-						zoltarForkRepBalanceAttoRep={operations.zoltarForkRepBalanceAttoRep}
-						zoltarMigrationActiveAction={operations.zoltarMigrationActiveAction}
-						zoltarMigrationChildRepBalancesAttoRep={operations.zoltarMigrationChildRepBalancesAttoRep}
-						zoltarMigrationChildSplitAmountsAttoRep={operations.zoltarMigrationChildSplitAmountsAttoRep}
-						zoltarMigrationError={operations.zoltarMigrationError}
-						zoltarMigrationForm={operations.zoltarMigrationForm}
-						zoltarMigrationPending={operations.zoltarMigrationPending}
-						zoltarMigrationPreparedRepBalanceAttoRep={operations.zoltarMigrationPreparedRepBalanceAttoRep}
-						zoltarUniverse={universe}
-						zoltarUniverseState={universeState}
-					/>
-				</SectionBlock>
-			</TransactionScopeProvider>
-			<ErrorNotice message={operations.zoltarChildUniverseError} />
+			<ZoltarMigrationWorkflow universeBrowserHref={buildRouteHref(getCurrentRouteHash(), writeZoltarViewQueryParam(getRouteHashSearch(), 'universes'))} accountState={accountState} activeUniverseId={universe.universeId} operations={operations} universeState={universeState} />
 		</>
 	)
 }

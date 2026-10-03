@@ -1,68 +1,46 @@
 /// <reference types="bun-types" />
 
-import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniversePoolDirectorySection.js'
 import { describe, expect, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
-
-function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
-		currentRetentionRate: 10n,
-		feeEligibleUnderwritingLimitAttoEth: 1n,
-		forkOutcome: 'none',
-		forkOwnSecurityPool: false,
-		hasForkActivity: false,
-		hasForkContinuationEscalationGame: false,
-		hasLoadedVaults: true,
-		initialReportPriorityFeeAttoEthPerGas: 1n,
-		lastOraclePrice: 1n,
-		lastOracleSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		marketDetails: {
-			answerUnit: '',
-			createdAt: 1n,
-			description: 'Question description',
-			displayValueMax: 100n,
-			displayValueMin: 0n,
-			endTime: 2n,
-			exists: true,
-			marketType: 'binary',
-			numTicks: 2n,
-			outcomeLabels: ['Yes', 'No'],
-			questionId: '0x01',
-			startTime: 1n,
-			title: 'Will this resolve?',
-		},
-		migratedAttoRep: 0n,
-		ordinaryEscalationGameStarted: false,
-		parent: zeroAddress,
-		questionId: '0x01',
-		questionOutcome: 'none',
-		securityPoolAddress: '0x0000000000000000000000000000000000000001' as Address,
-		settlementCollateralAttoEth: 0n,
-		shareTokenSupplyAttoShares: 0n,
-		statoblastSecurityMultiplierBps: 20_000n,
-		systemState: 'operational',
-		totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
-		totalPoolHeldAttoRep: 3n * 10n ** 18n,
-		truthAuctionAddress: zeroAddress,
-		truthAuctionStartedAt: 0n,
-		universeHasForked: false,
-		universeId: 1n,
-		vaultCount: 2n,
-		vaults: [],
-		...overrides,
-	}
-}
 
 installTestRouting()
 describe('UniversePoolDirectorySection', () => {
+	test('offers a migration preview before a fork', async () => {
+		let opened = false
+		const rendered = await renderIntoDocument(
+			h(UniversePoolDirectorySection, {
+				activeUniverseId: 1n,
+				zoltarUniverse: createForkedUniverseSummary({ hasForked: false, childUniverses: [], forkTime: 0n }),
+				onMigrateRep: () => {
+					opened = true
+				},
+			}),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const button = within(document.body).getByRole('button', { name: 'Preview REP migration' })
+		button.click()
+		expect(opened).toBe(true)
+	})
+
+	test('renders universe details without loading a global pool or vault directory', async () => {
+		const rendered = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, zoltarUniverse: createForkedUniverseSummary() }))
+		try {
+			expect(document.body.textContent).toContain('Forked')
+			expect(document.body.textContent).not.toContain('Loading')
+			expect(document.body.textContent).not.toContain('Pool-held REP')
+			expect(document.body.textContent).not.toContain('known vaults')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	installDomTestLifecycle({
@@ -72,21 +50,50 @@ describe('UniversePoolDirectorySection', () => {
 		},
 	})
 
-	test('shows selection actions only for deployed non-active child universes', async () => {
-		const renderedComponent = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, securityPools: [], zoltarUniverse: createForkedUniverseSummary() }))
+	test('recovers an unknown universe through Genesis without arbitrary ID entry', async () => {
+		window.history.replaceState({}, '', '#/pools/universes?universe=999')
+		const rendered = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 999n, zoltarUniverse: undefined, universeMissing: true }))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Universe not found')
+		expect(document.body.textContent).not.toContain('Choose another universe.')
+		expect(document.body.textContent).not.toContain('Loading')
+		expect(within(document.body).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
+		within(document.body).getByRole('button', { name: 'Go to Genesis universe' }).click()
+		expect(window.location.hash).toContain('universe=0')
+		expect(within(document.body).queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()
+	})
+
+	test('does not enumerate cached migration children in the summary view', async () => {
+		const renderedComponent = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, zoltarUniverse: createForkedUniverseSummary() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const selectLinks = documentQueries.getAllByRole('link', { name: 'Open' })
-		expect(selectLinks).toHaveLength(1)
-		expect(selectLinks[0]?.className).toContain('button-link')
+		expect(documentQueries.queryByRole('link', { name: 'Open' })).toBeNull()
+		expect(document.querySelector('.entity-card-list')).toBeNull()
+	})
+
+	test('uses the same summary layout with cached full or short universe data', async () => {
+		const full = createForkedUniverseSummary({
+			outcomeLabel: 'Alpha',
+			relatedUniversesLoaded: true,
+			lineage: [
+				{ universeId: 0n, outcomeLabel: undefined },
+				{ universeId: 1n, outcomeLabel: 'Alpha' },
+			],
+		})
+		const rendered = await renderIntoDocument(<UniversePoolDirectorySection activeUniverseId={1n} zoltarUniverse={full} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.entity-card-list')).toBeNull()
+		expect(document.querySelector('.universe-lineage')).toBeNull()
+		const content = rendered.container.textContent
+		await act(() => render(<UniversePoolDirectorySection activeUniverseId={1n} zoltarUniverse={{ ...full, childUniverses: [], lineage: undefined, relatedUniversesLoaded: false }} />, rendered.container))
+		expect(rendered.container.textContent).toBe(content)
 	})
 
 	test('keeps a parent universe link available when the active universe is a child', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(UniversePoolDirectorySection, {
 				activeUniverseId: 2n,
-				securityPools: [],
 				zoltarUniverse: createForkedUniverseSummary({
 					childUniverses: [],
 					parentUniverseId: 1n,
@@ -98,57 +105,5 @@ describe('UniversePoolDirectorySection', () => {
 
 		const parentLink = within(document.body).getByRole('link', { name: 'Universe 0x1' })
 		expect(parentLink.getAttribute('href')).toContain('universe=1')
-	})
-
-	test('shows statoblast pool metrics for the active and child universes', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(UniversePoolDirectorySection, {
-				activeUniverseId: 1n,
-				securityPools: [
-					createSecurityPool(),
-					createSecurityPool({
-						securityPoolAddress: '0x0000000000000000000000000000000000000002' as Address,
-						totalPoolHeldAttoRep: 5n * 10n ** 18n,
-						universeId: 2n,
-						vaultCount: 4n,
-					}),
-				],
-				zoltarUniverse: createForkedUniverseSummary(),
-			}),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('1 pool')).not.toBeNull()
-		expect(document.body.textContent).toContain('Pool-held REP')
-		expect(document.body.textContent).toContain('known vaults')
-		expect(document.body.textContent).toContain('3.00 REP')
-		expect(document.body.textContent).toContain('5.00 REP')
-	})
-
-	test('shows loading and retry states while universe stats are loading or fail', async () => {
-		const loadingRender = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, loadingSecurityPools: true, securityPools: undefined, zoltarUniverse: createForkedUniverseSummary() }))
-		cleanupRenderedComponent = loadingRender.cleanup
-		expect(document.body.textContent).toContain('Loading')
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-
-		let retried = false
-		const errorRender = await renderIntoDocument(
-			h(UniversePoolDirectorySection, {
-				activeUniverseId: 1n,
-				onRetry: () => {
-					retried = true
-				},
-				securityPoolError: 'Failed to load universe stats',
-				securityPools: undefined,
-				zoltarUniverse: createForkedUniverseSummary(),
-			}),
-		)
-		cleanupRenderedComponent = errorRender.cleanup
-
-		const retryButton = within(document.body).getByRole('button', { name: 'Retry' })
-		retryButton.click()
-		expect(retried).toBe(true)
 	})
 })

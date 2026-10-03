@@ -8,11 +8,11 @@ import { createTradingPublicClient, publicErrorMessage } from '../protocol/live.
 
 export type LoadUniverseSummary = (configuration: DeploymentConfiguration, universeId: bigint) => Promise<ZoltarUniverseSummary | undefined>
 
-export const loadUniverseSummary: LoadUniverseSummary = async (configuration, universeId) => await loadZoltarUniverseSummary(createTradingPublicClient(configuration), universeId, configuration.zoltar)
+export const loadUniverseSummary: LoadUniverseSummary = async (configuration, universeId) => await loadZoltarUniverseSummary(createTradingPublicClient(configuration), universeId, configuration.zoltar, { includeRelatedUniverses: false })
 
 export type UniverseSummaryState = Readonly<{ kind: 'idle' } | { kind: 'loading' } | { kind: 'ready'; universe: ZoltarUniverseSummary | undefined } | { kind: 'error'; message: string }>
 
-/** Loads one universe summary (lineage, fork state, children) for the universe route and the header switcher. */
+/** Loads the selected universe without scanning ancestry or children for the universe route and the header switcher. */
 export function useUniverseSummary(configuration: DeploymentConfiguration | undefined, universeId: bigint | undefined, loadUniverse: LoadUniverseSummary = loadUniverseSummary) {
 	const [retryNonce, setRetryNonce] = useState(0)
 	const [snapshot, setSnapshot] = useState<{ configuration: DeploymentConfiguration | undefined; universeId: bigint | undefined; loadUniverse: LoadUniverseSummary; retryNonce: number; state: UniverseSummaryState }>({ configuration, universeId, loadUniverse, retryNonce, state: { kind: 'idle' } })

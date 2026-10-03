@@ -57,7 +57,7 @@ export type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
+export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes' | 'migrate'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
@@ -187,21 +187,21 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 } & RepPerEthPriceProps
 
 export type SecurityPoolsSectionProps = {
+	migration?: import('preact').ComponentChildren
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
-	loadingUniverseDirectoryPools?: boolean | undefined
 	onActiveViewChange: (view: SecurityPoolsView) => void
-	onLoadUniverseDirectoryPools?: (() => void) | undefined
 	/** Opens a Browse pools row in its universe with one history entry and one pool load. */
 	onOpenSecurityPool: (securityPoolAddress: string, universeId: bigint) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
-	securityPoolUniverseDirectoryError?: string | undefined
 	/** The one REP price behind the selected pool's vault health, withdrawable REP, and liquidation figures. */
 	selectedPoolRepPrice?: import('./security-pools/lib/uiPriceOracle.js').ResolvedRepPrice | undefined
-	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps
 	zoltarUniverse: ZoltarUniverseSummary | undefined
+	universeMissing?: boolean | undefined
+	universeError?: string | undefined
+	onRetryUniverse?: (() => void) | undefined
 }
 
 export type SecurityVaultRouteContentProps = {

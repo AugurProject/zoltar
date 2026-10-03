@@ -2,7 +2,9 @@
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
+import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -51,6 +53,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		onDeployChildUniverse: () => undefined,
 		pendingChildUniverseOutcomeIndex: undefined,
 		onRetryMigrationBalances: () => undefined,
+		onRetryUniverse: () => undefined,
 		onZoltarMigrationFormChange: () => undefined,
 		zoltarForkActiveAction: undefined,
 		zoltarForkApproval: { error: undefined, loading: false, value: 20n * ATTO_REP },
@@ -95,24 +98,171 @@ describe('ZoltarMigrationSection', () => {
 		},
 	})
 
+	test('keeps every migration control disabled before a fork and unlocks after a fork', async () => {
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const props = createProps({ zoltarUniverse: createUniverse({ hasForked: false, childUniverses: [], forkTime: 0n }), onZoltarMigrationFormChange: update => updates.push(update) })
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(queries.getByText('Outcome choices appear after this universe forks.')).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+		for (const button of document.querySelectorAll<HTMLButtonElement>('.migration-wizard button')) {
+			expect(button.disabled).toBe(true)
+			await act(() => button.click())
+		}
+		expect(updates).toEqual([])
+		await act(() => render(h(ZoltarMigrationSection, { ...props, zoltarUniverse: createUniverse() }), rendered.container))
+		expect(queries.queryByText('Outcome choices appear after this universe forks.')).toBeNull()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false)
+	})
+
+	test('shows the pre-fork preview with no wallet REP instead of claiming migration is complete', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ accountAddress: undefined, zoltarForkRepBalanceAttoRep: 0n, zoltarMigrationPreparedRepBalanceAttoRep: 0n, zoltarUniverse: createUniverse({ hasForked: false, childUniverses: [], forkTime: 0n }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(within(document.body).queryByText('All your REP here is migrated')).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+	})
+
+	test('waits for required related-universe details instead of showing an empty wizard', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ loadingZoltarUniverse: true, zoltarUniverse: createUniverse({ childUniverses: [], relatedUniversesLoaded: false }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.migration-wizard')).toBeNull()
+		expect(within(document.body).queryByText('No outcome universes available.')).toBeNull()
+		expect(within(document.body).getByText('Loading universe details.')).toBeTruthy()
+	})
+
+	test('shows the related-detail read failure and retries without pretending outcomes are empty', async () => {
+		let retries = 0
+		const props = {
+			...createProps({ zoltarUniverse: createUniverse({ childUniverses: [], relatedUniversesLoaded: false }) }),
+			zoltarUniverseError: 'Failed to load Zoltar universe. Reason: RPC unavailable',
+			onRetryUniverse: () => {
+				retries += 1
+			},
+		}
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(queries.getByText(props.zoltarUniverseError)).toBeTruthy()
+		expect(document.querySelector('.migration-wizard')).toBeNull()
+		await act(() => queries.getByRole('button', { name: 'Retry' }).click())
+		expect(retries).toBe(1)
+		await act(() => render(h(ZoltarMigrationSection, { ...props, zoltarUniverse: createUniverse({ relatedUniversesLoaded: true }), zoltarUniverseError: undefined }), rendered.container))
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(queries.queryByText(props.zoltarUniverseError)).toBeNull()
+	})
+
 	test('starts on outcome selection with outcome names, destination status, and no raw ids', async () => {
 		const updates: Partial<ZoltarMigrationFormState>[] = []
 		const deployed: bigint[] = []
-		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ onDeployChildUniverse: outcomeIndex => deployed.push(outcomeIndex), onZoltarMigrationFormChange: update => updates.push(update) })))
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ universeBrowserHref: '#/pools/universes?universe=1', onDeployChildUniverse: outcomeIndex => deployed.push(outcomeIndex), onZoltarMigrationFormChange: update => updates.push(update) })))
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
 
 		expect(getCurrentStepTitle()).toBe('Choose outcomes')
-		expect(document.body.textContent).toContain('Not created yet')
+		expect(document.body.textContent).toContain('Not deployed')
 		expect(document.body.textContent).not.toContain('0x2')
 		expect(document.body.textContent).not.toContain('Split REP')
 		expect(document.body.textContent).not.toContain('prepared REP')
-		expect(queries.getByRole('link', { name: 'Open Yes universe' }).getAttribute('href')).toBe(getUniverseLinkHref(2n))
+		expect(queries.getByRole('link', { name: 'Open Yes universe' }).getAttribute('href')).toBe('#/pools/universes?universe=2')
 		expect(queries.getByRole('button', { name: /^Yes/ }).getAttribute('aria-pressed')).toBe('true')
 		queries.getByRole('button', { name: /^No/ }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [1n, 2n] }])
-		queries.getByRole('button', { name: 'Deploy universe' }).click()
+		queries.getByRole('button', { name: 'Deploy No universe' }).click()
 		expect(deployed).toEqual([2n])
+	})
+
+	test('uses the scalar picker for deployed, undeployed and Invalid outcomes without listing ticks', async () => {
+		const question = createMarketDetails({ marketType: 'scalar', outcomeLabels: [], numTicks: 10n ** 25n, displayValueMax: 100n * ATTO_REP, answerUnit: '°C' })
+		const maxIndex = getScalarOutcomeIndex(question, question.numTicks)
+		const child = { ...yesChild, outcomeIndex: maxIndex, outcomeLabel: '100 °C' }
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const deployments: bigint[] = []
+		const rendered = await renderIntoDocument(
+			h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [] }), onDeployChildUniverse: index => deployments.push(index), onZoltarMigrationFormChange: update => updates.push(update) })),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(0)
+		q.getByRole('button', { name: 'Deploy 0 °C universe' }).click()
+		expect(deployments).toEqual([getScalarOutcomeIndex(question, 0n)])
+		await act(() => fireEvent.input(q.getByLabelText('Scalar value'), { target: { value: '100' } }))
+		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(1)
+		q.getByRole('button', { name: '100 °C' }).click()
+		expect(updates).toEqual([{ outcomeIndexes: [maxIndex] }])
+		expect(q.getByRole('link', { name: 'Open 100 °C universe' }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
+		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Select outcome' }), { target: { value: (question.numTicks + 1n).toString() } }))
+		expect(q.queryByRole('button', { name: /^Deploy .* universe$/ })).toBeNull()
+		expect(document.body.textContent).toContain('Enter an exact tick within')
+		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
+		q.getByRole('button', { name: 'Deploy Invalid universe' }).click()
+		expect(deployments.at(-1)).toBe(0n)
+	})
+
+	test('pages categorical choices without losing selected outcomes', async () => {
+		const children = Array.from({ length: 12 }, (_, i) => ({ ...yesChild, universeId: BigInt(i + 2), outcomeIndex: BigInt(i + 1), outcomeLabel: `Option ${i + 1}` }))
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), onZoltarMigrationFormChange: update => updates.push(update) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(10)
+		await act(() => q.getByRole('button', { name: 'Next page' }).click())
+		expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
+		q.getByRole('button', { name: 'Option 11' }).click()
+		expect(updates).toEqual([{ outcomeIndexes: [1n, 11n] }])
+		await act(() => q.getByRole('button', { name: 'Previous page' }).click())
+		expect(q.getByRole('button', { name: 'Option 1' }).getAttribute('aria-pressed')).toBe('true')
+	})
+
+	test('keeps scalar selections visible and removable after moving the picker', async () => {
+		const question = createMarketDetails({ marketType: 'scalar', outcomeLabels: [], numTicks: 20n, displayValueMax: 100n * ATTO_REP, answerUnit: '°C' })
+		const index = getScalarOutcomeIndex(question, 10n)
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const child = { ...yesChild, outcomeIndex: index, outcomeLabel: '50 °C' }
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [index] }), onZoltarMigrationFormChange: update => updates.push(update) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } }))
+		await act(() => fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '1' } }))
+		expect(q.getByRole('button', { name: 'Remove 50 °C' })).toBeTruthy()
+		expect(q.getByRole('button', { name: 'Deploy 5 °C universe' })).toBeTruthy()
+		expect(q.getByText('Not deployed')).toBeTruthy()
+		q.getByRole('button', { name: 'Remove 50 °C' }).click()
+		expect(updates).toEqual([{ outcomeIndexes: [] }])
+		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [] }) })), rendered.container))
+		expect(q.queryByRole('button', { name: 'Remove 50 °C' })).toBeNull()
+	})
+
+	test('keeps selections from other categorical pages visible and removable', async () => {
+		const children = Array.from({ length: 12 }, (_, i) => ({ ...yesChild, universeId: BigInt(i + 2), outcomeIndex: BigInt(i + 1), outcomeLabel: `Option ${i + 1}` }))
+		const updates: Partial<ZoltarMigrationFormState>[] = []
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), zoltarMigrationForm: createForm({ outcomeIndexes: [1n, 11n] }), onZoltarMigrationFormChange: update => updates.push(update) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const q = within(document.body)
+		expect(q.getByRole('button', { name: 'Remove Option 11' })).toBeTruthy()
+		await act(() => q.getByRole('button', { name: 'Next page' }).click())
+		q.getByRole('button', { name: 'Remove Option 1' }).click()
+		expect(updates).toEqual([{ outcomeIndexes: [11n] }])
+		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ childUniverses: children }), zoltarMigrationForm: createForm({ outcomeIndexes: [11n] }) })), rendered.container))
+		expect(q.queryByRole('button', { name: 'Remove Option 1' })).toBeNull()
+		expect(q.getByRole('button', { name: 'Remove Option 11' })).toBeTruthy()
+	})
+
+	test('enables Continue when the first outcome selection reaches the form', async () => {
+		let props = createProps({ zoltarMigrationForm: createForm({ outcomeIndexes: [] }) })
+		props.onZoltarMigrationFormChange = update => {
+			props = { ...props, zoltarMigrationForm: { ...props.zoltarMigrationForm, ...update } }
+			render(h(ZoltarMigrationSection, props), rendered.container)
+		}
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Continue', 'Select at least one outcome.')
+		await act(() => within(document.body).getByRole('button', { name: 'Yes' }).click())
+		expectTransactionButtonEnabled(document.body, 'Continue')
+		await act(() => within(document.body).getByRole('button', { name: 'Continue' }).click())
+		expect(getCurrentStepTitle()).toBe('Amount')
 	})
 
 	test('blocks Continue until an outcome is selected', async () => {

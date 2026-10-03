@@ -13,6 +13,7 @@ import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZoltarRoutes } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarRoutes.js'
 import { ZoltarWorkspaceProvider } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
 import { describe, expect, mock, test } from 'bun:test'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
@@ -30,7 +31,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 }
 
 /** The operation slice the Zoltar route containers read; each test overrides the universe and view. */
-function createOperations(universe: ZoltarUniverseSummary | undefined) {
+function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined) {
 	return {
 		approveZoltarForkRep: async () => undefined,
 		createChildUniverse: async () => undefined,
@@ -75,6 +76,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined) {
 		zoltarQuestions: [],
 		zoltarQuestionsError: undefined,
 		zoltarUniverse: universe,
+		zoltarUniverseError: universeError,
 		zoltarUniverseFreshness: { refreshing: false, updatedAt: undefined },
 		zoltarQuestionsFreshness: { refreshing: false, updatedAt: undefined },
 	}
@@ -105,7 +107,7 @@ describe('ZoltarRoutes', () => {
 			onRetryUniverse: () => retries.push('universe'),
 			onSwitchNetwork: () => undefined,
 			onViewChange: (nextView: ZoltarView) => viewChanges.push(nextView),
-			operations: { ...createOperations(universe), ...overrides },
+			operations: { ...createOperations(universe, universeError), ...overrides },
 			universeError,
 			universeState,
 		}
@@ -171,21 +173,36 @@ describe('ZoltarRoutes', () => {
 		expect(document.body.textContent).toContain('Switch network')
 	})
 
-	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {
-		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false }))
+	test('offers Fork and a migration preview in an unforked universe', async () => {
+		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false, relatedUniversesLoaded: false }))
 		expect(queries.getByRole('heading', { name: 'Universes' })).toBeTruthy()
-		expect(queries.queryByRole('button', { name: 'Migrate REP' })).toBeNull()
+		fireEvent.click(queries.getByRole('button', { name: 'Preview REP migration' }))
+		expect(viewChanges).toEqual(['migrate'])
 		fireEvent.click(queries.getByRole('button', { name: 'Fork universe' }))
-		expect(viewChanges).toEqual(['fork'])
-		expect(queries.queryByRole('textbox')).toBeNull()
+		expect(viewChanges).toEqual(['migrate', 'fork'])
+		expect(queries.queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
+		expect(document.querySelector('.migration-wizard')).toBeNull()
+	})
+
+	test('keeps the bounded Universes layout when migration left a full summary cached', async () => {
+		const full = createUniverse({ outcomeLabel: 'Alpha', relatedUniversesLoaded: true, zoltarAddress: zeroAddress, forkQuestionDetails: createMarketDetails({ title: 'Cached fork question' }) })
+		const screen = await renderRoute('universes', full)
+		expect(document.querySelector('.universe-outcome-heading')).toBeTruthy()
+		expect(document.querySelector('.entity-card-list')).toBeNull()
+		expect(document.querySelector('.loaded-question-preview')).toBeNull()
+		expect(document.querySelector('.universe-lineage')).toBeNull()
+		expect(document.querySelector('.decision-heading h3')?.textContent).toBe('Alpha')
+		const content = document.querySelector('.universe-browser')?.textContent
+		await screen.update({ zoltarUniverse: { ...full, childUniverses: [], lineage: undefined, forkQuestionDetails: undefined, relatedUniversesLoaded: false } })
+		expect(document.querySelector('.universe-browser')?.textContent).toBe(content)
 	})
 
 	test('shows Migrate, not Fork, in the Universes browser of a forked universe', async () => {
-		const { queries, viewChanges } = await renderRoute('universes', createUniverse())
+		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }))
 		expect(queries.queryByRole('button', { name: 'Fork universe' })).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Migrate REP' }))
 		expect(viewChanges).toEqual(['migrate'])
-		expect(queries.getByText('Yes')).toBeTruthy()
+		expect(queries.queryByText('Yes')).toBeNull()
 		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
 
@@ -198,7 +215,7 @@ describe('ZoltarRoutes', () => {
 	test('mounts the migration workflow on the Migrate route of a forked universe', async () => {
 		const { queries } = await renderRoute('migrate', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Choose outcomes' })).toBeTruthy()
-		expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Deploy No universe' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelectorAll('.migration-wizard-steps button')).toHaveLength(4)
 	})
@@ -210,12 +227,26 @@ describe('ZoltarRoutes', () => {
 		expect(viewChanges).toEqual(['migrate'])
 	})
 
-	test('explains that migration waits for a fork', async () => {
-		const { queries, viewChanges } = await renderRoute('migrate', createUniverse({ childUniverses: [], hasForked: false }))
-		expect(queries.getByText('No fork yet')).toBeTruthy()
+	test('retries missing migration details in place when the retained overview read fails', async () => {
+		const reads: Array<{ clearCurrentState?: boolean } | undefined> = []
+		const { queries } = await renderRoute('migrate', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }), 'ready', 'Failed to load Zoltar universe. Reason: RPC unavailable', {
+			loadZoltarUniverse: async options => {
+				reads.push(options)
+				return undefined
+			},
+		})
 		expect(document.querySelector('.migration-wizard')).toBeNull()
-		fireEvent.click(queries.getByRole('button', { name: 'Browse universes' }))
-		expect(viewChanges).toEqual(['universes'])
+		expect(queries.getByText('Failed to load Zoltar universe. Reason: RPC unavailable')).toBeTruthy()
+		await act(() => queries.getByRole('button', { name: 'Retry' }).click())
+		expect(reads).toEqual([{ clearCurrentState: false }])
+	})
+
+	test('shows a disabled migration preview before a fork', async () => {
+		const { queries } = await renderRoute('migrate', createUniverse({ childUniverses: [], hasForked: false }))
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(queries.getByText('This universe must fork before REP can be migrated.')).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+		for (const button of document.querySelectorAll<HTMLButtonElement>('.migration-wizard-steps button')) expect(button.disabled).toBe(true)
 	})
 
 	test('shows an explicit not-found state with a Genesis link for a missing universe', async () => {
@@ -293,7 +324,7 @@ describe('ZoltarRoutes', () => {
 	test('leads the Overview with the user status and exactly one next step', async () => {
 		const { queries, viewChanges } = await renderRoute('overview', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
-		expect(queries.getByText('Genesis › Alpha')).toBeTruthy()
+		expect(queries.getByText('Alpha')).toBeTruthy()
 		expect(queries.getByText('This universe forked. Move your REP into the outcome universes you back.')).toBeTruthy()
 		expect(queries.getByText('Open, no deadline')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')

@@ -75,10 +75,12 @@ export function App() {
 		onRefresh: refreshRepPrices,
 	})
 	const { transactionState } = transactionTray
+	const includeRelatedUniverses = route === 'pools' && urlState.securityPoolsView === 'migrate'
 	const marketCreation = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		autoLoadInitialData: walletBootstrapComplete && canReadOnchainData,
+		includeRelatedUniverses,
 		deploymentStatuses,
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
@@ -106,7 +108,7 @@ export function App() {
 	const overviewProps = {
 		...overviewWalletProps,
 		activeUniverseId,
-		...getStatoblastOverviewUniverse(marketCreation),
+		...getStatoblastOverviewUniverse({ ...marketCreation, migrationActive: route === 'pools' && activeSecurityPoolsView === 'migrate' }),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		repPrices: {
 			isLoading: isLoadingRepPrices,
@@ -118,7 +120,7 @@ export function App() {
 			repUsdcSource,
 			repUsdcSourceUrl,
 		},
-		universeControl: <UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools'))} universe={zoltarUniverse} />,
+		universeControl: <UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools'))} universe={zoltarUniverse} />,
 		universePresentation: undefined,
 		showWethBalance: true,
 	}
@@ -163,7 +165,7 @@ export function App() {
 	const transactionRouteKey = getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route })
 
 	return (
-		<UniverseNamesProvider universe={zoltarUniverse}>
+		<UniverseNamesProvider includeRelatedUniverses={includeRelatedUniverses} universe={zoltarUniverse}>
 			<ProtocolAppFrame
 				accountAddress={walletScopedAccountAddress}
 				activeUniverseId={activeUniverseId}

@@ -4,11 +4,12 @@ import { setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.j
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
 import { h } from 'preact'
+import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, isSecurityPoolNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
+import { discoverAddressedMarket, discoverSavedMarkets, discoverTradingMarketPage, discoverUniverses, isSecurityPoolNotFoundError, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
 import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { latestBlockIdentity } from '../../protocol/tradeQuote.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
@@ -23,6 +24,34 @@ import { statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPool
 import { shareTokenAbi } from '../../protocol/authorization.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
+
+test('universe and address lookup discovery reads only the selected universe', async () => {
+	const configuration = deploymentConfigurationFixture()
+	const calls: bigint[] = []
+	const client = createPublicClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_call' || !Array.isArray(params)) throw new Error('Unexpected RPC method')
+				const [transaction] = params
+				if (typeof transaction !== 'object' || transaction === null || !('data' in transaction) || typeof transaction.data !== 'string') throw new Error('Missing contract call')
+				const { functionName, args } = decodeFunctionData({ abi: Zoltar_Zoltar.abi, data: transaction.data })
+				if (functionName !== 'getRepToken' || args === undefined) throw new Error(`Unbounded universe discovery: ${functionName}`)
+				const id = args[0]
+				if (typeof id !== 'bigint') throw new Error('Missing universe ID')
+				calls.push(id)
+				return encodeAbiParameters([{ type: 'address' }], [id === 999n ? '0x0000000000000000000000000000000000000000' : configuration.zoltar])
+			},
+		}),
+	})
+	const result = await discoverUniverses(client, configuration, 123n)
+	expect(result.selectedUniverseId).toBe(123n)
+	expect(result.universeIds).toEqual([0n, 123n])
+	expect(result.markets).toEqual([])
+	expect(calls).toEqual([123n])
+	await expect(discoverUniverses(client, configuration, 999n)).rejects.toThrow('Universe does not exist')
+	await expect(discoverUniverses(client, configuration, 0n, () => false)).rejects.toThrow('Market discovery cancelled')
+	expect(calls).toEqual([123n, 999n])
+})
 
 test('only missing pool identity reads are classified as a missing security pool', async () => {
 	const configuration = deploymentConfigurationFixture()

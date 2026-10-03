@@ -1,3 +1,8 @@
+import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
+import { useCallback } from 'preact/hooks'
+import { loadUniverseOutcomePage } from '@zoltar/ui-zoltar-shared/protocol/universeNavigation.js'
+import { createTradingPublicClient } from '../protocol/live.js'
+import { UniverseOutcomeNavigation, type LoadUniverseOutcomes } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseOutcomeNavigation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -24,21 +29,22 @@ type UniverseDirectoryProps = {
  * Selection goes through the shared `universe` query parameter, so every route follows the choice made here.
  */
 export function UniverseDirectory({ configuration, connectionMessage, loadUniverse = loadUniverseSummary, universeId }: UniverseDirectoryProps) {
+	const loadOutcomes = useCallback<LoadUniverseOutcomes>((address, id, start) => loadUniverseOutcomePage(createTradingPublicClient(configuration), address, id, start), [configuration])
 	const { retry, state } = useUniverseSummary(configuration, universeId, loadUniverse)
 	const genesisAction =
-		universeId === 0n ? undefined : (
+		universeId === 0n || (state.kind !== 'error' && !(state.kind === 'ready' && state.universe === undefined)) ? undefined : (
 			<UniverseLink className='button-link secondary-link' universeId={0n}>
 				{commonCopy.goToGenesisUniverse}
 			</UniverseLink>
 		)
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} actions={genesisAction} />
+			<RouteHeader title={appCopy.universe} actions={genesisAction} />
 			<ErrorNotice message={connectionMessage} />
 			{state.kind === 'loading' || state.kind === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} /> : undefined}
 			{state.kind === 'error' ? <RetryableNotice onRetry={retry} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: state.message }} /> : undefined}
-			{state.kind === 'ready' && state.universe === undefined ? <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}
-			{state.kind === 'ready' && state.universe !== undefined ? <UniverseBrowser activeUniverseId={universeId} universe={state.universe} /> : undefined}
+			{state.kind === 'ready' && state.universe === undefined ? <StateHint title={universeCopy.universeNotFoundTitle} presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: appCopy.universeNotFound(formatUniverseLabel(universeId)) }} /> : undefined}
+			{state.kind === 'ready' && state.universe !== undefined ? <UniverseBrowser activeUniverseId={universeId} navigation={state.universe.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={state.universe} loadPage={loadOutcomes} /> : undefined} universe={state.universe} /> : undefined}
 		</div>
 	)
 }

@@ -1,3 +1,4 @@
+import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -75,10 +76,14 @@ export async function discoverAddressedMarket(client: PublicClient, configuratio
 	return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [market.universeId], selectedUniverseId: market.universeId }
 }
 
-/** Loads only the universe list for routes that wait for an explicit SecurityPool address instead of listing markets. */
+/** Confirms one selected universe for universe and address-lookup routes without enumerating the tree. */
 export async function discoverUniverses(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, isCurrent = () => true) {
-	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
-	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	if (!isCurrent()) throw new Error('Market discovery cancelled')
+	const selectedUniverseId = requestedUniverseId ?? 0n
+	const reputationToken = await client.readContract({ abi: Zoltar_Zoltar.abi, address: configuration.zoltar, functionName: 'getRepToken', args: [selectedUniverseId] })
+	if (!isCurrent()) throw new Error('Market discovery cancelled')
+	if (reputationToken === zeroAddress) throw new Error('Universe does not exist')
+	const universeIds = selectedUniverseId === 0n ? [0n] : [0n, selectedUniverseId]
 	return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
 }
 

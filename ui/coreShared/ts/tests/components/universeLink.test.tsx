@@ -53,6 +53,20 @@ describe('UniverseLink', () => {
 		expect(popstateCount).toBe(0)
 	})
 
+	test('uses an explicit browser destination without intercepting browser navigation', async () => {
+		const component = await renderIntoDocument(
+			<UniverseLink href='#/pools/universes?universe=7' universeId={7n}>
+				Open Yes universe
+			</UniverseLink>,
+		)
+		trackCleanup(component.cleanup)
+		const link = within(document.body).getByRole('link', { name: 'Open Yes universe' })
+		expect(link.getAttribute('href')).toBe('#/pools/universes?universe=7')
+		const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+		await act(() => link.dispatchEvent(event))
+		expect(event.defaultPrevented).toBe(false)
+	})
+
 	test('renders the universe id in hex when requested', async () => {
 		const renderedComponent = await renderIntoDocument(<UniverseLink format='hex' universeId={15n} />)
 		trackCleanup(renderedComponent.cleanup)

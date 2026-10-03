@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { formatUniverseLineageLabel } from '@zoltar/ui-core-shared/lib/universeLineage.js'
+import { formatUniverseViewLabel } from '@zoltar/ui-core-shared/lib/universeLineage.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ZoltarView } from '../../types.js'
 
@@ -16,7 +16,7 @@ export function getZoltarUniverseActions(universe: Pick<ZoltarUniverseSummary, '
 	}
 }
 
-export type ZoltarRouteGate = 'ready' | 'loading' | 'universe-unavailable' | 'universe-missing' | 'fork-unavailable' | 'migrate-unavailable'
+export type ZoltarRouteGate = 'ready' | 'loading' | 'universe-unavailable' | 'universe-missing' | 'fork-unavailable'
 
 /** True when the universe read failed: no summary, no read in flight, and an error to report. */
 function isUniverseUnavailable(universeError: string | undefined, universeState: LoadableValueState) {
@@ -33,7 +33,6 @@ export function resolveZoltarRouteGate({ universe, universeError, universeState,
 	if (universe === undefined) return isUniverseUnavailable(universeError, universeState) ? 'universe-unavailable' : 'loading'
 	const actions = getZoltarUniverseActions(universe)
 	if (view === 'fork' && !actions.canFork) return 'fork-unavailable'
-	if (view === 'migrate' && !actions.canMigrate) return 'migrate-unavailable'
 	return 'ready'
 }
 
@@ -118,7 +117,8 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 			if (prepared === undefined || migrated === undefined) return undefined
 			return prepared > migrated ? prepared - migrated : 0n
 		}) ?? []
-	let remainingPrepared = prepared
+	// Remaining credit depends on per-child history, which bounded overviews intentionally omit.
+	let remainingPrepared = loadedUniverse?.relatedUniversesLoaded === false && prepared !== 0n ? undefined : prepared
 	if (remainingByChild.length > 0) {
 		remainingPrepared = remainingByChild.some(value => value === undefined) ? undefined : remainingByChild.reduce<bigint>((maximum, value) => (value !== undefined && value > maximum ? value : maximum), 0n)
 	}
@@ -131,7 +131,7 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 		nextStep: getNextStep(status, wallet, migratableRepAttoRep),
 		repBalanceAttoRep,
 		status,
-		universeLabel: formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId),
+		universeLabel: formatUniverseViewLabel(loadedUniverse, activeUniverseId, false),
 		wallet,
 	}
 }

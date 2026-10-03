@@ -1,3 +1,4 @@
+import { parsedUniverseId } from './live/useLiveTradingState.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
@@ -28,6 +29,7 @@ import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
+import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
@@ -202,13 +204,18 @@ export function LiveTrading({
 		if (confirmedUniverseId === undefined || discoveryState === 'error')
 			return (
 				<div className='route-view-flow'>
-					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
+					<RouteHeader title={appCopy.universe} />
 					<ErrorNotice message={connectionMessage} />
 					{discoveryState === 'error' ? (
 						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={refreshLocked} />
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}
+					{discoveryState === 'error' && (parsedUniverseId(selectedUniverseId) ?? 0n) !== 0n ? (
+						<UniverseLink className='button-link secondary-link' universeId={0n}>
+							{commonCopy.goToGenesisUniverse}
+						</UniverseLink>
+					) : undefined}
 				</div>
 			)
 		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
