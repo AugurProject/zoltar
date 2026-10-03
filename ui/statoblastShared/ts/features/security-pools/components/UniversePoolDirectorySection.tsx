@@ -54,7 +54,8 @@ export function UniversePoolDirectorySection({ activeUniverseId, zoltarUniverse,
 				) : undefined
 			}
 			activeUniverseId={activeUniverseId}
-			navigation={zoltarUniverse.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={zoltarUniverse} /> : undefined}
+			includeRelatedUniverses={false}
+			navigation={<UniverseOutcomeNavigation universe={zoltarUniverse} />}
 			universe={zoltarUniverse}
 		/>
 	)

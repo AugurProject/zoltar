@@ -6,7 +6,8 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniversePoolDirectorySection.js'
 import { describe, expect, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 installTestRouting()
@@ -62,14 +63,31 @@ describe('UniversePoolDirectorySection', () => {
 		expect(within(document.body).queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()
 	})
 
-	test('shows selection actions only for deployed non-active child universes', async () => {
+	test('does not enumerate cached migration children in the summary view', async () => {
 		const renderedComponent = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, zoltarUniverse: createForkedUniverseSummary() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const selectLinks = documentQueries.getAllByRole('link', { name: 'Open' })
-		expect(selectLinks).toHaveLength(1)
-		expect(selectLinks[0]?.className).toContain('button-link')
+		expect(documentQueries.queryByRole('link', { name: 'Open' })).toBeNull()
+		expect(document.querySelector('.entity-card-list')).toBeNull()
+	})
+
+	test('uses the same summary layout with cached full or short universe data', async () => {
+		const full = createForkedUniverseSummary({
+			outcomeLabel: 'Alpha',
+			relatedUniversesLoaded: true,
+			lineage: [
+				{ universeId: 0n, outcomeLabel: undefined },
+				{ universeId: 1n, outcomeLabel: 'Alpha' },
+			],
+		})
+		const rendered = await renderIntoDocument(<UniversePoolDirectorySection activeUniverseId={1n} zoltarUniverse={full} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.entity-card-list')).toBeNull()
+		expect(document.querySelector('.universe-lineage')).toBeNull()
+		const content = rendered.container.textContent
+		await act(() => render(<UniversePoolDirectorySection activeUniverseId={1n} zoltarUniverse={{ ...full, childUniverses: [], lineage: undefined, relatedUniversesLoaded: false }} />, rendered.container))
+		expect(rendered.container.textContent).toBe(content)
 	})
 
 	test('keeps a parent universe link available when the active universe is a child', async () => {

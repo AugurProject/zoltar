@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 import { formatUniverseIdHex } from '../lib/universeLabels.js'
-import { formatUniverseLineageLabel, formatUniverseStepName, type UniverseLineageStep } from '../lib/universeLineage.js'
+import { formatUniverseViewLabel, formatUniverseStepName, type UniverseLineageStep } from '../lib/universeLineage.js'
 import type { BadgeTone } from '../types/components.js'
 import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 import { Badge } from './Badge.js'
@@ -19,6 +19,8 @@ type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
 	actions?: ComponentChildren
 	navigation?: ComponentChildren
+	/** Whether this view includes ancestry and the complete child list. */
+	includeRelatedUniverses?: boolean
 	activeUniverseId: bigint
 	/** Application facts about the browsed universe, such as pool metrics or the fork question. */
 	children?: ComponentChildren
@@ -102,12 +104,10 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
  * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
  * universes its fork created. Opening the parent or a child changes the shared `universe` query parameter.
  */
-export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe }: UniverseBrowserProps) {
-	const lineage = resolveLineage(universe)
-	const currentStep = lineage[lineage.length - 1]
-	// The lineage trail already names the ancestors, so the heading names only this generation.
-	const lineageName = lineage.length > 1 && currentStep !== undefined ? formatUniverseStepName(currentStep) : formatUniverseLineageLabel(universe.lineage, universe.universeId)
-	const universeName = universe.outcomeLabel?.trim() || lineageName
+export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe, includeRelatedUniverses = universe.relatedUniversesLoaded !== false }: UniverseBrowserProps) {
+	const lineage = includeRelatedUniverses ? resolveLineage(universe) : [{ outcomeLabel: universe.outcomeLabel, universeId: universe.universeId }]
+	// The heading names this generation; ancestry belongs in the optional trail.
+	const universeName = formatUniverseViewLabel(universe, universe.universeId, false)
 	return (
 		<div className='route-view-flow universe-browser'>
 			<SectionBlock variant='plain'>
@@ -136,7 +136,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 				</div>
 			</SectionBlock>
 			{navigation}
-			{universe.relatedUniversesLoaded === false ? undefined : (
+			{!includeRelatedUniverses ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
 				</SectionBlock>

@@ -6,7 +6,6 @@ import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { UniverseBrowser } from '@zoltar/ui-core-shared/components/UniverseBrowser.js'
@@ -54,15 +53,10 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 					</>
 				}
 				activeUniverseId={activeUniverseId}
-				navigation={universe.relatedUniversesLoaded === false ? <UniverseOutcomeNavigation universe={universe} /> : undefined}
+				includeRelatedUniverses={false}
+				navigation={<UniverseOutcomeNavigation universe={universe} />}
 				universe={universe}
-			>
-				{universe.forkQuestionDetails === undefined ? undefined : (
-					<div className='loaded-question-preview'>
-						<Question question={universe.forkQuestionDetails} variant='preview' />
-					</div>
-				)}
-			</UniverseBrowser>
+			/>
 		</>
 	)
 }

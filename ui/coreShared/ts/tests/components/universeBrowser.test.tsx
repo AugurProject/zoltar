@@ -3,6 +3,7 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import { UniverseBrowser } from '../../components/UniverseBrowser.js'
 import { UniverseNamesProvider } from '../../components/UniverseNames.js'
 import { UniverseSwitcher } from '../../components/UniverseSwitcher.js'
@@ -118,6 +119,39 @@ describe('bounded universe overview', () => {
 			const queries = within(document.body)
 			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=11')
 			expect(queries.queryByRole('link', { name: 'Genesis' })).toBeNull()
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('summary scope ignores cached ancestry and children and keeps header and parent names stable', async () => {
+		const full = createUniverse({
+			universeId: alphaUniverseId,
+			parentUniverseId: yesUniverseId,
+			outcomeLabel: undefined,
+			relatedUniversesLoaded: true,
+			lineage: [
+				{ universeId: 0n, outcomeLabel: undefined },
+				{ universeId: yesUniverseId, outcomeLabel: 'Yes' },
+				{ universeId: alphaUniverseId, outcomeLabel: 'Alpha' },
+			],
+		})
+		const tree = (universe: ZoltarUniverseSummary) => (
+			<UniverseNamesProvider includeRelatedUniverses={false} universe={universe}>
+				<UniverseBrowser activeUniverseId={alphaUniverseId} includeRelatedUniverses={false} universe={universe} />
+				<UniverseSwitcher activeUniverseId={alphaUniverseId} includeRelatedUniverses={false} universe={universe} />
+			</UniverseNamesProvider>
+		)
+		const rendered = await renderIntoDocument(tree(full))
+		try {
+			expect(document.querySelector('.universe-switcher-label')?.textContent).toBe('Alpha')
+			expect(document.querySelector('.decision-heading h3')?.textContent).toBe('Alpha')
+			expect(document.querySelector('.universe-lineage')).toBeNull()
+			expect(within(document.body).queryByText('Child universes')).toBeNull()
+			expect(within(document.body).queryByText('Genesis › Yes')).toBeNull()
+			const content = rendered.container.textContent
+			await act(() => render(tree({ ...full, outcomeLabel: 'Alpha', childUniverses: [], lineage: undefined, relatedUniversesLoaded: false }), rendered.container))
+			expect(rendered.container.textContent).toBe(content)
 		} finally {
 			await rendered.cleanup()
 		}

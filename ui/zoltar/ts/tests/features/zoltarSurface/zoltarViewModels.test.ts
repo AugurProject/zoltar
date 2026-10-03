@@ -45,6 +45,13 @@ test('names a child overview from its outcome when bounded reads omit lineage', 
 	expect(deriveZoltarOverviewModel(createInput({ universe: createUniverse({ lineage: undefined, outcomeLabel: 'Wrong' }) })).universeLabel).toBe('Genesis')
 })
 
+test('overview names a cached full summary the same way as a bounded read', () => {
+	const full = { ...forkedChild, outcomeLabel: 'Yes', relatedUniversesLoaded: true }
+	const short = { ...full, childUniverses: [], lineage: undefined, relatedUniversesLoaded: false }
+	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: full })).universeLabel).toBe('Yes')
+	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: short })).universeLabel).toBe('Yes')
+})
+
 test('does not claim a remaining migration total when child migration history was omitted', () => {
 	const universe = createUniverse({ hasForked: true, relatedUniversesLoaded: false })
 	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n }))
@@ -123,7 +130,7 @@ describe('deriveZoltarOverviewModel', () => {
 		const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, { preparedMigrationRepAttoRep: 5n, repBalanceAttoRep: 10n }))
 		expect(model.status).toBe('forked')
 		expect(model.forkTime).toBe(100n)
-		expect(model.universeLabel).toBe('Genesis › Yes')
+		expect(model.universeLabel).toBe('Yes')
 		expect(model.migratableRepAttoRep).toBe(15n)
 		expect(model.needsAttention).toBe(true)
 		expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })

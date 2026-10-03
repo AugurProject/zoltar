@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
-import { formatUniverseLineageLabel, formatUniverseStepName } from '../lib/universeLineage.js'
+import { formatUniverseLineageLabel, formatUniverseStepName, formatUniverseViewLabel } from '../lib/universeLineage.js'
 import type { ZoltarUniverseSummary } from '../types/contracts.js'
 import { UniverseIdentity } from './UniverseIdentity.js'
 import { UniverseLink } from './UniverseLink.js'
 
 type UniverseSwitcherProps = {
 	activeUniverseId: bigint
+	/** The view scope, independent of whether migration details remain cached. */
+	includeRelatedUniverses?: boolean
 	/** Where the full universe browser lives; omitted when the application has no browser route. */
 	browseHref?: string | undefined
 	/** The loaded active universe; its lineage and deployed children are the switch targets. */
@@ -15,11 +17,11 @@ type UniverseSwitcherProps = {
 }
 
 /** Navigation follows one edge of the universe tree at a time. */
-function getParent(universe: UniverseSwitcherProps['universe']): readonly { label: string; universeId: bigint }[] {
+function getParent(universe: UniverseSwitcherProps['universe'], includeRelatedUniverses: boolean): readonly { label: string; universeId: bigint }[] {
 	if (universe === undefined || universe.universeId === 0n) return []
-	const parentIndex = universe.lineage?.findIndex(step => step.universeId === universe.parentUniverseId) ?? -1
+	const parentIndex = includeRelatedUniverses ? (universe.lineage?.findIndex(step => step.universeId === universe.parentUniverseId) ?? -1) : -1
 	let label = universe.parentUniverseId === 0n ? universeCopy.genesis : universeCopy.parentUniverse
-	if (parentIndex >= 0) label = formatUniverseLineageLabel(universe.lineage?.slice(0, parentIndex + 1), universe.parentUniverseId)
+	if (includeRelatedUniverses && parentIndex >= 0) label = formatUniverseLineageLabel(universe.lineage?.slice(0, parentIndex + 1), universe.parentUniverseId)
 	return [{ label, universeId: universe.parentUniverseId }]
 }
 
@@ -27,13 +29,12 @@ function getParent(universe: UniverseSwitcherProps['universe']): readonly { labe
  * Compact header control naming the active universe by lineage. It opens a menu of the universe's parent and
  * deployed children plus a link to the full universe browser; choosing one changes the shared `universe` parameter.
  */
-export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: UniverseSwitcherProps) {
+export function UniverseSwitcher({ activeUniverseId, browseHref, universe, includeRelatedUniverses = universe?.relatedUniversesLoaded !== false }: UniverseSwitcherProps) {
 	const detailsRef = useRef<HTMLDetailsElement>(null)
 	const loadedUniverse = universe?.universeId === activeUniverseId ? universe : undefined
-	const lineageLabel = formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId)
-	const universeLabel = loadedUniverse?.relatedUniversesLoaded === false ? loadedUniverse.outcomeLabel?.trim() || lineageLabel : lineageLabel
-	const parents = getParent(loadedUniverse)
-	const deployedChildren = loadedUniverse?.childUniverses.filter(child => child.exists) ?? []
+	const universeLabel = formatUniverseViewLabel(loadedUniverse, activeUniverseId, includeRelatedUniverses)
+	const parents = getParent(loadedUniverse, includeRelatedUniverses)
+	const deployedChildren = includeRelatedUniverses ? (loadedUniverse?.childUniverses.filter(child => child.exists) ?? []) : []
 	// Attribute access keeps the disclosure state in sync in every DOM implementation.
 	const close = () => detailsRef.current?.removeAttribute('open')
 
@@ -92,7 +93,7 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: Uni
 					</li>
 				</ul>
 				{/* Only a forked universe has children to switch to. */}
-				{loadedUniverse === undefined || loadedUniverse.relatedUniversesLoaded === false || !loadedUniverse.hasForked ? undefined : (
+				{loadedUniverse === undefined || !includeRelatedUniverses || loadedUniverse.relatedUniversesLoaded === false || !loadedUniverse.hasForked ? undefined : (
 					<>
 						<p className='universe-switcher-heading'>{commonCopy.childUniverses}</p>
 						{deployedChildren.length === 0 ? (

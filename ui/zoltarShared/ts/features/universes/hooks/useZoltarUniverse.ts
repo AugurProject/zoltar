@@ -545,6 +545,9 @@ export function useZoltarUniverse(
 		}
 		if (!autoLoadInitialData) return
 		const currentUniverse = zoltarUniverse.value
+		// Restore migration details immediately; the retained short summary still schedules an in-place refresh below.
+		const cachedUniverse = scopeOnlyChanged && includeRelatedUniverses && currentUniverse?.relatedUniversesLoaded === false ? zoltarUniverseQueries.get(`${environmentRefreshKey}:${activeUniverseId}:true`).data : undefined
+		if (cachedUniverse !== undefined && cachedUniverse.relatedUniversesLoaded !== false) zoltarUniverse.value = cachedUniverse
 		if (scopeOnlyChanged && currentUniverse !== undefined && (!includeRelatedUniverses || currentUniverse.relatedUniversesLoaded !== false)) return
 		const initialLoads: Promise<unknown>[] = [loadZoltarUniverse({ clearCurrentState: !scopeOnlyChanged })]
 		if (zoltarDeployed && !scopeOnlyChanged) {

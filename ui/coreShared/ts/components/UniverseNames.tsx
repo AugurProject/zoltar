@@ -5,8 +5,8 @@ import { buildUniverseLineageLabels, formatUniverseLineageLabel, type UniverseLi
 const UniverseNamesContext = createContext<ReadonlyMap<string, string> | undefined>(undefined)
 
 /** Publishes lineage names for the active universe, its ancestors, and its children to every universe label below it. */
-export function UniverseNamesProvider({ children, universe }: { children: ComponentChildren; universe: UniverseLineageSource | undefined }) {
-	const names = useMemo(() => buildUniverseLineageLabels(universe), [universe])
+export function UniverseNamesProvider({ children, universe, includeRelatedUniverses = true }: { children: ComponentChildren; universe: UniverseLineageSource | undefined; includeRelatedUniverses?: boolean }) {
+	const names = useMemo(() => buildUniverseLineageLabels(universe, includeRelatedUniverses), [universe, includeRelatedUniverses])
 	return <UniverseNamesContext.Provider value={names}>{children}</UniverseNamesContext.Provider>
 }
 

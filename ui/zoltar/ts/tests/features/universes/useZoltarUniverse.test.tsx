@@ -133,6 +133,52 @@ describe('useZoltarUniverse', () => {
 		expect(requireHookState(hookState).zoltarUniverse).toEqual(overview)
 	})
 
+	test('restores cached migration details immediately after a bounded block refresh', async () => {
+		const full = createUniverseSummary({ relatedUniversesLoaded: true })
+		const short = createUniverseSummary({ relatedUniversesLoaded: false })
+		const reread = createDeferred<ZoltarUniverseSummary>()
+		let fullReads = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: async () => 0n,
+			loadZoltarUniverseSummary: async (_client, _id, _address, options) => {
+				if (!options?.includeRelatedUniverses) return short
+				fullReads += 1
+				return fullReads === 1 ? full : await reread.promise
+			},
+		})
+		let state: UseZoltarUniverseState | undefined
+		function Harness({ includeRelatedUniverses }: { includeRelatedUniverses: boolean }) {
+			state = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					includeRelatedUniverses,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Harness includeRelatedUniverses />)
+		trackCleanup(rendered.cleanup)
+		await waitFor(() => expect(requireHookState(state).zoltarUniverse).toEqual(full))
+		await act(() => render(<Harness includeRelatedUniverses={false} />, rendered.container))
+		await act(() => announceNewBlock())
+		await waitFor(() => expect(requireHookState(state).zoltarUniverse).toEqual(short))
+		await act(() => render(<Harness includeRelatedUniverses />, rendered.container))
+		expect(requireHookState(state).zoltarUniverse).toEqual(full)
+		await act(async () => {
+			reread.resolve(full)
+			await reread.promise
+		})
+	})
+
 	test.each(['success', 'failure'] as const)('keeps deployment state through migration view toggles and applies %s feedback', async result => {
 		const transaction = createDeferred<Awaited<ReturnType<UseZoltarUniverseDependencies['createZoltarChildUniverse']>>>()
 		const universe = createUniverseSummary({ universeId: 1n, hasForked: true, relatedUniversesLoaded: true })

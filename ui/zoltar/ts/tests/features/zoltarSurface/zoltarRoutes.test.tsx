@@ -13,6 +13,7 @@ import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZoltarRoutes } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarRoutes.js'
 import { ZoltarWorkspaceProvider } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
 import { describe, expect, mock, test } from 'bun:test'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
@@ -183,6 +184,19 @@ describe('ZoltarRoutes', () => {
 		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
 
+	test('keeps the bounded Universes layout when migration left a full summary cached', async () => {
+		const full = createUniverse({ outcomeLabel: 'Alpha', relatedUniversesLoaded: true, zoltarAddress: zeroAddress, forkQuestionDetails: createMarketDetails({ title: 'Cached fork question' }) })
+		const screen = await renderRoute('universes', full)
+		expect(document.querySelector('.universe-outcome-heading')).toBeTruthy()
+		expect(document.querySelector('.entity-card-list')).toBeNull()
+		expect(document.querySelector('.loaded-question-preview')).toBeNull()
+		expect(document.querySelector('.universe-lineage')).toBeNull()
+		expect(document.querySelector('.decision-heading h3')?.textContent).toBe('Alpha')
+		const content = document.querySelector('.universe-browser')?.textContent
+		await screen.update({ zoltarUniverse: { ...full, childUniverses: [], lineage: undefined, forkQuestionDetails: undefined, relatedUniversesLoaded: false } })
+		expect(document.querySelector('.universe-browser')?.textContent).toBe(content)
+	})
+
 	test('shows Migrate, not Fork, in the Universes browser of a forked universe', async () => {
 		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }))
 		expect(queries.queryByRole('button', { name: 'Fork universe' })).toBeNull()
@@ -310,7 +324,7 @@ describe('ZoltarRoutes', () => {
 	test('leads the Overview with the user status and exactly one next step', async () => {
 		const { queries, viewChanges } = await renderRoute('overview', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
-		expect(queries.getByText('Genesis › Alpha')).toBeTruthy()
+		expect(queries.getByText('Alpha')).toBeTruthy()
 		expect(queries.getByText('This universe forked. Move your REP into the outcome universes you back.')).toBeTruthy()
 		expect(queries.getByText('Open, no deadline')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')

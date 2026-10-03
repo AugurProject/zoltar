@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { formatUniverseLineageLabel } from '@zoltar/ui-core-shared/lib/universeLineage.js'
+import { formatUniverseViewLabel } from '@zoltar/ui-core-shared/lib/universeLineage.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ZoltarView } from '../../types.js'
 
@@ -123,7 +123,6 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 		remainingPrepared = remainingByChild.some(value => value === undefined) ? undefined : remainingByChild.reduce<bigint>((maximum, value) => (value !== undefined && value > maximum ? value : maximum), 0n)
 	}
 	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, remainingPrepared]) : undefined
-	const outcomeLabel = loadedUniverse?.outcomeLabel?.trim()
 	const forkTime = status === 'forked' && loadedUniverse !== undefined && loadedUniverse.forkTime > 0n ? loadedUniverse.forkTime : undefined
 	return {
 		forkTime,
@@ -132,7 +131,7 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 		nextStep: getNextStep(status, wallet, migratableRepAttoRep),
 		repBalanceAttoRep,
 		status,
-		universeLabel: loadedUniverse?.lineage === undefined && activeUniverseId !== 0n && outcomeLabel ? outcomeLabel : formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId),
+		universeLabel: formatUniverseViewLabel(loadedUniverse, activeUniverseId, false),
 		wallet,
 	}
 }
