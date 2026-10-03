@@ -115,6 +115,7 @@ export function App() {
 	return (
 		<UniverseNamesProvider universe={zoltarUniverse}>
 			<ProtocolAppFrame
+				activeUniverseId={activeUniverseId}
 				accountAddress={accountState.address}
 				currentBlockNumber={currentBlockNumber}
 				currentTimestamp={currentTimestamp}

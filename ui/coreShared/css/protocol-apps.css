@@ -35,3 +35,76 @@
 	border-color: var(--primary-button-border-hover);
 	color: var(--primary-button-text);
 }
+
+/* Artwork never supplies text or action colors. Existing opaque surfaces protect controls. */
+.universe-identity {
+	pointer-events: none;
+	background-image: var(--universe-image-light);
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+.universe-identity-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-below);
+	background-color: var(--bg-deep);
+	background-size: cover;
+}
+
+/* An inset accent belongs to the nav, occupies no layout space, and never resembles a loading bar. */
+main[data-universe-id] .header-toolbar {
+	position: relative;
+}
+
+main[data-universe-id] .header-toolbar::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: 5px;
+	border-radius: var(--radius-shell) var(--radius-shell) 0 0;
+	background-image: var(--universe-band-light);
+	background-position: center;
+	background-size: cover;
+	pointer-events: none;
+}
+
+.universe-identity-swatch {
+	display: inline-block;
+	width: calc(2 * var(--space-4));
+	height: calc(2 * var(--space-4));
+	flex-shrink: 0;
+	background-color: var(--bg);
+	background-size: cover;
+	border: 1px solid var(--divider-strong);
+	border-radius: var(--radius-compact);
+}
+
+@media (prefers-color-scheme: dark) {
+	html:not([data-theme="light"]) .universe-identity {
+		background-image: var(--universe-image-dark);
+	}
+
+	html:not([data-theme="light"]) main[data-universe-id] .header-toolbar::before {
+		background-image: var(--universe-band-dark);
+	}
+}
+
+html[data-theme="dark"] .universe-identity {
+	background-image: var(--universe-image-dark);
+}
+
+html[data-theme="dark"] main[data-universe-id] .header-toolbar::before {
+	background-image: var(--universe-band-dark);
+}
+
+@media (max-width: 64rem) {
+	.universe-identity-swatch {
+		width: var(--space-5);
+		height: var(--space-5);
+	}
+
+	.header-toolbar .universe-switcher > summary {
+		max-width: 40vw;
+	}
+}
