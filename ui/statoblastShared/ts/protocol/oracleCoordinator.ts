@@ -524,7 +524,7 @@ export async function loadQueuedVaultOperationState(client: Pick<ReadClient, 'ge
 	const queued = result.queuedOperation
 	if (queued === undefined) return { status: 'missing' }
 	const block = await client.getBlock()
-	const blockNumber = requireBigintValue(block.number, 'mined block number')
+	const blockNumber = requireBigintValue(block.number, 'block number')
 	const operation = await client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperations', args: [queued.operationId], blockNumber })
 	if (operation.operator !== zeroAddress) {
 		if (decodeOracleQueueOperation(BigInt(operation.operation)) !== queued.operation) return { status: 'missing' }

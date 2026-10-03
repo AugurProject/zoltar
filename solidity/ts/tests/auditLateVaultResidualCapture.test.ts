@@ -119,7 +119,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		const backingBefore = await getTotalRepBackingUnits(client, pool)
 		strictEqualTypeSafe((await getSecurityVault(client, pool, reporter.account.address)).repBackingUnits, 0n)
 		const questionEnd = await getQuestionEndDate(client, questionId)
-		// The next mined transaction executes one second after this timestamp, exactly at question end.
+		// The next included transaction executes one second after this timestamp, exactly at question end.
 		await mockWindow.setTime(questionEnd - 1n)
 		await depositWalletRep(reporter, pool)
 		const game = await getSecurityPoolsEscalationGame(client, pool)

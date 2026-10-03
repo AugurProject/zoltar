@@ -38,6 +38,29 @@ function unrecoveredEntryPosition(reportId: string) {
 }
 
 describe('durable OpenOracle position journal', () => {
+	test.each([2, 3])('migrates version %i receipt timestamps without losing accounting', async version => {
+		const path = await journalPath()
+		const position = openPositionFixture()
+		const includedAt = '2026-01-01T00:00:00.000Z'
+		const expenditure = { costEth: '0.001', includedAt, transactionHash: position.entryTransactionHash }
+		const archived = version === 2 ? emptyPositionJournalArchive() : { ...emptyPositionJournalArchive(), gasSpentByUtcDay: { '2026-01-01': '0.002' } }
+		await writeFile(path, JSON.stringify({ archived, chainId: 1, positions: [{ ...position, gasExpenditures: [{ costEth: expenditure.costEth, minedAt: includedAt, transactionHash: expenditure.transactionHash }] }], version }), { mode: 0o600 })
+		const state = await loadPositionJournalState(path, 1)
+		expect(state).toEqual({ archived, positions: [{ ...position, gasExpenditures: [expenditure] }] })
+		await savePositionJournalState(path, state, 1)
+		const saved = await readFile(path, 'utf8')
+		expect(JSON.parse(saved).version).toBe(4)
+		expect(saved).not.toContain('minedAt')
+		expect(await loadPositionJournalState(path, 1)).toEqual(state)
+	})
+
+	test('rejects ambiguous and invalid legacy receipt timestamps', async () => {
+		const position = openPositionFixture()
+		const expenditure = { costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: position.entryTransactionHash }
+		await expectRawJournalRejected([{ ...position, gasExpenditures: [{ ...expenditure, includedAt: expenditure.minedAt }] }], 'gas expenditure fields are invalid')
+		await expectRawJournalRejected([{ ...position, gasExpenditures: [{ ...expenditure, minedAt: 'invalid' }] }], 'must be canonical UTC ISO')
+	})
+
 	test('allows only one lifetime owner of a journal', async () => {
 		const path = await journalPath()
 		const first = await acquirePositionJournalLock(path)
@@ -140,11 +163,11 @@ describe('durable OpenOracle position journal', () => {
 	test('bounds archived UTC-day gas buckets while retaining recent risk accounting', async () => {
 		const path = await journalPath()
 		const archivedAcrossDays = Array.from({ length: 40 }, (_value, index) => {
-			const minedAt = new Date(Date.UTC(2026, 0, index + 1)).toISOString()
+			const includedAt = new Date(Date.UTC(2026, 0, index + 1)).toISOString()
 			return terminalPositionFixture(500 + index, {
-				closedAt: minedAt,
-				gasExpenditures: [{ costEth: '0.001', minedAt, transactionHash: `0x${(index + 1).toString(16).padStart(64, '0')}` }],
-				openedAt: minedAt,
+				closedAt: includedAt,
+				gasExpenditures: [{ costEth: '0.001', includedAt, transactionHash: `0x${(index + 1).toString(16).padStart(64, '0')}` }],
+				openedAt: includedAt,
 			})
 		})
 
@@ -184,7 +207,7 @@ describe('durable OpenOracle position journal', () => {
 		const pendingFinality = {
 			...position,
 			executionIntent: position.executionIntent === undefined ? undefined : { ...position.executionIntent, reportId: '8' },
-			gasExpenditures: [...position.gasExpenditures, { costEth: '0.000021', minedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` as const }],
+			gasExpenditures: [...position.gasExpenditures, { costEth: '0.000021', includedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` as const }],
 			lifecycleGasCostEth: '0.000021',
 			lifecycleReceiptBlockHash: `0x${'44'.repeat(32)}` as const,
 			lifecycleReceiptBlockNumber: '123',
@@ -234,7 +257,7 @@ describe('durable OpenOracle position journal', () => {
 				openPositionFixture({
 					capitalAtRiskWeth: '0',
 					closedAt: '2026-07-24T23:30:00.000Z',
-					gasExpenditures: [{ costEth: '0.001', minedAt: '2026-07-25T00:30:00+01:00', transactionHash: `0x${'11'.repeat(32)}` }],
+					gasExpenditures: [{ costEth: '0.001', includedAt: '2026-07-25T00:30:00+01:00', transactionHash: `0x${'11'.repeat(32)}` }],
 					hedgeAmountToken: '0',
 					hedgeWeth: '0',
 					hedgedProfitBeforeGasEth: '0',
@@ -276,8 +299,8 @@ describe('durable OpenOracle position journal', () => {
 		const position = openPositionFixture({
 			expiredTransactionAttempts: [{ kind: 'entry', nonce: '8', targetBlockNumber: '123', transactionHash: `0x${'33'.repeat(32)}` }],
 			gasExpenditures: [
-				{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` },
-				{ costEth: '0.002', minedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` },
+				{ costEth: '0.001', includedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` },
+				{ costEth: '0.002', includedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` },
 			],
 			lifecycleGasCostEth: '0.002',
 			lifecycleReceiptRecovered: true,

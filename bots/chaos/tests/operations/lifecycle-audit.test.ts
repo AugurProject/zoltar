@@ -226,7 +226,7 @@ describe('raw lifecycle identity audit', () => {
 		expect(canonicalLifecyclePresence(snapshot, options).filter(item => item.definitionId === 'statoblast.fork.create-child')).toHaveLength(0)
 	})
 
-	test('keeps resume, fork claims, and unresolved migration present independently of funding, simulation, and mining margin', () => {
+	test('keeps resume, fork claims, and unresolved migration present independently of funding, simulation, and block inclusion margin', () => {
 		const resume = snapshotFixture()
 		const resumePool = resume.pools[0]
 		if (resumePool === undefined) throw new Error('Resume pool missing')

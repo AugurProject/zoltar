@@ -1464,7 +1464,7 @@ test.each(['edit', 'fetch', 'pending approval'] as const)('prepares again after 
 async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 'rejected', presentationChange: 'unchanged' | 'cleared' | 'replaced' = 'unchanged', detached = true, retryAction: 'edit' | 'fetch' | 'button' = 'edit') {
 	const dom = installDomEnvironment()
 	const wallet = createDeferred<void>()
-	const mined = createDeferred<void>()
+	const receiptReady = createDeferred<void>()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const activeReview = signal<typeof review | undefined>(review)
 	const prices: Array<bigint | undefined> = []
@@ -1494,7 +1494,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 						}
 						controller.submitted(hash)
 						presentation.value = { tone: 'pending', title: 'Requesting new price…', hash }
-						await mined.promise
+						await receiptReady.promise
 						controller.receipt(hash, outcome)
 						presentation.value = outcome === 'success' ? { tone: 'success', title: 'Price requested', hash } : { tone: 'error', title: 'Price request failed', detail: 'Transaction reverted.', hash }
 					}}
@@ -1525,7 +1525,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 			return
 		}
 		expect(prices).toHaveLength(1)
-		await act(() => mined.resolve())
+		await act(() => receiptReady.resolve())
 		await settle()
 		if (outcome === 'success') {
 			expect(closed).toBe(true)
@@ -1566,7 +1566,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 		}
 	} finally {
 		wallet.resolve()
-		mined.resolve()
+		receiptReady.resolve()
 		await rendered.cleanup()
 		dom.cleanup()
 	}
@@ -1592,7 +1592,7 @@ test.each([
 
 test('a quote that resolves after the request fails retries with the latched failure of the current render', async () => {
 	const dom = installDomEnvironment()
-	const mined = createDeferred<void>()
+	const receiptReady = createDeferred<void>()
 	const retryQuote = createDeferred<bigint>()
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	const prices: Array<bigint | undefined> = []
@@ -1615,7 +1615,7 @@ test('a quote that resolves after the request fails retries with the latched fai
 						await controller.review()
 						controller.submitted(hash)
 						presentation.value = { tone: 'pending', title: 'Requesting new price…', hash }
-						await mined.promise
+						await receiptReady.promise
 						controller.receipt(hash, 'reverted')
 						presentation.value = { tone: 'error', title: 'Price request failed', detail: 'Transaction reverted.', hash }
 					}}
@@ -1634,14 +1634,14 @@ test('a quote that resolves after the request fails retries with the latched fai
 		// The fetch starts while nothing is latched; the request then fails before the quote arrives.
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		await act(() => mined.resolve())
+		await act(() => receiptReady.resolve())
 		await settle()
 		expect(prices).toEqual([2n * 10n ** 18n])
 		await act(() => retryQuote.resolve(5n * 10n ** 18n))
 		await settle()
 		expect(prices).toEqual([2n * 10n ** 18n, 5n * 10n ** 18n])
 	} finally {
-		mined.resolve()
+		receiptReady.resolve()
 		retryQuote.resolve(0n)
 		await rendered.cleanup()
 		dom.cleanup()

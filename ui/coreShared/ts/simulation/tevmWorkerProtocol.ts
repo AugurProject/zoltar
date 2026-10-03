@@ -28,7 +28,7 @@ export type SimulationWorkerCallMap = {
 	getState: { params: undefined; result: SimulationWorkerState }
 	installSimulationProxyDeployer: { params: { address: Address; runtimeCode: Hex }; result: undefined }
 	mintRep: { params: { amount: bigint }; result: undefined }
-	mineBlock: { params: undefined; result: undefined }
+	advanceBlock: { params: undefined; result: undefined }
 	patchSimulationGenesisRepToken: { params: { repAddress: Address; zoltarAddress: Address }; result: undefined }
 	reset: { params: undefined; result: undefined }
 	selectAccount: { params: { address: Address }; result: undefined }

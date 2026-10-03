@@ -83,7 +83,7 @@ describe('settlement queue', () => {
 			finalized: false,
 			kind: 'settlement',
 			lastValidBlockNumber: '74',
-			minedAt: undefined,
+			includedAt: undefined,
 			nonce: '3',
 			projectedGasCostEth: '0.008',
 			receiptBlock: undefined,

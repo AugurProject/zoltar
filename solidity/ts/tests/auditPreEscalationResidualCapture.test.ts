@@ -32,7 +32,7 @@ describe('Audit: pre-escalation residual capture', () => {
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(depositor, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 
-		// The harness mines the next transaction one second after the latest timestamp.
+		// The harness includes the next transaction one second after the latest timestamp.
 		await mockWindow.setTime(questionEnd - 2n)
 		await depositRepToVault(depositor, securityPoolAddresses.securityPool, repDeposit)
 		await mockWindow.setTime(questionEnd - 1n)
@@ -50,7 +50,7 @@ describe('Audit: pre-escalation residual capture', () => {
 		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		await mockWindow.setTime(questionEnd - 600n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
-		// The next transaction is mined exactly at the question end timestamp.
+		// The next transaction is included exactly at the question end timestamp.
 		await mockWindow.setTime(questionEnd - 1n)
 
 		const attackerDeposit = 10n * repDeposit

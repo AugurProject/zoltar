@@ -280,7 +280,7 @@ function confirmedPosition(): PositionRecord {
 		entrySubmissionMode: 'public',
 		entryTransactionNonce: '8',
 		executionIntent: executionIntentFixture(),
-		gasExpenditures: [{ costEth: '0.001', minedAt: '2026-07-24T00:00:00.000Z', transactionHash }],
+		gasExpenditures: [{ costEth: '0.001', includedAt: '2026-07-24T00:00:00.000Z', transactionHash }],
 		openedAt: '2026-07-24T00:00:00.000Z',
 	})
 }
@@ -290,7 +290,7 @@ function pendingEntryPosition(overrides: Partial<PositionRecord> = {}): Position
 	return { ...confirmedPosition(), actualEntryGasCostEth: '0', entrySubmissionMode: 'private', gasExpenditures: [], status: 'pending-entry', ...overrides }
 }
 
-/** An absent entry that released its risk slot while its signed attempt may still be mined. */
+/** An absent entry that released its risk slot while its signed attempt may still be included. */
 function expiredEntryPosition(): PositionRecord {
 	return {
 		...confirmedPosition(),

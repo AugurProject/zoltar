@@ -239,16 +239,16 @@ test('nested snapshots restore their own node timestamp and reject consumed snap
 })
 
 test.each([
-	{ automine: true, clockStart: 10_000, clockStep: 501, expectsFallbackMining: false, name: 'lets automining publish a delayed receipt before fallback mining', hashByte: '11' },
-	{ automine: false, clockStart: 0, clockStep: 1_000, expectsFallbackMining: true, name: 'waits for a delayed receipt and mines pending Anvil transactions', hashByte: '12' },
-])('send transaction $name', async ({ automine, clockStart, clockStep, expectsFallbackMining, hashByte }) => {
+	{ automaticBlocks: true, clockStart: 10_000, clockStep: 501, expectsFallbackBlockAdvance: false, name: 'lets automatic block production publish a delayed receipt before fallback block advancement', hashByte: '11' },
+	{ automaticBlocks: false, clockStart: 0, clockStep: 1_000, expectsFallbackBlockAdvance: true, name: 'waits for a delayed receipt and includes pending Anvil transactions in a block', hashByte: '12' },
+])('send transaction $name', async ({ automaticBlocks, clockStart, clockStep, expectsFallbackBlockAdvance, hashByte }) => {
 	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
 	const observedMethods: string[] = []
 	const transactionHash = `0x${hashByte.repeat(32)}`
 	let receiptRequestCount = 0
 	mockJsonRpc(request => {
-		if (request.method === 'evm_setNextBlockTimestamp' || (!automine && request.method === 'evm_mine')) return createJsonRpcResponse(request, { result: '0x1' })
-		if (request.method === 'anvil_getAutomine') return createJsonRpcResponse(request, { result: automine })
+		if (request.method === 'evm_setNextBlockTimestamp' || (!automaticBlocks && request.method === 'evm_mine')) return createJsonRpcResponse(request, { result: '0x1' })
+		if (request.method === 'anvil_getAutomine') return createJsonRpcResponse(request, { result: automaticBlocks })
 		if (request.method === 'eth_sendTransaction') return createJsonRpcResponse(request, { result: transactionHash })
 		if (request.method === 'eth_getTransactionReceipt') {
 			receiptRequestCount += 1
@@ -262,7 +262,7 @@ test.each([
 		async () => {
 			await expect(sendTestTransaction()).resolves.toBe(transactionHash)
 			expect(receiptRequestCount).toBe(2)
-			if (expectsFallbackMining) expect(observedMethods).toContain('evm_mine')
+			if (expectsFallbackBlockAdvance) expect(observedMethods).toContain('evm_mine')
 			else expect(observedMethods).not.toContain('evm_mine')
 		},
 	)

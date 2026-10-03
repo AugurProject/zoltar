@@ -65,8 +65,8 @@ describe('execution risk controls', () => {
 				actualEntryGasCostEth: '0.01',
 				capitalAtRiskWeth: '2',
 				gasExpenditures: [
-					{ costEth: '0.01', minedAt: '2026-07-24T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` },
-					{ costEth: '0.005', minedAt: '2026-07-24T01:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` },
+					{ costEth: '0.01', includedAt: '2026-07-24T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` },
+					{ costEth: '0.005', includedAt: '2026-07-24T01:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` },
 				],
 				lifecycleGasCostEth: '0.005',
 				lifecycleUpdatedAt: '2026-07-24T01:00:00.000Z',
@@ -92,14 +92,14 @@ describe('execution risk controls', () => {
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 1n, positions, projectedGasCostAttoWeth: 0n }, { ...limits, maxConcurrentPositions: 1 }, now)).toContain('concurrent')
 	})
 
-	test('charges gas to canonical mined UTC days instead of local staging or recovery time', () => {
+	test('charges gas to canonical UTC days of receipt blocks instead of local staging or recovery time', () => {
 		const positions = [
 			{
 				actualEntryGasCostEth: '0.01',
 				capitalAtRiskWeth: '0',
 				gasExpenditures: [
-					{ costEth: '0.01', minedAt: '2026-07-25T00:00:01.000Z', transactionHash: `0x${'11'.repeat(32)}` },
-					{ costEth: '0.005', minedAt: '2026-07-25T23:59:59.000Z', transactionHash: `0x${'22'.repeat(32)}` },
+					{ costEth: '0.01', includedAt: '2026-07-25T00:00:01.000Z', transactionHash: `0x${'11'.repeat(32)}` },
+					{ costEth: '0.005', includedAt: '2026-07-25T23:59:59.000Z', transactionHash: `0x${'22'.repeat(32)}` },
 				],
 				lifecycleGasCostEth: '0.005',
 				lifecycleUpdatedAt: '2026-07-26T12:00:00.000Z',
@@ -108,10 +108,10 @@ describe('execution risk controls', () => {
 			},
 		]
 		const limits = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendAttoWeth: 20n * 10n ** 15n }
-		const minedDay = new Date('2026-07-25T12:00:00.000Z')
+		const receiptDay = new Date('2026-07-25T12:00:00.000Z')
 		const recoveryDay = new Date('2026-07-26T12:00:00.000Z')
-		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, minedDay)).toBeUndefined()
-		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, minedDay)).toContain('UTC-day gas spend')
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, receiptDay)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, receiptDay)).toContain('UTC-day gas spend')
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toBeUndefined()
 		expect(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth: 1n, capitalAtRiskAttoWeth: 0n, positions: [], projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toContain('UTC-day gas spend')
 	})

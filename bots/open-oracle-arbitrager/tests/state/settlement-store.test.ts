@@ -36,7 +36,7 @@ function record(index: number, overrides: Partial<SettlementRecord> = {}): Settl
 		finalized: true,
 		kind: 'settlement',
 		lastValidBlockNumber: '125',
-		minedAt: '2026-09-19T10:00:30.000Z',
+		includedAt: '2026-09-19T10:00:30.000Z',
 		nonce: index.toString(),
 		projectedGasCostEth: '0.005',
 		receiptBlock: { hash: hash(1_000 + index), number: '101' },
@@ -74,6 +74,29 @@ describe('settlement settings', () => {
 })
 
 describe('settlement journal', () => {
+	test('normalizes legacy receipt timestamps while preserving append-only history and daily gas', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-migration-'))
+		directories.push(directory)
+		const path = join(directory, 'journal')
+		const expected = record(1, { updatedAt: '2026-09-20T10:00:00.000Z' })
+		const { includedAt, ...fields } = expected
+		const legacyLine = JSON.stringify({ chainId: 1, record: { ...fields, minedAt: includedAt } })
+		await writeFile(path, `${legacyLine}\n`, { mode: 0o600 })
+		const loaded = await loadSettlementJournal(path, 1)
+		expect(loaded).toEqual([expected])
+		expect(settlementGasSpentAttoEthOnUtcDay(loaded, new Date('2026-09-19T12:00:00.000Z'))).toBe(4n * 10n ** 15n)
+		await appendSettlementRecord(path, expected, 1)
+		const lines = (await readFile(path, 'utf8')).trim().split('\n')
+		expect(lines[0]).toBe(legacyLine)
+		expect(lines[1]).toContain('includedAt')
+		expect(lines[1]).not.toContain('minedAt')
+		expect(await loadSettlementJournal(path, 1)).toEqual(loaded)
+		for (const timestampFields of [{ includedAt, minedAt: includedAt }, { minedAt: 'invalid' }]) {
+			await writeFile(path, `${JSON.stringify({ chainId: 1, record: { ...fields, ...timestampFields } })}\n`, { mode: 0o600 })
+			await expect(loadSettlementJournal(path, 1)).rejects.toThrow('Invalid settlement journal record')
+		}
+	})
+
 	test('validates journaled records and requires a coordinator and report for settlements only', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-records-'))
 		directories.push(directory)
@@ -120,7 +143,7 @@ describe('settlement journal', () => {
 		await expect(loadSettlementJournal(path, 1)).rejects.toThrow('Invalid settlement journal line 1')
 	})
 
-	test('merges by transaction hash, nets confirmed rewards against every paid gas cost, and charges gas to the mined UTC day', () => {
+	test('merges by transaction hash, nets confirmed rewards against every paid gas cost, and charges gas to the UTC day of the receipt block', () => {
 		const merged = mergeSettlementRecord([record(2), record(1, { status: 'pending', actualGasCostEth: undefined })], record(1))
 		expect(merged.map(entry => `${entry.reportId ?? 'reward'}:${entry.status}`)).toEqual(['1:confirmed', '2:confirmed'])
 		const records = [record(1), record(2, { status: 'reverted', actualGasCostEth: '0.002' }), record(3, { status: 'expired', actualGasCostEth: undefined }), record(4, { coordinator: undefined, kind: 'reward-withdrawal', reportId: undefined, rewardEth: '0.03', actualGasCostEth: '0.0001' })]
@@ -131,7 +154,7 @@ describe('settlement journal', () => {
 	})
 
 	test('charges a pending attempt its signed exposure on every day until its outcome replaces it', () => {
-		const pending = record(1, { actualGasCostEth: undefined, finalized: false, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
+		const pending = record(1, { actualGasCostEth: undefined, finalized: false, includedAt: undefined, receiptBlock: undefined, status: 'pending' })
 		// A dropped attempt holds its report until its own horizon has finalized, so a repeating refusal re-signs at that cadence.
 		const dropped = { ...pending, status: 'dropped' as const }
 		const horizonFinalized = BigInt(dropped.lastValidBlockNumber) + ATTEMPT_FINALITY_BLOCKS
@@ -145,7 +168,7 @@ describe('settlement journal', () => {
 		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized - 1n)).toBeTrue()
 		expect(settlementAttemptIsUnresolved(dropped, horizonFinalized)).toBeFalse()
 		expect(settlementAttemptIsUnresolved({ ...pending, finalized: true, status: 'expired' }, 0n)).toBeFalse()
-		// A mined or expired outcome is rechecked until recovery has verified it at finality depth; age alone finalizes nothing,
+		// A included or expired outcome is rechecked until recovery has verified it at finality depth; age alone finalizes nothing,
 		// because the bot may have been down while a reorg orphaned the receipt or the replacement.
 		expect(settlementAttemptIsUnresolved(record(1, { finalized: false }), 10_000n)).toBeTrue()
 		expect(settlementAttemptIsUnresolved(record(1, { finalized: true }), 101n)).toBeFalse()
@@ -154,11 +177,11 @@ describe('settlement journal', () => {
 		expect(settlementAttemptIsUnresolved({ ...pending, finalized: true, status: 'expired' }, 0n)).toBeFalse()
 		const day = new Date('2026-09-19T23:59:59.000Z')
 		expect(settlementGasSpentAttoEthOnUtcDay([pending], day)).toBe(5n * 10n ** 15n)
-		// The liability follows the attempt across midnight; only a mined cost is pinned to its block's day.
+		// The liability follows the attempt across midnight; only a receipt gas cost is pinned to its block's day.
 		expect(settlementGasSpentAttoEthOnUtcDay([pending], new Date('2026-09-20T00:00:00.000Z'))).toBe(5n * 10n ** 15n)
 		expect(settlementGasSpentAttoEthOnUtcDay([record(1)], day)).toBe(4n * 10n ** 15n)
 		expect(settlementGasSpentAttoEthOnUtcDay([record(1)], new Date('2026-09-20T00:00:00.000Z'))).toBe(0n)
-		// An expired attempt can never be mined and a dropped one is past its relay horizon: neither charges anything.
+		// An expired attempt can never be included and a dropped one is past its relay horizon: neither charges anything.
 		expect(settlementGasSpentAttoEthOnUtcDay([{ ...pending, status: 'expired' }], day)).toBe(0n)
 		expect(settlementGasSpentAttoEthOnUtcDay([{ ...pending, status: 'dropped' }], day)).toBe(0n)
 	})
@@ -166,7 +189,7 @@ describe('settlement journal', () => {
 	test('holds a report or a withdrawal only for live attempts against the same OpenOracle, and withdrawals only for the same wallet', () => {
 		const otherOpenOracle = getAddress('0x00000000000000000000000000000000000000ee')
 		const otherAccount = getAddress('0x00000000000000000000000000000000000000bb')
-		const pending = record(7, { actualGasCostEth: undefined, finalized: false, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
+		const pending = record(7, { actualGasCostEth: undefined, finalized: false, includedAt: undefined, receiptBlock: undefined, status: 'pending' })
 		// A live attempt sent to a previous OpenOracle says nothing about the new contract's report of the same id.
 		expect(inFlightSettlementReportIds([pending], 0n, coordinator).has('7')).toBeTrue()
 		expect(inFlightSettlementReportIds([pending], 0n, otherOpenOracle).has('7')).toBeFalse()

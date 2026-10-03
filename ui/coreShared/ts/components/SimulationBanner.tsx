@@ -381,8 +381,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 										<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
 											{simulationCopy.resetScenario}
 										</button>
-										<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
-											{simulationCopy.mineBlock}
+										<button className='secondary' onClick={() => void runControl(async () => await controller.advanceBlock())} disabled={busy.value || !isBootstrapped.value}>
+											{simulationCopy.advanceBlock}
 										</button>
 										<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
 											{simulationCopy.mint1MillionRep}

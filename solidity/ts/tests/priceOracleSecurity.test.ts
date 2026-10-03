@@ -1592,7 +1592,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const reportId = await getPendingReportId(client, priceOracle)
 		assert.ok(reportId > 0n, 'the committed bounty should open a pending report')
 		const expectedSettlementBaseFeeCap = (impliedRequestBaseFeeAttoEthPerGas * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
-		assert.strictEqual(await getPendingReportMaxSettlementBaseFee(client, priceOracle), expectedSettlementBaseFeeCap, 'a zero-basefee request must snapshot the cap implied by the bounty, so fee-free simulations write the same storage as mined requests')
+		assert.strictEqual(await getPendingReportMaxSettlementBaseFee(client, priceOracle), expectedSettlementBaseFeeCap, 'a zero-basefee request must snapshot the cap implied by the bounty, so fee-free simulations write the same storage as included requests')
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
 		assert.strictEqual(reportMeta.settlerRewardAttoEth, bountyAttoEth, 'the whole committed bounty should become the settler reward')
 	})
@@ -2413,7 +2413,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			if (status === '0x0') return 'reverted'
 			throw new Error(`Invalid staged-operation receipt status for ${hash}`)
 		}
-		const mineCompetitors = async (timestamp: bigint, executeFirst: boolean) => {
+		const includeCompetingTransactions = async (timestamp: bigint, executeFirst: boolean) => {
 			await rawRequest('anvil_setAutomine', [false])
 			try {
 				await rawRequest('evm_setNextBlockTimestamp', [`0x${timestamp.toString(16)}`])
@@ -2429,23 +2429,23 @@ describe('Price Oracle Refund Security Tests', () => {
 		}
 
 		let boundarySnapshot = await mockWindow.anvilSnapshot()
-		const before = await mineCompetitors(deadline - 1n, false)
+		const before = await includeCompetingTransactions(deadline - 1n, false)
 		assert.deepStrictEqual(before, { executeStatus: 'success', expireStatus: 'reverted' }, 'one second before equality only execution may consume the operation')
 		assert.strictEqual((await getStagedOperation(client, priceOracle, manualOperationId))[1], zeroAddress, 'valid execution should consume the operation')
 
 		await mockWindow.anvilRevert(boundarySnapshot)
 		boundarySnapshot = await mockWindow.anvilSnapshot()
-		const executeFirstAtEquality = await mineCompetitors(deadline, true)
+		const executeFirstAtEquality = await includeCompetingTransactions(deadline, true)
 		assert.deepStrictEqual(executeFirstAtEquality, { executeStatus: 'success', expireStatus: 'reverted' }, 'execution ordered first at equality should consume the operation')
 
 		await mockWindow.anvilRevert(boundarySnapshot)
 		boundarySnapshot = await mockWindow.anvilSnapshot()
-		const expireFirstAtEquality = await mineCompetitors(deadline, false)
+		const expireFirstAtEquality = await includeCompetingTransactions(deadline, false)
 		assert.deepStrictEqual(expireFirstAtEquality, { executeStatus: 'success', expireStatus: 'reverted' }, 'expiry ordered first at equality must fail before execution consumes the operation')
 		assert.strictEqual((await getStagedOperation(client, priceOracle, manualOperationId))[1], zeroAddress, 'equality execution should consume the operation exactly once')
 
 		await mockWindow.anvilRevert(boundarySnapshot)
-		const after = await mineCompetitors(deadline + 1n, true)
+		const after = await includeCompetingTransactions(deadline + 1n, true)
 		assert.deepStrictEqual(after, { executeStatus: 'success', expireStatus: 'reverted' }, 'after equality the execution entrypoint records expiry and consumes before a second expiry attempt')
 		assert.strictEqual((await getStagedOperation(client, priceOracle, manualOperationId))[1], zeroAddress, 'expired execution should consume the operation exactly once')
 	})

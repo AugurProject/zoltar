@@ -511,7 +511,7 @@ describe('Statoblast: vault accounting', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
-		// The Anvil harness mines mutating transactions one second after the latest block timestamp.
+		// The Anvil harness includes mutating transactions one second after the latest block timestamp.
 		// Setting time to endTime - 2 makes the next transaction execute one second before endTime.
 		await mockWindow.setTime(endTime - 2n)
 		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question active/)

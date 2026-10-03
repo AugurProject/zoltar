@@ -56,7 +56,7 @@ function createSimulationController(): SimulationController {
 		isBootstrapped: true,
 		isBootstrapping: false,
 		mintRep: async () => undefined,
-		mineBlock: async () => undefined,
+		advanceBlock: async () => undefined,
 		queryDelayMilliseconds: 0,
 		repPerEthPrice: REP_PER_ETH,
 		repPerUsdcPrice: REP_PER_USDC,

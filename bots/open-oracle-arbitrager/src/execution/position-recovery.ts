@@ -22,7 +22,7 @@ export function tokenDecimalsFromSnapshot(snapshot: { tokenDecimals: bigint }, r
 export function executionRecordForConfirmedPosition(position: PositionRecord, blockNumber: bigint, transactionHash: Hex): ExecutionRecord {
 	const intent = position.executionIntent
 	if (intent === undefined) throw new Error(`Position ${position.reportId} is missing its durable execution intent`)
-	const executedAt = position.gasExpenditures.find(expenditure => expenditure.transactionHash.toLowerCase() === transactionHash.toLowerCase())?.minedAt ?? position.gasExpenditures.at(-1)?.minedAt
+	const executedAt = position.gasExpenditures.find(expenditure => expenditure.transactionHash.toLowerCase() === transactionHash.toLowerCase())?.includedAt ?? position.gasExpenditures.at(-1)?.includedAt
 	if (executedAt === undefined) throw new Error(`Position ${position.reportId} is missing its confirmed execution timestamp`)
 	return {
 		...intent,
@@ -83,7 +83,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 	}
 	if (hedgeExecution === undefined || hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
 		if ((publicEntry || atomicPrivateEntry) && executorReceipt.status === 'reverted') {
-			const closedAt = gasExpenditures.at(-1)?.minedAt
+			const closedAt = gasExpenditures.at(-1)?.includedAt
 			if (closedAt === undefined) throw new Error('Recovered atomic entry gas timestamp is unavailable')
 			return {
 				position: {
@@ -215,7 +215,7 @@ export async function reconcileExpiredAttemptsWithQuorum(readClients: readonly R
 		expiredTransactionAttempts: attempts.filter(attempt => !completedHashes.has(attempt.transactionHash.toLowerCase())),
 		gasExpenditures: [...position.gasExpenditures, ...newExpenditures],
 		lifecycleGasCostEth: decimalWeth(parseDecimalWeth(position.lifecycleGasCostEth) + lifecycleGas),
-		lifecycleUpdatedAt: lifecycleGas === 0n ? position.lifecycleUpdatedAt : (newExpenditures.find(expenditure => !entryHashes.has(expenditure.transactionHash.toLowerCase()))?.minedAt ?? position.lifecycleUpdatedAt),
+		lifecycleUpdatedAt: lifecycleGas === 0n ? position.lifecycleUpdatedAt : (newExpenditures.find(expenditure => !entryHashes.has(expenditure.transactionHash.toLowerCase()))?.includedAt ?? position.lifecycleUpdatedAt),
 		realizedNetProfitEth: position.realizedNetProfitEth === undefined ? undefined : decimalSignedEth(parseSignedDecimalEth(position.realizedNetProfitEth) - totalGas),
 		status: successful === undefined ? position.status : 'recovery-required',
 	} satisfies PositionRecord
@@ -307,7 +307,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		...position,
 		gasExpenditures: [...(previousExpenditure === undefined ? position.gasExpenditures : position.gasExpenditures.filter(expenditure => expenditure.transactionHash.toLowerCase() !== receipt.transactionHash.toLowerCase())), ...lifecycleGasExpenditures],
 		lifecycleGasCostEth: decimalWeth(lifecycleGas),
-		lifecycleUpdatedAt: lifecycleGasExpenditures[0]?.minedAt ?? position.lifecycleUpdatedAt,
+		lifecycleUpdatedAt: lifecycleGasExpenditures[0]?.includedAt ?? position.lifecycleUpdatedAt,
 	} satisfies PositionRecord
 	const transactionIntentMismatch =
 		position.lifecycleSubmissionMode === 'public' && receipt.status === 'success'
