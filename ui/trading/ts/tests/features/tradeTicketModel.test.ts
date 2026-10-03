@@ -173,7 +173,6 @@ describe('trade ticket model', () => {
 
 	test('waits for typing to settle and explains blockers in order', () => {
 		expect(tradeTicketModel({ ...ready, amountSettling: true }).availability).toEqual({ disabled: true, loading: true, reason: ticketCopy.updatingEstimate })
-		expect(tradeTicketModel({ ...ready, amount: '' }).availability.reason).toBe(availabilityCopy.amountRequiredReason)
 		expect(tradeTicketModel({ ...ready, amount: '6' }).availability.reason).toBe(availabilityCopy.insufficientEthReason)
 		expect(tradeTicketModel({ ...ready, marketClosed: true }).availability.reason).toBe(ticketCopy.tradingEndedReason)
 		expect(tradeTicketModel({ ...ready, workflowLocked: true }).availability.reason).toBe(availabilityCopy.transactionInProgressReason)

@@ -363,7 +363,7 @@ export function getDeterministicLiquidationFailureReason({
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 }) {
 	if (requestedDebtAttoEth === undefined) return 'Enter a valid liquidation amount.'
-	if (requestedDebtAttoEth <= 0n) return 'Enter a liquidation amount greater than zero.'
+	if (requestedDebtAttoEth <= 0n) return undefined
 	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 	const targetUnderwritingLimitAttoEth = getVaultUnderwritingLimitAttoEth(targetVaultSummary)
 	if (targetUnderwritingLimitAttoEth === undefined) return 'Target vault underwriting limit is still loading.'

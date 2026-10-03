@@ -1,6 +1,6 @@
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { formatOutcomeQuantity } from '../lib/shareValue.js'
+import { OutcomeHolding } from './OutcomeHolding.js'
 import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { marketsCopy } from '../copy/markets.js'
@@ -11,8 +11,8 @@ import { BackingDetails } from './BackingDetails.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import type { TicketBalances, TicketWallet } from './LivePositionControls.js'
 
-function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, balanceState: BalanceState) {
-	if (value !== undefined) return formatOutcomeQuantity(value, outcome)
+function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, balanceState: BalanceState, market: LiveMarket) {
+	if (value !== undefined) return <OutcomeHolding amount={value} outcome={outcome} market={market} />
 	if (balanceState === 'loading') return appCopy.loadingBalances
 	if (balanceState === 'error') return appCopy.unavailable
 	return ticketCopy.noBalance
@@ -38,7 +38,7 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 				<ul className='portfolio-holdings market-holdings'>
 					{outcomes.map(item => (
 						<li key={item.outcome} className={item.className} data-outcome={item.outcome}>
-							<span className='holding-quantity'>{walletBalanceLabel(item.value, item.quantityOutcome, holdings.balanceState)}</span>
+							<span className='holding-quantity'>{walletBalanceLabel(item.value, item.quantityOutcome, holdings.balanceState, market)}</span>
 							<small className='payout-caption'>{item.caption}</small>
 						</li>
 					))}
@@ -46,7 +46,7 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 			)}
 			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
 			{ownsBalanceError && holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={disabled} /> : null}
-			<BackingDetails market={market} />
+			<BackingDetails market={market} balances={holdings.balances} />
 		</section>
 	)
 }

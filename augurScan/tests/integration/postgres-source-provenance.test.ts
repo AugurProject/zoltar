@@ -330,6 +330,7 @@ const resetForCombinedSourceChange = async ({ database, provenanceChainId, netwo
 	const combinedInvalidationRows = await database.sql`
 		SELECT invalidation.id::text, invalidation.indexer_run_id::text,
 			invalidation.abi_source_hash, invalidation.application_source_hash, invalidation.projection_source_hash,
+			invalidation.occurrence_counts AS stored_occurrence_counts,
 			COALESCE((SELECT jsonb_object_agg(counts.occurrence_kind, counts.occurrence_count ORDER BY counts.occurrence_kind)
 				FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
 					FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = invalidation.id
@@ -345,6 +346,7 @@ const resetForCombinedSourceChange = async ({ database, provenanceChainId, netwo
 		application_source_hash: combinedRun.applicationSourceHash,
 		projection_source_hash: combinedRun.projectionSourceHash,
 		occurrence_counts: { block: '1', 'entity-state': '2', log: '2', transaction: '1' },
+		stored_occurrence_counts: { block: '1', 'entity-state': '2', log: '2', transaction: '1' },
 	})
 	return combinedRun
 }

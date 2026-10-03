@@ -48,8 +48,8 @@ export function getReportingReportGuardMessage({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	if (selectedOutcome === undefined) return reportingCopy.reportOutcomeSelectionRequired
-	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
-	if (selectedAmount === undefined || selectedAmount <= 0n) return 'Enter a valid report amount greater than zero.'
+	if (reportAmount.trim() === '') return undefined
+	if (selectedAmount === undefined || selectedAmount <= 0n) return undefined
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason
 	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would become dispute-staked for this report.'
 	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {

@@ -4,7 +4,7 @@ import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { ScannerLiveState } from './scanner-live-state.ts'
 import { historyInvalidationNotice, isHistoryInvalidationReason } from './history-evidence.ts'
-import { createLiveRouteRefreshCoordinator, streamReconnectDelay } from './live-refresh.ts'
+import { createLiveRouteRefreshCoordinator, shouldRefreshRouteOnLiveEvent, streamReconnectDelay } from './live-refresh.ts'
 import { activityRefreshRetention } from './refresh-presentation.ts'
 import { renderExplorerPage } from './explorer-page.ts'
 import { classifyRoute } from './routes.ts'
@@ -93,7 +93,7 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 	const isAddress = () => classifyRoute(location.pathname) === 'address'
 	const isExplorer = () => classifyRoute(location.pathname) === 'explorer'
 	const isActivity = () => classifyRoute(location.pathname) === 'activity'
-	const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean, recovery: CanonicalRecovery | undefined): Promise<boolean> => {
+	const refreshAfterUpdates = async (_count: number, forceContentRefresh: boolean, recovery: CanonicalRecovery | undefined): Promise<boolean> => {
 		if (canonicalState.recovery !== undefined && canonicalState.recovery !== recovery) return await canonicalState.recovery.promise
 		if (isSystem()) {
 			const contentRefreshed = await loadSystemState({ live: true })
@@ -101,6 +101,7 @@ export const createLiveCoordinator = (deps: LiveCoordinatorDeps) => {
 			return contentRefreshed
 		}
 		if (isOperations()) {
+			if (!shouldRefreshRouteOnLiveEvent(location.pathname, forceContentRefresh, $('#operations-content').childElementCount > 0)) return true
 			const contentRefreshed = await loadOperations({ live: true })
 			if (contentRefreshed && canonicalState.refreshRequired && canonicalState.recovery === undefined) completeCanonicalRefresh()
 			return contentRefreshed

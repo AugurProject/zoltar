@@ -33,7 +33,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 
 	const submitBidAction = displays.renderStageActionButton({
 		action: 'submitBid',
-		availability: createActionAvailability(model.submitBidGuardMessage),
+		availability: { disabled: model.submitBidGuardMessage !== undefined || !model.hasValidBidInputs, reason: model.submitBidGuardMessage },
 		forceEnabled: model.hasSelectedAuctionChildPool,
 		idleLabel: model.submitBidLabel,
 		onClick: model.onSubmitBidForSelectedAuction,

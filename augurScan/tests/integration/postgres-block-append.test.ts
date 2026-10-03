@@ -5,7 +5,6 @@ import { assertBlockAppend, assertContractDeploymentObservation, assertLogScanCu
 import { getAddress } from '../../src/ethereum.ts'
 import { decodeAction } from '../../src/metadata.ts'
 import { initializeSchema } from '../../src/schema.ts'
-import { CURRENT_SCHEMA_VERSION } from '../../src/schema-policy.ts'
 import type { NetworkConfig } from '../../src/types.ts'
 import { address, blockHash, chainId, decodedLog, indexedBlock, log, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, transaction, transactionHash, uniswapPairAddress, wethAddress } from '../support/postgres-fixtures.ts'
 
@@ -358,7 +357,8 @@ for (const scenario of ['question seconds', 'receipt discovery order'] as const)
 				await database.sql`DELETE FROM questions WHERE chain_id = ${fixtureChain} AND question_id <> 0`
 				await database.sql`UPDATE questions SET start_time = 1767225600, end_time = 8640000000000, canonical = false WHERE chain_id = ${fixtureChain}`
 				await database.sql.unsafe('ALTER TABLE questions ALTER COLUMN start_time TYPE timestamptz USING to_timestamp(start_time), ALTER COLUMN end_time TYPE timestamptz USING to_timestamp(end_time)')
-				await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = ${CURRENT_SCHEMA_VERSION}`
+				await database.sql.unsafe('ALTER TABLE chain_reorganizations DROP COLUMN occurrence_counts')
+				await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version::integer > 3`
 				await database.sql`UPDATE augurscan_schema SET schema_version = '3' WHERE singleton`
 				await initializeSchema(database.sql)
 				const migratedQuestions = await database.sql`SELECT start_time::text, end_time::text, canonical FROM questions WHERE chain_id = ${fixtureChain}`

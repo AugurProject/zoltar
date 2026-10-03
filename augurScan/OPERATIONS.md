@@ -24,6 +24,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `MAINNET_AMM_FACTORY_ADDRESS`, `SEPOLIA_AMM_FACTORY_ADDRESS` | unset | `indexer` | Adds an Augur AMM factory as a tracked contract when the manifest does not already list that address. |
 | `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables | network default | `indexer` | Override the Uniswap activity sources. An unset or empty value selects the network default, and `none` disables that source. The V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`. |
 | `LOG_SCAN_RANGE_SIZE` | `100000` | `indexer` | Caps each inclusive `eth_getLogs` request, in blocks. |
+| `TRACE_SELECTED_TRANSACTIONS` | `0` | `indexer` | `1` enables optional `debug_traceTransaction` enrichment for log-selected transactions. It requires provider support for `callTracer` and adds RPC work. It does not index failed or eventless calls. Changing it affects subsequent ingestion and does not replay existing receipts. |
 | `POLL_INTERVAL_MS` | `12000` | `app`, `indexer` | Indexer polling interval. The web app treats an indexer as stale after four intervals, or 45 seconds if that is longer. |
 | `SCAN_BLOCK_TIME_MS` | `12000` on Mainnet and Sepolia | `indexer` | Block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging. |
 | `RPC_LOG_PATH` | `augurScan/logs/rpc.jsonl` | `indexer`, fixed to `/var/log/augurscan/rpc.jsonl` in the `augurscan-logs` volume | Rotating JSONL log of RPC exchanges. |
@@ -43,6 +44,8 @@ API requests and failed Basic-authentication attempts share one per-client quota
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
 Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are version-specific.
+
+Upgrading to event-first indexing changes the application source hash and triggers the existing source replay. Current views are rebuilt from log-selected activity; prior occurrences and interpretations remain retained for audit.
 
 Changing a tracked manifest address, label, kind, or deployment boundary can replay the affected network. ABI changes cause an `abi-redecode`; application or projection changes cause a conservative `projection-rebuild`. A deployment earlier than the stored coverage boundary requires a new database rather than silently presenting partial history. Review [STATE_MODEL.md](STATE_MODEL.md) before a source or manifest upgrade.
 

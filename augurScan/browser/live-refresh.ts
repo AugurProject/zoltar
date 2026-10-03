@@ -161,3 +161,6 @@ export const streamReconnectDelay = (attempt: number): number => Math.min(stream
 
 /** The periodic poll refreshes the route only when the open event stream has not already done so within one poll interval. */
 export const shouldPollRouteRefresh = (streamOpen: boolean, lastStreamRefreshAt: number | undefined, now: number, pollIntervalMs: number): boolean => !streamOpen || lastStreamRefreshAt === undefined || now - lastStreamRefreshAt >= pollIntervalMs
+
+// Integrity history changes on invalidation, while its head-dependent coverage is refreshed by the periodic poll.
+export const shouldRefreshRouteOnLiveEvent = (pathname: string, force: boolean, hasRenderedContent: boolean): boolean => !/^\/operations\/integrity\/?$/u.test(pathname) || force || !hasRenderedContent

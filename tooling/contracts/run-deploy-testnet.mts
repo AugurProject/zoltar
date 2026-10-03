@@ -46,7 +46,7 @@ type HeadlessDeploymentOptions = {
 	buildEntrypoint?: (sourceEntrypoint: string) => Promise<Blob>
 	removeTemporaryDirectory?: (temporaryDirectory: string) => Promise<void>
 	spawnChild?: (command: string[]) => DeploymentChild
-	spawnVerification?: (command: string[]) => DeploymentChild
+	spawnVerification?: (command: string[], environment: Readonly<Record<string, string | undefined>>) => DeploymentChild
 	temporaryRoot?: string
 }
 
@@ -64,18 +64,21 @@ function isHelpRequest(args: readonly string[]) {
 	return args.includes('--help') || args.includes('-h')
 }
 
-// Mirrors deploy-testnet.mts option/assignment precedence: the --chain-id
-// option wins, then the first CHAIN_ID= or --CHAIN_ID= assignment in argument
-// order, then the environment.
-export function resolveRequestedChainId(args: readonly string[], environment: Readonly<Record<string, string | undefined>> = process.env) {
-	const optionPrefix = '--chain-id='
+// Mirrors deploy-testnet.mts: flags win over the first uppercase assignment,
+// followed by the environment.
+function resolveRequestedOption(args: readonly string[], optionName: string, environmentName: string, environment: Readonly<Record<string, string | undefined>>) {
+	const optionPrefix = `--${optionName}=`
 	const optionArgument = args.find(candidate => candidate.startsWith(optionPrefix))
 	if (optionArgument !== undefined) return optionArgument.slice(optionPrefix.length)
 	for (const argument of args) {
-		const assignmentPrefix = ['CHAIN_ID=', '--CHAIN_ID='].find(candidate => argument.startsWith(candidate))
+		const assignmentPrefix = [`${environmentName}=`, `--${environmentName}=`].find(candidate => argument.startsWith(candidate))
 		if (assignmentPrefix !== undefined) return argument.slice(assignmentPrefix.length)
 	}
-	return environment['CHAIN_ID'] ?? '11155111'
+	return environment[environmentName]
+}
+
+export function resolveRequestedChainId(args: readonly string[], environment: Readonly<Record<string, string | undefined>> = process.env) {
+	return resolveRequestedOption(args, 'chain-id', 'CHAIN_ID', environment) ?? '11155111'
 }
 
 async function buildHeadlessEntrypoint(sourceEntrypoint: string) {
@@ -127,7 +130,8 @@ export async function runHeadlessTestnetDeployment(args: readonly string[], opti
 			if (exitCode === 0 && receivedSignal === undefined && !isHelpRequest(args)) {
 				const chainId = resolveRequestedChainId(args)
 				const verificationCommand = [process.execPath, path.join(repositoryRoot, 'tooling', 'contracts', 'verify-contracts.mts'), `--chain-id=${chainId}`]
-				activeChild = options.spawnVerification?.(verificationCommand) ?? Bun.spawn(verificationCommand, { cwd: repositoryRoot, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
+				const verificationEnvironment = { ...process.env, ETHERSCAN_API_KEY: resolveRequestedOption(args, 'etherscan-api-key', 'ETHERSCAN_API_KEY', process.env) }
+				activeChild = options.spawnVerification?.(verificationCommand, verificationEnvironment) ?? Bun.spawn(verificationCommand, { cwd: repositoryRoot, env: verificationEnvironment, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
 				const verificationExitCode = await activeChild.exited
 				if (verificationExitCode !== 0 && receivedSignal === undefined) {
 					console.error(`Testnet deployment succeeded, but explorer source verification failed. Rerun it with: bun run verify:contracts -- --chain-id=${chainId}`)

@@ -13,7 +13,6 @@ export type ProviderState = {
 	active: IndexerRpcProvider
 	client: PublicClient
 	logClient: PublicClient
-	readonly traceStartBlocks: WeakMap<IndexerRpcProvider, bigint>
 	readonly traceUnsupported: WeakSet<IndexerRpcProvider>
 	readonly verified: WeakSet<IndexerRpcProvider>
 	readonly stateBoundaries: WeakMap<IndexerRpcProvider, { readonly startBlock: bigint; readonly discovered: boolean }>
@@ -38,6 +37,7 @@ type ProgressState = {
 
 export type NetworkIndexerState = {
 	network: NetworkConfig
+	readonly traceSelectedTransactions: boolean
 	readonly configuredStartBlock: bigint
 	readonly database: ScannerDatabase
 	readonly signal: AbortSignal
@@ -69,6 +69,7 @@ export const createNetworkIndexer = (
 	signal: AbortSignal,
 	options: {
 		readonly provenance?: EvidenceProvenance
+		readonly traceSelectedTransactions?: boolean
 	} = {},
 ): NetworkIndexerState => {
 	const list = network.rpcUrls.map(createProvider)
@@ -77,6 +78,7 @@ export const createNetworkIndexer = (
 	return {
 		network,
 		configuredStartBlock: network.startBlock,
+		traceSelectedTransactions: options.traceSelectedTransactions ?? runtimeConfig.traceSelectedTransactions,
 		database,
 		signal,
 		provenance: options.provenance,
@@ -85,7 +87,6 @@ export const createNetworkIndexer = (
 			active: firstProvider,
 			client: firstProvider.client,
 			logClient: firstProvider.logClient,
-			traceStartBlocks: new WeakMap(),
 			traceUnsupported: new WeakSet(),
 			verified: new WeakSet(),
 			stateBoundaries: new WeakMap(),

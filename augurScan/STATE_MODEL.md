@@ -23,7 +23,7 @@ Every replacement has an audit record. `chain_reorganizations` stores its bounda
 
 ## Reading an Operations snapshot
 
-Every Operations response after indexing begins is anchored to one fully indexed canonical block. The overview and risk surfaces accept `atBlock` for a retained canonical boundary. Their `asOf` envelope distinguishes that selected block from the current indexed and observed heads and includes the latest invalidation and applied source hashes. Before the first indexed block, Operations returns empty evidence with an explicit availability message; its zero block is only a loading anchor.
+Event-first indexing retains event-bearing blocks and scan-range endpoints; quiet intervening blocks need no individual records. Every Operations response after indexing begins is anchored to one fully indexed canonical block. The overview and risk surfaces accept `atBlock` for a retained canonical boundary. Their `asOf` envelope distinguishes that selected block from the current indexed and observed heads and includes the latest invalidation and applied source hashes. Before the first indexed block, Operations returns empty evidence with an explicit availability message; its zero block is only a loading anchor.
 
 At the live head, the indexer samples bounded sets of least-recently observed pools, vaults, escalation games, and truth auctions. Every call in one entity read is tagged to the same indexed block and the block hash is checked before commit. A failure is an availability observation, never numeric zero. Repeated cycles continue until every known entity has a snapshot at that head.
 
@@ -60,7 +60,7 @@ Exact domain calculations, filters, response fields, limits, and continuation ru
 
 ## Completeness and absence
 
-History is complete only inside the selected network's configured and retrievable coverage boundary. The API exposes that boundary, the indexed block and hash, the current materialization generation, and collection-specific truncation or continuation fields. A missing row outside coverage is unknown, not zero or proof that an event never happened.
+Log history is complete only for the selected sources inside the network's configured and retrievable coverage boundary. Failed transactions and calls without protocol logs are outside event-first coverage. The API exposes that boundary, the indexed block and hash, the current materialization generation, and collection-specific truncation or continuation fields. A missing row outside coverage is unknown, not zero or proof that an event never happened.
 
 Balance and token-metadata failures are observation records, not numeric values. A successful attempt can update the current materialization; a failed attempt leaves the last successful materialization unchanged. Each balance target is recorded independently, so one failed native or token read does not erase the other outcomes from the same batch.
 

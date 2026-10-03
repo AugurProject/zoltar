@@ -143,10 +143,7 @@ export const historicalExportRows = async (sql: SQL, query: HistoricalExportQuer
 			reorganization.abi_source_hash, reorganization.application_source_hash, reorganization.projection_source_hash,
 			COALESCE((SELECT jsonb_agg(cause.reason ORDER BY cause.reason) FROM history_invalidation_causes cause
 				WHERE cause.invalidation_id = reorganization.id), jsonb_build_array(reorganization.reason)) AS causes,
-			COALESCE((SELECT jsonb_object_agg(counts.occurrence_kind, counts.occurrence_count ORDER BY counts.occurrence_kind)
-				FROM (SELECT occurrence.occurrence_kind, count(*)::text AS occurrence_count
-					FROM history_invalidation_occurrences occurrence WHERE occurrence.invalidation_id = reorganization.id
-					GROUP BY occurrence.occurrence_kind) counts), '{}'::jsonb) AS occurrence_counts,
+			reorganization.occurrence_counts,
 			reorganization.detected_at
 		FROM chain_reorganizations reorganization
 		WHERE reorganization.chain_id = ${chainId} AND reorganization.id <= ${snapshotInvalidationId}

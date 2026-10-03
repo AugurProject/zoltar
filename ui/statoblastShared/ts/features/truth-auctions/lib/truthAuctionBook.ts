@@ -425,11 +425,11 @@ export function getTruthAuctionBidPreview(submitBidPriceInput: string) {
 }
 
 export function getTruthAuctionBidPriceValidationMessage(submitBidPriceInput: string) {
-	if (submitBidPriceInput.trim() === '') return 'Enter a bid price greater than zero.'
+	if (submitBidPriceInput.trim() === '') return undefined
 	if (isTruthAuctionPriceInputDefinitelyOutOfRange(submitBidPriceInput)) return TRUTH_AUCTION_PRICE_RANGE_MESSAGE
 	const enteredBidPrice = tryParseTruthAuctionPriceInput(submitBidPriceInput)
 	if (enteredBidPrice === undefined) return 'Enter a valid bid price.'
-	if (enteredBidPrice <= 0n) return 'Enter a bid price greater than zero.'
+	if (enteredBidPrice <= 0n) return undefined
 	if (getTruthAuctionTickAtPrice(enteredBidPrice) === undefined) return TRUTH_AUCTION_PRICE_RANGE_MESSAGE
 	return undefined
 }
@@ -458,11 +458,11 @@ export function getTruthAuctionBidGuardMessage({
 	if (timingGuardMessage !== undefined) return timingGuardMessage
 
 	const trimmedAmount = submitBidAmountInput.trim()
-	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
+	if (trimmedAmount === '') return undefined
 	const bidAmount = tryParseTruthAuctionAmountInput(trimmedAmount)
 	if (bidAmount === undefined) return 'Enter a valid bid amount.'
 
-	if (bidAmount <= 0n) return 'Enter a bid amount greater than zero.'
+	if (bidAmount <= 0n) return undefined
 	if (bidAmount < truthAuction.minBidSizeAttoEth) return `Bid must be at least ${formatCurrencyBalanceWithUnit(truthAuction.minBidSizeAttoEth, 'ETH')}.`
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
 	if (bidAmount > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(bidAmount - walletBalanceAttoEth, 'ETH')} in this wallet to bid the selected amount.`

@@ -33,7 +33,7 @@
 				</figure>
 				<p>The details page tells you whether the SecurityPool can take a market. A <strong>Deploy trading pool</strong> button means it can, and selecting it returns you to the form; a disabled <strong>Initialize trading pool</strong> button names the reason it cannot, such as <em>Question ended — pair initialization unavailable</em>. <strong>Minting capacity</strong> shows the collateral already minted against the SecurityPool's ceiling (used / ceiling); your deposit must fit in the difference.</p>
 				<figure class="screenshot" id="fig-trading-pool-details" aria-labelledby="fig-trading-pool-details-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/security-pool-details.png"><img width="785" height="595" src="../assets/screenshots/trading/security-pool-details.png" alt="The security pool details page showing question end, system state Operational, universe not forked, minting capacity 0 of 80 ETH, and a Deploy trading pool button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/security-pool-details.png"><img width="785" height="535" src="../assets/screenshots/trading/security-pool-details.png" alt="The security pool details page showing question end, system state Operational, universe not forked, minting capacity 0 of 80 ETH, and a Deploy trading pool button." loading="lazy" /></a>
 					<figcaption id="fig-trading-pool-details-caption"><span class="figure-label">An eligible SecurityPool.</span> The SecurityPool is operational, its universe has not forked, and it has capacity for new collateral.</figcaption>
 				</figure>
 			</section>
@@ -45,7 +45,7 @@
 					<li>Select <strong>Initialize pool</strong> and confirm the one transaction that creates and seeds the trading pool. It reverts if it would mint fewer LP tokens than the estimate allows after your slippage tolerance, which you set under <strong>Settings</strong>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-initialize" aria-labelledby="fig-trading-initialize-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="800" height="1056" src="../assets/screenshots/trading/initialize-pool.png" alt="The Create new market form with Initialize selected, 0.01 ETH and a 70% conditional Yes price entered, and an estimate of 0.0043 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Initialize pool button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="800" height="1172" src="../assets/screenshots/trading/initialize-pool.png" alt="The Create new market form with Initialize selected, 0.01 ETH and a 70% conditional Yes price entered, and an estimate of 0.0043 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Initialize pool button." loading="lazy" /></a>
 					<figcaption id="fig-trading-initialize-caption"><span class="figure-label">Seeding at a 70% conditional Yes price.</span> The LP tokens represent only the Yes and No left in the trading pool; the Invalid and spare Yes return to your wallet.</figcaption>
 				</figure>
 			</section>
