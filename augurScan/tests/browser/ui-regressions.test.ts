@@ -353,6 +353,21 @@ test('the connection indicator reports the per-block number apart from the annou
 	expect(indicator.statusLabel).toBe('Live connection')
 	expect(indicator.blockLabel).toBe(' · #100')
 	expect(indicator.label).toBe('Live connection · #100')
+	const backfillNetwork = { ...network, phase: 'backfilling', observed_block: '12445', indexed_timestamp: '2025-12-29T21:00:10Z' }
+	const backfill = networkIndicator({ network: backfillNetwork, demo: false, streamState: 'open', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000 })
+	expect(backfill.statusLabel).toBe('Backfilling')
+	const estimated = networkIndicator({ network: backfillNetwork, demo: false, streamState: 'open', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000, progressSample: { indexedBlock: 100, sampledAt: now, blocksPerSecond: 10 } })
+	expect(estimated.label).toBe('Backfilling · 2d 3h behind · 12,345 blocks behind · 0.80% complete · ETA 20m 35s')
+	expect(backfill.label).toBe('Backfilling · 2d 3h behind · 12,345 blocks behind · 0.80% complete · Estimating ETA')
+	const reconnecting = networkIndicator({ network: backfillNetwork, demo: false, streamState: 'connecting', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000 })
+	expect(reconnecting.label).toBe('Backfilling · Reconnecting · 2d 3h behind · 12,345 blocks behind · 0.80% complete · Estimating ETA')
+	for (const indexed_timestamp of [null, 'invalid']) {
+		expect(networkIndicator({ network: { ...backfillNetwork, indexed_timestamp }, demo: false, streamState: 'open', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000 }).label).toBe('Backfilling · 12,345 blocks behind · 0.80% complete · Estimating ETA')
+	}
+	expect(networkIndicator({ network: { ...backfillNetwork, observed_block: '101', indexed_timestamp: '2026-01-01T00:00:05Z' }, demo: false, streamState: 'open', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000 }).label).toBe(
+		'Backfilling · 5s behind · 1 block behind · 99.01% complete · Estimating ETA',
+	)
+	expect(networkIndicator({ network: { ...backfillNetwork, indexed_timestamp: '2026-01-01T00:00:20Z' }, demo: false, streamState: 'open', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000 }).label).toBe('Backfilling · 0s behind · 12,345 blocks behind · 0.80% complete · Estimating ETA')
 	const next = networkIndicator({ network: { ...network, indexed_block: '101', observed_block: '101' }, demo: false, streamState: 'open', failed: false, streamHasOpened: true, now, freshnessThresholdMs: 48_000 })
 	expect(next.statusLabel).toBe(indicator.statusLabel)
 	expect(networkIndicator({ demo: false, streamState: 'connecting', failed: false, streamHasOpened: false, now, freshnessThresholdMs: 48_000 }).blockLabel).toBe('')
