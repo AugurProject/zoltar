@@ -56,6 +56,7 @@ export const updateConnectionStatus = (context: ScannerContext): void => {
 		streamHasOpened: liveState.streamHasOpened || state.connectionDemo === 'reconnecting',
 		now: Date.now() + liveState.serverClockOffsetMs,
 		freshnessThresholdMs: liveState.networkFreshnessThresholdMs,
+		progressSample: network === undefined ? undefined : state.networkRenderState.progressSamples.get(String(network.chain_id)),
 	})
 	const className = `connection ${status.tone}`
 	if (elements.connection.className !== className) elements.connection.className = className

@@ -580,6 +580,25 @@ describe('network indexer lifecycle', () => {
 		])
 	})
 
+	test('starts with 100,000 blocks and halves provider-rejected ranges without skipping the remainder', async () => {
+		const attempts: Array<readonly [bigint, bigint]> = []
+		const query = async (fromBlock: bigint, toBlock: bigint): Promise<readonly bigint[]> => {
+			attempts.push([fromBlock, toBlock])
+			if (toBlock - fromBlock + 1n > 25_000n) throw new Error('block range limit is 25000 blocks')
+			return [fromBlock, toBlock]
+		}
+		const first = await queryAdaptiveLogRange(10n, 200_000n, 100_000, query, undefined, isSplittableLogRangeError)
+		expect(first).toEqual({ fromBlock: 10n, toBlock: 25_009n, items: [10n, 25_009n] })
+		expect(attempts).toEqual([
+			[10n, 100_009n],
+			[10n, 50_009n],
+			[10n, 25_009n],
+		])
+		const next = await queryAdaptiveLogRange(first.toBlock + 1n, 200_000n, 100_000, query, undefined, isSplittableLogRangeError)
+		expect(next.fromBlock).toBe(25_010n)
+		expect(next.toBlock).toBe(50_009n)
+	})
+
 	test('does not hide an RPC failure when even one block cannot be queried', async () => {
 		const attempts: Array<readonly [bigint, bigint]> = []
 		await expect(

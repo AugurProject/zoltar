@@ -73,13 +73,13 @@ export const indexerConnectionStatus = (network: NetworkFreshnessRecord | undefi
 		if (network?.phase === 'degraded') return { label: 'Indexer retrying · Reconnecting', tone: 'error' }
 		if (waitingForStart && network !== undefined) return { label: `Waiting for #${network.start_block} · Reconnecting`, tone: 'error' }
 		if (network?.indexed_block === null) return { label: 'Indexer starting · Reconnecting', tone: 'error' }
-		if (network?.phase === 'backfilling') return { label: `Backfill #${network.indexed_block} · Reconnecting`, tone: 'error' }
+		if (network?.phase === 'backfilling') return { label: 'Backfilling · Reconnecting', tone: 'error' }
 		return { label: 'Reconnecting', tone: 'error' }
 	}
 	if (network?.phase === 'degraded') return { label: 'Indexer retrying', tone: 'error' }
 	if (waitingForStart && network !== undefined) return { label: `Waiting for start block #${network.start_block}`, tone: 'pending' }
 	if (network?.indexed_block === null) return { label: 'Indexer starting', tone: 'pending' }
-	if (network?.phase === 'backfilling') return { label: `Backfilling #${network.indexed_block}`, tone: 'pending' }
+	if (network?.phase === 'backfilling') return { label: 'Backfilling', tone: 'pending' }
 	if (streamState === 'open') return { label: 'Live connection', tone: 'live' }
 	if (network !== undefined) return { label: 'Reconnecting', tone: 'error' }
 	return { label: 'Connecting', tone: 'pending' }
@@ -150,6 +150,15 @@ const compactIndexerDuration = (seconds: number): string => {
 	}
 	const hours = totalHours % 24
 	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
+}
+
+/** Age of the indexed block relative to the server clock, distinct from catch-up ETA. */
+export const indexerTimeLagLabel = (network: NetworkFreshnessRecord, now: number): string | undefined => {
+	if (!network.indexed_timestamp) return undefined
+	const timestamp = new Date(network.indexed_timestamp).getTime()
+	if (!Number.isFinite(timestamp)) return undefined
+	const seconds = Math.max(0, (now - timestamp) / 1_000)
+	return `${seconds === 0 ? '0s' : compactIndexerDuration(seconds)} behind`
 }
 
 const exactIndexedBlockFor = (indexedBlock: string | number | bigint | null | undefined, exactStartBlock: bigint | undefined) => {
