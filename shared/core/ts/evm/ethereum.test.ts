@@ -2171,7 +2171,7 @@ describe('shared ethereum compatibility layer', () => {
 		}
 	})
 
-	test('public client rejects mined block transactions that are not bound to their block position', async () => {
+	test('public client rejects transactions in a block that are not bound to their block position', async () => {
 		const foreignBlockHash = `0x${'55'.repeat(32)}` satisfies Hash
 		const validTransaction = {
 			blockHash: BLOCK_HASH,
@@ -2219,9 +2219,9 @@ describe('shared ethereum compatibility layer', () => {
 		}
 
 		returnedBlock = { hash: null, number: '0xa', parentHash: BLOCK_HASH, timestamp: '0x5', transactions: [validTransaction] }
-		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a mined block without a hash')
+		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a non-pending block without a hash')
 		returnedBlock = { hash: BLOCK_HASH, number: null, parentHash: BLOCK_HASH, timestamp: '0x5', transactions: [validTransaction] }
-		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a mined block without a number')
+		await expect(client.getBlock({ blockNumber: 10n, includeTransactions: true })).rejects.toThrow('RPC returned a non-pending block without a number')
 
 		returnedBlock = {
 			hash: null,
@@ -2230,7 +2230,7 @@ describe('shared ethereum compatibility layer', () => {
 			timestamp: '0x5',
 			transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: '0x0' }],
 		}
-		await expect(client.getBlock({ blockTag: 'pending', includeTransactions: true })).rejects.toThrow('RPC returned a pending block with a transaction containing mined metadata')
+		await expect(client.getBlock({ blockTag: 'pending', includeTransactions: true })).rejects.toThrow('RPC returned a pending block with a transaction containing block inclusion metadata')
 		returnedBlock = { ...returnedBlock, transactions: [{ ...validTransaction, blockHash: null, blockNumber: null, transactionIndex: null }] }
 		const pendingBlock = await client.getBlock({ blockTag: 'pending', includeTransactions: true })
 		expect(pendingBlock.transactions[0]).toMatchObject({ blockHash: undefined, blockNumber: undefined, transactionIndex: undefined })
@@ -2274,7 +2274,7 @@ describe('shared ethereum compatibility layer', () => {
 		await expect(client.getTransactionReceipt({ hash: RECEIPT_HASH })).rejects.toThrow('different hash')
 	})
 
-	test('public client rejects transaction receipts without required mined fields', async () => {
+	test('public client rejects transaction receipts without required inclusion fields', async () => {
 		const validReceipt = {
 			blockHash: BLOCK_HASH,
 			blockNumber: '0x1',

@@ -88,7 +88,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const { client, mockWindow, questionId, statoblastSecurityMultiplierBps } = fixture
 			const { noDepositor, pool, game, universe, deadline, proof, secondQuestionId } = await setupInheritedDispute()
 			const beforeFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
-			// The fixture mines each transaction at latest block time + 1.
+			// The fixture includes each transaction at latest block time + 1.
 			await mockWindow.setTime(deadline + offset - 1n)
 			await forkUniverse(noDepositor, universe, secondQuestionId)
 			assert.equal(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] }), deadline + offset)

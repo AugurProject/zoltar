@@ -87,7 +87,7 @@ export type ReconciledSettlementJournal = { gasSpentAttoEthOnUtcDay: (day: Date)
 
 /**
  * Resolves attempts left `pending` by an interrupted process from their receipts or their consumed nonces. The operator
- * runs this before any candidate is judged against the daily gas budget, so a settlement mined during a crash or receipt
+ * runs this before any candidate is judged against the daily gas budget, so a settlement included during a crash or receipt
  * timeout charges its actual gas before a dispute in the same scan can spend the remainder; the returned view is how the
  * dispute path reads that gas, so it cannot be read before recovery has run.
  */

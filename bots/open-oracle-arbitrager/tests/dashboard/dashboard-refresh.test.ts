@@ -575,7 +575,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 				finalized: true,
 				kind: 'settlement',
 				lastValidBlockNumber: '115',
-				minedAt: '2026-09-19T10:01:00.000Z',
+				includedAt: '2026-09-19T10:01:00.000Z',
 				nonce: '7',
 				projectedGasCostEth: '0.0087',
 				receiptBlock: { hash: settlementHash, number: '91' },

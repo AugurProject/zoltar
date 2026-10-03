@@ -91,8 +91,8 @@ describe('Statoblast: truth auction', () => {
 			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
 
 			await mockWindow.setTime(migrationDeadline - 1n)
-			// The transaction mines at the exact deadline. On slower runners the receipt
-			// poll can mine another block before replaying the revert, losing its reason.
+			// The transaction is included at the exact deadline. On slower runners the receipt
+			// poll can advance another block before replaying the revert, losing its reason.
 			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool))
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in migration at the exact parent deadline')
 
@@ -117,7 +117,7 @@ describe('Statoblast: truth auction', () => {
 			let boundarySnapshot = await mockWindow.anvilSnapshot()
 			const forkerAddress = getInfraContractAddresses().securityPoolForker
 
-			const mineCompetitors = async (timestamp: bigint, migrateFirst: boolean) => {
+			const includeCompetingTransactions = async (timestamp: bigint, migrateFirst: boolean) => {
 				await directAnvilRequest('anvil_setAutomine', [false])
 				try {
 					await directAnvilRequest('evm_setNextBlockTimestamp', [`0x${timestamp.toString(16)}`])
@@ -152,18 +152,18 @@ describe('Statoblast: truth auction', () => {
 				}
 			}
 
-			const beforeDeadline = await mineCompetitors(migrationDeadline - 1n, false)
+			const beforeDeadline = await includeCompetingTransactions(migrationDeadline - 1n, false)
 			strictEqualTypeSafe(beforeDeadline.migrationStatus, 'success', 'migration should win before the inclusive deadline even when auction start is ordered first')
 			strictEqualTypeSafe(beforeDeadline.auctionStatus, 'reverted', 'auction start should lose before the migration deadline')
 
 			await mockWindow.anvilRevert(boundarySnapshot)
 			boundarySnapshot = await mockWindow.anvilSnapshot()
-			const atDeadline = await mineCompetitors(migrationDeadline, true)
+			const atDeadline = await includeCompetingTransactions(migrationDeadline, true)
 			strictEqualTypeSafe(atDeadline.migrationStatus, 'success', 'migration should remain valid at the exact inclusive deadline')
 			strictEqualTypeSafe(atDeadline.auctionStatus, 'reverted', 'auction start should remain invalid at the exact migration deadline')
 
 			await mockWindow.anvilRevert(boundarySnapshot)
-			const afterDeadline = await mineCompetitors(migrationDeadline + 1n, true)
+			const afterDeadline = await includeCompetingTransactions(migrationDeadline + 1n, true)
 			strictEqualTypeSafe(afterDeadline.migrationStatus, 'reverted', 'migration should close one second after the deadline')
 			strictEqualTypeSafe(afterDeadline.auctionStatus, 'success', 'auction start should become valid one second after the deadline in the same block')
 			assert.notStrictEqual(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'the post-deadline auction competitor should advance the child beyond migration, including immediate finalization when no repair is needed')
@@ -242,7 +242,7 @@ describe('Statoblast: truth auction', () => {
 			const forkerAddress = getInfraContractAddresses().securityPoolForker
 			let boundarySnapshot = await mockWindow.anvilSnapshot()
 
-			const mineCompetitors = async (timestamp: bigint, bidFirst: boolean) => {
+			const includeCompetingTransactions = async (timestamp: bigint, bidFirst: boolean) => {
 				await directAnvilRequest('anvil_setAutomine', [false])
 				try {
 					await directAnvilRequest('evm_setNextBlockTimestamp', [`0x${timestamp.toString(16)}`])
@@ -278,19 +278,19 @@ describe('Statoblast: truth auction', () => {
 				}
 			}
 
-			const beforeDeadline = await mineCompetitors(auctionDeadline - 1n, false)
+			const beforeDeadline = await includeCompetingTransactions(auctionDeadline - 1n, false)
 			strictEqualTypeSafe(beforeDeadline.bidStatus, 'success', 'a bid should remain valid one second before the deadline even when finalization is ordered first')
 			strictEqualTypeSafe(beforeDeadline.finalizeStatus, 'reverted', 'finalization should remain closed one second before the deadline')
 
 			await mockWindow.anvilRevert(boundarySnapshot)
 			boundarySnapshot = await mockWindow.anvilSnapshot()
-			const atDeadline = await mineCompetitors(auctionDeadline, true)
+			const atDeadline = await includeCompetingTransactions(auctionDeadline, true)
 			strictEqualTypeSafe(atDeadline.bidStatus, 'reverted', 'bidding should be closed at the exact auction deadline')
 			strictEqualTypeSafe(atDeadline.finalizeStatus, 'success', 'forker finalization should open at the exact auction deadline')
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child should activate through the exact-deadline finalization competitor')
 
 			await mockWindow.anvilRevert(boundarySnapshot)
-			const afterDeadline = await mineCompetitors(auctionDeadline + 1n, true)
+			const afterDeadline = await includeCompetingTransactions(auctionDeadline + 1n, true)
 			strictEqualTypeSafe(afterDeadline.bidStatus, 'reverted', 'bidding should stay closed after the deadline')
 			strictEqualTypeSafe(afterDeadline.finalizeStatus, 'success', 'finalization should become valid one second after the deadline in the same block')
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child should also activate through a post-deadline finalization competitor')

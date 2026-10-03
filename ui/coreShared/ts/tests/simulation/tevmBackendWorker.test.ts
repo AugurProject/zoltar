@@ -135,17 +135,17 @@ describe('simulation worker lifecycle', () => {
 		worker.emitMessage({ state: createReadyState(), type: 'ready' })
 		const backend = await backendPromise
 
-		const mineBlockPromise = backend.mineBlock()
+		const advanceBlockPromise = backend.advanceBlock()
 		expect(worker.postMessage).toHaveBeenLastCalledWith({
 			id: 1,
-			method: 'mineBlock',
+			method: 'advanceBlock',
 			params: undefined,
 			type: 'call',
 		})
 		worker.emitMessageError()
 
-		await expect(mineBlockPromise).rejects.toThrow('Simulation worker message deserialization failed')
-		await expect(backend.mineBlock()).rejects.toThrow('Simulation worker message deserialization failed')
+		await expect(advanceBlockPromise).rejects.toThrow('Simulation worker message deserialization failed')
+		await expect(backend.advanceBlock()).rejects.toThrow('Simulation worker message deserialization failed')
 		expect(worker.terminate).toHaveBeenCalledTimes(1)
 	})
 
@@ -156,9 +156,9 @@ describe('simulation worker lifecycle', () => {
 		const backend = await backendPromise
 
 		worker.failNextPostMessage(new Error('request could not be posted'))
-		await expect(backend.mineBlock()).rejects.toThrow('request could not be posted')
+		await expect(backend.advanceBlock()).rejects.toThrow('request could not be posted')
 
-		const retryPromise = backend.mineBlock()
+		const retryPromise = backend.advanceBlock()
 		worker.emitMessage({ id: 2, type: 'result', value: undefined })
 		await expect(retryPromise).resolves.toBeUndefined()
 		expect(worker.terminate).not.toHaveBeenCalled()
@@ -173,7 +173,7 @@ test('stops a stalled simulation control and clears its loading state', async ()
 	worker.emitMessage({ state: { ...createReadyState(), isBootstrapping: true }, type: 'ready' })
 	const backend = await pendingBackend
 	try {
-		const result = backend.mineBlock().then(
+		const result = backend.advanceBlock().then(
 			() => 'unexpected success',
 			error => (error instanceof Error ? error.message : 'unexpected error'),
 		)

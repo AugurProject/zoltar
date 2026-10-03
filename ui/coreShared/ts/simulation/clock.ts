@@ -102,7 +102,7 @@ async function syncSimulationVmState({ block, memoryClient, receiptsManager, vm 
 	const simulationNode = getSimulationNode(memoryClient)
 	const originalVm = await simulationNode.getVm()
 	const stateRootValue = vm.stateManager._baseState.stateRoots.get(bytesToHex(block.header.stateRoot))
-	if (stateRootValue === undefined) throw new Error('Simulation state root was not found after mining a block')
+	if (stateRootValue === undefined) throw new Error('Simulation state root was not found after advancing a block')
 	originalVm.stateManager.saveStateRoot(block.header.stateRoot, stateRootValue)
 	originalVm.blockchain = vm.blockchain
 	originalVm.evm.blockchain = vm.evm.blockchain
@@ -151,13 +151,13 @@ async function sealSimulationBlock({ blockBuilder, receiptsManager, vm }: Awaite
 	return block
 }
 
-async function mineSimulationBlockAtTimestamp(memoryClient: TevmLikeClient, timestamp: bigint) {
+async function advanceSimulationBlockAtTimestamp(memoryClient: TevmLikeClient, timestamp: bigint) {
 	const pendingBlock = await startSimulationBlock(memoryClient, timestamp)
 	const block = await sealSimulationBlock(pendingBlock, [])
 	await syncSimulationVmState({ block, memoryClient, receiptsManager: pendingBlock.receiptsManager, vm: pendingBlock.vm })
 }
 
-export async function minePendingSimulationTransactionAtTimestamp(memoryClient: TevmLikeClient, txHash: Hash, timestamp: bigint) {
+export async function includePendingSimulationTransactionAtTimestamp(memoryClient: TevmLikeClient, txHash: Hash, timestamp: bigint) {
 	const pool = await getSimulationNode(memoryClient).getTxPool()
 	const pendingBlock = await startSimulationBlock(memoryClient, timestamp)
 	const tx = requireSimulationTransaction(pool.getByHash(txHash), txHash)
@@ -173,26 +173,26 @@ export async function minePendingSimulationTransactionAtTimestamp(memoryClient: 
 	return bytesToHex(block.hash())
 }
 
-export async function minePendingSimulationTransaction(memoryClient: TevmLikeClient, txHash: Hash) {
+export async function includePendingSimulationTransaction(memoryClient: TevmLikeClient, txHash: Hash) {
 	const chainTimestamp = await getSimulationChainTimestamp(memoryClient)
-	return await minePendingSimulationTransactionAtTimestamp(memoryClient, txHash, getNextSimulationTimestamp(chainTimestamp))
+	return await includePendingSimulationTransactionAtTimestamp(memoryClient, txHash, getNextSimulationTimestamp(chainTimestamp))
 }
 
-export async function mineNextSimulationBlock(memoryClient: TevmLikeClient) {
+export async function advanceNextSimulationBlock(memoryClient: TevmLikeClient) {
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-	await mineSimulationBlockAtTimestamp(memoryClient, getNextSimulationTimestamp(currentTimestamp))
+	await advanceSimulationBlockAtTimestamp(memoryClient, getNextSimulationTimestamp(currentTimestamp))
 }
 
 export async function advanceSimulationTime(memoryClient: TevmLikeClient, seconds: bigint) {
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 	const offset = seconds > 0n ? seconds : SIMULATION_BLOCK_INTERVAL_SECONDS
-	await mineSimulationBlockAtTimestamp(memoryClient, currentTimestamp + offset)
+	await advanceSimulationBlockAtTimestamp(memoryClient, currentTimestamp + offset)
 }
 
 export async function initializeSimulationClock(memoryClient: TevmLikeClient, initialTimestamp: bigint = SIMULATION_INITIAL_TIMESTAMP) {
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 	if (currentTimestamp >= initialTimestamp) return currentTimestamp
 	const nextTimestamp = currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS > initialTimestamp ? currentTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS : initialTimestamp
-	await mineSimulationBlockAtTimestamp(memoryClient, nextTimestamp)
+	await advanceSimulationBlockAtTimestamp(memoryClient, nextTimestamp)
 	return nextTimestamp
 }

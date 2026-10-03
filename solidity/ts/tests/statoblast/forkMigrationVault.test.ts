@@ -164,7 +164,7 @@ describe('Statoblast: fork migration', () => {
 			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
 
-			// Child creation mines at the inclusive deadline; the next transaction is one second later.
+			// Child creation is included at the inclusive deadline; the next transaction is one second later.
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /Migration closed/)
 		})
 

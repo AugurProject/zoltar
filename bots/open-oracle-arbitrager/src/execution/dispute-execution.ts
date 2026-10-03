@@ -302,7 +302,7 @@ export async function executeDispute(
 		actualGasCost = receiptGasCost(receipt)
 		entryGasExpenditures = await confirmedGasExpenditures(readClients, config, `public entry ${reportId}`, [receipt])
 		if (receipt.status !== 'success') {
-			const closedAt = entryGasExpenditures[0]?.minedAt
+			const closedAt = entryGasExpenditures[0]?.includedAt
 			if (closedAt === undefined) throw new Error('Reverted public dispute gas timestamp is unavailable')
 			await persistPosition({
 				...receiptPosition,

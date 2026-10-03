@@ -53,8 +53,8 @@ async function handleCall(message: SimulationWorkerCallMessage) {
 		case 'mintRep':
 			await engine.mintRep(message.params.amount)
 			return undefined
-		case 'mineBlock':
-			await engine.mineBlock()
+		case 'advanceBlock':
+			await engine.advanceBlock()
 			return undefined
 		case 'patchSimulationGenesisRepToken':
 			await engine.patchSimulationGenesisRepToken(message.params)

@@ -1081,7 +1081,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			functionName: 'settle',
 			args: [reportId, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper)],
 		})
-		const mineDeadlineCompetitors = async (settleFirst: boolean) => {
+		const includeDeadlineTransactions = async (settleFirst: boolean) => {
 			const rawRequest = async (method: string, params: readonly unknown[]) => await mockWindow.requestRaw({ method, params })
 			const queueTransaction = async (from: Address, data: Hex) => {
 				const hash = await rawRequest('eth_sendTransaction', [{ from, to: openOracle, data, gas: '0x17d7840', gasPrice: '0x0' }])
@@ -1123,13 +1123,13 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 
 		await mockWindow.anvilRevert(boundarySnapshot)
 		boundarySnapshot = await mockWindow.anvilSnapshot()
-		const disputeFirst = await mineDeadlineCompetitors(false)
+		const disputeFirst = await includeDeadlineTransactions(false)
 		assert.strictEqual(disputeFirst.disputeStatus, 'reverted', 'a dispute must fail at equality even when ordered first')
 		assert.strictEqual(disputeFirst.settleStatus, 'success', 'settlement must succeed at equality when ordered after a rejected dispute')
 
 		await mockWindow.anvilRevert(boundarySnapshot)
 		boundarySnapshot = await mockWindow.anvilSnapshot()
-		const settlementFirst = await mineDeadlineCompetitors(true)
+		const settlementFirst = await includeDeadlineTransactions(true)
 		assert.strictEqual(settlementFirst.disputeStatus, 'reverted', 'a dispute must fail at equality after settlement is ordered first')
 		assert.strictEqual(settlementFirst.settleStatus, 'success', 'settlement must succeed at equality when ordered first')
 		assert.strictEqual((await getOpenOracleReportStatus(reporter, reportId)).settlementTimestamp, deadline)

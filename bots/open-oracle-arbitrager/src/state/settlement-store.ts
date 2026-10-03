@@ -39,7 +39,7 @@ function settlementAttemptHorizonFinalized(record: Pick<SettlementRecord, 'lastV
 }
 
 /**
- * A public transaction has no on-chain deadline, so a pending attempt may be mined however long ago it was signed; nothing
+ * A public transaction has no on-chain deadline, so a pending attempt may be included however long ago it was signed; nothing
  * that depends on it may be re-sent until its receipt appears or another transaction consumes its nonce.
  */
 function settlementAttemptMayStillLand(record: Pick<SettlementRecord, 'status'>) {
@@ -74,7 +74,7 @@ export function rewardWithdrawalInFlight(records: readonly SettlementRecord[], b
 
 /**
  * Attempts whose outcome recovery still has to check: pending ones; dropped private ones (the relay may have shared the
- * transaction before its horizon) and dropped public ones inside their horizon; and mined or expired ones recovery has
+ * transaction before its horizon) and dropped public ones inside their horizon; and included or expired ones recovery has
  * not yet verified at finality depth, because a short reorg can orphan a receipt or a replacement after it was journaled.
  * A public attempt that no node accepted is final once its horizon has finalized; a dropped private one is rechecked
  * until its nonce is consumed.
@@ -103,7 +103,7 @@ export type SettlementCandidateSnapshot = {
 /**
  * Durable record of one settlement or reward-withdrawal transaction signed by this operator. The nonce and intent let
  * recovery tell a late inclusion from a replacement: `expired` means another transaction consumed the nonce, so the
- * signed hash can never be mined. A `pending` record stays tracked until that or a receipt is observed; a private
+ * signed hash can never be included. A `pending` record stays tracked until that or a receipt is observed; a private
  * attempt whose relay horizon has finalized without inclusion becomes `dropped`, which frees the report and the budget
  * while recovery keeps rechecking it, because a public attempt has no deadline but a relay stops at `maxBlockNumber`.
  */
@@ -120,10 +120,10 @@ export type SettlementRecord = {
 	 * down while a reorg orphaned it.
 	 */
 	finalized: boolean
-	/** Receipt block timestamp; charges gas to the UTC day the chain mined it, like position expenditures. */
-	minedAt: string | undefined
+	/** Receipt block timestamp; charges gas to the UTC day the chain included it, like position expenditures. */
+	includedAt: string | undefined
 	nonce: string
-	/** The block that carried the receipt; a mined outcome is rechecked against it until that block has finality. */
+	/** The block that carried the receipt; an included outcome is rechecked against it until that block has finality. */
 	receiptBlock: { hash: Hex; number: string } | undefined
 	/** For an expired attempt, the transaction that consumed its nonce, rechecked until it has finality. */
 	replacedBy: Hex | undefined
@@ -210,6 +210,9 @@ export function settlementJournalPath(positionFile: string) {
 function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const record = value as Record<string, unknown>
+	// Read legacy append-only history without rewriting its audit lines.
+	if ('includedAt' in record && 'minedAt' in record) return undefined
+	const includedAt = 'includedAt' in record ? record['includedAt'] : record['minedAt']
 	const optionalString = (field: string, pattern: RegExp) => record[field] === undefined || (typeof record[field] === 'string' && pattern.test(record[field]))
 	if (
 		typeof record['account'] !== 'string' ||
@@ -221,7 +224,7 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		(record['kind'] !== 'reward-withdrawal' && record['kind'] !== 'settlement') ||
 		typeof record['lastValidBlockNumber'] !== 'string' ||
 		!INTEGER.test(record['lastValidBlockNumber']) ||
-		(record['minedAt'] !== undefined && (typeof record['minedAt'] !== 'string' || !Number.isFinite(Date.parse(record['minedAt'])))) ||
+		(includedAt !== undefined && (typeof includedAt !== 'string' || !Number.isFinite(Date.parse(includedAt)))) ||
 		typeof record['nonce'] !== 'string' ||
 		!INTEGER.test(record['nonce']) ||
 		typeof record['projectedGasCostEth'] !== 'string' ||
@@ -253,7 +256,7 @@ function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 		finalized: record['finalized'],
 		kind: record['kind'],
 		lastValidBlockNumber: record['lastValidBlockNumber'],
-		minedAt: typeof record['minedAt'] === 'string' ? record['minedAt'] : undefined,
+		includedAt: typeof includedAt === 'string' ? includedAt : undefined,
 		nonce: record['nonce'],
 		projectedGasCostEth: record['projectedGasCostEth'],
 		receiptBlock,
@@ -333,7 +336,7 @@ function realizedSettlementIncomeAttoEth(records: readonly SettlementRecord[]) {
 }
 
 /**
- * Gas the settler paid on the given UTC day (by mined block time) plus the signed exposure of every attempt that may still
+ * Gas the settler paid on the given UTC day (by receipt block time) plus the signed exposure of every attempt that may still
  * land, whichever day it was signed on, so settlements share the operator's daily gas budget with positions even before
  * their receipts: a pending attempt is a liability against whatever day is being judged until its outcome is known. A
  * dropped attempt charges nothing until a late receipt shows what it actually paid.
@@ -341,7 +344,7 @@ function realizedSettlementIncomeAttoEth(records: readonly SettlementRecord[]) {
 export function settlementGasSpentAttoEthOnUtcDay(records: readonly SettlementRecord[], now: Date) {
 	const day = now.toISOString().slice(0, 10)
 	return records.reduce((total, record) => {
-		if (record.actualGasCostEth !== undefined) return (record.minedAt ?? record.updatedAt).slice(0, 10) === day ? total + parseDecimalWeth(record.actualGasCostEth) : total
+		if (record.actualGasCostEth !== undefined) return (record.includedAt ?? record.updatedAt).slice(0, 10) === day ? total + parseDecimalWeth(record.actualGasCostEth) : total
 		if (settlementAttemptMayStillLand(record)) return total + parseDecimalWeth(record.projectedGasCostEth)
 		return total
 	}, 0n)

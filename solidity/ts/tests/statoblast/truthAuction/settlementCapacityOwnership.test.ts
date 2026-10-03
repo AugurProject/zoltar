@@ -158,7 +158,7 @@ describe('Statoblast: truth auction', () => {
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			const feeIndexAfterClaim = (await client.readContract({ address: yesSecurityPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getPoolAccountingSnapshot', args: [] })).feeIndex
-			assert.ok(feeIndexAfterClaim >= migratedVaultBeforeClaim.feeIndex, 'the child fee index must not move backward while the claim is mined')
+			assert.ok(feeIndexAfterClaim >= migratedVaultBeforeClaim.feeIndex, 'the child fee index must not move backward while the claim is included')
 			strictEqualTypeSafe(participantVault.feeIndex, feeIndexAfterClaim, 'newly auction-funded vaults should inherit the current child-pool fee index')
 			const [associatedRepPerCapacityBps, poolHeldRepPerCapacityBps] = await client.readContract({
 				address: yesSecurityPool.securityPool,

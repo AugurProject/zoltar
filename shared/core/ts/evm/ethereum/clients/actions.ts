@@ -84,7 +84,7 @@ async function scanReplacementTransactions(blockReader: Pick<PublicClientActions
 	let transaction: BlockTransaction | undefined
 	for (let blockNumber = firstBlock; blockNumber <= latestBlockNumber; blockNumber += 1n) {
 		const block = await blockReader.getBlock({ blockNumber, includeTransactions: true })
-		if (block.hash === undefined) throw new Error('Replacement scan requires a mined block hash')
+		if (block.hash === undefined) throw new Error('Replacement scan requires a block hash')
 		const previous = history.at(-1)
 		if (previous !== undefined && block.parentHash !== previous.hash) return { history: [] }
 		history.push({ number: blockNumber, hash: block.hash })
