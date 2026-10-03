@@ -756,6 +756,24 @@ describe('live market refresh', () => {
 		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently saved')
 	})
 
+	test('the liquidity route exposes its controls on narrow screens without opening a dialog', async () => {
+		window.location.hash = `#/liquidity/${pool}?simulate=1`
+		const originalMatchMedia = window.matchMedia
+		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		const services = { ...offlineControllerServices, discoverAddressedMarket: async () => discoveryPage([market]) }
+		const rendered = await renderIntoDocument(<LiveTrading route={`liquidity/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = async () => {
+			await rendered.cleanup()
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
+		await waitForDom(() => document.querySelector('.liquidity-controls') !== null, 'liquidity controls')
+		expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Liquidity')
+		expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(false)
+		expect(document.querySelector('.market-ticket-bar')).toBeNull()
+		expect(document.querySelector('[role="dialog"]')).toBeNull()
+		expect(document.querySelector('input[name="amount"]')).not.toBeNull()
+	})
+
 	test('a ticket link opens the ticket on its direction and side and keeps them in the hash', async () => {
 		window.location.hash = `#/market/${pool}?simulate=1&ticket=sell-no`
 		const services = {
@@ -807,7 +825,7 @@ describe('live market refresh', () => {
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&view=settlement`)
 	})
 
-	test('a side request for a market that never loads does not open the sheet on the next market', async () => {
+	test('a side request for a market that never loads does not leak into the next visible ticket', async () => {
 		const originalMatchMedia = window.matchMedia
 		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
 		try {
@@ -823,8 +841,10 @@ describe('live market refresh', () => {
 			await waitForDom(() => document.body.textContent?.includes('This security pool could not be loaded') === true, 'unavailable market')
 			window.location.hash = `#/market/${pool}`
 			await act(() => render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
-			await waitForDom(() => document.querySelector('.market-ticket-bar') !== null, 'collapsed ticket bar')
-			expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(true)
+			await waitForDom(() => document.querySelector('.market-ticket__panel') !== null, 'visible ticket')
+			expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(false)
+			expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('Yes 50%')
+			expect(document.querySelector('.trade-ticket-switchers .view-tabs:not(.outcome-picker) button[aria-pressed="true"]')?.textContent).toBe('Buy')
 			expect(document.querySelector('[role="dialog"]')).toBeNull()
 		} finally {
 			Reflect.set(window, 'matchMedia', originalMatchMedia)

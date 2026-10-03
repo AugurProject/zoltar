@@ -418,8 +418,12 @@ button.outcome-button--no:hover:not(:disabled) {
 .market-layout {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+	grid-template-areas: "overview ticket";
 	align-items: start;
 	gap: var(--space-5);
+}
+.market-layout__main {
+	grid-area: overview;
 }
 .market-overview {
 	display: grid;
@@ -480,6 +484,7 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 /* A ticket taller than the viewport scrolls inside its column so its primary action stays reachable while sticky. */
 .market-ticket {
+	grid-area: ticket;
 	position: sticky;
 	top: var(--space-4);
 	max-height: calc(100dvh - 2 * var(--space-4));
@@ -488,9 +493,6 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 .market-ticket__panel {
 	min-width: 0;
-}
-.market-ticket-bar {
-	display: none;
 }
 
 /* On phones the status chips take their own row and share it, so the four labels fit inside the page gutter. */
@@ -511,82 +513,16 @@ button.outcome-button--no:hover:not(:disabled) {
 	}
 }
 
-/* Keep in sync with COMPACT_TICKET_QUERY in MarketTicketSheet.tsx. */
+/* Narrow layouts keep the workflow in the page, ahead of the detailed market overview. */
 @media (max-width: 64rem) {
-	/* The bottom padding leaves room for the collapsed ticket bar (above the tab bar that main already pads for) so it never covers the end of the page. */
 	.market-layout {
 		grid-template-columns: minmax(0, 1fr);
-		padding-bottom: 5rem;
+		grid-template-areas: "ticket" "overview";
 	}
 	.market-ticket {
 		position: static;
 		max-height: none;
 		overflow: visible;
-	}
-	/* Inside the sheet the ticket's section surface would draw a second frame; the sheet is the surface. */
-	.market-ticket--sheet .market-ticket__panel > .section-block {
-		border: 0;
-		border-radius: 0;
-		background: transparent;
-	}
-	.market-ticket.market-ticket--sheet {
-		position: fixed;
-		place-items: end stretch;
-		padding: 0;
-	}
-	.market-ticket--sheet .market-ticket__panel {
-		width: 100%;
-		max-height: min(88vh, 100%);
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		border-top: 1px solid var(--border-strong);
-		border-radius: var(--radius-overlay) var(--radius-overlay) 0 0;
-		background: var(--surface-modal-opaque);
-		box-shadow: var(--shadow-overlay);
-	}
-	.market-ticket__sheet-header {
-		position: sticky;
-		top: 0;
-		z-index: var(--z-content-raised);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-3);
-		padding: var(--space-3) var(--space-4);
-		border-bottom: 1px solid var(--border-default);
-		background: var(--surface-modal-opaque);
-	}
-	.market-ticket__sheet-header h2 {
-		margin: 0;
-		font-size: 1rem;
-	}
-	/* The collapsed ticket stacks directly above the app's bottom tab bar so both stay reachable. */
-	.market-ticket-bar {
-		position: fixed;
-		inset: auto 0 var(--bottom-nav-height);
-		z-index: var(--z-nav);
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: 1fr;
-		gap: var(--space-2);
-		padding: var(--space-3) var(--space-4);
-		border-top: 1px solid var(--border-strong);
-		background: var(--surface-modal-opaque);
-		box-shadow: var(--shadow-overlay);
-	}
-	.market-ticket-bar button {
-		min-height: 2.75rem;
-	}
-}
-@media (prefers-reduced-motion: no-preference) and (max-width: 64rem) {
-	.market-ticket--sheet .market-ticket__panel {
-		animation: market-ticket-rise var(--transition-standard);
-	}
-}
-@keyframes market-ticket-rise {
-	from {
-		transform: translateY(1.5rem);
-		opacity: 0;
 	}
 }
 
