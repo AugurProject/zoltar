@@ -1,6 +1,6 @@
 import type { NetworkRecord } from './browser-types.ts'
 import { exactNumber } from './format.ts'
-import { indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel } from './network-freshness.ts'
+import { type IndexerProgressSample, indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel, indexerProgressEstimate, indexerTimeLagLabel } from './network-freshness.ts'
 
 export const networkIndicator = (input: {
 	readonly network?: NetworkRecord | undefined
@@ -10,6 +10,7 @@ export const networkIndicator = (input: {
 	readonly streamHasOpened: boolean
 	readonly now: number
 	readonly freshnessThresholdMs: number
+	readonly progressSample?: IndexerProgressSample | undefined
 }): { tone: string; label: string; statusLabel: string; blockLabel: string; title: string } => {
 	const { network } = input
 	const stale = network !== undefined && (indexerHeadFreshness(network, input.now).stale || !network.last_success_at || input.now - new Date(network.last_success_at).getTime() > input.freshnessThresholdMs)
@@ -30,9 +31,14 @@ export const networkIndicator = (input: {
 		}
 	}
 	const status = indexerConnectionStatus(network, input.streamState, input.failed, input.streamHasOpened)
-	// The block number changes every block, so it is reported apart from the status that assistive technology announces.
+	// Per-block progress is reported apart from the status that assistive technology announces.
 	const statusLabel = network?.indexed_block && stale ? 'Stale' : status.label
-	const blockLabel = network?.indexed_block ? ` · #${exactNumber(network.indexed_block)}` : ''
+	let blockLabel = network?.indexed_block ? ` · #${exactNumber(network.indexed_block)}` : ''
+	if (network?.phase === 'backfilling' && network.indexed_block) {
+		const progress = indexerProgressEstimate(network, input.progressSample, input.now)
+		const details = [indexerTimeLagLabel(network, input.now), indexerLagLabel(network), progress.percentage === undefined ? undefined : `${progress.percentage}% complete`, progress.eta]
+		blockLabel = ` · ${details.filter(detail => detail !== undefined).join(' · ')}`
+	}
 	return {
 		tone: stale ? 'error' : status.tone,
 		label: `${statusLabel}${blockLabel}`,

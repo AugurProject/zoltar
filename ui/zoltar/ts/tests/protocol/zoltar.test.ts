@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadMarketDetails, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 
@@ -193,7 +194,7 @@ describe('zoltar contract helpers', () => {
 		])
 	})
 
-	test('loadZoltarUniverseSummary handles forked scalar details and an empty child-universe page', async () => {
+	test('loadZoltarUniverseSummary loads scalar fork metadata without enumerating deployed children', async () => {
 		const client = createReadClient({
 			multicallResponses: [
 				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n],
@@ -203,7 +204,9 @@ describe('zoltar contract helpers', () => {
 			readContractHandlers: {
 				getUniverseTheoreticalSupplyAttoRep: async () => 222n,
 				getOutcomeLabels: async () => [],
-				getDeployedChildUniverses: async () => [[], [], []],
+				getDeployedChildUniverses: async () => {
+					throw new Error('Scalar children must be selected through the picker')
+				},
 				...lineageHandlers,
 			},
 		})
@@ -219,6 +222,35 @@ describe('zoltar contract helpers', () => {
 			{ outcomeLabel: 'answer 41:1', universeId: 77n },
 			{ outcomeLabel: 'answer 42:2', universeId: 8n },
 		])
+	})
+
+	test('reads only explicitly selected scalar children, including Invalid and the maximum tick', async () => {
+		const numTicks = 10n ** 25n
+		const lastIndex = getScalarOutcomeIndex({ numTicks }, numTicks)
+		const client = createReadClient({
+			multicallResponses: [
+				[REP_TOKEN, [0n, 55n, 2n, REP_TOKEN, 77n], 15n, 5n, 5n],
+				['Augur Reputation 8', 'REP8', 8n],
+				[['Scalar question', '', 0n, 1n, numTicks, 0n, 100n, 'units'], 1n],
+				[99n, 100n],
+				[
+					[0n, 55n, 0n, getAddress('0x0000000000000000000000000000000000000000'), 8n],
+					[0n, 55n, lastIndex, getAddress('0x0000000000000000000000000000000000000000'), 8n],
+				],
+			],
+			readContractHandlers: {
+				getUniverseTheoreticalSupplyAttoRep: async () => 222n,
+				getOutcomeLabels: async () => [],
+				getDeployedChildUniverses: async () => {
+					throw new Error('Do not enumerate scalar children')
+				},
+				...lineageHandlers,
+			},
+		})
+		const summary = await loadZoltarUniverseSummary(client, 8n, undefined, { scalarOutcomeIndexes: [0n, lastIndex, lastIndex] })
+		expect(summary?.childUniverses.map(child => child.outcomeIndex)).toEqual([0n, lastIndex])
+		expect(summary?.childUniverses.map(child => child.universeId)).toEqual([99n, 100n])
+		expect(summary?.childUniverses.map(child => child.exists)).toEqual([false, false])
 	})
 
 	test('loadZoltarUniverseSummary builds categorical child universes from fork question outcome ids', async () => {

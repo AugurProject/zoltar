@@ -1336,7 +1336,7 @@ button.tx-action-wallet-fix {
 		justify-items: end;
 	}
 
-	.header-toolbar .universe-switcher > summary {
+	.header-toolbar .universe-switcher {
 		box-sizing: border-box;
 		width: 100%;
 		max-width: 26vw;
@@ -1394,17 +1394,6 @@ button.tx-action-wallet-fix {
 		width: auto;
 		max-width: 100%;
 		margin-top: var(--space-2);
-	}
-
-	/* The popover spans the viewport under its trigger instead of overflowing the left edge. */
-	.header-toolbar .universe-switcher-popover {
-		position: fixed;
-		top: auto;
-		right: 0.75rem;
-		left: 0.75rem;
-		width: auto;
-		max-width: calc(100vw - 1.5rem);
-		margin-top: 0.5rem;
 	}
 }
 

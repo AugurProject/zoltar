@@ -99,7 +99,6 @@ export const stagedOperationRetryDetail = 'Submit a new staged operation if you 
 export const transactionStateUnavailableDetail = 'The transaction succeeded, but the latest manager state is not available.'
 export const manualQueuedOperationDetail = 'The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.'
 export const formatLabelValue = (label: CopyTemplateValue, value: CopyTemplateValue) => `${label}: ${value}`
-export const formatPairSlash = (leftValue: CopyTemplateValue, rightValue: CopyTemplateValue) => `${leftValue} / ${rightValue}`
 export const dismissErrorActionLabel = 'Dismiss error'
 export const dropdownOptions = 'Dropdown options'
 export const unknown = 'Unknown'
@@ -140,7 +139,6 @@ export const moreInfo = 'More info'
 export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${actionLabel} details`
 export const noneSelected = 'None selected'
 export const notDeployed = 'Not deployed'
-export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`
 export const walletAssetAutomaticImportUnavailable = 'Automatic import unavailable. Copy the token address to import it manually.'
 export const walletAssetRequestAccepted = 'Request accepted'
@@ -163,7 +161,6 @@ export const questionDetailsLoadingLabel = 'Loading question details…'
 export const questionTimeline = 'Question timeline'
 export const questionType = 'Question type'
 export const selectedOutcome = 'Selected outcome'
-export const selectedTick = 'Selected tick'
 export const scalarValue = 'Scalar value'
 export const scalarValueHelpText = 'Enter a value on an increment.'
 export const scalarValueInvalid = 'Enter a value between the minimum and maximum that falls on an increment.'

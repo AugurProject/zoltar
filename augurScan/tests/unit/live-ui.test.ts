@@ -1116,12 +1116,12 @@ test('does not refresh network status when a product-tab load restores the cache
 test('distinguishes indexer startup and backfill progress from stream connectivity', () => {
 	expect(indexerConnectionStatus(undefined, 'connecting', false)).toEqual({ label: 'Connecting', tone: 'pending' })
 	expect(indexerConnectionStatus({ indexed_block: null, phase: 'backfilling' }, 'open', false)).toEqual({ label: 'Indexer starting', tone: 'pending' })
-	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'backfilling' }, 'open', false)).toEqual({ label: 'Backfilling #42', tone: 'pending' })
+	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'backfilling' }, 'open', false)).toEqual({ label: 'Backfilling', tone: 'pending' })
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'degraded' }, 'open', false)).toEqual({ label: 'Indexer retrying', tone: 'error' })
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'open', false)).toEqual({ label: 'Live connection', tone: 'live' })
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'live' }, 'connecting', false)).toEqual({ label: 'Reconnecting', tone: 'error' })
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'backfilling' }, 'connecting', false, true)).toEqual({
-		label: 'Backfill #42 · Reconnecting',
+		label: 'Backfilling · Reconnecting',
 		tone: 'error',
 	})
 	expect(indexerConnectionStatus({ indexed_block: '42', phase: 'degraded' }, 'closed', false, true)).toEqual({

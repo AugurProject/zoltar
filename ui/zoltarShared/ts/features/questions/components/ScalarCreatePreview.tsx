@@ -23,7 +23,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 	const clampedSelectedTickValue = clampScalarTickIndex(selectedTickValue, details.numTicks)
 	const clampedSelectedTick = clampedSelectedTickValue.toString()
 	useEffect(() => {
-		if (clampedSelectedTick === selectedTick) return
+		if (selectedTick.trim() === '' || clampedSelectedTick === selectedTick) return
 		onSelectedTickChange(clampedSelectedTick)
 	}, [clampedSelectedTick, onSelectedTickChange, selectedTick])
 
@@ -35,8 +35,7 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 			onInvalidChange={setIsInvalid}
 			onSelectedTickChange={onSelectedTickChange}
 			selectedOutcomeLabel={isInvalid ? commonCopy.invalid : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}
-			selectedTick={clampedSelectedTick}
-			selectedTickLabel={isInvalid ? commonCopy.invalid : commonCopy.formatPairSlash(clampedSelectedTick, details.numTicks.toString())}
+			selectedTick={selectedTick.trim() === '' ? '' : clampedSelectedTick}
 			showMinMax={false}
 		/>
 	)

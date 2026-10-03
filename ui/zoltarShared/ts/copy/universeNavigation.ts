@@ -7,4 +7,3 @@ export const formatChildStatusReadFailure = (outcome: string) => `The ${outcome}
 export const formatRetryChildOutcome = (outcome: string) => `Retry ${outcome} universe`
 export const selectScalarOutcome = 'Select outcome'
 export const loadingChild = 'Loading child universe…'
-export const invalidScalarTick = 'Enter an exact tick within the question’s range.'

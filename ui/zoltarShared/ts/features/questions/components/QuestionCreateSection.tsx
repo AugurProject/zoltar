@@ -165,7 +165,7 @@ export function QuestionCreateSection({
 			: submitActionOverride
 	const showEndedQuestionWarning = questionFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(questionForm, currentTimestamp)
 	useEffect(() => {
-		if (scalarCreatePreviewDetails === undefined) return
+		if (scalarCreatePreviewDetails === undefined || scalarCreatePreviewTick.trim() === '') return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
 		if (clampedTick === scalarCreatePreviewTick) return
 		setScalarCreatePreviewTick(clampedTick)

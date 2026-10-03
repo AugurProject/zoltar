@@ -45,3 +45,18 @@ export function insertCreatedQuestion(registry: LoadedQuestionRegistry, createdQ
 	const pageQuestions = createdFollowsPage ? [...page.questions, createdQuestion] : page.questions
 	return { questionCount, questionPage: { ...page, questionCount, questions: pageQuestions }, questions }
 }
+
+export function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
+	const questionCount = BigInt(questions.length)
+	const startIndex = currentPage.pageIndex * currentPage.pageSize
+	return {
+		pageIndex: currentPage.pageIndex,
+		pageSize: currentPage.pageSize,
+		questionCount,
+		questions: questions.slice(startIndex, startIndex + currentPage.pageSize),
+	}
+}
+
+export function includesQuestionId(questions: readonly MarketDetails[], normalizedQuestionId: string) {
+	return questions.some(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
+}

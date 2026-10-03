@@ -2,7 +2,7 @@ import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/li
 import { useSignal } from '@preact/signals'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useCallback, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createZoltarChildUniverse } from '../../../protocol/zoltarForks.js'
 import { loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/zoltar.js'
@@ -23,25 +23,9 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWallet.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
-import { insertCreatedQuestion, mergeQuestionLists } from '../lib/questionRegistry.js'
+import { buildQuestionPageFromQuestions, includesQuestionId, insertCreatedQuestion, mergeQuestionLists } from '../lib/questionRegistry.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
-function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
-	const questionCount = BigInt(questions.length)
-	const startIndex = currentPage.pageIndex * currentPage.pageSize
-	return {
-		pageIndex: currentPage.pageIndex,
-		pageSize: currentPage.pageSize,
-		questionCount,
-		questions: questions.slice(startIndex, startIndex + currentPage.pageSize),
-	}
-}
-
-function includesQuestionId(questions: readonly MarketDetails[], normalizedQuestionId: string) {
-	return questions.some(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
-}
-
-/** Universe summaries and question pages refresh in place on each new block, so forks and new questions appear without a reload. */
 const zoltarUniverseQueries = appQueryCache.createStore<ZoltarUniverseSummary | undefined>()
 const zoltarQuestionPageQueries = appQueryCache.createStore<MarketDetailsPage>()
 
@@ -115,7 +99,9 @@ export function useZoltarUniverse(
 	// Each background request and foreground commit retires older background answers.
 	const universeCommitVersionRef = useRef(0)
 	const questionPageCommitVersionRef = useRef(0)
-	const universeQueryKey = zoltarDeployed ? `${environmentRefreshKey}:${activeUniverseId}:${includeRelatedUniverses}` : undefined
+	const scalarOutcomeIndexes = useRef<readonly bigint[]>([])
+	const scalarSelectionKey = scalarOutcomeIndexes.current.join(',')
+	const universeQueryKey = zoltarDeployed ? `${environmentRefreshKey}:${activeUniverseId}:${includeRelatedUniverses}:${scalarSelectionKey}` : undefined
 	const questionPage = zoltarQuestionPage.value
 	const questionPageQueryKey = zoltarDeployed && questionPage !== undefined ? `${environmentRefreshKey}:${questionPage.pageIndex}:${questionPage.pageSize}` : undefined
 	const universeQuery = useQueryState(zoltarUniverseQueries, universeQueryKey)
@@ -175,6 +161,7 @@ export function useZoltarUniverse(
 		const clearCurrentState = options.clearCurrentState ?? true
 		const isCurrent = nextUniverseLoad()
 		const requestedUniverseId = activeUniverseId
+		const requestedScalarOutcomeIndexes = scalarOutcomeIndexes.current
 		const universeLoadContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 		if (clearCurrentState) resetZoltarUniverseState()
 		else zoltarUniverseError.value = undefined
@@ -190,10 +177,10 @@ export function useZoltarUniverse(
 					zoltarChildUniversePendingOutcomeIndex.value = undefined
 					return undefined
 				}
-				return await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), requestedUniverseId, undefined, { includeRelatedUniverses })
+				return await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), requestedUniverseId, undefined, { includeRelatedUniverses, scalarOutcomeIndexes: requestedScalarOutcomeIndexes })
 			},
 			onSuccess: universe => {
-				if (!isCurrentZoltarContext(universeLoadContext)) return
+				if (!isCurrentZoltarContext(universeLoadContext) || scalarOutcomeIndexes.current !== requestedScalarOutcomeIndexes) return
 				if (universe === undefined) {
 					zoltarUniverseResolvedId.value = requestedUniverseId
 					zoltarUniverseMissing.value = requestedUniverseId !== 0n
@@ -204,16 +191,25 @@ export function useZoltarUniverse(
 				zoltarUniverseLoadedId.value = requestedUniverseId
 				zoltarUniverseResolvedId.value = requestedUniverseId
 				universeCommitVersionRef.current += 1
-				zoltarUniverseQueries.set(`${universeLoadContext.environmentRefreshKey}:${requestedUniverseId}:${includeRelatedUniverses}`, universe)
+				zoltarUniverseQueries.set(`${universeLoadContext.environmentRefreshKey}:${requestedUniverseId}:${includeRelatedUniverses}:${requestedScalarOutcomeIndexes.join(',')}`, universe)
 			},
 			onError: error => {
-				if (!isCurrentZoltarContext(universeLoadContext)) return
+				if (!isCurrentZoltarContext(universeLoadContext) || scalarOutcomeIndexes.current !== requestedScalarOutcomeIndexes) return
 				zoltarUniverseError.value = getErrorMessage(error, 'Failed to load Zoltar universe')
 			},
 		})
 	}
 
 	const refreshZoltarUniverse = async () => await loadZoltarUniverse({ clearCurrentState: false })
+	const refreshUniverseRef = useRef(refreshZoltarUniverse)
+	refreshUniverseRef.current = refreshZoltarUniverse
+	const selectScalarOutcomeIndexes = useCallback((indexes: readonly bigint[]) => {
+		const next = [...new Set(indexes)]
+		if (next.join(',') === scalarOutcomeIndexes.current.join(',')) return
+		scalarOutcomeIndexes.current = next
+		universeCommitVersionRef.current += 1
+		void refreshUniverseRef.current()
+	}, [])
 
 	const loadZoltarQuestionCountData = async () => {
 		if (!isMounted.current) return
@@ -405,6 +401,7 @@ export function useZoltarUniverse(
 	/** Re-reads the loaded universe and question page on a new block, keeping the current data visible until the read lands. */
 	const refreshInBackground = async () => {
 		if (!isMounted.current || !zoltarDeployed) return
+		const requestedScalarOutcomeIndexes = scalarOutcomeIndexes.current
 		const universeContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 		const questionContext = { environmentRefreshKey, zoltarDeployed }
 		const questionLoadGeneration = questionLoadGenerationRef.current
@@ -416,7 +413,9 @@ export function useZoltarUniverse(
 					.fetch(
 						universeQueryKey,
 						async () =>
-							await runReadOperation(async operation => await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), activeUniverseId, undefined, { includeRelatedUniverses }), { isCurrent: () => isMounted.current && isCurrentZoltarContext(universeContext) }),
+							await runReadOperation(async operation => await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), activeUniverseId, undefined, { includeRelatedUniverses, scalarOutcomeIndexes: requestedScalarOutcomeIndexes }), {
+								isCurrent: () => isMounted.current && isCurrentZoltarContext(universeContext),
+							}),
 					)
 					.then(universe => {
 						if (universe === undefined || !isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
@@ -522,7 +521,9 @@ export function useZoltarUniverse(
 		const previousContext = previousZoltarContextRef.current
 		const contextChanged = previousContext.activeUniverseId !== activeUniverseId || previousContext.environmentRefreshKey !== environmentRefreshKey || previousContext.zoltarDeployed !== zoltarDeployed
 		previousZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
-		if (contextChanged) resetZoltarUniverseState()
+		if (!contextChanged) return
+		scalarOutcomeIndexes.current = []
+		resetZoltarUniverseState()
 	}, [activeUniverseId, environmentRefreshKey, zoltarDeployed])
 
 	useLayoutEffect(() => {
@@ -546,7 +547,7 @@ export function useZoltarUniverse(
 		if (!autoLoadInitialData) return
 		const currentUniverse = zoltarUniverse.value
 		// Restore migration details immediately; the retained short summary still schedules an in-place refresh below.
-		const cachedUniverse = scopeOnlyChanged && includeRelatedUniverses && currentUniverse?.relatedUniversesLoaded === false ? zoltarUniverseQueries.get(`${environmentRefreshKey}:${activeUniverseId}:true`).data : undefined
+		const cachedUniverse = scopeOnlyChanged && includeRelatedUniverses && currentUniverse?.relatedUniversesLoaded === false ? zoltarUniverseQueries.get(`${environmentRefreshKey}:${activeUniverseId}:true:${scalarSelectionKey}`).data : undefined
 		if (cachedUniverse !== undefined && cachedUniverse.relatedUniversesLoaded !== false) zoltarUniverse.value = cachedUniverse
 		if (scopeOnlyChanged && currentUniverse !== undefined && (!includeRelatedUniverses || currentUniverse.relatedUniversesLoaded !== false)) return
 		const initialLoads: Promise<unknown>[] = [loadZoltarUniverse({ clearCurrentState: !scopeOnlyChanged })]
@@ -579,6 +580,7 @@ export function useZoltarUniverse(
 		loadZoltarUniverse,
 		zoltarChildUniverseFeedback: zoltarChildUniverseFeedback.value,
 		refreshZoltarUniverse,
+		selectScalarOutcomeIndexes,
 		zoltarChildUniverseError: zoltarChildUniverseError.value,
 		zoltarChildUniversePendingOutcomeIndex: zoltarChildUniversePendingOutcomeIndex.value,
 		zoltarQuestionPage: zoltarQuestionPage.value,

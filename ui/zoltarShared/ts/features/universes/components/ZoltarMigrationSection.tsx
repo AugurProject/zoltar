@@ -42,6 +42,7 @@ function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForke
 
 type ZoltarMigrationSectionProps = {
 	universeBrowserHref?: string | undefined
+	onScalarOutcomesChange?: ((indexes: readonly bigint[]) => void) | undefined
 	onDeployChildUniverse: (outcomeIndex: bigint) => void
 	pendingChildUniverseOutcomeIndex: bigint | undefined
 	accountAddress: Address | undefined
@@ -81,6 +82,7 @@ function formatRep(value: bigint) {
  */
 export function ZoltarMigrationSection({
 	universeBrowserHref,
+	onScalarOutcomesChange,
 	onDeployChildUniverse,
 	pendingChildUniverseOutcomeIndex,
 	accountAddress,
@@ -218,10 +220,13 @@ export function ZoltarMigrationSection({
 			case 'outcomes':
 				return (
 					<>
+						{zoltarUniverseError !== undefined && !loadingZoltarUniverse ? <RetryableNotice message={zoltarUniverseError} onRetry={onRetryUniverse} retryLabel={commonCopy.retry} /> : undefined}
 						<p className='detail'>{zoltarCopy.chooseOutcomesDetail}</p>
 						<MigrationOutcomeUniversesSection
 							universeBrowserHref={universeBrowserHref}
 							key={rootUniverse?.universeId.toString()}
+							selectedOutcomeIndexes={zoltarMigrationForm.outcomeIndexes}
+							onScalarOutcomesChange={onScalarOutcomesChange}
 							scalarQuestion={rootUniverse?.forkQuestionDetails?.marketType === 'scalar' ? rootUniverse.forkQuestionDetails : undefined}
 							deploymentDisabledReason={deploymentDisabledReason}
 							disabled={zoltarMigrationPending}

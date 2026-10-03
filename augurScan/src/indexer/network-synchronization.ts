@@ -220,7 +220,9 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		state.progress.indexingStartReported = true
 	}
 	const batchStart = nextBlock
-	scanReport.update({ fromBlock: batchStart, block: nextBlock + 99n < observedHead ? nextBlock + 99n : observedHead, status: 'incomplete' })
+	const maximumBatchEnd = nextBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
+	const batchEnd = maximumBatchEnd < observedHead ? maximumBatchEnd : observedHead
+	scanReport.update({ fromBlock: batchStart, block: batchEnd, status: 'incomplete' })
 	let contracts = withManifestDeploymentBlocks(state.network, await state.database.contracts(state.network.chainId, requireLease(state)))
 	let tokenMetadata = await state.database.tokenMetadata(state.network.chainId, requireLease(state))
 	const storedCursors = await state.database.logScanCursors(state.network.chainId, requireLease(state))
@@ -239,7 +241,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		readonly deploymentObservations: readonly ContractDeploymentObservation[]
 	}
 	try {
-		segment = await operations.getNextLogSegment(state, nextBlock, nextBlock + 99n < observedHead ? nextBlock + 99n : observedHead, initialContracts)
+		segment = await operations.getNextLogSegment(state, nextBlock, batchEnd, initialContracts)
 		if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 	} catch (error) {
 		if (error instanceof ChainContinuityError) return false
@@ -274,11 +276,50 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		headerPromises.set(blockNumber, pending)
 		return await pending
 	}
-	const processedBlocks = new Set<bigint>()
+	let processedBlockCount = 0
+	let committedLogs = 0
+	let commitCheckpoint = checkpoint === undefined ? undefined : { number: checkpoint.number, hash: checkpoint.hash }
 	const blocksToStore: IndexedBlock[] = []
 	let previousStoredNumber = checkpoint?.number
 	let previousStoredHash = checkpoint?.hash
-	while (!processedBlocks.has(end) && !state.signal.aborted) {
+	// Keep durable progress and memory bounded while the RPC scan covers up to 100,000 blocks.
+	const commitPendingBlocks = async (): Promise<boolean> => {
+		state.signal.throwIfAborted()
+		const lastBlock = blocksToStore.at(-1)
+		const indexedEndHash = lastBlock?.hash
+		if (lastBlock === undefined || indexedEndHash === undefined || (lastBlock.number === end && segment.endBlockHash !== undefined && indexedEndHash !== segment.endBlockHash)) {
+			scanReport.update({ status: 'incomplete' })
+			await operations.reconcileReorg(state)
+			return false
+		}
+		const anchors = [...(commitCheckpoint === undefined ? [] : [{ number: commitCheckpoint.number, hash: commitCheckpoint.hash }]), { number: lastBlock.number, hash: indexedEndHash }, ...(segment.endBlockHash === undefined || lastBlock.number === end ? [] : [{ number: end, hash: segment.endBlockHash }])]
+		try {
+			await commitSparseCanonicalBatch(
+				anchors,
+				async blockNumber => (await operations.getBlockHeader(state.providers, blockNumber)).hash,
+				async validateBeforeCommit => {
+					state.signal.throwIfAborted()
+					await assertLease(state)
+					await state.database.storeBlocks(state.network.chainId, blocksToStore, requireLease(state), state.provenance, async () => {
+						state.signal.throwIfAborted()
+						await validateBeforeCommit()
+						state.signal.throwIfAborted()
+					})
+				},
+			)
+		} catch (error) {
+			if (!(error instanceof ChainContinuityError)) throw error
+			scanReport.update({ status: 'incomplete' })
+			await operations.reconcileReorg(state)
+			return false
+		}
+		committedLogs += blocksToStore.reduce((total, block) => total + block.logs.length, 0)
+		commitCheckpoint = { number: lastBlock.number, hash: indexedEndHash }
+		reportProgress(state, batchStart, lastBlock.number, observedHead, scanReport, committedLogs)
+		blocksToStore.length = 0
+		return true
+	}
+	while (previousStoredNumber !== end && !state.signal.aborted) {
 		const targetBlock = previousStoredNumber !== undefined && previousStoredNumber >= batchStart ? previousStoredNumber + 1n : batchStart
 		const header = await headerAt(targetBlock)
 		const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
@@ -309,17 +350,19 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 			)
 		} catch (error) {
 			if (error instanceof ChainContinuityError) {
+				scanReport.update({ status: 'incomplete' })
 				await operations.reconcileReorg(state)
 				return false
 			}
 			throw error
 		}
 		const isSegmentEnd = targetBlock === end
-		const block = isSegmentEnd
+		const isCommitEnd = blocksToStore.length + 1 >= 100 || isSegmentEnd
+		const block = isCommitEnd
 			? {
 					...indexed.block,
-					contractDeploymentObservations: segment.deploymentObservations,
-					logScanCursors: logScanCursorUpdates(indexed.contracts, segment.scanInputs, end, state.network.startBlock, batchStart),
+					contractDeploymentObservations: isSegmentEnd ? segment.deploymentObservations : indexed.block.contractDeploymentObservations,
+					logScanCursors: logScanCursorUpdates(indexed.contracts, segment.scanInputs, targetBlock, state.network.startBlock, batchStart),
 				}
 			: indexed.block
 		blocksToStore.push(block)
@@ -327,45 +370,14 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		tokenMetadata = indexed.tokenMetadata
 		previousStoredNumber = targetBlock
 		previousStoredHash = indexed.block.hash
-		processedBlocks.add(targetBlock)
+		processedBlockCount++
+		headerPromises.delete(targetBlock)
+		logsByBlock.delete(targetBlock)
+		if (isCommitEnd && !(await commitPendingBlocks())) return false
 	}
-	if (processedBlocks.size > 0) {
+	if (processedBlockCount > 0) {
 		state.signal.throwIfAborted()
-		const indexedEndHash = blocksToStore.at(-1)?.hash
-		if (indexedEndHash === undefined || (segment.endBlockHash !== undefined && indexedEndHash !== segment.endBlockHash)) {
-			await operations.reconcileReorg(state)
-			return false
-		}
-		const anchors = [...(checkpoint === undefined ? [] : [{ number: checkpoint.number, hash: checkpoint.hash }]), { number: end, hash: indexedEndHash }]
-		try {
-			await commitSparseCanonicalBatch(
-				anchors,
-				async blockNumber => (await operations.getBlockHeader(state.providers, blockNumber)).hash,
-				async validateBeforeCommit => {
-					state.signal.throwIfAborted()
-					await assertLease(state)
-					await state.database.storeBlocks(state.network.chainId, blocksToStore, requireLease(state), state.provenance, async () => {
-						state.signal.throwIfAborted()
-						await validateBeforeCommit()
-						state.signal.throwIfAborted()
-					})
-				},
-			)
-		} catch (error) {
-			if (!(error instanceof ChainContinuityError)) throw error
-			await operations.reconcileReorg(state)
-			return false
-		}
-		const indexedThrough = end
-		reportProgress(
-			state,
-			batchStart,
-			indexedThrough,
-			observedHead,
-			scanReport,
-			blocksToStore.reduce((total, block) => total + block.logs.length, 0),
-		)
-		await operations.refreshContractDeployment(state, indexedThrough)
+		await operations.refreshContractDeployment(state, end)
 	}
 	return end >= observedHead
 }
