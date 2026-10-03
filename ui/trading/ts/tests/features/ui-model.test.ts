@@ -477,9 +477,9 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('loading', 0n, unit)).toBe('Loading…')
 		expect(settlementBalanceLabel('error', 0n, unit)).toBe('Unavailable')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes (5 ETH if Yes wins)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No (5 ETH if No wins)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid (5 ETH if Invalid wins)')
 	})
 
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {
