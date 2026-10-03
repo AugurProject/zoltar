@@ -447,3 +447,16 @@ test("loading the registry keeps the entity search usable and never leaves anoth
 		},
 	)
 })
+
+for (const traceStatus of ['not-requested', 'unavailable'] as const) {
+	for (const status of ['success', 'reverted'] as const) {
+		test(`explorer distinguishes trace availability and attempted values (${traceStatus}, ${status})`, async () => {
+			await withBrowser('https://scanner.test/tx/0xabc?chainId=1', '<div id="explorer-content"></div>', async () => {
+				await renderExplorerPage('/tx/0xabc', '1', async () => ({ transaction: { hash: '0xabc', block_number: '1', block_timestamp: '2026-09-23T00:00:00Z', explorer_base_url: 'https://etherscan.io', value: '0', gas_used: '21000', status, receipt: { callTraceStatus: traceStatus } }, logs: [] }))
+				const text = document.querySelector('#explorer-content')?.textContent ?? ''
+				expect(text).toContain(traceStatus === 'not-requested' ? 'Call traces were not requested' : 'Call traces unavailable')
+				expect(text.includes('attempted value')).toBe(status === 'reverted')
+			})
+		})
+	}
+}

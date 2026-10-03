@@ -1,3 +1,4 @@
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { runtimeConfig } from '../config.ts'
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type IndexedBlock } from '../database.ts'
@@ -19,15 +20,15 @@ import {
 	leaseFailureNames,
 	readHistoricalCodeWithPermanentFallback,
 	scanDiscoveredLogCoverage,
+	requireLogPosition,
 } from '../indexer-runtime.ts'
 import { rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, TokenMetadata } from '../types.ts'
 import { findContractDeploymentBlock, type LogScanInput, logScanCursorUpdates, manifestReplayAncestor, planManifestBackfill, type RpcBlockHeader, reorgSearchFloor } from './planning.ts'
-import { createBlockPrefetch } from './block-prefetch.ts'
 import { indexBlock, refreshEntityStateSnapshots, refreshRichListBalances } from './ingestion-operations.ts'
 import { getAllLogs, getKnownLogs, getNextLogSegment, mergeLogs } from './log-scanner.ts'
-import { discoverStateStartBlock, findManifestDeployment, getBlockHeader, getFullBlock, historicalCodeUnavailable, rememberHistoricalCodeUnavailable } from './network-provider.ts'
+import { discoverStateStartBlock, findManifestDeployment, getBlockHeader, historicalCodeUnavailable, rememberHistoricalCodeUnavailable } from './network-provider.ts'
 import { assertLease, type NetworkIndexerState, requireLease } from './network-state.ts'
 
 /** Collaborators a poll delegates to; replaceable so replay tests can isolate one ingestion stage. */
@@ -36,7 +37,6 @@ export type PollOperations = {
 	readonly refreshContractDeployment: typeof refreshContractDeployment
 	readonly getNextLogSegment: typeof getNextLogSegment
 	readonly getBlockHeader: typeof getBlockHeader
-	readonly getFullBlock: typeof getFullBlock
 	readonly indexBlock: typeof indexBlock
 }
 
@@ -278,14 +278,15 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		headerPromises.set(blockNumber, pending)
 		return await pending
 	}
-	const takeFullBlock = createBlockPrefetch(batchStart, end, number => operations.getFullBlock(state.providers, number), state.signal)
+	let pendingBlocks = [...new Set([...logsByBlock.keys(), end])].sort(compareBigint)
+	let pendingBlockIndex = 0
 	let processedBlockCount = 0
 	let committedLogs = 0
 	let commitCheckpoint = checkpoint === undefined ? undefined : { number: checkpoint.number, hash: checkpoint.hash }
 	const blocksToStore: IndexedBlock[] = []
 	let previousStoredNumber = checkpoint?.number
 	let previousStoredHash = checkpoint?.hash
-	// Keep durable progress and memory bounded while the RPC scan covers up to 100,000 blocks.
+	// Commit up to 100 event blocks at a time, including the empty range-end checkpoint.
 	const commitPendingBlocks = async (): Promise<boolean> => {
 		state.signal.throwIfAborted()
 		const lastBlock = blocksToStore.at(-1)
@@ -295,7 +296,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 			await operations.reconcileReorg(state)
 			return false
 		}
-		const anchors = [...(commitCheckpoint === undefined ? [] : [{ number: commitCheckpoint.number, hash: commitCheckpoint.hash }]), { number: lastBlock.number, hash: indexedEndHash }, ...(segment.endBlockHash === undefined || lastBlock.number === end ? [] : [{ number: end, hash: segment.endBlockHash }])]
+		const anchors = [...(commitCheckpoint === undefined ? [] : [{ number: commitCheckpoint.number, hash: commitCheckpoint.hash }]), ...blocksToStore.map(({ number, hash }) => ({ number, hash })), ...(segment.endBlockHash === undefined || lastBlock.number === end ? [] : [{ number: end, hash: segment.endBlockHash }])]
 		try {
 			await commitSparseCanonicalBatch(
 				anchors,
@@ -323,9 +324,9 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		return true
 	}
 	while (previousStoredNumber !== end && !state.signal.aborted) {
-		const targetBlock = previousStoredNumber !== undefined && previousStoredNumber >= batchStart ? previousStoredNumber + 1n : batchStart
-		const header = await takeFullBlock(targetBlock)
-		headerPromises.set(targetBlock, Promise.resolve(header))
+		const targetBlock = pendingBlocks[pendingBlockIndex++]
+		if (targetBlock === undefined) throw new Error('Missing event block or scan boundary')
+		const header = await headerAt(targetBlock)
 		const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
 		let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 		try {
@@ -348,6 +349,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 						(fromBlock, toBlock, addresses) => getAllLogs(state, fromBlock, toBlock, addresses, discoveredContracts, async blockNumber => (await headerAt(blockNumber)).hash),
 					)
 					mergeLogs(logsByBlock, coverage.remainingLogs)
+					pendingBlocks = [...new Set([...pendingBlocks.slice(pendingBlockIndex), ...coverage.remainingLogs.map(log => requireLogPosition(log).blockNumber)])].sort(compareBigint)
+					pendingBlockIndex = 0
 					return coverage.currentBlockLogs
 				},
 				operations.getBlockHeader,
@@ -386,4 +389,4 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	return end >= observedHead
 }
 
-const pollOperations: PollOperations = { reconcileReorg, refreshContractDeployment, getNextLogSegment, getBlockHeader, getFullBlock, indexBlock }
+const pollOperations: PollOperations = { reconcileReorg, refreshContractDeployment, getNextLogSegment, getBlockHeader, indexBlock }

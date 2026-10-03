@@ -1,9 +1,9 @@
-import { blockCallTraces, protocolCallDestination, relevantCallTrace, unsupportedTraceError } from './transaction-selection.ts'
+import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
-import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, findEarliestAvailableStateBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
+import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from '../metadata.ts'
 import { sampleEntityState } from '../snapshot-client.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
@@ -12,8 +12,10 @@ import { erc20BalanceAbi, erc20MetadataAbi, mapLimit, priceCoordinatorDependenci
 import { type BlockHeaderReader, discoverStateStartBlock, getBlockHeader, type HistoricalStateContext } from './network-provider.ts'
 import { assertLease, type NetworkIndexerState, type ProviderState, requireLease } from './network-state.ts'
 
+type SelectedTransactionTrace = { readonly status: 'available'; readonly trace: Record<string, unknown> } | { readonly status: 'not-requested' | 'unavailable' | 'unavailable-historical-state' }
+
 export async function indexBlock(
-	state: HistoricalStateContext,
+	state: HistoricalStateContext & Pick<NetworkIndexerState, 'traceSelectedTransactions'>,
 	number: bigint,
 	observedHead: bigint,
 	currentContracts: ReadonlyMap<string, ContractMetadata>,
@@ -33,57 +35,40 @@ export async function indexBlock(
 		const position = requireLogPosition(log)
 		if (position.blockHash !== block.hash || position.blockNumber !== number) throw new ChainContinuityError(`RPC log response changed while indexing block ${number}`)
 	}
+	const emptyBlock: IndexedBlock = {
+		number,
+		hash: block.hash,
+		parentHash: block.parentHash,
+		timestamp: unixSecondsToDate(block.timestamp, 'Block timestamp'),
+		observedHead,
+		finalizedThrough: observedHead > state.network.confirmationDepth ? observedHead - state.network.confirmationDepth : 0n,
+		contracts: [],
+		tokenMetadata: [],
+		transactions: [],
+		logs: [],
+		addressActivity: [],
+		contractDeploymentObservations: [],
+		logScanCursors: [],
+	}
+	if (knownLogs.length === 0) return { block: emptyBlock, contracts, tokenMetadata: new Map(currentTokenMetadata) }
 	const relevantHashes = new Set<Hash>(knownLogs.map(log => requireLogPosition(log).transactionHash))
 	const transactionByHash = new Map<Hash, { transaction: BlockTransaction; index: number }>()
-
-	const blockTransactions = block.transactions ?? (await state.providers.client.getBlock({ blockNumber: number, includeTransactions: true })).transactions
-	const targets = new Set([...contracts.values()].filter(protocolCallDestination).map(contract => contract.address.toLowerCase()))
-	const traces = new Map<string, Record<string, unknown>>()
-	const traceStartBlock = state.providers.traceStartBlocks.get(state.providers.active)
-	let traceStatus = traceStartBlock !== undefined && number < traceStartBlock ? 'unavailable-historical-state' : 'unavailable'
-	if (traceStatus !== 'unavailable-historical-state' && !state.providers.traceUnsupported.has(state.providers.active)) {
-		try {
-			for (const item of await blockCallTraces(state.providers.client, block.hash)) traces.set(item.hash, item.trace)
-			traceStatus = 'available'
-		} catch (error) {
-			if (unsupportedTraceError(error)) {
-				state.providers.traceUnsupported.add(state.providers.active)
-				console.warn(`[${state.network.id}] Call traces unavailable on this provider; direct calls and log-selected activity remain indexed`)
-			} else if (isPrunedHistoricalStateError(error)) {
-				// Trace replay needs parent state and may have a different floor from eth_call.
-				const availableStart = await findEarliestAvailableStateBlock(
-					number,
-					observedHead,
-					async candidate => {
-						await blockCallTraces(state.providers.client, (await readBlockHeader(state.providers, candidate)).hash)
-					},
-					true,
-				)
-				state.providers.traceStartBlocks.set(state.providers.active, availableStart)
-				traceStatus = 'unavailable-historical-state'
-				console.warn(`[${state.network.id}] RPC call traces before block #${availableStart} are pruned; skipping older traces while continuing direct calls and log-selected activity`)
-			} else throw error
-		}
-	}
-	for (const transaction of blockTransactions) {
-		if (typeof transaction === 'string') throw new Error('Full block transaction data is required for protocol call selection')
-		if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`BlockTransaction ${transaction.hash} no longer belongs to block ${number}`)
-		transactionByHash.set(transaction.hash, { transaction, index: bigintToSafeNumber(transaction.transactionIndex, `BlockTransaction ${transaction.hash} index`) })
-		if ((transaction.to !== null && transaction.to !== undefined && targets.has(transaction.to.toLowerCase())) || targets.has(transaction.from.toLowerCase()) || relevantCallTrace(traces.get(transaction.hash.toLowerCase()), targets)) relevantHashes.add(transaction.hash)
-	}
 
 	const receipts: TransactionReceipt[] = []
 	const receiptByHash = new Map<Hash, TransactionReceipt>()
 	const fetchMissingEvidence = async (): Promise<void> => {
 		const missing = [...relevantHashes].filter(hash => !receiptByHash.has(hash))
 		for (const { receipt, transaction } of await mapLimit(missing, 8, async hash => {
-			const pair = transactionByHash.get(hash)
-			if (pair === undefined) throw new ChainContinuityError(`Relevant transaction ${hash} is missing from block ${number}`)
-			return { receipt: await state.providers.client.getTransactionReceipt({ hash }), transaction: pair.transaction }
+			const [receipt, transaction] = await Promise.all([state.providers.client.getTransactionReceipt({ hash }), state.providers.client.getTransaction({ hash })])
+			if (transaction.hash !== hash || transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`BlockTransaction ${hash} no longer belongs to block ${number}`)
+			return { receipt, transaction }
 		})) {
 			requireReceiptPosition(receipt, block.hash, number)
 			if (receipt.transactionHash !== transaction.hash || receipt.transactionIndex !== transaction.transactionIndex) throw new ChainContinuityError(`Receipt ${receipt.transactionHash} does not match its block transaction`)
 			if (receipt.status !== 'success' && (receipt.logs.length > 0 || knownLogs.some(log => log.transactionHash === receipt.transactionHash))) throw new ChainContinuityError(`Reverted transaction ${receipt.transactionHash} has inconsistent log evidence`)
+			if (transaction.transactionIndex === undefined) throw new ChainContinuityError(`Missing transaction position for ${transaction.hash}`)
+			for (const known of knownLogs.filter(log => log.transactionHash === transaction.hash)) assertSelectedLogEvidence(known, receipt)
+			transactionByHash.set(transaction.hash, { transaction, index: bigintToSafeNumber(transaction.transactionIndex, `BlockTransaction ${transaction.hash} index`) })
 			receipts.push(receipt)
 			receiptByHash.set(receipt.transactionHash, receipt)
 		}
@@ -147,13 +132,13 @@ export async function indexBlock(
 			}
 		}
 		if (discoveredAddresses.length === 0) break
-		for (const contract of contracts.values()) if (protocolCallDestination(contract)) targets.add(contract.address.toLowerCase())
-		for (const transaction of blockTransactions) {
-			if (typeof transaction === 'string') continue
-			if ((transaction.to != null && targets.has(transaction.to.toLowerCase())) || targets.has(transaction.from.toLowerCase()) || relevantCallTrace(traces.get(transaction.hash.toLowerCase()), targets)) relevantHashes.add(transaction.hash)
-		}
 		for (const log of await getDiscoveredLogs(discoveredAddresses, contracts)) {
-			relevantHashes.add(requireLogPosition(log).transactionHash)
+			const position = requireLogPosition(log)
+			if (position.blockHash !== block.hash || position.blockNumber !== number) throw new ChainContinuityError(`Discovered log no longer belongs to block ${number}`)
+			const existingReceipt = receiptByHash.get(position.transactionHash)
+			if (existingReceipt !== undefined) assertSelectedLogEvidence(log, existingReceipt)
+			knownLogs.push(log)
+			relevantHashes.add(position.transactionHash)
 		}
 		await fetchMissingEvidence()
 	}
@@ -211,14 +196,30 @@ export async function indexBlock(
 		}
 	}
 
+	const selectedTraces = new Map<Hash, SelectedTransactionTrace>(
+		await mapLimit([...relevantHashes], 4, async hash => {
+			if (!state.traceSelectedTransactions) return [hash, { status: 'not-requested' }] as const
+			if (state.providers.traceUnsupported.has(state.providers.active)) return [hash, { status: 'unavailable' }] as const
+			try {
+				return [hash, { status: 'available', trace: await transactionCallTrace(state.providers.client, hash) }] as const
+			} catch (error) {
+				if (unsupportedTraceError(error)) {
+					state.providers.traceUnsupported.add(state.providers.active)
+					return [hash, { status: 'unavailable' }] as const
+				}
+				if (isPrunedHistoricalStateError(error)) return [hash, { status: 'unavailable-historical-state' }] as const
+				throw error
+			}
+		}),
+	)
 	const storedTransactions: StoredTransaction[] = []
 	for (const hash of relevantHashes) {
 		const pair = transactionByHash.get(hash)
 		const receipt = receiptByHash.get(hash)
 		if (pair === undefined || receipt === undefined) throw new Error(`Block ${number} did not contain relevant transaction ${hash}`)
 		const to = pair.transaction.to === null || pair.transaction.to === undefined ? null : getAddress(pair.transaction.to)
-		let transactionTraceStatus = traceStatus
-		if (traceStatus === 'available' && !traces.has(hash.toLowerCase())) transactionTraceStatus = 'missing'
+		const trace = selectedTraces.get(hash)
+		if (trace === undefined) throw new Error(`Missing trace availability for ${hash}`)
 		storedTransactions.push({
 			hash,
 			transactionIndex: pair.index,
@@ -228,23 +229,17 @@ export async function indexBlock(
 			input: pair.transaction.input,
 			status: receipt.status,
 			gasUsed: receipt.gasUsed,
-			receipt: jsonEvidence({ ...receipt, callTraceStatus: transactionTraceStatus, callTrace: traces.get(hash.toLowerCase()) }),
+			receipt: jsonEvidence({ ...receipt, selectionSource: 'protocol-log', callTraceStatus: trace.status, ...('trace' in trace ? { callTrace: trace.trace } : {}) }),
 			decoded: decodeAction(to === null ? undefined : contracts.get(to.toLowerCase()), pair.transaction.input, displayLabels, tokenMetadata, contractKinds, displayContext),
 		})
 	}
 
-	const finalizedThrough = observedHead > state.network.confirmationDepth ? observedHead - state.network.confirmationDepth : 0n
 	await confirmCanonicalBlock(number, block.hash, async blockNumber => (await readBlockHeader(state.providers, blockNumber)).hash)
 	return {
 		contracts,
 		tokenMetadata,
 		block: {
-			number,
-			hash: block.hash,
-			parentHash: block.parentHash,
-			timestamp: unixSecondsToDate(block.timestamp, 'Block timestamp'),
-			observedHead,
-			finalizedThrough,
+			...emptyBlock,
 			contracts: discovered,
 			tokenMetadata: tokenMetadataReads,
 			transactions: storedTransactions,
@@ -254,6 +249,23 @@ export async function indexBlock(
 			logScanCursors: [],
 		},
 	}
+}
+
+function assertSelectedLogEvidence(known: Log, receipt: TransactionReceipt): void {
+	const actual = receipt.logs.find(log => log.logIndex === known.logIndex)
+	if (
+		actual === undefined ||
+		actual.transactionHash !== receipt.transactionHash ||
+		actual.transactionIndex !== receipt.transactionIndex ||
+		known.transactionIndex !== receipt.transactionIndex ||
+		actual.blockHash !== known.blockHash ||
+		actual.blockNumber !== known.blockNumber ||
+		actual.address.toLowerCase() !== known.address.toLowerCase() ||
+		actual.data !== known.data ||
+		actual.topics.length !== known.topics.length ||
+		actual.topics.some((topic, index) => topic !== known.topics[index])
+	)
+		throw new ChainContinuityError(`Receipt ${receipt.transactionHash} disagrees with its selected log evidence`)
 }
 
 export async function refreshRichListBalances(state: NetworkIndexerState, blockNumber: bigint, blockHash: Hash): Promise<void> {

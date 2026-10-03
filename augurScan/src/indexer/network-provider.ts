@@ -13,8 +13,6 @@ export const getBlockHeader: BlockHeaderReader = async (providers, blockNumber) 
 	return { hash: block.hash, parentHash: block.parentHash, timestamp: block.timestamp }
 }
 
-export const getFullBlock: BlockHeaderReader = async (providers, blockNumber) => requireRpcBlockHeader(await providers.client.getBlock({ blockNumber, includeTransactions: true }), blockNumber)
-
 export function rpcFailureReason(providers: ProviderState, error: unknown): string {
 	return providers.diagnostics.failureReason(error)
 }

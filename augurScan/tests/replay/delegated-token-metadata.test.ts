@@ -61,8 +61,8 @@ for (const mode of ['direct', 'registered wrapper', 'unregistered wrapper', 'nes
 		const receipt = spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: block.hash, blockNumber: 10n, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to, transactionHash, transactionIndex: 0n })
 		try {
 			const result = await indexBlock(indexer, 10n, 10n, contracts, new Map(), undefined, block, [log], async () => [], readBlockHeader)
-			expect(transaction).not.toHaveBeenCalled()
-			expect(result.block.transactions[0]?.receipt).toMatchObject({ callTraceStatus: 'unavailable' })
+			expect(transaction).toHaveBeenCalledTimes(1)
+			expect(result.block.transactions[0]?.receipt).toMatchObject({ callTraceStatus: 'not-requested', selectionSource: 'protocol-log' })
 			expect(reads.sort()).toEqual(['decimals', 'name', 'symbol'])
 			expect(result.block.tokenMetadata).toEqual([{ address: token, decimals: 6, name: 'Unknown Token', symbol: 'TKN', readBlock: 10n }])
 			expect(result.block.transactions[0]?.decoded.summary).toContain('amount=1.500001 TKN')

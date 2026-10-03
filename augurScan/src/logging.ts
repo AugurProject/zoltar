@@ -145,7 +145,7 @@ const appendRpcRecord = async (log: RotatingJsonLog, logPath: string, record: un
 	}
 }
 
-const historicalStateMethods = new Set(['debug_traceBlockByHash', 'eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getProof', 'eth_getStorageAt', 'eth_getTransactionCount'])
+const historicalStateMethods = new Set(['debug_traceTransaction', 'debug_traceBlockByHash', 'eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getProof', 'eth_getStorageAt', 'eth_getTransactionCount'])
 
 export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, logPath: string, log: RotatingJsonLog, fetchFn: RpcFetchFn = fetch): RpcFetchFn => {
 	let reportedPrunedState = false
