@@ -47,7 +47,7 @@ function formatScanStatus(network: ScanNetwork, sample: ScanSample, elapsedMs: n
 	return `${now.toISOString().slice(0, 19).replace('T', ' ')} ${name} ${sample.block ?? 'unknown'}: ProcessedMs=${duration}${details.length === 0 ? '' : ` ${details.join(' ')}`} status=${status} lagging=${lagging}${reason === undefined ? '' : ` reason=${reason}`} blocksBehind=${behind ?? 'unknown'} blockTimeMs=${blockTimeMs ?? 'unknown'}`
 }
 
-/** Report completed scans and exceptional exits, with rate-limited warnings while occupied. */
+/** Report completed scans and exceptional exits, with optional heartbeats and rate-limited warnings while occupied. */
 export function startScanReport(options: {
 	network: ScanNetwork
 	blockTimeMs: number | undefined
@@ -57,6 +57,7 @@ export function startScanReport(options: {
 	write?: (line: string) => void
 	warn?: (line: string) => void
 	warningIntervalMs?: number
+	heartbeatIntervalMs?: number
 	headTimeoutMs?: number
 }) {
 	const clock = options.clock ?? (() => performance.now())
@@ -72,6 +73,8 @@ export function startScanReport(options: {
 		if (options.blockTimeMs === undefined || elapsed > Number(blocks) * options.blockTimeMs) warn(line(elapsed, true))
 	}, options.warningIntervalMs ?? 30_000)
 	timer.unref()
+	const heartbeat = options.heartbeatIntervalMs === undefined ? undefined : setInterval(() => write(line(clock() - startedAt)), options.heartbeatIntervalMs)
+	heartbeat?.unref()
 	return {
 		update(next: Partial<ScanSample>) {
 			sample = { ...sample, ...next }
@@ -80,6 +83,7 @@ export function startScanReport(options: {
 			if (finished) return
 			finished = true
 			clearInterval(timer)
+			clearInterval(heartbeat)
 			if (status !== undefined) sample.status = status
 			// A known-block waiting cycle did not scan a new block. Keep idle polling silent.
 			if (sample.status === 'waiting' && sample.block !== undefined) return

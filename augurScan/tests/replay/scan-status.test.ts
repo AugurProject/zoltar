@@ -4,7 +4,7 @@ import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
 import { type PollOperations, poll } from '../../src/indexer/network-synchronization.ts'
 import { toHex, zeroAddress, zeroHash } from '../../src/ethereum.ts'
 
-for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-failure', 'partial-reorg'] as const) {
+for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-failure', 'partial-reorg', 'heartbeat'] as const) {
 	test(`scan summary reflects ${mode} ingestion and only counts committed logs`, async () => {
 		const database = new ScannerDatabase('postgres://unused')
 		const signal = new AbortController().signal
@@ -59,10 +59,22 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 				committed = true
 			}),
 		]
+		const intervalMock = mode === 'heartbeat' ? spyOn(globalThis, 'setInterval') : undefined
+		const expectUncommittedHeartbeat = () => {
+			for (const [callback, interval] of intervalMock?.mock.calls ?? []) {
+				if (interval === 30_000 && typeof callback === 'function') callback()
+			}
+			expect(lines.length).toBeGreaterThan(0)
+			expect(lines.at(-1)).toContain('Sepolia 9:')
+			expect(lines.at(-1)).toContain('blocksScanned=0 progress=0.00% etaSeconds=unknown status=backfilling')
+			expect(lines.at(-1)).toContain('blocksBehind=1')
+			lines.length = 0
+		}
 		const operations: PollOperations = {
 			reconcileReorg: async () => {},
 			refreshContractDeployment: async () => {},
 			getNextLogSegment: async (_state, fromBlock, maximumToBlock) => {
+				if (mode === 'heartbeat') expectUncommittedHeartbeat()
 				if (largeRange) {
 					expect(fromBlock).toBe(10n)
 					expect(maximumToBlock).toBe(100_009n)
@@ -72,7 +84,10 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 			},
 			getBlockHeader: async (_providers, number) => ({ ...header, number, hash: mode === 'reorg' || (mode === 'partial-reorg' && committed && number === segmentEnd) ? zeroHash : hash }),
 			// The completed ingestion result includes logs discovered after the initial empty RPC segment.
-			indexBlock: async (_state, number) => ({ block: { ...block, number }, contracts, tokenMetadata: new Map() }),
+			indexBlock: async (_state, number) => {
+				if (mode === 'heartbeat') expectUncommittedHeartbeat()
+				return { block: { ...block, number }, contracts, tokenMetadata: new Map() }
+			},
 		}
 		try {
 			if (mode === 'failed' || mode === 'partial-failure') await expect(poll(indexer, operations)).rejects.toThrow('Commit failed')
@@ -84,7 +99,7 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 					[110n, 209n, 100],
 					[210n, 259n, 50],
 				])
-			if (mode === 'committed' || mode === 'empty' || mode === 'wide') {
+			if (mode === 'committed' || mode === 'empty' || mode === 'wide' || mode === 'heartbeat') {
 				expect(lines[0]).toContain(`logsAdded=${block.logs.length * (largeRange ? 250 : 1)}`)
 				expect(lines[0]).toContain(`blocksScanned=${largeRange ? 250 : 1}`)
 				expect(lines[0]).toContain(`status=${mode === 'wide' ? 'backfilling' : 'lagging'} lagging=true reason=behind-head blocksBehind=${largeRange ? 199_741 : 2}`)
@@ -98,6 +113,7 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 				expect(lines[0]).not.toContain('logsAdded=')
 			}
 		} finally {
+			intervalMock?.mockRestore()
 			for (const mock of mocks) mock.mockRestore()
 			await database.close()
 		}
