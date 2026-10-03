@@ -6,6 +6,7 @@ import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavai
 import { createConcurrencyGate } from './limits.ts'
 import { createLiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
+import { apiFailureLog } from './api-failure-log.ts'
 import { initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
 
 installConsoleTimestamps()
@@ -147,7 +148,7 @@ const server = Bun.serve({
 						}
 						return Response.json({ error: 'Not found' }, { status: 404, headers: securityHeaders })
 					} catch (error) {
-						console.error(`augurScan API transaction failed (${error instanceof Error ? error.name : typeof error})`)
+						console.error(apiFailureLog(request, error, startedAt, 'transaction'))
 						return Response.json({ error: 'Internal server error' }, { status: 500, headers: securityHeaders })
 					}
 				}),
