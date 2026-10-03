@@ -3,11 +3,12 @@ import type { VaultOperationsInput } from '@zoltar/statoblast-shared/statoblast/
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { loadSecurityVaultDetails, loadSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
-import { loadOracleManagerDetails, loadQueuedVaultOperationState, loadOracleManagerQueueOperationEthValue } from '../../../protocol/oracleCoordinator.js'
+import { getCoordinatorInitialReportPrice, loadOracleManagerDetails, loadQueuedVaultOperationState, loadOracleManagerQueueOperationEthValue } from '../../../protocol/oracleCoordinator.js'
 import { isSecurityPoolEscalationResolved, redeemSecurityVaultFees, redeemRepFromVaultFromSecurityPool } from '../../../protocol/securityVault.js'
 import { hasPendingVaultCommitment, quoteVaultOperations, submitVaultOperations, type VaultOperationsResult } from '../../../protocol/vaultOperations.js'
 
 export const vaultOperationsDependencies = {
+	fetchPrice: async (manager: Address) => await getCoordinatorInitialReportPrice(createConnectedReadClient(), manager),
 	loadResolved: async (pool: Address) => await isSecurityPoolEscalationResolved(createConnectedReadClient(), pool),
 	claim: async (owner: Address, pool: Address, action: 'fees' | 'redeem', callbacks: Parameters<typeof createWalletWriteClient>[1]): Promise<VaultOperationsResult> => {
 		const client = createWalletWriteClient(owner, callbacks)

@@ -19,10 +19,10 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	const embedded = workflow !== undefined && (isEmbeddedTransactionReview(workflow.reviewSignal) || (embeddedTransactionSteps.value !== undefined && workflow.reviewSignal === embeddedTransactionSteps.value))
 	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
 	useEffect(() => {
-		// A finished or failed review has nothing left to confirm; its outcome moves to the transaction status notice.
+		// Keep failed reviews open so the user can read the error before dismissing them.
 		if (workflow === undefined || embedded) return
-		if (completed || workflow.steps[workflow.activeIndex]?.phase === 'failed') workflow.cancel()
-	}, [workflow, embedded, completed])
+		if (completed || ((directApproval || !workflow.showReviewDialog) && workflow.steps[workflow.activeIndex]?.phase === 'failed')) workflow.cancel()
+	}, [workflow, embedded, completed, directApproval])
 	useEffect(() => {
 		if (!embedded && directApproval && workflow?.steps[workflow.activeIndex]?.phase === 'review') workflow.confirm()
 	}, [workflow, embedded, directApproval])

@@ -14,6 +14,7 @@ import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperation
 import { previewVaultOperations } from '../lib/preview.js'
 import { getVaultRedeemRepGuardMessage } from '../../security-pools/lib/securityVaultGuards.js'
 import * as copy from '../../../copy/vaultOperations.js'
+import * as priceRequestCopy from '../../../copy/priceRequest.js'
 
 import { vaultOperationsDependencies, type VaultOperationsDependencies } from './dependencies.js'
 
@@ -40,6 +41,8 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 	const quote = useSignal<Awaited<ReturnType<typeof quoteVaultOperations>> | undefined>(undefined)
 	const bounty = useSignal<bigint | undefined>(undefined)
 	const quoting = useSignal(false)
+	const fetchingPrice = useSignal(false)
+	const priceFetchError = useSignal<string | undefined>(undefined)
 	const active = useRef(true)
 	const quoteGeneration = useRef(0)
 	const refreshReads = useRef<() => void>(() => {})
@@ -53,6 +56,23 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 		draft.value = { ...draft.value, ...update }
 		quote.value = undefined
 		error.value = undefined
+		if (update.proposedPrice !== undefined) priceFetchError.value = undefined
+	}
+	const fetchPrice = async () => {
+		if (busy.value || fetchingPrice.value || resolved.value) return
+		const environment = createActiveEnvironmentGuard()
+		const originalDraft = draft.value
+		fetchingPrice.value = true
+		priceFetchError.value = undefined
+		try {
+			const price = await dependencies.fetchPrice(pool.managerAddress)
+			if (active.current && environment.isCurrent() && draft.value === originalDraft) setDraft({ proposedPrice: formatCurrencyInputBalance(price) })
+		} catch (failure) {
+			if (failure instanceof Error && failure.name === 'AbortError') return
+			if (active.current && environment.isCurrent() && draft.value === originalDraft) priceFetchError.value = priceRequestCopy.uniswapPriceFailed
+		} finally {
+			if (active.current) fetchingPrice.value = false
+		}
 	}
 	useEffect(
 		() => () => {
@@ -324,6 +344,9 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 		}
 	}
 	return {
+		fetchPrice,
+		fetchingPrice: fetchingPrice.value,
+		priceFetchError: priceFetchError.value,
 		draft: draft.value,
 		setDraft,
 		clearDraft: () => setDraft(emptyVaultOperationsDraft()),

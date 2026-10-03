@@ -19,11 +19,14 @@ import type { ListedSecurityPool } from '../../../types/contracts.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import { useVaultOperations } from '../hooks/useVaultOperations.js'
 import * as copy from '../../../copy/vaultOperations.js'
+import * as priceRequestCopy from '../../../copy/priceRequest.js'
+import { useId } from 'preact/hooks'
 
-type Props = { pool: ListedSecurityPool; parameters: WriteOperationsParameters; contextKey: string; networkReady: boolean; onViewStagedOperations: () => void; onPoolChanged?: (totalCommitment?: bigint) => void; dependencies?: VaultOperationsDependencies }
+type Props = { pool: ListedSecurityPool; parameters: WriteOperationsParameters; contextKey: string; networkReady: boolean; onViewStagedOperations: (operationId: bigint) => void; onPoolChanged?: (totalCommitment?: bigint) => void; dependencies?: VaultOperationsDependencies }
 
 export function VaultOperationsPanel({ pool, parameters, contextKey, networkReady, onViewStagedOperations, onPoolChanged, dependencies }: Props) {
 	const model = useVaultOperations(pool, parameters, contextKey, dependencies, onPoolChanged)
+	const initialPriceId = useId()
 	const fieldsDisabled = model.busy
 	const operationalFieldsDisabled = fieldsDisabled || model.resolved === true
 	const priceActions = model.input === undefined ? 0 : countVaultPriceActions(model.input)
@@ -31,7 +34,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 	let actionHint: string | undefined = copy.limits
 	if (model.resolved) actionHint = (model.owned?.underwritingLimitAttoEth ?? 0n) > 0n ? copy.resolvedHint : undefined
 	let disabledReason: string | undefined
-	if (model.busy) disabledReason = copy.busyAction
+	if (model.busy) disabledReason = undefined
 	else if (parameters.accountAddress === undefined) disabledReason = copy.noWallet
 	else if (!networkReady) disabledReason = copy.walletWrongNetwork
 	else if (pool.systemState !== 'operational' || (pool.universeHasForked && !model.resolved)) disabledReason = copy.poolInactive
@@ -63,7 +66,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 	if (failed) resultDetail = model.status?.execution?.errorMessage ?? copy.laterFailure
 	else if (model.pending) resultDetail = copy.laterFailure
 	let claimDisabledReason: string | undefined
-	if (model.busy) claimDisabledReason = copy.busyAction
+	if (model.busy) claimDisabledReason = undefined
 	else if (parameters.accountAddress === undefined) claimDisabledReason = copy.noWallet
 	else if (!networkReady) claimDisabledReason = copy.walletWrongNetwork
 	else if (model.loading) claimDisabledReason = copy.loading
@@ -101,6 +104,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 								value={model.draft.deposit}
 								disabled={operationalFieldsDisabled}
 								unit='REP'
+								hint={model.owned?.minimumVaultRepDepositAttoRep === undefined ? undefined : copy.formatMinimumBacking(formatCurrencyBalance(model.owned.minimumVaultRepDepositAttoRep))}
 								fillMax={{ amount: model.balance === undefined ? undefined : model.balance - (model.quote?.funding?.requiredRepAttoRep ?? 0n), unavailableReason: copy.loading }}
 								onChange={deposit => model.setDraft({ deposit })}
 							/>
@@ -152,7 +156,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 								error={model.lookupError}
 								onInput={event => model.setLookupAddress(event.currentTarget.value)}
 								action={
-									<TransactionActionButton tone='secondary' idleLabel={copy.lookupAction} pendingLabel={copy.loading} pending={model.lookupBusy} onClick={() => void model.lookup()} availability={{ disabled: fieldsDisabled || model.lookupAddress.trim() === '', reason: model.busy ? copy.pending : copy.enterTarget }} />
+									<TransactionActionButton tone='secondary' idleLabel={copy.lookupAction} pendingLabel={copy.loading} pending={model.lookupBusy} onClick={() => void model.lookup()} availability={{ disabled: fieldsDisabled || model.lookupAddress.trim() === '', reason: model.busy ? undefined : copy.enterTarget }} />
 								}
 							/>
 						</label>
@@ -174,18 +178,25 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 								{copy.timeout}
 								<FormInput type='number' min='1' max='5' step='1' value={model.draft.timeoutMinutes} disabled={fieldsDisabled} hint={copy.timeoutHint} onInput={event => model.setDraft({ timeoutMinutes: event.currentTarget.value })} />
 							</label>
-							<label className='field'>
-								{copy.initialPrice}
+							<div className='field vault-operations-price'>
+								<label htmlFor={initialPriceId}>{copy.initialPrice}</label>
 								<FormInput
+									id={initialPriceId}
 									inputMode='decimal'
 									adornment='REP / ETH'
 									value={model.draft.proposedPrice}
 									placeholder={formatCurrencyBalance(model.manager?.lastPrice ?? pool.lastOraclePrice ?? 0n)}
 									disabled={fieldsDisabled}
 									hint={copy.initialPriceHint}
+									error={model.priceFetchError}
+									action={
+										<button type='button' className='secondary request-price-fetch' disabled={fieldsDisabled || model.fetchingPrice || model.loading || !networkReady} aria-busy={model.fetchingPrice} onClick={() => void model.fetchPrice()}>
+											{model.fetchingPrice ? priceRequestCopy.fetchingUniswapPrice : priceRequestCopy.fetchUniswapPrice}
+										</button>
+									}
 									onInput={event => model.setDraft({ proposedPrice: event.currentTarget.value })}
 								/>
-							</label>
+							</div>
 						</WorkflowSubsection>
 					)}
 					<WorkflowSubsection title={copy.claims}>
@@ -195,8 +206,8 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 							</MetricField>
 						</MetricGrid>
 						<div className='actions'>
-							<TransactionActionButton idleLabel={copy.claimFees} pendingLabel={copy.busyAction} pending={model.busyAction === 'fees'} onClick={() => void model.claimFees()} availability={{ disabled: feeClaimReason !== undefined, reason: feeClaimReason }} />
-							<TransactionActionButton idleLabel={copy.redeemRep} pendingLabel={copy.busyAction} pending={model.busyAction === 'redeem'} onClick={() => void model.redeemRep()} availability={{ disabled: repClaimReason !== undefined, reason: repClaimReason }} />
+							<TransactionActionButton idleLabel={copy.claimFees} pendingLabel={copy.busyAction} pending={model.busyAction === 'fees'} onClick={() => void model.claimFees()} availability={{ disabled: model.busy || feeClaimReason !== undefined, reason: model.busy ? undefined : feeClaimReason }} />
+							<TransactionActionButton idleLabel={copy.redeemRep} pendingLabel={copy.busyAction} pending={model.busyAction === 'redeem'} onClick={() => void model.redeemRep()} availability={{ disabled: model.busy || repClaimReason !== undefined, reason: model.busy ? undefined : repClaimReason }} />
 						</div>
 						{model.claimError === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.claimError} />}
 						{model.claimResult === undefined ? undefined : (
@@ -272,14 +283,8 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 					)}
 					{actionHint === undefined ? undefined : <p className='detail'>{actionHint}</p>}
 					{model.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.error} />}
-					<TransactionActionButton
-						idleLabel={model.resolved ? copy.reviewCommitment : copy.review}
-						pendingLabel={model.resolved ? copy.busyAction : copy.pending}
-						pending={model.busyAction === 'bundle'}
-						onClick={() => void model.submit()}
-						availability={{ disabled: model.busy || disabledReason !== undefined, reason: disabledReason }}
-					/>
-					<TransactionActionButton tone='secondary' idleLabel={copy.clearDraft} pendingLabel={copy.clearDraft} pending={false} onClick={model.clearDraft} availability={{ disabled: model.busy, reason: copy.busyAction }} />
+					<TransactionActionButton idleLabel={model.resolved ? copy.reviewCommitment : copy.review} pendingLabel={copy.pending} pending={model.busyAction === 'bundle'} onClick={() => void model.submit()} availability={{ disabled: model.busy || disabledReason !== undefined, reason: disabledReason }} />
+					<TransactionActionButton tone='secondary' idleLabel={copy.clearDraft} pendingLabel={copy.clearDraft} pending={false} onClick={model.clearDraft} availability={{ disabled: model.busy, reason: undefined }} />
 					{model.result === undefined && !model.pending ? undefined : (
 						<UserMessage
 							placement='section'
@@ -291,7 +296,13 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 								<>
 									{model.result === undefined ? undefined : <TransactionHashLink hash={model.result.hash} />}
 									{model.result?.queuedOperation === undefined ? undefined : (
-										<button type='button' className='secondary' onClick={onViewStagedOperations}>
+										<button
+											type='button'
+											className='secondary'
+											onClick={() => {
+												if (model.result?.queuedOperation !== undefined) onViewStagedOperations(model.result.queuedOperation.operationId)
+											}}
+										>
 											{copy.reviewStaged}
 										</button>
 									)}
