@@ -352,8 +352,11 @@ function isPendingMessage(message: string) {
 }
 
 async function callExplorer(fetchFn: ExplorerFetch, target: ExplorerTarget, parameters: Readonly<Record<string, string>>, method: 'GET' | 'POST'): Promise<{ result: unknown; status: string }> {
-	const query = new URLSearchParams({ ...target.baseParameters, ...(target.apiKey === undefined ? {} : { apikey: target.apiKey }), ...parameters })
-	const response = method === 'GET' ? await fetchFn(`${target.apiUrl}?${query.toString()}`) : await fetchFn(target.apiUrl, { body: query.toString(), headers: { 'content-type': 'application/x-www-form-urlencoded' }, method: 'POST' })
+	const { module, action, ...bodyParameters } = parameters
+	// Etherscan V2 routes POST requests by URL query parameters, including chainid.
+	const query = new URLSearchParams({ ...target.baseParameters, ...(target.apiKey === undefined ? {} : { apikey: target.apiKey }), ...(module === undefined ? {} : { module }), ...(action === undefined ? {} : { action }), ...(method === 'GET' ? bodyParameters : {}) })
+	const requestUrl = `${target.apiUrl}?${query.toString()}`
+	const response = method === 'GET' ? await fetchFn(requestUrl) : await fetchFn(requestUrl, { body: new URLSearchParams(bodyParameters).toString(), headers: { 'content-type': 'application/x-www-form-urlencoded' }, method: 'POST' })
 	if (!response.ok) throw new Error(`${target.name} responded with HTTP ${response.status.toString()}`)
 	const payload = await response.json()
 	if (!isRecord(payload)) throw new Error(`${target.name} returned a non-object response`)
