@@ -1,4 +1,4 @@
-import { formatNetworkRequiredReason, positiveAmountRequired, walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
+import { formatNetworkRequiredReason, walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import { outcomeLabel } from './outcomes.js'
 import { conditionalYesPriceValidation } from './liquidity.js'
 import { walletBalancesUnavailable } from './app.js'
@@ -8,7 +8,6 @@ export const connectWalletReason = walletConnectionRequired
 export const marketClosedReason = 'Market closed to new positions.'
 export const balancesLoadingReason = 'Loading wallet balances…'
 export const balancesUnavailableReason = `${walletBalancesUnavailable}.`
-export const amountRequiredReason = positiveAmountRequired
 export const insufficientEthReason = 'Insufficient ETH balance.'
 export const insufficientLpReason = 'Insufficient LP balance.'
 export const initializePriceInvalidReason = conditionalYesPriceValidation

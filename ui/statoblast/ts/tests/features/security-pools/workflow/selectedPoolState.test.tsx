@@ -334,7 +334,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const vaultSummarySection = vaultSummaryHeading.closest('.entity-card')
 		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		expect(within(vaultSummarySection).queryByText('Approved REP')).toBeNull()
-		expect(documentQueries.queryByText('Enter a deposit amount greater than zero.')).toBeNull()
 		expect(documentQueries.queryByText('Fork Flow')).toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()

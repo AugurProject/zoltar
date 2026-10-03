@@ -50,7 +50,6 @@ export const migrationBalancesReadFailed = 'Could not read migration balances. R
 
 export const migrationApprovalNotNeededChildRep = 'Outcome-universe REP is burned directly, so no approval is needed.'
 export const migrationApprovalNotNeededNoWalletRep = 'Your migration balance covers this amount, so no wallet REP needs approval.'
-export const migrationApprovalNeedsAmount = 'Enter an amount first.'
 export const migrationApprovalLoading = 'Loading your REP approval…'
 export const formatMigrationApprovalRequired = (amount: CopyTemplateValue) => `Approve ${amount}\u00a0REP to continue.`
 export const migrationApprovalActionLabel = 'migrating REP'

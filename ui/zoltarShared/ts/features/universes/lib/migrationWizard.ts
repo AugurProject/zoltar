@@ -1,4 +1,3 @@
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -95,9 +94,9 @@ export function formatOutcomeList(outcomes: readonly Pick<MigrationWizardOutcome
 
 function deriveAmountStep(input: MigrationWizardInput, hasSelection: boolean, amountAttoRep: bigint | undefined, reusable: bigint | undefined, walletRepToBurn: bigint | undefined, maxAmount: bigint | undefined): Omit<MigrationWizardStep, 'id'> {
 	if (!hasSelection) return { reason: zoltarCopy.outcomeSelectionRequired, status: 'incomplete' }
-	if (input.amountInput.trim() === '') return { reason: commonCopy.positiveAmountRequired, status: 'incomplete' }
+	if (input.amountInput.trim() === '') return { reason: undefined, status: 'incomplete' }
 	if (amountAttoRep === undefined) return { reason: zoltarCopy.migrationAmountInvalid, status: 'incomplete' }
-	if (amountAttoRep <= 0n) return { reason: commonCopy.positiveAmountRequired, status: 'incomplete' }
+	if (amountAttoRep <= 0n) return { reason: undefined, status: 'incomplete' }
 	if (reusable === undefined || (walletRepToBurn !== undefined && walletRepToBurn > 0n && input.walletRepAttoRep === undefined)) {
 		return input.balancesLoading ? { reason: zoltarCopy.outcomeBalancesLoading, status: 'loading' } : { reason: zoltarCopy.migrationBalancesReadFailed, status: 'blocked' }
 	}
@@ -107,7 +106,7 @@ function deriveAmountStep(input: MigrationWizardInput, hasSelection: boolean, am
 
 function deriveApproveStep(input: MigrationWizardInput, amountStatus: MigrationWizardStepStatus, walletRepToBurn: bigint | undefined): Omit<MigrationWizardStep, 'id'> {
 	if (!input.requiresApproval) return { reason: zoltarCopy.migrationApprovalNotNeededChildRep, status: 'notNeeded' }
-	if (amountStatus !== 'complete' || walletRepToBurn === undefined) return { reason: zoltarCopy.migrationApprovalNeedsAmount, status: 'incomplete' }
+	if (amountStatus !== 'complete' || walletRepToBurn === undefined) return { reason: undefined, status: 'incomplete' }
 	if (walletRepToBurn === 0n) return { reason: zoltarCopy.migrationApprovalNotNeededNoWalletRep, status: 'notNeeded' }
 	if (input.approvalLoading && input.approvedAttoRep === undefined) return { reason: zoltarCopy.migrationApprovalLoading, status: 'loading' }
 	if (input.approvedAttoRep !== undefined && input.approvedAttoRep >= walletRepToBurn) return { reason: undefined, status: 'complete' }

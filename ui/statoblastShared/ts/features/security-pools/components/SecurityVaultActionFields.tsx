@@ -86,7 +86,6 @@ export function VaultRepExitActionButton({
 		if (repExitGuardMessage !== undefined) return repExitGuardMessage
 		if (!repExitEnabled) return securityPoolCopy.withdrawalUnavailableReason
 		if (repExitMode === 'withdraw' && !hasWithdrawableRep) return securityPoolCopy.noWithdrawableRepReason
-		if (repExitMode === 'withdraw' && !hasPositiveWithdrawAmount) return commonCopy.positiveAmountRequired
 		return undefined
 	})()
 	return (

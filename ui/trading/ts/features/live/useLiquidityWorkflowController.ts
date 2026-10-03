@@ -68,8 +68,9 @@ export function useLiquidityWorkflowController({
 	})
 	const estimate = parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
 	let previewBlocker: string | undefined
-	if (estimate === undefined) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
-	else if (estimate.operation === 'add')
+	if (estimate === undefined) {
+		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
+	} else if (estimate.operation === 'add')
 		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, maximumAfterSlippage(estimate.yesUsed, settings.slippageBps), maximumAfterSlippage(estimate.noUsed, settings.slippageBps), nowSeconds + settings.validityMinutes * 60n, {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,

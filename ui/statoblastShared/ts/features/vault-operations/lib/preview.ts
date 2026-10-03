@@ -24,6 +24,7 @@ export function previewVaultOperations(pool: ListedSecurityPool, owned: Security
 	}
 	const totalLimit = pool.totalUnderwritingLimitAttoEth - owned.underwritingLimitAttoEth + receiver.underwritingLimitAttoEth
 	for (const selected of input.liquidations) {
+		if (selected.requestedDebtAttoEth <= 0n) throw new Error('Invalid liquidation amount.')
 		const target = targets.find(candidate => candidate.vaultAddress.toLowerCase() === selected.targetVault.toLowerCase())
 		if (target === undefined) throw new Error(copy.targetUnavailable)
 		if (target.vaultAttoRepBacking <= 0n) throw new Error(copy.targetNoBacking)
