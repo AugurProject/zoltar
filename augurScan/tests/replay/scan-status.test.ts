@@ -4,16 +4,17 @@ import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
 import { type PollOperations, poll } from '../../src/indexer/network-synchronization.ts'
 import { toHex, zeroAddress, zeroHash } from '../../src/ethereum.ts'
 
-for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-failure', 'partial-reorg'] as const) {
+for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-failure', 'partial-reorg', 'prefetch-failure'] as const) {
 	test(`scan summary reflects ${mode} ingestion and only counts committed logs`, async () => {
 		const database = new ScannerDatabase('postgres://unused')
 		const signal = new AbortController().signal
 		const indexer = createNetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, signal)
 		indexer.stateBoundary.discovered = true
 		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
-		const largeRange = mode === 'wide' || mode === 'partial-failure' || mode === 'partial-reorg'
+		const largeRange = mode === 'wide' || mode === 'partial-failure' || mode === 'partial-reorg' || mode === 'prefetch-failure'
 		const segmentEnd = largeRange ? 259n : 10n
 		const contracts = new Map([[zeroAddress, { address: zeroAddress, label: 'OpenOracle', kind: 'openOracle', provenance: 'manifest', deploymentBlock: 10n, deploymentBlockExact: true }]])
+		const fullBlockReads: bigint[] = []
 		const storedRanges: Array<readonly [bigint | undefined, bigint | undefined, number]> = []
 		const hash = toHex(10n, { size: 32 })
 		const header = { number: 10n, hash, parentHash: zeroHash, timestamp: 1_700_000_000n, transactions: [] }
@@ -71,11 +72,20 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 				return { toBlock: segmentEnd, logs: [], scanInputs: [{ address: zeroAddress, startBlock: 10n, fromBlock }], deploymentObservations: [], endBlockHash: hash, endBlockHeader: { ...header, number: segmentEnd } }
 			},
 			getBlockHeader: async (_providers, number) => ({ ...header, number, hash: mode === 'reorg' || (mode === 'partial-reorg' && committed && number === segmentEnd) ? zeroHash : hash }),
+			getFullBlock: async (_providers, number) => {
+				fullBlockReads.push(number)
+				if (mode === 'prefetch-failure' && number === 110n) throw new Error('Prefetch failed')
+				return { ...header, number }
+			},
 			// The completed ingestion result includes logs discovered after the initial empty RPC segment.
-			indexBlock: async (_state, number) => ({ block: { ...block, number }, contracts, tokenMetadata: new Map() }),
+			indexBlock: async (_state, number) => {
+				if (largeRange && number === 10n) expect(fullBlockReads).toEqual([10n, 11n, 12n, 13n])
+				return { block: { ...block, number }, contracts, tokenMetadata: new Map() }
+			},
 		}
 		try {
 			if (mode === 'failed' || mode === 'partial-failure') await expect(poll(indexer, operations)).rejects.toThrow('Commit failed')
+			else if (mode === 'prefetch-failure') await expect(poll(indexer, operations)).rejects.toThrow('Prefetch failed')
 			else expect(await poll(indexer, operations)).toBe(mode !== 'reorg' && !largeRange)
 			expect(lines).toHaveLength(1)
 			if (mode === 'wide')
@@ -88,11 +98,11 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 				expect(lines[0]).toContain(`logsAdded=${block.logs.length * (largeRange ? 250 : 1)}`)
 				expect(lines[0]).toContain(`blocksScanned=${largeRange ? 250 : 1}`)
 				expect(lines[0]).toContain(`status=${mode === 'wide' ? 'backfilling' : 'lagging'} lagging=true reason=behind-head blocksBehind=${largeRange ? 199_741 : 2}`)
-			} else if (mode === 'partial-failure' || mode === 'partial-reorg') {
+			} else if (mode === 'partial-failure' || mode === 'partial-reorg' || mode === 'prefetch-failure') {
 				expect(storedRanges).toEqual([[10n, 109n, 100]])
 				expect(lines[0]).toContain('logsAdded=200')
 				expect(lines[0]).toContain('blocksScanned=100')
-				expect(lines[0]).toContain(`status=${mode === 'partial-failure' ? 'failed' : 'incomplete'}`)
+				expect(lines[0]).toContain(`status=${mode === 'partial-failure' || mode === 'prefetch-failure' ? 'failed' : 'incomplete'}`)
 			} else {
 				expect(lines[0]).toContain(`status=${mode === 'failed' ? 'failed' : 'incomplete'}`)
 				expect(lines[0]).not.toContain('logsAdded=')

@@ -67,6 +67,8 @@ export async function indexBlock(
 	}
 	for (const transaction of blockTransactions) {
 		if (typeof transaction === 'string') throw new Error('Full block transaction data is required for protocol call selection')
+		if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`BlockTransaction ${transaction.hash} no longer belongs to block ${number}`)
+		transactionByHash.set(transaction.hash, { transaction, index: bigintToSafeNumber(transaction.transactionIndex, `BlockTransaction ${transaction.hash} index`) })
 		if ((transaction.to !== null && transaction.to !== undefined && targets.has(transaction.to.toLowerCase())) || targets.has(transaction.from.toLowerCase()) || relevantCallTrace(traces.get(transaction.hash.toLowerCase()), targets)) relevantHashes.add(transaction.hash)
 	}
 
@@ -75,16 +77,15 @@ export async function indexBlock(
 	const fetchMissingEvidence = async (): Promise<void> => {
 		const missing = [...relevantHashes].filter(hash => !receiptByHash.has(hash))
 		for (const { receipt, transaction } of await mapLimit(missing, 8, async hash => {
-			const [receipt, transaction] = await Promise.all([state.providers.client.getTransactionReceipt({ hash }), state.providers.client.getTransaction({ hash })])
-			return { receipt, transaction }
+			const pair = transactionByHash.get(hash)
+			if (pair === undefined) throw new ChainContinuityError(`Relevant transaction ${hash} is missing from block ${number}`)
+			return { receipt: await state.providers.client.getTransactionReceipt({ hash }), transaction: pair.transaction }
 		})) {
 			requireReceiptPosition(receipt, block.hash, number)
+			if (receipt.transactionHash !== transaction.hash || receipt.transactionIndex !== transaction.transactionIndex) throw new ChainContinuityError(`Receipt ${receipt.transactionHash} does not match its block transaction`)
 			if (receipt.status !== 'success' && (receipt.logs.length > 0 || knownLogs.some(log => log.transactionHash === receipt.transactionHash))) throw new ChainContinuityError(`Reverted transaction ${receipt.transactionHash} has inconsistent log evidence`)
-			if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`BlockTransaction ${transaction.hash} no longer belongs to block ${number}`)
-			const transactionIndex = bigintToSafeNumber(transaction.transactionIndex, `BlockTransaction ${transaction.hash} index`)
 			receipts.push(receipt)
 			receiptByHash.set(receipt.transactionHash, receipt)
-			transactionByHash.set(transaction.hash, { transaction, index: transactionIndex })
 		}
 	}
 	await fetchMissingEvidence()

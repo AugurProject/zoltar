@@ -8,7 +8,12 @@ export type HistoricalStateContext = Pick<NetworkIndexerState, 'network' | 'prov
 
 export type BlockHeaderReader = (providers: ProviderState, blockNumber: bigint) => Promise<RpcBlockHeader>
 
-export const getBlockHeader: BlockHeaderReader = async (providers, blockNumber) => requireRpcBlockHeader(await providers.client.getBlock({ blockNumber, includeTransactions: true }), blockNumber)
+export const getBlockHeader: BlockHeaderReader = async (providers, blockNumber) => {
+	const block = requireRpcBlockHeader(await providers.client.getBlock({ blockNumber }), blockNumber)
+	return { hash: block.hash, parentHash: block.parentHash, timestamp: block.timestamp }
+}
+
+export const getFullBlock: BlockHeaderReader = async (providers, blockNumber) => requireRpcBlockHeader(await providers.client.getBlock({ blockNumber, includeTransactions: true }), blockNumber)
 
 export function rpcFailureReason(providers: ProviderState, error: unknown): string {
 	return providers.diagnostics.failureReason(error)

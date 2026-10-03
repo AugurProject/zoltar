@@ -36,7 +36,9 @@ test('discovers and remembers the trace boundary while continuing log indexing',
 		const transactionRead = spyOn(indexer.providers.client, 'getTransaction').mockResolvedValue(transaction)
 		const receiptRead = spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: current.hash, blockNumber: number, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to: oracle, transactionHash: hash, transactionIndex: 0n })
 		try {
-			return await indexBlock(indexer, number, 100n, contracts, new Map(), undefined, { ...current, transactions: [transaction] }, [log], async () => [], readBlockHeader)
+			const result = await indexBlock(indexer, number, 100n, contracts, new Map(), undefined, { ...current, transactions: [transaction] }, [log], async () => [], readBlockHeader)
+			expect(transactionRead).not.toHaveBeenCalled()
+			return result
 		} finally {
 			transactionRead.mockRestore()
 			receiptRead.mockRestore()

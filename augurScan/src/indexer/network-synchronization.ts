@@ -24,9 +24,10 @@ import { rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, TokenMetadata } from '../types.ts'
 import { findContractDeploymentBlock, type LogScanInput, logScanCursorUpdates, manifestReplayAncestor, planManifestBackfill, type RpcBlockHeader, reorgSearchFloor } from './planning.ts'
+import { createBlockPrefetch } from './block-prefetch.ts'
 import { indexBlock, refreshEntityStateSnapshots, refreshRichListBalances } from './ingestion-operations.ts'
 import { getAllLogs, getKnownLogs, getNextLogSegment, mergeLogs } from './log-scanner.ts'
-import { discoverStateStartBlock, findManifestDeployment, getBlockHeader, historicalCodeUnavailable, rememberHistoricalCodeUnavailable } from './network-provider.ts'
+import { discoverStateStartBlock, findManifestDeployment, getBlockHeader, getFullBlock, historicalCodeUnavailable, rememberHistoricalCodeUnavailable } from './network-provider.ts'
 import { assertLease, type NetworkIndexerState, requireLease } from './network-state.ts'
 
 /** Collaborators a poll delegates to; replaceable so replay tests can isolate one ingestion stage. */
@@ -35,6 +36,7 @@ export type PollOperations = {
 	readonly refreshContractDeployment: typeof refreshContractDeployment
 	readonly getNextLogSegment: typeof getNextLogSegment
 	readonly getBlockHeader: typeof getBlockHeader
+	readonly getFullBlock: typeof getFullBlock
 	readonly indexBlock: typeof indexBlock
 }
 
@@ -276,6 +278,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		headerPromises.set(blockNumber, pending)
 		return await pending
 	}
+	const takeFullBlock = createBlockPrefetch(batchStart, end, number => operations.getFullBlock(state.providers, number), state.signal)
 	let processedBlockCount = 0
 	let committedLogs = 0
 	let commitCheckpoint = checkpoint === undefined ? undefined : { number: checkpoint.number, hash: checkpoint.hash }
@@ -321,7 +324,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	}
 	while (previousStoredNumber !== end && !state.signal.aborted) {
 		const targetBlock = previousStoredNumber !== undefined && previousStoredNumber >= batchStart ? previousStoredNumber + 1n : batchStart
-		const header = await headerAt(targetBlock)
+		const header = await takeFullBlock(targetBlock)
+		headerPromises.set(targetBlock, Promise.resolve(header))
 		const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
 		let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 		try {
@@ -382,4 +386,4 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 	return end >= observedHead
 }
 
-const pollOperations: PollOperations = { reconcileReorg, refreshContractDeployment, getNextLogSegment, getBlockHeader, indexBlock }
+const pollOperations: PollOperations = { reconcileReorg, refreshContractDeployment, getNextLogSegment, getBlockHeader, getFullBlock, indexBlock }
