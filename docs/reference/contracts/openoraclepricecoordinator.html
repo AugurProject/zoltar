@@ -21,7 +21,7 @@
 				<p>Report and staged-operation liveness depends on <a href="../security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../security-model.html#assumption-a17">A17 corrector capability</a>, <a href="../security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="../security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="../security-model.html#assumption-a06">A06 lifecycle executors</a>. When <code>lastPrice</code> is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.</p>
 				<h2 id="interactions">State-changing interactions</h2>
 				<!-- Validated read ABI fingerprint: 2b4e03586a6b112405e3e8dc00ce49eac9a94cdd943685325ed5b875db742a45 -->
-				<!-- Validated complete compiled ABI fingerprint: 96bf38a482665cf0e621d6345f97e7d5900965fcce217565184c1fa9783b79fb -->
+				<!-- Validated complete compiled ABI fingerprint: 3368808f4fa10d2152b5a15004a47c23b93c40c08f47149ac7b48819bdda6309 -->
 				<table>
 					<thead>
 						<tr>
@@ -94,7 +94,7 @@
 							<td>The <code>PriceCoordinatorDeploymentWorker</code> that deployed the coordinator only, invoked by <code>OpenOraclePriceCoordinatorFactory</code> during deployment</td>
 							<td>Registry is nonzero and no registry was previously installed.</td>
 							<td>Binds the coordinator-local approval registry once.</td>
-							<td>No event; deterministic factory deployment and the public getter identify the registry.</td>
+							<td><code>LiquidationApprovalRegistrySet</code> identifies the configured registry.</td>
 						</tr>
 						<tr>
 							<td><code>setSecurityPool(securityPool)</code></td>

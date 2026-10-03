@@ -1,4 +1,7 @@
 export const eventSourceByName: Record<string, string> = {
+	RegistryInitialized: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
+	LiquidationApprovalRegistrySet: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
+	EthReceived: 'solidity/contracts/statoblast/SecurityPool.sol',
 	UnderwritingLimitSet: 'solidity/contracts/statoblast/SecurityPoolStorage.sol',
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	Approval: 'solidity/contracts/IERC20.sol',
