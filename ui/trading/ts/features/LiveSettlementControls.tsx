@@ -9,7 +9,6 @@ import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
@@ -274,7 +273,6 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 			})()}
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={actionAvailability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submitCurrent()}>
-				{transaction.quoteState === 'loading' && quote === undefined ? <LoadingText>{settlementCopy.gettingQuote}</LoadingText> : null}
 				{quote?.operation === 'redeem-complete-set' ? (
 					<section className='trade-estimate' aria-label={settlementCopy.quoteHeading} aria-busy={transaction.quoteState === 'loading'}>
 						<TransactionReview

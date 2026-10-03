@@ -4,7 +4,6 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
@@ -61,6 +60,7 @@ export function LiveLiquidityControls({
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const newRiskBlocker = marketNewRiskBlocker(market, nowSeconds)
 	const walletConnected = account !== undefined && walletClient !== undefined
+	const initializationState = estimate === undefined ? 'error' : 'ready'
 	const availability = resolveLiquidityAvailability({
 		walletConnected,
 		networkMismatchReason,
@@ -73,8 +73,8 @@ export function LiveLiquidityControls({
 		lpBalance: balances?.lp,
 		initializePriceValid: conditionalBps !== undefined,
 		workflowLocked,
-		quoteState: transaction.quoteState,
-		quoteError: transaction.quoteError,
+		quoteState: operation === 'initialize' ? initializationState : transaction.quoteState,
+		quoteError: operation === 'initialize' ? liquidityCopy.initialAmountTooSmall : transaction.quoteError,
 	})
 	const walletStep = panelWalletStep(wallet, walletConnected && networkMismatchReason === undefined, workflowLocked)
 	const fieldId = useId()
@@ -102,10 +102,10 @@ export function LiveLiquidityControls({
 		operationOption('add', liquidityCopy.addAction, !initialized || closedForAdding || workflowLocked, addOptionReason(initialized, newRiskBlocker)),
 		operationOption('remove', liquidityCopy.removeAction, !initialized || workflowLocked, initialized ? undefined : liquidityCopy.noLiquidityToRemoveReason),
 	]
-	// The wallet quote is the preview of record; before a wallet is ready, the public pool state still prices the amount.
+	// Initialization uses the local preview immediately; other operations use the wallet quote when connected.
 	let preview: LiquidityPreview | undefined
 	if (quote !== undefined) preview = quotePreview(quote)
-	else if (walletStep !== undefined) preview = estimate
+	else if (walletStep !== undefined || operation === 'initialize') preview = estimate
 	return (
 		<div className='liquidity-controls'>
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
@@ -135,12 +135,12 @@ export function LiveLiquidityControls({
 				{transaction.quoteState === 'error' ? (
 					<TransactionActionButton idleLabel={liquidityCopy.retryQuote} pendingLabel={liquidityCopy.gettingQuote} pending={false} tone='secondary' availability={{ disabled: workflowLocked, reason: workflowLocked ? liquidityCopy.waitForTransaction : undefined }} onClick={transaction.retryQuote} />
 				) : null}
-				{transaction.quoteState === 'loading' && quote === undefined ? <LoadingText>{liquidityCopy.gettingQuote}</LoadingText> : null}
 				{preview === undefined ? null : (
 					<LiquidityPreviewSection
 						preview={preview}
 						market={market}
 						estimated={quote === undefined}
+						connected={walletConnected}
 						busy={transaction.quoteState === 'loading'}
 						blockNumber={quote?.blockNumber}
 						protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')}
@@ -166,7 +166,8 @@ function addOptionReason(initialized: boolean, newRiskBlocker: string | undefine
 }
 
 /** What the operation gives and returns: the wallet quote when one is ready, otherwise an estimate from the public pool state. */
-function LiquidityPreviewSection({ preview, market, estimated, busy, blockNumber, protection }: { preview: LiquidityPreview; market: LiveMarket; estimated: boolean; busy: boolean; blockNumber: bigint | undefined; protection: string }) {
+function LiquidityPreviewSection({ preview, market, estimated, connected, busy, blockNumber, protection }: { preview: LiquidityPreview; market: LiveMarket; estimated: boolean; connected: boolean; busy: boolean; blockNumber: bigint | undefined; protection: string }) {
+	const estimateNote = connected ? liquidityCopy.localEstimateNote : liquidityCopy.estimateNote
 	const removalValue = preview.operation === 'remove' ? outcomeSharesValueAttoEth(market, preview.yesOut, preview.noOut) : undefined
 	return (
 		<section className='trade-estimate' aria-label={estimated ? liquidityCopy.estimateHeading : liquidityCopy.quoteHeading} aria-busy={busy}>
@@ -213,7 +214,7 @@ function LiquidityPreviewSection({ preview, market, estimated, busy, blockNumber
 					</DataGrid>
 				</ReadOnlyDetailAccordion>
 			)}
-			<UserMessage className='detail trade-estimate-note' detail={estimated ? liquidityCopy.estimateNote : protection} />
+			<UserMessage className='detail trade-estimate-note' detail={estimated ? estimateNote : protection} />
 		</section>
 	)
 }

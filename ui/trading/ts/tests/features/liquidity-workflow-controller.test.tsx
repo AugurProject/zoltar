@@ -95,6 +95,53 @@ async function settleQuote() {
 describe('liquidity workflow controller state', () => {
 	installDomTestLifecycle()
 
+	test('simulates initialization only at submission and retains the local preview LP bound', async () => {
+		let controller: Controller | undefined
+		let simulations = 0
+		let sends = 0
+		const initialMarket = { ...market, pair: undefined, lpTotalSupply: 0n }
+		const baseClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const walletClient = { ...baseClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
+		const services: LiveLiquidityServices = {
+			publicErrorMessage: String,
+			simulateLiquidity: async (_client, _configuration, quotedMarket, _account, operation, amount) => {
+				simulations += 1
+				return { ...liquidityQuote(amount), market: quotedMarket, operation, expectedLiquidity: amount * 2n }
+			},
+			submitFreshLiquidity: async (_client, _configuration, _account, quote, guardedWrite) => {
+				expect(quote.expectedLiquidity).toBe(10n ** 16n - 1_000n)
+				expect(quote.deadline).toBe(1_000_000n)
+				return await guardedWrite(async () => {
+					sends += 1
+					return transactionHash
+				})
+			},
+		}
+		const rendered = await renderIntoDocument(
+			controllerProbe(
+				walletClient,
+				services,
+				next => {
+					controller = next
+				},
+				() => undefined,
+				initialMarket,
+			),
+		)
+		try {
+			await act(() => controller?.updateAmount('0.01'))
+			await settleQuote()
+			expect(simulations).toBe(0)
+			expect(controller?.estimate?.operation).toBe('initialize')
+			await act(async () => await controller?.submit())
+			expect(simulations).toBe(1)
+			expect(sends).toBe(1)
+			expect(controller?.transaction.state).toBe('confirmed')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('retries a failed quote without changing the amount or sending a transaction', async () => {
 		let current: Controller | undefined
 		let calls = 0

@@ -61,3 +61,6 @@ export const previewDetails = 'Liquidity breakdown'
 
 export const retryQuote = 'Retry quote'
 export const waitForTransaction = 'Wait for the current transaction to finish.'
+
+export const localEstimateNote = 'Estimate from the current pool state. Rechecked before submitting.'
+export const initialAmountTooSmall = 'Increase the amount to mint liquidity.'

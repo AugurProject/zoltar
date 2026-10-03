@@ -6,6 +6,7 @@ import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, getDefaultNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 import { createRecoveringReceiptWaiter } from '../transactions/receiptRecovery.js'
+import { createRetryEmptyReadProvider } from './retryEmptyReadProvider.js'
 import { createConfirmedReadTransport } from './confirmedReadTransport.js'
 
 export type TransactionSubmissionStatus = 'pending' | 'uncertain'
@@ -101,9 +102,10 @@ export type ChainBackend = {
 }
 
 function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, getConfirmedBlock: () => bigint | undefined, ethereum?: InjectedEthereum): ReadClient {
+	const provider = ethereum === undefined ? undefined : createRetryEmptyReadProvider(ethereum, profile, rpcUrl)
 	return createPublicClient({
 		chain: profile.chain,
-		transport: createConfirmedReadTransport(transportMode === 'provider' && ethereum !== undefined ? custom({ request: parameters => requestWalletRpc(ethereum, parameters) }, { retryCount: 0 }) : http(rpcUrl), getConfirmedBlock),
+		transport: createConfirmedReadTransport(transportMode === 'provider' && provider !== undefined ? custom(provider, { retryCount: 0 }) : http(rpcUrl), getConfirmedBlock),
 	})
 }
 
@@ -198,10 +200,12 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
 
+			const readRecoveringProvider = createRetryEmptyReadProvider(ethereum, profile, configuredRpc.url)
+
 			const baseClient = createWalletClient({
 				account: accountAddress,
 				chain: profile.chain,
-				transport: createConfirmedReadTransport(custom({ request: parameters => requestWalletRpc(ethereum, parameters) }), getConfirmedBlock),
+				transport: createConfirmedReadTransport(custom({ request: parameters => readRecoveringProvider.request(parameters) }), getConfirmedBlock),
 			}).extend(publicActions) as WriteClient
 
 			return withTransactionCallbacks(baseClient, callbacks, onConfirmedBlock, async () => {
