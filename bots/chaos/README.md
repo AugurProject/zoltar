@@ -14,10 +14,11 @@ The chaos bot is a long-running operator that exercises the Zoltar, Statoblast, 
 
 ### 1. Install and create a private configuration
 
-From `bots/chaos`:
+From the repository root, install once, then work from `bots/chaos`:
 
 ```sh
 bun install --frozen-lockfile
+cd bots/chaos
 install -d -m 700 .state
 cp config/operator.example.json .state/operator.json
 chmod 600 .state/operator.json
@@ -48,7 +49,7 @@ cp config/operator.custom-chain-placeholder.json .state/operator.json
 chmod 600 .state/operator.json
 ```
 
-Replace every placeholder RPC and relay URL. Keep `paused: true` and `runtime.execute: false`, and choose a new unused `runtime.stateFile` for a new chain, deployment, or signer. Direct bot and Compose restarts retain a pinned deployment. On Windows, `start.bat` rebuilds the bot and selects the latest contract addresses immediately, archiving the old configuration and preserving its state for explicit retirement. An unrecognized operated profile fails closed; see [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile). Never repoint an operated state path at another identity; preserve its main file and companion stores together.
+Replace every placeholder RPC and relay URL. Keep `paused: true` and `runtime.execute: false`, and choose a new unused `runtime.stateFile` for a new chain, deployment, or signer. Direct bot and Compose restarts retain a pinned deployment; the [Windows launchers](#windows-launchers) instead select the latest contracts. An unrecognized operated profile fails closed; see [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile). Never repoint an operated state path at another identity; preserve its main file and companion stores together.
 
 Live execution with the recommended `connectivity.rpcQuorum: 2` requires the primary reader and at least two independent quorum-reader origins; `connectivity.rpcQuorum: 1` runs live against a single trusted reader. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest relevant deployment or carry event. Configure authenticated private relays before enabling deadline-bound operations. The [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile) and [RPC and submission configuration](./OPERATOR_REFERENCE.md#rpc-and-submission-configuration) are the canonical sources for exact fields, graph checks, reader limits, custom-chain requirements, and relay rules.
 
@@ -73,7 +74,16 @@ Keep `paused: true` and `runtime.execute: false`, then validate and run:
 )
 ```
 
-Leave that command running, then open <http://127.0.0.1:4193>. Settings is grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 · Execution policy** (risk gates, allowlist, reserves, timing, ecosystems), and **3 · Go live** (transaction signer and execution mode), and **4 · Complete configuration** (all remaining fields, including contract addresses, discovery limits, submission, and runtime). The complete editor loads automatically on Settings; its JSON mode also supports adding or removing optional fields. Save it while paused to validate and restart the bot paused with live execution off. Changing the dashboard binding or disabling it disconnects the page; reconnect at the configured address when enabled. Load the private key through the write-only **Transaction signer** control under Go live. Leaving **remember** off keeps it only in process memory; enabling it saves the key in the owner-only configuration.
+Leave that command running, then open <http://127.0.0.1:4193>. Settings is grouped into setup steps with a jump bar:
+
+1. **Connect**: chain and RPCs.
+2. **Execution policy**: risk gates, allowlist, reserves, timing, and ecosystems.
+3. **Go live**: transaction signer and execution mode.
+4. **Complete configuration**: all remaining fields, including contract addresses, discovery limits, submission, and runtime.
+
+The complete editor loads automatically on Settings; its JSON mode also supports adding or removing optional fields. Save it while paused to validate and restart the bot paused with live execution off. Changing the dashboard binding or disabling it disconnects the page; reconnect at the configured address when enabled.
+
+Load the private key through the write-only **Transaction signer** control under Go live. Leaving **remember** off keeps it only in process memory; enabling it saves the key in the owner-only configuration.
 
 While paused and dry, verify that the displayed wallet address exactly matches the independently derived address. Only then fund it within the budget from step 2. Confirm the ETH, WETH, and universe-specific REP inventory on Overview. To replace the address, pause and load the intended key through Transaction signer. The bot automatically preserves the old configuration and complete state unit, selects a new state file, and restarts paused with live execution off. Old funds and positions remain with the old signer. Pending transactions must finish recovery before switching identities. Memory-only keys remain in memory across this internal restart and are still omitted from saved configurations. Never delete state to work around signer scoping.
 
@@ -97,7 +107,7 @@ The [scheduler and execution controls](./OPERATOR_REFERENCE.md#scheduler-and-exe
 
 ### 6. Perform the signer-aware live preflight
 
-Pause first. Take a stopped encrypted backup of the complete `.state` unit, then configure conservative positive ETH and REP reserves, principal and gas caps, the proven canary allowlist, and any required private relay. Keep both high-risk gates off. The signer persistence choice determines the safe preflight:
+Pause first. Take a stopped encrypted backup of the complete `.state` unit, then configure conservative positive ETH and REP reserves, principal and gas caps, the proven canary allowlist, and any required private relay. Keep both high-risk gates (`strategy.allowHighRiskOperations` and `strategy.allowIrreversibleOperations`) off. The [configuration keys](./OPERATOR_REFERENCE.md#configuration-keys) table lists every field. The signer persistence choice determines the safe preflight:
 
 - **Saved signer:** enable live execution while paused through the **Execution mode** panel under Go live, whose readiness checklist (pause, signer, chain and RPC health, quorum RPCs, reserve policy, canonical scan, live inventory, delivery) must hold before the switch unlocks; stop the process, and run `bun run doctor` against that persisted live-capable configuration. It must acquire both the state and signer locks and validate the durable stores, deployment, quorum, actual public-broadcast or signer-authenticated private-relay method, canonical topology, and signer funding. Restart paused. Before resuming, inspect the readiness report and require every check except the intentional pause to pass; this is where complete signer-scoped scan readiness is established. Reverify the signer, pending nonce, active workflow, index status, and safety-pause latch.
 - **Memory-only signer:** stopping drops the key, so a stopped `doctor` becomes keyless and cannot prove signer funding or signer-lock ownership. Loading the funded signer into the paused process acquires its signer-scoped lock. Enable live execution through the loopback-only dashboard's **Execution mode** panel; that path retains the lock and rejects the change unless signer-scoped discovery is complete and the full configured ETH, REP, and gas funding envelope is available. The saved configuration is forced back to paused, keyless dry-run form, so a restart cannot execute. Before resuming, require every readiness check except the intentional pause to pass.
@@ -128,24 +138,40 @@ State may contain a remembered key, signed transactions, and credentialed endpoi
 
 Drain & Retire is a durable, restart-safe retirement workflow for one deployment profile. It is different from pause: pause stops signing, while drain stops new random exposure but continues pending-transaction recovery, partial-workflow cleanup, matured lifecycle obligations, claims, withdrawals, redemptions, allowance revocation, and asset recovery. A safety pause always overrides drain. `SIGINT` and `SIGTERM` retain their normal graceful-boundary behavior.
 
-While the bot is running, request drain in the dashboard. For CLI use, stop the same bot first and ensure the signer key is saved in settings; the CLI needs the bot's exclusive state lock. The commands below use direct Bun and its local state file. For a Compose bot, run `docker compose stop chaos` from this directory, then replace `bun run run --` in each command with `docker compose run --rm --no-deps chaos bun src/cli/run.ts` so the command uses the container's state volume. The exact confirmation contains the active profile and configured signer address. Recovered ETH and REP go to that signer wallet:
+While the bot is running, use the dashboard for every action below. The CLI needs the bot's exclusive state lock and a signer key saved in settings, so stop the same bot first, run the command, and restart it afterwards:
+
+| Launcher | Stop first | Command prefix | Restart afterwards |
+| --- | --- | --- | --- |
+| Direct Bun | Stop the process | `bun run run --` | `bun run run` |
+| Compose | `docker compose stop chaos` | `docker compose run --rm --no-deps chaos bun src/cli/run.ts` | `docker compose start chaos` |
+| Archived deployment | `docker stop zoltar-chaos-retirement` | `docker compose run -e ZOLTAR_CHAOS_CONFIG=.state/operator.json.retired-ARCHIVE_ID.json --rm --no-deps chaos bun src/cli/run.ts` | Rerun `retirement.bat ARCHIVE_ID`; see [Windows launchers](#windows-launchers) |
+
+The Compose prefix runs the command against the container's state volume. Append one of these argument sets to the prefix:
+
+| Action | Arguments | Notes |
+| --- | --- | --- |
+| Request drain | `--drain 0xSigner --confirm "DRAIN profile:id TO 0xSigner"` | The exact confirmation contains the active profile and configured signer address. Recovered ETH and REP go to that signer wallet. The command saves the request and exits. |
+| Show status | `--retirement-status` | Read-only. |
+| Cancel drain | `--cancel-drain --confirm "CANCEL DRAIN"` | Unavailable once the first retirement WETH unwrap begins. |
+| Accept residuals | `--accept-residuals "$target_id" --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR $target_id"` | See below. |
+| Register a V3 position | `--register-v3-position '<json>' --confirm "REGISTER V3 profile:id"` | See below. |
+
+A drain request accepts three optional flags: `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>` (an integer from `0` through `10000`), and `--exit-after-completion`.
+
+For example, with direct Bun:
 
 ```sh
 bun run run -- --drain 0xSigner --confirm "DRAIN profile:id TO 0xSigner"
 ```
 
-Restart the same bot after this CLI command; it saves the drain request and exits. Use `bun run run` for direct Bun, or `docker compose start chaos` to resume the same pinned Compose service. For an archived deployment, use `retirement.bat ARCHIVE_ID` instead.
-
-Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. Inspect progress in the running dashboard, or stop the bot and use `bun run run -- --retirement-status` with the matching direct Bun or Compose prefix above. Cancel in the dashboard or, after stopping the bot, with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"` using the same prefix rule. After status or cancellation through the CLI, restart direct Bun with `bun run run` or the pinned old Docker service with `docker compose start chaos`. `start.bat` selects the latest contracts without requesting retirement; `retirement.bat ARCHIVE_ID` explicitly requests a new drain if the archived drain was cancelled. Cancellation is unavailable once the first retirement WETH unwrap begins.
-
-If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target deployment ID. That `factory:v1:` ID binds both the target core profile and its Uniswap factory; copy the full ID shown by the launcher. Use the dashboard while the bot runs, or stop it for the CLI command below, using the matching direct Bun or Compose prefix. For an archived deployment, keep `retirement.bat ARCHIVE_ID` open to verify completion and restart the current service. For archive CLI commands, stop `zoltar-chaos-retirement` with `docker stop zoltar-chaos-retirement` first, then select its configuration with `-e ZOLTAR_CHAOS_CONFIG=.state/operator.json.retired-ARCHIVE_ID.json` immediately after `docker compose run`.
+**Residuals.** If retirement reports `drained-with-residuals`, review the completion evidence and residual list before accepting replacement for the shown target deployment ID. That `factory:v1:` ID binds both the target core profile and its Uniswap factory, and it differs from the archive ID; copy the full ID shown by the dashboard or launcher.
 
 ```sh
-target_id='factory:v1:…' # replace with the full target deployment ID printed by retirement.bat (not the archive ID)
+target_id='factory:v1:…'
 bun run run -- --accept-residuals "$target_id" --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR $target_id"
 ```
 
-If retirement flags a legacy Uniswap V3 position whose ownership and coordinates you can verify, register it in the dashboard. For CLI use, stop the bot, run the command below with the matching direct Bun or Compose prefix, and restart the same bot afterward:
+**Legacy Uniswap V3 positions.** If retirement flags a V3 position whose ownership and coordinates you can verify, register it in the dashboard or with the CLI:
 
 ```sh
 bun run run -- --register-v3-position '{"owner":"0x…","pool":"0x…","token0":"0x…","token1":"0x…","fee":3000,"tickLower":-120,"tickUpper":120,"workflowId":"receipt:0x…"}' --confirm "REGISTER V3 profile:id"
@@ -153,11 +179,11 @@ bun run run -- --register-v3-position '{"owner":"0x…","pool":"0x…","token0":
 
 Recovery may spend existing shares or REP when a claim requires it; the default launcher policy does not enable claim-linked migration. For the exact claim catalog, proof requirements, and residual categories, see [drain and retirement controls](./OPERATOR_REFERENCE.md#drain-and-retirement-controls).
 
-For safe testnet redeployment, drain the old profile, review any residuals, preserve the owner-only state and completion proof, and configure a distinct state file for the new profile. The Windows `start.bat` launcher switches immediately using a distinct state file; old funds and positions remain on the old contracts until explicitly retired. The shipped zero-root bootstrap has a narrowly checked upgrade migration that preserves its signer and audit history.
+For safe testnet redeployment, drain the old profile, review any residuals, preserve the owner-only state and completion proof, and configure a distinct state file for the new profile.
 
 ## Run with Docker
 
-The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume. It sets `ZOLTAR_BOT_SIGNER_LOCK_ROOT=.state/process-locks` and mounts the fixed `zoltar-bot-signer-locks` volume there, which fences the same signer across chaos, liquidator, and OpenOracle arbitrager Compose projects on one Docker host; it does not fence another host. A direct Bun process uses `ZOLTAR_BOT_SIGNER_LOCK_ROOT` when it is set to a non-empty path, otherwise a `zoltar-bot-locks` directory under the system temporary directory. `SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the scan status log uses to report a scan as lagging; Mainnet and Sepolia default to `12000`. `ZOLTAR_BOT_RPC_QUORUM` (`1` or `2`, default `1`) supplies the RPC agreement requirement only when the operator file omits `connectivity.rpcQuorum`; Compose passes it through from the host. The dashboard has no password: `ZOLTAR_BOT_DASHBOARD_PASSWORD` and `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY` apply only to the other bots, and Compose sets `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED=true` to pair its `0.0.0.0` container listener with the host-loopback port. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state).
+The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume.
 
 ```sh
 docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
@@ -166,15 +192,18 @@ docker compose up --build -d
 docker compose logs --tail 100 chaos
 ```
 
-First boot copies the safe paused, dry, keyless template. Stop the service and complete steps 3–6 before live use. The shipped Compose service and image's default `bun run run` command automatically run the stopped preflight when the persisted configuration is live-capable; startup aborts on failed state, signer, or network checks. Normal operation also requires the configured ETH and REP trading inventory. An active retirement may restart after those balances have been depleted; it still needs ETH to pay for any remaining recovery transactions. Missing core scan deployments instead allow startup in the waiting state; deployment-graph and funding readiness remain incomplete until the contracts exist. An alternate container command does not receive that automatic gate, so run `bun src/cli/doctor.ts --if-live-capable` before any alternate operator launcher. `start.bat doctor` exposes the explicit gate on Windows. Do not copy a remembered key through an ordinary host directory; provision the protected volume through a secret manager.
+The [shared bot guide](../README.md) owns the behaviour this service has in common with the other bots: the [signer lock](../README.md#signer-lock) and its `zoltar-bot-signer-locks` volume, and the [environment variables](../README.md#environment-variables), including `ZOLTAR_BOT_RPC_QUORUM`, `SCAN_BLOCK_TIME_MS`, and `ZOLTAR_CHAOS_CONFIG`. The chaos dashboard has no password; see [dashboard access](../README.md#dashboard-access) and [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state).
 
-On Windows, run `start.bat` to stop the containers, rebuild from the local checkout, select the latest contracts in the built manifest, and restart with logs in the console. It does not fetch repository updates. When the deployment changes, it saves an owner-only configuration archive beside `.state/operator.json`, preserves the old journal and companion stores, and selects a new state file. Repeated starts on the same deployment reuse its state. The narrowly checked zero-root bootstrap migration retains its existing journal.
+First boot copies the safe paused, dry, keyless template. Stop the service and complete steps 3–6 before live use.
 
-Run `retirement.bat` without arguments to list archived deployment IDs and their retirement status. Then run `retirement.bat ARCHIVE_ID` to retire one explicitly. This stops the current service and runs the archive at the same dashboard address without replacing the current configuration. Old funds and positions are not transferred by `start.bat`.
+The image's default `bun run run` command automatically runs the stopped preflight when the persisted configuration is live-capable:
 
-The archived configuration must permit unpaused live execution with a configured signer and RPC connectivity. If it does not, edit `.state/operator.json.retired-ARCHIVE_ID.json` inside the protected volume before retrying, keeping its deployment pin and state path unchanged. A new drain recovers assets to that signer and unwraps WETH using the default retirement policies, without unmatched-share exit or claim migration. An active drain retains its saved policies. Inspect the dashboard Retirement panel for blockers and use `docker logs zoltar-chaos-retirement` for runtime errors.
+- Startup aborts on failed state, signer, or network checks.
+- Normal operation also requires the configured ETH and REP trading inventory. An active retirement may restart after those balances have been depleted; it still needs ETH to pay for any remaining recovery transactions.
+- Missing core scan deployments instead allow startup in the waiting state; deployment-graph and funding readiness remain incomplete until the contracts exist.
+- An alternate container command does not receive that automatic gate, so run `bun src/cli/doctor.ts --if-live-capable` before any alternate operator launcher.
 
-The launcher checks completion every minute. Review and accept any residuals for the displayed target deployment ID in the dashboard; this ID differs from the archive ID. Completion must be canonical and finalized using the archive's configured RPC quorum before the launcher stops retirement and restarts the current service. Closing the window leaves the detached retirement container running; rerun `retirement.bat ARCHIVE_ID` to resume monitoring. Run `start.bat` at any time to stop retirement and return to the latest contracts, preserving retirement progress in the archive's journal. `start.bat doctor` only checks the saved current profile.
+Do not copy a remembered key through an ordinary host directory; provision the protected volume through a secret manager.
 
 For the keyless first-boot edit, export only the safe template to a protected Linux directory, choose a new state path and replace every placeholder, then restore its ownership in the volume:
 
@@ -182,7 +211,11 @@ For the keyless first-boot edit, export only the safe template to a protected Li
 install -d -m 700 .state
 docker compose stop chaos
 docker compose cp chaos:/app/bots/chaos/.state/operator.json ./.state/operator.json
-# Edit .state/operator.json while it remains paused, dry, and keyless.
+```
+
+Edit `.state/operator.json` while it remains paused, dry, and keyless, then copy it back:
+
+```sh
 chmod 600 .state/operator.json
 docker compose cp ./.state/operator.json chaos:/app/bots/chaos/.state/operator.json
 docker compose run --rm --no-deps --user root --entrypoint sh chaos -c 'chown bun:bun /app/bots/chaos/.state/operator.json && chmod 600 /app/bots/chaos/.state/operator.json'
@@ -192,7 +225,30 @@ docker compose start chaos
 
 After loading or remembering a signer, make changes only through the loopback-only dashboard. For a saved-signer live preflight, pause and stop the service, run the same one-off `doctor` command, then restart paused and complete step 6's readiness checks.
 
-Any manually created container must mount `zoltar-bot-signer-locks` at `.state/process-locks`. For multi-host operation, use exactly one signer per host or add an external lease/fencing service. This section owns the container-specific ownership and fencing guidance; the [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) owns the underlying state-unit and launch-gate invariants.
+This section owns the container-specific ownership guidance; the [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) owns the underlying state-unit and launch-gate invariants.
+
+## Windows launchers
+
+Two batch files wrap the Compose service. Neither fetches repository updates.
+
+| Command | What it does |
+| --- | --- |
+| `start.bat` | Stops the chaos containers, rebuilds from the local checkout, selects the latest contracts in the built manifest, runs the launch gate when the configuration is live-capable, and restarts with logs in the console. |
+| `start.bat doctor` | Rebuilds and runs only the stopped-process launch preflight against the saved current profile. |
+| `retirement.bat` | Lists archived deployment IDs and their retirement status. |
+| `retirement.bat ARCHIVE_ID` | Stops the current service and retires one archived deployment at the same dashboard address, without replacing the current configuration. |
+
+**Switching deployments with `start.bat`.** Unlike a direct Bun or Compose restart, which retains the pinned deployment, `start.bat` selects the latest contract addresses immediately. When the deployment changes, it saves an owner-only configuration archive beside `.state/operator.json`, preserves the old journal and companion stores, and selects a new state file. Repeated starts on the same deployment reuse its state. It does not request retirement and does not transfer anything: old funds and positions remain on the old contracts until explicitly retired.
+
+**Retiring an archive with `retirement.bat ARCHIVE_ID`.**
+
+- The archived configuration must permit unpaused live execution with a configured signer and RPC connectivity. If it does not, edit `.state/operator.json.retired-ARCHIVE_ID.json` inside the protected volume before retrying, keeping its deployment pin and state path unchanged.
+- A new drain recovers assets to that signer and unwraps WETH using the default retirement policies, without unmatched-share exit or claim migration. An active drain retains its saved policies. If the archived drain was cancelled, the launcher explicitly requests a new one.
+- Inspect the dashboard Retirement panel for blockers and use `docker logs zoltar-chaos-retirement` for runtime errors.
+- The launcher checks completion every minute. Review and accept any residuals for the displayed target deployment ID in the dashboard; this ID differs from the archive ID.
+- Completion must be canonical and finalized using the archive's configured RPC quorum before the launcher stops retirement and restarts the current service. Keep the window open so it can do so.
+- Closing the window leaves the detached retirement container running; rerun `retirement.bat ARCHIVE_ID` to resume monitoring.
+- Run `start.bat` at any time to stop retirement and return to the latest contracts, preserving retirement progress in the archive's journal.
 
 ## Coverage and dashboard fixture
 
@@ -204,4 +260,8 @@ To inspect the UI without a chain or key:
 bun ./scripts/serve-dashboard-fixture.mts
 ```
 
-Use `bun ./scripts/serve-dashboard-fixture.mts safety-recovery` for the pre-scan inventory, partial-workflow recovery, and safety-pause presentation. With Chromium installed, `bun ./scripts/capture-dashboard-qa.mts` records ignored desktop (`1440x900`) and mobile (`390x844`) evidence under `.state/qa`.
+Pass a scenario name to change the state shown: `baseline` (the default), `safety-recovery` for the pre-scan inventory, partial-workflow recovery, and safety-pause presentation, or `private-relay-ready` and `private-relay-blocked` for the private-submission states. The fixture listens on port `4193` unless `DASHBOARD_FIXTURE_PORT` is set. `bun ./scripts/capture-dashboard-qa.mts` records ignored desktop (`1440x900`) and mobile (`390x844`) evidence under `.state/qa`; it uses the Chromium at `CHROMIUM_PATH`, or `/usr/bin/chromium` by default.
+
+## Development
+
+`bun run check` runs typecheck, lint, tests, and the format check; `bun run typecheck`, `bun run lint`, `bun run test`, and `bun run format:check` run the individual steps.

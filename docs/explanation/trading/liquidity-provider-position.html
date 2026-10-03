@@ -32,7 +32,8 @@
 			</section>
 			<section id="what-it-claims">
 				<h2>What the token claims</h2>
-				<p>Direct Yes and No donations are synchronized into the reserves and accrue to existing LPs. Removal returns proportional raw shares even after trading closes. See <a href="./invalid-insurance.html">Invalid insurance</a> for how a provider is covered against an Invalid result.</p>
+				<p>A holder of <code>wallet LP / total LP</code> can withdraw that fraction of both reserves as raw Yes and No shares at any time, including after trading closes. Swap fees are taken from the input and stay in the reserves, and direct Yes or No donations are synchronized into them, so both accrue to existing LPs.</p>
+				<p>The claim is on shares, not ETH. Its mix of Yes and No shifts as trades move the price, and neither share redeems for anything if the question resolves Invalid. The pair cannot hold Invalid shares, so the Invalid minted with a provider's complete sets stays in the provider's wallet, outside the token; <a href="./invalid-insurance.html">Invalid insurance</a> explains what it covers.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

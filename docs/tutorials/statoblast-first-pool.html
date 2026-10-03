@@ -13,11 +13,11 @@
 			<header>
 				<p class="kicker">Tutorial</p>
 				<h1>Your first security pool</h1>
-				<p>You will create a yes-or-no question and its <a href="../reference/glossary.html#security-pool">SecurityPool</a>, back the pool with 1,000 REP, commit to underwrite 10 ETH of it, and mint the pool's first <a href="../reference/glossary.html#complete-set">complete set</a>. At the end the pool shows 1 ETH of open interest against a 10 ETH commitment.</p>
+				<p>You will create a yes-or-no question and its <a href="../reference/glossary.html#security-pool">SecurityPool</a>, back the pool with 1,000 REP, commit to underwrite 10 ETH of it, and mint the pool's first <a href="../reference/glossary.html#complete-set">complete set</a>. At the end the pool shows 1 ETH of <a href="../reference/glossary.html#open-interest">open interest</a> against a 10 ETH commitment.</p>
 			</header>
 			<section id="before-you-start">
 				<h2>Before you start</h2>
-				<p>Statoblast is the market layer built on Zoltar: a SecurityPool holds the ETH behind one question's outcome shares, and <a href="../reference/glossary.html#vault">vault</a> owners back it with <a href="../reference/glossary.html#rep">REP</a>. <a href="../explanation/statoblast.html">How Statoblast works</a> explains the model; this tutorial only walks through it.</p>
+				<p>Statoblast is the market layer built on <a href="../explanation/zoltar.html">Zoltar</a>, the forkable oracle: a SecurityPool holds the ETH behind one question's outcome shares, and <a href="../reference/glossary.html#vault">vault</a> owners back it with <a href="../reference/glossary.html#rep">REP</a>. <a href="../explanation/statoblast.html">How Statoblast works</a> explains the model; this tutorial only walks through it.</p>
 				<p>Run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/?simulate=1&amp;simScenario=deployed</code>. That browser-local simulator has the contracts deployed, no pools yet, and a wallet holding ETH and REP; the screenshots below come from it. It never reflects live chain state.</p>
 			</section>
 			<section id="create">
@@ -51,17 +51,17 @@
 			</section>
 			<section id="commit">
 				<h2>Commit to underwrite</h2>
-				<p>REP alone does not let the pool take collateral. Your <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a> is the ETH amount you agree to cover, and changing it needs a fresh REP/ETH price from <a href="../reference/glossary.html#open-oracle">OpenOracle</a>.</p>
+				<p>REP alone does not let the pool take collateral. Your <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a> is the ETH amount you agree to cover, and raising it needs a valid REP/ETH price from <a href="../reference/glossary.html#open-oracle">OpenOracle</a>. A new pool has no price yet, so this first commitment requests one.</p>
 				<ol>
 					<li>Select <strong>Set commitment limit</strong>.</li>
 					<li>Enter <code>3</code> in <strong>OpenOracle REP per ETH starting price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
 					<li>Enter <code>10</code> in <strong>Commitment limit</strong>. The form prepares the funding requirements and keeps the send button disabled until they are met.</li>
 					<li>Approve WETH and REP with their separate buttons. Each approval has an editable amount; use the suggested amounts for this tutorial.</li>
-					<li>Select <strong>Set commitment limit</strong> and confirm that transaction. It funds a new price report and stages your change; the vault shows it as a staged operation.</li>
+					<li>Select <strong>Set commitment limit</strong> (the button also shows the ETH it sends) and confirm that transaction. It funds a new price report and stages your change; the vault shows it as a staged operation.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-set-commitment" aria-labelledby="fig-statoblast-set-commitment-caption">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/set-commitment.png"><img width="711" height="428" src="../assets/screenshots/statoblast/set-commitment.png" alt="The commitment transaction controls with editable WETH and REP approval amounts, separate approval buttons, and Set commitment limit disabled below them until funding is ready." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-set-commitment-caption"><span class="figure-label">A staged commitment.</span> At 3 REP per ETH and a 2× backing ratio, 1,000 REP backs about 166 ETH, so 10 ETH leaves the vault healthy.</figcaption>
+					<figcaption id="fig-statoblast-set-commitment-caption"><span class="figure-label">The commitment form before its approvals.</span> At 3 REP per ETH and a security multiplier of 2, 1,000 REP backs about 166 ETH, so 10 ETH leaves the vault healthy.</figcaption>
 				</figure>
 			</section>
 			<section id="settle">
@@ -92,7 +92,7 @@
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/mint-complete-sets.png"><img width="768" height="487" src="../assets/screenshots/statoblast/mint-complete-sets.png" alt="The Mint complete sets dialog showing 10.00 ETH available to mint, 1 ETH entered, and an enabled Mint complete sets button." loading="lazy" /></a>
 					<figcaption id="fig-statoblast-mint-caption"><span class="figure-label">Minting.</span> Minting needs no oracle price; here it only has to fit within the pool's total commitments.</figcaption>
 				</figure>
-				<p>Your wallet now holds the new Yes, No, and Invalid shares, and the pool summary's <strong><a href="../reference/glossary.html#open-interest">Open interest</a> / commitment</strong> reads 1.00 ETH / 10.00 ETH. That is the whole underwriting loop: back a pool, commit capacity, and let collateral in. <a href="../explanation/fees.html">Open-interest fees</a> explains what your commitment earns, and <a href="./trading-first-market.html">Your first Trading market</a> opens a market for a pool like this one.</p>
+				<p>Your wallet now holds the new Yes, No, and Invalid shares, and the pool summary's <strong>Open interest / commitment</strong> reads 1.00 ETH / 10.00 ETH. That is the whole underwriting loop: back a pool, commit capacity, and let collateral in. <a href="../explanation/fees.html">Open-interest fees</a> explains what your commitment earns, and <a href="./trading-first-market.html">Your first Trading market</a> opens a market for a pool like this one.</p>
 				<figure class="screenshot" id="fig-statoblast-pool-after-mint" aria-labelledby="fig-statoblast-pool-after-mint-caption">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/pool-after-mint.png"><img width="800" height="1441" src="../assets/screenshots/statoblast/pool-after-mint.png" alt="The pool page for Will it rain in Lisbon on 1 June 2027?, operational, with Open interest / commitment reading 1.00 ETH of 10.00 ETH and the Shares tab showing 1.00 redeemable complete set and 1.00 each of Yes, No, and Invalid." loading="lazy" /></a>
 					<figcaption id="fig-statoblast-pool-after-mint-caption"><span class="figure-label">The finished pool.</span> One ETH of collateral now backs outstanding shares, inside the 10 ETH you committed.</figcaption>

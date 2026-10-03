@@ -111,7 +111,7 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Minimum post-liquidation health factor',
 				blocks: [
 					paragraph(
-						`\`minPostLiquidationHealthFactorBps\` is applied to both vault-health branches at execution. \`${formatUnderscored(liquidationRules.bpsDenominator).replace('_', ',')}\` (\`BPS_DENOMINATOR\`) means exactly the protocol minimum; a larger value requires the receiver to be over-collateralized by that ratio after accepting the position. The factor is checked against live post-liquidation state, not the queue-time preview.`,
+						`\`minPostLiquidationHealthFactorBps\` is applied to both vault-health branches at execution. \`${formatUnderscored(liquidationRules.bpsDenominator).replace('_', ',')}\` (\`BPS_DENOMINATOR\`) means exactly the protocol minimum; a larger value multiplies both REP requirements by that ratio, so \`12,000\` requires 1.2 times each requirement, rounded up, after the receiver accepts the position. The factor is checked against live post-liquidation state, not the queue-time preview.`,
 					),
 				],
 			},

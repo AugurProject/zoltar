@@ -19,7 +19,7 @@ const reset = requiredElement(explorer, '[data-invariant-reset]', HTMLButtonElem
 
 const entries = Array.from(document.querySelectorAll<HTMLDetailsElement>('details.invariant-entry'))
 const entrySections = new Set<HTMLElement>()
-const catalogContextSections = Array.from(document.querySelectorAll<HTMLElement>('#standing, section.callout'))
+const catalogContextSections = Array.from(document.querySelectorAll<HTMLElement>('#standing, #invariant-index, section.callout'))
 
 function normalizedText(value: string): string {
 	return value
@@ -192,5 +192,14 @@ if (target instanceof HTMLDetailsElement && target.classList.contains('invariant
 		})
 	})
 }
+
+// Index and cross-reference links change only the fragment, so open the entry they point at.
+window.addEventListener('hashchange', () => {
+	const linked = entries.find(entry => entry.id === window.location.hash.slice(1))
+	if (linked === undefined) return
+	if (linked.hidden) reset.click()
+	linked.open = true
+	linked.scrollIntoView({ behavior: 'instant', block: 'start' })
+})
 
 applyFilters()

@@ -45,7 +45,7 @@ var collapse = requiredElement(explorer, "[data-invariant-collapse]", HTMLButton
 var reset = requiredElement(explorer, "[data-invariant-reset]", HTMLButtonElement);
 var entries = Array.from(document.querySelectorAll("details.invariant-entry"));
 var entrySections = new Set;
-var catalogContextSections = Array.from(document.querySelectorAll("#standing, section.callout"));
+var catalogContextSections = Array.from(document.querySelectorAll("#standing, #invariant-index, section.callout"));
 function normalizedText(value) {
   return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -206,4 +206,13 @@ if (target instanceof HTMLDetailsElement && target.classList.contains("invariant
     });
   });
 }
+window.addEventListener("hashchange", () => {
+  const linked = entries.find((entry) => entry.id === window.location.hash.slice(1));
+  if (linked === undefined)
+    return;
+  if (linked.hidden)
+    reset.click();
+  linked.open = true;
+  linked.scrollIntoView({ behavior: "instant", block: "start" });
+});
 applyFilters();

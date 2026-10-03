@@ -54,7 +54,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`reserve(operationId, approvalId, receiverVault, targetVault, operator, requestedDebtAttoEth, snapshotTargetDebtAttoEth, latestExecutionTimestamp)`',
-				caller: 'Bound coordinator only',
+				caller: 'Bound coordinator only (`Only coordinator`)',
 				effect: 'Moves quota from available to pending reserved at staging, bounded by requested debt, target snapshot debt, per-operation limit, and available cumulative quota.',
 				declarations: [{ name: 'reserve' }],
 				preconditions: 'Approval matches local pool, receiver, exact operator, and exact or wildcard target; it is active, unrevoked, non-invalidated, valid through latest execution, and has positive reservable quota.',
@@ -62,7 +62,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`release(operationId)`',
-				caller: 'Bound coordinator only',
+				caller: 'Bound coordinator only (`Only coordinator`)',
 				effect: 'Returns an unsettled delegated reservation to available quota. A missing, self-route, or already settled reservation is a no-op.',
 				declarations: [{ name: 'release' }],
 				preconditions: 'Coordinator terminal cleanup path.',
@@ -70,7 +70,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`consume(operationId, debtMovedAttoEth)`',
-				caller: 'Bound coordinator only',
+				caller: 'Bound coordinator only (`Only coordinator`)',
 				effect: 'Permanently consumes exactly moved debt, releases unused reservation, and settles the reservation once.',
 				declarations: [{ name: 'consume' }],
 				preconditions: 'For a delegated reservation, it is unsettled and moved debt does not exceed reserved debt. A self route is a no-op.',
@@ -84,7 +84,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		purpose: 'Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.',
 		readAbiFingerprint: '2b4e03586a6b112405e3e8dc00ce49eac9a94cdd943685325ed5b875db742a45',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `SETTLEMENT_GAS_OVERHEAD`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `vaultOperations`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. `lastSettlementTimestamp` records when the accepted final report reached settlement eligibility (report timestamp plus `settlementTime`), not when `settle` was called, and `isPriceValid` measures freshness from it. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementWork`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `SETTLEMENT_GAS_OVERHEAD`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `vaultOperations` (the [VaultOperations](./contracts/vaultoperations.html) executor this coordinator deploys in its constructor), `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. `lastSettlementTimestamp` records when the accepted final report reached settlement eligibility (report timestamp plus `settlementTime`), not when `settle` was called, and `isPriceValid` measures freshness from it: it is true while `lastPrice > 0`, `lastSettlementTimestamp` is nonzero, and `lastSettlementTimestamp + 5 minutes > block.timestamp`. On chain ID `11155111` (Sepolia) the window is 1 hour instead of 5 minutes. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementWork`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		securityBoundary:
 			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -139,7 +139,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
 		interactions: [
 			{
-				call: '`requestPriceIfNeededAndStageLiquidation(targetVault, receiverVault, requestedDebtAttoEth, approvalId, ..., bountyAttoEth)`',
+				call: '`requestPriceIfNeededAndStageLiquidation(targetVault, receiverVault, requestedDebtAttoEth, approvalId, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)`',
 				caller: 'Liquidation operator; a delegated receiver must have approved this exact operator',
 				effect:
 					'Stages explicit operator, receiver, target backing, and target underwriting commitment and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.',
@@ -148,24 +148,24 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				signals: '`LiquidationRouteStaged`; `LiquidationApprovalReserved` on a delegated route; staged-operation lifecycle events',
 			},
 			{
-				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
+				call: '`requestPriceIfNeededAndStageOperation(operation, targetVault, operationValue, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with funding when stale',
 				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
-					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or leaves it active outside the batch for a later `executeStagedOperation`. A target change cannot supersede an active dependent bundle. Otherwise, a newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
+					'Records the operation with `operationValue` in the unit of its `OperationType` (`0` `Liquidation`, transferred commitment in attoETH; `1` `WithdrawRep`, withdrawal in attoREP; `2` `SetVaultUnderwritingLimit`, absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or leaves it active outside the batch for a later `executeStagedOperation`. A target change cannot supersede an active dependent bundle. Otherwise, a newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or underwriting-limit adjustment; liquidation and withdrawal require positive amounts, and a withdrawal whose previewed REP is zero reverts with `Withdraw amount has no effect`, while an absolute underwriting limit may be zero to request an exit; and timeout from 1 second through 5 minutes. A committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
+					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or underwriting-commitment change; liquidation and withdrawal require positive amounts, and a withdrawal whose previewed REP is zero reverts with `Withdraw amount has no effect`, while an absolute underwriting commitment may be zero to request an exit; and `validForSeconds` is from 1 second through 5 minutes. A committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
 				signals: '`StagedOperationQueued`; `PriceRequested` when this call opens a report; `ExecutedStagedOperation` for immediate fresh-price execution or a superseded target change; `LiquidationRouteStaged` for operation `0`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
 				call: '`stageVaultOperations(owner, changeCommitment, actionCount, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)`',
-				caller: 'The immutable `vaultOperations` executor only; wallets enter through its `submitVaultOperations` function',
+				caller: 'The [VaultOperations](./contracts/vaultoperations.html) executor only (`Only vault operations executor`); wallets enter through its `submitVaultOperations` function',
 				effect:
-					"Records operation type 3 with the submitting wallet as owner and report sponsor. A fresh-price bundle executes commitment changes, other-vault liquidations, and withdrawal atomically; a failure reverts the submission and its deposit. With a stale price, deposits complete immediately and dependent actions queue together. Any change to a queued liquidation target's backing units or underwriting commitment fails the whole bundle, rolling back the owner's commitment change and withdrawal. The failed bundle is consumed while its earlier deposit remains. Each action uses one of four settlement slots; the deposit uses none.",
+					"Records `OperationType` `3` (`VaultOperations`) with the submitting wallet as owner and report sponsor. A fresh-price bundle executes commitment changes, other-vault liquidations, and withdrawal atomically; a failure reverts the submission and its deposit. With a stale price, deposits complete immediately and dependent actions queue together. Any change to a queued liquidation target's backing units or underwriting commitment fails the whole bundle, rolling back the owner's commitment change and withdrawal. The failed bundle is consumed while its earlier deposit remains. Each action uses one of four settlement slots; the deposit uses none.",
 				declarations: [{ name: 'stageVaultOperations' }],
 				preconditions:
-					'Execution window is 1–300 seconds; escalation is unresolved; a pending report belongs to the owner; a commitment change has no active preceding commitment operation. Stale-price bundles must fit the remaining weighted callback capacity and satisfy report funding when opening a report. Targets are distinct, nonzero other vaults with a positive commitment; liquidation bundles require a receiver health factor of at least 10,000 bps. All liquidation snapshots and pool safety checks must still pass at execution, and a withdrawal whose resulting REP is zero fails with `Withdraw amount has no effect`.',
-				signals: '`StagedOperationQueued`, `PriceRequested` when opening a report, `ExecutedStagedOperation`, and `CoordinatorStateCheckpoint`; the executor also emits bundle and target details',
+					'`validForSeconds` is from 1 second through 5 minutes; escalation is unresolved; a pending report belongs to the owner; a commitment change has no active preceding commitment operation. Stale-price bundles must fit the remaining weighted callback capacity and satisfy report funding when opening a report. Targets are distinct, nonzero other vaults with a positive commitment; liquidation bundles require a receiver health factor of at least 10,000 BPS. All liquidation snapshots and pool safety checks must still pass at execution, and a withdrawal whose resulting REP is zero fails with `Withdraw amount has no effect`.',
+				signals: '`StagedOperationQueued`, `PriceRequested` when opening a report, `ExecutedStagedOperation`, and `CoordinatorStateCheckpoint`; the executor emits `VaultLiquidationStaged` per target and `VaultOperationsStaged` before this call',
 			},
 			{
 				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with report funding',
@@ -173,7 +173,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation, retains the whole committed bounty as the settler reward, then refunds any ETH above the bounty through a low-level caller callback. Callback rejection rolls back the report and initial position.',
 				declarations: [{ name: 'requestPrice' }],
 				preconditions:
-					'Cached price stale; no pending report; nonzero proposed REP/ETH price, a committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, and funding and approvals for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report. The caller must accept any positive excess-ETH refund.',
+					'Cached price stale; no pending report; nonzero proposed REP-per-ETH price, a committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, and funding and approvals for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report. The caller must accept any positive excess-ETH refund.',
 				signals: '`PriceRequested` and `CoordinatorStateCheckpoint`',
 			},
 			{
@@ -182,7 +182,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect:
 					"Consumes an expired operation and releases its delegated reservation without requiring a valid price. Otherwise, consumes and attempts the active operation using the current fresh price. Price-report funding is independent of the operation's notional; the downstream operation applies its own protocol bounds.",
 				declarations: [{ name: 'executeStagedOperation' }],
-				preconditions: 'Operation exists. Expired cleanup requires no valid price; a non-expired operation requires a fresh coordinator price. Lifecycle failures are emitted rather than retried.',
+				preconditions: 'Operation exists (`Staged operation unavailable`). Expired cleanup requires no valid price; a non-expired operation requires a fresh coordinator price (`Valid oracle price required`). Lifecycle failures are emitted rather than retried.',
 				signals: '`ExecutedStagedOperation`, either `LiquidationApprovalConsumed` or `LiquidationApprovalReleased` for a delegated liquidation, and `CoordinatorStateCheckpoint`',
 			},
 			{
@@ -190,7 +190,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				effect: 'Permissionlessly consumes an expired operation and releases its liquidation reservation without requiring a valid oracle price.',
 				declarations: [{ name: 'expireStagedOperation' }],
-				preconditions: 'Operation exists and its settlement-plus-validity window has elapsed.',
+				preconditions: 'Operation exists (`Staged operation unavailable`) and `block.timestamp` is after `queuedAt + settlementTime + validForSeconds` (`Staged operation active`).',
 				signals: '`ExecutedStagedOperation`, `LiquidationApprovalReleased` for a delegated liquidation, and `CoordinatorStateCheckpoint`',
 			},
 			{
@@ -202,8 +202,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				signals: '`PendingReportRecovered`, failed `ExecutedStagedOperation` for each live attached operation, `LiquidationApprovalReleased` for each attached delegated liquidation, and `CoordinatorStateCheckpoint`',
 			},
 			{
-				call: '`openOracleCallback(...)`',
-				caller: 'Configured `OpenOracle` only',
+				call: '`openOracleCallback(reportId, amount1, amount2, uint256, address, address)`; the last three parameters are unnamed and ignored',
+				caller: 'Configured `OpenOracle` only (`Only OpenOracle`)',
 				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A terminally rejected settlement consumes the pending batch and releases every liquidation reservation.',
 				declarations: [{ name: 'openOracleCallback' }],
 				preconditions: 'Callback report matches the pending report; excessive settlement basefee, a saturated `uint24` report counter, an uneconomic final history record at its recorded base fee plus configured priority fee, a stale report, or zero values reject the price after clearing pending report state.',
@@ -214,7 +214,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				caller: 'The `PriceCoordinatorDeploymentWorker` that deployed the coordinator only, invoked by `OpenOraclePriceCoordinatorFactory` during deployment',
 				effect: 'Binds the coordinator-local approval registry once.',
 				declarations: [{ name: 'setLiquidationApprovalRegistry' }],
-				preconditions: 'Registry is nonzero and no registry was previously installed.',
+				preconditions: 'Registry is nonzero and no registry was previously installed (`Registry setup invalid` for any failed condition, including the caller).',
 				signals: 'No event; deterministic factory deployment and the public getter identify the registry.',
 			},
 			{
@@ -222,16 +222,66 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				caller: 'Anyone while `securityPool` remains zero; normal factory deployment calls atomically',
 				effect: 'A nonzero value binds the pool permanently. A zero value emits and checkpoints zero but leaves the setter callable. `SecurityPoolFactory` supplies the nonzero canonical pool in the same deployment transaction, immediately after deploying the pool.',
 				declarations: [{ name: 'setSecurityPool' }],
-				preconditions: 'Current `securityPool` is zero; the argument itself is not required to be nonzero.',
+				preconditions: 'Current `securityPool` is zero (`Security pool already set`); the argument itself is not required to be nonzero.',
 				signals: '`SecurityPoolSet` and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`setRepEthPrice(lastPrice)`',
-				caller: 'Configured nonzero `SecurityPool` only',
+				caller: 'Configured nonzero `SecurityPool` only (`Only pool`)',
 				effect: "Seeds the coordinator's price value, including zero, for inherited child state.",
 				declarations: [{ name: 'setRepEthPrice' }],
 				preconditions: 'Caller equals the configured pool.',
 				signals: '`RepEthPriceSet` and `CoordinatorStateCheckpoint`',
+			},
+		],
+	},
+	{
+		compiledAbiFingerprint: '7c3d7744d423261e7717c26408f087fb592b2c279e2fb691787e029beda49294',
+		name: 'VaultOperations',
+		purpose: 'Accepts a wallet bundle of vault actions for one security pool, stores the price-dependent actions, and is the only caller that pool accepts for executor-gated vault entrypoints.',
+		readAbiFingerprint: '1553ba0b23ef9af1a6270c7df9688bef2c2ca7903e6ef66207f0e9c2d5fe41d2',
+		readSurface:
+			'Use `MAX_ACTIONS` (4) for the limit on price-dependent actions in one bundle. `getBundle(operationId)` returns a stored bundle: `owner`, `changeCommitment`, `commitmentAttoEth`, `withdrawAttoRep`, `minimumReceiverHealthFactorBps`, and each liquidation `targetVault` and `requestedDebtAttoEth` with its queue-time `targetBackingUnits` and `targetUnderwritingLimitAttoEth` snapshot. `previewWithdrawRep(pool, vault, amountAttoRep)` returns the REP a withdrawal would send: zero for a zero request, otherwise the requested backing or the whole vault backing when the remainder would fall below `minimumVaultRepDepositAttoRep`. The coordinator address is a private immutable set to the deployer; each [OpenOraclePriceCoordinator](./contracts/openoraclepricecoordinator.html) deploys one instance in its constructor and exposes it as `vaultOperations`.',
+		readDeclarations: [{ name: 'getBundle' }, { name: 'previewWithdrawRep' }],
+		readStorageDeclarations: [{ name: 'MAX_ACTIONS' }],
+		sourcePath: 'solidity/contracts/statoblast/VaultOperations.sol',
+		interactionNotes: 'The `input` of `submitVaultOperations` contains, in ABI order, `depositAttoRep`, `changeCommitment`, `commitmentAttoEth`, `liquidations` (each a `targetVault` and a `requestedDebtAttoEth`), `withdrawAttoRep`, `minimumReceiverHealthFactorBps`, and `validForSeconds`.',
+		interactions: [
+			{
+				call: '`submitVaultOperations(input, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with ETH',
+				caller: 'Vault owner; the caller becomes the bundle owner',
+				effect:
+					"Deposits a positive `depositAttoRep` immediately through the pool `depositRepToVaultFromExecutor`. When price-dependent actions exist, stores the bundle under the next coordinator operation ID with a snapshot of each target's backing units and underwriting commitment, then forwards `msg.value` and the three price arguments to the coordinator `stageVaultOperations`, which executes the bundle at a fresh price or queues it. A deposit-only call returns operation ID zero and refunds `msg.value` to the caller.",
+				declarations: [{ name: 'submitVaultOperations' }],
+				preconditions:
+					'No submission is already in progress (`Vault submission already active`). The bundle contains a deposit or a price-dependent action (`Choose a vault action`); a commitment change, each liquidation, and a positive withdrawal are price-dependent actions, at most four in total (`Choose one to four price actions`). With liquidations, `minimumReceiverHealthFactorBps` is at least 10,000 BPS (`Receiver health factor below one`); each target is nonzero and differs from the caller (`Choose another vault`), requests a positive amount (`Liquidation amount zero`), is listed once (`Duplicate liquidation target`), and has positive backing units and underwriting commitment (`Target vault has no commitment`). A deposit requires the pool `depositRepToVaultFromExecutor` prerequisites; price-dependent actions require the coordinator `stageVaultOperations` prerequisites; a deposit-only caller accepts the ETH refund (`Vault operation refund failed`).',
+				signals: 'The pool `depositRepToVault` signals for a positive deposit; `VaultLiquidationStaged` per liquidation, then `VaultOperationsStaged`, when price-dependent actions exist; then the coordinator `stageVaultOperations` signals. A deposit-only call emits only the deposit signals',
+			},
+			{
+				call: '`execute(operationId)`',
+				caller: 'Bound coordinator only (`Only coordinator`)',
+				effect:
+					"Runs the stored bundle in order: sets the owner's underwriting commitment through the pool `setVaultUnderwritingLimit` when the bundle changes it; performs each liquidation through the pool `performLiquidation` with the owner as operator and receiver and the stored target snapshot; then withdraws through the pool `withdrawRepFromVault`. A failed step reverts the whole call. The bundle stays stored until `release`.",
+				declarations: [{ name: 'execute' }],
+				preconditions: 'A bundle is stored for `operationId` (`Bundle unavailable`); a positive withdrawal previews to a positive amount (`Withdraw amount has no effect`); each pool call meets its own prerequisites.',
+				signals: 'The signals of each pool call it makes; no event of its own',
+			},
+			{
+				call: '`executeSingle(operationId, operation)`',
+				caller: 'Bound coordinator only (`Only coordinator`)',
+				effect:
+					'Dispatches one staged coordinator operation by its `OperationType`. `VaultOperations` runs `execute(operationId)` and returns zero. `Liquidation` calls the pool `performLiquidation` and returns the moved commitment: a self route uses `operationValue` and a 10,000 BPS minimum receiver health factor, while a delegated route uses the reserved debt and the approval registry `minimumHealthFactorBps(operationId)`. `WithdrawRep` calls the pool `withdrawRepFromVault` and `SetVaultUnderwritingLimit` calls the pool `setVaultUnderwritingLimit`, each for the operator with `operationValue`.',
+				declarations: [{ name: 'executeSingle' }],
+				preconditions: 'The operation type is `Liquidation`, `WithdrawRep`, `SetVaultUnderwritingLimit`, or `VaultOperations` (`Unsupported single operation`); the pool call meets its own prerequisites.',
+				signals: 'The signals of the pool call it makes; no event of its own',
+			},
+			{
+				call: '`release(operationId)`',
+				caller: 'Bound coordinator only (`Only coordinator`)',
+				effect: 'Deletes the stored bundle for `operationId`. Releasing an ID without a bundle changes nothing.',
+				declarations: [{ name: 'release' }],
+				preconditions: 'No prerequisite beyond the caller.',
+				signals: 'No event',
 			},
 		],
 	},
@@ -278,7 +328,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				signals: '`ApprovalForAll`',
 			},
 			{
-				call: 'Both `safeTransferFrom(...)` overloads',
+				call: '`safeTransferFrom(from, to, id, value)` and `safeTransferFrom(from, to, id, value, data)`',
 				caller: 'Share holder or approved ERC-1155 operator',
 				effect: 'Transfers one outcome-token balance without changing supply.',
 				declarations: [{ name: 'safeTransferFrom', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' }],
@@ -287,7 +337,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				signals: '`TransferSingle`',
 			},
 			{
-				call: 'Both `safeBatchTransferFrom(...)` overloads',
+				call: '`safeBatchTransferFrom(from, to, ids, values)` and `safeBatchTransferFrom(from, to, ids, values, data)`',
 				caller: 'Share holder or approved ERC-1155 operator for a nonempty batch; any caller for an empty batch',
 				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
 				declarations: [{ name: 'safeBatchTransferFrom', sourcePath: 'solidity/contracts/statoblast/tokens/ERC1155.sol' }],
@@ -408,9 +458,9 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				call: '`refundLosingBidsFor(bidder, tickIndices)`',
 				caller: 'Auction owner (`SecurityPoolForker`) only; public callers use `settleAuctionBids`',
 				declarations: [{ name: 'refundLosingBidsFor' }],
-				effect: "A nonempty list marks a named bidder's bids already provably below the current clearing tick and credits their ETH to `pendingEthRefundsAttoEth` without calling the bidder. An empty list changes no bids.",
-				preconditions: 'Named bidder is nonzero; auction started and unfinalized; auction has reached a clearing price. Nonempty indexes additionally belong to that bidder and are strictly losing and unrefunded.',
-				signals: '`BidSettled` per refunded bid; one aggregate `EthRefundCredited` per call when total credited ETH is positive',
+				effect: 'Performs the `refundLosingBids` refund for the bids of `bidder` instead of the caller.',
+				preconditions: '`bidder` is nonzero; the `refundLosingBids` prerequisites, with the indexes belonging to `bidder`.',
+				signals: 'The `refundLosingBids` signals',
 			},
 			{
 				call: '`finalize()`',
@@ -422,9 +472,9 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal, repBackingUnitsTotal)`',
-				caller: 'Auction owner only',
+				caller: 'Auction owner (`SecurityPoolForker`) only; public callers use `claimAuctionProceeds` or `settleAuctionBids`',
 				effect:
-					'Returns five `uint256` values in ABI order: `totalFilledAttoRep` (filled REP), `totalRefundAttoEth` (ETH refund), `totalProRataAllocation` (capacity), `totalSecondaryProRataAllocation` (bad debt), and `totalRepBackingUnitsAllocation` (REP backing units). The forker credits backing and capacity to the bidder vault and credits bad debt only while the recorded auction debt generation is current; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Capacity and debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust `repBackingUnitsTotal` without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.',
+					'Returns five `uint256` values in ABI order: `totalFilledAttoRep` (filled REP), `totalRefundAttoEth` (ETH refund), `totalProRataAllocation` (underwriting commitment), `totalSecondaryProRataAllocation` (bad debt), and `totalRepBackingUnitsAllocation` (REP backing units). The forker credits backing and underwriting commitment to the bidder vault and credits bad debt only while the recorded auction debt generation is current; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Underwriting commitment and bad debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust `repBackingUnitsTotal` without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.',
 				declarations: [{ name: 'withdrawBids' }],
 				preconditions: 'Auction finalized; caller is owner. Nonempty indexes belong to `withdrawFor` and remain unsettled.',
 				signals: '`BidSettled` per processed bid; one `EthRefundCredited` for the call when aggregate `totalRefundAttoEth` is positive',

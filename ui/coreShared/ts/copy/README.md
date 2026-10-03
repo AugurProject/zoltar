@@ -1,6 +1,8 @@
 # UI copy modules
 
-User-facing text is grouped by the feature that owns its meaning. Consumers import a feature module as a namespace, such as `import * as marketCopy from '../copy/market.js'`, so call sites retain context without large named-import lists.
+These rules apply to every UI copy directory: `ui/coreShared/ts/copy` for cross-product text, and `ui/zoltarShared/ts/copy` and `ui/statoblastShared/ts/copy` for product text. The examples below come from all three.
+
+User-facing text is grouped by the feature that owns its meaning. Consumers import a feature module as a namespace, such as `import * as commonCopy from '../copy/common.js'`, so call sites retain context without large named-import lists.
 
 Use `common.ts` only when the same concept is shared across multiple features. Text that merely happens to be identical should remain feature-owned when the contexts may evolve independently.
 

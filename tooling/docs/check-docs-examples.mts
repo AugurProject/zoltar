@@ -785,17 +785,17 @@ async function checkBinaryCensorshipExample(): Promise<void> {
 		assertEqual(example.valueFor('honestDisputeBarrierFraction'), '1.10%', 'binary censorship default fee barrier')
 		assertEqual(example.output('attackerPayoff'), '1000.00 ETH', 'binary censorship default outside payoff')
 		assertEqual(example.output('censorshipCost'), '11424.00 ETH', 'binary censorship default cost')
-		assertEqual(example.output('safeCensorshipDuration'), '4.20', 'binary censorship default duration bound')
+		assertEqual(example.output('durationToTargetCost'), '4.20', 'binary censorship default duration bound')
 
 		example.setInput('manipulatedPrice', 108)
 		assertEqual(example.output('liquidationExecutable'), 'no', 'distance guard should block a small manipulation')
 		assertEqual(example.output('attackerPayoff'), '0.00 ETH', 'blocked liquidation should have no outside payoff')
-		assertEqual(example.output('safeCensorshipDuration'), 'not applicable without attacker payoff', 'blocked liquidation should have no payoff-relative duration threshold')
+		assertEqual(example.output('durationToTargetCost'), 'not applicable without attacker payoff', 'blocked liquidation should have no payoff-relative duration threshold')
 
 		example.setInput('manipulatedPrice', 113)
 		example.setInput('honestDisputeBarrierFraction', 0.13)
 		assertEqual(example.output('censorshipCost'), '0.00 ETH', 'a calibrated barrier above the fixed-fee floor should remove censorship pressure at equal price error')
-		assertEqual(example.output('safeCensorshipDuration'), 'unbounded when censorship rate is zero', 'zero censorship pressure should have no finite duration bound')
+		assertEqual(example.output('durationToTargetCost'), 'unbounded when censorship rate is zero', 'zero censorship pressure should have no finite duration bound')
 	} finally {
 		example.close()
 	}

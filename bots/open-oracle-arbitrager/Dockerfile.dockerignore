@@ -17,6 +17,10 @@
 !bots/open-oracle-arbitrager/
 !bots/open-oracle-arbitrager/package.json
 !bots/open-oracle-arbitrager/README.md
+!bots/open-oracle-arbitrager/EXECUTION.md
+!bots/open-oracle-arbitrager/CONFIGURATION.md
+!bots/open-oracle-arbitrager/MARKETS.md
+!bots/open-oracle-arbitrager/RECOVERY.md
 !bots/open-oracle-arbitrager/config/
 !bots/open-oracle-arbitrager/config/**
 !bots/open-oracle-arbitrager/docs/

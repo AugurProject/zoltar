@@ -4,9 +4,10 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ensureContractArtifactsAreCurrent } from '../contracts/ensure-contract-artifacts.mts'
 import { walkFiles } from '../repo/walk.mts'
-import { entrypointSignaturesBySource, readDeclarationExclusionsBySource, stateChangingAbiFingerprintBySource } from './contract-reference-abi-surface.mts'
+import { entrypointSignaturesBySource, fallbackRoutedEntrypointSignatures, interfaceEntrypointExclusionsBySource, readDeclarationExclusionsBySource, stateChangingAbiFingerprintBySource } from './contract-reference-abi-surface.mts'
 import { assemblyEventEmissions, delegateEventDeclarationMirrors, documentedEventSchemas, referencedEventAbiFingerprint } from './contract-reference-event-schemas.mts'
 import { eventSourceByName } from './contract-reference-event-sources.mts'
+import { computeCompiledAbiFingerprint, countEntrypoints, getCompiledContractAbi, getFallbackSelectorReferences } from './contract-reference-abi-readers.mts'
 import { contractPageOutputPath, contractPagesDirectory, contractReferences, expectedProductionSoliditySourceFingerprint, outputPath, type ContractDeclaration } from './contract-reference-metadata.mts'
 import { renderAccountingExamples } from './contract-reference-examples.mts'
 import { escapeHtml, headingId, renderRichText } from './contract-reference-rich-text.mts'
@@ -53,6 +54,8 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	const representedReadNamesBySource = new Map<string, Set<string>>()
 	const representedStorageNamesBySource = new Map<string, Set<string>>()
 	const representedEntrypointKeys = new Set<string>()
+	const representedFallbackEntrypointKeys = new Set<string>()
+	const entrypointSignatureCountsByContract = new Map<string, Map<string, number>>()
 	const referencedEventNames = new Set<string>()
 	const getSource = async (sourcePath: string): Promise<string> => {
 		const cachedSource = sourceByPath.get(sourcePath)
@@ -74,9 +77,25 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	for (const [sourcePath, expectedFingerprint] of Object.entries(stateChangingAbiFingerprintBySource)) {
 		const source = await getSource(sourcePath)
 		const signaturesByName = entrypointSignaturesBySource[sourcePath] ?? {}
-		assert.deepEqual(getPublicStateChangingDeclarationNames(source), Object.keys(signaturesByName).sort(), `${sourcePath} state-changing public entrypoints must exactly match the interaction metadata`)
+		const excludedInterfaceNames = new Set(interfaceEntrypointExclusionsBySource[sourcePath] ?? [])
+		assert.deepEqual(
+			getPublicStateChangingDeclarationNames(source).filter(name => !excludedInterfaceNames.has(name)),
+			Object.keys(signaturesByName).sort(),
+			`${sourcePath} state-changing public entrypoints must exactly match the interaction metadata`,
+		)
 		const actualFingerprint = computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations(source))
 		assert.equal(actualFingerprint, expectedFingerprint, `${sourcePath} state-changing ABI changed; review the interaction rows and update its pinned fingerprint`)
+	}
+	for (const [routerSourcePath, signaturesByDelegateSource] of Object.entries(fallbackRoutedEntrypointSignatures)) {
+		const expectedSelectorReferences: string[] = []
+		for (const [delegateSourcePath, signaturesByName] of Object.entries(signaturesByDelegateSource)) {
+			const delegateSource = await getSource(delegateSourcePath)
+			for (const [name, expectedSignatures] of Object.entries(signaturesByName)) {
+				assertEntrypointSignatures(delegateSource, { name }, expectedSignatures, delegateSourcePath)
+				expectedSelectorReferences.push(`${path.basename(delegateSourcePath, '.sol')}.${name}`)
+			}
+		}
+		assert.deepEqual(getFallbackSelectorReferences(await getSource(routerSourcePath), routerSourcePath), expectedSelectorReferences.sort(), `${routerSourcePath} fallback must route exactly the documented delegate selectors`)
 	}
 	for (const eventSchema of documentedEventSchemas) {
 		assertEventSchema(await getSource(eventSchema.sourcePath), eventSchema, eventSchema.sourcePath)
@@ -114,13 +133,19 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 			for (const declaration of interaction.declarations) {
 				const declarationSourcePath = declaration.sourcePath ?? contractReference.sourcePath
 				const source = await getSource(declarationSourcePath)
-				const configuredSourceSignatures = entrypointSignaturesBySource[declarationSourcePath]
+				const isFallbackRouted = declaration.kind === 'fallback-routed'
+				const configuredSourceSignatures = isFallbackRouted ? fallbackRoutedEntrypointSignatures[contractReference.sourcePath]?.[declarationSourcePath] : entrypointSignaturesBySource[declarationSourcePath]
 				assert.ok(configuredSourceSignatures, `No entrypoint signature metadata exists for ${declarationSourcePath}`)
 				const expectedSignatures = configuredSourceSignatures[declaration.name]
 				assert.ok(expectedSignatures, `No entrypoint signatures are configured for ${declarationSourcePath}#${declaration.name}`)
-				assertEntrypointSignatures(source, declaration, expectedSignatures, declarationSourcePath)
+				assertEntrypointSignatures(source, isFallbackRouted ? { name: declaration.name } : declaration, expectedSignatures, declarationSourcePath)
 				assert.ok(new RegExp(`\\\`${declaration.name}(?:\\\`|\\()`).test(interaction.call), `${contractReference.name} interaction call must name validated entrypoint ${declaration.name}`)
-				representedEntrypointKeys.add(`${declarationSourcePath}#${declaration.name}`)
+				assert.doesNotMatch(interaction.call, /\.\.\./, `${contractReference.name} interaction call for ${declaration.name} must list every parameter`)
+				if (isFallbackRouted) representedFallbackEntrypointKeys.add(`${contractReference.sourcePath}#${declarationSourcePath}#${declaration.name}`)
+				else representedEntrypointKeys.add(`${declarationSourcePath}#${declaration.name}`)
+				const signatureCounts = entrypointSignatureCountsByContract.get(contractReference.name) ?? new Map<string, number>()
+				signatureCounts.set(`${declarationSourcePath}#${declaration.name}`, expectedSignatures.length)
+				entrypointSignatureCountsByContract.set(contractReference.name, signatureCounts)
 			}
 			for (const eventMatch of interaction.signals.matchAll(/`([A-Z][A-Za-z0-9_]*)`/g)) {
 				const eventName = eventMatch[1]
@@ -142,6 +167,10 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	}
 	const configuredEntrypointKeys = Object.entries(entrypointSignaturesBySource).flatMap(([sourcePath, signaturesByName]) => Object.keys(signaturesByName).map(name => `${sourcePath}#${name}`))
 	assert.deepEqual(Array.from(representedEntrypointKeys).sort(), configuredEntrypointKeys.sort(), 'Entrypoint signature metadata must exactly match the declarations represented by interaction rows')
+	const configuredFallbackEntrypointKeys = Object.entries(fallbackRoutedEntrypointSignatures).flatMap(([routerSourcePath, signaturesByDelegateSource]) =>
+		Object.entries(signaturesByDelegateSource).flatMap(([delegateSourcePath, signaturesByName]) => Object.keys(signaturesByName).map(name => `${routerSourcePath}#${delegateSourcePath}#${name}`)),
+	)
+	assert.deepEqual(Array.from(representedFallbackEntrypointKeys).sort(), configuredFallbackEntrypointKeys.sort(), 'Fallback-routed entrypoint metadata must exactly match the fallback-routed declarations represented by interaction rows')
 	assert.deepEqual(Array.from(referencedEventNames).sort(), Object.keys(eventSourceByName).sort(), 'Event source metadata must exactly match the events named in interaction signals')
 	const referencedEventDeclarations: string[] = []
 	for (const [eventName, sourcePath] of Object.entries(eventSourceByName)) {
@@ -150,12 +179,14 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	const actualEventAbiFingerprint = computeEventAbiFingerprint(referencedEventDeclarations)
 	assert.equal(actualEventAbiFingerprint, referencedEventAbiFingerprint, 'A referenced event ABI changed; review event semantics and update the pinned fingerprint')
 
+	// Pages without a page-specific trust-boundary heading share this one, so every security paragraph sits under a heading.
+	const defaultSecurityBoundaryHeading = 'Security assumptions'
 	const generatedBanner = '<!-- Generated by tooling/docs/generate-contract-interaction-reference.mts. Do not edit directly. -->'
 	const contractPages = contractReferences.map((contractReference): GeneratedPage => {
 		const rows = contractReference.interactions
 			.map(
 				interaction => `<tr>
-	<td>${renderRichText(interaction.call)}</td>
+	<td>${renderCallCell(interaction.call)}</td>
 	<td>${renderRichText(interaction.caller)}</td>
 	<td>${renderRichText(interaction.preconditions)}</td>
 	<td>${renderRichText(interaction.effect)}</td>
@@ -167,7 +198,8 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 		assert.ok(readAbiFingerprint, `Missing read ABI fingerprint for ${contractReference.name}`)
 		const compiledAbiFingerprint = compiledAbiFingerprintByContract.get(contractReference.name)
 		assert.ok(compiledAbiFingerprint, `Missing compiled ABI fingerprint for ${contractReference.name}`)
-		const securityBoundaryHeading = contractReference.securityBoundaryHeading === undefined ? '' : `<h2 id="${headingId(contractReference.securityBoundaryHeading)}">${escapeHtml(contractReference.securityBoundaryHeading)}</h2>`
+		const securityBoundaryHeadingText = contractReference.securityBoundaryHeading ?? defaultSecurityBoundaryHeading
+		const securityBoundaryHeading = contractReference.securityBoundary === undefined ? '' : `<h2 id="${headingId(securityBoundaryHeadingText)}">${escapeHtml(securityBoundaryHeadingText)}</h2>`
 		const securityBoundary = contractReference.securityBoundary === undefined ? '' : `<p>${renderRichText(contractReference.securityBoundary)}</p>`
 		const content = `${generatedBanner}
 	<header>
@@ -178,7 +210,8 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	<p>${renderRichText(contractReference.readSurface)}</p>
 	${securityBoundaryHeading}
 	${securityBoundary}
-	<h2 id="interactions">State-changing interactions</h2>${contractReference.delegatedInteractions === undefined ? '' : `\n\t<p>${renderRichText(contractReference.delegatedInteractions)}</p>`}
+	<h2 id="interactions">State-changing interactions</h2>
+	<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns.${contractReference.interactionNotes === undefined ? '' : ` ${renderRichText(contractReference.interactionNotes)}`}</p>
 	<!-- Validated read ABI fingerprint: ${readAbiFingerprint} -->
 	<!-- Validated complete compiled ABI fingerprint: ${compiledAbiFingerprint} -->
 	<table>
@@ -207,15 +240,25 @@ ${rows}
 			return `<tr id="${headingId(contractReference.name)}">
 	<td><a href="${escapeHtml(pageHref)}">${escapeHtml(contractReference.name)}</a></td>
 	<td>${renderRichText(indexSummary(contractReference.purpose), outputPath)}${boundaryLink}</td>
-	<td>${contractReference.interactions.length}</td>
+	<td>${countEntrypoints(entrypointSignatureCountsByContract.get(contractReference.name))}</td>
 </tr>`
 		})
 		.join('\n')
 	const indexContent = `${generatedBanner}
 	<header>
 		<h1>Contract interactions</h1>
-		<p class="lede">Open a contract to see its read surface, any trust boundary, and each state-changing entrypoint with its caller, prerequisites, effects, and primary signals.</p>
+		<p class="lede">Open a contract to see its read surface, any security assumptions or trust boundary, and each state-changing entrypoint with its caller, prerequisites, effects, and primary signals.</p>
 	</header>
+	<p>The entrypoint count is the number of state-changing function signatures a contract answers, counting each overload, each selector its <code>fallback()</code> routes to a delegate, and <code>receive()</code>.</p>
+	<h2 id="table-columns">Table columns</h2>
+	<p>Every contract page uses the same five columns.</p>
+	<ul>
+		<li><strong>Transaction</strong>: the function name with its parameter names in ABI order. Overloads appear as separate signatures.</li>
+		<li><strong>Caller</strong>: the addresses the contract accepts as <code>msg.sender</code>.</li>
+		<li><strong>Main prerequisites</strong>: the conditions the call requires, quoting a revert string where a caller needs it to tell failures apart.</li>
+		<li><strong>State or asset effect</strong>: what a successful call changes.</li>
+		<li><strong>Primary signals</strong>: the events a successful call emits, each with the condition under which it is emitted, including events emitted by contracts the call reaches. A row says so when a call can succeed without emitting an event.</li>
+	</ul>
 	<table>
 		<thead>
 			<tr>
@@ -229,6 +272,12 @@ ${indexRows}
 		</tbody>
 	</table>`
 	return [{ content: indexContent, outputPath, title: 'Contract interactions' }, ...contractPages]
+}
+
+// The docs stylesheet keeps a cell's lone code span on one line. A trailing break opportunity makes a multi-parameter signature wrap at its commas instead of forcing the table wider.
+function renderCallCell(call: string): string {
+	const rendered = renderRichText(call)
+	return /<code>[^<]*, [^<]*<\/code>/.test(rendered) ? `${rendered}<wbr />` : rendered
 }
 
 // The index keeps only the opening sentence of each purpose; the contract page lede carries the full text.
@@ -429,45 +478,6 @@ function computeEventAbiFingerprint(declarations: string[]): string {
 		.digest('hex')
 }
 
-function getCompiledContractAbi(compiledArtifacts: unknown, sourcePath: string, contractName: string): unknown[] {
-	assert.ok(isRecord(compiledArtifacts), 'solidity/artifacts/Contracts.json must contain an object')
-	const contracts = compiledArtifacts['contracts']
-	assert.ok(isRecord(contracts), 'solidity/artifacts/Contracts.json must contain contract outputs')
-	const artifactSourcePath = sourcePath.replace(/^solidity\//, '')
-	const sourceContracts = contracts[artifactSourcePath]
-	assert.ok(isRecord(sourceContracts), `Compiled artifacts are missing ${artifactSourcePath}`)
-	const contract = sourceContracts[contractName]
-	assert.ok(isRecord(contract), `Compiled artifacts are missing ${artifactSourcePath}#${contractName}`)
-	const abi = contract['abi']
-	assert.ok(Array.isArray(abi), `Compiled artifact ${artifactSourcePath}#${contractName} is missing its ABI`)
-	return abi
-}
-
-function computeCompiledAbiFingerprint(abi: unknown[]): string {
-	return createHash('sha256')
-		.update(
-			abi
-				.map(entry => canonicalizeJson(entry))
-				.sort()
-				.join('\n'),
-		)
-		.digest('hex')
-}
-
-function canonicalizeJson(value: unknown): string {
-	if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return JSON.stringify(value)
-	if (Array.isArray(value)) return `[${value.map(item => canonicalizeJson(item)).join(',')}]`
-	assert.ok(isRecord(value), 'Compiled ABI contains an unsupported JSON value')
-	return `{${Object.keys(value)
-		.sort()
-		.map(key => `${JSON.stringify(key)}:${canonicalizeJson(value[key])}`)
-		.join(',')}}`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function assertDeclarationCheckerRegression(): void {
 	const sourceWithoutSecondary = `
 		function primary() external {
@@ -560,6 +570,9 @@ function assertDeclarationCheckerRegression(): void {
 			{ sourcePath: 'NewSupport.sol', source: 'library NewSupport {}' },
 		]),
 	)
+	const fallbackFixture = "contract Router {\n\tfallback() external {\n\t\trequire(msg.sig == Delegate.second.selector || msg.sig == Delegate.first.selector, 'Unsupported');\n\t\tif (true) { forward(); }\n\t}\n\tfunction later() external { Other.ignored.selector; }\n}"
+	assert.deepEqual(getFallbackSelectorReferences(fallbackFixture, 'fallback fixture'), ['Delegate.first', 'Delegate.second'])
+	assert.throws(() => getFallbackSelectorReferences('contract Plain {}', 'missing fallback fixture'), /missing fallback fixture must declare an external fallback/)
 	assert.deepEqual(getPublicStateChangingDeclarations('abstract contract Empty {}'), [])
 	assert.notDeepEqual(getPublicStateChangingDeclarations('abstract contract Empty {\nfunction added() external {}\n}'), [])
 	assert.throws(() => assertEventDeclaration('function SystemStateSet() external {}', { name: 'SystemStateSet' }, 'event fixture'), /event fixture must declare exactly one event SystemStateSet/)

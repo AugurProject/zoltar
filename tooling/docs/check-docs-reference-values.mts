@@ -8,6 +8,7 @@ import { getMainnetProtocolConfig } from '../contracts/protocol-config.ts'
 import { walkFiles } from '../repo/walk.mts'
 import { assertAccountingExampleOwnership } from './check-docs-example-ownership.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
+import { assertCoordinatorDataEventAndEnumDeclarations, assertCoordinatorParameterTableValues, assertInvariantCatalogLifecycleBoundaries, assertInvariantIndexMatchesEntries } from './check-docs-catalog-declarations.mts'
 import { assertCoordinatorDataFunctionInventory } from './contract-reference-abi-surface.mts'
 import { repositorySourceUrl } from './repository-source-links.mts'
 
@@ -77,12 +78,15 @@ assertAggregateEscalationContinuationDocs()
 assertNonDecisionLifecycleDocs()
 assertAuditFindingRemediations()
 assertInvariantCatalogOwnership()
-assertInvariantCatalogLifecycleBoundaries()
+assertInvariantCatalogLifecycleBoundaries(invariantsHtml)
+assertInvariantIndexMatchesEntries(invariantsHtml)
 assertZoltarForkDepths()
 assertRecursiveForkGasStatusDocs()
 assertCoordinatorRecoveryBranch()
 assertCoordinatorSettlementEconomics()
 assertOpenOracleVendorAndEventDocs()
+assertCoordinatorDataEventAndEnumDeclarations(coordinatorData, compiledContractArtifacts, priceCoordinatorTypes)
+await assertCoordinatorParameterTableValues(openOracleIntegration, priceCoordinator, priceCoordinatorTypes)
 assertTruthAuctionCombinedRepCapDocs()
 assertMigrationSecurityCoverageCommitmentDocs()
 assertRepricingBoundaryDocs()
@@ -310,21 +314,6 @@ function assertInvariantCatalogOwnership(): void {
 	assert.match(auctionLiabilityEntry, /href="#auc-05"><code>AUC-05<\/code><\/a>/, 'AUC-12 must link settlement-allocation ownership to AUC-05')
 	assert.match(eventReplayEntry, /href="\.\/contracts\.html"/, 'OBS-01 must link the canonical contract interaction reference')
 	assert.match(shareSupplyEntry, /href="#fork-10"><code>FORK-10<\/code><\/a>/, 'SHARE-06 must link migration ownership to FORK-10')
-}
-
-function assertInvariantCatalogLifecycleBoundaries(): void {
-	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
-	const capacityOwnershipEntry = normalizedInvariants.match(/<details class="invariant-entry" id="bal-08"\s*>[\s\S]*?<\/details>/)?.[0]
-	const vaultEntry = normalizedInvariants.match(/<details class="invariant-entry" id="vault-03"\s*>[\s\S]*?<\/details>/)?.[0]
-	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11"\s*>[\s\S]*?<\/details>/)?.[0]
-	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12"\s*>[\s\S]*?<\/details>/)?.[0]
-	assert.ok(capacityOwnershipEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified underwriting commitment accounting')
-	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 append-only registry accounting')
-	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
-	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
-	assert.match(capacityOwnershipEntry, /href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
-	assert.ok(vaultEntry.includes(`href="${repositorySourceUrl('solidity/contracts/statoblast/SecurityPool.sol')}"><code>_registerVault</code></a>`), 'VAULT-03 must link _registerVault to its repository source')
-	assert.match(activeAuctionEntry, /href="#auc-12"><code>AUC-12<\/code><\/a>/)
 }
 
 function assertZoltarForkDepths(): void {

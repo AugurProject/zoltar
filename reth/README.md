@@ -31,7 +31,7 @@ curl --fail-with-body \
   https://your-trusted-sepolia-rpc.example
 ```
 
-The selected block's timestamp must be at or after the cutoff, and the preceding block's timestamp must be before it.
+Repeat the request for the preceding block (`0xbc614d` in this example). The selected block's timestamp must be at or after the cutoff, and the preceding block's timestamp must be before it.
 
 > [!WARNING]
 > Keep `RETH_RECEIPTS_START_BLOCK` fixed on every restart. Raising it authorizes Reth to permanently delete additional block bodies, receipts, and transaction lookups.
@@ -71,20 +71,9 @@ This supports historical `eth_getLogs` and receipt lookup from the configured bo
 > [!WARNING]
 > Never run `docker compose down --volumes` unless all Reth and Lighthouse data may be deleted. Never move the retention boundary forward unless the additional block, transaction, and receipt history may be irreversibly deleted.
 
-## Migration from Erigon
+## Verify the node
 
-The old Erigon database cannot be reused by Reth. Bring this project up with its new volumes and leave the old Erigon Compose project and volume stopped but intact until Reth is fully synchronized and verified.
-
-During migration, only one execution client can publish host port `8545` and P2P port `30303`. Either stop Erigon before starting this project or temporarily assign different host/P2P ports. Because the checked-in deployment uses fixed P2P ports, the simplest safe sequence is:
-
-1. Stop Erigon with `docker compose down` from the old checkout. Do not pass `--volumes`.
-2. Start this Reth project.
-3. Wait for both clients to synchronize.
-4. Verify the chain ID, sync status, and logs spanning the retention boundary.
-5. Point dependent services from `http://erigon:8545` to `http://reth:8545`.
-6. Delete the old Erigon volume only after an explicit backup/rollback decision.
-
-Verify the execution endpoint:
+Check the execution endpoint:
 
 ```bash
 curl --fail-with-body \
@@ -93,4 +82,4 @@ curl --fail-with-body \
   http://localhost:8545
 ```
 
-Sepolia returns `0xaa36a7`. Then query `eth_getLogs` once from the configured start block through a small known range and again across recent blocks. Do not retire Erigon until both return the expected events and `eth_syncing` reports that Reth has reached the head.
+Sepolia returns `0xaa36a7`. Then query `eth_getLogs` once from the configured start block through a small known range and again across recent blocks. Point dependent services at the node only after both return the expected events and `eth_syncing` reports that Reth has reached the head.

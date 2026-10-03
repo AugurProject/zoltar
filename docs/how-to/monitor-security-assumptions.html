@@ -14,15 +14,18 @@
 				<header>
 					<p class="kicker">How-to guide</p>
 					<h1>Monitor security assumptions</h1>
-					<p>The Zoltar fork oracle and the Statoblast prediction-market contracts built on it (see the <a href="../explanation/system-overview.html">system overview</a>) cannot tell you when an economic or liveness assumption has stopped holding. This guide lists, for each assumption whose truth changes with market or service conditions, what to read, how often to look, and what to do when the boundary is weak or unknown.</p>
+					<p>Check that the economic and liveness assumptions behind a deadline-bearing or price-sensitive action still hold before you take it, and keep checking until its last deadline. The contracts cannot tell you when such an assumption has stopped holding.</p>
 				</header>
 				<section id="how-to-use">
-					<h2>How to use this guide</h2>
+					<h2>Check an action's assumptions</h2>
 					<ol>
-						<li>Before a deadline-bearing or price-sensitive action, find the rows whose assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
-						<li>Take the row's reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, pool, and block as the action, express values in one <a href="#terms">numeraire</a>, and cover the <a href="#terms">action horizon</a>. Repeat on the stated cadence, and apply the response before proceeding whenever a read is weak or unavailable.</li>
-						<li>Most on-chain reads are also indexed by augurScan under <code>/operations/…</code> (see the <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan README</a>); the liquidator and OpenOracle arbitrager bots in <code>bots/</code> show live pool, vault, and report state in their dashboards.</li>
+						<li>List the assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
+						<li>Find the rows for those assumptions in the <a href="#assumption-monitoring">table below</a>.</li>
+						<li>Take each row's reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, pool, and block as the action. Express the values in one <a href="#terms">numeraire</a> and cover the <a href="#terms">action horizon</a>.</li>
+						<li>If a read is weak or unavailable, apply the row's response before proceeding.</li>
+						<li>Repeat the reads on the row's cadence until the action's last deadline has passed.</li>
 					</ol>
+					<p>Most on-chain reads are also indexed by augurScan under <code>/operations/…</code> (see the <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan README</a>). The liquidator and OpenOracle arbitrager bots in <code>bots/</code> show live pool, vault, and report state in their dashboards.</p>
 				</section>
 				<section id="terms">
 					<h2>Terms used in the table</h2>
@@ -40,7 +43,7 @@
 					</dl>
 				</section>
 				<section id="assumption-monitoring">
-					<h2>What to watch, how often, and what to do</h2>
+					<h2>Reads, cadence, and response for each assumption</h2>
 
 					<table>
 						<thead>

@@ -10,24 +10,9 @@ It also contains the OpenOracle price feed integration, the Statoblast Trading e
 ## Documentation
 
 - [Protocol documentation](https://augurproject.github.io/zoltar/docs/documentation.html): start with the [system overview](https://augurproject.github.io/zoltar/docs/explanation/system-overview.html), then follow the tutorials, how-to guides, explanations, and contract reference. Trading is documented there too.
+- [Protocol glossary](https://augurproject.github.io/zoltar/docs/reference/glossary.html): the canonical definitions of REP, universe, security pool, fork, and the other protocol terms.
 - [Further reading](https://augurproject.github.io/zoltar/docs/reference/further-reading.html): bot operator guides, the augurScan explorer, the security regression suite, and the design-research repository.
 - This README covers developer setup, local development, and repository commands.
-
-## Glossary
-
-The [protocol glossary](https://augurproject.github.io/zoltar/docs/reference/glossary.html) is canonical; these are the terms you meet first.
-
-| Term | Meaning |
-| --- | --- |
-| [Zoltar](https://augurproject.github.io/zoltar/docs/explanation/zoltar.html) | The forkable oracle ledger: it records questions, universes, REP, and forks, and never judges which answer is true. |
-| [Statoblast](https://augurproject.github.io/zoltar/docs/explanation/statoblast.html) | The prediction-market layer on Zoltar: one SecurityPool per question, universe, and pool configuration, with local dispute resolution and fork migration. |
-| [REP](https://augurproject.github.io/zoltar/docs/reference/glossary.html#rep) | Universe-specific reputation tokens used as reporting, dispute, and security capital. |
-| [Universe](https://augurproject.github.io/zoltar/docs/reference/glossary.html#universe) | A Zoltar ledger that can branch; markets and REP balances belong to one universe, and universe 0 is the root. |
-| [Security pool](https://augurproject.github.io/zoltar/docs/reference/glossary.html#security-pool) | The Statoblast contract for one question, universe, and pool configuration; it holds settlement collateral and coordinates shares, vaults, resolution, and migration. |
-| [Escalation game](https://augurproject.github.io/zoltar/docs/explanation/escalation-game.html) | The local Statoblast dispute round in which REP accumulates behind Invalid, Yes, and No until one answer wins or the pool forks. |
-| [Fork](https://augurproject.github.io/zoltar/docs/explanation/zoltar.html) | The split of a universe into one child universe per valid answer, each with its own REP, when a dispute cannot be settled locally. |
-| [Truth auction](https://augurproject.github.io/zoltar/docs/explanation/truth-auctions.html) | A Statoblast auction that sells child REP to repair a child pool's ETH collateral shortfall; it does not select truth. |
-| [OpenOracle](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html) | A contestable price-reporting contract that supplies fresh REP/ETH prices for solvency checks, never market outcomes. |
 
 ## Repository layout
 
@@ -65,16 +50,17 @@ Important:
 
 - `bun run setup` installs the Bun workspace from the root frozen lockfile once, generates shared contract and vendor inputs once, and builds the UI and test outputs in dependency order.
 - The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
-- Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
+- Standalone commands like `bun run tsc` and `bun run test` assume the root dependencies are already installed.
 
 ## Local Development
 
-After completing [Setup](#setup), start a local chain and launch the app:
+After completing [Setup](#setup), start an app with its serve command from [Common Commands](#common-commands); for rebuilds while iterating, use the corresponding watch command in that table. Then choose what the app talks to:
 
-1. Start the repository-pinned local chain with `bun run anvil`
-1. Choose your app's serve command from [Common Commands](#common-commands).
+- **No chain:** open the app with `?simulate=1`. [Browser Simulation](#browser-simulation) needs neither a wallet nor a node.
+- **Local chain:** follow [`testnetwork/README.md`](./testnetwork/README.md). It starts the repository-pinned Anvil node with Sepolia's chain ID, deploys the contracts with `bun run deploy:testnet`, and gives the `?network=sepolia&rpcUrl=…` URL that points an app at the node.
+- **Public network:** see [RPC Configuration](#rpc-configuration) and [Sepolia](#sepolia).
 
-For rebuilds while iterating, use the corresponding watch command in that table.
+The apps have network profiles only for mainnet and Sepolia, so a local node must run with chain ID `11155111`. `bun run anvil` starts the same pinned Anvil binary directly, but without arguments it uses Anvil's default chain ID, which the apps cannot follow; pass it the flags from [`testnetwork/Dockerfile`](./testnetwork/Dockerfile) when you run it outside Docker.
 
 ## RPC Configuration
 
@@ -177,7 +163,7 @@ Changes to global, unowned, CI, or repository-tooling paths make `check:affected
 
 `bun run validate` runs the root suite, every independent package `check` command, formatting, repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
 
-- `bun run tsc` prepares missing or stale contract artifacts and shared build outputs, then runs the registered project typechecks. `bun run tsc:app` also refreshes Trading vendor inputs. This command can write generated files.
+- `bun run tsc` prepares missing or stale contract artifacts and shared build outputs, then runs the registered project typechecks. `bun run tsc:app` refreshes Trading vendor inputs and then typechecks the UI apps. Both commands can write generated files.
 - `bun run test:launch-invariants` runs the launch-focused fork, auction, and exit invariant gate.
 - `bun run coverage` runs every canonically discovered TypeScript test, reports weighted coverage for UI, shared, and tooling source, counts statically identified executable lines and functions in unloaded source as zero-hit coverage, and checks product TypeScript from the `origin/main` merge base through committed, staged, unstaged, and untracked task changes. Set `COVERAGE_BASE_REF` or pass `--base-ref` to the reporter to use another comparison ref. Use `bun run coverage:full` to enforce the same policy with the slower Solidity bytecode trace phase.
 - `bun run lint:fix` and `bun run knip:fix` apply automatic lint and dead-code fixes.

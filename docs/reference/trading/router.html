@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Entrypoints, custody guarantees, and approval-free share operations of the stateless Trading router." />
+		<meta name="description" content="Entrypoints, custody guarantees, and approval-free share operations of the Trading router." />
 		<title>Trading router</title>
 		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
@@ -19,14 +19,15 @@
 				<h2>Entrypoints</h2>
 				<p><code>TwoWayConstantProductRouter(factory)</code> fixes the only eligible factory. All user mutations enforce a deadline and a reentrancy guard. The router's receiver callbacks accept only the active pool's canonical share token and universe IDs. <code>receive()</code> accepts ETH only during redemption and only from the expected SecurityPool.</p>
 				<ul>
-					<li><code>enterPosition(pair, longOutcome, minLongSharesOut, recipient, deadline)</code> is payable. It creates actual complete-set shares from <code>msg.value</code>, verifies equal Invalid/Yes/No deltas, swaps all opposite shares, and delivers <a href="../glossary.html#long-shares">long shares</a> plus Invalid. It returns ETH spent, complete sets, swap amounts, fee, and before/after Conditional Yes prices.</li>
-					<li><code>createPairAndInitializeWithEth(pool, conditionalYesBps, minLiquidity, recipient, deadline)</code> creates or reuses the deterministic pair and requires it to be uninitialized before atomically seeding it.</li>
-					<li><code>initializeWithEth(pair, conditionalYesBps, minLiquidity, recipient, deadline)</code> initializes an already created canonical pair.</li>
+					<li><code>enterPosition(pair, longOutcome, minLongSharesOut, recipient, deadline)</code> is payable. It creates actual complete-set shares from <code>msg.value</code>, verifies equal Invalid/Yes/No deltas, swaps all opposite shares, and delivers <a href="../glossary.html#long-shares">long shares</a> plus Invalid. It reverts with <code>Minimum long shares</code> below <code>minLongSharesOut</code>. It returns <code>EnterResult</code>: <code>ethSpent</code>, <code>completeSetShares</code>, <code>oppositeSharesSwapped</code>, <code>additionalLongShares</code>, <code>totalLongShares</code>, <code>invalidInsurance</code>, <code>feeAmount</code>, <code>conditionalYesBpsBefore</code>, and <code>conditionalYesBpsAfter</code>.</li>
+					<li><code>createPairAndInitializeWithEth(pool, conditionalYesBpsValue, minLiquidity, recipient, deadline)</code> creates or reuses the deterministic pair and requires it to be uninitialized (<code>Pair already initialized</code>) before atomically seeding it at a Conditional Yes price strictly between 0 and 10,000 basis points.</li>
+					<li><code>initializeWithEth(pair, conditionalYesBpsValue, minLiquidity, recipient, deadline)</code> initializes an already created canonical pair.</li>
 					<li><code>addLiquidityWithEth(pair, maxYesUsed, maxNoUsed, minLiquidity, recipient, deadline)</code> creates complete sets, deposits the authoritative proportional maximum, and returns Invalid and unused shares. It reverts with <code>Liquidity price slippage</code> when <code>yesUsed &gt; maxYesUsed</code> or <code>noUsed &gt; maxNoUsed</code>. <code>minLiquidity</code> alone does not bound the price: a swap toward even odds before the call raises both the deposit of the side with the smaller reserve and the minted LP.</li>
-					<li><code>removeLiquidityWithPermit(pair, liquidity, minYesOut, minNoOut, recipient, deadline, v, r, s)</code> tries the exact-amount ERC-2612 permit, requires an existing allowance if the permit fails, pulls LP, and returns raw Yes/No directly to the recipient.</li>
+					<li><code>removeLiquidityWithPermit(pair, liquidity, minYesOut, minNoOut, recipient, deadline, v, r, s)</code> calls the pair's <code>permit</code> for the caller as owner, the router as spender, exactly <code>liquidity</code> as value, and the same <code>deadline</code>; the signature must cover those values. A failing permit is ignored when the router's allowance already covers <code>liquidity</code>; otherwise the call reverts with <code>LP permit or allowance</code>. The router then pulls the LP and returns raw Yes/No directly to the recipient.</li>
 					<li><code>factory()</code> exposes the immutable factory.</li>
 					<li><code>onERC1155Received</code>, <code>onERC1155BatchReceived</code>, and <code>supportsInterface</code> exist only for the receive-based operations described below and for the pair callbacks inside an operation.</li>
 				</ul>
+				<p>The payable entrypoints require nonzero <code>msg.value</code> (<code>ETH input is zero</code>). Every entrypoint requires a recipient that is neither zero nor the router (<code>Invalid recipient</code>) and <code>block.timestamp ≤ deadline</code> (<code>Deadline expired</code>); those that take a <code>pair</code> require it to be the factory's canonical pair for its SecurityPool (<code>Unrecognized pair</code>, <code>Noncanonical pair</code>). The three liquidity entrypoints that take ETH return <code>LiquidityResult</code>: <code>pair</code>, <code>completeSetShares</code>, <code>yesUsed</code>, <code>noUsed</code>, <code>yesReturned</code>, <code>noReturned</code>, <code>invalidInsurance</code>, and <code>liquidity</code>.</p>
 				<p>Every successful share-custody operation, including the receive-based operations below, asserts that the router's Invalid, Yes, and No balances equal their starting values, preserving pre-existing forced shares.</p>
 			</section>
 			<section id="approval-free">
@@ -36,10 +37,11 @@
 				</p>
 				<ul>
 					<li>
-						<strong><a href="../glossary.html#insured-exit">Insured exit</a>.</strong> The transfer carries exactly <code>q</code> Invalid and <code>maxLongSharesIn</code> long shares. The router buys exactly <code>q</code> opposite shares with an exact-output swap, redeems <code>q</code> complete sets at the pool, and returns any unused long shares to the bound refund recipient. It emits <code>PositionExitedByTransfer</code>.
+						<strong><a href="../glossary.html#insured-exit">Insured exit</a>.</strong> The transfer carries exactly two IDs in the order <code>[invalidTokenId, long token ID]</code> with the values <code>[q, maxLongSharesIn]</code>, where <code>q</code> is <code>completeSetShares</code>, and <code>longOutcome</code> is Yes (1) or No (2). The router buys exactly <code>q</code> opposite shares with an exact-output swap, redeems <code>q</code> complete sets at the pool, and returns any unused long shares to the bound refund recipient. It emits <code>PositionExitedByTransfer</code>.
 					</li>
-					<li><strong>Complete-set redemption.</strong> The transfer carries exactly ordered, equal Invalid, Yes, and No amounts with no long outcome or maximum input. The router redeems them at the exact canonical SecurityPool and emits <code>CompleteSetRedeemedByTransfer</code>.</li>
+					<li><strong>Complete-set redemption.</strong> The transfer carries exactly three IDs in the order <code>[invalidTokenId, yesTokenId, noTokenId]</code>, each with the value <code>completeSetShares</code>; <code>longOutcome</code> must be <code>None</code> (3) and <code>maxLongSharesIn</code> zero. The router redeems them at the exact canonical SecurityPool and emits <code>CompleteSetRedeemedByTransfer</code>.</li>
 				</ul>
+				<p>Both operations require <code>completeSetShares &gt; 0</code>, a <code>payoutRecipient</code> and a <code>refundRecipient</code> that are neither zero nor the router, and a <code>pair</code> that is the factory's canonical pair for <code>securityPool</code>, with every identity field matching it. Complete-set redemption through the router therefore needs an existing pair; without one, call the SecurityPool's <code>redeemCompleteSet</code> directly.</p>
 				<p>Both operations measure the ETH the redemption produced, require that delta to be positive and at least <code>minEthOut</code>, and forward exactly that delta to the payout recipient. Pre-existing forced ETH in the router is never mixed into a payout.</p>
 				<p>For LP removal through the router, Safes and integrations without signature support may use ordinary exact allowances instead of a permit. The first-party UI calls the pair directly and needs no router allowance.</p>
 			</section>

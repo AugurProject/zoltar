@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 
+# Sends HTTP Basic credentials when access control is configured. They reach curl through a
+# config file descriptor, so they appear neither in the URL nor in the process arguments.
 augurscan_curl() {
-	curl "$@"
+	local username=${AUGURSCAN_ACCESS_USERNAME:-} password=${AUGURSCAN_ACCESS_PASSWORD:-}
+	if test -z "$username" && test -z "$password"; then
+		curl "$@"
+		return
+	fi
+	local credentials="$username:$password"
+	credentials=${credentials//\\/\\\\}
+	credentials=${credentials//\"/\\\"}
+	curl --config <(printf 'user = "%s"\n' "$credentials") "$@"
 }
 
 augurscan_export_readiness() {
@@ -21,6 +31,15 @@ augurscan_export_history() {
 	: "${AUGURSCAN_RESTORE_URL:?Set the direct, container-reachable restore URL}"
 	: "${AUGURSCAN_CHAIN_ID:?Set the export chain ID}"
 	: "${AUGURSCAN_EXPORT_DIRECTORY:?Set a new export directory}"
+
+	# The isolated app and every request below must agree on access control, so the app receives this
+	# shell's credentials (possibly empty) rather than whatever Compose would interpolate from .env.
+	export AUGURSCAN_ACCESS_USERNAME=${AUGURSCAN_ACCESS_USERNAME:-}
+	export AUGURSCAN_ACCESS_PASSWORD=${AUGURSCAN_ACCESS_PASSWORD:-}
+	if { test -n "$AUGURSCAN_ACCESS_USERNAME" && test -z "$AUGURSCAN_ACCESS_PASSWORD"; } || { test -z "$AUGURSCAN_ACCESS_USERNAME" && test -n "$AUGURSCAN_ACCESS_PASSWORD"; }; then
+		echo 'Set both AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD, or neither.' >&2
+		return 2
+	fi
 
 	case "$AUGURSCAN_DATABASE_MODE" in
 		bundled)
@@ -101,6 +120,8 @@ augurscan_export_history() {
 		--publish "127.0.0.1:$AUGURSCAN_EXPORT_PORT:3000" \
 		--env "POSTGRES_URL=$AUGURSCAN_RESTORE_URL" \
 		--env DISABLE_INDEXER=1 \
+		--env AUGURSCAN_ACCESS_USERNAME \
+		--env AUGURSCAN_ACCESS_PASSWORD \
 		app >/dev/null
 	augurscan_install_export_cleanup
 

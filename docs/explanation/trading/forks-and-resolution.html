@@ -35,7 +35,7 @@
 					</ol>
 					<figcaption id="fig-trading-fork-migration-caption"><span class="figure-label">Carrying liquidity across a fork.</span> Every step is the LP's own decision; nothing here happens automatically.</figcaption>
 				</figure>
-				<p>A fork does not select a branch or migrate LP. A child pair can be initialized only if the fork happened before the question's end date, for example a fork caused by another question: pairs refuse initialization and swaps once the question has ended, and a fork caused by disputing this question always comes after its end date. Parent and child pools may share one <a href="../../reference/glossary.html#outcome-share">ShareToken</a> contract, but they have different universe-specific token IDs and different pair addresses. <a href="../../how-to/trading-handle-a-fork.html">Handle a universe fork</a> gives the step-by-step procedure.</p>
+				<p>A fork does not select a branch or migrate LP. A child pair can be initialized only if the child SecurityPool is back to Operational before the question's end date, which requires a fork caused by another question: pairs refuse initialization and swaps once the question has ended, and a fork caused by disputing this question always comes after its end date. Parent and child pools may share one <a href="../../reference/glossary.html#outcome-share">ShareToken</a> contract, but they have different universe-specific token IDs and different pair addresses. <a href="../../how-to/trading-handle-a-fork.html">Handle a universe fork</a> gives the step-by-step procedure.</p>
 			</section>
 			<section id="after-resolution">
 				<h2>After resolution</h2>

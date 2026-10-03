@@ -15,9 +15,9 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-On Windows, run `start.bat` from this directory. Open <http://localhost:3000>. Compose now runs separate `app` and `indexer` containers against the same PostgreSQL database, so browsing remains responsive while backfill continues. PostgreSQL data is stored in the `augurscan-data` named volume, so rebuilding the containers does not discard indexed history.
+On Windows, run `start.bat` from this directory. Open <http://localhost:3000>. Compose runs separate `app` and `indexer` containers against the same PostgreSQL database, so browsing remains responsive while backfill continues. PostgreSQL data is stored in the `augurscan-data` named volume, so rebuilding the containers does not discard indexed history.
 
-The public RPC defaults are suitable for evaluation but may rate-limit a large backfill. Put archival-capable endpoints in `.env` for reliable indexing. `NETWORKS=mainnet` or `NETWORKS=sepolia` limits the enabled networks. The website remains available during backfill and reports each network's indexed block, observed head, lag, progress, estimated time remaining, and current error.
+The public RPC defaults are suitable for evaluation but may rate-limit a large backfill. Put archival-capable endpoints in `.env` for reliable indexing. `NETWORKS=mainnet` or `NETWORKS=sepolia` limits the enabled networks; the [runtime settings](OPERATIONS.md#runtime-settings) table lists every variable and its default. The website remains available during backfill and reports each network's indexed block, observed head, lag, progress, estimated time remaining, and current error.
 
 The Compose services join the external `zoltar` network. If this repository's Reth Compose project is running, `SEPOLIA_RPC_URL=http://reth:8545` reaches it without exposing RPC outside the host.
 
@@ -59,14 +59,40 @@ bun install --frozen-lockfile
 cd augurScan
 bun run typecheck
 bun test
+```
+
+Running the app or the indexer needs a PostgreSQL 17.11 database. The Compose database is not published to the host, so start a development database that matches the default `POSTGRES_URL` (`postgres://augurscan:augurscan@localhost:5432/augurscan`), or set `POSTGRES_URL` to another one:
+
+```bash
+docker run --detach --name augurscan-dev-postgres \
+  --publish 127.0.0.1:5432:5432 \
+  --env POSTGRES_USER=augurscan \
+  --env POSTGRES_PASSWORD=augurscan \
+  --env POSTGRES_DB=augurscan \
+  postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+
 bun run dev
 ```
 
-`bun run dev` starts separate watched app and indexer processes. For manual local startup, run `bun run build && bun src/server.ts` for the web app and `bun run start:indexer` for the indexer in a second terminal.
+`bun run dev` starts separate watched app and indexer processes. For manual local startup, run `bun run build && bun src/server.ts` for the web app and `bun run start:indexer` for the indexer in a second terminal. The web app never indexes; only the indexer process writes chain evidence.
 
 `bun run build` generates scanner metadata and bundles `browser/` to the ignored `public/app.js`. Typecheck, tests, and indexer startup also prepare the metadata automatically. Docker generates it in a build stage and copies the results into the runtime image.
 
-The default tests need no infrastructure. PostgreSQL integration tests require a dedicated disposable database because they recreate its `public` schema:
+### Tests
+
+`bun test` runs every suite under `tests/`. None needs infrastructure except the PostgreSQL integration tests, which are skipped unless `POSTGRES_TEST_URL` is set.
+
+| Command | Scope |
+| --- | --- |
+| `bun run test:unit` | Pure validation, cursor, projection, and lifecycle behavior. |
+| `bun run test:api` | Routes, response contracts, and the export scripts. |
+| `bun run test:replay` | Indexer and replay behavior. |
+| `bun run test:integration` | Real PostgreSQL transaction, lease, reorganization, and API boundaries. |
+| `bun test tests/browser` | Browser application modules. No package script covers this directory. |
+| `bun run test:ci` | Unit, API, and replay. |
+| `bun run test` | `test:ci` plus integration. |
+
+The integration tests require a dedicated disposable database because they recreate its `public` schema:
 
 ```bash
 docker run --detach --rm --name augurscan-test-postgres \
@@ -79,6 +105,20 @@ docker run --detach --rm --name augurscan-test-postgres \
 POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test bun run test:integration
 docker stop augurscan-test-postgres
 ```
+
+### Other scripts
+
+| Command | Purpose |
+| --- | --- |
+| `bun run check` | Metadata build, import-boundary check, restricted-import check, metadata check, and Biome. |
+| `bun run format`, `bun run format:check` | Biome formatting. |
+| `bun run schema:init` | Initializes or migrates the schema in the `POSTGRES_URL` database and exits. |
+| `bun run qa:serve` | Builds the demo browser bundle and serves it against fixture data on port `3001` (or `PORT`), without a database. |
+| `bun run build:demo` | Builds only that demo bundle. |
+| `bun run metadata:snapshot` | Writes the generated scanner metadata from the already compiled contract artifacts. `metadata:build` compiles the contracts first and then runs it. |
+| `bun run metadata:unknown-calls` | Read-only report of canonical undecoded outer calls in the `POSTGRES_URL` database; `--limit` accepts 1–1000 and defaults to 100. |
+
+### Scanner metadata
 
 ABI catalogs, contract routes, and network manifests are ignored build outputs. The Solidity sources, deployment metadata, dependency ABIs in `config/dependency-abis.json`, and their source pins remain tracked. Builds verify the vendored ABI checksums and never download replacements. Missing or modified ABI files fail validation.
 

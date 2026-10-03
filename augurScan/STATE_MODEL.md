@@ -6,7 +6,7 @@ augurScan separates retained evidence from the current view so an operator can t
 
 1. **Occurrences** are the block, transaction, action, receipt, and raw log records selected by the indexer's declared coverage model. A log retains its topics, data, block hash, transaction hash, and position even when decoding fails. A reorganization changes its canonical status instead of deleting the displaced occurrence.
 2. **Interpretations** record how one indexer run decoded an action or log and which semantic projections it produced. Each interpretation carries run and ABI/application/projection source provenance. A later replay appends another interpretation, so operators can compare meanings without changing the raw occurrence.
-3. **Observations** are contract values read at a tagged canonical block. From schema version 2 onward, every pool, vault, escalation, auction, address-balance, or token-metadata attempt is appended with its result or failure, block hash, observation time, run, and source hashes. Migration keeps the version 1 materialized rows that still exist, but cannot reconstruct attempts already overwritten or invent their run/source provenance.
+3. **Observations** are contract values read at a tagged canonical block. Every pool, vault, escalation, auction, address-balance, or token-metadata attempt is appended with its result or failure, block hash, observation time, run, and source hashes.
 4. **Current materializations** are replaceable registries, domain projections, and latest state rows used by the UI and ordinary canonical APIs. They are convenient views of the first three layers, not independent historical evidence.
 
 OpenOracle reports, escalation games, truth auctions, AMM activity, registrations, forks, and migrations use this same model. One decoded occurrence can create several semantic timeline entries because it can affect several entities. Current views keep stable entity and occurrence identities so replay remains idempotent.
@@ -19,7 +19,7 @@ A manifest, ABI, application, or projection change replays retained canonical hi
 
 Every replacement has an audit record. `chain_reorganizations` stores its boundary, primary reason, detection time, invalidating indexer run, and the ABI/application/projection hashes used by that run. `history_invalidation_causes` stores the complete cause set when one startup discovers several reasons, and `history_invalidation_occurrences` identifies affected blocks, transactions, logs, sampled states, address balances, and token metadata. A chain reorganization, manifest rewind, or coverage-floor change marks only observations outside the retained canonical boundary noncanonical and associates those displaced observations with the replacement. An ABI, application, or projection replay associates affected sampled entity-state observations with the replacement while leaving them canonical. Balance and token-metadata observations also remain canonical across a source replay, but receive replacement provenance only if a later reorganization, manifest rewind, or coverage reset displaces them. No path rewrites a recorded outcome or failure. Canonical APIs exclude evidence displaced from the chain or coverage boundary by default; audit surfaces return the invalidation provenance that exists for displaced or replay-associated evidence.
 
-From schema version 2 onward, `indexer_runs` identifies the schema/application versions, source hashes, configuration, whether indexing was enabled, and process lifetime. The lease-owning indexer compares the source markers already applied to each network and records any replay plus new markers atomically. A standby cannot suppress a replay merely by starting. Migrated version 1 evidence has no invented run or interpretation provenance.
+`indexer_runs` identifies the schema/application versions, source hashes, configuration, whether indexing was enabled, and process lifetime. The lease-owning indexer compares the source markers already applied to each network and records any replay plus new markers atomically. A standby cannot suppress a replay merely by starting.
 
 ## Reading an Operations snapshot
 
@@ -37,7 +37,7 @@ The [API reference](API_REFERENCE.md) is the canonical source for collection ord
 | Report dispute and settlement boundaries | Deterministic calculation from event fields using the indexed block or indexed timestamp selected by the report flag |
 | Escalation deposits and per-outcome totals | Direct event fields plus deterministic canonical aggregation |
 | Auction schedule, bids, clearing result, settlements, and refunds | Direct event fields plus deterministic canonical aggregation |
-| Current values absent from events | Current contract read at the latest fully indexed canonical block. `entity_state_snapshots` is the replaceable latest materialization. From schema version 2 onward, every sampling attempt is appended to `entity_state_observations` with method, success/failure, block hash, observation time, run, and source hashes. Migration preserves each version 1 snapshot row that still exists, but cannot reconstruct attempts that version 1 already overwrote or invent their run/source provenance. |
+| Current values absent from events | Current contract read at the latest fully indexed canonical block. `entity_state_snapshots` is the replaceable latest materialization. Every sampling attempt is appended to `entity_state_observations` with method, success/failure, block hash, observation time, run, and source hashes. |
 | Related addresses carried by one timeline event | Direct event fields; timeline entries do not claim cross-record inferred relationships. Risk summaries may associate approval transitions that share both an approval ID and registry, and expose that association as inferred evidence. |
 | Warning or urgency | Scanner presentation state, separate from protocol state |
 
@@ -65,3 +65,11 @@ History is complete only inside the selected network's configured and retrievabl
 Balance and token-metadata failures are observation records, not numeric values. A successful attempt can update the current materialization; a failed attempt leaves the last successful materialization unchanged. Each balance target is recorded independently, so one failed native or token read does not erase the other outcomes from the same batch.
 
 Use `canonical=all` when auditing replacements. A noncanonical observation identifies the replacement that displaced it and reports chain reorganization, manifest supersession, or coverage reset as its evidence status. Follow every documented cursor until completion; do not infer completeness from the first page.
+
+## Upgrading from schema version 1
+
+Append-only observations, `indexer_runs`, and interpretation provenance exist from schema version 2 onward. A database migrated from version 1 keeps its history with these gaps:
+
+- Migration keeps the version 1 materialized snapshot rows that still exist, but cannot reconstruct attempts that version 1 already overwrote.
+- Migrated version 1 evidence has no invented run, source, or interpretation provenance, so its run and source-hash fields are null in API responses.
+- Invalidation records created outside a provenance-aware indexer run can likewise have null run and source fields rather than inferred values.

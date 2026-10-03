@@ -40,6 +40,9 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		start: ['external(uint256,uint256)'],
 		startFromFork: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome,bool,uint256)'],
 	},
+	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': {
+		initializeForkClaimCheckpoint: ['external(address)'],
+	},
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': {
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
 	},
@@ -142,6 +145,12 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		withdrawBids: ['external(address,IUniformPriceDualCapBatchAuction.TickIndex[],uint256,uint256,uint256)'],
 		withdrawPendingEthRefund: ['external()'],
 	},
+	'solidity/contracts/statoblast/VaultOperations.sol': {
+		execute: ['public(uint256)'],
+		executeSingle: ['external(uint256,StagedOperation)'],
+		release: ['external(uint256)'],
+		submitVaultOperations: ['external(VaultOperationsInput,uint256,uint256,uint256)'],
+	},
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': {
 		authorize: ['external(ISecurityPool)'],
 		burnCompleteSets: ['external(uint248,address,uint256)'],
@@ -156,6 +165,31 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 }
 
+// Selectors a documented contract reaches only through its `fallback()`. Keyed by the routing contract source, then by the
+// delegate source that declares the implementation. The generator checks each signature against the delegate source and
+// requires the routing contract's fallback to reference exactly these `Delegate.name.selector` values.
+export const fallbackRoutedEntrypointSignatures: Record<string, Record<string, Record<string, string[]>>> = {
+	'solidity/contracts/statoblast/SecurityPool.sol': {
+		'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol': {
+			depositRepToVaultFromExecutor: ['external(address,uint256)'],
+			depositRepToVaultWithAuthorization: ['external(address,uint256,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+			depositRepToVaultWithPermit: ['external(uint256,uint256,uint256,uint8,bytes32,bytes32)'],
+			setVaultUnderwritingLimit: ['external(address,uint256)'],
+		},
+	},
+	'solidity/contracts/statoblast/EscalationGame.sol': {
+		'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol': {
+			depositRepOnOutcomeWithAuthorization: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'],
+			depositRepOnOutcomeWithPermit: ['external(BinaryOutcomes.BinaryOutcome,uint256,uint256,uint8,bytes32,bytes32)'],
+		},
+	},
+}
+
+// Interface declarations that share a fingerprinted source file with the documented contract. They are not entrypoints of that contract.
+export const interfaceEntrypointExclusionsBySource: Record<string, string[]> = {
+	'solidity/contracts/statoblast/VaultOperations.sol': ['stageVaultOperations'],
+}
+
 export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
@@ -165,6 +199,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGame.sol': '22346007107d60d8dac5545122037fa8bc457ac604c733c03edd992276604e85',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': 'bdd7cfe47523c5e0c8985eec993214de44caf88fc4f2e6f1586d2d03c0a02ef0',
+	'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol': '08f609ca28f10ebc4e1f3eeb6d109b3713e9deddd436d4f508d31d39f4396dc1',
 	'solidity/contracts/statoblast/EscalationGameEscrow.sol': 'c75cd0c9ea134a3bfa03227d0500485049818553447b4b258ff220cb0d201dde',
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': '73f9aad63165cacbff5bd02fd57a6b5a3f73737545018ecdf152c46f905c8c32',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -176,6 +211,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol': '7181208a40b17a27a92de234ac9bb59aa1a585e71742cbb1bef7878ae7ffe0ed',
+	'solidity/contracts/statoblast/VaultOperations.sol': '1777a52a367b0ffa5fff11581677ba0d768958dbd78255d8973b0fa8c984023a',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '618aed7f3f8bdfd50267b9d7533db3f489f45715f1cd448f5107f67631814d34',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': '2a3339ca5db0ccabc2bc10318ff3baf52273b90837f01683d3e5147a13fd2d0d',
@@ -188,6 +224,7 @@ export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': ['securityPool'],
 	'solidity/contracts/statoblast/SecurityPool.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': [],
+	'solidity/contracts/statoblast/VaultOperations.sol': ['liquidationApprovalRegistry', 'minLiquidationPriceDistanceBps', 'securityPool', 'stagedOperationCounter'],
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)

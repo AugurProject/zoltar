@@ -38,7 +38,7 @@
 					<li>Vault owners deposit REP; traders deposit ETH to mint complete sets.</li>
 					<li>Traders may exchange shares through an exchange such as <a href="./trading.html">Trading</a>.</li>
 					<li>After the question ends, the first REP deposit on an outcome opens the <a href="../reference/glossary.html#escalation-game">Escalation Game</a>.</li>
-					<li>A strict local winner finalizes the pool; holders redeem winning shares from its settlement collateral.</li>
+					<li>An unchallenged report wins three days later; a contested game runs until one outcome is the strict leader at its deadline. Holders then redeem winning shares from the pool's settlement collateral.</li>
 				</ol>
 				<figure class="diagram" id="fig-statoblast-share-lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="606" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
@@ -99,8 +99,8 @@
 						</tr>
 						<tr>
 							<td>Trading LP tokens</td>
-							<td>A claim on one pair's Yes and No reserves</td>
-							<td>The Trading pair's ERC-20 ledger</td>
+							<td>A claim on one <a href="../reference/glossary.html#trading-pool">trading pool</a>'s Yes and No reserves</td>
+							<td>The trading pool's ERC-20 ledger</td>
 						</tr>
 					</tbody>
 				</table>
@@ -112,7 +112,7 @@
 					<a class="anchor-link" href="#local-resolution" aria-label="Link to Local resolution">#</a>
 				</div>
 				<p>The game opens with the first REP deposit after the question ends. REP-backed balances then accumulate behind Invalid, Yes, and No. Their median is <a href="../reference/glossary.html#binding-capital">binding capital</a> and determines the moving deadline. After that deadline, exactly one strict balance leader produces the local winner. Winning shares redeem from that pool.</p>
-				<p>If two outcomes reach the non-decision threshold, the game does not choose between them. Statoblast instead initiates a Zoltar fork when the fork conditions are met. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the required-support curve, deadlines, payouts, and how games continue across forks.</p>
+				<p>If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the game does not choose between them. Anyone can then fork the universe on the market question through Statoblast, which pays the <a href="../reference/glossary.html#fork-threshold">fork threshold</a> from the REP held by the pool and the game. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the required-support curve, deadlines, payouts, and how games continue across forks.</p>
 			</section>
 
 			<section class="paper-section" id="forks-migration">
@@ -125,12 +125,12 @@
 					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="906" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, and any auction repair to an operational child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Fork timeline.</span> The parent halts permanently; each child becomes operational only after migration and any required repair.</p>
 				</figure>
-				<p>A vault's parent backing claim, underwriting commitment, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
+				<p>Migration is open for a <a href="../reference/glossary.html#migration-window">migration window</a> of eight weeks, counted from the call that puts the parent pool into fork mode. A vault's parent backing claim, underwriting commitment, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
 				<figure class="diagram" id="fig-statoblast-share-migration">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="468" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">The full eligible source balance can materialize in each selected child as a separate branch claim, while the source remains locked. ETH is not copied.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share migration.</span> Branch-specific token claims may appear in more than one child; settlement collateral follows vault migration and remains finite.</p>
 				</figure>
-				<p>If a child receives too little ETH, it can sell child REP through a Truth Auction. Full demand can repair the shortfall; weak demand can leave redemption below face value.</p>
+				<p>If a child receives too little ETH, it can sell child REP through a one-week Truth Auction, which anyone can start once the migration window has closed. Full demand can repair the shortfall; weak demand can leave redemption below face value.</p>
 				<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth Auction collateral repair balance sheet"><span class="plot-chart-fallback">A child begins with a collateral shortfall. Auction ETH may fully repair it, partially repair it, or leave it unchanged when there is no demand.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Collateral repair.</span> The auction raises what demand supports and never selects truth.</p>
@@ -142,7 +142,9 @@
 					<h2>6. Fees, underwriting, and liquidations</h2>
 					<a class="anchor-link" href="#fees-capacity-liquidations" aria-label="Link to Fees, underwriting, and liquidations">#</a>
 				</div>
-				<p>REP deposits do not create underwriting commitments; each vault owner sets one separately, and a vault's share of total commitments sets its share of the pool's settlement collateral obligations and of the time-based fees that outstanding collateral pays. New complete sets can be minted only while total commitments cover the resulting collateral and no Escalation Game has opened. Minting needs no oracle price or backing check, because vault owners already answer for their full commitments, so minters accept the pool's current backing; <a href="../reference/invariants.html#bal-03">invariant BAL-03</a> states the exact condition. A vault whose REP no longer backs its commitment can be liquidated: some or all of its commitment and backing move to an authorized receiver vault. See <a href="./fees.html">open-interest fees</a> and <a href="./liquidations.html">vault liquidation</a> for the accounting.</p>
+				<p>REP deposits do not create underwriting commitments; each vault owner sets one separately. A vault's share of total commitments sets its share of the pool's settlement collateral obligations and of the <a href="./fees.html">open-interest fees</a> that outstanding collateral pays.</p>
+				<p>New complete sets can be minted only while total commitments cover the resulting collateral and no Escalation Game has opened. Minting needs no oracle price or backing check, because vault owners already answer for their full commitments (<a href="../reference/invariants.html#bal-03">invariant BAL-03</a>).</p>
+				<p>A vault whose REP no longer backs its commitment can be liquidated: some or all of its commitment and backing move to an authorized receiver vault. See <a href="./liquidations.html">vault liquidation</a>.</p>
 			</section>
 
 			<section class="paper-section" id="security">
@@ -154,8 +156,8 @@
 					<li>REP-backed incentives do not prove objective truth; users and applications decide which branches retain activity.</li>
 					<li>OpenOracle depends on timely, profitable correction of inaccurate REP/ETH reports.</li>
 					<li>A fork gives each child only the ETH that migrates to it (<a href="./zoltar.html#non-guarantees">Zoltar's non-guarantees</a>).</li>
-					<li>Forced balances do not replace protocol-accounted collateral, and permissionless progress still depends on executable transactions.</li>
-					<li>Spot prices from Trading pairs are manipulable and are never protocol oracles.</li>
+					<li>ETH pushed into a pool outside its accounting is not counted as collateral. Steps that anyone may trigger, such as forking or starting an auction, still need someone to send the transaction.</li>
+					<li>Spot prices from trading pools are manipulable and are never protocol oracles.</li>
 				</ul>
 				<p>Normative assumptions and guarantees are listed in the <a href="../reference/security-model.html">security model</a> and <a href="../reference/invariants.html">invariant catalog</a>.</p>
 				<aside class="callout">

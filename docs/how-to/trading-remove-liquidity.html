@@ -33,7 +33,8 @@
 					<li>Compute the outputs from <code>getEffectiveReserves()</code>: each reserve × <code>liquidity</code> ÷ LP total supply, rounded down. Removal first synchronizes the reserves, so donated shares count.</li>
 					<li>Call the trading pool's <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code> with <code>minYes</code> and <code>minNo</code> set from those outputs and your tolerance. The deadline is enforced on chain.</li>
 				</ol>
-				<p>Integrations that need router-based removal can call the router's <code>removeLiquidityWithPermit</code>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>, with an exact-amount ERC-2612 signature. Ordinary exact allowances also work for already submitted permits, Safes, and clients without signature support. Never grant a permanent or infinite allowance.</p>
+				<p>After either path, your LP balance has fallen by <code>liquidity</code>, your Yes and No balances have risen by the outputs, and the trading pool has emitted <code>LiquidityRemoved</code>.</p>
+				<p>Integrations that need router-based removal call the router's <a href="../reference/trading/router.html#entrypoints"><code>removeLiquidityWithPermit</code></a>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>. The router reference gives the values the permit must sign and the allowance fallback. Never grant a permanent or infinite allowance.</p>
 			</section>
 			<section id="what-removal-does-not-do">
 				<h2>What removal does not do</h2>
