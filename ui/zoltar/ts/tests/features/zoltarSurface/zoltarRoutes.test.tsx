@@ -30,7 +30,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 }
 
 /** The operation slice the Zoltar route containers read; each test overrides the universe and view. */
-function createOperations(universe: ZoltarUniverseSummary | undefined) {
+function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined) {
 	return {
 		approveZoltarForkRep: async () => undefined,
 		createChildUniverse: async () => undefined,
@@ -75,6 +75,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined) {
 		zoltarQuestions: [],
 		zoltarQuestionsError: undefined,
 		zoltarUniverse: universe,
+		zoltarUniverseError: universeError,
 		zoltarUniverseFreshness: { refreshing: false, updatedAt: undefined },
 		zoltarQuestionsFreshness: { refreshing: false, updatedAt: undefined },
 	}
@@ -105,7 +106,7 @@ describe('ZoltarRoutes', () => {
 			onRetryUniverse: () => retries.push('universe'),
 			onSwitchNetwork: () => undefined,
 			onViewChange: (nextView: ZoltarView) => viewChanges.push(nextView),
-			operations: { ...createOperations(universe), ...overrides },
+			operations: { ...createOperations(universe, universeError), ...overrides },
 			universeError,
 			universeState,
 		}
@@ -210,6 +211,20 @@ describe('ZoltarRoutes', () => {
 		expect(queries.getByText('Already forked')).toBeTruthy()
 		fireEvent.click(queries.getByRole('button', { name: 'Migrate REP' }))
 		expect(viewChanges).toEqual(['migrate'])
+	})
+
+	test('retries missing migration details in place when the retained overview read fails', async () => {
+		const reads: Array<{ clearCurrentState?: boolean } | undefined> = []
+		const { queries } = await renderRoute('migrate', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }), 'ready', 'Failed to load Zoltar universe. Reason: RPC unavailable', {
+			loadZoltarUniverse: async options => {
+				reads.push(options)
+				return undefined
+			},
+		})
+		expect(document.querySelector('.migration-wizard')).toBeNull()
+		expect(queries.getByText('Failed to load Zoltar universe. Reason: RPC unavailable')).toBeTruthy()
+		await act(() => queries.getByRole('button', { name: 'Retry' }).click())
+		expect(reads).toEqual([{ clearCurrentState: false }])
 	})
 
 	test('shows a disabled migration preview before a fork', async () => {

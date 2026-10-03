@@ -11,6 +11,7 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -48,6 +49,8 @@ type ZoltarMigrationSectionProps = {
 	loadingZoltarForkAccess: boolean
 	loadingZoltarUniverse: boolean
 	onRetryMigrationBalances: () => void
+	onRetryUniverse: () => void
+	zoltarUniverseError?: string | undefined
 	onMigrateInternalRep: (preparationAttoRep: bigint) => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarForkRepBalanceAttoRep: bigint | undefined
@@ -85,6 +88,8 @@ export function ZoltarMigrationSection({
 	loadingZoltarForkAccess,
 	loadingZoltarUniverse,
 	onRetryMigrationBalances,
+	onRetryUniverse,
+	zoltarUniverseError,
 	onMigrateInternalRep,
 	onZoltarMigrationFormChange,
 	zoltarForkRepBalanceAttoRep,
@@ -144,6 +149,12 @@ export function ZoltarMigrationSection({
 		if (currentStepId !== requestedStepId) setRequestedStepId(currentStepId)
 	}, [currentStepId, requestedStepId])
 	const navigationHintId = useId()
+
+	// A retained overview summary is useful context, but its omitted children are not an empty migration.
+	if (rootUniverse?.relatedUniversesLoaded === false) {
+		if (loadingZoltarUniverse || zoltarUniverseError === undefined) return <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
+		return <RetryableNotice message={zoltarUniverseError} onRetry={onRetryUniverse} retryLabel={commonCopy.retry} />
+	}
 
 	if (zoltarUniverseState === 'missing') {
 		const presentation = getUniversePresentation(zoltarUniverseState)

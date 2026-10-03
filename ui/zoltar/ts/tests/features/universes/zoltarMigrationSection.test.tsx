@@ -53,6 +53,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		onDeployChildUniverse: () => undefined,
 		pendingChildUniverseOutcomeIndex: undefined,
 		onRetryMigrationBalances: () => undefined,
+		onRetryUniverse: () => undefined,
 		onZoltarMigrationFormChange: () => undefined,
 		zoltarForkActiveAction: undefined,
 		zoltarForkApproval: { error: undefined, loading: false, value: 20n * ATTO_REP },
@@ -122,6 +123,35 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.querySelector('.migration-wizard')).toBeTruthy()
 		expect(within(document.body).queryByText('All your REP here is migrated')).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
+	})
+
+	test('waits for required related-universe details instead of showing an empty wizard', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ loadingZoltarUniverse: true, zoltarUniverse: createUniverse({ childUniverses: [], relatedUniversesLoaded: false }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.migration-wizard')).toBeNull()
+		expect(within(document.body).queryByText('No outcome universes available.')).toBeNull()
+		expect(within(document.body).getByText('Loading universe details.')).toBeTruthy()
+	})
+
+	test('shows the related-detail read failure and retries without pretending outcomes are empty', async () => {
+		let retries = 0
+		const props = {
+			...createProps({ zoltarUniverse: createUniverse({ childUniverses: [], relatedUniversesLoaded: false }) }),
+			zoltarUniverseError: 'Failed to load Zoltar universe. Reason: RPC unavailable',
+			onRetryUniverse: () => {
+				retries += 1
+			},
+		}
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(queries.getByText(props.zoltarUniverseError)).toBeTruthy()
+		expect(document.querySelector('.migration-wizard')).toBeNull()
+		await act(() => queries.getByRole('button', { name: 'Retry' }).click())
+		expect(retries).toBe(1)
+		await act(() => render(h(ZoltarMigrationSection, { ...props, zoltarUniverse: createUniverse({ relatedUniversesLoaded: true }), zoltarUniverseError: undefined }), rendered.container))
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		expect(queries.queryByText(props.zoltarUniverseError)).toBeNull()
 	})
 
 	test('starts on outcome selection with outcome names, destination status, and no raw ids', async () => {

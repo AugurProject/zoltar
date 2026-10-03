@@ -123,6 +123,7 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 		remainingPrepared = remainingByChild.some(value => value === undefined) ? undefined : remainingByChild.reduce<bigint>((maximum, value) => (value !== undefined && value > maximum ? value : maximum), 0n)
 	}
 	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, remainingPrepared]) : undefined
+	const outcomeLabel = loadedUniverse?.outcomeLabel?.trim()
 	const forkTime = status === 'forked' && loadedUniverse !== undefined && loadedUniverse.forkTime > 0n ? loadedUniverse.forkTime : undefined
 	return {
 		forkTime,
@@ -131,7 +132,7 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 		nextStep: getNextStep(status, wallet, migratableRepAttoRep),
 		repBalanceAttoRep,
 		status,
-		universeLabel: formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId),
+		universeLabel: loadedUniverse?.lineage === undefined && activeUniverseId !== 0n && outcomeLabel ? outcomeLabel : formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId),
 		wallet,
 	}
 }

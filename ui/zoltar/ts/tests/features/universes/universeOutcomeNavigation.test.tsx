@@ -76,7 +76,7 @@ describe('outcome-based universe traversal', () => {
 		expect(calls).toBe(3)
 	})
 
-	test('keeps cards busy through paging failures and Retry until the replacement loads', async () => {
+	test('keeps cards busy while paging and Retry load, but hides a failed page', async () => {
 		const next = createDeferred<UniverseOutcomePage>()
 		const retry = createDeferred<UniverseOutcomePage>()
 		let calls = 0
@@ -98,7 +98,7 @@ describe('outcome-based universe traversal', () => {
 			await Promise.resolve()
 		})
 		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
-		expect(q.getByRole('button', { name: 'Open Alpha universe' })).toBeTruthy()
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
 		await waitFor(() => expect(calls).toBe(3))
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(true)
@@ -145,6 +145,30 @@ describe('outcome-based universe traversal', () => {
 		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
 		await waitFor(() => expect(q.queryByText('Which proposal wins?')).not.toBeNull())
 		expect(calls).toBe(2)
+	})
+
+	test('does not skip the failed page or open retained outcomes after Next fails', async () => {
+		const starts: bigint[] = []
+		const loader: LoadUniverseOutcomes = async (_address, _id, start) => {
+			starts.push(start)
+			if (starts.length === 2) throw new Error('RPC unavailable')
+			return { ...page, hasNextPage: true, choices: [{ label: start === 0n ? 'Alpha' : 'Gamma', universeId: start === 0n ? 10n : 30n, exists: true }] }
+		}
+		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
+		const q = within(view.container)
+		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
+		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
+		const next = q.queryByRole('button', { name: 'Next page' })
+		expect(next === null || next.hasAttribute('disabled')).toBe(true)
+		if (next !== null) fireEvent.click(next)
+		expect(starts).toEqual([0n, 10n])
+		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
+		await waitFor(() => expect(q.queryByText('Gamma')).not.toBeNull())
+		expect(starts).toEqual([0n, 10n, 10n])
+		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
+		await waitFor(() => expect(starts).toEqual([0n, 10n, 10n, 20n]))
 	})
 
 	test('paging replaces outcome cards and requests only the next page', async () => {

@@ -35,10 +35,10 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 	const [start, setStart] = useState(0n)
 	const [retry, setRetry] = useState(0)
 	const [refresh, setRefresh] = useState(0)
-	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; page?: UniverseOutcomePage | undefined; error?: string }>()
+	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; pageStart?: bigint | undefined; page?: UniverseOutcomePage | undefined; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadPage === loadPage && snapshot.start === start && snapshot.retry === retry ? snapshot : undefined
 	const retained = snapshot?.backend === backend && snapshot.loadPage === loadPage ? snapshot.page : undefined
-	const page = current?.page ?? retained
+	const page = current?.error !== undefined && current.pageStart !== start ? undefined : (current?.page ?? retained)
 	const loading = current === undefined
 	useBlockRefresh(() => setRefresh(count => count + 1), page?.scalarQuestion === undefined)
 	useEffect(() => {
@@ -47,7 +47,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 		void (async () => {
 			try {
 				const page = await withReadTimeout(loadPage(address, universeId, start))
-				if (active && guard.isCurrent()) setSnapshot({ backend, loadPage, start, retry, page })
+				if (active && guard.isCurrent()) setSnapshot({ backend, loadPage, start, retry, pageStart: start, page })
 			} catch (error) {
 				if (active && guard.isCurrent())
 					setSnapshot(previous => ({
@@ -55,6 +55,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 						loadPage,
 						start,
 						retry,
+						pageStart: previous?.backend === backend && previous.loadPage === loadPage ? previous.pageStart : undefined,
 						page: previous?.backend === backend && previous.loadPage === loadPage ? previous.page : undefined,
 						error: describeUniverseReadError(error, copy.outcomeReadFailure),
 					}))
@@ -98,8 +99,8 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 				<RetryableNotice message={current?.error} retryLabel={copy.retryOutcomes} onRetry={() => setRetry(count => count + 1)} />
 				<PaginationControls
 					loading={loading}
-					hasPreviousPage={start > 0n}
-					hasNextPage={page?.hasNextPage ?? false}
+					hasPreviousPage={current?.error === undefined && start > 0n}
+					hasNextPage={current?.error === undefined && (page?.hasNextPage ?? false)}
 					onPreviousPage={() => setStart(current => (current >= UNIVERSE_OUTCOME_PAGE_SIZE ? current - UNIVERSE_OUTCOME_PAGE_SIZE : 0n))}
 					onNextPage={() => setStart(current => current + UNIVERSE_OUTCOME_PAGE_SIZE)}
 				/>

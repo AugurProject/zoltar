@@ -39,6 +39,12 @@ const forkedChild = createUniverse({
 	universeId: childUniverseId,
 })
 
+test('names a child overview from its outcome when bounded reads omit lineage', () => {
+	const universe = createUniverse({ universeId: 5n, outcomeLabel: 'Yes', lineage: undefined, relatedUniversesLoaded: false })
+	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: 5n, universe })).universeLabel).toBe('Yes')
+	expect(deriveZoltarOverviewModel(createInput({ universe: createUniverse({ lineage: undefined, outcomeLabel: 'Wrong' }) })).universeLabel).toBe('Genesis')
+})
+
 test('does not claim a remaining migration total when child migration history was omitted', () => {
 	const universe = createUniverse({ hasForked: true, relatedUniversesLoaded: false })
 	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n }))

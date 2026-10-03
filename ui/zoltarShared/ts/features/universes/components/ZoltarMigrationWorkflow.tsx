@@ -23,6 +23,8 @@ export function ZoltarMigrationWorkflow({ universeBrowserHref, accountState, act
 						isOnActiveAppChain={isActiveAppChain(accountState.chainId)}
 						loadingZoltarForkAccess={operations.loadingZoltarForkAccess}
 						loadingZoltarUniverse={operations.loadingZoltarUniverse}
+						zoltarUniverseError={operations.zoltarUniverseError}
+						onRetryUniverse={() => void operations.loadZoltarUniverse({ clearCurrentState: false })}
 						onApproveZoltarForkRep={amount => void operations.approveZoltarForkRep(amount)}
 						onDeployChildUniverse={outcomeIndex => void operations.createChildUniverse(outcomeIndex)}
 						onMigrateInternalRep={maxPreparationAttoRep => void operations.migrateInternalRep(maxPreparationAttoRep)}
