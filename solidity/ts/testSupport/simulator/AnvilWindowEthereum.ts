@@ -70,7 +70,7 @@ const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1c9c380'
 // are driving simulator-backed transactions concurrently.
 const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 180_000
 const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 100
-const SEND_TRANSACTION_RECEIPT_MINE_INTERVAL_MS = 1_000
+const SEND_TRANSACTION_RECEIPT_BLOCK_ADVANCE_INTERVAL_MS = 1_000
 const RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS = 1_000
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
@@ -340,10 +340,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (args.method === 'anvil_reset' || args.method === 'anvil_revert') resetSolidityBytecodeCoverageAddressCache()
 		if (args.method === 'anvil_setCode' && typeof params[0] === 'string') invalidateSolidityBytecodeCoverageAddressCache(params[0])
 
-		const minePendingTransactions = async () => {
-			const automineEnabled = await request({ method: 'anvil_getAutomine', params: [] })
-			if (typeof automineEnabled !== 'boolean') throw new Error('Invalid anvil_getAutomine response: expected boolean')
-			if (automineEnabled) return
+		const includePendingTransactions = async () => {
+			const automaticBlocksEnabled = await request({ method: 'anvil_getAutomine', params: [] })
+			if (typeof automaticBlocksEnabled !== 'boolean') throw new Error('Invalid anvil_getAutomine response: expected boolean')
+			if (automaticBlocksEnabled) return
 			try {
 				await request({
 					method: 'evm_mine',
@@ -355,7 +355,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		}
 		const waitForReceiptStatus = async (hash: string) => {
 			const deadline = Date.now() + SEND_TRANSACTION_RECEIPT_TIMEOUT_MS
-			let lastMineAttempt = Date.now()
+			let lastBlockAdvanceAttempt = Date.now()
 			while (Date.now() < deadline) {
 				const receipt = await request({
 					method: 'eth_getTransactionReceipt',
@@ -365,9 +365,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				if (status !== undefined) return { receipt, status }
 
 				const now = Date.now()
-				if (now - lastMineAttempt >= SEND_TRANSACTION_RECEIPT_MINE_INTERVAL_MS) {
-					lastMineAttempt = now
-					await minePendingTransactions()
+				if (now - lastBlockAdvanceAttempt >= SEND_TRANSACTION_RECEIPT_BLOCK_ADVANCE_INTERVAL_MS) {
+					lastBlockAdvanceAttempt = now
+					await includePendingTransactions()
 				}
 				await new Promise(resolve => setTimeout(resolve, SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS))
 			}

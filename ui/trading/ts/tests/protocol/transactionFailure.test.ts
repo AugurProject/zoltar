@@ -11,7 +11,7 @@ describe('transaction failure explanations', () => {
 	test.each([
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
-		['Deadline expired', 'The transaction expired before it was mined.'],
+		['Deadline expired', 'The transaction deadline passed.'],
 		['Question ended', 'This market no longer accepts this action.'],
 		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
 		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],

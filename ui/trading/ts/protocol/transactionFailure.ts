@@ -14,7 +14,7 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 		cause: 'The price moved past your slippage limit.',
 		nextStep: 'Try again at the new price, or raise the slippage tolerance in Settings.',
 	},
-	{ reasons: ['Deadline expired'], cause: 'The transaction expired before it was mined.', nextStep: 'Try again, or allow more time in Settings.' },
+	{ reasons: ['Deadline expired'], cause: 'The transaction deadline passed.', nextStep: 'Try again, or allow more time in Settings.' },
 	{
 		reasons: ['Question ended', 'Question resolved', 'Universe forked', 'Fork continuation pending', 'Pool inactive', 'Forked', 'Fork await', 'Fork paused'],
 		cause: 'This market no longer accepts this action.',

@@ -56,7 +56,7 @@ export async function evaluatePinnedHead(runtime: OperatorRuntime, context: Oper
 	await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 	state.priceHistory = [...state.priceHistory, ...samples]
 	state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], [...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations], config.centralizedMarkets.maximumObservationAgeMilliseconds)
-	// Settlements mined during a crash or receipt timeout must charge their gas before any candidate is judged against today's budget.
+	// Settlements included during a crash or receipt timeout must charge their gas before any candidate is judged against today's budget.
 	const reconciledSettlements = await recoverPendingSettlements({ blockNumber, config, journal: context.settlementJournal, readClients: runtime.readClients, state })
 	const gated = gateReportCandidates(runtime, context, inspectedReports, block, reconciledSettlements, stopHead)
 	if (gated === undefined) return undefined

@@ -67,7 +67,7 @@ test('bounds each receipt wait so shutdown is observed within the grace period',
 	expect(activities).toEqual(['confirmed', 'confirmed'])
 })
 
-test('nets a known pre-gas profit against the mined gas, and only the gas when the transaction reverted', async () => {
+test('nets a known pre-gas profit against the receipt gas costs, and only the gas when the transaction reverted', async () => {
 	const activities: TransactionActivity[] = []
 	const client = createPublicClient({ chain: mainnet, transport: custom({ request: () => Promise.reject(new Error('confirmation retries must not read the chain')) }) })
 	const config = { connectivity: { publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://rpc.example' }, pollMilliseconds: 1_000, submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] } } as const

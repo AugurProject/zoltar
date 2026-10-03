@@ -4,7 +4,7 @@ import type { TransactionScope } from './transactionScope.js'
 
 type TransactionActivityStatus = 'pending' | 'confirmed' | 'failed'
 
-/** Why a stored transaction failed; `dropped` means it was never mined within the tracking window. */
+/** Why a stored transaction failed; `dropped` means it was never included within the tracking window. */
 type TransactionActivityFailureKind = TransactionFailureKind | 'dropped'
 
 /** A broadcast transaction remembered per network and account so its status survives a reload. */
@@ -25,7 +25,7 @@ export type TransactionActivityOutcome = Readonly<{ status: 'confirmed' }> | Rea
 
 export const MAX_TRANSACTION_ACTIVITY_ENTRIES = 20
 
-/** A transaction still unmined after this long was dropped or replaced outside the app; it stops locking its objects. */
+/** A transaction still pending after this long was dropped or replaced outside the app; it stops locking its objects. */
 export const MAX_PENDING_TRANSACTION_AGE_MILLISECONDS = 24 * 60 * 60 * 1000
 
 export function getTransactionActivityStorageKey({ account, backendId, chainId }: { account: string; backendId: string; chainId: number }) {

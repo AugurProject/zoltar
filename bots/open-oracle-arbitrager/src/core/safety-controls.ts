@@ -55,7 +55,7 @@ type RecordedRiskPosition = {
 	capitalAtRiskWeth: string
 	gasExpenditures: readonly {
 		costEth: string
-		minedAt: string
+		includedAt: string
 	}[]
 	lifecycleGasCostEth: string
 	lifecycleUpdatedAt: string | undefined
@@ -65,7 +65,7 @@ type RecordedRiskPosition = {
 
 export function utcDayGasSpentWeth(positions: readonly Pick<RecordedRiskPosition, 'gasExpenditures'>[], now = new Date()) {
 	const day = now.toISOString().slice(0, 10)
-	return positions.reduce((total, position) => total + position.gasExpenditures.reduce((positionTotal, expenditure) => positionTotal + (expenditure.minedAt.slice(0, 10) === day ? parseDecimalWeth(expenditure.costEth) : 0n), 0n), 0n)
+	return positions.reduce((total, position) => total + position.gasExpenditures.reduce((positionTotal, expenditure) => positionTotal + (expenditure.includedAt.slice(0, 10) === day ? parseDecimalWeth(expenditure.costEth) : 0n), 0n), 0n)
 }
 
 export function positionRiskLimitMismatch(

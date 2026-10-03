@@ -114,7 +114,7 @@ function createPrivateRelay(node: AnvilNode): ChaosPrivateRelay {
 			const upstreamBody: unknown = JSON.parse(upstreamText)
 			if (!upstream.ok || !successfulJsonRpcResult(upstreamBody)) return new Response(upstreamText, { headers: { 'content-type': 'application/json' }, status: upstream.status })
 			rawTransactions.push(rawTransaction)
-			await mineFinalityBlocks(node)
+			await advanceFinalityBlocks(node)
 			return new Response(upstreamText, { headers: { 'content-type': 'application/json' }, status: upstream.status })
 		},
 	})
@@ -161,7 +161,7 @@ async function deploy(client: ReturnType<typeof createWriteClient>, data: Hex, l
 	return receipt.contractAddress
 }
 
-async function mineFinalityBlocks(node: AnvilNode) {
+async function advanceFinalityBlocks(node: AnvilNode) {
 	for (let block = 0n; block < CHAOS_TEST_FINALITY_BLOCKS; block += 1n) {
 		await node.anvilWindowEthereum.requestRaw({ method: 'evm_mine', params: [] })
 	}
@@ -197,7 +197,7 @@ function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?:
 			if (!hex(rawTransaction)) throw new Error('eth_sendRawTransaction did not contain serialized transaction bytes')
 			rawTransactions.push(rawTransaction)
 			successfulSendRawTransactionParams.push([...body.params])
-			await mineFinalityBlocks(node)
+			await advanceFinalityBlocks(node)
 			if (rawTransactions.length === options.lostAcknowledgementOrdinal) {
 				return Response.json({
 					error: { code: -32_098, message: 'Simulated lost acknowledgement after transaction acceptance' },

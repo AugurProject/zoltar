@@ -650,7 +650,7 @@ void describe('simulation backend', () => {
 			expect(backend.transactionCountSinceReset).toBe(initialTransactionCount + 1n)
 			expect(backend.currentTimestamp).toBe(initialTimestamp + SIMULATION_BLOCK_INTERVAL_SECONDS)
 
-			await backend.mineBlock()
+			await backend.advanceBlock()
 			expect(backend.blockCountSinceReset).toBe(initialBlockCount + 2n)
 			expect(backend.currentTimestamp).toBe(initialTimestamp + 2n * SIMULATION_BLOCK_INTERVAL_SECONDS)
 
