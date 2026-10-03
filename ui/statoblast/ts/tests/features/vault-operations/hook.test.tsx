@@ -106,6 +106,17 @@ describe('vault operations lifecycle', () => {
 		expect(deps.claim).toHaveBeenCalledWith(owner, pool.securityPoolAddress, 'fees', expect.anything())
 		expect(current.state().draft.deposit).toBe('5')
 	})
+	test('rechecks fees before claiming even when the vault has a commitment', async () => {
+		let fees = unit
+		const deps = dependencies({ loadOwned: async () => ({ ...owned, underwritingLimitAttoEth: unit, claimableFeesAttoEth: fees }) })
+		const current = await mount(deps)
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		expect(current.state().feeClaimReason).toBeUndefined()
+		fees = 0n
+		await act(async () => await current.state().claimFees())
+		expect(deps.claim).not.toHaveBeenCalled()
+		expect(current.state().claimError).toContain('No claimable fees')
+	})
 	test('claiming fees preserves the receipt and polling of a queued bundle', async () => {
 		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 0n, queuedOperation: { operation: 'vaultOperations', operationId: 2n, isPendingSlot: true } }
 		const deps = dependencies({ submit: async () => queued })
@@ -248,6 +259,13 @@ describe('vault operations lifecycle', () => {
 		return rendered
 	}
 
+	test.each([0n, unit])('panel only enables fee claiming for positive fees (%s)', async fees => {
+		const rendered = await mountPanel(dependencies({ loadOwned: async () => ({ ...owned, underwritingLimitAttoEth: unit, claimableFeesAttoEth: fees }) }))
+		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		const claim = within(rendered.container).getByRole<HTMLButtonElement>('button', { name: 'Claim fees' })
+		await waitFor(() => expect(claim.disabled).toBe(fees === 0n))
+		if (fees === 0n) expect(rendered.container.textContent).toContain('No claimable fees')
+	})
 	test('panel presents confirmation in the submission area', async () => {
 		const rendered = await mountPanel(dependencies())
 		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))

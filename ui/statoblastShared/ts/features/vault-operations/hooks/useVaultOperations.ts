@@ -236,7 +236,7 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 
 	const claimReason = (action: 'fees' | 'redeem') => {
 		if (owned.value === undefined || resolved.value === undefined) return copy.loading
-		if (action === 'fees') return owned.value.claimableFeesAttoEth > 0n || owned.value.underwritingLimitAttoEth > 0n ? undefined : copy.noFees
+		if (action === 'fees') return owned.value.claimableFeesAttoEth > 0n ? undefined : copy.noFees
 		if (pool.questionOutcome === 'none') return copy.questionNotFinal
 		return getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: owned.value.disputeStakedAttoRep, redeemableRepAmountAttoRep: owned.value.vaultAttoRepBacking, underwritingLimitAttoEth: owned.value.underwritingLimitAttoEth })
 	}
