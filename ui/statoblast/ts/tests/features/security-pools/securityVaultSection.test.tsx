@@ -1036,7 +1036,7 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).queryByText('Underwater')).toBeNull()
 	})
 
-	test.each(['', '0'])('shares one amount notice above approval and deposit for %s in the dialog', async amount => {
+	test.each(['', '0'])('keeps one accessible amount reason without a visible notice for %s in the dialog', async amount => {
 		const props = createSecurityVaultSectionProps({ modalFirst: true })
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: amount }} />)
 		cleanupRenderedComponent = rendered.cleanup
@@ -1045,7 +1045,8 @@ describe('SecurityVaultSection', () => {
 		const group = dialog.querySelector('.tx-action-group')
 		expect(group?.querySelectorAll('[role="note"]').length).toBe(1)
 		const notice = group?.querySelector('[role="note"]')
-		// An empty field is the starting state, so it asks for an amount instead of reporting an invalid one.
+		expect(notice?.className).toBe('visually-hidden')
+		expect(group?.querySelector('.tx-action-notice')).toBeNull()
 		expect(notice?.textContent).toBe('Enter an amount greater than zero.')
 		for (const button of group?.querySelectorAll('.tx-action-button') ?? []) {
 			expect(button.getAttribute('aria-describedby')).toBe(notice?.id)

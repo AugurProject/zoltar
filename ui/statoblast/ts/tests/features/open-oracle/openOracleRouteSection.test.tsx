@@ -467,7 +467,10 @@ describe('OpenOracleSection route create view', () => {
 		})
 		expect(quoteTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
 		expect(quoteTokenAmountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('open-oracle-dispute-new-amount-2-error-7')
-		expect(expectPoliteFieldError('Enter a valid new WETH amount greater than zero.').id).toBe('open-oracle-dispute-new-amount-2-error-7')
+		const amountReason = document.getElementById('open-oracle-dispute-new-amount-2-error-7')
+		expect(amountReason?.className).toBe('visually-hidden')
+		expect(amountReason?.textContent).toBe('Enter a valid new WETH amount greater than zero.')
+		expect(amountReason?.parentElement?.getAttribute('aria-live')).toBe('polite')
 		expect(dialog.textContent?.split('Enter a valid new WETH amount greater than zero.')).toHaveLength(2)
 		expect(dialogQueries.getByRole('button', { name: 'Dispute & swap' }).getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-2-error-7')
 		await act(() => {

@@ -16,6 +16,34 @@ describe('UserMessage', () => {
 		},
 	})
 
+	test.each([
+		'Enter an amount greater than zero.',
+		'Enter a mint amount greater than zero.',
+		'Enter a redeem amount greater than zero.',
+		'Enter a bid amount greater than zero.',
+		'Enter a bid price greater than zero.',
+		'Enter a valid report amount greater than zero.',
+		'Enter a liquidation amount greater than zero.',
+		'Enter a valid new WETH amount greater than zero.',
+		'Base token amount must be greater than zero.',
+		'Quote token amount must be greater than zero.',
+		'Enter an amount first.',
+	])('keeps the amount blocker accessible without a visible notice: %s', async message => {
+		const rendered = await renderIntoDocument(<UserMessage id='amount-reason' detail={message} />)
+		cleanup = rendered.cleanup
+		const reason = rendered.container.querySelector('#amount-reason')
+		expect(reason?.textContent).toBe(message)
+		expect(reason?.className).toBe('visually-hidden')
+		expect(rendered.container.querySelector('.tx-action-notice')).toBeNull()
+	})
+
+	test.each(['Insufficient balance.', 'Enter a number, such as 1.5.', 'Enter an ETH amount with at most 18 decimal places.', 'Enter at least 2 REP.'])('keeps actionable validation visible: %s', async message => {
+		const rendered = await renderIntoDocument(<UserMessage detail={message} />)
+		cleanup = rendered.cleanup
+		expect(rendered.container.querySelector('.tx-action-notice')?.textContent).toBe(message)
+		expect(rendered.container.querySelector('.visually-hidden')).toBeNull()
+	})
+
 	test('renders the browser showcase through the same shared components used by both apps', async () => {
 		const rendered = await renderIntoDocument(<UserMessageShowcase />)
 		cleanup = rendered.cleanup

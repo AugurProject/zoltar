@@ -22,6 +22,15 @@ describe('FormInput', () => {
 		},
 	})
 
+	test('keeps zero-amount validation accessible without visible field guidance', async () => {
+		const rendered = await renderIntoDocument(<FormInput error='Enter an amount greater than zero.' errorId='zero-amount-error' value='0' />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(getInput().getAttribute('aria-invalid')).toBe('true')
+		expect(getInput().getAttribute('aria-describedby')).toBe('zero-amount-error')
+		expect(document.getElementById('zero-amount-error')?.className).toBe('visually-hidden')
+		expect(rendered.container.querySelector('.field-error')).toBeNull()
+	})
+
 	test('renders a bare input when no error, hint, or adornment is provided', async () => {
 		const renderedComponent = await renderIntoDocument(<FormInput aria-describedby='external-help' className='custom' invalid value='' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
