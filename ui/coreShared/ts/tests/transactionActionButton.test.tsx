@@ -58,20 +58,6 @@ describe('TransactionActionButton', () => {
 		expect(documentQueries.queryByRole('status')).toBeNull()
 	})
 
-	test('keeps nonpositive amounts disabled without a visible amount notice', async () => {
-		let clicks = 0
-		const rendered = await renderIntoDocument(<TransactionActionButton availability={{ disabled: true, reason: 'Enter an amount greater than zero.' }} idleLabel='Deposit' onClick={() => clicks++} pendingLabel='Depositing…' />)
-		cleanupRenderedComponent = rendered.cleanup
-		const button = within(document.body).getByRole('button', { name: 'Deposit' })
-		expect(button.hasAttribute('disabled')).toBe(true)
-		const reason = document.getElementById(button.getAttribute('aria-describedby') ?? '')
-		expect(reason?.className).toBe('visually-hidden')
-		expect(reason?.textContent).toBe('Enter an amount greater than zero.')
-		expect(rendered.container.querySelector('.tx-action-notice')).toBeNull()
-		await act(() => fireEvent.click(button))
-		expect(clicks).toBe(0)
-	})
-
 	test('renders the disabled reason when requested', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(TransactionActionButton, {

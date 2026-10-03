@@ -502,7 +502,7 @@ describe('SecurityVaultSection', () => {
 		).cleanup
 		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
 		expect(input.value).toBe('')
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Enter an amount greater than zero.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
 	})
 
 	test('flags a withdrawal above the withdrawable maximum inline on the field', async () => {
@@ -1034,24 +1034,6 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).queryByText('Healthy')).toBeNull()
 		expect(within(document.body).queryByText('Near minimum')).toBeNull()
 		expect(within(document.body).queryByText('Underwater')).toBeNull()
-	})
-
-	test.each(['', '0'])('keeps one accessible amount reason without a visible notice for %s in the dialog', async amount => {
-		const props = createSecurityVaultSectionProps({ modalFirst: true })
-		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: amount }} />)
-		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Deposit REP' }))
-		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
-		const group = dialog.querySelector('.tx-action-group')
-		expect(group?.querySelectorAll('[role="note"]').length).toBe(1)
-		const notice = group?.querySelector('[role="note"]')
-		expect(notice?.className).toBe('visually-hidden')
-		expect(group?.querySelector('.tx-action-notice')).toBeNull()
-		expect(notice?.textContent).toBe('Enter an amount greater than zero.')
-		for (const button of group?.querySelectorAll('.tx-action-button') ?? []) {
-			expect(button.getAttribute('aria-describedby')).toBe(notice?.id)
-		}
-		expect(group?.firstElementChild?.className).toBe('tx-action-feedback')
 	})
 
 	for (const [dialogName, blockedAccount, fixLabel] of [

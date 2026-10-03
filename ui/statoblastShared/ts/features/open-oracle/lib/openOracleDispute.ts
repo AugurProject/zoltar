@@ -193,7 +193,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	const setInputBlockMessage = (message: OpenOracleGateMessage, field?: OpenOracleDisputeInputField) => {
 		inputBlockMessage = message
 		blockMessage = message
-		if (field !== undefined) inputFieldErrors[field] = message.message
+		if (field !== undefined && message.message !== undefined) inputFieldErrors[field] = message.message
 	}
 	if (reportDetails === undefined) {
 		setInputBlockMessage(createVisibleGateMessage('Select a report first'))
@@ -207,8 +207,11 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 			setInputBlockMessage(createHiddenLoadingGateMessage(`Loading ${token2Label} decimal metadata.`))
 		} else if (newAmount1 === undefined) {
 			setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token1Label} amount.`), 'disputeNewAmount1')
-		} else if (newAmount2 === undefined || newAmount2 <= 0n) {
-			setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token2Label} amount greater than zero.`), 'disputeNewAmount2')
+		} else if (newAmount2 === undefined) {
+			if (disputeNewAmount2Input.trim() === '') setInputBlockMessage({ kind: 'incomplete', message: undefined })
+			else setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token2Label} amount.`), 'disputeNewAmount2')
+		} else if (newAmount2 <= 0n) {
+			setInputBlockMessage({ kind: 'incomplete', message: undefined })
 		} else if (expectedNewAmount1 === undefined) {
 			setInputBlockMessage(createVisibleGateMessage(`Unable to determine the required new ${token1Label} amount.`))
 		} else if (!amount1Allowed) {

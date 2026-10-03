@@ -80,6 +80,7 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 				autoComplete='off'
 				disabled={disabled}
 				error={visibleError}
+				invalid={revealed && validation.status === 'invalid'}
 				errorId={errorId}
 				hint={hint ?? balanceHint}
 				id={inputId}

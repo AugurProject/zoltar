@@ -8,7 +8,7 @@ import {
 	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateGuardMessage,
-	getOpenOracleCreateValidationMessage,
+	getOpenOracleCreateValidation,
 	getOpenOracleLifecycleBoundaryOffsets,
 	getOpenOracleLiveReportDetails,
 	getOpenOracleSelectedReportActionMode,
@@ -282,9 +282,9 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			openOracleCreateFieldErrors.value = {}
 			openOracleFeedback.value = undefined
 			openOracleError.value = undefined
-			const initialValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm })
-			if (initialValidationMessage !== undefined) {
-				openOracleError.value = initialValidationMessage
+			const initialValidation = getOpenOracleCreateValidation({ form: submittedOpenOracleCreateForm })
+			if (!initialValidation.isValid) {
+				openOracleError.value = initialValidation.message
 				return
 			}
 			const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, 'Base token address')
@@ -315,8 +315,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						walletBalanceAttoEth,
 					})
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
-					const preciseCreateValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })
-					if (preciseCreateValidationMessage !== undefined) throw new Error(preciseCreateValidationMessage)
+					const preciseCreateValidation = getOpenOracleCreateValidation({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })
+					if (!preciseCreateValidation.isValid) throw new Error(preciseCreateValidation.message ?? 'Invalid oracle report parameters.')
 
 					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
 				},

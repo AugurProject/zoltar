@@ -288,17 +288,6 @@ void describe('fork auction helpers', () => {
 				accountAddress: zeroAddress,
 				currentTimestamp: 10n,
 				isOnActiveAppChain: true,
-				submitBidAmountInput: '',
-				truthAuction: createTruthAuction(),
-				walletBalanceAttoEth: 100n,
-			}),
-		).toBe('Enter a bid amount greater than zero.')
-
-		expect(
-			getTruthAuctionBidGuardMessage({
-				accountAddress: zeroAddress,
-				currentTimestamp: 10n,
-				isOnActiveAppChain: true,
 				submitBidAmountInput: 'abc',
 				truthAuction: createTruthAuction(),
 				walletBalanceAttoEth: 100n,

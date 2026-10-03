@@ -34,11 +34,6 @@ function balanceReason({ balanceState }: BalanceInputs) {
 	return undefined
 }
 
-function amountReason(parsedAmount: bigint | undefined) {
-	if (parsedAmount === undefined || parsedAmount === 0n) return copy.amountRequiredReason
-	return undefined
-}
-
 function insufficientReason(requested: bigint | undefined, available: bigint | undefined, reason: string) {
 	if (requested === undefined || available === undefined) return undefined
 	return requested > available ? reason : undefined
@@ -71,13 +66,12 @@ export type LiquidityAvailabilityInputs = WalletInputs &
 
 export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs): ActionAvailability {
 	const insufficient = inputs.operation === 'remove' ? insufficientReason(inputs.requestedAmount, inputs.lpBalance, copy.insufficientLpReason) : insufficientReason(inputs.requestedAmount, inputs.walletEthAttoEth, copy.insufficientEthReason)
-	return withLoading(
+	const availability = withLoading(
 		createActionAvailability(
 			walletReason(inputs),
 			inputs.operation !== 'remove' && inputs.marketClosed ? copy.marketClosedReason : undefined,
 			inputs.submissionBlocker,
 			balanceReason(inputs),
-			amountReason(inputs.requestedAmount),
 			insufficient,
 			inputs.operation === 'initialize' && !inputs.initializePriceValid ? copy.initializePriceInvalidReason : undefined,
 			workflowReason(inputs),
@@ -85,6 +79,7 @@ export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs
 		),
 		[copy.balancesLoadingReason],
 	)
+	return { ...availability, disabled: availability.disabled || inputs.requestedAmount === undefined || inputs.requestedAmount <= 0n }
 }
 
 export type SettlementAvailabilityInputs = WalletInputs &

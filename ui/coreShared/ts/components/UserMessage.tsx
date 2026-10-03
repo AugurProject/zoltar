@@ -44,15 +44,6 @@ export function UserMessage({ actions, actionHint, as: FieldTag = 'p', announcem
 		id,
 		role,
 	}
-	// Routine amount prerequisites stay available to described controls without adding visible form notices.
-	const isAmountPrerequisite = typeof detail === 'string' && (/^Enter .+ (?:amount|price) greater than zero\.$/.test(detail) || /^(?:Base|Quote) token amount must be greater than zero\.$/.test(detail) || detail === 'Enter an amount first.')
-	if (isAmountPrerequisite && title === undefined && actionHint === undefined && actions === undefined && expandableDetail === undefined && dismiss === undefined && !loading) {
-		return (
-			<span {...attributes} className='visually-hidden'>
-				{detail}
-			</span>
-		)
-	}
 	const detailContent = loading ? <LoadingText announce={announcement === undefined}>{detail}</LoadingText> : detail
 	if (placement === 'field')
 		return (

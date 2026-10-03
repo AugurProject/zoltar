@@ -391,7 +391,7 @@ describe('OpenOracleSection route create view', () => {
 		// Once the token is read, its symbol labels the amount.
 		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual([openOracleCopy.initialToken1AmountHelpText, 'REP'])
 		expect(within(document.body).getByText('REP · 18 decimals')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Base token amount must be greater than zero.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report')
 		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
 	})
 
@@ -461,17 +461,14 @@ describe('OpenOracleSection route create view', () => {
 		const quoteTokenAmountInput = dialogQueries.getByLabelText('New WETH amount')
 		expect(quoteTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(document.getElementById('open-oracle-dispute-new-amount-2-error-7')).toBeNull()
-		expect(dialog.textContent?.split('Enter a valid new WETH amount greater than zero.')).toHaveLength(2)
+		expect(dialog.textContent?.split('Enter a valid new WETH amount.')).toHaveLength(2)
 		await act(() => {
 			quoteTokenAmountInput.dispatchEvent(new Event('blur'))
 		})
 		expect(quoteTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
 		expect(quoteTokenAmountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('open-oracle-dispute-new-amount-2-error-7')
-		const amountReason = document.getElementById('open-oracle-dispute-new-amount-2-error-7')
-		expect(amountReason?.className).toBe('visually-hidden')
-		expect(amountReason?.textContent).toBe('Enter a valid new WETH amount greater than zero.')
-		expect(amountReason?.parentElement?.getAttribute('aria-live')).toBe('polite')
-		expect(dialog.textContent?.split('Enter a valid new WETH amount greater than zero.')).toHaveLength(2)
+		expect(expectPoliteFieldError('Enter a valid new WETH amount.').id).toBe('open-oracle-dispute-new-amount-2-error-7')
+		expect(dialog.textContent?.split('Enter a valid new WETH amount.')).toHaveLength(2)
 		expect(dialogQueries.getByRole('button', { name: 'Dispute & swap' }).getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-2-error-7')
 		await act(() => {
 			fireEvent.input(quoteTokenAmountInput, { target: { value: 'still-not-a-number' } })

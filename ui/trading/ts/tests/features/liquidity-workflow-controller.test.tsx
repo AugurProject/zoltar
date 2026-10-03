@@ -186,7 +186,6 @@ describe('liquidity workflow controller state', () => {
 				amount.dispatchEvent(new Event('input', { bubbles: true }))
 			})
 			expect(amount.getAttribute('aria-invalid')).toBe('true')
-			expect(amount.getAttribute('aria-describedby')).toBeTruthy()
 			expect(rendered.container.querySelector('input[name="probability"]')?.getAttribute('inputmode')).toBe('decimal')
 		} finally {
 			await rendered.cleanup()

@@ -82,7 +82,6 @@ export function LiveLiquidityControls({
 	const amountError = (() => {
 		if (amount.trim() === '') return undefined
 		if (parsed === undefined) return operation === 'remove' ? liquidityCopy.invalidLpAmount : liquidityCopy.invalidEthAmount
-		if (parsed === 0n) return availabilityCopy.amountRequiredReason
 		if (availableAmount !== undefined && parsed > availableAmount) return operation === 'remove' ? availabilityCopy.insufficientLpReason : availabilityCopy.insufficientEthReason
 		return undefined
 	})()
@@ -112,6 +111,7 @@ export function LiveLiquidityControls({
 					adornment={operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth}
 					hint={amountHint}
 					error={amountError}
+					invalid={amount.trim() !== '' && (parsed ?? 0n) <= 0n}
 					onInput={event => updateAmount(event.currentTarget.value)}
 				/>
 			</FormField>
