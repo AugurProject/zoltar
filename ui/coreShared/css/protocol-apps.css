@@ -37,14 +37,9 @@
 }
 
 /* Artwork never supplies text or action colors. Existing opaque surfaces protect controls. */
-main:has(> .universe-identity-backdrop) {
-	/* Small metadata needs stronger ink over the shaded folds in light theme. */
-	--muted: var(--universe-muted);
-}
-
 .universe-identity {
 	pointer-events: none;
-	background-image: var(--universe-image);
+	background-image: var(--universe-image-light);
 	background-repeat: no-repeat;
 	background-position: center;
 }
@@ -57,22 +52,21 @@ main:has(> .universe-identity-backdrop) {
 	background-size: cover;
 }
 
-.universe-identity-backdrop::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	background: var(--universe-veil);
+/* An inset accent belongs to the nav, occupies no layout space, and never resembles a loading bar. */
+main[data-universe-id] .header-toolbar {
+	position: relative;
 }
 
-.universe-identity-band {
-	display: block;
-	height: var(--touch-target-min);
-	flex-shrink: 0;
-	background-color: var(--bg);
-	background-size: cover;
+main[data-universe-id] .header-toolbar::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	height: 5px;
+	border-radius: var(--radius-shell) var(--radius-shell) 0 0;
+	background-image: var(--universe-band-light);
 	background-position: center;
-	border-inline-start: var(--space-2) solid var(--universe-ink);
-	border-radius: var(--radius-compact);
+	background-size: cover;
+	pointer-events: none;
 }
 
 .universe-identity-swatch {
@@ -82,9 +76,26 @@ main:has(> .universe-identity-backdrop) {
 	flex-shrink: 0;
 	background-color: var(--bg);
 	background-size: cover;
-	background-position: center;
-	border: 1px solid var(--universe-ink);
+	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-compact);
+}
+
+@media (prefers-color-scheme: dark) {
+	html:not([data-theme="light"]) .universe-identity {
+		background-image: var(--universe-image-dark);
+	}
+
+	html:not([data-theme="light"]) main[data-universe-id] .header-toolbar::before {
+		background-image: var(--universe-band-dark);
+	}
+}
+
+html[data-theme="dark"] .universe-identity {
+	background-image: var(--universe-image-dark);
+}
+
+html[data-theme="dark"] main[data-universe-id] .header-toolbar::before {
+	background-image: var(--universe-band-dark);
 }
 
 @media (max-width: 64rem) {

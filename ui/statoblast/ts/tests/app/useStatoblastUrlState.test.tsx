@@ -66,18 +66,18 @@ describe('useStatoblastUrlState', () => {
 		let hookState: UseUrlStateState | undefined
 		function Harness() {
 			hookState = useStatoblastUrlState()
-			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='band' />
+			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='backdrop' />
 		}
 		const rendered = await renderIntoDocument(<Harness />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(requireState(hookState).activeUniverseId).toBe(0n)
-		expect(rendered.container.querySelector('.universe-identity')?.getAttribute('data-universe-id')).toBe('0')
+		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
 		await act(() => {
 			window.history.replaceState({}, '', `/?universe=${overflow}#/pools?universe=${maximum}`)
 			window.dispatchEvent(new Event('popstate'))
 		})
 		expect(requireState(hookState).activeUniverseId).toBe(maximum)
-		expect(rendered.container.querySelector('.universe-identity')?.getAttribute('data-universe-id')).toBe(maximum.toString())
+		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe(maximum.toString())
 	})
 
 	test('lands on Browse pools before the default route hash is installed', async () => {

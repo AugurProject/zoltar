@@ -40,18 +40,18 @@ describe('useZoltarUrlState', () => {
 		let hookState: ZoltarUrlState | undefined
 		function Harness() {
 			hookState = useZoltarUrlState()
-			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='band' />
+			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='backdrop' />
 		}
 		const rendered = await renderIntoDocument(<Harness />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(requireState(hookState).activeUniverseId).toBe(0n)
-		expect(rendered.container.querySelector('.universe-identity')?.getAttribute('data-universe-id')).toBe('0')
+		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
 		await act(() => {
 			window.history.replaceState({}, '', `/#/zoltar?universe=${maximum}`)
 			window.dispatchEvent(new Event('popstate'))
 		})
 		expect(requireState(hookState).activeUniverseId).toBe(maximum)
-		expect(rendered.container.querySelector('.universe-identity')?.getAttribute('data-universe-id')).toBe(maximum.toString())
+		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe(maximum.toString())
 	})
 
 	test('reads and writes only Zoltar-owned URL state', async () => {

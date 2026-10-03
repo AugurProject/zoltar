@@ -25,10 +25,6 @@
 	--color-white-16: light-dark(rgba(14, 26, 43, 0.12), rgba(255, 255, 255, 0.16));
 	--mask-opaque: rgba(0, 0, 0, 1);
 
-	/* Keep the procedural page image quieter than its header recognition band. */
-	--universe-veil: light-dark(rgba(244, 247, 251, 0.55), rgba(5, 10, 17, 0.85));
-	--universe-muted: light-dark(rgba(35, 51, 73, 1), rgba(160, 181, 207, 0.76));
-
 	/* accents */
 	--accent-zoltar: light-dark(rgba(0, 101, 138, 1), rgba(56, 213, 255, 1));
 	--accent-statoblast: light-dark(rgba(103, 62, 210, 1), rgba(160, 124, 255, 1));

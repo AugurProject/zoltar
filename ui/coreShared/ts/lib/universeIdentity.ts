@@ -1,79 +1,126 @@
 import { hexToBytes, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import { oklchToSrgb } from './oklch.js'
 
-/** A shared palette and flow field, composed separately for page, band, and swatch. */
+// Curated OKLCH hues avoid the semantic Yes (~163°) and No (~12°) hue neighborhoods.
+const hues = [55, 70, 85, 100, 115, 130, 195, 210, 225, 240, 255, 270, 285, 300, 315, 330]
+const schemes = ['analogous', 'split-complementary', 'two-tone']
+const compositions = ['parallel', 'swirl', 'crossing']
+
+/** One whole-ID hash supplies discrete identity choices and sixteen-bit geometry parameters. */
 export function createUniverseIdentity(universeId: bigint) {
 	if (universeId < 0n || universeId >= 1n << 256n) throw new Error('Universe ID must be an unsigned 256-bit integer')
-	const seed = Array.from({ length: 4 }, (_, block) => [...hexToBytes(keccak256(`universe-relief-v8:${universeId}:${block}`))]).flat()
-	const value = (index: number) => (seed[index % seed.length] ?? 0) / 255
-	const hue = Math.round(value(0) * 359)
-	const support = hue + (value(1) < 0.5 ? -1 : 1) * (20 + value(2) * 25)
-	const accent = hue + 90 + value(3) * 50
-	const saturation = 38 + value(4) * 20
-	const color = (h: number, lightness: number) => `hsl(${Math.round((h + 360) % 360)} ${Math.round(saturation)}% ${Math.round(lightness)}%)`
-	const noise = createNoise(seed.slice(16, 20).reduce((result, byte) => result * 256 + byte, 0))
-	const angle = Math.round(value(5) * 360)
-	const count = 8 + Math.round(value(6) * 6)
-	const spacing = 145 + value(7) * 75
-	const amplitude = 90 + value(8) * 230
-	const focus = -500 + value(9) * 1000
-	const spread = 350 + value(10) * 650
-	const bend = (value(11) - 0.5) * 1.5
-	const curl = (value(12) - 0.5) * 3.2
-	const curlX = 150 + value(13) * 1300
-	const curlY = 150 + value(14) * 700
-	const curlRadius = 350 + value(15) * 400
-	const detail = value(20) * 0.22
-	const roundness = 0.65 + value(21) * 0.35
+	const seed = hexToBytes(keccak256(`universe-relief-v9:${universeId}`))
+	const byte = (index: number) => seed[index] ?? 0
+	const value = (index: number) => (byte(index * 2) * 256 + byte(index * 2 + 1)) / 65535
+	const hueBucket = byte(0) % hues.length
+	const schemeIndex = byte(1) % schemes.length
+	const compositionIndex = byte(2) % compositions.length
+	const scheme = schemes[schemeIndex]
+	const composition = compositions[compositionIndex]
+	if (scheme === undefined || composition === undefined) throw new Error('Universe identity choices must be configured')
+	const hue = (hues[hueBucket] ?? 55) + (value(2) - 0.5) * 4
+	const distance = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180)
+	const nearestHue = (target: number) => hues.reduce((closest, candidate) => (distance(candidate, target) < distance(closest, target) ? candidate : closest), hues[0] ?? 55)
+	const support = nearestHue(hue + ([25, 150, 180][schemeIndex] ?? 25))
+	const third = schemeIndex === 1 ? nearestHue(hue + 210) : support
+	const angle = Math.round(value(3) * 359)
+	const count = 6 + (byte(3) % 6)
+	const amplitude = 90 + value(4) * 210
+	const spacing = 155 + value(5) * 110
+	const focus = -500 + value(6) * 1000
+	const spread = 350 + value(7) * 650
+	const bend = (value(8) - 0.5) * 0.8
+	const curlX = 350 + value(9) * 900
+	const curlY = 250 + value(10) * 500
+	const curl = (value(11) - 0.5) * 2.4
+	const roundness = 0.75 + value(12) * 0.25
+	const detail = value(13) * 0.2
+	const noise = createNoise([28, 29, 30, 31].reduce((result, index) => result * 256 + byte(index), 0))
 	const relief = (t: number, lane: number) => {
 		const warp = noise(t / 850, lane / 900) * 200
 		const field = [1800, 900, 450, 225].reduce((sum, scale, octave) => sum + noise((t + warp) / scale + octave * 13, lane / scale) * amplitude * (octave < 2 ? 1 / (octave + 1) : detail / octave), 0)
-		return field + Math.exp(-(((t - focus) / spread) ** 2)) * amplitude * Math.sin(lane / 500 + value(22) * 6) + t * bend
+		return field + Math.exp(-(((t - focus) / spread) ** 2)) * amplitude * Math.sin(lane / 500) + t * bend
 	}
-	const transform = (point: Point): Point => {
-		const dx = point.x - curlX
-		const dy = point.y - curlY
-		const rotation = curl * Math.exp(-(dx * dx + dy * dy) / (curlRadius * curlRadius))
-		return { x: Math.round(curlX + dx * Math.cos(rotation) - dy * Math.sin(rotation)), y: Math.round(curlY + dx * Math.sin(rotation) + dy * Math.cos(rotation)) }
-	}
-	const gradients: string[] = []
-	const layers = Array.from({ length: count }, (_, index) => {
+	const edges = Array.from({ length: count }, (_, index) => {
+		if (compositionIndex === 1) {
+			// Spiral ribbons radiate from the seeded curl point; their centers and sweep are part of the identity.
+			const spiral = (side: number) =>
+				Array.from({ length: 33 }, (_, step) => {
+					const t = step / 32
+					const radius = 35 + t * 1900
+					const radians = (index / count) * Math.PI * 2 + t * (1.6 + value(11) * 1.5) + side * (0.12 + value(5) * 0.13)
+					return { x: Math.round(curlX + Math.cos(radians) * radius), y: Math.round(curlY + Math.sin(radians) * radius) }
+				})
+			return `${curve(spiral(-1), 'M', roundness)} ${curve(spiral(1).reverse(), 'L', roundness)} Z`
+		}
 		const lane = (index - count / 2) * spacing
-		const edge = Array.from({ length: 49 }, (_, step) => {
-			const t = -1700 + step * (3400 / 48)
-			return transform({ x: 800 + t, y: 500 + lane + relief(t, lane) })
+		const points = Array.from({ length: 49 }, (_, step) => {
+			const t = -1900 + step * (3800 / 48)
+			const x = 800 + t
+			const y = 500 + lane + relief(t, lane)
+			const dx = x - curlX
+			const dy = y - curlY
+			const rotation = curl * Math.exp(-(dx * dx + dy * dy) / 500000)
+			return { x: Math.round(curlX + dx * Math.cos(rotation) - dy * Math.sin(rotation)), y: Math.round(curlY + dx * Math.sin(rotation) + dy * Math.cos(rotation)) }
 		})
-		const h = hue + (support - hue) * (index / count)
-		const lightness = 64 + (index / count) * 15
-		const anchor = 500 + lane + relief(0, lane)
-		gradients.push(
-			`<linearGradient id="fold${index}" gradientUnits="userSpaceOnUse" x1="800" y1="${Math.round(anchor)}" x2="820" y2="${Math.round(anchor + spacing * 1.1)}"><stop stop-color="${color(h, lightness)}"/><stop offset=".18" stop-color="${color(h, lightness + 20)}"/><stop offset=".7" stop-color="${color(h, lightness + 6)}"/><stop offset="1" stop-color="${color(h, lightness - 12)}"/></linearGradient>`,
-		)
-		return `<path d="${curve(edge, 'M', roundness)} L3000 3000 L-1500 3000 Z" fill="url(#fold${index})" filter="url(#depth)"/><path d="${curve(edge, 'M', roundness)}" fill="none" stroke="${color(h, 95)}" stroke-opacity=".55" stroke-width="2"/>`
-	}).join('')
-	const accentLane = (Math.round(value(23) * (count - 2)) - count / 2) * spacing
-	const accentEdge = Array.from({ length: 49 }, (_, step) => {
-		const t = -1700 + step * (3400 / 48)
-		return transform({ x: 800 + t, y: 500 + accentLane + relief(t, accentLane) + 10 })
+		return `${curve(points, 'M', roundness)} L3500 3500 L-2000 3500 Z`
 	})
-	const image = encodeSvg(
-		`<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000"><defs>${gradients.join('')}<filter id="depth" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="${color(hue, 25)}" flood-opacity=".24"/></filter><radialGradient id="quiet"><stop stop-color="#aaa"/><stop offset=".4" stop-color="#bbb"/><stop offset="1" stop-color="#fff"/></radialGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask></defs><rect width="1600" height="1000" fill="${color(hue, 93)}"/><g mask="url(#space)"><g transform="rotate(${angle} 800 500)">${layers}<path d="${curve(accentEdge)}" fill="none" stroke="${color(accent, 67)}" stroke-width="7" stroke-opacity=".55"/></g></g></svg>`,
-	)
-	// A few broad folds fit the band; their proportions are never squeezed from the page image.
-	const bandPaths = Array.from({ length: 3 }, (_, index) => {
-		const edge = Array.from({ length: 25 }, (_, step) => {
-			const x = step * (1800 / 24) - 100
-			const y = 14 + index * 28 + noise(x / (500 + value(24) * 700), index * 0.4) * 18 + Math.exp(-(((x - 250 - value(25) * 1100) / 350) ** 2)) * Math.sin(index * 1.3 + value(26) * 6) * 65 + (x - 800) * (value(28) - 0.5) * 0.06
-			return { x, y: Math.round(y) }
-		})
-		return `<path d="${curve(edge)} L1800 150 L-100 150 Z" fill="${color(index === 2 ? support : hue, 62 + index * 9)}"/><path d="${curve(edge)}" fill="none" stroke="${color(hue, 94)}" stroke-opacity=".65" stroke-width="1.5"/>`
-	}).join('')
-	const bandImage = encodeSvg(
-		`<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="80" viewBox="0 0 1600 80"><defs><linearGradient id="light" x2="0" y2="1"><stop stop-color="${color(hue, 95)}" stop-opacity=".6"/><stop offset=".5" stop-color="${color(hue, 95)}" stop-opacity="0"/><stop offset="1" stop-color="${color(hue, 25)}" stop-opacity=".12"/></linearGradient></defs><rect width="1600" height="80" fill="${color(hue, 88)}"/>${bandPaths}<rect width="1600" height="80" fill="url(#light)"/><path d="M0 70 Q800 ${35 + Math.round(value(26) * 35)} 1600 70" fill="none" stroke="${color(accent, 63)}" stroke-width="3"/></svg>`,
-	)
-	const swatchImage = encodeSvg(
-		`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><defs><linearGradient id="face" x2=".3" y2="1"><stop stop-color="${color(hue, 85)}"/><stop offset="1" stop-color="${color(hue, 61)}"/></linearGradient></defs><rect width="96" height="96" fill="${color(support, 85)}"/><path d="M-10 18 Q${Math.round(value(27) * 80)} 90 106 40 L106 106 L-10 106Z" fill="url(#face)"/><path d="M-10 18 Q${Math.round(value(27) * 80)} 90 106 40" fill="none" stroke="${color(hue, 96)}" stroke-width="3"/><path d="M-10 30 Q${Math.round(value(27) * 80)} 102 106 52" fill="none" stroke="${color(accent, 60)}" stroke-width="5"/></svg>`,
-	)
-	return { image, bandImage, swatchImage, ink: `light-dark(hsl(${hue} 48% 32%), hsl(${hue} 48% 72%))` }
+	const renderImage = (dark: boolean, miniature: boolean, band: boolean) => {
+		const palette = dark ? { ground: 17, fold: 23, miniature: 32, miniatureGround: 27, foldChroma: 0.03 } : { ground: 97, fold: 92, miniature: 84, miniatureGround: 93, foldChroma: 0.022 }
+		const groundL = miniature ? palette.miniatureGround : palette.ground
+		const baseL = miniature ? palette.miniature : palette.fold
+		const rangeL = miniature ? 8 : 3
+		const chroma = miniature ? 0.065 : palette.foldChroma
+		let width = 1600
+		let height = 1000
+		let viewBox = '0 0 1600 1000'
+		if (band) {
+			height = 80
+			viewBox = '0 460 1600 80'
+		} else if (miniature) {
+			width = 96
+			height = 96
+			viewBox = '0 -300 1600 1600'
+		}
+		const gradients = edges
+			.map((_, index) => {
+				let h = hue
+				if (index % 3 === 0) h = third
+				else if (index % 2 !== 0) h = support
+				const l = baseL + (index / count) * rangeL
+				const lane = (index - count / 2) * spacing
+				const anchor = 500 + lane + relief(0, lane)
+				// The near-vertical lighting axis rotates with the later group rotate, following the fold orientation.
+				return `<linearGradient id="fold${index}" gradientUnits="userSpaceOnUse" x1="800" y1="${Math.round(anchor)}" x2="820" y2="${Math.round(anchor + spacing)}"><stop stop-color="${color(h, l, chroma)}"/><stop offset=".4" stop-color="${color(h, l + (miniature ? 3 : 1.5), chroma)}"/><stop offset="1" stop-color="${color(h, l - (miniature ? 2 : 1), chroma)}"/></linearGradient>`
+			})
+			.join('')
+		const paths = edges.map((d, index) => `<path d="${d}" fill="url(#fold${index})"/>`).join('')
+		const crossing = compositionIndex === 2 ? `<g opacity=".5" transform="rotate(${55 + value(12) * 35} 800 500)">${paths}</g>` : ''
+		// Top-aligned content stays nearly flat; folds grow gently toward the bottom and outside the content column.
+		const quiet =
+			miniature || band
+				? ''
+				: '<linearGradient id="quiet" x2="0" y2="1"><stop stop-color="#000"/><stop offset=".45" stop-color="#000"/><stop offset=".7" stop-color="#555"/><stop offset="1" stop-color="#fff"/></linearGradient><linearGradient id="margins"><stop stop-color="#fff"/><stop offset=".12" stop-color="#333"/><stop offset=".25" stop-color="#222"/><stop offset=".75" stop-color="#222"/><stop offset=".88" stop-color="#333"/><stop offset="1" stop-color="#fff"/></linearGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask><mask id="column"><rect width="1600" height="1000" fill="url(#margins)"/></mask>'
+		const art = `<g transform="rotate(${angle} 800 500)">${paths}${crossing}</g>`
+		const composed = miniature || band ? art : `<g mask="url(#space)"><g mask="url(#column)">${art}</g></g>`
+		return encodeSvg(
+			`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" data-composition="${composition}"><defs>${gradients}${quiet}</defs><rect x="-2000" y="-2000" width="6000" height="6000" fill="${color(hue, groundL, miniature ? 0.04 : 0.008)}"/>${composed}</svg>`,
+		)
+	}
+	const variants = (miniature: boolean, band: boolean) => ({ light: renderImage(false, miniature, band), dark: renderImage(true, miniature, band) })
+	return {
+		image: variants(false, false),
+		bandImage: variants(true, true),
+		swatchImage: variants(true, false),
+		traits: { hueBucket, hue, support, third, scheme, composition, angle, count },
+	}
+}
+
+/** Role lightness is fixed across hues; reduce only chroma when needed to stay inside sRGB. */
+function color(hue: number, lightness: number, chroma: number) {
+	let c = chroma
+	while (oklchToSrgb(lightness / 100, c, hue).some(channel => channel < 0 || channel > 1)) c *= 0.9
+	return `oklch(${lightness.toFixed(2)}% ${c.toFixed(5)} ${hue.toFixed(2)})`
 }
 
 function encodeSvg(svg: string) {
