@@ -15,6 +15,7 @@ import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { join } from 'node:path'
 import { operatorHeader } from './header.ts'
+import { REFERENCE_DOCUMENTS } from './reference-documents.ts'
 import { settingsPageMarkup } from './settings-page.tsx'
 
 type DashboardController = {
@@ -170,9 +171,6 @@ function markdownHeadingId(value: string) {
 		.replace(/[^a-z0-9 -]/g, '')
 		.replace(/\s+/g, '-')
 }
-
-/** The reference documents in reading order. The first supplies the page's only top-level heading. */
-const REFERENCE_DOCUMENTS = ['README.md', 'EXECUTION.md', 'CONFIGURATION.md', 'MARKETS.md', 'RECOVERY.md']
 
 /** The shared bot guide lives outside this package, so the rendered reference links to its published copy. */
 const SHARED_BOT_GUIDE_URL = 'https://github.com/AugurProject/zoltar/blob/main/bots/README.md'

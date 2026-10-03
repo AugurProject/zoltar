@@ -1,4 +1,5 @@
 import { operatorHeader } from '../src/dashboard/header.ts'
+import { REFERENCE_DOCUMENTS } from '../src/dashboard/reference-documents.ts'
 import assert from 'node:assert/strict'
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -7,7 +8,15 @@ const projectRoot = path.resolve(import.meta.dir, '..')
 const guidePath = path.join(projectRoot, 'docs', 'operator-guide.html')
 const guide = await readFile(guidePath, 'utf8')
 // The dashboard renders these documents as one reference page, so they are validated together.
-const referenceDocumentNames = ['README.md', 'EXECUTION.md', 'CONFIGURATION.md', 'MARKETS.md', 'RECOVERY.md']
+const referenceDocumentNames = REFERENCE_DOCUMENTS
+// The container serves the same reference page, so its image must include every document.
+const dockerfile = await readFile(path.join(projectRoot, 'Dockerfile'), 'utf8')
+const dockerignore = await readFile(path.join(projectRoot, 'Dockerfile.dockerignore'), 'utf8')
+for (const name of referenceDocumentNames) {
+	const imagePath = `bots/open-oracle-arbitrager/${name}`
+	assert.ok(dockerfile.includes(`${imagePath} `), `Dockerfile must copy ${imagePath}`)
+	assert.ok(dockerignore.split('\n').includes(`!${imagePath}`), `Dockerfile.dockerignore must include ${imagePath}`)
+}
 const referenceDocuments = await Promise.all(referenceDocumentNames.map(async name => ({ contents: await readFile(path.join(projectRoot, name), 'utf8'), name })))
 const readme = referenceDocuments.map(document => document.contents).join('\n\n')
 const dashboard = (await readFile(path.join(projectRoot, 'src', 'dashboard', 'index.html'), 'utf8')).replace('<!-- operator-header -->', operatorHeader)

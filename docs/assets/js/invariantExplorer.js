@@ -168,32 +168,44 @@ collapse.addEventListener("click", () => {
   for (const entry of entries)
     entry.open = false;
 });
-reset.addEventListener("click", () => {
+var clearFilters = () => {
   keywordInput.value = "";
   typeSelect.value = "";
   statusSelect.value = "";
   subsystemSelect.value = "";
   applyFilters();
+};
+reset.addEventListener("click", () => {
+  clearFilters();
   keywordInput.focus();
 });
-var targetId = window.location.hash.slice(1);
-try {
-  targetId = decodeURIComponent(targetId);
-} catch (error) {
-  if (!(error instanceof URIError))
-    throw error;
-}
-var target = document.getElementById(targetId);
-if (target instanceof HTMLDetailsElement && target.classList.contains("invariant-entry")) {
-  const syncTargetScrollMargin = () => {
-    if (getComputedStyle(explorer).position === "sticky") {
-      target.style.scrollMarginTop = `${explorer.getBoundingClientRect().height + 16}px`;
-      return;
-    }
-    target.style.removeProperty("scroll-margin-top");
-  };
+var scrollMarginTarget;
+var syncTargetScrollMargin = () => {
+  if (scrollMarginTarget === undefined)
+    return;
+  if (getComputedStyle(explorer).position === "sticky") {
+    scrollMarginTarget.style.scrollMarginTop = `${explorer.getBoundingClientRect().height + 16}px`;
+    return;
+  }
+  scrollMarginTarget.style.removeProperty("scroll-margin-top");
+};
+window.addEventListener("resize", syncTargetScrollMargin);
+var revealFragmentEntry = () => {
+  let targetId = window.location.hash.slice(1);
+  try {
+    targetId = decodeURIComponent(targetId);
+  } catch (error) {
+    if (!(error instanceof URIError))
+      throw error;
+  }
+  const target = entries.find((entry) => entry.id === targetId);
+  if (target === undefined)
+    return;
+  if (target.hidden)
+    clearFilters();
+  scrollMarginTarget?.style.removeProperty("scroll-margin-top");
+  scrollMarginTarget = target;
   syncTargetScrollMargin();
-  window.addEventListener("resize", syncTargetScrollMargin);
   target.open = true;
   requestAnimationFrame(() => {
     target.scrollIntoView({ behavior: "instant", block: "start" });
@@ -205,14 +217,7 @@ if (target instanceof HTMLDetailsElement && target.classList.contains("invariant
         window.scrollBy({ behavior: "instant", top: -overlap });
     });
   });
-}
-window.addEventListener("hashchange", () => {
-  const linked = entries.find((entry) => entry.id === window.location.hash.slice(1));
-  if (linked === undefined)
-    return;
-  if (linked.hidden)
-    reset.click();
-  linked.open = true;
-  linked.scrollIntoView({ behavior: "instant", block: "start" });
-});
+};
+window.addEventListener("hashchange", revealFragmentEntry);
 applyFilters();
+revealFragmentEntry();
