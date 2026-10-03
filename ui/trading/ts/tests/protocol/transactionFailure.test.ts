@@ -11,7 +11,7 @@ describe('transaction failure explanations', () => {
 	test.each([
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
-		['Deadline expired', 'The transaction expired before it was mined.'],
+		['Deadline expired', 'The transaction deadline passed.'],
 		['Question ended', 'This market no longer accepts this action.'],
 		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
 		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],
@@ -29,7 +29,7 @@ describe('transaction failure explanations', () => {
 	})
 
 	test('explains a pre-signing settlement deadline failure with expiration guidance', () => {
-		expect(describeTransactionFailure(new Error('Transaction deadline has passed; try again'), 'Settlement transaction failed')).toBe('The transaction expired before it was mined. Try again, or allow more time in Settings.')
+		expect(describeTransactionFailure(new Error('Transaction deadline has passed; try again'), 'Settlement transaction failed')).toBe('The transaction deadline passed. Try again, or allow more time in Settings.')
 	})
 
 	test('explains wallet cancellations and missing gas funds', () => {
