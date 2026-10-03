@@ -157,7 +157,7 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={valued} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('1.987158 Yes')
-		expect(rendered.container.textContent).toContain('1.9558 ETH if Yes wins')
+		expect(rendered.container.textContent).toContain('1.955761 ETH if Yes wins')
 		expect(rendered.container.textContent).toContain('0 ETH otherwise')
 		expect(rendered.container.textContent?.match(/if Yes wins/g)).toHaveLength(1)
 		expect(rendered.container.textContent).not.toContain('sale')

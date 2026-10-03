@@ -58,7 +58,7 @@ export function sellOutcome(outcome: 'YES' | 'NO') {
 }
 
 export function holdingAfter(outcome: 'YES' | 'NO') {
-	return `Your ${outcomeLabel(outcome)} after this trade`
+	return `${outcomeLabel(outcome)} after trade`
 }
 
 /** The pool fee as its rate and its ETH value, which arrives already marked as approximate or as an upper bound. */

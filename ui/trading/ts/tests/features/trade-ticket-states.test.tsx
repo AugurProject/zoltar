@@ -126,7 +126,7 @@ describe('trade ticket states', () => {
 	test('the estimate leads with price, profit, and the resulting holding, and keeps a low price impact in the details', async () => {
 		const container = await renderTicket(positionTicket({ amount: '0.5' }))
 		const visible = container.querySelector('.transaction-review-details')?.textContent
-		for (const phrase of ['Average price', 'Minimum received', 'Your Yes after this trade']) expect(visible).toContain(phrase)
+		for (const phrase of ['Average price', 'Minimum received', 'Yes after trade']) expect(visible).toContain(phrase)
 		// The payout states the profit it leaves over the ETH paid, in one sentence.
 		expect(container.querySelector('.payout-note')?.textContent).toMatch(/^[\d.]+ ETH if Yes wins · \+[\d.]+ ETH profit \(\+[\d.]+%\) · 0 ETH otherwise$/)
 		expect(visible).not.toContain('Price impact')

@@ -222,6 +222,10 @@
 .trade-settings-preset {
 	flex: 1 1 0;
 	min-height: var(--touch-target-min);
+	white-space: nowrap;
+}
+.trade-settings--embedded .trade-settings-preset {
+	padding-inline: var(--space-2);
 }
 .trade-settings-preset[aria-pressed="true"] {
 	border-color: var(--accent);

@@ -8,11 +8,12 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { TradeSettingsPanel } from '../components/TradeSettingsPanel.js'
 import { formatRoundedUnits } from '../lib/format.js'
-import { averagePriceBps, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
+import { averagePriceBps, formatCompleteSetQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import * as payoutCopy from '../copy/payout.js'
+import * as workflowCopy from '../copy/workflows.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 import { buyReturn, holdingAfterTrade, poolFeeAttoEth, probabilityPercent, type PriceImpactTier, type TradeEstimate } from './live/tradeTicketModel.js'
 
@@ -45,10 +46,23 @@ function absolute(value: bigint) {
 	return value < 0n ? -value : value
 }
 
-/** The gain or loss against the ETH paid, with the same figure as a return on that ETH. */
-function formatProfit({ profitAttoEth, returnBps }: { profitAttoEth: bigint; returnBps: bigint }) {
-	const format = profitAttoEth < 0n ? payoutCopy.loss : payoutCopy.profit
-	return format(`${formatRoundedUnits(absolute(profitAttoEth), 18, ESTIMATE_DIGITS)} ETH`, formatScaledPercentage(absolute(returnBps), 2, 1))
+function formatEstimateEth(amountAttoEth: bigint) {
+	return `${formatRoundedUnits(amountAttoEth, 18, ESTIMATE_DIGITS)} ${workflowCopy.eth}`
+}
+
+/** The payout if the bought outcome wins and the gain or loss it leaves against the ETH paid, at one precision so the two reconcile. */
+function BuyPayout({ estimate, market }: { estimate: Extract<TradeEstimate, { kind: 'entry' }>; market: LiveMarket }) {
+	const { payoutAttoEth, profitAttoEth, returnBps } = buyReturn(estimate, market)
+	const formatProfit = profitAttoEth < 0n ? payoutCopy.loss : payoutCopy.profit
+	return (
+		<>
+			<strong>{payoutCopy.conditionalPayout(formatEstimateEth(payoutAttoEth), estimate.side)}</strong>
+			{' · '}
+			{formatProfit(formatEstimateEth(absolute(profitAttoEth)), formatScaledPercentage(absolute(returnBps), 2, 1))}
+			{' · '}
+			{payoutCopy.otherwiseZero}
+		</>
+	)
 }
 
 /** The approximate fee, or the smallest shown amount as an upper bound when the fee rounds to nothing. */
@@ -92,7 +106,7 @@ export function TradeEstimatePanel({
 			? [{ label: ticketCopy.youReceiveEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS) }]
 			: [
 					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS) },
-					{ label: ticketCopy.youReceiveEstimate, value: `${formatRoundedUnits(estimate.receiveAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
+					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth) },
 				]
 	const average = averagePriceBps(estimate.kind === 'entry' ? estimate.payAttoEth : estimate.receiveAttoEth, quote.totalLongShares, market)
 	const holdingAfter = holdingAfterTrade(estimate, balances)
@@ -126,20 +140,7 @@ export function TradeEstimatePanel({
 				{ticketCopy.priceImpactTierAnnouncement(impactTier)}
 			</p>
 			<ImpactNotice tier={impactTier} impactBps={estimate.impactBps} acknowledged={impactAcknowledged} disabled={disabled} onAcknowledge={onAcknowledgeImpact} />
-			{estimate.kind === 'entry' ? (
-				<UserMessage
-					className='detail payout-note'
-					detail={
-						<>
-							<strong>{payoutCopy.conditionalPayout(formatCollateralEth(quote.totalLongShares, market), side)}</strong>
-							{' · '}
-							{formatProfit(buyReturn(estimate, market))}
-							{' · '}
-							{payoutCopy.otherwiseZero}
-						</>
-					}
-				/>
-			) : null}
+			{estimate.kind === 'entry' ? <UserMessage className='detail payout-note' detail={<BuyPayout estimate={estimate} market={market} />} /> : null}
 			<ReadOnlyDetailAccordion title={ticketCopy.moreDetails}>
 				<DataGrid dense>
 					{detailRows.map(row => (
