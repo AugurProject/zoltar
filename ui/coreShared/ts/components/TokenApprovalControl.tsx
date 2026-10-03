@@ -15,6 +15,7 @@ import { formatCurrencyBalance, formatCeilingAmount, formatCeilingAmountDisplay,
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
+	approvalPurpose?: string | undefined
 	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
 	completedLabel?: string | undefined
 	/** When set, the custom approval amount field sits collapsed behind a disclosure with this summary; the default approves exactly the required amount. */
@@ -91,6 +92,7 @@ function RequiredApprovalAmount({ requiredAmount, tokenSymbol, tokenUnits }: { r
 }
 export function TokenApprovalControl({
 	compact = false,
+	approvalPurpose,
 	completedLabel,
 	customAmountDisclosureLabel,
 	showRequirementNotice = true,
@@ -204,7 +206,7 @@ export function TokenApprovalControl({
 	)
 	const amountField = (
 		<label className='field approval-amount-field'>
-			<span className='approval-amount-label'>{commonCopy.formatValueApprovalAmount(tokenSymbol)}</span>
+			<span className='approval-amount-label'>{commonCopy.formatValueApprovalAmount(tokenSymbol, approvalPurpose)}</span>
 			<div className='field-inline approval-amount-controls'>
 				<FormInput
 					aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}

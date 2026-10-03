@@ -25,6 +25,8 @@ export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool 
 
 export function getPendingOperationLabel(operation: OracleQueueOperation) {
 	switch (operation) {
+		case 'vaultOperations':
+			return 'Vault operations'
 		case 'liquidation':
 			return securityPoolCopy.liquidation
 		case 'setVaultUnderwritingLimit':
@@ -38,6 +40,8 @@ export function getPendingOperationLabel(operation: OracleQueueOperation) {
 
 export function getPendingOperationAmountPresentation(operation: OracleQueueOperation) {
 	switch (operation) {
+		case 'vaultOperations':
+			return { summaryLabel: 'Price actions', suffix: 'actions', units: 0 }
 		case 'liquidation':
 			return { summaryLabel: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, units: 18 }
 		case 'withdrawRep':

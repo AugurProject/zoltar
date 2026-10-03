@@ -117,7 +117,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 				liquidationMinimumReceiverHealthFactorBps = minimumReceiverHealthFactorBps
 				liquidationMinPriceDistanceBps = minLiquidationPriceDistanceBps
 				const simulation = await client.simulateContract({
-					account: pool.coordinator,
+					account: pool.vaultOperations,
 					abi: securityPoolAbi,
 					address: pool.address,
 					args: [
@@ -150,7 +150,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 				if (!sameAddress(operation.operator, operation.receiverVault) || !sameAddress(operation.operator, operation.targetVault)) throw stagedRouteIneligible('Staged self operation is not an exact self route')
 				if (operation.liquidationApprovalId.toLowerCase() !== zeroHash || operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Staged self operation carries liquidation approval state')
 				await client.simulateContract({
-					account: pool.coordinator,
+					account: pool.vaultOperations,
 					abi: securityPoolAbi,
 					address: pool.address,
 					args: [operation.operator, operation.operationValue],

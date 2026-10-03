@@ -41,7 +41,7 @@ export type ForkAuctionAction =
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
 export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
-export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setVaultUnderwritingLimit'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setVaultUnderwritingLimit' | 'vaultOperations'
 export type StagedOracleOperation = {
 	amount: bigint
 	operator: Address

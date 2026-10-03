@@ -95,6 +95,8 @@ void describe('selected pool workflow lookup state', () => {
 
 	void test('maps the legacy resolution view alias to the reporting tab', () => {
 		expect(resolveSelectedPoolView(undefined)).toBe('vaults')
+		expect(resolveSelectedPoolView('vault-operations')).toBe('vault-operations')
+		expect(isSupportedSelectedPoolView('vault-operations')).toBe(true)
 		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
 		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
 		expect(resolveSelectedPoolView('fork')).toBe('vaults')

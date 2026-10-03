@@ -151,6 +151,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAct
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
+												approvalPurpose={step.approval.purpose}
 												compact
 												completedLabel={completedLabel}
 												showRequirementNotice={false}
@@ -231,7 +232,19 @@ export function TransactionStepsContent({ actionsFirst = false, cancelable = tru
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const outcome = workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome
 	const totalEth = workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n)
-	const actions = <TransactionStepsActions cancelable={cancelable} contextKey={contextKey} includeWrapAction={includeWrapAction} finalActionLabel={finalActionLabel} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} retainedWorkflow={retainedWorkflow} retryAction={retryAction} />
+	const actions = (
+		<TransactionStepsActions
+			cancelable={cancelable}
+			contextKey={contextKey}
+			includeWrapAction={includeWrapAction || funding.some(token => token.tokenSymbol === commonCopy.weth)}
+			finalActionLabel={finalActionLabel}
+			focusOnMount={focusOnMount}
+			keepActionsVisible={keepActionsVisible}
+			onClose={onClose}
+			retainedWorkflow={retainedWorkflow}
+			retryAction={retryAction}
+		/>
+	)
 	return (
 		<>
 			{heading === undefined ? undefined : (

@@ -256,8 +256,9 @@ type LiquidationSimulation = {
 	}
 }
 
-/** @internal Exported for regression tests of liquidation submission guards. */
+/** Estimates sequential liquidation transfers for previews and submission guards. */
 export function simulateLiquidation({
+	minLiquidationPriceDistanceBps,
 	callerVaultSummary,
 	requestedDebtAttoEth,
 	totalUnderwritingLimitAttoEth,
@@ -267,6 +268,7 @@ export function simulateLiquidation({
 	statoblastSecurityMultiplierBps,
 	targetVaultSummary,
 }: {
+	minLiquidationPriceDistanceBps?: bigint | undefined
 	callerVaultSummary: SecurityPoolVaultSummary | undefined
 	requestedDebtAttoEth: bigint
 	totalUnderwritingLimitAttoEth: bigint
@@ -284,6 +286,7 @@ export function simulateLiquidation({
 	const targetUnderwritingLimitAttoEth = requireVaultUnderwritingLimitAttoEth(targetVaultSummary)
 	const maxLiquidationDebtAttoEth =
 		getMaxLiquidationAmount({
+			minLiquidationPriceDistanceBps,
 			repPerEthPrice,
 			statoblastSecurityMultiplierBps,
 			targetVaultSummary,

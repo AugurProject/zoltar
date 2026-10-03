@@ -39,6 +39,11 @@
 			"bun": "./ts/statoblast/truthAuctionTickMath.ts",
 			"default": "./js/statoblast/truthAuctionTickMath.js"
 		},
+		"./statoblast/vaultOperations": {
+			"types": "./ts/statoblast/vaultOperations.ts",
+			"bun": "./ts/statoblast/vaultOperations.ts",
+			"default": "./js/statoblast/vaultOperations.js"
+		},
 		"./deployment/initCodes": {
 			"types": "./ts/deployment/initCodes.ts",
 			"bun": "./ts/deployment/initCodes.ts",

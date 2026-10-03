@@ -1,6 +1,7 @@
 import { openOraclePriceCoordinatorAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
+import type { CachedPoolDeployment } from './topology-cache.ts'
 import { type ChaosReadClient, drainConcurrent } from './discovery-client.ts'
 
 export function requireGraphEdge(actual: Address, expected: Address, label: string) {
@@ -93,4 +94,16 @@ export function assertCanonicalPairGraph(identity: PairGraphIdentity) {
 	requireGraphEdge(identity.pairPool, identity.pool, `Pair ${identity.pair} security-pool edge`)
 	requireGraphEdge(identity.pairShareToken, identity.poolShareToken, `Pair ${identity.pair} share-token edge`)
 	if (identity.pairUniverseId !== identity.poolUniverseId || identity.pairQuestionId !== identity.poolQuestionId) throw new Error(`Pair ${identity.pair} immutable question identity does not match pool ${identity.pool}`)
+}
+
+export function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; securityPool: Address; shareToken: Address; truthAuction: Address; universeId: bigint }): CachedPoolDeployment {
+	return {
+		coordinator: getAddress(deployment.openOraclePriceCoordinator),
+		parent: getAddress(deployment.parent),
+		questionId: deployment.questionId.toString(),
+		securityPool: getAddress(deployment.securityPool),
+		shareToken: getAddress(deployment.shareToken),
+		truthAuction: getAddress(deployment.truthAuction),
+		universeId: deployment.universeId.toString(),
+	}
 }

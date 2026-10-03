@@ -13,7 +13,7 @@ export type TokenFundingAmount = { amount: bigint; tokenSymbol: string; tokenUni
 
 export type TransactionStepDetails = {
 	proposedRepPerEthPrice?: bigint | undefined
-	approval?: { requiredAmount: bigint; recommendedAmount?: bigint | undefined; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
+	approval?: { purpose?: string | undefined; requiredAmount: bigint; recommendedAmount?: bigint | undefined; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly TokenFundingAmount[]
 	optional?: boolean

@@ -148,6 +148,8 @@ type SecurityPoolsOverviewRouteContentProps = {
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
+	vaultOperationsParameters?: import('../types/app.js').WriteOperationsParameters
+	vaultOperationsContextKey?: number
 	controlledVaultView?: SelectedVaultView | undefined
 	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
@@ -163,7 +165,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
-	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
+	onRefreshSelectedPoolData: (securityPoolAddress?: string, totalCommitment?: bigint) => void
 	securityPoolsFreshness?: DataFreshness | undefined
 	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) => void | Promise<void>
 	onSelectedPoolViewChange: (view: string | undefined) => void

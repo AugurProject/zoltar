@@ -144,12 +144,17 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		'browse',
 	)
 	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, SECURITY_POOLS_VIEWS)
-	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
+	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string, totalCommitment?: bigint) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
 		if (!isHexAddressInput(nextSecurityPoolAddress)) return
+		if (totalCommitment !== undefined) {
+			overview.updatePoolCommitment(nextSecurityPoolAddress, totalCommitment)
+			return
+		}
 		selectedPoolRefresh.setNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
+		if (nextSecurityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase()) void vault.loadSecurityVault()
 	}
 	const { securityVaultResult } = vault
 	useEffect(() => {
@@ -246,6 +251,8 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		selectedPoolRepPrice,
 		universeDirectoryPools: universeDirectoryLoadedForContext ? overview.universeDirectoryPools : undefined,
 		workflow: {
+			vaultOperationsParameters: walletScopedHookConfig,
+			vaultOperationsContextKey: activeEnvironmentNonce,
 			...buildLiquidationSectionProps(overview, priceCoordinator),
 			...uiRepPrice,
 			controlledVaultView: urlState.vaultView,
