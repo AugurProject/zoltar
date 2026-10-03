@@ -200,7 +200,8 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				}
 	const poolOracleStatus = model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />
 	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined
-	const poolActions = showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined
+	const actionItems = props.vaultOperationsParameters === undefined ? model.actionItems : model.actionItems.map(item => (item.tab === 'vaults' ? { ...item, tab: 'vault-operations' as const } : item))
+	const poolActions = showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={actionItems} onChange={onSelectedPoolViewChange} /> : undefined
 	return (
 		<RouteWorkflowPanel showHeader={showHeader && objectHeaderProps === undefined} title={securityPoolCopy.selectedPool}>
 			<div className='pool-context'>
@@ -262,6 +263,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								liquidationEnabled={selectedPoolStateModel.actions.queueLiquidation.enabled}
 								onOpenLiquidationModal={onOpenLiquidationModal}
 								onSelectedPoolViewChange={onSelectedPoolViewChange}
+								vaultOperationsAvailable={props.vaultOperationsParameters !== undefined}
 								poolState={selectedPoolStateModel}
 								repPerEthPrice={repPerEthPrice}
 								repPerEthSource={repPerEthSource}

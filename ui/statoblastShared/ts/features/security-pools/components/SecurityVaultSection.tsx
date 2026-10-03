@@ -60,7 +60,7 @@ import type { SecurityVaultSectionProps } from '../../types.js'
 import { VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
 import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
-import { VaultWithdrawalSummaryMetrics, VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
+import { VaultOperationsLauncher, VaultWithdrawalSummaryMetrics, VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
 import { SecurityVaultInlineActionSections } from './SecurityVaultInlineActionSections.js'
 
 export function SecurityVaultSection({
@@ -79,6 +79,7 @@ export function SecurityVaultSection({
 	onSecurityVaultFormChange,
 	oracleManagerDetails,
 	onViewPriceOracle,
+	onViewVaultOperations,
 	onViewStagedOperations,
 	onWithdrawRep,
 	repPerEthPrice,
@@ -549,7 +550,7 @@ export function SecurityVaultSection({
 	const vaultActions = (
 		<>
 			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />
-			{actionSections}
+			{onViewVaultOperations === undefined ? actionSections : <VaultOperationsLauncher onOpen={onViewVaultOperations} error={securityVaultError} additionalActions={extraReadinessActions} />}
 		</>
 	)
 	const sections = (

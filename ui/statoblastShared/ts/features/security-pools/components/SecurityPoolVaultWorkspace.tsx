@@ -31,6 +31,7 @@ export function SecurityPoolVaultWorkspace({
 	liquidationEnabled,
 	onOpenLiquidationModal,
 	onSelectedPoolViewChange,
+	vaultOperationsAvailable,
 	poolState,
 	repPerEthPrice,
 	repPerEthSource,
@@ -54,6 +55,7 @@ export function SecurityPoolVaultWorkspace({
 	liquidationEnabled: boolean
 	onOpenLiquidationModal: SecurityPoolWorkflowRouteContentProps['onOpenLiquidationModal']
 	onSelectedPoolViewChange: SecurityPoolWorkflowRouteContentProps['onSelectedPoolViewChange']
+	vaultOperationsAvailable: boolean
 	poolState: PoolState
 	repPerEthPrice: SecurityPoolWorkflowRouteContentProps['repPerEthPrice']
 	repPerEthSource: SecurityPoolWorkflowRouteContentProps['repPerEthSource']
@@ -216,6 +218,7 @@ export function SecurityPoolVaultWorkspace({
 					autoLoadVault
 					modalFirst
 					onViewPriceOracle={() => onSelectedPoolViewChange('price-oracle')}
+					onViewVaultOperations={vaultOperationsAvailable ? () => onSelectedPoolViewChange('vault-operations') : undefined}
 					onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 					oracleManagerDetails={currentPoolOracleManagerDetails}
 					poolState={poolState}

@@ -184,6 +184,42 @@ export function VaultDepositApprovalControl({
 	)
 }
 
+function VaultActionLauncher({ action, claimingFees = false, hasVaultRepBacking = false, redeemRepAction }: { action: Omit<ReadinessAction, 'title'>; claimingFees?: boolean; hasVaultRepBacking?: boolean; redeemRepAction?: ComponentChildren }) {
+	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
+	return (
+		<div key={action.key} className='vault-action-launcher'>
+			{action.key === 'rep-exit' && redeemRepAction !== undefined ? (
+				redeemRepAction
+			) : (
+				<ActionLauncherButton
+					describedBy={action.disabledReasonId}
+					idleLabel={action.actionLabel}
+					pending={action.key === 'claim-fees' && claimingFees}
+					pendingLabel={action.key === 'claim-fees' ? securityPoolCopy.claimingFees : commonCopy.opening}
+					onClick={() => action.onAction?.()}
+					tone={action.key === 'deposit-rep' || (action.key === 'adjust-backing' && hasVaultRepBacking) ? 'primary' : 'secondary'}
+					availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
+				/>
+			)}
+			{action.description === undefined ? undefined : <UserMessage className='detail' detail={action.description} />}
+		</div>
+	)
+}
+
+export function VaultOperationsLauncher({ onOpen, error, additionalActions }: { onOpen: () => void; error: string | undefined; additionalActions: Omit<ReadinessAction, 'title'>[] }) {
+	return (
+		<>
+			<button type='button' onClick={onOpen}>
+				{vaultOperationsCopy.title}
+			</button>
+			{additionalActions.map(action => (
+				<VaultActionLauncher key={action.key} action={action} />
+			))}
+			<ErrorNotice message={error} />
+		</>
+	)
+}
+
 export function VaultActionLaunchers({
 	claimingFees = false,
 	hasVaultRepBacking,
@@ -211,34 +247,17 @@ export function VaultActionLaunchers({
 	vaultReadinessActions: Omit<ReadinessAction, 'title'>[]
 	walletRepBalanceError: string | undefined
 }) {
-	const renderAction = (action: Omit<ReadinessAction, 'title'>) => {
-		if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
-		return (
-			<div key={action.key} className='vault-action-launcher'>
-				{action.key === 'rep-exit' && redeemRepAction !== undefined ? (
-					redeemRepAction
-				) : (
-					<ActionLauncherButton
-						describedBy={action.disabledReasonId}
-						idleLabel={action.actionLabel}
-						pending={action.key === 'claim-fees' && claimingFees}
-						pendingLabel={action.key === 'claim-fees' ? securityPoolCopy.claimingFees : commonCopy.opening}
-						onClick={() => action.onAction?.()}
-						tone={action.key === 'deposit-rep' || (action.key === 'adjust-backing' && hasVaultRepBacking) ? 'primary' : 'secondary'}
-						availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
-					/>
-				)}
-				{action.description === undefined ? undefined : <UserMessage className='detail' detail={action.description} />}
-			</div>
-		)
-	}
 	return (
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
 				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
 				{vaultLifecycleBlocker === undefined ? undefined : <UserMessage tone='warning' id={vaultLifecycleBlockerId} detail={vaultLifecycleBlocker} />}
 				{showSharedRefreshVaultBlocker ? <UserMessage className='detail' id={refreshVaultActionsDescriptionId} detail={vaultActionsLoadBlocker} /> : undefined}
-				<div className='vault-primary-actions'>{vaultReadinessActions.map(renderAction)}</div>
+				<div className='vault-primary-actions'>
+					{vaultReadinessActions.map(action => (
+						<VaultActionLauncher key={action.key} action={action} claimingFees={claimingFees} hasVaultRepBacking={hasVaultRepBacking} redeemRepAction={redeemRepAction} />
+					))}
+				</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
 			<ErrorNotice message={walletRepBalanceError} />
@@ -257,3 +276,4 @@ export function VaultWithdrawalSummaryMetrics({ repTokenSymbol, amountLabel, max
 		</MetricGrid>
 	)
 }
+import * as vaultOperationsCopy from '../../../copy/vaultOperations.js'
