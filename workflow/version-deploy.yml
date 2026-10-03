@@ -93,9 +93,6 @@ jobs:
           - [Zoltar — ipfs://${ZOLTAR_IPFS_CID}/](ipfs://${ZOLTAR_IPFS_CID}/)
           - [Augur Statoblast — ipfs://${STATOBLAST_IPFS_CID}/](ipfs://${STATOBLAST_IPFS_CID}/)
           - [Trading — ipfs://${TRADING_IPFS_CID}/](ipfs://${TRADING_IPFS_CID}/)
-          - [Zoltar gateway](https://${ZOLTAR_IPFS_CID}.ipfs.w3s.link/)
-          - [Augur Statoblast gateway](https://${STATOBLAST_IPFS_CID}.ipfs.w3s.link/)
-          - [Trading gateway](https://${TRADING_IPFS_CID}.ipfs.w3s.link/)
 
           ${GENERATED_NOTES}
           EOF
