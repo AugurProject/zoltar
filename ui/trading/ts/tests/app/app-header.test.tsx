@@ -68,6 +68,8 @@ describe('trading header', () => {
 		// The header and the universe route show a loading state, never the unconfirmed ID, so an unknown request cannot flash as a universe.
 		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
 		expect(rendered.container.textContent).not.toContain('Universe 0x2')
+		expect(rendered.container.querySelector('.universe-identity')).toBeNull()
+		expect(rendered.container.querySelector('.universe-identity-band')).not.toBeNull()
 		expect(rendered.container.textContent).not.toContain('not deployed')
 		expect(rendered.container.querySelector('#app-content .route-header')?.textContent).toContain('Universe')
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
@@ -88,6 +90,7 @@ describe('trading header', () => {
 		// The header names the universe with the shared switcher, which links back to the universe browser.
 		const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value .universe-switcher')
 		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Genesis')
+		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
 		expect(universeSwitcher?.querySelector('summary')?.getAttribute('aria-label')).toBe('Universe: Genesis. Switch universe')
 		expect(universeSwitcher?.querySelector('.universe-switcher-browse')?.getAttribute('href')).toContain('#/universe')
 	})
@@ -101,6 +104,7 @@ describe('trading header', () => {
 		})
 		await waitFor(() => expect(window.location.hash).toBe(`#/market/${pool}?universe=5`))
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Universe 0x5'))
+		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('5')
 	})
 
 	test('a request superseded while in flight settles nothing; only the answer to the current universe request does', async () => {

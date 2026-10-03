@@ -1,3 +1,4 @@
+import { UniverseIdentity } from '../../components/UniverseIdentity.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -29,7 +30,7 @@ export function ProtocolAppFrame({
 	accountAddress: Address | undefined
 	/** Locks every transaction action for a workflow the application tracks outside shared transaction status. */
 	actionsLocked?: boolean
-	activeUniverseId?: bigint
+	activeUniverseId?: bigint | undefined
 	children: ComponentChildren
 	currentBlockNumber: bigint | undefined
 	currentTimestamp: bigint | undefined
@@ -56,6 +57,9 @@ export function ProtocolAppFrame({
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
+					{activeUniverseId === undefined ? undefined : <UniverseIdentity universeId={activeUniverseId} variant='backdrop' />}
+					{/* Reserve the band while Trading confirms its universe, without showing an unconfirmed identity. */}
+					{activeUniverseId === undefined ? <span aria-hidden='true' className='universe-identity-band' /> : <UniverseIdentity universeId={activeUniverseId} variant='band' />}
 					{heading}
 					{notices}
 					{header}

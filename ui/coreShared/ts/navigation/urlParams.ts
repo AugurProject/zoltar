@@ -37,7 +37,7 @@ export function readUniverseQueryParam(search: string) {
 	const value = readStringQueryParam(search, UNIVERSE_QUERY_PARAM)
 	if (value === undefined) return undefined
 	const universeId = tryParseBigIntInput(value)
-	return universeId !== undefined && universeId >= 0n ? universeId : undefined
+	return universeId !== undefined && universeId >= 0n && universeId < 1n << 256n ? universeId : undefined
 }
 
 export function writeUniverseQueryParam(search: string, universeId: bigint | undefined) {

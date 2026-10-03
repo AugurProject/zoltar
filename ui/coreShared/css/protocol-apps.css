@@ -35,3 +35,65 @@
 	border-color: var(--primary-button-border-hover);
 	color: var(--primary-button-text);
 }
+
+/* Artwork never supplies text or action colors. Existing opaque surfaces protect controls. */
+main:has(> .universe-identity-backdrop) {
+	/* Small metadata needs stronger ink over the shaded folds in light theme. */
+	--muted: var(--universe-muted);
+}
+
+.universe-identity {
+	pointer-events: none;
+	background-image: var(--universe-image);
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+.universe-identity-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-below);
+	background-color: var(--bg-deep);
+	background-size: cover;
+}
+
+.universe-identity-backdrop::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--universe-veil);
+}
+
+.universe-identity-band {
+	display: block;
+	height: var(--touch-target-min);
+	flex-shrink: 0;
+	background-color: var(--bg);
+	background-size: cover;
+	background-position: center;
+	border-inline-start: var(--space-2) solid var(--universe-ink);
+	border-radius: var(--radius-compact);
+}
+
+.universe-identity-swatch {
+	display: inline-block;
+	width: calc(2 * var(--space-4));
+	height: calc(2 * var(--space-4));
+	flex-shrink: 0;
+	background-color: var(--bg);
+	background-size: cover;
+	background-position: center;
+	border: 1px solid var(--universe-ink);
+	border-radius: var(--radius-compact);
+}
+
+@media (max-width: 64rem) {
+	.universe-identity-swatch {
+		width: var(--space-5);
+		height: var(--space-5);
+	}
+
+	.header-toolbar .universe-switcher > summary {
+		max-width: 40vw;
+	}
+}

@@ -12,6 +12,12 @@ void describe('url params', () => {
 		expect(readUniverseQueryParam('')).toBe(undefined)
 	})
 
+	void test('rejects universe IDs outside uint256 while preserving the maximum', () => {
+		const maximum = (1n << 256n) - 1n
+		for (const value of [maximum.toString(), `0x${maximum.toString(16)}`]) expect(readUniverseQueryParam(`?universe=${value}`)).toBe(maximum)
+		for (const value of [(maximum + 1n).toString(), `0x${(maximum + 1n).toString(16)}`]) expect(readUniverseQueryParam(`?universe=${value}`)).toBeUndefined()
+	})
+
 	void test('writes a universe query param', () => {
 		expect(writeUniverseQueryParam('', 12n)).toBe('?universe=12')
 		expect(writeUniverseQueryParam('?foo=bar', 12n)).toBe('?foo=bar&universe=12')

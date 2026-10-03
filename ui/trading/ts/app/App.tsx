@@ -284,6 +284,7 @@ export function App({
 	const showWalletControls = hasTradingWalletControls(walletSlot)
 	return (
 		<ProtocolAppFrame
+			activeUniverseId={confirmedUniverseId === undefined ? undefined : BigInt(confirmedUniverseId)}
 			accountAddress={walletSummary.account}
 			actionsLocked={deploymentWorkflowLocked}
 			currentBlockNumber={undefined}

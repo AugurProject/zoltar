@@ -1081,6 +1081,14 @@
 		"./tests/app/appSettingsMenu.test.js": {
 			"bun": "./ts/tests/app/appSettingsMenu.test.tsx",
 			"default": "./js/tests/app/appSettingsMenu.test.js"
+		},
+		"./components/UniverseIdentity.js": {
+			"bun": "./ts/components/UniverseIdentity.tsx",
+			"default": "./js/components/UniverseIdentity.js"
+		},
+		"./tests/universeIdentity.test.js": {
+			"bun": "./ts/tests/universeIdentity.test.tsx",
+			"default": "./js/tests/universeIdentity.test.js"
 		}
 	},
 	"version": "1.0.0"

@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { UniverseIdentity } from '@zoltar/ui-core-shared/components/UniverseIdentity.js'
 import { act } from 'preact/test-utils'
 import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -57,6 +58,27 @@ describe('useStatoblastUrlState', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		return () => requireState(hookState)
 	}
+
+	test('recovers from oversized universe URLs and renders the maximum uint256 identity', async () => {
+		const overflow = 1n << 256n
+		const maximum = overflow - 1n
+		window.history.replaceState({}, '', `/?universe=${overflow}#/pools?universe=0x${overflow.toString(16)}`)
+		let hookState: UseUrlStateState | undefined
+		function Harness() {
+			hookState = useStatoblastUrlState()
+			return <UniverseIdentity universeId={hookState.activeUniverseId} variant='band' />
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(requireState(hookState).activeUniverseId).toBe(0n)
+		expect(rendered.container.querySelector('.universe-identity')?.getAttribute('data-universe-id')).toBe('0')
+		await act(() => {
+			window.history.replaceState({}, '', `/?universe=${overflow}#/pools?universe=${maximum}`)
+			window.dispatchEvent(new Event('popstate'))
+		})
+		expect(requireState(hookState).activeUniverseId).toBe(maximum)
+		expect(rendered.container.querySelector('.universe-identity')?.getAttribute('data-universe-id')).toBe(maximum.toString())
+	})
 
 	test('lands on Browse pools before the default route hash is installed', async () => {
 		window.history.replaceState({}, '', '/')

@@ -15,10 +15,10 @@
 	font-weight: 600;
 }
 .probability__labels span:first-child {
-	color: var(--outcome-yes);
+	color: color-mix(in srgb, var(--outcome-yes) 75%, var(--text));
 }
 .probability__labels span:last-child {
-	color: var(--outcome-no);
+	color: color-mix(in srgb, var(--outcome-no) 75%, var(--text));
 }
 .probability__track {
 	position: relative;
