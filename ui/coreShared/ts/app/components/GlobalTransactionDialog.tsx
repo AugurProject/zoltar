@@ -43,7 +43,7 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	const reviewing = transactionSteps.value?.steps.some(step => step.phase === 'review') ?? false
 	const terminal = current?.tone === 'success' || current?.tone === 'error' || current?.tone === 'warning'
 	const compact = current?.tone === 'success' || current?.tone === 'pending' || current?.tone === 'error'
-	const visible = current !== undefined && current !== dismissedRequest && current.tone !== 'awaiting-wallet' && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
+	const visible = current !== undefined && current.showStatusDialog !== false && current !== dismissedRequest && current.tone !== 'awaiting-wallet' && current.tone !== 'preparing' && (!reviewing || outcomePresentation !== undefined || terminal) && !isGlobalTransactionDismissed(current) && !hiddenAfterOutcome
 	const dismiss = () => {
 		if (current?.hash === undefined && (current?.dismissKey ?? current?.operationKey)?.startsWith('transaction-request-')) setDismissedRequest(current)
 		else dismissGlobalTransaction(current)

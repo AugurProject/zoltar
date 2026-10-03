@@ -8,6 +8,7 @@ import { getMainnetProtocolConfig } from '../contracts/protocol-config.ts'
 import { walkFiles } from '../repo/walk.mts'
 import { assertAccountingExampleOwnership } from './check-docs-example-ownership.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
+import { assertCoordinatorDataFunctionInventory } from './contract-reference-abi-surface.mts'
 import { repositorySourceUrl } from './repository-source-links.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
@@ -197,9 +198,9 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	for (const functionName of externalPureFunctions) {
 		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
-	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*SetVaultUnderwritingLimit\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
+	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*SetVaultUnderwritingLimit,\s*VaultOperations\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
 	assert.match(priceCoordinator, /operationValue > 0 \|\| operation == OperationType.SetVaultUnderwritingLimit/, 'zero is a valid absolute underwriting-limit exit; other staged operations require a positive amount')
-	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit" \}/)
+	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit", "3": "VaultOperations" \}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
 	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)
@@ -213,7 +214,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(securityPoolOperationsDelegate, /securityVaults\[request\.targetVault\]\.underwritingLimitAttoEth -= debtToMoveAttoEth;[\s\S]*securityVaults\[request\.receiverVault\]\.underwritingLimitAttoEth \+= debtToMoveAttoEth/)
 	assert.match(securityPoolOperationsDelegate, /badDebtAttoEth = 0;/)
 	assert.match(securityPoolOperationsDelegate, /_getVaultBadDebtAttoEth\(request\.targetVault\) == 0[\s\S]*_getVaultBadDebtAttoEth\(request\.receiverVault\) == 0/)
-	assertCoordinatorDataFunctionInventory()
+	assertCoordinatorDataFunctionInventory(coordinatorData, compiledContractArtifacts)
 }
 
 function assertRepricingBoundaryDocs(): void {
@@ -230,31 +231,6 @@ function assertRepricingBoundaryDocs(): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
-}
-
-function assertCoordinatorDataFunctionInventory(): void {
-	const coordinatorIndex: unknown = JSON.parse(coordinatorData)
-	assert.ok(isRecord(coordinatorIndex))
-	const documentedFunctions = coordinatorIndex['functions']
-	assert.ok(isRecord(documentedFunctions), 'Coordinator data must provide its complete function inventory')
-	assert.ok(isRecord(compiledContractArtifacts))
-	const contracts = compiledContractArtifacts['contracts']
-	assert.ok(isRecord(contracts))
-	const coordinatorSource = contracts['contracts/statoblast/OpenOraclePriceCoordinator.sol']
-	assert.ok(isRecord(coordinatorSource))
-	const coordinatorArtifact = coordinatorSource['OpenOraclePriceCoordinator']
-	assert.ok(isRecord(coordinatorArtifact))
-	const abi = coordinatorArtifact['abi']
-	assert.ok(Array.isArray(abi))
-	const compiledFunctionNames = Array.from(
-		new Set(
-			abi.flatMap(entry => {
-				if (!isRecord(entry) || entry['type'] !== 'function' || typeof entry['name'] !== 'string') return []
-				return [entry['name']]
-			}),
-		),
-	).sort()
-	assert.deepEqual(Object.keys(documentedFunctions).sort(), compiledFunctionNames, 'Coordinator data function inventory must exactly match the compiled ABI')
 }
 
 function assertLazyClaimCommitmentDocs(): void {

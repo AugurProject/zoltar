@@ -437,6 +437,34 @@
 			"bun": "./ts/protocol/openOraclePricing.ts",
 			"default": "./js/protocol/openOraclePricing.js"
 		},
+		"./protocol/vaultOperations.js": {
+			"bun": "./ts/protocol/vaultOperations.ts",
+			"default": "./js/protocol/vaultOperations.js"
+		},
+		"./protocol/vaultOperationsErrors.js": {
+			"bun": "./ts/protocol/vaultOperationsErrors.ts",
+			"default": "./js/protocol/vaultOperationsErrors.js"
+		},
+		"./features/vault-operations/lib/draft.js": {
+			"bun": "./ts/features/vault-operations/lib/draft.ts",
+			"default": "./js/features/vault-operations/lib/draft.js"
+		},
+		"./features/vault-operations/lib/preview.js": {
+			"bun": "./ts/features/vault-operations/lib/preview.ts",
+			"default": "./js/features/vault-operations/lib/preview.js"
+		},
+		"./features/vault-operations/components/VaultOperationsPanel.js": {
+			"bun": "./ts/features/vault-operations/components/VaultOperationsPanel.tsx",
+			"default": "./js/features/vault-operations/components/VaultOperationsPanel.js"
+		},
+		"./features/vault-operations/hooks/useVaultOperations.js": {
+			"bun": "./ts/features/vault-operations/hooks/useVaultOperations.ts",
+			"default": "./js/features/vault-operations/hooks/useVaultOperations.js"
+		},
+		"./features/vault-operations/hooks/dependencies.js": {
+			"bun": "./ts/features/vault-operations/hooks/dependencies.ts",
+			"default": "./js/features/vault-operations/hooks/dependencies.js"
+		},
 		"./protocol/oracleCoordinator.js": {
 			"bun": "./ts/protocol/oracleCoordinator.ts",
 			"default": "./js/protocol/oracleCoordinator.js"

@@ -1,0 +1,311 @@
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
+import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
+import { formatCurrencyBalance, formatAmountDisplay } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { countVaultPriceActions } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
+import { getVaultOperationsTargetState } from '../lib/targets.js'
+import type { VaultOperationsDependencies } from '../hooks/dependencies.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
+import type { WriteOperationsParameters } from '../../../types/app.js'
+import { useVaultOperations } from '../hooks/useVaultOperations.js'
+import * as copy from '../../../copy/vaultOperations.js'
+
+type Props = { pool: ListedSecurityPool; parameters: WriteOperationsParameters; contextKey: string; networkReady: boolean; onViewStagedOperations: () => void; onPoolChanged?: (totalCommitment?: bigint) => void; dependencies?: VaultOperationsDependencies }
+
+export function VaultOperationsPanel({ pool, parameters, contextKey, networkReady, onViewStagedOperations, onPoolChanged, dependencies }: Props) {
+	const model = useVaultOperations(pool, parameters, contextKey, dependencies, onPoolChanged)
+	const fieldsDisabled = model.busy
+	const operationalFieldsDisabled = fieldsDisabled || model.resolved === true
+	const priceActions = model.input === undefined ? 0 : countVaultPriceActions(model.input)
+	const fresh = model.quote?.validPrice ?? model.manager?.isPriceValid ?? false
+	let actionHint: string | undefined = copy.limits
+	if (model.resolved) actionHint = (model.owned?.underwritingLimitAttoEth ?? 0n) > 0n ? copy.resolvedHint : undefined
+	let disabledReason: string | undefined
+	if (model.busy) disabledReason = copy.busyAction
+	else if (parameters.accountAddress === undefined) disabledReason = copy.noWallet
+	else if (!networkReady) disabledReason = copy.walletWrongNetwork
+	else if (pool.systemState !== 'operational' || (pool.universeHasForked && !model.resolved)) disabledReason = copy.poolInactive
+	else if (model.loading) disabledReason = copy.loading
+	else disabledReason = model.readError ?? model.inputError ?? model.quoteError ?? (model.quote === undefined ? copy.checking : undefined)
+	let executionTitle: string | undefined
+	if (model.input !== undefined) {
+		if (model.resolved) executionTitle = copy.directCommitment
+		else if (priceActions === 0) executionTitle = copy.depositOnly
+		else if (fresh) executionTitle = copy.fresh
+		else if (model.input.depositAttoRep === 0n) executionTitle = copy.queuedNoDeposit
+		else executionTitle = copy.queued
+	}
+	const queuedStatus = model.status?.status
+	const unknown = queuedStatus === 'missing'
+	const failed = queuedStatus === 'failed' || queuedStatus === 'expired' || queuedStatus === 'superseded'
+	const completed = model.result?.stagedExecution?.success === true || queuedStatus === 'executed'
+	let resultTitle = copy.confirmedDeposit
+	if (model.result?.action === 'commitment') resultTitle = copy.confirmedCommitment
+	else if (model.result?.action === 'fees') resultTitle = copy.feesConfirmed
+	else if (model.result?.action === 'redeem') resultTitle = copy.repConfirmed
+	if (failed) resultTitle = copy.failedBundle
+	else if (completed) resultTitle = copy.success
+	else if (unknown) resultTitle = copy.unknownOutcome
+	else if (model.pending) resultTitle = copy.awaiting
+	const confirmed = model.result !== undefined && model.result.queuedOperation === undefined
+	const resultTone = completed || confirmed ? 'success' : 'warning'
+	let resultDetail: string | undefined
+	if (failed) resultDetail = model.status?.execution?.errorMessage ?? copy.laterFailure
+	else if (model.pending) resultDetail = copy.laterFailure
+	let claimDisabledReason: string | undefined
+	if (model.busy) claimDisabledReason = copy.busyAction
+	else if (parameters.accountAddress === undefined) claimDisabledReason = copy.noWallet
+	else if (!networkReady) claimDisabledReason = copy.walletWrongNetwork
+	else if (model.loading) claimDisabledReason = copy.loading
+	else claimDisabledReason = model.readError
+	const feeClaimReason = claimDisabledReason ?? model.feeClaimReason
+	const repClaimReason = claimDisabledReason ?? (pool.systemState !== 'operational' ? copy.poolInactive : model.repClaimReason)
+	return (
+		<div className='vault-operations-flow'>
+			<p className='detail'>{model.resolved ? copy.resolvedDescription : copy.description}</p>
+			<MetricGrid>
+				<MetricField label={copy.receiver}>{parameters.accountAddress === undefined ? copy.unavailable : <AddressValue address={parameters.accountAddress} />}</MetricField>
+				<MetricField label={copy.currentBacking}>{model.owned === undefined ? copy.unavailable : <CurrencyValue value={model.owned.vaultAttoRepBacking} notation='compact' suffix={commonCopy.rep} />}</MetricField>
+				<MetricField label={copy.currentCommitment}>{model.owned === undefined ? copy.unavailable : <CurrencyValue value={model.owned.underwritingLimitAttoEth} notation='compact' suffix={commonCopy.eth} />}</MetricField>
+				<MetricField label={copy.walletBalance}>{model.balance === undefined ? copy.unavailable : <CurrencyValue value={model.balance} notation='compact' suffix={commonCopy.rep} />}</MetricField>
+			</MetricGrid>
+			{model.loading ? <UserMessage loading detail={copy.loading} /> : undefined}
+			{model.readError === undefined ? undefined : (
+				<UserMessage
+					tone='error'
+					detail={model.readError}
+					actions={
+						<button type='button' className='secondary' onClick={model.refresh}>
+							{copy.retry}
+						</button>
+					}
+				/>
+			)}
+
+			<div className='vault-operations-layout'>
+				<SectionBlock title={copy.title} variant='surface' className='vault-operations-form'>
+					<WorkflowSubsection title={copy.myVault}>
+						<div className='vault-operations-fields'>
+							<AmountField
+								label={copy.deposit}
+								value={model.draft.deposit}
+								disabled={operationalFieldsDisabled}
+								unit='REP'
+								fillMax={{ amount: model.balance === undefined ? undefined : model.balance - (model.quote?.funding?.requiredRepAttoRep ?? 0n), unavailableReason: copy.loading }}
+								onChange={deposit => model.setDraft({ deposit })}
+							/>
+							<label className='field'>
+								{model.resolved ? copy.commitmentLimit : copy.commitment}
+								<FormInput inputMode='decimal' value={model.draft.commitment} disabled={fieldsDisabled || (!model.resolved && model.commitmentPending)} adornment='ETH' hint={copy.unchanged} onInput={event => model.setDraft({ commitment: event.currentTarget.value })} />
+							</label>
+						</div>
+					</WorkflowSubsection>
+					<WorkflowSubsection title={copy.liquidations}>
+						<p className='detail'>{copy.liquidationHint}</p>
+						{model.targets.length === 0 ? (
+							<EmptyState title={copy.noTargets} />
+						) : (
+							<ul className='vault-operations-targets'>
+								{model.targets.map(target => {
+									const selected = model.draft.liquidations.find(item => item.address.toLowerCase() === target.vaultAddress.toLowerCase())
+									const availability = getVaultOperationsTargetState(pool, model.owned, target, model.input, model.price, model.manager?.minLiquidationPriceDistanceBps)
+									return (
+										<li key={target.vaultAddress}>
+											<label className='vault-operations-target-choice'>
+												<input type='checkbox' checked={selected !== undefined} disabled={operationalFieldsDisabled || (availability.reason !== undefined && selected === undefined)} onChange={() => model.toggle(target)} />
+												<span>
+													<AddressValue address={target.vaultAddress} />
+													<small>{copy.formatTargetSummary(formatAmountDisplay(target.vaultAttoRepBacking, { notation: 'compact' }), formatAmountDisplay(target.underwritingLimitAttoEth, { notation: 'compact' }))}</small>
+													<small>{availability.reason ?? copy.formatTargetMaximum(formatAmountDisplay(availability.maximum ?? 0n, { notation: 'compact' }))}</small>
+												</span>
+											</label>
+											{selected === undefined ? undefined : (
+												<AmountField
+													label={copy.amount}
+													unit='ETH'
+													disabled={operationalFieldsDisabled}
+													value={selected.amount}
+													fillMax={{ amount: availability.maximum, unavailableReason: availability.reason }}
+													onChange={amount => model.setDraft({ liquidations: model.draft.liquidations.map(item => (item === selected ? { ...item, amount } : item)) })}
+												/>
+											)}
+										</li>
+									)
+								})}
+							</ul>
+						)}
+						<label className='field vault-operations-lookup'>
+							{copy.lookup}
+							<FormInput
+								value={model.lookupAddress}
+								disabled={fieldsDisabled || model.lookupBusy}
+								error={model.lookupError}
+								onInput={event => model.setLookupAddress(event.currentTarget.value)}
+								action={
+									<TransactionActionButton tone='secondary' idleLabel={copy.lookupAction} pendingLabel={copy.loading} pending={model.lookupBusy} onClick={() => void model.lookup()} availability={{ disabled: fieldsDisabled || model.lookupAddress.trim() === '', reason: model.busy ? copy.pending : copy.enterTarget }} />
+								}
+							/>
+						</label>
+					</WorkflowSubsection>
+					<WorkflowSubsection title={copy.withdrawal}>
+						<AmountField
+							label={copy.withdraw}
+							value={model.draft.withdraw}
+							disabled={operationalFieldsDisabled}
+							unit='REP'
+							hint={copy.withdrawHint}
+							fillMax={{ amount: fresh ? model.withdrawMaximum : undefined, unavailableReason: fresh ? copy.noWithdrawal : copy.unavailableMaximum }}
+							onChange={withdraw => model.setDraft({ withdraw })}
+						/>
+					</WorkflowSubsection>
+					{fresh || model.resolved ? undefined : (
+						<WorkflowSubsection title={copy.oracle}>
+							<label className='field'>
+								{copy.timeout}
+								<FormInput type='number' min='1' max='5' step='1' value={model.draft.timeoutMinutes} disabled={fieldsDisabled} hint={copy.timeoutHint} onInput={event => model.setDraft({ timeoutMinutes: event.currentTarget.value })} />
+							</label>
+							<label className='field'>
+								{copy.initialPrice}
+								<FormInput
+									inputMode='decimal'
+									adornment='REP / ETH'
+									value={model.draft.proposedPrice}
+									placeholder={formatCurrencyBalance(model.manager?.lastPrice ?? pool.lastOraclePrice ?? 0n)}
+									disabled={fieldsDisabled}
+									hint={copy.initialPriceHint}
+									onInput={event => model.setDraft({ proposedPrice: event.currentTarget.value })}
+								/>
+							</label>
+						</WorkflowSubsection>
+					)}
+					<WorkflowSubsection title={copy.claims}>
+						<MetricGrid>
+							<MetricField label={copy.feeBalance}>
+								<CurrencyValue value={model.owned?.claimableFeesAttoEth ?? 0n} notation='compact' suffix={commonCopy.eth} />
+							</MetricField>
+						</MetricGrid>
+						<div className='actions'>
+							<TransactionActionButton idleLabel={copy.claimFees} pendingLabel={copy.busyAction} pending={model.busyAction === 'fees'} onClick={() => void model.claimFees()} availability={{ disabled: feeClaimReason !== undefined, reason: feeClaimReason }} />
+							<TransactionActionButton idleLabel={copy.redeemRep} pendingLabel={copy.busyAction} pending={model.busyAction === 'redeem'} onClick={() => void model.redeemRep()} availability={{ disabled: repClaimReason !== undefined, reason: repClaimReason }} />
+						</div>
+						{model.claimError === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.claimError} />}
+						{model.claimResult === undefined ? undefined : (
+							<UserMessage
+								placement='section'
+								tone='success'
+								announcement='polite'
+								title={model.claimResult.action === 'fees' ? copy.feesConfirmed : copy.repConfirmed}
+								actions={
+									<>
+										<TransactionHashLink hash={model.claimResult.hash} />
+										<button type='button' className='secondary' onClick={model.dismissClaimResult}>
+											{copy.dismiss}
+										</button>
+									</>
+								}
+							/>
+						)}
+					</WorkflowSubsection>
+				</SectionBlock>
+				<SectionBlock title={copy.preview} variant='surface' className='vault-operations-preview'>
+					<dl className='vault-operations-summary'>
+						<div>
+							<dt>{copy.previewDeposit}</dt>
+							<dd>
+								<CurrencyValue value={model.input?.depositAttoRep ?? 0n} notation='compact' suffix={commonCopy.rep} />
+							</dd>
+						</div>
+						<div>
+							<dt>{copy.previewLiquidations}</dt>
+							<dd>{model.draft.liquidations.length}</dd>
+						</div>
+						<div>
+							<dt>{copy.withdrawal}</dt>
+							<dd>
+								<CurrencyValue value={model.input?.withdrawAttoRep ?? 0n} notation='compact' suffix={commonCopy.rep} />
+							</dd>
+						</div>
+						<div>
+							<dt>{copy.finalCommitment}</dt>
+							<dd>{model.preview === undefined ? copy.unavailable : <CurrencyValue value={model.preview.commitment} notation='compact' suffix={commonCopy.eth} />}</dd>
+						</div>
+						<div>
+							<dt>{copy.resultingBacking}</dt>
+							<dd>{model.preview === undefined ? copy.unavailable : <CurrencyValue value={model.preview.backing} notation='compact' suffix={commonCopy.rep} />}</dd>
+						</div>
+						<div>
+							<dt>{copy.oracleFunding}</dt>
+							<dd>{model.bounty === undefined ? copy.unavailable : <CurrencyValue copyable decimals={4} notation='compact' value={model.bounty} suffix={commonCopy.eth} />}</dd>
+						</div>
+						{model.quote?.funding === undefined ? undefined : (
+							<>
+								<div>
+									<dt>{copy.reportRep}</dt>
+									<dd>
+										<CurrencyValue copyable decimals={4} notation='compact' value={model.quote.funding.requiredRepAttoRep} suffix={commonCopy.rep} />
+									</dd>
+								</div>
+								<div>
+									<dt>{copy.reportWeth}</dt>
+									<dd>
+										<CurrencyValue copyable decimals={4} notation='compact' value={model.quote.funding.minimumToken1ReportAttoEth} suffix={commonCopy.weth} />
+									</dd>
+								</div>
+							</>
+						)}
+					</dl>
+					{executionTitle === undefined ? undefined : <p className={fresh ? 'detail' : 'warning'}>{executionTitle}</p>}
+					{priceActions === 0 || model.resolved ? undefined : (
+						<p className='detail'>
+							{copy.estimateHint} {fresh ? copy.freshFailure : copy.queuedFailure} {!fresh && (model.input?.depositAttoRep ?? 0n) > 0n ? copy.laterFailure : ''}
+						</p>
+					)}
+					{actionHint === undefined ? undefined : <p className='detail'>{actionHint}</p>}
+					{model.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.error} />}
+					<TransactionActionButton
+						idleLabel={model.resolved ? copy.reviewCommitment : copy.review}
+						pendingLabel={model.resolved ? copy.busyAction : copy.pending}
+						pending={model.busyAction === 'bundle'}
+						onClick={() => void model.submit()}
+						availability={{ disabled: model.busy || disabledReason !== undefined, reason: disabledReason }}
+					/>
+					<TransactionActionButton tone='secondary' idleLabel={copy.clearDraft} pendingLabel={copy.clearDraft} pending={false} onClick={model.clearDraft} availability={{ disabled: model.busy, reason: copy.busyAction }} />
+					{model.result === undefined && !model.pending ? undefined : (
+						<UserMessage
+							placement='section'
+							tone={failed ? 'error' : resultTone}
+							announcement='polite'
+							title={resultTitle}
+							detail={resultDetail}
+							actions={
+								<>
+									{model.result === undefined ? undefined : <TransactionHashLink hash={model.result.hash} />}
+									{model.result?.queuedOperation === undefined ? undefined : (
+										<button type='button' className='secondary' onClick={onViewStagedOperations}>
+											{copy.reviewStaged}
+										</button>
+									)}
+									{model.pending ? undefined : (
+										<button type='button' className='secondary' onClick={model.dismissResult}>
+											{copy.dismiss}
+										</button>
+									)}
+								</>
+							}
+						/>
+					)}
+				</SectionBlock>
+			</div>
+		</div>
+	)
+}

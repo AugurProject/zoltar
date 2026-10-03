@@ -130,7 +130,7 @@ export const approvalSatisfied = 'Approval satisfied'
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
 export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${amount}`
 export const formatApprovedValue = (amount: CopyTemplateValue) => `Approved ${amount}`
-export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue) => `${tokenLabel} approval amount`
+export const formatValueApprovalAmount = (tokenLabel: CopyTemplateValue, purpose?: string) => (purpose === undefined ? `${tokenLabel} approval amount` : `${purpose}: ${tokenLabel} approval amount`)
 export const requiredTotalPlaceholder = 'Required'
 export const leaveBlankForRequiredTotal = 'Leave blank for required total'
 export const emptyStateDetail = 'Nothing to show.'

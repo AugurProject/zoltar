@@ -13,11 +13,11 @@ import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QU
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, limitsWithDefaults, requireAggregateDiscoveryEnvelope, type DiscoveryLimits, type EcosystemDiscoveryContext } from './discovery-context.ts'
 import { discoverDirectEscalationDepositQuotes, emptyDirectEscalationDepositQuote, minimumSafeVaultDeposit, projectSettlementCollateral, relevantTokenSpenders } from './discovery-escalation.ts'
 import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from './discovery-fork-migration.ts'
-import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings, requireGraphEdge } from './discovery-graph.ts'
+import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings, cachePoolDeployment, requireGraphEdge } from './discovery-graph.ts'
 import { advanceVaultRegistryCursor, assertRegistryCountNotRegressed, collectCountedPages, cursorWithCanonicalCount, registryCatchUpWarning, sameRegistryCursor, updateRegistryCommitment } from './discovery-registry.ts'
 import { discoverShareInventory, trustedIndexedReportsForDiscovery } from './discovery-share-inventory.ts'
 import { discoverStagedOperations, discoverVault } from './discovery-staged-operations.ts'
-import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES, type CachedPoolDeployment, type CountedRegistryCursor, type ImmutableTopologyData } from './topology-cache.ts'
+import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES, type CountedRegistryCursor, type ImmutableTopologyData } from './topology-cache.ts'
 
 const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6)
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
@@ -334,18 +334,6 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 	return topology.questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] }))
 }
 
-function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; securityPool: Address; shareToken: Address; truthAuction: Address; universeId: bigint }): CachedPoolDeployment {
-	return {
-		coordinator: getAddress(deployment.openOraclePriceCoordinator),
-		parent: getAddress(deployment.parent),
-		questionId: deployment.questionId.toString(),
-		securityPool: getAddress(deployment.securityPool),
-		shareToken: getAddress(deployment.shareToken),
-		truthAuction: getAddress(deployment.truthAuction),
-		universeId: deployment.universeId.toString(),
-	}
-}
-
 async function discoverPools(
 	context: EcosystemDiscoveryContext,
 	blockNumber: bigint,
@@ -479,6 +467,7 @@ async function discoverPools(
 			poolQuestionData,
 			poolCoordinator,
 			coordinatorPool,
+			vaultOperations,
 		] = await drainConcurrent([
 			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
 			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
@@ -527,6 +516,7 @@ async function discoverPools(
 			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'questionData' }),
 			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'openOraclePriceCoordinator' }),
 			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'vaultOperations' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,
@@ -704,6 +694,7 @@ async function discoverPools(
 			awaitingForkContinuation,
 			canonicalVaultCount: vaultCount.toString(),
 			coordinator,
+			vaultOperations: getAddress(vaultOperations),
 			currentMintingCapacityAttoEth: currentMintingCapacity.toString(),
 			escalationCanTriggerOwnFork,
 			escalationForkContinuation,

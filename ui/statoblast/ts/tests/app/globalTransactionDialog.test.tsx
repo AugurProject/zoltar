@@ -35,6 +35,11 @@ describe('GlobalTransactionDialog', () => {
 		restoreRouting = installTestRouting()
 	})
 
+	test('keeps an inline vault result out of the floating status dialog', async () => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ title: 'Bundle queued', tone: 'warning', showStatusDialog: false }} />)
+		trackRendered(rendered)
+		expect(rendered.container.querySelector('.global-transaction-dialog') === null).toBe(true)
+	})
 	test.each(['success', 'pending'] as const)('reserves measured %s notice space so the next action stays reachable', async tone => {
 		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ title: 'WETH approval', tone, hash: '0x1111111111111111111111111111111111111111111111111111111111111111' }} />)
 		const panel = rendered.container.querySelector<HTMLElement>('.global-transaction-dialog')

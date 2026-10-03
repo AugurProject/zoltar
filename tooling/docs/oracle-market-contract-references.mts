@@ -79,12 +79,12 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'e222525f15557c99f8a34e6e479a760fc30845d5cefd438c5f879f82cf7c085d',
+		compiledAbiFingerprint: '96bf38a482665cf0e621d6345f97e7d5900965fcce217565184c1fa9783b79fb',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.',
-		readAbiFingerprint: '288a73d13de5a0f593226105eb11eb177bf085ac2ee708a31645c3d7c4eb7237',
+		readAbiFingerprint: '2b4e03586a6b112405e3e8dc00ce49eac9a94cdd943685325ed5b875db742a45',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. `lastSettlementTimestamp` records when the accepted final report reached settlement eligibility (report timestamp plus `settlementTime`), not when `settle` was called, and `isPriceValid` measures freshness from it. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `SETTLEMENT_GAS_OVERHEAD`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `liquidationApprovalRegistry`, `vaultOperations`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `stagedOperationCounter`, and `stagedOperations`. `lastSettlementTimestamp` records when the accepted final report reached settlement eligibility (report timestamp plus `settlementTime`), not when `settle` was called, and `isPriceValid` measures freshness from it. Use `isPriceValid`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getQueuedOperationCostAttoEth`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementWork`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		securityBoundary:
 			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -98,9 +98,11 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'getPendingSettlementOperationCount' },
 			{ name: 'getPendingSettlementOperationIds' },
 			{ name: 'getActiveStagedOperations' },
+			{ name: 'getPendingSettlementWork' },
 		],
 		readStorageDeclarations: [
 			{ name: 'MAX_PENDING_SETTLEMENT_OPERATIONS' },
+			{ name: 'SETTLEMENT_GAS_OVERHEAD' },
 			{ name: 'OPEN_INTEREST_DIVIDER' },
 			{ name: 'pendingReportId' },
 			{ name: 'pendingReportSponsor' },
@@ -132,6 +134,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{ name: 'stagedOperationCounter' },
 			{ name: 'stagedOperations' },
 			{ name: 'liquidationApprovalRegistry' },
+			{ name: 'vaultOperations' },
 		],
 		sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
 		interactions: [
@@ -148,11 +151,21 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
 				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
-					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or leaves it active outside the batch for a later `executeStagedOperation`. A newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
+					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or leaves it active outside the batch for a later `executeStagedOperation`. A target change cannot supersede an active dependent bundle. Otherwise, a newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
 					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or underwriting-limit adjustment; liquidation and withdrawal require positive amounts, and a withdrawal whose previewed REP is zero reverts with `Withdraw amount has no effect`, while an absolute underwriting limit may be zero to request an exit; and timeout from 1 second through 5 minutes. A committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
 				signals: '`StagedOperationQueued`; `PriceRequested` when this call opens a report; `ExecutedStagedOperation` for immediate fresh-price execution or a superseded target change; `LiquidationRouteStaged` for operation `0`; authoritative `CoordinatorStateCheckpoint` records',
+			},
+			{
+				call: '`stageVaultOperations(owner, changeCommitment, actionCount, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)`',
+				caller: 'The immutable `vaultOperations` executor only; wallets enter through its `submitVaultOperations` function',
+				effect:
+					"Records operation type 3 with the submitting wallet as owner and report sponsor. A fresh-price bundle executes commitment changes, other-vault liquidations, and withdrawal atomically; a failure reverts the submission and its deposit. With a stale price, deposits complete immediately and dependent actions queue together. Any change to a queued liquidation target's backing units or underwriting commitment fails the whole bundle, rolling back the owner's commitment change and withdrawal. The failed bundle is consumed while its earlier deposit remains. Each action uses one of four settlement slots; the deposit uses none.",
+				declarations: [{ name: 'stageVaultOperations' }],
+				preconditions:
+					'Execution window is 1–300 seconds; escalation is unresolved; a pending report belongs to the owner; a commitment change has no active preceding commitment operation. Stale-price bundles must fit the remaining weighted callback capacity and satisfy report funding when opening a report. Targets are distinct, nonzero other vaults with a positive commitment; liquidation bundles require a receiver health factor of at least 10,000 bps. All liquidation snapshots and pool safety checks must still pass at execution, and a withdrawal whose resulting REP is zero fails with `Withdraw amount has no effect`.',
+				signals: '`StagedOperationQueued`, `PriceRequested` when opening a report, `ExecutedStagedOperation`, and `CoordinatorStateCheckpoint`; the executor also emits bundle and target details',
 			},
 			{
 				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with report funding',

@@ -14,6 +14,8 @@ describe('oracleQueueOperation', () => {
 		expect(decodeOracleQueueOperation(1n)).toBe('withdrawRep')
 		expect(encodeOracleQueueOperation('setVaultUnderwritingLimit')).toBe(2)
 		expect(decodeOracleQueueOperation(2n)).toBe('setVaultUnderwritingLimit')
+		expect(encodeOracleQueueOperation('vaultOperations')).toBe(3)
+		expect(decodeOracleQueueOperation(3n)).toBe('vaultOperations')
 	})
 
 	test('rejects unknown operation values', () => {

@@ -1583,6 +1583,7 @@ export const openOraclePriceCoordinatorAbi = [
 	},
 	{ type: 'function', name: 'MAX_PENDING_SETTLEMENT_OPERATIONS', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'OPEN_INTEREST_DIVIDER', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'SETTLEMENT_GAS_OVERHEAD', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'disputeDelay', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
 	{ type: 'function', name: 'escalationHaltMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'executeStagedOperation', stateMutability: 'nonpayable', inputs: [{ name: 'operationId', type: 'uint256', internalType: 'uint256' }], outputs: [] },
@@ -1650,6 +1651,7 @@ export const openOraclePriceCoordinatorAbi = [
 	},
 	{ type: 'function', name: 'getPendingSettlementOperationCount', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getPendingSettlementOperationIds', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256[]', internalType: 'uint256[]' }] },
+	{ type: 'function', name: 'getPendingSettlementWork', stateMutability: 'view', inputs: [], outputs: [{ name: 'work', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getQueuedOperationCostAttoEth', stateMutability: 'pure', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getRequestPriceCostAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getSettlementCallbackGasLimit', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint32', internalType: 'uint32' }] },
@@ -1733,6 +1735,21 @@ export const openOraclePriceCoordinatorAbi = [
 	{ type: 'function', name: 'setRepEthPrice', stateMutability: 'nonpayable', inputs: [{ name: '_lastPrice', type: 'uint256', internalType: 'uint256' }], outputs: [] },
 	{ type: 'function', name: 'setSecurityPool', stateMutability: 'nonpayable', inputs: [{ name: '_securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [] },
 	{ type: 'function', name: 'settlementTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint48', internalType: 'uint48' }] },
+	{
+		type: 'function',
+		name: 'stageVaultOperations',
+		stateMutability: 'payable',
+		inputs: [
+			{ name: 'owner', type: 'address', internalType: 'address' },
+			{ name: 'changeCommitment', type: 'bool', internalType: 'bool' },
+			{ name: 'actionCount', type: 'uint256', internalType: 'uint256' },
+			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
+			{ name: 'proposedRepPerEthPrice', type: 'uint256', internalType: 'uint256' },
+			{ name: 'requestedInitialAttoWeth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'bountyAttoEth', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [{ name: 'operationId', type: 'uint256', internalType: 'uint256' }],
+	},
 	{ type: 'function', name: 'stagedOperationCounter', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -1756,6 +1773,7 @@ export const openOraclePriceCoordinatorAbi = [
 	{ type: 'function', name: 'targetPriceErrorForDispute', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'timeType', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'trackDisputes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'vaultOperations', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract VaultOperations' }] },
 	{ type: 'function', name: 'weth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract IWeth9' }] },
 ] as const
 

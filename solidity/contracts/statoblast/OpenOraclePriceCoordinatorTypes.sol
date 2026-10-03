@@ -30,7 +30,8 @@ interface IStoredOpenOracleGame {
 enum OperationType {
 	Liquidation,
 	WithdrawRep,
-	SetVaultUnderwritingLimit
+	SetVaultUnderwritingLimit,
+	VaultOperations
 }
 
 enum CoordinatorCheckpointReason {

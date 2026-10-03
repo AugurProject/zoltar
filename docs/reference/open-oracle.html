@@ -96,9 +96,11 @@
 
 				<h3>Execution batches</h3>
 
-				<p>If a cached price is valid, the coordinator stages the operation record and then attempts immediate execution. Liquidation gates, a stale queue-time snapshot, a zero-effect withdrawal, or a downstream pool check may still cause the staged operation to fail and be consumed.</p>
+				<p>For a single operation with a valid cached price, the coordinator stages the operation record and then attempts immediate execution. Liquidation gates, a stale queue-time snapshot, a zero-effect withdrawal, or a downstream pool check may still cause the staged operation to fail and be consumed.</p>
 
-				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS = 4</code> operations. Additional staged operations remain active outside the callback batch. If they have not expired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>.</p>
+				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS = 4</code> price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. A bundle must fit the remaining capacity; additional single staged operations remain active outside the callback batch. If they have not expired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>.</p>
+
+				<p>For a vault bundle, a fresh-price failure reverts the entire submission. With a stale price, the deposit completes immediately and the deferred commitment changes, liquidations, and withdrawal later execute or fail together. See the <a href="./contracts/openoraclepricecoordinator.html">coordinator interaction reference</a>.</p>
 
 				<h3>Escalation Game deposits</h3>
 
@@ -127,7 +129,7 @@
 							<mn>101</mn>
 						</mrow>
 					</math>
-					<p class="equation-note"><code>callbackGasLimit</code> is the gas reserved for the settlement callback, <code>gasConsumedSettlement × MAX_PENDING_SETTLEMENT_OPERATIONS</code>; <code>gasConsumedOpenOracleReportPrice</code> is the coordinator's own report-price callback work, and the small <code>101</code> offset keeps the forwarded bounty strictly above the computed gas product so the OpenOracle-funded reward path has a positive buffer instead of landing exactly on the boundary.</p>
+					<p class="equation-note"><code>callbackGasLimit</code> is the gas reserved for the settlement callback, <code>(gasConsumedSettlement + 50,000) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>; <code>gasConsumedOpenOracleReportPrice</code> is the coordinator's own report-price callback work, and the small <code>101</code> offset keeps the forwarded bounty strictly above the computed gas product so the OpenOracle-funded reward path has a positive buffer instead of landing exactly on the boundary.</p>
 				</figure>
 				<p id="refund-callback">Every request path takes an explicit <code>bountyAttoEth</code>. When a call opens a report, the committed bounty must cover <code>getRequestPriceCostAttoEth()</code> at inclusion and <code>msg.value</code> must cover the bounty. The coordinator then retains the whole bounty as the settler reward. If a cached price is usable, nothing is retained and the ETH is refunded. If a report is needed, only the first pending settlement slot retains the bounty. <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> forwards exactly the bounty to OpenOracle and refunds any ETH above it. The same transaction submits the initial WETH/REP position, so the refresh sponsor funds both the ETH bounty and report position up front.</p>
 
@@ -679,11 +681,11 @@
 						<tr>
 							<td><code>callbackGasLimit</code></td>
 							<td>
-								<code>gasConsumedSettlement × MAX_PENDING_SETTLEMENT_OPERATIONS</code>
+								<code>(gasConsumedSettlement + 50,000) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>
 							</td>
 							<td>
 								Sets the callback gas limit for up to
-								<code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> staged operations; settlement still needs enough surrounding gas to satisfy OpenOracle's callback headroom check.
+								<code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> price actions, including actions inside vault bundles; settlement still needs enough surrounding gas to satisfy OpenOracle's callback headroom check.
 							</td>
 						</tr>
 						<tr>
