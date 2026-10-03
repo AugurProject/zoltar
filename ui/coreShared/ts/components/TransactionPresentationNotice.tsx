@@ -1,6 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, RefObject } from 'preact'
+import { useMemo, useRef } from 'preact/hooks'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
@@ -37,7 +38,7 @@ function parseAddressDetailValue(value: ComponentChildren) {
 
 const embeddedAddressPattern = /(0x[0-9a-fA-F]{40})(?![0-9a-fA-F])/
 
-/** Splits text such as a call's argument list so each embedded address abbreviates in place instead of wrapping into a narrow column. */
+/** Splits a call's argument list so embedded addresses use the shared responsive presentation. */
 function splitEmbeddedAddresses(value: string) {
 	return value
 		.split(embeddedAddressPattern)
@@ -45,10 +46,25 @@ function splitEmbeddedAddresses(value: string) {
 		.map(segment => ({ isAddress: /^0x[0-9a-fA-F]{40}$/.test(segment), segment }))
 }
 
+function TransactionDetailAddress({ address, slot }: { address: string; slot: RefObject<HTMLElement> }) {
+	const control = useRef<HTMLSpanElement>(null)
+	const widthConstraint = useMemo(() => ({ slot, control }), [slot, control])
+	return (
+		<span className='global-transaction-detail-address' ref={control}>
+			<AddressValue address={address} widthConstraint={widthConstraint} />
+		</span>
+	)
+}
+
 function TransactionDetailText({ value }: { value: string }) {
+	const slot = useRef<HTMLSpanElement>(null)
 	const segments = splitEmbeddedAddresses(value)
 	if (!segments.some(({ isAddress }) => isAddress)) return <>{value}</>
-	return <span className='global-transaction-detail-text'>{segments.map(({ isAddress, segment }, index) => (isAddress ? <AddressValue key={index} address={segment} alwaysAbbreviated /> : <span key={index}>{segment}</span>))}</span>
+	return (
+		<span className='global-transaction-detail-text' ref={slot}>
+			{segments.map(({ isAddress, segment }, index) => (isAddress ? <TransactionDetailAddress key={index} address={segment} slot={slot} /> : <span key={index}>{segment}</span>))}
+		</span>
+	)
 }
 
 function TransactionDetailValue({ value }: { value: ComponentChildren }) {

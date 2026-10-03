@@ -139,13 +139,13 @@ describe('AddressValue', () => {
 		expect(copyButton.getAttribute('title')).toBe(address)
 	})
 
-	test('always abbreviates an inline address without reserving the full width, while keeping the complete copy target', async () => {
+	test('shows the full inline address when it fits, while keeping the complete copy target', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} alwaysAbbreviated />)
+		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
-		expect(copyButton.textContent).toBe('0x123456…345678')
-		expect(copyButton.querySelector('.address-value-full')).toBeNull()
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(copyButton.querySelector('.address-value-text')?.getAttribute('data-abbreviated')).toBe('false')
 		expect(copyButton.getAttribute('title')).toBe(address)
 		await act(() => fireEvent.click(copyButton))
 		await waitFor(() => expect(copyButton.textContent).toBe('Copied address'))

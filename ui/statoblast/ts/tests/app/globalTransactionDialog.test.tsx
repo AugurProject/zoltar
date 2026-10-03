@@ -484,7 +484,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(within(document.body).getByText('Arguments').nextElementSibling?.querySelector('.global-transaction-identifier-label')).toBeNull()
 	})
 
-	test('abbreviates each address inside an argument list and lists call data in one full-width column', async () => {
+	test('shows each address responsively inside an argument list and lists call data in one full-width column', async () => {
 		const poolAddress = '0x11cBa4f7B4e4B66702FC3bF4d1cB5815AC030149'
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionDialog
@@ -506,12 +506,13 @@ describe('GlobalTransactionDialog', () => {
 			.getAllByText('Arguments')
 			.map(label => label.nextElementSibling)
 		if (addressArguments === null || addressArguments === undefined) throw new Error('Missing argument list value')
-		// The address abbreviates in place, so the next argument follows it directly instead of after a reserved full-width gap.
-		expect(addressArguments.textContent).toBe('0x11cBa4…030149, 1')
+		// Embedded addresses use the same measured full-or-short presentation as standalone addresses.
+		expect(addressArguments.querySelector('.address-value-full')?.textContent).toBe(poolAddress)
+		expect(addressArguments.querySelector('.address-value-text')?.getAttribute('data-abbreviated')).toBe('false')
 		const argumentAddress = addressArguments.querySelector('.address-value')
 		expect(argumentAddress?.getAttribute('title')).toBe(poolAddress)
 		expect(argumentAddress?.getAttribute('aria-label')).toBe(`Copy address ${poolAddress}`)
-		expect(argumentAddress?.querySelector('.address-value-full')).toBeNull()
+		expect(argumentAddress?.querySelector('.address-value-full')?.textContent).toBe(poolAddress)
 		expect(addressArguments.querySelector('.global-transaction-detail-text')).not.toBeNull()
 		expect(plainArguments?.textContent).toBe('1, {title: Will this resolve?}')
 		expect(plainArguments?.querySelector('.address-value')).toBeNull()
