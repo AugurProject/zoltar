@@ -13,6 +13,15 @@ export function conditionalPayout(value: string, outcome: 'YES' | 'NO' | 'INVALI
 	return `${value} if ${outcomeLabel(outcome)} wins`
 }
 
+/** The gain of a winning payout over the ETH paid for it, and that gain as a return. */
+export function gain(amount: string, returnPercent: string) {
+	return `+${amount} (+${returnPercent})`
+}
+
+export function loss(amount: string, returnPercent: string) {
+	return `−${amount} (−${returnPercent})`
+}
+
 export function redeemable(value: string) {
 	return `${value} redeemable`
 }

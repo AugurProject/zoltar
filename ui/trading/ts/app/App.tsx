@@ -278,6 +278,7 @@ export function App({
 				walletSummaryRetryNonce={walletSummaryRetryNonce}
 				walletConnectRequestNonce={walletConnectRequestNonce}
 				tradeSettings={tradeSettings}
+				onTradeSettingsChange={updateTradeSettings}
 			/>
 		)
 	const simulationController = getActiveSimulationController()
