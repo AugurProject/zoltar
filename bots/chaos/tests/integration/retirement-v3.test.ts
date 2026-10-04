@@ -13,6 +13,9 @@ import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionK
 import { recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { createDurableWorkflow } from '../../src/runtime/workflows.ts'
+import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { uniswapActionsFixture } from '../operations/uniswap-fixture.ts'
+import { UNISWAP_POSITION_RANGES } from '../../src/core/uniswap-ranges.ts'
 import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
@@ -125,6 +128,7 @@ const openOracleAbi = [
 let node: AnvilNode | undefined
 let tokenBytecode: Hex
 let poolBytecode: Hex
+let routerBytecode: Hex
 let openOracleBytecode: Hex
 let compileDirectory: string | undefined
 
@@ -143,6 +147,7 @@ async function compileFixture() {
 	}
 	tokenBytecode = await readBytecode('_RetirementTokenMock.bin')
 	poolBytecode = await readBytecode('_RetirementV3PoolMock.bin')
+	routerBytecode = await readBytecode('_RetirementV3RouterMock.bin')
 	openOracleBytecode = await readBytecode('_RetirementOpenOracleMock.bin')
 }
 
@@ -186,6 +191,102 @@ async function currentV3Anchor(client: ReturnType<typeof createWriteClient>) {
 }
 
 describe('Drain & Retire on a local chain', () => {
+	test.each(['rep-for-weth', 'weth-for-rep'] as const)('executes bounded %s router calldata and reconciles real wallet balances', async direction => {
+		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[4])
+		const rep = await deploy(owner, tokenBytecode, tokenAbi)
+		const weth = await deploy(owner, tokenBytecode, tokenAbi)
+		const pool = await deploy(owner, poolBytecode, poolAbi, [rep, weth])
+		const router = await deploy(
+			owner,
+			routerBytecode,
+			[
+				{
+					type: 'constructor',
+					inputs: [
+						{ name: 'factory', type: 'address' },
+						{ name: 'weth', type: 'address' },
+						{ name: 'pool', type: 'address' },
+					],
+					stateMutability: 'nonpayable',
+				},
+			],
+			[address(40), weth, pool],
+		)
+		for (const token of [rep, weth]) {
+			await owner.writeContract({ abi: tokenAbi, address: token, args: [owner.account.address, 1_000_000n], functionName: 'mint' })
+			await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 1_000_000n], functionName: 'mint' })
+		}
+		const snapshot = uniswapActionsFixture()
+		snapshot.wallet.address = owner.account.address
+		snapshot.deployments.weth = weth
+		snapshot.anchor.timestamp = (await owner.getBlock()).timestamp.toString()
+		snapshot.wallet.tokens = [rep, weth].map(token => ({ address: token, symbol: token === rep ? 'REP' : 'WETH', balance: '1000000', allowances: {}, openOracleCredit: '0', openOracleInternalAllowanceToSelf: '0' }))
+		if (snapshot.universeUniswap === undefined) throw new Error('Uniswap fixture missing')
+		snapshot.universeUniswap.router = router
+		snapshot.universeUniswap.pools = [{ initialized: true, liquidity: '1000', pool, repToken: rep, universeId: '0', sqrtPriceX96: (1n << 96n).toString(), repBalanceAttoRep: 1000000n.toString(), wethBalanceAttoEth: 1000000n.toString() }]
+		const plan = evaluateSelectableOperationDefinition(`trading.uniswap.swap-${direction}`, snapshot, { seed: 1, maximumBlockIntervalSeconds: 15, maxRepSpendAttoRep: 10000n.toString(), maxEthSpendAttoEth: 10000n.toString() }).plan
+		if (plan === undefined) throw new Error('Swap plan missing')
+		await executePlan(owner, plan)
+		const input = direction === 'rep-for-weth' ? rep : weth
+		const output = direction === 'rep-for-weth' ? weth : rep
+		expect(await owner.readContract({ abi: tokenAbi, address: input, args: [owner.account.address], functionName: 'balanceOf' })).toBe(990_000n)
+		expect(await owner.readContract({ abi: tokenAbi, address: output, args: [owner.account.address], functionName: 'balanceOf' })).toBe(1_009_900n)
+		expect(await owner.readContract({ abi: tokenAbi, address: input, args: [owner.account.address, router], functionName: 'allowance' })).toBe(0n)
+	})
+
+	test.each(UNISWAP_POSITION_RANGES.filter(range => range.id !== 'full'))('partial recovery and fee collection preserve range $id across restart', async range => {
+		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[4])
+		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
+		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
+		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
+		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 1000n], functionName: 'mint' })
+		const creationHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, range.tickLower, range.tickUpper, 100n, 10n, 20n], functionName: 'seed' })
+		await owner.waitForTransactionReceipt({ hash: creationHash })
+		const snapshot = uniswapActionsFixture()
+		snapshot.wallet.address = owner.account.address
+		if (snapshot.universeUniswap === undefined) throw new Error('Pool fixture missing')
+		snapshot.universeUniswap.pools = [{ initialized: true, liquidity: '100', pool, repToken: token1, universeId: '0', positions: [{ ...range, liquidity: '100', collectable0: '10', collectable1: '20' }] }]
+		const fees = evaluateSelectableOperationDefinition('trading.uniswap.collect-fees', snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).plan
+		if (fees === undefined) throw new Error('Fee plan missing')
+		await executePlan(owner, fees)
+		const position = { ...durablePosition(pool, owner.account.address, token0, token1, 'range', range.tickLower, range.tickUpper), creationTransactionHash: creationHash, registeredBy: 'workflow' as const }
+		expect((await readV3Position(owner, position, await currentV3Anchor(owner))).liquidity).toBe(100n)
+		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address], functionName: 'balanceOf' })).toBe(10n)
+		const partial = evaluateSelectableOperationDefinition('trading.uniswap.remove-liquidity', snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).plan
+		const burn = partial?.steps[0]
+		if (partial === undefined || burn === undefined) throw new Error('Partial plan missing')
+		await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: burn.data, to: burn.to }) })
+		const workflow = createDurableWorkflow(partial)
+		const confirmed = workflow.steps[0]
+		if (confirmed === undefined) throw new Error('Burn step missing')
+		confirmed.status = 'confirmed'
+		const directory = await mkdtemp(join(tmpdir(), 'chaos-range-recovery-'))
+		try {
+			const state = initialDurableState(31_337, false, 'integration', owner.account.address)
+			state.workflows = [workflow]
+			const path = join(directory, 'state.json')
+			await saveDurableState(path, state)
+			const restored = await loadDurableState(path, 31_337)
+			expect(restored.workflows[0]?.metadata).toEqual(partial.metadata)
+			const poolState = snapshot.universeUniswap.pools[0]?.positions?.[0]
+			if (poolState === undefined) throw new Error('Position snapshot missing')
+			poolState.liquidity = '75'
+			poolState.collectable0 = '25'
+			poolState.collectable1 = '50'
+			const continuation = reevaluateOperationContinuation(snapshot, partial, { maximumBlockIntervalSeconds: 15 }, { confirmedStepIds: ['update-uniswap-position'] }).plan
+			if (continuation === undefined) throw new Error('Continuation missing')
+			expect(continuation.steps.map(step => step.id)).toEqual(['collect-uniswap-position'])
+			await executePlan(owner, continuation)
+			const remaining = await readV3Position(owner, position, await currentV3Anchor(owner))
+			expect(remaining.liquidity).toBe(75n)
+			expect(remaining.tokensOwed0 + remaining.tokensOwed1).toBe(0n)
+			await executePlan(owner, buildV3RetirementPlan(snapshot, remaining, 1))
+			expect((await readV3Position(owner, position, await currentV3Anchor(owner))).liquidity).toBe(0n)
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+
 	test('retains successful position provenance after a reverted top-up and restart', async () => {
 		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[4])
 		const token0 = await deploy(owner, tokenBytecode, tokenAbi)

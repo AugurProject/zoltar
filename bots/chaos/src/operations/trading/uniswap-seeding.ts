@@ -62,7 +62,7 @@ function createPoolStep(snapshot: EcosystemSnapshot, factory: Address, rep: Addr
 }
 
 /** Bounded REP and WETH amounts a liquidity mint may spend, or `undefined` when the resulting position would be empty. */
-function uniswapSeedAmounts(snapshot: EcosystemSnapshot, options: PlanningOptions, repToken: Address) {
+export function uniswapSeedAmounts(snapshot: EcosystemSnapshot, options: PlanningOptions, repToken: Address) {
 	const repInventory = tokenInventory(snapshot, repToken)
 	const wethInventory = tokenInventory(snapshot, snapshot.deployments.weth)
 	if (repInventory === undefined || wethInventory === undefined) return undefined
@@ -82,7 +82,7 @@ function seederApprovalStep(snapshot: EcosystemSnapshot, scope: SeedScope, token
 }
 
 /** Orders the REP/WETH pair, bounds liquidity and builds the approval and seed steps shared by initial seeding and liquidity additions. */
-function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, pool: Address, rep: Address, amounts: { repAmount: bigint; wethAmountAttoEth: bigint }, seedLabel: string) {
+export function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, pool: Address, rep: Address, amounts: { repAmount: bigint; wethAmountAttoEth: bigint }, seedLabel: string, range = { tickLower: GENESIS_UNISWAP_TICK_LOWER, tickUpper: GENESIS_UNISWAP_TICK_UPPER }) {
 	const { weth } = snapshot.deployments
 	const seeder = genesisUniswapSeederDeployment().address
 	const token0 = rep.toLowerCase() < weth.toLowerCase() ? rep : weth
@@ -97,7 +97,7 @@ function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, pool: A
 	steps.push(
 		encodeStep({
 			abi: genesisUniswapV3SeederAbi,
-			args: [pool, token0, token1, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, liquidity, maximum0, maximum1, snapshot.wallet.address],
+			args: [pool, token0, token1, range.tickLower, range.tickUpper, liquidity, maximum0, maximum1, snapshot.wallet.address],
 			evidence: [{ kind: 'receipt-success' }],
 			functionName: 'seed',
 			id: `seed-${scope}-uniswap-pool`,
@@ -110,7 +110,7 @@ function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, pool: A
 }
 
 /** Revokes every seeder allowance a confirmed step of the previous seed plan created. */
-function seederAllowanceCleanup(snapshot: EcosystemSnapshot, context: OperationContinuationContext, scope: SeedScope, definition: OperationDefinition): OperationPlanDraft | undefined {
+export function seederAllowanceCleanup(snapshot: EcosystemSnapshot, context: OperationContinuationContext, scope: SeedScope, definition: OperationDefinition): OperationPlanDraft | undefined {
 	const token0 = metadataAddress(context.previousPlan.metadata, 'token0')
 	const token1 = metadataAddress(context.previousPlan.metadata, 'token1')
 	const seeder = metadataAddress(context.previousPlan.metadata, 'seeder')

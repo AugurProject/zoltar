@@ -14,6 +14,15 @@ contract RetirementTokenMock {
 		return true;
 	}
 
+	function transferFrom(address sender, address recipient, uint256 amount) external returns (bool) {
+		require(allowance[sender][msg.sender] >= amount, 'Allowance');
+		require(balanceOf[sender] >= amount, 'Balance');
+		allowance[sender][msg.sender] -= amount;
+		balanceOf[sender] -= amount;
+		balanceOf[recipient] += amount;
+		return true;
+	}
+
 	function transfer(address recipient, uint256 amount) external returns (bool) {
 		require(balanceOf[msg.sender] >= amount, 'Balance');
 		balanceOf[msg.sender] -= amount;
@@ -52,6 +61,9 @@ contract RetirementV3PoolMock {
 		uint128 tokensOwed1;
 	}
 
+	event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick);
+	event Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1);
+	event Collect(address indexed owner, address recipient, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount0, uint128 amount1);
 	mapping(bytes32 => Position) public positions;
 	RetirementTokenMock public immutable token0;
 	RetirementTokenMock public immutable token1;
@@ -60,6 +72,12 @@ contract RetirementV3PoolMock {
 	constructor(RetirementTokenMock token0_, RetirementTokenMock token1_) {
 		token0 = token0_;
 		token1 = token1_;
+	}
+
+	function swapForFixture(address tokenIn, address tokenOut, address recipient, uint256 amountIn, uint256 amountOut) external {
+		require(tokenIn != tokenOut && (tokenOut == address(token0) || tokenOut == address(token1)), 'Tokens');
+		require(RetirementTokenMock(tokenOut).transfer(recipient, amountOut), 'Transfer');
+		emit Swap(msg.sender, recipient, tokenIn == address(token0) ? int256(amountIn) : -int256(amountOut), tokenIn == address(token1) ? int256(amountIn) : -int256(amountOut), uint160(1 << 96), 1000, 0);
 	}
 
 	function positionKey(address owner, int24 tickLower, int24 tickUpper) public pure returns (bytes32) {
@@ -76,6 +94,7 @@ contract RetirementV3PoolMock {
 		position.liquidity -= amount;
 		position.tokensOwed0 += amount;
 		position.tokensOwed1 += amount * 2;
+		emit Burn(msg.sender, tickLower, tickUpper, amount, amount, amount * 2);
 		return (amount, amount * 2);
 	}
 
@@ -86,5 +105,39 @@ contract RetirementV3PoolMock {
 		position.tokensOwed0 -= amount0;
 		position.tokensOwed1 -= amount1;
 		require(token0.transfer(recipient, amount0) && token1.transfer(recipient, amount1), 'Transfer');
+		emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
+	}
+}
+
+
+contract RetirementV3RouterMock {
+	struct ExactInputSingleParams {
+		address tokenIn;
+		address tokenOut;
+		uint24 fee;
+		address recipient;
+		uint256 deadline;
+		uint256 amountIn;
+		uint256 amountOutMinimum;
+		uint160 sqrtPriceLimitX96;
+	}
+
+	address public immutable factory;
+	address public immutable WETH9;
+	RetirementV3PoolMock public immutable pool;
+
+	constructor(address factory_, address weth_, RetirementV3PoolMock pool_) {
+		factory = factory_;
+		WETH9 = weth_;
+		pool = pool_;
+	}
+
+	function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut) {
+		require(block.timestamp <= params.deadline, 'Deadline');
+		require(params.fee == 10000 && params.sqrtPriceLimitX96 == 0, 'Route');
+		amountOut = params.amountIn * 99 / 100;
+		require(amountOut >= params.amountOutMinimum, 'Minimum output');
+		require(RetirementTokenMock(params.tokenIn).transferFrom(msg.sender, address(pool), params.amountIn), 'Transfer');
+		pool.swapForFixture(params.tokenIn, params.tokenOut, params.recipient, params.amountIn, amountOut);
 	}
 }

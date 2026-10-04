@@ -1,3 +1,6 @@
+import { mintUniswapRange } from './uniswap-range.ts'
+import { uniswapRecoveryDefinition } from './uniswap-recovery.ts'
+import { uniswapSwapDefinition } from './uniswap-swap.ts'
 import { disabled } from '../planning.ts'
 import type { OperationDefinition } from '../types.ts'
 import { createPair, directLiquidity, syncPair } from './pair.ts'
@@ -48,6 +51,11 @@ export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	initializeUniverseUniswapPool,
 	seedUniverseUniswapPool,
 	addUniverseUniswapLiquidity,
+	mintUniswapRange,
+	uniswapSwapDefinition('rep-for-weth'),
+	uniswapSwapDefinition('weth-for-rep'),
+	uniswapRecoveryDefinition('remove'),
+	uniswapRecoveryDefinition('collect'),
 	createPair,
 	directLiquidity('initialize'),
 	directLiquidity('add'),

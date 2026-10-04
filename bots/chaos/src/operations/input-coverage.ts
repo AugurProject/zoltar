@@ -1,9 +1,12 @@
+import { chaosUniswapV3RouterAbi } from '../contracts/uniswap-abi.ts'
+import { retirementUniswapV3PositionAbi } from '../contracts/retirement-abi.ts'
 import type { Abi, AbiParameter } from '@zoltar/bot-shared/ethereum'
 import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { operationInputSchema } from './input-schema.ts'
 import type { OperationDefinition } from './types.ts'
 
 const bindings: Record<string, Abi> = {
+	UniswapV3SwapRouter: chaosUniswapV3RouterAbi,
 	ZoltarQuestionData: abis.zoltarQuestionDataAbi,
 	Zoltar: abis.zoltarAbi,
 	ReputationToken: abis.genesisReputationTokenAbi,
@@ -21,7 +24,7 @@ const bindings: Record<string, Abi> = {
 	TwoWayConstantProductRouter: abis.twoWayConstantProductRouterAbi,
 	GenesisUniswapV3Seeder: abis.genesisUniswapV3SeederAbi,
 	UniswapV3Factory: abis.genesisUniswapV3FactoryAbi,
-	UniswapV3Pool: abis.genesisUniswapV3PoolStateAbi,
+	UniswapV3Pool: [...abis.genesisUniswapV3PoolStateAbi, ...retirementUniswapV3PositionAbi],
 }
 
 // Fields read from durable metadata still own these transaction arguments.

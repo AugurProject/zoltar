@@ -3,13 +3,12 @@ import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { CANONICAL_PROXY_DEPLOYER, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { discoverUniverseUniswap } from './discovery-uniswap.ts'
 import { canonicalUintString, compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
 import type { AuctionSnapshot, ChildRepSplitProgressSnapshot, EcosystemSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
-import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, requirePositiveLimit, type ChaosReadClient } from './discovery-client.ts'
+import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, requirePositiveLimit, type ChaosReadClient } from './discovery-client.ts'
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, limitsWithDefaults, requireAggregateDiscoveryEnvelope, type DiscoveryLimits, type EcosystemDiscoveryContext } from './discovery-context.ts'
 import { discoverDirectEscalationDepositQuotes, emptyDirectEscalationDepositQuote, minimumSafeVaultDeposit, projectSettlementCollateral, relevantTokenSpenders } from './discovery-escalation.ts'
 import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from './discovery-fork-migration.ts'
@@ -19,7 +18,6 @@ import { discoverShareInventory, trustedIndexedReportsForDiscovery } from './dis
 import { discoverStagedOperations, discoverVault } from './discovery-staged-operations.ts'
 import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES, type CountedRegistryCursor, type ImmutableTopologyData } from './topology-cache.ts'
 
-const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6)
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 const OUTCOME_LABEL_PAGE_SIZE = 256n
 const hasCode = (code: string | undefined): code is string => code !== undefined && code !== '0x'
@@ -100,34 +98,6 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 		requireGraphEdge(getAddress(routerFactory), deployments.tradingFactory, 'Trading router factory edge')
 	}
 	return { factory, router }
-}
-
-async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint, chainId: number) {
-	const seeder = genesisUniswapSeederDeployment()
-	const uniswapFactory = context.deployments.uniswapV3Factory ?? canonicalUniswapDeployment(chainId).factory
-	const [factoryCode, proxyCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: CANONICAL_PROXY_DEPLOYER, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
-	if (hasCode(proxyCode) && proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE) throw new Error('Canonical proxy deployer has unexpected runtime code')
-	if (hasCode(seederCode) && seederCode.toLowerCase() !== seeder.runtime.toLowerCase()) throw new Error('Genesis Uniswap seeder has unexpected runtime code')
-	const [factory, authenticatedProxy, authenticatedSeeder] = [hasCode(factoryCode), hasCode(proxyCode), hasCode(seederCode)]
-	const pools = await mapWithConcurrency(universes, UNISWAP_POOL_DISCOVERY_CONCURRENCY, async universe => {
-		if (!factory) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
-		const pool = getAddress(await context.client.readContract({ abi: abis.genesisUniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
-		if (pool === zeroAddress) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
-		const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
-			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'factory' }),
-			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'token0' }),
-			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'token1' }),
-			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'fee' }),
-			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'slot0' }),
-			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'liquidity' }),
-		])
-		requireGraphEdge(getAddress(poolFactory), uniswapFactory, `Universe ${universe.id} Uniswap pool ${pool} factory edge`)
-		const expected = [universe.repToken.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
-		const actual = [getAddress(token0).toLowerCase(), getAddress(token1).toLowerCase()].sort()
-		if (actual[0] !== expected[0] || actual[1] !== expected[1] || fee !== BigInt(GENESIS_UNISWAP_FEE)) throw new Error(`Universe ${universe.id} Uniswap pool ${pool} has unexpected immutable token or fee bindings`)
-		return { initialized: slot0[0] !== 0n, liquidity: liquidity.toString(), pool, repToken: universe.repToken, universeId: universe.id }
-	})
-	return { factory, pools, proxy: authenticatedProxy, seeder: authenticatedSeeder }
 }
 
 async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
@@ -837,7 +807,9 @@ async function discoverTokenInventory(context: EcosystemDiscoveryContext, univer
 			client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [wallet, wallet, address], blockNumber, functionName: 'internalAllowance' }),
 		])
 		const allowances: Record<string, string> = {}
-		for (const spender of relevantTokenSpenders(deployments, pools, address)) {
+		const spenders = relevantTokenSpenders(deployments, pools, address)
+		if (deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment) spenders.push(canonicalUniswapDeployment(await client.getChainId()).router)
+		for (const spender of spenders) {
 			allowances[spender] = (await client.readContract({ abi: abis.erc20Abi, address, args: [wallet, spender], blockNumber, functionName: 'allowance' })).toString()
 		}
 		tokens.push({

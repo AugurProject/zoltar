@@ -4,7 +4,7 @@ import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { evaluateSelectableOperationDefinition, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { address, snapshotFixture } from './fixture.ts'
 
-const options = { allowHighRisk: true, maximumBlockIntervalSeconds: 15, maxEthSpendAttoEth: '100', maxRepSpendAttoRep: '100', minimumRepReserveAttoRep: '1000', seed: 1 }
+const options = { allowHighRisk: true, maximumBlockIntervalSeconds: 15, maxEthSpendAttoEth: 100n.toString(), maxRepSpendAttoRep: 100n.toString(), minimumRepReserveAttoRep: 1000n.toString(), seed: 1 }
 
 for (const scope of ['genesis', 'universe'] as const) {
 	test(`${scope} REP/WETH top-up mints a bounded wallet position only in a funded pool`, () => {
