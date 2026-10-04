@@ -13,13 +13,13 @@ export function shareOperationRouter(configuration: DeploymentConfiguration) {
 }
 
 function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
+	if (market.pair === undefined) throw new Error('The trading pool is unavailable')
 	const invalidTokenId = market.universeId << 8n
 	return encodeReceiveRequest([1, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, recipient, deadline])
 }
 
 export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint): Hex {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
+	if (market.pair === undefined) throw new Error('The trading pool is unavailable')
 	const invalidTokenId = market.universeId << 8n
 	const noLongOutcome = 3 // BinaryOutcomes.BinaryOutcome.None: redemption has no directional leg.
 	return encodeReceiveRequest([1, 1, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, noLongOutcome, completeSetShares, 0n, minimumEthAttoEth, recipient, recipient, deadline])

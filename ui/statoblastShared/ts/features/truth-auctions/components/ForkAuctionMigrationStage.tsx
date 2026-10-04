@@ -202,7 +202,7 @@ export function ForkAuctionMigrationStage({
 											<div className='field' key={side.key}>
 												<span>{side.label}</span>
 												{side.userDeposits.length === 0 ? (
-													<UserMessage className='detail' detail={forkAuctionCopy.formatNoUnresolvedDeposits(side.label.toLowerCase())} />
+													<UserMessage className='detail' detail={forkAuctionCopy.formatNoUnresolvedDeposits(side.label)} />
 												) : (
 													<EscalationDepositSelectionList
 														selectable={false}

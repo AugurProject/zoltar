@@ -132,8 +132,8 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 	)
 }
 
-/** The forked-universe notice: when the universe forked and a direct action to migrate REP. */
-function UniverseForkNotice({ forkTime, migrateRepHref }: { forkTime: bigint | undefined; migrateRepHref: string | undefined }) {
+/** The forked-universe notice: when the universe forked and, for an account that holds REP in it, a direct action to migrate that REP. */
+function UniverseForkNotice({ forkTime, hasRepToMigrate, migrateRepHref }: { forkTime: bigint | undefined; hasRepToMigrate: boolean; migrateRepHref: string | undefined }) {
 	return (
 		<WarningSurface role='status' surface='flat' className='universe-fork-notice'>
 			<p>
@@ -146,10 +146,10 @@ function UniverseForkNotice({ forkTime, migrateRepHref }: { forkTime: bigint | u
 						</>
 					)}
 					.
-				</strong>{' '}
-				{appCopy.migrateRepToChildUniverse}
+				</strong>
+				{hasRepToMigrate ? <> {appCopy.migrateRepToChildUniverse}</> : undefined}
 			</p>
-			{migrateRepHref === undefined ? undefined : (
+			{migrateRepHref === undefined || !hasRepToMigrate ? undefined : (
 				<a className='button-link secondary-link' href={migrateRepHref}>
 					{appCopy.migrateRep}
 				</a>
@@ -205,7 +205,7 @@ export function OverviewPanels({
 		const actions = isBrowserSimulationReadBackend ? undefined : (
 			<>
 				<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
-				<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet} />
+				<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={appCopy.disconnectWallet} />
 			</>
 		)
 		return (
@@ -251,7 +251,7 @@ export function OverviewPanels({
 					{accountControl}
 				</>
 			}
-			notices={universeHasForked ? <UniverseForkNotice forkTime={universeForkTime} migrateRepHref={migrateRepHref} /> : undefined}
+			notices={universeHasForked ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
 			footer={
 				universePresentation === undefined ? undefined : (
 					<StateHint

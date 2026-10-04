@@ -2,19 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import {
-	MAINNET_NETWORK_PROFILE,
-	MAINNET_WETH_ADDRESS,
-	SEPOLIA_NETWORK_PROFILE,
-	buildAddressExplorerUrl,
-	buildTransactionExplorerUrl,
-	createSimulationProfile,
-	formatTransactionNetworkLabel,
-	getDefaultNetworkProfile,
-	getPublicNetworkProfile,
-	getPublicNetworkProfileForChainId,
-	getRuntimeNetworkProfile,
-} from '../wallet/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildAddressExplorerUrl, buildTransactionExplorerUrl, createSimulationProfile, getDefaultNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 
 describe('network profile helpers', () => {
@@ -80,10 +68,5 @@ describe('network profile helpers', () => {
 		expect(profile.displayName).toBe('Browser simulation')
 		expect(profile.repPricingMode).toBe('mock')
 		expect(profile.transactionExplorerBaseUrl).toBeUndefined()
-		expect(formatTransactionNetworkLabel(profile)).toBe('Browser simulation · local sandbox')
-	})
-
-	test('uses the public network name for mainnet transaction reviews', () => {
-		expect(formatTransactionNetworkLabel(MAINNET_NETWORK_PROFILE)).toBe('Ethereum mainnet')
 	})
 })

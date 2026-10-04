@@ -6,10 +6,9 @@ export const formatFavoriteToggleLabel = (entityLabel: CopyTemplateValue) => `Fa
 export const favorites = 'Favorites'
 export const downloaded = 'Downloaded'
 export const formatCollectionTab = (label: CopyTemplateValue, count: CopyTemplateValue) => `${label} (${count})`
-export const collectionAriaLabel = 'Saved collection'
-export const recentlySaved = 'Recently saved'
-export const endTime = 'End time'
+export const collectionAriaLabel = 'Favorites collection'
+export const recentlySaved = 'Recently added'
 export const discoverMore = 'Discover more'
 export const discovering = 'Discovering…'
-export const rescan = 'Scan again'
-export const formatDiscoveredProgress = (discovered: CopyTemplateValue, total: CopyTemplateValue, noun: CopyTemplateValue) => `${discovered} of ${total} ${noun} scanned`
+export const rescan = 'Discover again'
+export const formatDiscoveredProgress = (discovered: CopyTemplateValue, total: CopyTemplateValue, noun: CopyTemplateValue) => `${discovered} of ${total} ${noun} checked`

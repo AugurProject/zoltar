@@ -1,3 +1,4 @@
+import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import type { BadgeTone } from '../types/components.js'
@@ -30,7 +31,7 @@ export function SimulationStripSummary({ accountLabel, bootstrapLabel, bootstrap
 	return (
 		<summary>
 			<span className='simulation-strip'>
-				<h2 className='simulation-strip-title'>{simulationCopy.browserSimulation}</h2>
+				<h2 className='simulation-strip-title'>{appCopy.browserSimulation}</h2>
 				<Badge tone={status.badgeTone}>{status.label}</Badge>
 				<strong className='simulation-strip-scenario'>{scenarioLabel}</strong>
 				{bootstrapping ? (

@@ -1,4 +1,5 @@
 import * as tradingCopy from '../../../copy/trading.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -16,8 +17,8 @@ import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-cor
 
 const PRICE_PRECISION = 10n ** 18n
 
-export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active underwriting commitments.'
-export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
+export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No vault has an active commitment.'
+export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes, No, and Invalid shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
@@ -229,11 +230,11 @@ export function getTradingMintGuardMessage({
 	if (escalationGameActive) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
+	if (undefinedExchangeRate === undefined) return 'Loading mint capacity…'
 	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 	const remainingCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-	if (remainingCapacity === undefined) return 'Loading mint capacity.'
+	if (remainingCapacity === undefined) return 'Loading mint capacity…'
 	if (remainingCapacity === 0n) {
 		if ((totalPoolHeldAttoRep ?? 0n) > 0n && mintingCapacityAttoEth === 0n) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
@@ -247,7 +248,7 @@ export function getTradingMintGuardMessage({
 
 	if (mintAmount <= 0n) return undefined
 	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
-	if (ethBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
 	if (mintAmount > spendableEthAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH')} in this wallet to mint the selected amount and keep ${formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH')} for gas.`
 	return undefined
@@ -275,10 +276,10 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before redeeming complete sets.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('redeeming complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (loadingTradingDetails) return 'Loading wallet share balances.'
+	if (loadingTradingDetails) return 'Loading wallet share balances…'
 
 	const maxRedeemableCompleteSetsAttoShares = getMaxRedeemableCompleteSets(shareBalances)
-	if (maxRedeemableCompleteSetsAttoShares === undefined) return 'Loading wallet share balances.'
+	if (maxRedeemableCompleteSetsAttoShares === undefined) return 'Loading wallet share balances…'
 	if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
@@ -320,7 +321,7 @@ export function getTradingMigrateSharesGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before migrating shares.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('migrating shares') })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
+	if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniverses
 	if (tradingForkUniverse === undefined) return tradingCopy.forkTargetsRefreshRequired
 	if (!tradingForkUniverse.hasForked) return tradingCopy.shareMigrationRequiresFork
 
@@ -329,10 +330,10 @@ export function getTradingMigrateSharesGuardMessage({
 	if (new Set(targetOutcomeIndexes.map(outcomeIndex => outcomeIndex.toString())).size !== targetOutcomeIndexes.length) return 'Select each target child universe only once.'
 
 	if (!areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse, targetOutcomeIndexes)) return 'Select valid target child universes.'
-	if (loadingTradingDetails) return 'Loading wallet share balances.'
+	if (loadingTradingDetails) return 'Loading wallet share balances…'
 
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, selectedShareOutcome)
-	if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances.'
+	if (selectedOutcomeBalance === undefined) return 'Loading wallet share balances…'
 	if (selectedOutcomeBalance === 0n) return `No ${getReportingOutcomeLabel(selectedShareOutcome)} shares available to migrate.`
 	return undefined
 }

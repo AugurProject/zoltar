@@ -3,6 +3,7 @@ import { getLiquidationFailureReason, simulateLiquidation } from '../../security
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
 import { getSecurityVaultWithdrawableRepAmount, getVaultBackingFactorAdjustmentGuard } from '../../security-pools/lib/securityVault.js'
 import * as copy from '../../../copy/vaultOperations.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 
 export function previewVaultOperations(pool: ListedSecurityPool, owned: SecurityVaultDetails, targets: SecurityPoolVaultSummary[], input: VaultOperationsInput, price: bigint, minLiquidationPriceDistanceBps?: bigint, isPriceValid = true) {
 	let receiver: SecurityPoolVaultSummary = {
@@ -24,7 +25,7 @@ export function previewVaultOperations(pool: ListedSecurityPool, owned: Security
 	}
 	const totalLimit = pool.totalUnderwritingLimitAttoEth - owned.underwritingLimitAttoEth + receiver.underwritingLimitAttoEth
 	for (const selected of input.liquidations) {
-		if (selected.requestedDebtAttoEth <= 0n) throw new Error('Invalid liquidation amount.')
+		if (selected.requestedDebtAttoEth <= 0n) throw new Error(liquidationCopy.liquidationAmountRequired)
 		const target = targets.find(candidate => candidate.vaultAddress.toLowerCase() === selected.targetVault.toLowerCase())
 		if (target === undefined) throw new Error(copy.targetUnavailable)
 		if (target.vaultAttoRepBacking <= 0n) throw new Error(copy.targetNoBacking)

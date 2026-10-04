@@ -40,8 +40,8 @@ export function VaultDepositAmountField({
 	// The balance is a hint only: the approval control already reports a shortfall with its exact amount.
 	let hint: ComponentChildren = undefined
 	if (walletRepBalanceLoading) hint = <LoadingText>{commonCopy.loading}</LoadingText>
-	else if (walletRepBalanceAttoRep !== undefined) hint = commonCopy.formatAmountHint(commonCopy.balance, formatAmountForDisplay(walletRepBalanceAttoRep, 18, repTokenSymbol))
-	return <AmountField disabled={disabled} fillMax={{ amount: walletRepBalanceAttoRep }} hint={hint} label={securityPoolCopy.repBackingLabel} onChange={onChange} unit={repTokenSymbol} value={value} />
+	else if (walletRepBalanceAttoRep !== undefined) hint = commonCopy.formatLabelValue(commonCopy.balance, formatAmountForDisplay(walletRepBalanceAttoRep, 18, repTokenSymbol))
+	return <AmountField disabled={disabled} fillMax={{ amount: walletRepBalanceAttoRep }} hint={hint} label={securityPoolCopy.formatRepDepositAmount(repTokenSymbol)} onChange={onChange} unit={repTokenSymbol} value={value} />
 }
 
 export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoRep, onChange, repTokenSymbol, value }: { disabled: boolean; maximumWithdrawableAttoRep: bigint | undefined; onChange: (repWithdrawAmount: string) => void; repTokenSymbol: string; value: string }) {
@@ -82,9 +82,9 @@ export function VaultRepExitActionButton({
 	// A blocking wallet is the reason shown, so its fix takes the reason slot instead of the price field's error.
 	const describedByElementId = walletGuard.walletBlocker === undefined ? disabledReasonElementId : undefined
 	const unavailableReason = (() => {
-		if (!canUseLoadedVaultActions) return securityPoolCopy.selectOwnVaultToWithdrawRep
+		if (!canUseLoadedVaultActions) return repExitMode === 'redeem' ? securityPoolCopy.selectOwnVaultToRedeemRep : securityPoolCopy.selectOwnVaultToWithdrawRep
 		if (repExitGuardMessage !== undefined) return repExitGuardMessage
-		if (!repExitEnabled) return securityPoolCopy.withdrawalUnavailableReason
+		if (!repExitEnabled) return repExitMode === 'redeem' ? securityPoolCopy.redemptionUnavailableReason : securityPoolCopy.withdrawalUnavailableReason
 		if (repExitMode === 'withdraw' && !hasWithdrawableRep) return securityPoolCopy.noWithdrawableRepReason
 		return undefined
 	})()

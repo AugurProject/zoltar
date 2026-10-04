@@ -7,7 +7,9 @@ import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { MarketOddsBar } from '../components/MarketOddsBar.js'
+import * as appCopy from '../copy/app.js'
 import { liveCopy } from '../copy/live.js'
+import { formatEthAmount } from '../copy/outcomes.js'
 import { marketsCopy } from '../copy/markets.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { coarseDuration, marketLiquidityAttoEth, marketOddsPercent } from '../lib/marketListing.js'
@@ -20,30 +22,30 @@ import { marketStatusLabel, marketStatusTone } from './marketStatus.js'
 type RowLink = Readonly<{ href: string; label: string }>
 
 function marketRowActions(listKind: TradingListKind, lookupRoute: TradingLookupRoute, pool: string): Readonly<{ primary: RowLink; secondary: RowLink }> {
-	if (listKind === 'security-pools') return { primary: { href: `#/create-market/${pool}`, label: liveCopy.createMarketAction }, secondary: { href: `#/security-pool/${pool}`, label: liveCopy.poolDetails } }
-	const trade = { href: `#/market/${pool}`, label: liveCopy.trade }
-	const liquidity = { href: `#/liquidity/${pool}`, label: liveCopy.manageLiquidity }
+	if (listKind === 'security-pools') return { primary: { href: `#/create-market/${pool}`, label: appCopy.createMarket }, secondary: { href: `#/security-pool/${pool}`, label: liveCopy.details } }
+	const trade = { href: `#/market/${pool}`, label: appCopy.trade }
+	const liquidity = { href: `#/liquidity/${pool}`, label: appCopy.liquidity }
 	return lookupRoute === 'liquidity' ? { primary: liquidity, secondary: trade } : { primary: trade, secondary: liquidity }
 }
 
 export function formatMarketLiquidity(market: LiveMarket) {
 	const liquidity = marketLiquidityAttoEth(market)
-	return liquidity === undefined ? undefined : marketsCopy.liquidityValue(formatRoundedUnits(liquidity, 18, 4))
+	return liquidity === undefined ? undefined : formatEthAmount(formatRoundedUnits(liquidity, 18, 4))
 }
 
 function MarketCardOdds({ market, tradeable }: { market: LiveMarket; tradeable: boolean }) {
 	const odds = marketOddsPercent(market)
-	if (odds === undefined) return <UserMessage className='detail market-card__odds-note' detail={marketsCopy.oddsUnavailable} />
+	if (odds === undefined) return <UserMessage className='detail market-card__odds-note' detail={marketsCopy.priceUnavailable} />
 	return (
 		<div className='market-card__odds'>
 			<MarketOddsBar yesPercent={odds.yes} noPercent={odds.no} showValues={!tradeable} />
 			{tradeable ? (
 				<div className='market-card__outcomes'>
 					<a className='button-link outcome-button outcome-button--yes' href={marketTicketHref(market.pool, { mode: 'entry', side: 'YES' })} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.yes, odds.yes)}>
-						{marketsCopy.outcomeOdds(marketsCopy.yes, odds.yes)}
+						{marketsCopy.formatOutcomePrice(marketsCopy.yes, odds.yes)}
 					</a>
 					<a className='button-link outcome-button outcome-button--no' href={marketTicketHref(market.pool, { mode: 'entry', side: 'NO' })} aria-label={marketsCopy.buyOutcomeAt(marketsCopy.no, odds.no)}>
-						{marketsCopy.outcomeOdds(marketsCopy.no, odds.no)}
+						{marketsCopy.formatOutcomePrice(marketsCopy.no, odds.no)}
 					</a>
 				</div>
 			) : undefined}

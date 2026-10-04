@@ -23,7 +23,7 @@ void describe('load state helpers', () => {
 				},
 			})
 			expect(failure).toBeInstanceOf(Error)
-			expect(failure instanceof Error ? failure.message : '').toContain('Backend readiness timed out')
+			expect(failure instanceof Error ? failure.message : '').toContain('The network connection took too long to become ready')
 			expect(reads).toBe(0)
 			expect(controller.isLoading.value).toBe(false)
 			expect(await controller.run({ waitUntilReady: async () => undefined, load: async () => 42 })).toBe(42)

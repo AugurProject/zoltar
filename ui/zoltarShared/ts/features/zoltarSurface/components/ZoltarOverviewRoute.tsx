@@ -9,6 +9,8 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import * as userMessagesCopy from '@zoltar/ui-core-shared/copy/userMessages.js'
+import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { deriveZoltarOverviewModel, type ZoltarNextStep, type ZoltarOverviewModel } from '../lib/zoltarViewModels.js'
 import type { ZoltarView } from '../../types.js'
@@ -21,7 +23,7 @@ function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation
 		case 'retry-universe':
 			return { actionLabel: commonCopy.retry, detail: zoltarCopy.universeUnavailableDetail }
 		case 'go-to-genesis':
-			return { actionLabel: commonCopy.goToGenesisUniverse, detail: zoltarCopy.goToGenesisDetail }
+			return { actionLabel: commonCopy.goToGenesisUniverse, detail: userMessagesCopy.missingUniverseDetail }
 		case 'connect-wallet':
 			return { actionLabel: commonCopy.connectWallet, detail: zoltarCopy.connectWalletDetail }
 		case 'switch-network':
@@ -31,7 +33,7 @@ function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation
 		case 'open-child-universe':
 			return { actionLabel: zoltarCopy.browseUniversesAction, detail: zoltarCopy.openChildUniverseDetail }
 		case 'browse-questions':
-			return { actionLabel: zoltarCopy.browseQuestionsAction, detail: zoltarCopy.browseQuestionsDetail }
+			return { actionLabel: marketCopy.browseQuestions, detail: zoltarCopy.browseQuestionsDetail }
 		default:
 			return assertNever(nextStep)
 	}
@@ -69,8 +71,8 @@ function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnec
 }
 
 function renderRepBalance(model: ZoltarOverviewModel, loadingRepBalance: boolean) {
-	if (model.wallet === 'wrong-network') return zoltarCopy.switchNetworkAction
-	if (model.wallet !== 'connected') return zoltarCopy.connectToSeeRep
+	if (model.wallet === 'wrong-network') return userMessagesCopy.wrongNetwork
+	if (model.wallet !== 'connected') return zoltarCopy.walletNotConnected
 	// A balance that is absent after its read finished could not be read; it must not look like it is still loading.
 	if (model.repBalanceAttoRep === undefined && !loadingRepBalance) return commonCopy.unavailable
 	return <CurrencyValue value={model.repBalanceAttoRep} loading={model.repBalanceAttoRep === undefined} suffix={commonCopy.rep} />
@@ -86,7 +88,7 @@ function ZoltarOverviewView({ currentTimestamp, loadingRepBalance, model, ...act
 	return (
 		<>
 			<RouteHeader title={zoltarCopy.overview} />
-			<SectionBlock title={zoltarCopy.yourStatus} variant='plain'>
+			<SectionBlock title={commonCopy.status} variant='plain'>
 				{model.status === 'loading' ? (
 					<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 				) : (

@@ -215,7 +215,7 @@ describe('injected backend read transport', () => {
 
 	test('throws when creating a write client before wallet injection', () => {
 		const backend = createInjectedBackend()
-		expect(() => backend.createWriteClient(zeroAddress)).toThrow('No injected wallet found')
+		expect(() => backend.createWriteClient(zeroAddress)).toThrow('No browser wallet was found.')
 	})
 
 	test('normalizes wallet account lists and filters invalid addresses', async () => {
@@ -416,7 +416,7 @@ describe('injected backend read transport', () => {
 	test('rejects chain id reads without an injected provider', async () => {
 		delete ensureWindowObject().ethereum
 		const backend = createInjectedBackend()
-		await expect(backend.getChainId()).rejects.toThrow('Unable to verify wallet network because no injected wallet was found.')
+		await expect(backend.getChainId()).rejects.toThrow('Unable to verify wallet network because no browser wallet was found.')
 	})
 })
 

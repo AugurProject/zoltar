@@ -38,7 +38,7 @@ export function getReportingStagePresentation({
 		return {
 			availableActions: [],
 			blockedActions: [],
-			detail: reportingCopy.reportingDetailsRequired,
+			detail: reportingCopy.loadingReportingDetails,
 			key: 'reporting-open',
 			label: reportingCopy.reportingOpen,
 			tone: 'default',
@@ -47,7 +47,7 @@ export function getReportingStagePresentation({
 		return {
 			availableActions: [],
 			blockedActions: [],
-			detail: reportingCopy.formatReportingResolvedDetailLabel(getResolvedReportingOutcomeLabel(reportingDetails)),
+			detail: reportingCopy.resultSummary(getResolvedReportingOutcomeLabel(reportingDetails)),
 			key: 'escalation-resolved',
 			label: reportingCopy.resolved,
 			tone: 'success',
@@ -60,7 +60,7 @@ export function getReportingStagePresentation({
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: leadingOutcome === undefined ? reportingCopy.tieStatusLead : reportingCopy.pendingStartNext({ end: formatReportingDeadline(reportingDetails.escalationEndTime, reportingDetails.currentTime), outcome: getReportingOutcomeLabel(leadingOutcome) }),
+				detail: leadingOutcome === undefined ? reportingCopy.tieStatusLead : reportingCopy.formatLeaderWinsNext(formatReportingDeadline(reportingDetails.escalationEndTime, reportingDetails.currentTime), getReportingOutcomeLabel(leadingOutcome)),
 				key: 'escalation-pending',
 				label: reportingCopy.phaseLabels[1] ?? reportingCopy.reportingOpen,
 				tone: 'default',
@@ -69,7 +69,7 @@ export function getReportingStagePresentation({
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: leadingOutcome === undefined ? reportingCopy.tieStatusLead : reportingCopy.activeNext(formatReportingDeadline(reportingDetails.escalationEndTime, reportingDetails.currentTime), getReportingOutcomeLabel(leadingOutcome)),
+				detail: leadingOutcome === undefined ? reportingCopy.tieStatusLead : reportingCopy.formatLeaderWinsNext(formatReportingDeadline(reportingDetails.escalationEndTime, reportingDetails.currentTime), getReportingOutcomeLabel(leadingOutcome)),
 				key: 'escalation-active',
 				label: commonCopy.active,
 				tone: 'default',
@@ -96,7 +96,7 @@ export function getReportingStagePresentation({
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: reportingCopy.formatReportingResolvedDetailLabel(getResolvedReportingOutcomeLabel(reportingDetails)),
+				detail: reportingCopy.resultSummary(getResolvedReportingOutcomeLabel(reportingDetails)),
 				key: 'escalation-resolved',
 				label: reportingCopy.resolved,
 				tone: 'success',

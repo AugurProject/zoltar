@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolVaultSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
-import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, isLiquidationBeyondMinPriceDistance } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
+import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getPoolExecutionFailureSentence, getMaxLiquidationAmount, isLiquidationBeyondMinPriceDistance } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 
 const ATTO = 10n ** 18n
 const DISTANCE_BPS = 1_000n
@@ -77,7 +77,7 @@ describe('liquidation minimum price distance', () => {
 	})
 
 	test('keeps the safe-vault reason for a healthy vault', () => {
-		expect(getDeterministicLiquidationFailureReason(createReasonInput({ repPerEthPrice: 4n * ATTO }))).toBe('This vault is not undercollateralized at the current OpenOracle price.')
+		expect(getDeterministicLiquidationFailureReason(createReasonInput({ repPerEthPrice: 4n * ATTO }))).toBe('The target vault is not liquidatable at the current price.')
 	})
 })
 
@@ -107,12 +107,18 @@ describe('liquidation execution failure details', () => {
 	test('passes through reverts the contracts do not emit', () => {
 		expect(getLiquidationExecutionFailureDetail('Target REP')).toBe('Target REP')
 	})
+
+	test('closes a failed execution reason as a sentence for display', () => {
+		expect(getPoolExecutionFailureSentence('Target safe')).toBe(liquidationCopy.targetNotLiquidatableError)
+		expect(getPoolExecutionFailureSentence('Target REP')).toBe('Target REP.')
+		expect(getPoolExecutionFailureSentence(undefined)).toBeUndefined()
+	})
 })
 
 describe('liquidation pool minimum vault REP', () => {
 	// The pool stores its effective minimum (theoretical supply / 100_000 when unconfigured), so an unloaded value is unknown, not 10 REP.
 	test('execution waits for the pool minimum instead of assuming a default', () => {
 		const input = createReasonInput({ minimumVaultRepDepositAttoRep: undefined })
-		expect(getLiquidationFailureReason({ ...input, settlementCollateralAttoEth: 10n * ATTO, totalUnderwritingLimitAttoEth: 10n * ATTO })).toBe(liquidationCopy.selectedPoolReloadRequired)
+		expect(getLiquidationFailureReason({ ...input, settlementCollateralAttoEth: 10n * ATTO, totalUnderwritingLimitAttoEth: 10n * ATTO })).toBe(liquidationCopy.selectedPoolDetailsLoading)
 	})
 })

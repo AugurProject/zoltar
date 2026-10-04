@@ -131,7 +131,7 @@ describe('live portfolio scope', () => {
 	test('separates stable outcome quantities, conditional payouts, and finalized redemption', async () => {
 		const valuedMarket = { ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 984_200_000_000_000_000n }
 		for (const [questionOutcome, systemState, expected] of [
-			[3, 0, '0.9842 ETH if Yes wins'],
+			[3, 0, '0.9842 ETH if the question resolves Yes'],
 			[1, 0, '0.9842 ETH redeemable'],
 			[2, 0, '0 ETH · lost'],
 			[1, 1, 'winning payout; redemption unavailable'],
@@ -158,9 +158,8 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={valued} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('1.987158 Yes')
-		expect(rendered.container.textContent).toContain('1.9558 ETH if Yes wins')
-		expect(rendered.container.textContent).toContain('if Yes wins')
-		expect(rendered.container.textContent).toContain('Yes (1.9558 ETH if Yes wins)')
+		expect(rendered.container.textContent).toContain('1.9558 ETH if the question resolves Yes')
+		expect(rendered.container.textContent).toContain('Yes (1.9558 ETH if the question resolves Yes)')
 		expect(rendered.container.textContent).not.toContain('sale')
 	})
 
@@ -232,7 +231,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
 		expect(rendered.container.textContent).toContain('Outcome token IDs')
-		expect(rendered.container.textContent).toContain('System stateOperational')
+		expect(rendered.container.textContent).toContain('Security pool stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.querySelector('details')?.open).toBe(false)
 		const capacity = Array.from(rendered.container.querySelectorAll('.metric-label')).find(field => field.textContent?.includes('Minting capacity'))
@@ -240,8 +239,8 @@ describe('live portfolio scope', () => {
 		expect(capacity?.closest('details')).toBeNull()
 		expect(rendered.container.querySelector('a.primary')?.closest('details')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('OutcomeNone (unresolved)')
-		expect(rendered.container.querySelector(`a[href="#/create-market/${pool}"]`)?.textContent).toContain('Deploy trading pool')
-		expect(rendered.container.textContent).toContain('available to browse')
+		expect(rendered.container.querySelector(`a[href="#/create-market/${pool}"]`)?.textContent).toContain('Create market')
+		expect(rendered.container.textContent).toContain('does not have a market yet')
 		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
 		expect(rendered.container.textContent).toContain('2\u00a0nanoETH per gas')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
@@ -252,15 +251,15 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, pair: `0x${'90'.repeat(20)}` }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.route-header a[href="#/market"]')).not.toBeNull()
-		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toContain('Trade this pool')
+		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toContain('Open market')
 	})
 
 	test('shows the deployed fee when an existing trading pool needs initialization', async () => {
 		const rendered = await renderIntoDocument(<PairInitializationAction market={{ ...market, pair: `0x${'90'.repeat(20)}`, feeBps: 125n }} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.textContent).toContain('needs initial liquidity')
+		expect(rendered.container.textContent).toContain('needs its first liquidity')
 		expect(rendered.container.textContent).toContain('Trading fee: 1.25%')
-		expect(rendered.container.querySelector(`a[href="#/liquidity/${pool}"]`)?.textContent).toContain('Initialize trading pool')
+		expect(rendered.container.querySelector(`a[href="#/liquidity/${pool}"]`)?.textContent).toContain('Add first liquidity')
 	})
 
 	test('does not present placeholder operational facts when live pool reads fail', async () => {
@@ -272,7 +271,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
 		expect(rendered.container.textContent).toContain('Outcome token IDs')
-		expect(rendered.container.textContent).not.toContain('System state')
+		expect(rendered.container.textContent).not.toContain('Security pool state')
 		expect(rendered.container.textContent).not.toContain('Registered vaults')
 		expect(rendered.container.textContent).not.toContain('Minting capacity')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
@@ -302,7 +301,7 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool refresh failed; showing the last successful result: factory RPC failed')
-		expect(rendered.container.textContent).toContain('System stateOperational')
+		expect(rendered.container.textContent).toContain('Security pool stateOperational')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry refresh button is unavailable')
 		retry.click()
@@ -314,7 +313,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing security pool; showing the last successful result.')
 		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()
-		expect(rendered.container.textContent).toContain('System stateOperational')
+		expect(rendered.container.textContent).toContain('Security pool stateOperational')
 		expect(rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)') === null).toBe(true)
 	})
 
@@ -334,7 +333,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		const empty = rendered.container.querySelector('.empty-state')
 		// The pool route names what is wrong once, and offers both ways out.
-		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Pool not in this universe')
+		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Security pool not in this universe')
 		expect(empty?.textContent).not.toContain('No security pool selected')
 		expect(Array.from(empty?.querySelectorAll('a') ?? []).map(link => [link.textContent, link.getAttribute('href')])).toEqual([
 			['Switch universe', '#/universe'],

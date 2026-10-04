@@ -37,7 +37,7 @@ export async function waitForSubmittedTransactionReceipt<TReceipt extends Pick<T
 	})
 	onKnownReceipt?.()
 	if (replacementReason === 'cancelled' || replacementReason === 'replaced') throw createTransactionFailureError('replaced', replacementFailureMessage(replacementReason))
-	if (!allowRevertedReceipt && receipt.status === 'reverted') throw createTransactionFailureError('reverted', 'Transaction reverted')
+	if (!allowRevertedReceipt && receipt.status === 'reverted') throw createTransactionFailureError('reverted', 'Transaction reverted.')
 	return {
 		hash: resolvedHash,
 		receipt,

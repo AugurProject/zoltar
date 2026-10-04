@@ -45,8 +45,8 @@ test('opens a newly created market and opens it again when entered through the c
 			input.value = '0.5'
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})
-		await waitForDom(() => !buttonByLabel('Initialize pool').disabled, 'enabled initialization')
-		await act(() => buttonByLabel('Initialize pool').click())
+		await waitForDom(() => !buttonByLabel('Create market and add liquidity').disabled, 'enabled initialization')
+		await act(() => buttonByLabel('Create market and add liquidity').click())
 		await waitForDom(() => created, 'transaction submission')
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`create-market/${market.pool}`)
 		await act(() => receipt.resolve({ status: 'success' }))

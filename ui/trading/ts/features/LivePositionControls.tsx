@@ -9,7 +9,7 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatOutcomeWithValue, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
-import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk, marketSettlementPath, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import { marketsCopy } from '../copy/markets.js'
@@ -61,11 +61,11 @@ export type TicketBalances = Readonly<{
 }>
 
 function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined, market: LiveMarket) {
-	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : ticketCopy.walletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
+	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : workflowCopy.formatWalletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
 	// The sellable amount only needs saying when INVALID coverage or pool depth holds it below the holding.
-	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeWithValue(holding, side, market, 4, 'down'))
+	if (model.sellable >= holding) return workflowCopy.formatHolding(formatOutcomeWithValue(holding, side, market, 4, 'down'))
 	return ticketCopy.sellableHint(formatOutcomeWithValue(holding, side, market, 4, 'down'), formatOutcomeWithValue(model.sellable, side, market, 4, 'down'))
 }
 
@@ -160,7 +160,7 @@ export function LivePositionControls({
 			{closed ? (
 				<UserMessage
 					className='trade-ticket-closed'
-					detail={ticketCopy.tradingEndedDetail}
+					detail={ticketCopy.formatTradingEndedDetail(marketSettlementPath(market))}
 					actions={
 						onOpenSettlement === undefined ? undefined : (
 							<button type='button' className='secondary' onClick={onOpenSettlement}>
@@ -192,19 +192,19 @@ export function LivePositionControls({
 					value={side}
 					onChange={ticket.setSide}
 					options={[
-						{ value: 'YES', label: odds === undefined ? workflowCopy.yes : marketsCopy.outcomeOdds(workflowCopy.yes, odds.yes), disabled: controlsDisabled },
-						{ value: 'NO', label: odds === undefined ? workflowCopy.no : marketsCopy.outcomeOdds(workflowCopy.no, odds.no), disabled: controlsDisabled },
+						{ value: 'YES', label: odds === undefined ? workflowCopy.yes : marketsCopy.formatOutcomePrice(workflowCopy.yes, odds.yes), disabled: controlsDisabled },
+						{ value: 'NO', label: odds === undefined ? workflowCopy.no : marketsCopy.formatOutcomePrice(workflowCopy.no, odds.no), disabled: controlsDisabled },
 					]}
 				/>
 				{/* The percentages on the outcome buttons are conditional on a valid resolution, and say so in view. */}
-				{odds === undefined ? null : <span className='trade-ticket-odds-caption'>{marketsCopy.conditionalOdds}</span>}
+				{odds === undefined ? null : <span className='trade-ticket-odds-caption'>{marketsCopy.conditionalPrice}</span>}
 			</div>
 			<FormField id={amountId} label={mode === 'entry' ? ticketCopy.youPay : ticketCopy.sharesToSell}>
 				<FormInput
 					id={amountId}
 					name='amount'
 					value={ticket.amount}
-					placeholder={workflowCopy.amountPlaceholder}
+					placeholder={workflowCopy.zeroDecimalPlaceholder}
 					disabled={controlsDisabled}
 					inputMode='decimal'
 					autoComplete='off'

@@ -36,7 +36,7 @@ export function getReportingOutcomeLabel(outcome: ReportingOutcomeKey | 'none') 
 }
 
 export function getReportingLockedUntilMessage(endTime: bigint, currentTimestamp: bigint | undefined) {
-	return `Reporting opens when this pool's underlying question ends: ${formatTimestampWithRelative(endTime, currentTimestamp)}.`
+	return `Reporting opens when this pool’s underlying question ends: ${formatTimestampWithRelative(endTime, currentTimestamp)}.`
 }
 
 export function hasReportingOpened(endTime: bigint, currentTimestamp: bigint | undefined) {

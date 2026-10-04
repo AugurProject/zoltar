@@ -14,7 +14,7 @@ test('the market list search opens a pasted pool address even before any market 
 		const form = rendered.container.querySelector<HTMLFormElement>('form.market-list-search')
 		const input = form?.querySelector<HTMLInputElement>('input[type="search"]')
 		if (form === null || input === null || input === undefined) throw new Error('Market search did not render')
-		expect(input.placeholder).toContain('paste a pool address')
+		expect(input.placeholder).toContain('paste a security pool address')
 		const type = (value: string) =>
 			act(() => {
 				input.value = value
@@ -28,7 +28,7 @@ test('the market list search opens a pasted pool address even before any market 
 		await type(` ${pool} `)
 		// The action appears beside the field without replacing it, so typing keeps focus.
 		expect(form.querySelector('input[type="search"]')).toBe(input)
-		expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open pool')
+		expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open security pool')
 		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`market/${pool}`)
 		expect(window.location.hash).toContain('simScenario=trading-funded')

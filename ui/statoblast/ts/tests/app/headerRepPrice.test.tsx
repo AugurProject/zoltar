@@ -49,7 +49,7 @@ describe('header REP / ETH price', () => {
 		expect(fallback.repPerEthPrice).toBe(30n * 10n ** 18n)
 		expect(fallback.repPerEthSource).toBe('v4')
 		expect(fallback.repPerEthUnavailableLabel).toBeUndefined()
-		expect(await renderText(fallback.repPerEthSourceLabel)).toBe('(u4)')
+		expect(await renderText(fallback.repPerEthSourceLabel)).toBe('(V4)')
 	})
 
 	test('names the missing pool OpenOracle report when a pool is open', async () => {

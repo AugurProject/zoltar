@@ -288,7 +288,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
 			<TransactionActionButtonLockProvider lock={unlockedTransactionActions}>
-				<OperationModal embedTransactionSteps={false} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close}>
+				<OperationModal embedTransactionSteps={false} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} title={poolCopy.requestNewPrice} onClose={close}>
 					{priceControls}
 					{showSteps || failedWorkflow !== undefined ? (
 						<GlobalTransactionPresentationProvider transaction={presentation === ignoredFailure.current ? undefined : presentation}>

@@ -28,7 +28,7 @@ function PoolAddressDisplay({ address, loading, onLoad }: { address: string; loa
 				<ReadOnlyAddressValue address={address} className='pool-address-display-value' />
 				<div className='pool-address-display-actions'>
 					<button className='secondary' type='button' aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
-						{copied.value ? workspaceCopy.copiedPoolAddress : workspaceCopy.copyPoolAddress}
+						{copied.value ? commonCopy.copied : workspaceCopy.copyPoolAddress}
 					</button>
 					<RefreshPoolButton address={address} loading={loading} onLoad={onLoad} poolLoaded />
 				</div>

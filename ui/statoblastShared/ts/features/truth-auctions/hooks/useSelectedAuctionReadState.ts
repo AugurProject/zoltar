@@ -89,7 +89,7 @@ export function useSelectedAuctionReadState({
 			})
 			.catch(error => {
 				if (requestGeneration !== selectedAuctionRequestGenerationRef.current) return
-				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
+				setSelectedAuctionError(getErrorMessage(error, `Unable to load truth auction details for the ${selectedAuctionLabel} child universe.`))
 				setSelectedAuctionErrorAddress(selectedAuctionPoolAddress)
 				setLoadingSelectedAuctionDetails(false)
 				setRetryingSelectedAuctionDetails(false)
@@ -175,7 +175,7 @@ export function useSelectedAuctionReadState({
 				if (cancelled || requestGeneration !== selectedAuctionRequestGenerationRef.current) return
 				setLoadingSelectedAuctionDetails(false)
 				setRetryingSelectedAuctionDetails(false)
-				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
+				setSelectedAuctionError(getErrorMessage(error, `Unable to load truth auction details for the ${selectedAuctionLabel} child universe.`))
 				setSelectedAuctionErrorAddress(selectedAuctionPoolAddress)
 			})
 		return () => {

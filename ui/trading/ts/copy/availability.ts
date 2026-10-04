@@ -4,8 +4,8 @@ import { conditionalYesPriceValidation } from './liquidity.js'
 import { walletBalancesUnavailable } from './app.js'
 
 export { formatNetworkRequiredReason }
+export { closedToAdditions as liquidityClosedReason } from './liquidity.js'
 export const connectWalletReason = walletConnectionRequired
-export const marketClosedReason = 'Market closed to new positions.'
 export const balancesLoadingReason = 'Loading wallet balances…'
 export const balancesUnavailableReason = `${walletBalancesUnavailable}.`
 export const insufficientEthReason = 'Insufficient ETH balance.'

@@ -21,6 +21,7 @@ import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../..
 import type { SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import { SecurityPoolVaultDirectory } from './SecurityPoolVaultDirectory.js'
 import { SecurityVaultSection } from './SecurityVaultSection.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 
 type PoolState = ComponentProps<typeof SecurityVaultSection>['poolState']
 
@@ -140,7 +141,7 @@ export function SecurityPoolVaultWorkspace({
 								}}
 								disabled={securityVault.loadingSecurityVault || lookupOwner.trim() === ''}
 							>
-								{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : workspaceCopy.openVault}
+								{securityVault.loadingSecurityVault ? <LoadingText announce={false}>{commonCopy.refreshingData}</LoadingText> : workspaceCopy.openVault}
 							</button>
 						}
 					/>
@@ -170,11 +171,11 @@ export function SecurityPoolVaultWorkspace({
 												void securityVault.onLoadSecurityVault(vault.vaultAddress.toString())
 											}}
 										>
-											{securityPoolCopy.selectVault}
+											{workspaceCopy.openVault}
 										</button>
 										{ownVault ? undefined : (
 											<button aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId} className='secondary' disabled={liquidationBlocker !== undefined} type='button' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}>
-												{securityPoolCopy.reviewLiquidation}
+												{liquidationCopy.liquidateVault}
 											</button>
 										)}
 									</div>
@@ -205,7 +206,7 @@ export function SecurityPoolVaultWorkspace({
 											vaultLoaded: selectedVaultDetails !== undefined,
 										})
 										return {
-											actionLabel: securityPoolCopy.reviewLiquidation,
+											actionLabel: liquidationCopy.liquidateVault,
 											...(blocker === undefined ? {} : { blocker }),
 											description: securityPoolCopy.liquidationWorkflowDescription,
 											key: 'liquidate-vault',

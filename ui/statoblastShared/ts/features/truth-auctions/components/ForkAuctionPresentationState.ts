@@ -59,16 +59,16 @@ export function getTruthAuctionStateBadge({
 		return { label: forkAuctionCopy.inactive, tone: 'muted' } as const
 	}
 	if (!truthAuction.finalized) {
-		if (truthAuction.hitCap && truthAuction.clearingTick !== undefined && truthAuction.clearingPrice !== undefined) return { label: forkAuctionCopy.clearing, tone: 'pending' } as const
+		if (truthAuction.hitCap && truthAuction.clearingTick !== undefined && truthAuction.clearingPrice !== undefined) return { label: forkAuctionCopy.targetReached, tone: 'pending' } as const
 		return { label: forkAuctionCopy.open, tone: 'pending' } as const
 	}
 	if (truthAuction.underfunded) return { label: forkAuctionCopy.shortfall, tone: 'blocked' } as const
-	if (truthAuction.hitCap) return { label: commonCopy.settled, tone: 'ok' } as const
+	if (truthAuction.hitCap) return { label: forkAuctionCopy.finalized, tone: 'ok' } as const
 	return { label: forkAuctionCopy.unfilled, tone: 'muted' } as const
 }
 
 export function getMigrationStateBadge({ currentTimestamp, effectiveTruthAuctionStartedAt, migrationEndsAt }: { currentTimestamp: bigint | undefined; effectiveTruthAuctionStartedAt: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return { label: forkAuctionCopy.notStartedBadgeLabel, tone: 'muted' } as const
+	if (migrationEndsAt === undefined) return { label: forkAuctionCopy.notStarted, tone: 'muted' } as const
 	if (effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
 	// Migration accepts block.timestamp <= forkActivationTime + MIGRATION_TIME, so it closes only after migrationEndsAt.
 	if (currentTimestamp !== undefined && currentTimestamp > migrationEndsAt) return { label: forkAuctionCopy.closed, tone: 'ok' } as const

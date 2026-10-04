@@ -105,7 +105,10 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
 		expect(document.querySelector('.migration-wizard')).toBeTruthy()
-		expect(queries.getByText('Outcome choices appear after this universe forks.')).toBeTruthy()
+		// The fork requirement is stated once, in the panel, and describes the disabled Continue button.
+		const forkRequirement = queries.getByText('This universe must fork before REP can be migrated.')
+		expect(document.body.textContent?.split('This universe must fork before REP can be migrated.').length).toBe(2)
+		expect(queries.getByRole('button', { name: 'Continue' }).getAttribute('aria-describedby')).toBe(forkRequirement.id)
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		for (const button of document.querySelectorAll<HTMLButtonElement>('.migration-wizard button')) {
 			expect(button.disabled).toBe(true)
@@ -113,7 +116,7 @@ describe('ZoltarMigrationSection', () => {
 		}
 		expect(updates).toEqual([])
 		await act(() => render(h(ZoltarMigrationSection, { ...props, zoltarUniverse: createUniverse() }), rendered.container))
-		expect(queries.queryByText('Outcome choices appear after this universe forks.')).toBeNull()
+		expect(queries.queryByText('This universe must fork before REP can be migrated.')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false)
 	})
 
@@ -129,15 +132,15 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ loadingZoltarUniverse: true, zoltarUniverse: createUniverse({ childUniverses: [], relatedUniversesLoaded: false }) })))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.querySelector('.migration-wizard')).toBeNull()
-		expect(within(document.body).queryByText('No outcome universes available.')).toBeNull()
-		expect(within(document.body).getByText('Loading universe details.')).toBeTruthy()
+		expect(within(document.body).queryByText('No child universes available.')).toBeNull()
+		expect(within(document.body).getByText('Loading universe details…')).toBeTruthy()
 	})
 
 	test('shows the related-detail read failure and retries without pretending outcomes are empty', async () => {
 		let retries = 0
 		const props = {
 			...createProps({ zoltarUniverse: createUniverse({ childUniverses: [], relatedUniversesLoaded: false }) }),
-			zoltarUniverseError: 'Failed to load Zoltar universe. Reason: RPC unavailable',
+			zoltarUniverseError: 'Failed to load Zoltar universe. Reason: RPC unavailable.',
 			onRetryUniverse: () => {
 				retries += 1
 			},
@@ -161,7 +164,7 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
 
-		expect(getCurrentStepTitle()).toBe('Choose outcomes')
+		expect(getCurrentStepTitle()).toBe('Select outcomes')
 		expect(document.body.textContent).toContain('Not deployed')
 		expect(document.body.textContent).not.toContain('0x2')
 		expect(document.body.textContent).not.toContain('Split REP')
@@ -492,7 +495,7 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = rendered.cleanup
 		await openStep('Amount')
-		expectTransactionButtonDisabled(document.body, 'Continue', 'Could not read migration balances. Retry to continue.')
+		expectTransactionButtonDisabled(document.body, 'Continue', 'Migration balances could not be loaded. Retry to continue.')
 		await act(() => within(document.body).getByRole('button', { name: 'Retry' }).click())
 		expectTransactionButtonEnabled(document.body, 'Continue')
 		expect(within(document.body).queryByRole('button', { name: 'Retry' })).toBeNull()
@@ -518,7 +521,7 @@ describe('ZoltarMigrationSection', () => {
 	test('offers wallet import only for outcome REP the account holds', async () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarMigrationChildRepBalancesAttoRep: { '2': 5n * ATTO_REP }, zoltarMigrationChildSplitAmountsAttoRep: { '2': 5n * ATTO_REP } })))
 		cleanupRenderedComponent = rendered.cleanup
-		const walletTokensSection = Array.from(document.querySelectorAll('details')).find(details => details.querySelector('summary')?.textContent === 'Outcome-universe REP in your wallet')
+		const walletTokensSection = Array.from(document.querySelectorAll('details')).find(details => details.querySelector('summary')?.textContent === 'Add child-universe REP to your wallet')
 		if (walletTokensSection === undefined) throw new Error('Expected outcome REP section')
 		expect(walletTokensSection.open).toBe(false)
 		expect(walletTokensSection.textContent).toContain('Yes')
@@ -527,6 +530,6 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = undefined
 		const withoutHeldTokens = await renderIntoDocument(h(ZoltarMigrationSection, createProps()))
 		cleanupRenderedComponent = withoutHeldTokens.cleanup
-		expect(Array.from(document.querySelectorAll('summary')).some(summary => summary.textContent === 'Outcome-universe REP in your wallet')).toBe(false)
+		expect(Array.from(document.querySelectorAll('summary')).some(summary => summary.textContent === 'Add child-universe REP to your wallet')).toBe(false)
 	})
 })

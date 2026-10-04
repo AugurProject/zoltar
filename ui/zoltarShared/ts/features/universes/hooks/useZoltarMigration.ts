@@ -1,3 +1,4 @@
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { useSignal } from '@preact/signals'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
@@ -85,7 +86,7 @@ export function useZoltarMigration({
 			zoltarMigrationPending.value = true
 			zoltarMigrationActiveAction.value = 'split'
 			zoltarMigrationError.value = undefined
-			zoltarMigrationFeedback.value = createPendingActionFeedback('splitMigrationRep', 'Migrating REP')
+			zoltarMigrationFeedback.value = createPendingActionFeedback('splitMigrationRep', transactionCopy.migratingRep)
 			zoltarMigrationResult.value = undefined
 			const submittedForm = zoltarMigrationForm.value
 			let outcomeLabels = submittedForm.outcomeIndexes.map(outcomeIndex => getOutcomeLabelForIndex(zoltarUniverse?.childUniverses, outcomeIndex))
@@ -104,14 +105,14 @@ export function useZoltarMigration({
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
-				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
+				if (amount <= 0n) throw new Error('Migration amount must be greater than zero.')
 				const outcomeIndexes = getSubmittableOutcomeIndexes(universe.childUniverses, submittedForm.outcomeIndexes)
-				if (outcomeIndexes.length === 0 || outcomeIndexes.length !== submittedForm.outcomeIndexes.length) throw new Error('Select outcomes of this universe again before migrating')
+				if (outcomeIndexes.length === 0 || outcomeIndexes.length !== submittedForm.outcomeIndexes.length) throw new Error('Select the outcomes again before migrating: the selection no longer matches this universe.')
 				outcomeLabels = outcomeIndexes.map(outcomeIndex => getOutcomeLabelForIndex(universe.childUniverses, outcomeIndex))
 				const result = await migrateInternalRepInZoltar(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes, preparationAttoRep)
 				if (!environmentGuard.isCurrent()) return
 				zoltarMigrationResult.value = result
-				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, 'REP migrated', result.hash)
+				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, transactionCopy.repMigrated, result.hash)
 				// Clear the amount so the wizard returns to the amount step with refreshed balances instead of re-offering the same migration.
 				setZoltarMigrationForm(current => (current === submittedForm ? { ...current, amount: '' } : current))
 				onTransactionPresented(createZoltarMigrationSuccessPresentation(result, outcomeLabels))
@@ -138,9 +139,9 @@ export function useZoltarMigration({
 				await refreshZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
-				const message = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
+				const message = formatRefreshErrorMessage(error, 'REP migrated, but the page could not be refreshed.')
 				const latestResult = zoltarMigrationResult.value
-				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? 'splitMigrationRep', 'REP migrated', message, latestResult?.hash)
+				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? 'splitMigrationRep', transactionCopy.repMigrated, message, latestResult?.hash)
 				if (latestResult !== undefined) onTransactionPresented(createZoltarMigrationWarningPresentation(latestResult, outcomeLabels, message))
 			}
 		},

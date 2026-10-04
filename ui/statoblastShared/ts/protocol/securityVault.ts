@@ -5,8 +5,8 @@ import type { SecurityVaultActionResult } from '../types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 
 export async function depositRepToVaultToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) {
-	if (amount <= 0n) throw new Error('REP deposit amount must be greater than zero')
-	if (targetHealthFactorBps < 10_000n) throw new Error('Target backing ratio must be at least 1×')
+	if (amount <= 0n) throw new Error('REP deposit amount must be greater than zero.')
+	if (targetHealthFactorBps < 10_000n) throw new Error('Target backing ratio must be at least 1×.')
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -62,7 +62,7 @@ export async function isSecurityPoolEscalationResolved(client: Pick<ReadClient, 
 
 /** Sets the caller's own commitment limit on the pool, without the price coordinator queue. */
 export async function setUnderwritingLimit(client: WriteClient, securityPoolAddress: Address, limitAttoEth: bigint) {
-	if (limitAttoEth < 0n) throw new Error('Commitment limit cannot be negative')
+	if (limitAttoEth < 0n) throw new Error('Commitment limit cannot be negative.')
 	const hash = await writeContractAndWait(client, () => ({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'setUnderwritingLimit', args: [limitAttoEth] }))
 	return { action: 'setVaultUnderwritingLimit', hash } satisfies SecurityVaultActionResult
 }

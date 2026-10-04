@@ -42,7 +42,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 				})
 	}
 	const pairAddress = quote.market.pair
-	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
+	if (pairAddress === undefined) throw new Error('The trading pool disappeared while the transaction was checked')
 	if (quote.operation === 'add') {
 		if (refreshed.operation !== 'add') throw new Error('Liquidity operation changed during revalidation')
 		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')

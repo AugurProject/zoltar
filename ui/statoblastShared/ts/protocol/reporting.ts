@@ -479,7 +479,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 			args: [],
 		}))
 	const useWalletFunding = (contributionFunding ?? (forkContinuation ? 'vault' : 'wallet')) === 'wallet'
-	if (useWalletFunding && forkContinuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
+	if (useWalletFunding && forkContinuation) throw new Error('Reports in a pool continued after a fork are funded from your vault.')
 	if (escalationGameAddress !== zeroAddress) {
 		const [escalationEndTime, block] = await Promise.all([client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] }), client.getBlock()])
 		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime })
@@ -519,7 +519,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
 					])
-					if (useWalletFunding && continuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
+					if (useWalletFunding && continuation) throw new Error('Reports in a pool continued after a fork are funded from your vault.')
 					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
 					const block = await client.getBlock()
 					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })

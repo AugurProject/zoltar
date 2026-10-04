@@ -31,7 +31,7 @@ function getPointStatus(point: TruthAuctionDepthPoint, clearingTick: bigint | un
 	const isBidPrice = point.isSelected || point.isPreviewTick
 	if (isClearing && isBidPrice) return forkAuctionCopy.depthChartClearingAndSelectedStatus
 	if (isClearing) return forkAuctionCopy.depthChartClearingStatus
-	return isBidPrice ? forkAuctionCopy.depthChartSelectedStatus : undefined
+	return isBidPrice ? forkAuctionCopy.yourBidPrice : undefined
 }
 
 /** Announces the price that selecting the point fills, using the bid form's own formatter, with the depth and status sighted users see. */

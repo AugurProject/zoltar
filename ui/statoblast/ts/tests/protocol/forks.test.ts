@@ -83,7 +83,7 @@ describe('forks protocol client', () => {
 		await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, 12n, ['yes', 'no'], 5n * 10n ** 18n)
 		await migrateSecurityVault(client, securityPoolAddress, 12n, 'invalid', { repAttoRep: 3n * 10n ** 18n, underwritingLimitAttoEth: 2n * 10n ** 18n })
 		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([
-			['Trigger universe fork · 6\u00a0REP', 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and 6\u00a0REP held by the pool and its escalation game moves into fork migration. This can’t be undone.'],
+			['Trigger universe fork · 6\u00a0REP', 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Yes, No, and Invalid, this pool stops operating, and 6\u00a0REP held by the pool and its escalation game moves into fork migration. This can’t be undone.'],
 			['Migrate pool-held REP to Yes, No · 5\u00a0REP', 'Moves this pool’s 5\u00a0REP attributed to Yes, No into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
 			['Migrate vault to Invalid · 3\u00a0REP', 'Moves all your vault REP (3\u00a0REP) and underwriting commitments (2\u00a0ETH) from this pool to the Invalid universe. This can’t be undone or split across outcomes.'],
 		])

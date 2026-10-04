@@ -48,7 +48,7 @@ export function SelectedVaultSummarySection({
 						</div>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
-						<span>{securityPoolCopy.exposureSupported}</span>
+						<span>{securityPoolCopy.commitmentLimit}</span>
 						<strong>
 							<VaultExposureValue capacity={underwritingLimitAttoEth} />
 						</strong>

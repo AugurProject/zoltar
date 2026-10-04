@@ -1,5 +1,4 @@
 export const firstRunTitle = 'New here? Start with your role'
-export const dismissFirstRun = 'Dismiss'
 export const dismissFirstRunLabel = 'Dismiss the role guide'
 export const vaultProviderRole = 'Vault provider'
 export const vaultProviderGuide = 'How vaults work'

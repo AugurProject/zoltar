@@ -9,7 +9,7 @@ import { shouldShowDeploymentTab } from '../lib/deploymentTab.js'
 
 type InitializeEnvironmentOptions = { shouldCommit?: () => boolean }
 
-type DeploymentRouteOptions = Pick<Parameters<typeof buildDeploymentRouteContentProps>[0], 'deploymentCompleteHref' | 'getSections'>
+type DeploymentRouteOptions = Pick<Parameters<typeof buildDeploymentRouteContentProps>[0], 'deploymentCompleteHref' | 'deploymentCompleteLabel' | 'getSections'>
 
 type UseProtocolAppShellParameters = {
 	deploymentRoute?: DeploymentRouteOptions

@@ -336,7 +336,7 @@ export function renderSelectedReportActionSection({
 									)}
 								</MetricField>
 								<MetricField label={openOracleCopy.disputeFee}>{renderTokenAmounts([{ amount: disputeSubmission?.disputeFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
-								<MetricField label={openOracleCopy.disputeProtocolFee}>{renderTokenAmounts([{ amount: disputeSubmission?.protocolFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
+								<MetricField label={openOracleCopy.protocolFee}>{renderTokenAmounts([{ amount: disputeSubmission?.protocolFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
 								<MetricField label={openOracleCopy.creditedToOracleBalance}>{renderTokenAmounts([{ amount: disputeSubmission?.token2CreditAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol }])}</MetricField>
 								<MetricField label={openOracleCopy.yourNewReport}>
 									{renderTokenAmounts([
@@ -360,7 +360,7 @@ export function renderSelectedReportActionSection({
 						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <UserMessage className='detail' detail={disputeSubmission.blockMessage.message} />}
 						<div className='actions'>
 							<TransactionActionButton
-								idleLabel={openOracleCopy.disputeAndSwapAction}
+								idleLabel={openOracleCopy.disputeAndSwap}
 								pendingLabel={openOracleCopy.submittingDispute}
 								onClick={onDisputeReport}
 								pending={openOracleActiveAction === 'dispute'}
@@ -406,7 +406,7 @@ export function renderSelectedReportActionSection({
 						{priceExpiry === undefined ? undefined : <UserMessage tone='warning' detail={priceExpiry.detail} />}
 						<div className='actions'>
 							<TransactionActionButton
-								idleLabel={openOracleCopy.settleReportTitle(openOracleReportDetails?.reportId ?? 0n)}
+								idleLabel={openOracleReportDetails === undefined ? openOracleCopy.settleReport : openOracleCopy.settleReportTitle(openOracleReportDetails.reportId)}
 								pendingLabel={openOracleCopy.settlingReport}
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}

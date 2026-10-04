@@ -163,7 +163,7 @@ export function TradingSection({
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
+		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.questionFinalizedReason
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -195,7 +195,7 @@ export function TradingSection({
 
 		return (() => {
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
-			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniversesReason
+			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniverses
 
 			return (() => {
 				if (tradingForkUniverse?.hasForked === false || (tradingForkUniverse === undefined && !poolUniverseHasForked)) return tradingCopy.shareMigrationRequiresFork
@@ -217,10 +217,10 @@ export function TradingSection({
 	const expectedRedemptionPayoutAttoEth = convertAttoSharesToSettlementCollateralAttoEth(winningAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const redeemSharesLauncherBlocker = getTradingRedeemSharesGuardMessage({ accountAddress: accountState.address, hasSelectedPool, isOnActiveAppChain, questionOutcome: selectedPool?.questionOutcome, shareBalances: loadingTradingDetails ? undefined : shareBalances })
 
-	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.mintCompleteSetsActionLabel))
-	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemCompleteSetsActionLabel))
-	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.migrateForkedShares))
-	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemSharesActionLabel))
+	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : tradingCopy.actionUnavailableReason)
+	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.actionUnavailableReason)
+	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
+	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (!actionEnabled) return tradingCopy.actionUnavailableReason
@@ -272,7 +272,7 @@ export function TradingSection({
 	)
 	const tradingLaunchers: ReadinessAction[] = [
 		{
-			actionLabel: tradingCopy.mintCompleteSetsActionLabel,
+			actionLabel: tradingCopy.mintCompleteSets,
 			description: tradingCopy.completeSetMintDescription,
 			key: 'mint-complete-sets',
 			readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -281,7 +281,7 @@ export function TradingSection({
 			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
 		},
 		{
-			actionLabel: tradingCopy.redeemCompleteSetsActionLabel,
+			actionLabel: tradingCopy.redeemCompleteSets,
 			description: tradingCopy.completeSetBurnDescription,
 			key: 'redeem-complete-sets',
 			readiness: !walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
@@ -294,16 +294,16 @@ export function TradingSection({
 			description: tradingCopy.shareMigrationDescription,
 			key: 'migrate-shares',
 			readiness: !walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.migrateForkedSharesTitle,
+			title: tradingCopy.migrateForkedShares,
 			...(!walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
 			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
 		},
 		{
-			actionLabel: tradingCopy.redeemSharesActionLabel,
+			actionLabel: tradingCopy.redeemResolvedShares,
 			description: tradingCopy.resolvedShareRedemptionDescription,
 			key: 'redeem-shares',
 			readiness: !walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.redeemResolvedSharesTitle,
+			title: tradingCopy.redeemResolvedShares,
 			...(!walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
 		},
@@ -401,7 +401,7 @@ export function TradingSection({
 				/>
 				<div className='actions'>
 					<TransactionActionButton
-						idleLabel={tradingCopy.mintCompleteSetsActionLabel}
+						idleLabel={tradingCopy.mintCompleteSets}
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
@@ -423,7 +423,7 @@ export function TradingSection({
 				<UserMessage className='detail' detail={tradingCopy.redeemCompleteSetsFeeDetail} />
 				<div className='actions'>
 					<TransactionActionButton
-						idleLabel={tradingCopy.redeemCompleteSetsActionLabel}
+						idleLabel={tradingCopy.redeemCompleteSets}
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
@@ -437,7 +437,7 @@ export function TradingSection({
 				context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))}
 				isOpen={activeModal === 'migrate-shares'}
 				onClose={() => setActiveModal(undefined)}
-				title={tradingCopy.migrateForkedSharesTitle}
+				title={tradingCopy.migrateForkedShares}
 			>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
@@ -458,7 +458,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemResolvedSharesTitle}>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemResolvedShares}>
 				<MetricGrid>
 					<MetricField label={tradingCopy.formatWinningOutcomeShares(winningOutcomeLabel ?? '')}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={winningAttoShares} suffix={tradingCopy.sharesUnit} />
@@ -469,7 +469,7 @@ export function TradingSection({
 				</MetricGrid>
 				<UserMessage className='detail' detail={tradingCopy.resolvedShareRedemptionFeeDetail} />
 				<div className='actions'>
-					<TransactionActionButton idleLabel={tradingCopy.redeemSharesActionLabel} pendingLabel={tradingCopy.redeemingShares} onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} availability={getModalActionAvailability(redeemSharesEnabled, redeemSharesLauncherBlocker)} />
+					<TransactionActionButton idleLabel={tradingCopy.redeemResolvedShares} pendingLabel={tradingCopy.redeemingShares} onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} availability={getModalActionAvailability(redeemSharesEnabled, redeemSharesLauncherBlocker)} />
 				</div>
 			</OperationModal>
 		</>

@@ -15,7 +15,8 @@ type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>
 type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint, owner?: WorkflowOwner, options?: Readonly<{ ownerMarket?: Address }>) => Promise<void>
 
 function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigint, market: LiveMarket) {
-	return estimate.kind === 'entry' ? `${ticketCopy.youReceiveEstimate} ${formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)}` : `${ticketCopy.youSellEstimate} ${formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)}`
+	const amount = formatOutcomeWithValue(authoritativeLongShares, estimate.side, market)
+	return estimate.kind === 'entry' ? ticketCopy.formatRequotedReceive(amount) : ticketCopy.formatRequotedSell(amount)
 }
 
 /**
@@ -71,7 +72,7 @@ export function createPositionTransactionController({
 		workflow.setRequoteNotice(market.pool, undefined)
 		await transaction.submit<Quote>({
 			prepare: async () => {
-				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
+				await executeWithCurrentWalletContext(account, 'Wallet network changed. Switch back before submitting.', 'Wallet account changed. Reconnect and try again.', async () => undefined)
 				const quoteContext = { account, configuration, walletClient }
 				const quote: Quote =
 					estimate.kind === 'entry'
@@ -80,7 +81,7 @@ export function createPositionTransactionController({
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
 					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
 					void refresh(undefined, undefined, 'position', ownerRefresh)
-					const requote = ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market))
+					const requote = ticketCopy.formatPriceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market), estimate.kind === 'entry' ? ticketCopy.buyOutcome(estimate.side) : ticketCopy.sellOutcome(estimate.side))
 					// The submission still stops here; the ticket presents the stop as a prompt to review the new estimate.
 					workflow.setRequoteNotice(market.pool, requote)
 					throw new Error(requote)
@@ -88,7 +89,7 @@ export function createPositionTransactionController({
 				return withApprovedBounds(quote, estimate)
 			},
 			send: async (quote, requestSignature) => {
-				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and try again', 'Wallet account changed during transaction revalidation; reconnect and try again')
+				const guarded = createGuardedWalletWrite(account, 'Wallet network changed while the transaction was checked. Reconnect and try again.', 'Wallet account changed while the transaction was checked. Reconnect and try again.')
 				const guardedWrite: GuardedWalletWrite = async write => await guarded(async () => await requestSignature(write))
 				return quote.kind === 'entry' ? await services.submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await services.submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
 			},

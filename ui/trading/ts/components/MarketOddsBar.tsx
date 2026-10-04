@@ -5,15 +5,15 @@ export function MarketOddsBar({ yesPercent, noPercent, showValues = true }: { ye
 	return (
 		<div className='market-odds'>
 			<div className='market-odds__labels' aria-hidden='true'>
-				<span className='market-odds__caption'>{marketsCopy.conditionalOdds}</span>
+				<span className='market-odds__caption'>{marketsCopy.conditionalPrice}</span>
 				{showValues ? (
 					<>
-						<span className='market-odds__yes'>{marketsCopy.outcomeOdds(marketsCopy.yes, yesPercent)}</span>
-						<span className='market-odds__no'>{marketsCopy.outcomeOdds(marketsCopy.no, noPercent)}</span>
+						<span className='market-odds__yes'>{marketsCopy.formatOutcomePrice(marketsCopy.yes, yesPercent)}</span>
+						<span className='market-odds__no'>{marketsCopy.formatOutcomePrice(marketsCopy.no, noPercent)}</span>
 					</>
 				) : undefined}
 			</div>
-			<div className='market-odds__track' role='img' aria-label={marketsCopy.impliedOdds(yesPercent, noPercent)}>
+			<div className='market-odds__track' role='img' aria-label={marketsCopy.formatConditionalPrices(yesPercent, noPercent)}>
 				<div className='market-odds__fill' style={{ width: `${yesPercent.toString()}%` }} />
 			</div>
 		</div>

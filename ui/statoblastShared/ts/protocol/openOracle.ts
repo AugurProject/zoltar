@@ -27,7 +27,7 @@ const OPEN_ORACLE_SETTLE_OVERHEAD_GAS = 300_000n
 const OPEN_ORACLE_REPORT_MISSING_ERROR_NAME = 'OpenOracleReportMissingError'
 
 function createOpenOracleReportMissingError(reportId: bigint) {
-	const error = new Error(`Oracle report #${reportId.toString()} does not exist`)
+	const error = new Error(openOracleCopy.formatReportMissing(reportId.toString()))
 	error.name = OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
 	return error
 }
@@ -75,7 +75,7 @@ function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'],
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleReportDetails> {
 	const [storedState, stateHash, block] = await Promise.all([
 		loadOpenOracleStoredState(client, openOracleAddress, reportId).catch(error => {
-			if (error instanceof Error && error.message === `Oracle report #${reportId.toString()} does not exist`) throw createOpenOracleReportMissingError(reportId)
+			if (error instanceof Error && error.message === openOracleCopy.formatReportMissing(reportId.toString())) throw createOpenOracleReportMissingError(reportId)
 			throw error
 		}),
 		client.readContract({
@@ -89,7 +89,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	if (!hasTimestampAndNumber(block)) throw new Error('Unexpected block response')
 	const { game } = storedState.latest
 	const expectedStateHash = hashOpenOracleStatePreimage(storedState.latest)
-	if (stateHash.toLowerCase() !== expectedStateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId.toString()} stored state does not match its on-chain state hash`)
+	if (stateHash.toLowerCase() !== expectedStateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId.toString()} stored state does not match its onchain state hash.`)
 	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
 		{
 			abi: ABIS.mainnet.erc20,
@@ -213,7 +213,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 	const tokenAddresses = new Set<Address>()
 	for (const reportId of supportedReportIds) {
 		const state = storedStates.get(reportId)
-		if (state === undefined) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
+		if (state === undefined) throw new Error(openOracleCopy.formatReportMissing(reportId.toString()))
 		tokenAddresses.add(state.latest.game.token1)
 		tokenAddresses.add(state.latest.game.token2)
 	}
@@ -310,10 +310,10 @@ export async function createOpenOracleReportInstance(
 		if (!Number.isSafeInteger(value)) throw new Error(`${label} exceeds the maximum safe integer range`)
 	}
 	assertSafeInteger(parameters.disputeDelay, 'Dispute delay')
-	assertSafeInteger(parameters.feePercentage, 'Fee percentage')
+	assertSafeInteger(parameters.feePercentage, 'Dispute fee')
 	assertSafeInteger(parameters.multiplier, 'Multiplier')
 	assertSafeInteger(parameters.protocolFee, 'Protocol fee')
-	assertSafeInteger(parameters.settlementTime, 'Settlement time')
+	assertSafeInteger(parameters.settlementTime, 'Settlement delay')
 	const parameterValidation = getOpenOracleCreateParameterValidation({
 		disputeDelay: BigInt(parameters.disputeDelay),
 		escalationHalt: parameters.escalationHalt,
@@ -347,9 +347,9 @@ export async function createOpenOracleReportInstance(
 		client.readContract({ address: parameters.token2Address, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
 		client.getBalance({ address: client.account.address }),
 	])
-	if (token1Balance + (sameAddress(parameters.token1Address, getWethAddress()) ? wethShortfallAttoEth : 0n) < parameters.exactToken1Report) throw new Error('Insufficient token 1 balance to fund the report.')
-	if (token2Balance + (sameAddress(parameters.token2Address, getWethAddress()) ? wethShortfallAttoEth : 0n) < parameters.initialToken2Amount) throw new Error('Insufficient token 2 balance to fund the report.')
-	if (ethBalanceAttoEth < parameters.ethValueAttoEth + wethShortfallAttoEth) throw new Error('Insufficient ETH for report funding and the oracle fee. Gas is additional.')
+	if (token1Balance + (sameAddress(parameters.token1Address, getWethAddress()) ? wethShortfallAttoEth : 0n) < parameters.exactToken1Report) throw new Error('Insufficient base token balance to fund the report.')
+	if (token2Balance + (sameAddress(parameters.token2Address, getWethAddress()) ? wethShortfallAttoEth : 0n) < parameters.initialToken2Amount) throw new Error('Insufficient quote token balance to fund the report.')
+	if (ethBalanceAttoEth < parameters.ethValueAttoEth + wethShortfallAttoEth) throw new Error('Insufficient ETH for report funding and the settler reward. Gas is additional.')
 	const [token1Allowance, token2Allowance] = await Promise.all([
 		client.readContract({ address: parameters.token1Address, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, getOpenOracleAddress()] }),
 		client.readContract({ address: parameters.token2Address, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, getOpenOracleAddress()] }),
@@ -381,7 +381,7 @@ export async function createOpenOracleReportInstance(
 		value: parameters.ethValueAttoEth,
 		tokenFunding: fundingOrder.map(funding => ({ tokenAddress: funding.token, amount: funding.required })),
 		validateBeforeSubmit: async () => {
-			if ((await client.getBalance({ address: client.account.address })) < parameters.ethValueAttoEth) throw new Error('Insufficient ETH for the report bounty. Gas is additional.')
+			if ((await client.getBalance({ address: client.account.address })) < parameters.ethValueAttoEth) throw new Error('Insufficient ETH for the settler reward. Gas is additional.')
 		},
 	})
 	const callParams = {
@@ -552,7 +552,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 				if (readContract === undefined || getBlock === undefined) throw new Error('OpenOracle settlement requires a readable wallet client.')
 				const current = await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)
 				if (current.settled) throw new Error('This report is already settled.')
-				if (current.stateHash.toLowerCase() !== reviewedStateHash.toLowerCase()) throw new Error('This report changed on-chain. Review the latest settlement state again.')
+				if (current.stateHash.toLowerCase() !== reviewedStateHash.toLowerCase()) throw new Error('This report changed onchain. Review the latest settlement state again.')
 				const block = await getBlock()
 				const clock = hasOpenOracleFlag(current.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE) ? block.timestamp : block.number
 				if (clock === undefined || clock < current.latest.game.reportTimestamp + current.latest.game.settlementTime) throw new Error('This report is not ready to settle. Refresh its settlement time.')
@@ -571,7 +571,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex) {
 	const state = await requireOpenOracleDisputeSubmissionWindow(client, openOracleAddress, reportId)
 	const currentStateHash = hashOpenOracleStatePreimage(state.latest)
-	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
+	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed onchain while the dispute was being prepared. Retry to use the latest state.')
 	const derivedTokenToSwap = getOpenOracleDisputeSwapToken(state.latest.game, newAmount1, newAmount2)
 	if (derivedTokenToSwap.toLowerCase() !== tokenToSwap.toLowerCase()) throw new Error('The dispute price direction does not match the selected swap token.')
 	const callParams = {
@@ -586,7 +586,7 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 			contractAddress: openOracleAddress,
 			validateBeforeSubmit: async () => {
 				const currentState = await requireOpenOracleDisputeSubmissionWindow(client, openOracleAddress, reportId)
-				if (hashOpenOracleStatePreimage(currentState.latest).toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
+				if (hashOpenOracleStatePreimage(currentState.latest).toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed onchain while the dispute was being prepared. Retry to use the latest state.')
 			},
 		},
 	])

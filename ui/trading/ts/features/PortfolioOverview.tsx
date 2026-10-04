@@ -2,6 +2,8 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { marketsCopy } from '../copy/markets.js'
+import { formatEthAmount } from '../copy/outcomes.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { getTradingRouteHref } from '../lib/routing.js'
@@ -9,14 +11,14 @@ import { marketTicketHref } from '../lib/routeState.js'
 import type { PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
 
 function formatPortfolioEth(attoEth: bigint) {
-	return portfolioCopy.ethAmount(formatRoundedUnits(attoEth, 18, 4))
+	return formatEthAmount(formatRoundedUnits(attoEth, 18, 4))
 }
 
 function valuationCaption(valuation: PortfolioValuation) {
 	if (valuation.kind === 'exit') return valuation.pendingResolution ? portfolioCopy.exitValuePendingBasis : portfolioCopy.exitValueBasis
 	if (valuation.kind === 'complete-sets') return valuation.pendingResolution ? portfolioCopy.completeSetsPendingBasis : portfolioCopy.completeSetsBasis
 	if (valuation.kind === 'redemption') return portfolioCopy.redemptionValueBasis
-	if (valuation.reason === 'settlement-required') return portfolioCopy.settlementValueReason
+	if (valuation.reason === 'settlement-required') return portfolioCopy.migrationValueReason
 	if (valuation.reason === 'pool-inactive') return portfolioCopy.poolInactiveValueReason
 	return valuation.reason === 'market-unavailable' ? portfolioCopy.marketValueReason : portfolioCopy.balanceValueReason
 }
@@ -51,7 +53,7 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 					))}
 				</MetricField>
 				<MetricField label={portfolioCopy.positions}>{overview.positionCount.toString()}</MetricField>
-				<MetricField label={portfolioCopy.actionItemCount}>{overview.actionItems.length === 0 ? portfolioCopy.nothingNeedsAttention : overview.actionItems.length.toString()}</MetricField>
+				<MetricField label={portfolioCopy.needsAttention}>{overview.actionItems.length === 0 ? portfolioCopy.nothingNeedsAttention : overview.actionItems.length.toString()}</MetricField>
 			</DataGrid>
 		</section>
 	)
@@ -59,15 +61,15 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 
 function actionBadge(item: PortfolioActionItem) {
 	if (item.kind === 'redeem') return { label: portfolioCopy.actionRedeem, tone: 'ok' as const }
-	if (item.kind === 'settle') return { label: portfolioCopy.actionSettle, tone: 'warning' as const }
-	if (item.kind === 'withdraw-liquidity') return { label: portfolioCopy.actionWithdrawLiquidity, tone: 'muted' as const }
-	return { label: portfolioCopy.actionTradingCloses, tone: 'warning' as const }
+	if (item.kind === 'settle') return { label: portfolioCopy.actionMigrate, tone: 'warning' as const }
+	if (item.kind === 'withdraw-liquidity') return { label: portfolioCopy.actionRemoveLiquidity, tone: 'muted' as const }
+	return { label: marketsCopy.closingSoon, tone: 'warning' as const }
 }
 
 function actionLink(item: PortfolioActionItem) {
-	if (item.action === 'withdraw-liquidity') return { action: portfolioCopy.withdrawLiquidity, href: getTradingRouteHref(`#/liquidity/${item.pool}`) }
+	if (item.action === 'withdraw-liquidity') return { action: portfolioCopy.removeLiquidity, href: getTradingRouteHref(`#/liquidity/${item.pool}`) }
 	if (item.action === 'redeem') return { action: portfolioCopy.redeem, href: getTradingRouteHref(`#/market/${item.pool}`) }
-	if (item.action === 'settle') return { action: portfolioCopy.settle, href: getTradingRouteHref(`#/market/${item.pool}`) }
+	if (item.action === 'settle') return { action: portfolioCopy.migrate, href: getTradingRouteHref(`#/market/${item.pool}`) }
 	return { action: portfolioCopy.sell, href: marketTicketHref(item.pool, { mode: 'exit', side: item.sellSide }) }
 }
 

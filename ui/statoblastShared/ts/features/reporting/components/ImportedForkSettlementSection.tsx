@@ -54,7 +54,7 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 		side.importedUserDeposits.length > IMPORTED_FORK_SETTLEMENT_PAGE_SIZE && paginationPageSummary !== undefined ? forkAuctionCopy.formatImportedForkDepositPageSummary((pageStartIndex + 1).toString(), pageEndIndex.toString(), side.importedUserDeposits.length.toString(), paginationPageSummary) : undefined
 	const settlementGuardMessage = (() => {
 		if (!resolved) return forkAuctionCopy.forkDepositSettlementAvailabilityDetail
-		if (selectedDepositIndexes.length === 0) return forkAuctionCopy.formatDepositSelectionRequired(side.label.toLowerCase())
+		if (selectedDepositIndexes.length === 0) return forkAuctionCopy.formatDepositSelectionRequired(side.label)
 		return undefined
 	})()
 
@@ -135,9 +135,7 @@ export function ImportedForkSettlementSection({ activeReportingDetails, disabled
 
 	return (
 		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits} variant='embedded'>
-			<UserMessage className='detail' detail={forkAuctionCopy.importedDepositSettlementDetail} />
-			{resolved ? undefined : <UserMessage className='detail' detail={forkAuctionCopy.forkDepositSettlementAvailabilityDetail} />}
-			<UserMessage className='detail' detail={forkAuctionCopy.escalationAuctionHaircutDetail} />
+			<UserMessage className='detail' detail={forkAuctionCopy.importedDepositSettlementDetail} expandableDetail={{ label: commonCopy.technicalDetails, content: forkAuctionCopy.escalationAuctionHaircutDetail }} />
 			{settleableSides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}

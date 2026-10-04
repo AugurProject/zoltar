@@ -205,7 +205,7 @@ describe('saved simulation states', () => {
 		test('reports malformed saved-state storage with a generic warning', () => {
 			window.localStorage.setItem(SAVED_STATES_KEY, '{bad json')
 
-			expect(getSavedSimulationStateStorageSummary().warning).toBe('Saved simulation state storage is corrupted in browser storage.')
+			expect(getSavedSimulationStateStorageSummary().warning).toBe('Saved simulation states in browser storage are corrupted.')
 			expect(removeCorruptedSavedSimulationStates()).toBe(1)
 			expect(getSavedSimulationStateStorageSummary().warning).toBeUndefined()
 			expect(getSavedSimulationStateStorageSummary().records).toEqual([])

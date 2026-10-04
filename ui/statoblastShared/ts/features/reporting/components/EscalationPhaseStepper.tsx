@@ -17,15 +17,14 @@ export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId
 	const leadingOutcome = details?.status === 'active' ? getDisplayedLeadingEscalationOutcome(details.sides) : undefined
 	const hasUnsettledDeposits = details?.status === 'active' && details.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
 	const labels = copy.phaseLabels.map((label, i) => (i === 2 && fork ? copy.forkPhase : label))
-	let next = copy.reportingDetailsRequired
+	let next = copy.loadingReportingDetails
 	if (details !== undefined) {
-		if (stage === 'resolved' && details.questionOutcome !== 'none') next = hasUnsettledDeposits ? copy.resolvedNext : copy.resultSummary(getReportingOutcomeLabel(details.questionOutcome))
+		if (stage === 'resolved' && details.questionOutcome !== 'none') next = hasUnsettledDeposits ? copy.resolvedNext : copy.resolvedNoDepositsNext
 		else if (fork) next = forkAlreadyTriggered ? copy.forkAlreadyTriggeredReportReason : copy.forkTriggerInstruction
 		else if (details.status === 'not-started') next = copy.firstReportNext(formatCurrencyBalance(details.startBondAttoRep))
 		else if (phase === 'Timed Out') next = copy.timeoutResolutionDetail
 		else if (leadingOutcome === undefined) next = copy.tieStatusLead
-		else if (phase === 'Pending Start') next = copy.pendingStartNext({ end: formatReportingDeadline(details.escalationEndTime, details.currentTime), outcome: getReportingOutcomeLabel(leadingOutcome) })
-		else next = copy.activeNext(formatReportingDeadline(details.escalationEndTime, details.currentTime), getReportingOutcomeLabel(leadingOutcome))
+		else next = copy.formatLeaderWinsNext(formatReportingDeadline(details.escalationEndTime, details.currentTime), getReportingOutcomeLabel(leadingOutcome))
 	}
 	return (
 		<div className='escalation-phase'>

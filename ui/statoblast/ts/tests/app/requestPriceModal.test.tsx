@@ -79,7 +79,7 @@ test('closes after confirmation and permits a new request when reopened after st
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		await settle()
 		if (controller === undefined) throw new Error('Missing price request controller')
 		await act(() => {
@@ -95,7 +95,7 @@ test('closes after confirmation and permits a new request when reopened after st
 		expect(pendingStatus.textContent).toContain('Pending')
 		expect(within(pendingStatus).getByText(hash)).not.toBeNull()
 		expect(dialogBeforeResult.textContent).not.toContain(hash)
-		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }).hasAttribute('disabled')).toBe(false)
+		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }).hasAttribute('disabled')).toBe(false)
 		await act(() => {
 			completedHash.value = hash
 			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security pool address', value: review.securityPoolAddress }] }
@@ -142,7 +142,7 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		await settle()
 		const dialog = queries.getByRole('dialog', { name: 'Request new price' })
 		const requestButton = within(dialog).getByRole('button', { name: /^Request new price/ })
@@ -157,7 +157,7 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 		expect(within(queries.getByRole('status', { name: 'Transaction status' })).getByText('Pending')).not.toBeNull()
 		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
 		expect(dialog.textContent).not.toContain(hash)
-		const priceInput = within(dialog).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const priceInput = within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		priceInput.focus()
 		await act(() => {
 			presentation.value = { tone: 'pending', title: 'Still requesting price', hash, operationKey: 'price-request' }
@@ -203,7 +203,7 @@ test('closes after a confirmed request when refreshed pool state clears the revi
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		await settle()
 		if (controller === undefined) throw new Error('Missing price request controller')
 		await act(() => {
@@ -269,15 +269,15 @@ test('prepares approval and request actions alongside editable price controls in
 		expect(queries.getByRole('button', { name: /Request new price/ })).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Review funding and steps' })).toBeNull()
 		expect(submitted).toBe(0)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '' } }))
 		expect(queries.getByRole('button', { name: /Approve.*REP/ }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelector('.transaction-funding')).toBeNull()
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
-			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value } }))
-			expect(queries.getByText('Enter a positive REP per ETH price with up to 18 decimal places.')).not.toBeNull()
+			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value } }))
+			expect(queries.getByText('Enter a positive initial report price.')).not.toBeNull()
 			expect(queries.getByRole('button', { name: /Request new price/ }).hasAttribute('disabled')).toBe(true)
 		}
-		const priceInput = queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const priceInput = queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		priceInput.focus()
 		await act(() => fireEvent.input(priceInput, { target: { value: '1.25' } }))
 		await settle()
@@ -290,7 +290,7 @@ test('prepares approval and request actions alongside editable price controls in
 			await Promise.resolve()
 		})
 		expect(submitted).toBe(1)
-		expect(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }).hasAttribute('disabled')).toBe(false)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -371,7 +371,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		expect(document.querySelector('.price-request-preview')?.textContent).not.toContain('Uniswap quote unavailable.')
 		expect(queries.queryByRole('button', { name: 'Review and retry' })).toBeNull()
 		expect(attempts).toBe(1)
-		const priceInput = queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const priceInput = queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		expect(inputValue(priceInput)).toBe('2')
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
@@ -405,7 +405,7 @@ test.each(['edit', 'button'] as const)('allows another price request after a fai
 		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
 		await settle()
 		expect(attempts).toBe(1)
-		const priceInput = queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const priceInput = queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
 		expect(queries.queryByRole('button', { name: /^Review request/ })).toBeNull()
 		expect(inputValue(priceInput)).toBe('2')
@@ -550,7 +550,7 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 			await settle()
 		}
 		expect(queries.queryByRole('button', { name: /^Review request/ })).toBeNull()
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe(action === 'fetch' ? '3' : '2')
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe(action === 'fetch' ? '3' : '2')
 		await settle()
 		expect(attempts).toBe(2)
 	} finally {
@@ -646,7 +646,7 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		expect(transactionSteps.value?.steps[0]?.hash).toBeUndefined()
 		if (action === 'close') await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Request new price' })).getByRole('button', { name: 'Close' })))
 		if (action === 'fetch') await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
-		if (action === 'edit') await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '4' } }))
+		if (action === 'edit') await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '4' } }))
 		expect(submittedSignal?.aborted).toBe(false)
 		await act(async () => walletResponse.resolve(hash))
 		await settle()
@@ -661,7 +661,7 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 			})
 		await settle()
 		const expectedPrices = { close: '2', fetch: '3', edit: '4' }
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe(expectedPrices[action])
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe(expectedPrices[action])
 		expect(queries.queryByRole('button', { name: /^Review request/ })).toBeNull()
 	} finally {
 		walletResponse.resolve(hash)
@@ -742,7 +742,7 @@ test('keeps submitted funding and pool details beside the original action after 
 		await settle()
 		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
 		expect(document.querySelector('.price-request-preview')?.textContent ?? '').not.toContain('nonce too low')
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		expect(queries.queryByRole('button', { name: /^Review request/ })).toBeNull()
 		guard.value = 'A pending report blocks another request.'
 		await settle()
@@ -791,7 +791,7 @@ test.each(['reverted', 'rejected'] as const)('keeps approvals in place after a %
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '2' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '2' } }))
 		await settle()
 		const form = queries.getByRole('dialog', { name: 'Request new price' })
 		const approvals = ['REP', 'WETH'].map(symbol => within(form).getByRole('button', { name: `${symbol} approved ✓` }))
@@ -850,12 +850,12 @@ test.each(['preparation', 'transaction step'] as const)('prepares again after a 
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(attempts).toBe(1)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		await settle()
 		expect(attempts).toBe(2)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe('4')
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe('4')
 		expect(attempts).toBe(3)
 		expect(prices).toEqual([2n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n])
 	} finally {
@@ -882,13 +882,13 @@ test.each(['automatic', 'manual'] as const)('prepares %s again after visiting an
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '' } }))
 		if (source === 'manual') {
-			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '1.25' } }))
+			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '1.25' } }))
 			await settle()
-			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '0' } }))
+			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '0' } }))
 			await settle()
-			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '1.25' } }))
+			await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '1.25' } }))
 		} else {
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		}
@@ -967,9 +967,9 @@ test('fetches only on demand, fills the editable field, and prepares the fetched
 		await settle()
 		expect(fetches).toBe(1)
 		// The 18-decimal quote is rounded to six significant digits so the editable price stays readable.
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe('1.23457')
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe('1.23457')
 		expect(prices).toEqual([1_234_570_000_000_000_000n])
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3.5' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3.5' } }))
 		await settle()
 		expect(prices.at(-1)).toBe(3_500_000_000_000_000_000n)
 		expect(fetches).toBe(1)
@@ -1001,7 +1001,7 @@ test('a late Uniswap result cannot overwrite a manual edit', async () => {
 	)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '2.5' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '2.5' } }))
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		expect(queries.getByRole('button', { name: '1/3 Reading oracle…' }).hasAttribute('disabled')).toBe(true)
 		expect(queries.getByText('Fetching…').closest('.visually-hidden') !== null).toBe(true)
@@ -1009,7 +1009,7 @@ test('a late Uniswap result cannot overwrite a manual edit', async () => {
 		expect(queries.getByRole('button', { name: '2/3 Querying Uniswap V4…' }).getAttribute('aria-busy')).toBe('true')
 		await act(() => progress?.('v3'))
 		expect(queries.getByRole('button', { name: '3/3 Querying Uniswap V3…' }).hasAttribute('disabled')).toBe(true)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '4' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '4' } }))
 		await act(() => progress?.('v4'))
 		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' }).hasAttribute('disabled')).toBe(false)
 		await act(async () => {
@@ -1040,15 +1040,15 @@ test('a failed fetch preserves the input and allows fetching again or manual ent
 	)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '1.25' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '1.25' } }))
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(queries.getByRole('alert').textContent).toContain('Uniswap unavailable')
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe('1.25')
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe('1.25')
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(queries.queryByRole('alert')).toBeNull()
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe('2')
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe('2')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -1077,7 +1077,7 @@ test('ignores a quote completed after the dialog closes and reopens', async () =
 			await quote
 		})
 		await settle()
-		expect(inputValue(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }))).toBe('')
+		expect(inputValue(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }))).toBe('')
 		expect(prices).toEqual([])
 	} finally {
 		await rendered.cleanup()
@@ -1099,7 +1099,7 @@ test('keeps funding controls visible and disabled until a price estimate is ente
 	try {
 		await settle()
 		const queries = within(document.body)
-		expect(queries.getByText('Enter a starting price.')).not.toBeNull()
+		expect(queries.getByText('Enter a positive initial report price.')).not.toBeNull()
 		expect(document.querySelector('.transaction-funding')).toBeNull()
 		const approvals = queries.getAllByRole('button', { name: /Approve.*(REP|WETH)/ })
 		expect(approvals).toHaveLength(2)
@@ -1107,7 +1107,7 @@ test('keeps funding controls visible and disabled until a price estimate is ente
 		const button = queries.getByRole('button', { name: /^Request new price/ })
 		expect(button.hasAttribute('disabled')).toBe(true)
 		const reasonId = button.getAttribute('aria-describedby')
-		expect(reasonId === null ? undefined : document.getElementById(reasonId)?.textContent).toContain('Enter a starting price.')
+		expect(reasonId === null ? undefined : document.getElementById(reasonId)?.textContent).toContain('Enter a positive initial report price.')
 		expect(preparations).toBe(0)
 	} finally {
 		await rendered.cleanup()
@@ -1121,7 +1121,7 @@ test('does not show a price prompt that contradicts a visible waiting reason', a
 	try {
 		// The prompt row keeps its slot for a stable dialog height but stays empty, so it cannot contradict the reason.
 		expect(rendered.container.querySelector('.price-request-estimate-prompt')?.textContent).toBe('')
-		expect(rendered.container.textContent).not.toContain('Enter a starting price.')
+		expect(rendered.container.textContent).not.toContain('Enter a positive initial report price.')
 		expect(rendered.container.textContent?.split('Waiting for the current request to finish.').length).toBe(2)
 	} finally {
 		await rendered.cleanup()
@@ -1146,7 +1146,7 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 	const rendered = await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />)
 	try {
 		const queries = within(rendered.container)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '1.25' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '1.25' } }))
 		await settle()
 		expect(transactionSteps.value?.activeIndex).toBe(-1)
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
@@ -1189,7 +1189,7 @@ test('does not announce submission while preparing an unconfirmed price review',
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const dialog = within(document.body).getByRole('dialog', { name: 'Request new price' })
-		await act(() => fireEvent.input(within(dialog).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		await settle()
 		expect(dialog.textContent).not.toContain('Submitting in browser simulation')
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
@@ -1217,7 +1217,7 @@ test('offers the switch fix in place of a wrong-network confirmation guard', asy
 	)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		await settle()
 		const fix = expectWalletFixDescribesAction(document.body, /^Request new price/, 'Switch to Sepolia')
 		expect(queries.queryByRole('alert')).toBeNull()
@@ -1318,7 +1318,7 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 		await settle()
 		expect(confirmReturned).toBe(true)
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '4' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '4' } }))
 		await settle()
 		expect(attempts).toBe(1)
 		await act(() => {
@@ -1397,7 +1397,7 @@ test('keeps preparation paused when a retry quote fails', async () => {
 	)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '2' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '2' } }))
 		await settle()
 		expect(attempts).toBe(1)
 		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(true)
@@ -1439,12 +1439,12 @@ test.each(['edit', 'fetch', 'pending approval'] as const)('prepares again after 
 	const rendered = await renderIntoDocument(<RequestPriceModal {...props} fetchPrice={async () => 4n * 10n ** 18n} onConfirm={onConfirm} />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '2' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '2' } }))
 		await settle()
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /Approve.*REP/ })))
 		await settle()
 		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(action === 'pending approval' ? ['pending', 'upcoming'] : ['confirmed', 'review'])
-		if (action !== 'fetch') await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '4' } }))
+		if (action !== 'fetch') await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '4' } }))
 		else await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		if (action === 'pending approval') {
@@ -1511,7 +1511,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
 		await settle()
 		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['wallet'])
-		const priceInput = queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const priceInput = queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
 		if (detached) {
 			await act(() => fireEvent.input(priceInput, { target: { value: '4' } }))

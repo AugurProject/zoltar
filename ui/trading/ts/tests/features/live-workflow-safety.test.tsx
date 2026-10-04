@@ -511,14 +511,14 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(secondMarketTransactionHash)
 		expect(document.body.textContent).not.toContain('Buy Yes confirmed.')
 		secondMarketReceipt.resolve({ status: 'reverted' })
-		await waitForDom(() => document.body.textContent?.includes('The transaction reverted on-chain') === true, 'second market reverted trade')
+		await waitForDom(() => document.body.textContent?.includes('The transaction reverted onchain') === true, 'second market reverted trade')
 		expect(transactionActivity.value.entries.find(entry => entry.hash === secondMarketTransactionHash)?.status).toBe('failed')
 		expect(transactionActivity.value.entries.find(entry => entry.hash === replacementTransactionHash)?.status).toBe('confirmed')
 		expect(isMarketTransactionPending(secondPool)).toBeFalse()
 		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.disabled).toBeFalse()
 		await show(marketRoute)
 		await settleAsyncWorkflow()
-		expect(document.body.textContent).not.toContain('The transaction reverted on-chain')
+		expect(document.body.textContent).not.toContain('The transaction reverted onchain')
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
 		repricePositionReceipt = false
@@ -549,7 +549,7 @@ describe('live workflow safety boundary', () => {
 		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
 		await show('portfolio', { selectedUniverseId: '3' })
 		await settleAsyncWorkflow()
-		await waitForDom(() => document.body.textContent?.includes('No saved pools in this universe.') === true, 'empty universe portfolio')
+		await waitForDom(() => document.body.textContent?.includes('No favorite markets in this universe') === true, 'empty universe portfolio')
 		expect(document.querySelectorAll('.empty-state')).toHaveLength(1)
 		expect(document.querySelector('.portfolio-positions')).toBeNull()
 	})

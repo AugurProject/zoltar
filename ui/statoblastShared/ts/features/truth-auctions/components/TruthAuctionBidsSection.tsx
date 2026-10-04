@@ -115,7 +115,7 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 		<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
 			{hasLoadedData && hasMoreAggregatedAuctionBids ? <p className='detail'>{forkAuctionCopy.formatShownBidCount(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</p> : undefined}
 			{loadingAggregatedAuctionBids ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingAuctionBids} /> : undefined}
-			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryCurrentBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
+			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryCurrentBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : commonCopy.retry} />
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.auctionPriceLevelsEmpty} /> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.loadedPriceBidsEmpty} /> : undefined}
 			<BidTable
@@ -124,7 +124,7 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 				regionLabel={forkAuctionCopy.scrollableAuctionBidHistory}
 				rowClassName='truth-auction-bid-row is-wide is-no-actions'
 				rows={rows}
-				tableLabel={forkAuctionCopy.auctionBidHistory}
+				tableLabel={forkAuctionCopy.currentBids}
 			/>
 			{error === undefined && hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} loading={loadingAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids} /> : undefined}
 		</SectionBlock>
@@ -154,7 +154,7 @@ export function ViewerTruthAuctionBidsSection({
 		<SectionBlock title={forkAuctionCopy.myBids} variant='embedded'>
 			{accountAddress === undefined ? <UserMessage className='detail' detail={forkAuctionCopy.walletBidsConnectionRequired} /> : undefined}
 			{accountAddress !== undefined && loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingYourBids} /> : undefined}
-			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryMyBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
+			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryMyBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : commonCopy.retry} />
 			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.walletBidsEmpty} /> : undefined}
 			{!showSettlementActionColumn || selectableBidKeys.length === 0 ? undefined : (
 				<div className='actions'>

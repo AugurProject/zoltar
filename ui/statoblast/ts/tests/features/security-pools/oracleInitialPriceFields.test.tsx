@@ -33,7 +33,7 @@ test('fetches an explicit starting price and preserves manual edits over late qu
 	)
 	try {
 		const page = within(document.body)
-		const input = page.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const input = page.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		const submit = page.getByRole('button', { name: 'Submit' })
 		expect(submit.hasAttribute('disabled')).toBe(true)
 		await act(async () => {

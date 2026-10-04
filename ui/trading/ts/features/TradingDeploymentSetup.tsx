@@ -47,14 +47,14 @@ const defaultServices: TradingDeploymentSetupServices = {
 	createPublicClient: createDeploymentReadClient,
 	connectWallet: async () => {
 		const provider = getActiveInjectedProvider()
-		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
+		if (provider === undefined) throw new Error(deploymentCopy.walletNotFound)
 		const account = await requestInjectedAccount(provider)
 		return { account, chainId: await readInjectedChainIdNumber(provider), provider }
 	},
 	getWalletProvider: getActiveInjectedProvider,
 	deployStep: async (publicClient, plan, step, onSubmitted) => {
 		const provider = getActiveInjectedProvider()
-		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
+		if (provider === undefined) throw new Error(deploymentCopy.walletNotFound)
 		let currentChainId = await readInjectedChainIdNumber(provider)
 		if (currentChainId !== plan.core.chainId) {
 			await switchInjectedChain(provider, plan.core.chainId)
@@ -65,9 +65,9 @@ const defaultServices: TradingDeploymentSetupServices = {
 		const walletClient = createTradingWalletClient(provider, account)
 		await deployTradingStep(walletClient, publicClient, plan, step, onSubmitted, async () => {
 			validateRpcChainId(await publicClient.getChainId(), plan.core.chainId)
-			if (getActiveInjectedProvider() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedBeforeDeployment)
+			if (getActiveInjectedProvider() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletChangedBeforeDeployment)
 		})
-		if (getActiveInjectedProvider() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedDuringDeployment)
+		if (getActiveInjectedProvider() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletChangedDuringDeployment)
 	},
 	loadCoreDeployments,
 }
@@ -75,14 +75,14 @@ const defaultServices: TradingDeploymentSetupServices = {
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
 function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
-	if (status === undefined) return deploymentCopy.progressUnavailable
+	if (status === undefined) return commonCopy.metricUnavailablePlaceholder
 	return `${Number(status.factory) + Number(status.router)} / ${total.toString()}`
 }
 
 function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
 	if (registryLoading) return { label: deploymentCopy.loadingNetworks, tone: 'muted' as const }
 	if (registryError) return { label: deploymentCopy.networksUnavailable, tone: 'warning' as const }
-	if (inputError) return { label: appCopy.invalidDeploymentSettings, tone: 'warning' as const }
+	if (inputError) return { label: appCopy.deploymentConfigurationInvalid, tone: 'warning' as const }
 	if (busy) return { label: coreAppCopy.deploymentInProgress, tone: 'muted' as const }
 	if (deploymentComplete) return { label: appCopy.deploymentComplete, tone: 'ok' as const }
 	if (state === 'loading') return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
@@ -90,17 +90,17 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warning' as const }
 	if (state === 'error') return { label: deploymentCopy.configurationUnavailable, tone: 'warning' as const }
 	if (plan) return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
-	return { label: appCopy.completeDeploymentSettings, tone: 'muted' as const }
+	return { label: appCopy.deploymentNotConfigured, tone: 'muted' as const }
 }
 
 // A deployment still pending after the setup route was left keeps the deploy action locked when the route returns.
 const tradingDeploymentScope = createTransactionScope('trading-deployment', 'factory')
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, plan: TradingDeploymentPlan | undefined, status: DeploymentStatus | undefined) {
-	if (busy) return coreAppCopy.formatDeployingContract(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
+	if (busy) return deploymentCopy.formatDeployingStep(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
 	if (plan !== undefined && status !== undefined && isTradingDeploymentComplete(plan, status)) return appCopy.deploymentComplete
 	if (nextStep === undefined) return deploymentCopy.deployTradingContracts
-	return coreAppCopy.formatDeployContract(nextStep.label)
+	return deploymentCopy.formatDeployStep(nextStep.label)
 }
 
 /** Why the deploy action is unavailable, so the disabled control explains itself instead of silently ignoring clicks. The order mirrors `inspectionPresentation`, so the badge and the action never disagree. */
@@ -129,9 +129,9 @@ function deploymentActionAvailability({
 }>): ActionAvailability {
 	if (registryLoading) return { disabled: true, loading: true, reason: deploymentCopy.loadingNetworks }
 	if (registryError) return { disabled: true, reason: deploymentCopy.networksUnavailable }
-	if (inputError) return { disabled: true, reason: appCopy.invalidDeploymentSettings }
+	if (inputError) return { disabled: true, reason: appCopy.deploymentConfigurationInvalid }
 	// Inspection parks in idle while the settings are incomplete; that is a settings problem, not a check in flight.
-	if (settingsIncomplete) return { disabled: true, reason: appCopy.completeDeploymentSettings }
+	if (settingsIncomplete) return { disabled: true, reason: appCopy.deploymentNotConfigured }
 	if (!inspectionIsCurrent || inspectionState === 'loading' || inspectionState === 'idle') return { disabled: true, loading: true, reason: deploymentCopy.checkingNetwork }
 	if (inspectionState === 'blocked') return { disabled: true, reason: appCopy.securityPoolFactoryNotDeployed }
 	if (inspectionState === 'error') return { disabled: true, reason: deploymentCopy.configurationUnavailable }
@@ -206,7 +206,7 @@ export function TradingDeploymentSetup({
 				if (!mounted.current || walletConnectionRevision.current !== revision) return
 				setWalletAccount(undefined)
 				setWalletChain(undefined)
-				setWalletConnectionMessage(deploymentCopy.walletContextChanged)
+				setWalletConnectionMessage(deploymentCopy.walletChanged)
 			}
 			// A network change keeps the connected account, so setup follows the wallet's chain and offers the switch back instead of disconnecting.
 			if (eventName !== 'chainChanged' || provider === undefined || !walletAccountConnected.current) return dropWalletContext()
@@ -257,7 +257,7 @@ export function TradingDeploymentSetup({
 		try {
 			parseDeploymentSetupInput({ chainId, feeBps, rpcUrl })
 		} catch (error) {
-			inputError = publicErrorMessage(error, deploymentCopy.deploymentSettingsInvalid)
+			inputError = publicErrorMessage(error, deploymentCopy.deploymentConfigurationInvalid)
 		}
 	}
 
@@ -273,7 +273,7 @@ export function TradingDeploymentSetup({
 				setCoreDeployments(deployments)
 			} catch (error) {
 				if (!active) return
-				setRegistryError(publicErrorMessage(error, deploymentCopy.coreDeploymentsUnavailable))
+				setRegistryError(publicErrorMessage(error, deploymentCopy.supportedNetworksUnavailable))
 			} finally {
 				if (active) setRegistryLoading(false)
 			}
@@ -364,7 +364,7 @@ export function TradingDeploymentSetup({
 		try {
 			const initialProvider = services.getWalletProvider?.()
 			bindWalletProvider(initialProvider)
-			if (initialProvider === undefined && services.connectWallet === undefined) throw new Error(deploymentCopy.noInjectedWallet)
+			if (initialProvider === undefined && services.connectWallet === undefined) throw new Error(deploymentCopy.walletNotFound)
 			if (initialProvider !== undefined && selectedCore !== undefined) {
 				const currentChain = await readInjectedChainIdNumber(initialProvider)
 				if (currentChain !== selectedCore.chainId) {
@@ -374,7 +374,7 @@ export function TradingDeploymentSetup({
 				}
 			}
 			const connectService = services.connectWallet
-			if (connectService === undefined) throw new Error(deploymentCopy.walletConnectionServiceUnavailable)
+			if (connectService === undefined) throw new Error(deploymentCopy.walletConnectionUnavailable)
 			const connected = await connectService()
 			if (!mounted.current || walletConnectionRevision.current !== revision) return
 			const provider = initialProvider ?? connected.provider
@@ -382,9 +382,9 @@ export function TradingDeploymentSetup({
 			const contextRevision = walletContextEventRevision.current
 			const account = provider === undefined ? connected.account : await requireInjectedAccount(provider)
 			const connectedChain = provider === undefined ? connected.chainId : await readInjectedChainIdNumber(provider)
-			if (walletContextEventRevision.current !== contextRevision) throw new Error(deploymentCopy.walletContextChangedDuringConnection)
+			if (walletContextEventRevision.current !== contextRevision) throw new Error(deploymentCopy.walletChangedDuringConnection)
 			const currentProvider = services.getWalletProvider?.()
-			if (provider !== undefined && currentProvider !== undefined && currentProvider !== provider) throw new Error(deploymentCopy.walletProviderChangedDuringConnection)
+			if (provider !== undefined && currentProvider !== undefined && currentProvider !== provider) throw new Error(deploymentCopy.activeWalletChangedDuringConnection)
 			if (!mounted.current || walletConnectionRevision.current !== revision) return
 			setWalletAccount(account)
 			setWalletChain(connectedChain)
@@ -490,10 +490,10 @@ export function TradingDeploymentSetup({
 		let broadcastHash: Hash | undefined
 		try {
 			const deployStep = services.deployStep ?? defaultServices.deployStep
-			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentServiceUnavailable)
+			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentUnavailable)
 			await deployStep(publicClient, plan, nextStep, hash => {
 				// A replacement broadcast takes over the row of the transaction it replaced.
-				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: coreAppCopy.formatDeployContract(nextStep.label) })
+				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: deploymentCopy.formatDeployStep(nextStep.label) })
 				broadcastHash = hash
 			})
 			if (broadcastHash !== undefined) recordTransactionSettled(broadcastHash, { status: 'confirmed' })
@@ -530,7 +530,7 @@ export function TradingDeploymentSetup({
 					return
 				}
 			} catch (recoveryError) {
-				detail = deploymentCopy.deploymentStatusUnverified(detail, publicErrorMessage(recoveryError, deploymentCopy.unknownRecoveryFallback))
+				detail = deploymentCopy.deploymentStatusUnverified(detail, publicErrorMessage(recoveryError, deploymentCopy.statusCheckFailed))
 			}
 			setActionMessage(broadcastHash === undefined ? detail : deploymentCopy.broadcastWithoutCompletion(broadcastHash, detail))
 		} finally {
@@ -569,7 +569,7 @@ export function TradingDeploymentSetup({
 				{wrongNetworkNotice === undefined || selectedCore === undefined ? null : (
 					<div className='actions'>
 						<button type='button' className='secondary' disabled={busy || walletConnecting} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
-							{walletConnecting ? deploymentCopy.switchingToNetwork(selectedCore.chainName) : deploymentCopy.switchToNetwork(selectedCore.chainName)}
+							{walletConnecting ? deploymentCopy.switchingToNetwork(selectedCore.chainName) : coreAppCopy.formatSwitchToNetwork(selectedCore.chainName)}
 						</button>
 					</div>
 				)}

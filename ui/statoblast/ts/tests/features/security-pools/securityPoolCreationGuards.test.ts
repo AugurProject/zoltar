@@ -80,7 +80,7 @@ describe('security pool creation guards', () => {
 				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
-		).toBe('Enter an exact binary Yes / No question before creating a pool.')
+		).toBe('Enter a binary Yes / No question before creating a pool.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({
@@ -94,7 +94,7 @@ describe('security pool creation guards', () => {
 				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
-		).toBe('Security pools can only be created for exact binary Yes / No questions.')
+		).toBe('Security pools can only be created for binary Yes / No questions. Enter an eligible question to proceed.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({
@@ -113,20 +113,20 @@ describe('security pool creation guards', () => {
 
 	test('validates the security multiplier before submission', () => {
 		expect(getStatoblastSecurityMultiplierValidationMessage('')).toBe('Enter a security multiplier of at least 1.0002×.')
-		expect(getStatoblastSecurityMultiplierValidationMessage('abc')).toBe('Enter a multiplier with at most 4 decimal places.')
-		expect(getStatoblastSecurityMultiplierValidationMessage('2.00001')).toBe('Enter a multiplier with at most 4 decimal places.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('abc')).toBe('Enter a security multiplier with up to four decimal places.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('2.00001')).toBe('Enter a security multiplier with up to four decimal places.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('1')).toBe('Security multiplier must be at least 1.0002×.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('1.0001')).toBe('Security multiplier must be at least 1.0002×.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('2.0001')).toBeUndefined()
 	})
 
 	test('validates the initial-report priority fee before submission', () => {
-		expect(getInitialReportPriorityFeeValidationMessage('')).toBe('Enter an initial-report priority fee in nanoETH per gas.')
-		expect(getInitialReportPriorityFeeValidationMessage('abc')).toBe('Enter a nanoETH value with at most 9 decimal places.')
-		expect(getInitialReportPriorityFeeValidationMessage('0.0000000001')).toBe('Enter a nanoETH value with at most 9 decimal places.')
-		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.')
+		expect(getInitialReportPriorityFeeValidationMessage('')).toBe('Enter an initial report priority fee in nanoETH per gas.')
+		expect(getInitialReportPriorityFeeValidationMessage('abc')).toBe('Enter a nanoETH value with up to nine decimal places.')
+		expect(getInitialReportPriorityFeeValidationMessage('0.0000000001')).toBe('Enter a nanoETH value with up to nine decimal places.')
+		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial report priority fee must be greater than 0\u00a0nanoETH per gas.')
 		expect(getInitialReportPriorityFeeValidationMessage('0.000000001')).toBeUndefined()
 		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())).toBeUndefined()
-		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for OpenOracle report limits.')
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial report priority fee is too large for OpenOracle report limits.')
 	})
 })

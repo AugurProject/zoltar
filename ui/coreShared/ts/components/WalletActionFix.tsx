@@ -67,7 +67,7 @@ export function useWalletActionFix({ actionButtonRef, actionDisabled, availabili
 				else walletActions.onSwitchNetwork()
 			}}
 		>
-			{pending ? <LoadingText>{blocker.kind === 'wallet-disconnected' ? appCopy.connecting : appCopy.managingWallet}</LoadingText> : label}
+			{pending ? <LoadingText>{blocker.kind === 'wallet-disconnected' ? appCopy.connecting : appCopy.switchingNetwork}</LoadingText> : label}
 		</button>
 	)
 }

@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { previewVaultOperations } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/preview.js'
 import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsPrice } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/draft.js'
+import { getVaultOperationsTargetState } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/targets.js'
+import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
+import * as vaultOperationsCopy from '@zoltar/ui-statoblast-shared/copy/vaultOperations.js'
 import { createSelectedPool, createSecurityVaultDetails, createSecurityPoolVaultSummary } from '../security-pools/workflow/builders.js'
 
 const unit = 10n ** 18n
@@ -40,9 +43,19 @@ describe('vault bundle preview guards', () => {
 	})
 	test('rejects withdrawals while escalation deposits remain unsettled', () => {
 		const withdrawing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), withdraw: '1' }, owner)
-		expect(() => previewVaultOperations(pool, { ...owned, disputeStakedAttoRep: unit }, [], withdrawing, unit)).toThrow('Settle escalation')
+		expect(() => previewVaultOperations(pool, { ...owned, disputeStakedAttoRep: unit }, [], withdrawing, unit)).toThrow('Settle escalation deposits')
 	})
 	test('uses a field label rather than an instruction for malformed proposed prices', () => {
-		expect(() => getVaultOperationsPrice('invalid', unit, false)).toThrow('Initial oracle report price must be a decimal number')
+		expect(() => getVaultOperationsPrice('invalid', unit, false)).toThrow('Initial report price must be a decimal number')
+	})
+})
+
+describe('vault operations target availability', () => {
+	test('says a target without commitment has nothing to liquidate', () => {
+		expect(getVaultOperationsTargetState(pool, owned, { ...target, underwritingLimitAttoEth: 0n }, undefined, unit, 1000n)).toEqual({ maximum: 0n, reason: liquidationCopy.targetHasNoCommitmentReason })
+	})
+	test('asks for an initial report price instead of loading forever when the pool has no price', () => {
+		expect(getVaultOperationsTargetState(pool, owned, target, undefined, 0n, 1000n)).toEqual({ maximum: undefined, reason: vaultOperationsCopy.targetPriceNeeded })
+		expect(getVaultOperationsTargetState(pool, undefined, target, undefined, 0n, 1000n)).toEqual({ maximum: undefined, reason: vaultOperationsCopy.loading })
 	})
 })

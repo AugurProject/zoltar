@@ -168,12 +168,12 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			await act(() => {
-				fireEvent.click(within(document.body).getByRole('tab', { name: 'Fork readiness' }))
+				fireEvent.click(within(document.body).getByRole('tab', { name: 'Fork trigger' }))
 			})
 
 			await waitFor(() => {
 				const documentQueries = within(document.body)
-				expect(documentQueries.getByRole('tab', { name: 'Fork readiness' }).getAttribute('aria-selected')).toBe('true')
+				expect(documentQueries.getByRole('tab', { name: 'Fork trigger' }).getAttribute('aria-selected')).toBe('true')
 				expect(documentQueries.getByRole('heading', { name: 'Fork triggered' })).not.toBeNull()
 				expect(documentQueries.queryByRole('heading', { name: 'Migration status' })).toBeNull()
 			})

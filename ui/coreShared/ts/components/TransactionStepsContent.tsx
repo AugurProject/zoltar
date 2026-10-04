@@ -48,7 +48,7 @@ function useTransactionStepsState(retainedWorkflow?: Workflow) {
 	const workflow = retainedWorkflow ?? transactionSteps.value
 	const current = workflow?.steps[workflow.activeIndex]
 	const operationFailed = presentation?.tone === 'error'
-	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
+	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : transactionCopy.failureReasonUnavailable
 	// A reverted receipt is explained by the operation's diagnosed failure when there is one.
 	const error = operationFailed && (current?.failure === undefined || current.failure.kind === 'reverted') ? operationError : current?.failure?.message
 	const pending = error === undefined && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
@@ -112,7 +112,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAct
 	const getCompletedLabel = (step: (typeof workflow.steps)[number]) => {
 		const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
 		if (approvalSatisfied && step.approval !== undefined && (step.phase === 'confirmed' || step.phase === 'skipped')) return copy.formatStepCompleted(copy.formatTokenApproved(step.approval.tokenSymbol))
-		if (step.phase === 'confirmed') return copy.formatStepCompleted(step.title === copy.wrapEthIntoWeth ? copy.ethWrapped : step.title)
+		if (step.phase === 'confirmed') return copy.formatStepCompleted(transactionCopy.completedAction(step.title))
 		return undefined
 	}
 	return (
@@ -263,7 +263,7 @@ export function TransactionStepsContent({ actionsFirst = false, cancelable = tru
 							...(current.paidFrom === undefined
 								? []
 								: [
-										{ label: transactionCopy.amount, value: current.amount },
+										{ label: commonCopy.amount, value: current.amount },
 										{ label: transactionCopy.paidFrom, value: current.paidFrom },
 									]),
 							...(presentation?.rows ?? []),

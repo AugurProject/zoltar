@@ -58,11 +58,11 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			100n,
 		)
 		const card = document.querySelector('.staged-operation-card')
-		expect(card?.textContent).toContain('Settle in 10s')
+		expect(card?.textContent).toContain('Can settle in 10s')
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 1100))
 		})
-		expect(card?.textContent).toContain('Settle in 9s')
+		expect(card?.textContent).toContain('Can settle in 9s')
 	})
 
 	const openWithdrawDialog = async (poolOracleManagerDetails: SecurityPoolWorkflowRouteContentProps['poolOracleManagerDetails'], securityVault: Partial<SecurityVaultRouteContentProps>) => {
@@ -181,7 +181,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 					loadPoolOracleManagerCalls.push(managerAddressInput)
 				},
 				poolOracleManagerDetails: undefined,
-				poolOracleManagerError: 'Failed to load price oracle details. Reason: RPC unavailable',
+				poolOracleManagerError: 'Failed to load price oracle details. Reason: RPC unavailable.',
 				poolOracleManagerErrorAddress: managerAddress,
 				securityPools: [createSelectedPool({ managerAddress })],
 			})

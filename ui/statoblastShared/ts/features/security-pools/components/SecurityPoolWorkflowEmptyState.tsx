@@ -30,7 +30,7 @@ export function SecurityPoolUniverseMismatchNotice({
 						<span>
 							<UniverseName universeId={activeUniverseId} />
 						</span>
-						. <span>{securityPoolCopy.missingPoolDetail}</span>
+						. <span>{securityPoolCopy.universeMismatchDetail}</span>
 					</>
 				}
 			/>
@@ -68,10 +68,10 @@ export function SecurityPoolWorkflowEmptyState({
 				actions={
 					<>
 						<button className='primary' type='button' onClick={onBrowsePools}>
-							{commonCopy.browsePoolsAction}
+							{commonCopy.browsePools}
 						</button>
 						<button className='secondary' type='button' onClick={onCreatePool}>
-							{commonCopy.createPoolAction}
+							{commonCopy.createPool}
 						</button>
 					</>
 				}

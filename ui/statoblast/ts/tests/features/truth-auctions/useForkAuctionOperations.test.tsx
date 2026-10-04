@@ -423,7 +423,7 @@ describe('useForkAuctionOperations', () => {
 
 		expect(refundTruthAuctionBid).not.toHaveBeenCalled()
 		expect(requireHookState(hookState).forkAuctionFeedback?.status.tone).toBe('error')
-		expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Pick one or more bids to refund first')
+		expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Select one or more bids to refund first')
 	})
 
 	test('claimAuctionProceeds rejects placeholder-only settlement selections after filtering negative bid indexes', async () => {
@@ -455,7 +455,7 @@ describe('useForkAuctionOperations', () => {
 
 		expect(settleTruthAuctionBids).not.toHaveBeenCalled()
 		expect(requireHookState(hookState).forkAuctionFeedback?.status.tone).toBe('error')
-		expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Pick one or more bids to settle first')
+		expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Select one or more bids to settle first')
 	})
 
 	test('loadForkAuction ignores stale results when overlapping requests resolve out of order', async () => {

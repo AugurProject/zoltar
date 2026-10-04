@@ -3,7 +3,7 @@ import { batch, useComputed, useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, normalizeAccount } from '../../wallet/clients.js'
-import type { ChainBackend, ReadBackendStatus } from '../../wallet/chainBackend.js'
+import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
 import { getErrorMessage } from '../../lib/errors.js'
 import { getActiveBackend, getActiveSimulationController } from '../../lib/activeEnvironment.js'
 import { appBlockWatcher, blockPollIntervalMilliseconds } from '../../lib/dataRefresh.js'
@@ -89,12 +89,12 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			currentTimestamp.value = undefined
 		})
 	}
-	const updateReadBackendStatus = (backend: ChainBackend, block?: ChainClock) => {
+	const updateReadBackendStatus = (backend: ChainBackend, block?: ChainClock, issue?: ReadBackendIssue) => {
 		backend.setReadBackendBlock?.({
 			number: block?.currentBlockNumber,
 			timestamp: block?.currentTimestamp,
 		})
-		readBackendStatus.value = getReadBackendStatus(backend)
+		readBackendStatus.value = { ...getReadBackendStatus(backend), issue: issue ?? (readBackendMessage.value === undefined ? undefined : readBackendStatus.value.issue) }
 	}
 	const isReadBackendReady = () => readBackendValidated.value && readBackendMessage.value === undefined
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
@@ -283,7 +283,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 					readBackendMessage.value = validation.readBackendMessage
 					readBackendValidated.value = validation.validated
 				})
-				updateReadBackendStatus(backend)
+				updateReadBackendStatus(backend, undefined, validation.readBackendIssue)
 				if (validation.readBackendMessage !== undefined) {
 					clearChainClock()
 					invalidateDeploymentState()

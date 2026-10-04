@@ -11,8 +11,8 @@ export function tryParseBigIntInput(value: string) {
 
 export function parseBigIntInput(value: string, label: string) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	if (trimmed === '') throw new Error(`${label} is required.`)
 	const parsed = tryParseBigIntInput(trimmed)
-	if (parsed === undefined) throw new Error(`${label} must be a whole number`)
+	if (parsed === undefined) throw new Error(`${label} must be a whole number.`)
 	return parsed
 }

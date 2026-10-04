@@ -37,7 +37,7 @@ const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-t
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 	switch (stage) {
 		case 'fork-triggered':
-			return forkAuctionCopy.forkReadiness
+			return forkAuctionCopy.forkTrigger
 		case 'migration':
 			return forkAuctionCopy.migration
 		case 'auction':

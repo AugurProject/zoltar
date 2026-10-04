@@ -66,7 +66,7 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 				{commonCopy.max}
 			</button>
 		)
-	const balanceHint = balance === undefined || showsBalanceError ? undefined : commonCopy.formatAmountHint(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
+	const balanceHint = balance === undefined || showsBalanceError ? undefined : commonCopy.formatLabelValue(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
 	// A lone symbol such as × reads as a speck at label size, so it renders at body size.
 	const adornment = unit !== undefined && [...unit].length === 1 ? <span className='form-input-adornment-symbol'>{unit}</span> : unit
 	return (

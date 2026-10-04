@@ -220,8 +220,8 @@ test('sends an approval-only workflow from the form control without a separate r
 		// A rejected approval leaves the form ready for another attempt.
 		const failedWorkflow = transactionSteps.value
 		await act(() => {
-			controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
-			presentation.value = { operationKey: 'approval', title: 'Approval failed', tone: 'error', detail: 'Action canceled in wallet.' }
+			controller?.failed({ kind: 'rejected', message: 'Rejected in wallet.' })
+			presentation.value = { operationKey: 'approval', title: 'Approval failed', tone: 'error', detail: 'Rejected in wallet.' }
 		})
 		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
