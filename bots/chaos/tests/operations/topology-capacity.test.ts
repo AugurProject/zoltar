@@ -208,7 +208,7 @@ describe('immutable topology planning capacity', () => {
 		const question = snapshot.questions[0]
 		const pool = snapshot.pools[0]
 		if (question === undefined || pool === undefined) throw new Error('Pool deployment fixture is incomplete')
-		snapshot.questions.push({ ...question, id: '78' }, { ...question, id: '79' })
+		snapshot.questions.push({ ...question, endTime: '2000001000', id: '78' }, { ...question, endTime: '2000001000', id: '79' })
 		const plan = operation(snapshot, 'statoblast.pool.deploy').plan
 		if (plan === undefined) throw new Error('Pool deployment should fit at limit minus one')
 		expect(plan.metadata['questionId']).not.toBe('77')

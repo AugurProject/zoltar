@@ -8,7 +8,9 @@ import { loadNetworks } from '../../src/config.ts'
 import { parseManifestValue } from '../../src/manifest.ts'
 import networkDefinitions from '../../config/networks.json'
 import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
-import { mainnet, sepolia } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, getAddress, mainnet, sepolia, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { CANONICAL_TRADING_FEE_BPS, createDeploymentStatusOracleAddressHelper, tradingDeploymentData, zoltarDeploymentStatusStepAddresses } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { DeploymentStatusOracle_DeploymentStatusOracle as statusOracleContract, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryContract, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerContract } from '../../../solidity/ts/types/contractArtifact.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '..', '..')
 
@@ -84,7 +86,7 @@ describe('network configuration', () => {
 		]) {
 			const deployedById = new Map(deployment.deploymentSteps.map(({ id: deploymentId, address }) => [deploymentId, address]))
 			const indexedByKind = new Map(parseManifestValue(manifest, `${id}.json`).map(([address, _label, kind]) => [kind, address]))
-			expect(deployedById.get('deploymentStatusOracle')).toBe(indexedByKind.get('deploymentStatusOracle'))
+			expect(parseManifestValue(manifest, `${id}.json`).some(([address, , kind]) => address === deployedById.get('deploymentStatusOracle') && kind === 'deploymentStatusOracle')).toBe(true)
 			expect(deployedById.get('securityPoolFactory')).toBe(indexedByKind.get('securityPoolFactory'))
 			expect(deployedById.get('securityPoolOperationsDelegate')).toBe(indexedByKind.get('securityPoolOperationsDelegate'))
 			expect(indexedByKind.get('usdc')).toBeDefined()
@@ -99,9 +101,29 @@ describe('network configuration', () => {
 			const manifestEntries = parseManifestValue(manifest, `${id}.json`)
 			const usdcAddress = id === 'mainnet' ? '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' : '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
 			const expectedAddresses = new Set([...deployment.deploymentSteps, ...deployment.derivedContracts, { address: deployment.network.genesisRepTokenAddress }, { address: deployment.network.wethAddress }, { address: usdcAddress }].map(({ address }) => address.toLowerCase()))
+			const requiredAddress = (id: string) => {
+				const entry = deployment.deploymentSteps.find(entry => entry.id === id)
+				if (entry === undefined) throw new Error(`Missing deployment ${id}`)
+				return getAddress(entry.address)
+			}
+			const trading = tradingDeploymentData(requiredAddress('proxyDeployer'), requiredAddress('securityPoolFactory'), CANONICAL_TRADING_FEE_BPS, { abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}` }, { abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` })
+			expectedAddresses.add(trading.factoryAddress.toLowerCase())
+			expectedAddresses.add(trading.routerAddress.toLowerCase())
+			expect(manifestEntries).toContainEqual([trading.factoryAddress, 'Augur AMM Factory', 'ammFactory'])
+			expect(manifestEntries).toContainEqual([trading.routerAddress, 'Augur AMM Router', 'ammRouter'])
+			const zoltarSteps = zoltarDeploymentStatusStepAddresses(id, getAddress(deployment.network.genesisRepTokenAddress), { proxyDeployer: requiredAddress('proxyDeployer'), multicall3: requiredAddress('multicall3'), zoltarQuestionData: requiredAddress('zoltarQuestionData'), zoltar: requiredAddress('zoltar') })
+			const oracle = createDeploymentStatusOracleAddressHelper({
+				deploymentStatusOracleBytecode: () => encodeDeployData({ abi: statusOracleContract.abi, bytecode: `0x${statusOracleContract.evm.bytecode.object}`, args: [zoltarSteps] }),
+				proxyDeployerAddress: requiredAddress('proxyDeployer'),
+				zeroSalt: toHex(0, { size: 32 }),
+			}).getDeploymentStatusOracleAddress()
+			expectedAddresses.add(oracle.toLowerCase())
+			expect(manifestEntries).toContainEqual([oracle, 'Zoltar Deployment Status Oracle', 'deploymentStatusOracle'])
 			expect(new Set(manifestEntries.map(([address]) => address.toLowerCase()))).toEqual(expectedAddresses)
 			expect(manifestEntries).toHaveLength(expectedAddresses.size)
-			expect(new Set(manifestEntries.map(([_address, _label, kind]) => kind)).size).toBe(manifestEntries.length)
+			expect(manifestEntries.filter(([, , kind]) => kind === 'deploymentStatusOracle')).toHaveLength(2)
+			const otherKinds = manifestEntries.filter(([, , kind]) => kind !== 'deploymentStatusOracle').map(([, , kind]) => kind)
+			expect(new Set(otherKinds).size).toBe(otherKinds.length)
 		}
 	})
 
@@ -214,11 +236,22 @@ describe('network configuration', () => {
 		expect(networks[0]?.rpcUrls).toEqual(['https://primary.example', 'https://fallback.example/rpc'])
 	})
 
-	test('optionally registers the deployed Augur AMM factory as an activity source', async () => {
+	test('registers the deployed Sepolia AMM factory without an environment override', async () => {
+		process.env['NETWORKS'] = 'sepolia'
+		for (const override of [undefined, '', '   ']) {
+			if (override === undefined) delete process.env['SEPOLIA_AMM_FACTORY_ADDRESS']
+			else process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = override
+			const [network] = await loadNetworks()
+			expect(network?.contracts.filter(([, , kind]) => kind === 'ammFactory')).toEqual([[getAddress('0xc9c6d6fc790ad1e84387528017331db041dda3a2'), 'Augur AMM Factory', 'ammFactory']])
+		}
+	})
+
+	test('registers an additional AMM factory alongside the canonical activity source', async () => {
 		process.env['NETWORKS'] = 'sepolia'
 		process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = '0x1000000000000000000000000000000000000001'
 		const networks = await loadNetworks()
 		expect(networks[0]?.contracts).toContainEqual(['0x1000000000000000000000000000000000000001', 'Augur AMM Factory', 'ammFactory'])
+		expect(networks[0]?.contracts.filter(([, , kind]) => kind === 'ammFactory')).toHaveLength(2)
 	})
 
 	test('rejects a malformed Augur AMM factory address', async () => {

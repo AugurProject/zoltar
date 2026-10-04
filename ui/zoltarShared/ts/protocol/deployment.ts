@@ -1,6 +1,6 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper, PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper, PROXY_DEPLOYER_RUNTIME_CODE, zoltarDeploymentStatusStepAddresses } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
@@ -233,7 +233,7 @@ function markDeploymentTransactionPrepared(
 
 export function getZoltarDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
 	const addresses = getZoltarContractAddresses(profile)
-	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
+	return zoltarDeploymentStatusStepAddresses(profile.id, profile.genesisRepTokenAddress, { proxyDeployer: PROXY_DEPLOYER_ADDRESS, ...addresses })
 }
 
 function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {

@@ -1,5 +1,5 @@
-import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { getAddress, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { PROXY_DEPLOYER_RUNTIME_CODE, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -40,31 +40,12 @@ type TradingDeploymentWallet = Readonly<{
 
 const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-const zeroSalt = toHex(0, { size: 32 })
-
-function requireFeeBps(feeBps: number) {
-	if (!Number.isSafeInteger(feeBps) || feeBps < 0 || feeBps >= 10_000) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
-	return feeBps
-}
-
 export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number): TradingDeploymentPlan {
-	const checkedFeeBps = requireFeeBps(feeBps)
-	const factoryData = encodeDeployData({
-		abi: factoryContract.abi,
-		bytecode: `0x${factoryContract.evm.bytecode.object}`,
-		args: [core.securityPoolFactory, BigInt(checkedFeeBps)],
-	})
-	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: core.proxyDeployer, salt: zeroSalt })
-	const routerData = encodeDeployData({
-		abi: routerContract.abi,
-		bytecode: `0x${routerContract.evm.bytecode.object}`,
-		args: [factoryAddress],
-	})
-	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
+	const { factoryAddress, factoryData, routerAddress, routerData } = tradingDeploymentData(core.proxyDeployer, core.securityPoolFactory, feeBps, { abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}` }, { abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` })
 	return {
 		core,
 		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
-		feeBps: checkedFeeBps,
+		feeBps,
 		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
 	}
 }

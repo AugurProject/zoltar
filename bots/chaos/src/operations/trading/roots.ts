@@ -1,30 +1,22 @@
-import { encodeDeployData, getCreate2Address, toHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { CANONICAL_TRADING_FEE_BPS, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../../solidity/ts/types/contractArtifact.ts'
 import { CANONICAL_PROXY_DEPLOYER } from '../../core/genesis-uniswap.ts'
 import { eligible, planBase } from '../planning.ts'
 import type { OperationDefinition, OperationEvidence } from '../types.ts'
-
-const ZERO_SALT = toHex(0, { size: 32 })
-const GENESIS_TRADING_FEE_BPS = 30
 
 export function deploymentStep(id: string, label: string, to: Address, data: Hex, evidence: OperationEvidence[]) {
 	return { data, evidence, gasLimit: '12000000', id, label, preflightCalls: [], to, walletAssetDebits: [] }
 }
 
 export function tradingRootDeploymentPlans(securityPoolFactory: Address) {
-	const factoryData = encodeDeployData({
-		abi: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.abi,
-		args: [securityPoolFactory, BigInt(GENESIS_TRADING_FEE_BPS)],
-		bytecode: `0x${trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.evm.bytecode.object}`,
-	})
-	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: CANONICAL_PROXY_DEPLOYER, salt: ZERO_SALT })
-	const routerData = encodeDeployData({
-		abi: trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter.abi,
-		args: [factoryAddress],
-		bytecode: `0x${trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter.evm.bytecode.object}`,
-	})
-	const routerAddress = getCreate2Address({ bytecode: routerData, from: CANONICAL_PROXY_DEPLOYER, salt: ZERO_SALT })
-	return { factoryAddress, factoryData, routerAddress, routerData }
+	return tradingDeploymentData(
+		CANONICAL_PROXY_DEPLOYER,
+		securityPoolFactory,
+		CANONICAL_TRADING_FEE_BPS,
+		{ abi: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.abi, bytecode: `0x${trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.evm.bytecode.object}` },
+		{ abi: trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter.abi, bytecode: `0x${trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter.evm.bytecode.object}` },
+	)
 }
 
 export const deployTradingFactory: OperationDefinition = {

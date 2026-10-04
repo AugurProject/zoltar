@@ -69,6 +69,7 @@ for (const source of Object.keys(result.contracts).sort()) {
 for (const [source, name] of [
 	['contracts/trading/TwoWayConstantProductFactory.sol', 'TwoWayConstantProductFactory'],
 	['contracts/trading/TwoWayConstantProductPair.sol', 'TwoWayConstantProductPair'],
+	['contracts/trading/TwoWayConstantProductRouter.sol', 'TwoWayConstantProductRouter'],
 ] as const) {
 	const artifact = result.contracts?.[source]?.[name]
 	if (artifact?.abi === undefined) throw new Error(`Canonical Solidity artifact has no ${name} ABI`)

@@ -8,6 +8,7 @@ const kindAliases: Readonly<Record<string, string>> = {
 	OpenOraclePriceCoordinatorFactory: 'priceCoordinatorFactory',
 	TwoWayConstantProductFactory: 'ammFactory',
 	TwoWayConstantProductPair: 'ammPair',
+	TwoWayConstantProductRouter: 'ammRouter',
 	UniformPriceDualCapBatchAuction: 'truthAuction',
 	UniformPriceDualCapBatchAuctionFactory: 'truthAuctionFactory',
 	WETH9: 'weth',

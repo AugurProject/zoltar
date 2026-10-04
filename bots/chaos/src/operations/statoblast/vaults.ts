@@ -35,15 +35,19 @@ function poolDeploymentCapacityBlocker(snapshot: EcosystemSnapshot, options: Pla
 	return topologyMutationCapacityBlocker(snapshot, options, { additionalPools: 1, additionalUniverses: 0, label: 'Pool deployment' })
 }
 
+function originPoolCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	const deployed = new Set(snapshot.pools.map(pool => `${pool.universeId}:${pool.questionId}`))
+	const binaryQuestions = snapshot.questions.filter(question => question.kind === 'binary' && amount(question.endTime) > amount(snapshot.anchor.timestamp))
+	return snapshot.universes
+		.flatMap(universe => binaryQuestions.map(question => ({ question, universe })))
+		.filter(candidate => canDeployOriginPool(candidate.universe) && !deployed.has(`${candidate.universe.id}:${candidate.question.id}`))
+		.filter(candidate => options.genesisInitializationTarget === undefined || (candidate.universe.id === options.genesisInitializationTarget.universeId && candidate.question.id === options.genesisInitializationTarget.questionId))
+}
+
 export const deployPool: OperationDefinition = {
 	buildPlan(snapshot, options) {
 		if (poolDeploymentCapacityBlocker(snapshot, options) !== undefined) return undefined
-		const deployed = new Set(snapshot.pools.map(pool => `${pool.universeId}:${pool.questionId}`))
-		const binaryQuestions = snapshot.questions.filter(question => question.kind === 'binary')
-		const candidates = snapshot.universes
-			.flatMap(universe => binaryQuestions.map(question => ({ question, universe })))
-			.filter(candidate => canDeployOriginPool(candidate.universe) && !deployed.has(`${candidate.universe.id}:${candidate.question.id}`))
-			.filter(candidate => options.genesisInitializationTarget === undefined || (candidate.universe.id === options.genesisInitializationTarget.universeId && candidate.question.id === options.genesisInitializationTarget.questionId))
+		const candidates = originPoolCandidates(snapshot, options)
 		const candidate = choose(candidates, mixSeed(options.seed, deployPool.id))
 		if (candidate === undefined) return undefined
 		const multiplier = 11_000n + BigInt(mixSeed(options.seed, 'pool-multiplier') % 9_001)
@@ -62,6 +66,8 @@ export const deployPool: OperationDefinition = {
 					args: [BigInt(candidate.universe.id), BigInt(candidate.question.id), multiplier, priorityFee],
 					evidence: [eventEvidence(snapshot.deployments.securityPoolFactory, 'DeploySecurityPool(address,address,address,address,address,uint248,uint256,uint256,uint256,uint256,uint256)')],
 					functionName: 'deployOriginSecurityPool',
+					// Factory deployment needs about 15.3M gas plus the executor's padding.
+					gasLimit: 20_000_000n,
 					id: 'deploy-origin-pool',
 					label: 'Deploy origin security pool',
 					to: snapshot.deployments.securityPoolFactory,
@@ -75,9 +81,7 @@ export const deployPool: OperationDefinition = {
 	discoveryInputs: ['binary questions', 'unforked universes', 'factory deployments', 'non-decision threshold and theoretical REP supply'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
-		const deployed = new Set(snapshot.pools.map(pool => `${pool.universeId}:${pool.questionId}`))
-		const found = snapshot.universes.some(universe => canDeployOriginPool(universe) && snapshot.questions.some(question => question.kind === 'binary' && !deployed.has(`${universe.id}:${question.id}`)))
-		return eligible(poolDeploymentCapacityBlocker(snapshot, options), found ? undefined : 'No undeployed binary question/universe combination')
+		return eligible(poolDeploymentCapacityBlocker(snapshot, options), originPoolCandidates(snapshot, options).length === 0 ? 'No undeployed active binary question/universe combination' : undefined)
 	},
 	id: 'statoblast.pool.deploy',
 	label: 'Deploy security pool',
