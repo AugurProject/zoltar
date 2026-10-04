@@ -1,5 +1,5 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { useId, useState } from 'preact/hooks'
+import { useEffect, useId, useState } from 'preact/hooks'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { formatSlippagePercent, isLowSlippage, parseSlippagePercent, parseValidityMinutes, SLIPPAGE_PRESETS_BPS, VALIDITY_PRESETS_MINUTES, type TradeSettings } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
@@ -16,8 +16,11 @@ function PresetRow({ label, presets, value, format, onSelect }: { label: string;
 	)
 }
 
-/** Trade settings inside the application settings menu: every Trading form reads these instead of its own protection fields. */
-export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSettings; onChange(settings: TradeSettings): void }) {
+/**
+ * Trade settings inside the application settings menu: every Trading form reads these instead of its own protection fields.
+ * `embedded` drops the title and the menu's divider for a host that already titles the panel, such as the trade ticket's disclosure.
+ */
+export function TradeSettingsPanel({ settings, onChange, embedded = false }: { settings: TradeSettings; onChange(settings: TradeSettings): void; embedded?: boolean }) {
 	const id = useId()
 	const [slippageText, setSlippageText] = useState(() => formatSlippagePercent(settings.slippageBps))
 	const [validityText, setValidityText] = useState(() => settings.validityMinutes.toString())
@@ -25,6 +28,13 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 	const slippageInvalid = parsedSlippage === undefined
 	const slippageHint = parsedSlippage !== undefined && isLowSlippage(parsedSlippage) ? settingsCopy.lowSlippageWarning : undefined
 	const validityInvalid = parseValidityMinutes(validityText) === undefined
+	// The menu and the trade ticket can both show this panel; a change made in one replaces the other's text unless it already says the same.
+	useEffect(() => {
+		setSlippageText(current => (parseSlippagePercent(current) === settings.slippageBps ? current : formatSlippagePercent(settings.slippageBps)))
+	}, [settings.slippageBps])
+	useEffect(() => {
+		setValidityText(current => (parseValidityMinutes(current) === settings.validityMinutes ? current : settings.validityMinutes.toString()))
+	}, [settings.validityMinutes])
 	const selectSlippage = (slippageBps: bigint) => {
 		setSlippageText(formatSlippagePercent(slippageBps))
 		onChange({ ...settings, slippageBps })
@@ -34,10 +44,12 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 		onChange({ ...settings, validityMinutes })
 	}
 	return (
-		<section className='trade-settings' aria-labelledby={`${id}-title`}>
-			<h2 id={`${id}-title`} className='trade-settings-title'>
-				{settingsCopy.tradeSettings}
-			</h2>
+		<section className={embedded ? 'trade-settings trade-settings--embedded' : 'trade-settings'} aria-labelledby={embedded ? undefined : `${id}-title`} aria-label={embedded ? settingsCopy.tradeSettings : undefined}>
+			{embedded ? undefined : (
+				<h2 id={`${id}-title`} className='trade-settings-title'>
+					{settingsCopy.tradeSettings}
+				</h2>
+			)}
 			<div className='trade-settings-field'>
 				<span className='trade-settings-label'>{settingsCopy.slippageTolerance}</span>
 				<PresetRow label={settingsCopy.slippagePresets} presets={SLIPPAGE_PRESETS_BPS} value={settings.slippageBps} format={value => `${formatSlippagePercent(value)}%`} onSelect={selectSlippage} />
