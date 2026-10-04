@@ -63,7 +63,7 @@ abstract contract EscalationGameStorage {
 		return _applyTruthAuctionRetention(escalationClaimBundles[vault].disputeStakedRepClaimUnits);
 	}
 
-	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep, bool) internal {
+	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {
 		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
 		escalationClaimBundles[bundleId].disputeStakedRepClaimUnits += claimUnits;
 		totalDisputeStakedAttoRep += amountAttoRep;

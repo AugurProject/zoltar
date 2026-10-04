@@ -309,7 +309,7 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 
 async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, rpcPool: RpcPool, pool: PoolObservation, reservedTopUpAttoRep: bigint, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (pool.requestPriceCostAttoEth > settings.strategy.maximumOracleRequestCostAttoEth) {
-		throw new Error('Oracle request cost exceeds strategy.maximumOracleRequestCostAttoEth')
+		throw new Error('Oracle request cost exceeds strategy.maximumOracleRequestCostEth')
 	}
 	const proposedPrice = pool.lastPrice > 0n ? pool.lastPrice : settings.strategy.fallbackRepPerEthPrice
 	if (proposedPrice === 0n) {

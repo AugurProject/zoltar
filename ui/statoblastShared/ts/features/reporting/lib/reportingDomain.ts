@@ -14,7 +14,7 @@ type ReportingAmountSuggestion = {
 	reason: string | undefined
 }
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
-const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
+const LOAD_REPORTING_PRESETS_REASON = reportingCopy.presetDetailsRequired
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
@@ -244,7 +244,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (isPoolQuestionFinalized(details))
 		return {
 			actualDepositAmount: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: ESCALATION_RESOLVED_REASON,
 		}
 	const selectedSide = getEscalationSide(details, outcome)
 	if (selectedSide === undefined)

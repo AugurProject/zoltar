@@ -1,7 +1,6 @@
-import { createUniverseIdentity } from '../../lib/universeIdentity.js'
 import { UniverseIdentity } from '../../components/UniverseIdentity.js'
 import type { ComponentChildren } from 'preact'
-import { useEffect, useMemo } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ChainBlockNumberContext, ChainTimestampContext } from '../../wallet/chainTimestamp.js'
 import { getLockedTransactionScopes, isTransactionPromptOpen, type TransactionTrayState } from '../../transactions/transactionTray.js'
@@ -45,7 +44,6 @@ export function ProtocolAppFrame({
 	/** The header's wallet controls; blocked actions reuse them to offer connect and switch fixes in place. */
 	walletActions?: WalletActions | undefined
 }) {
-	const identity = useMemo(() => (activeUniverseId === undefined ? undefined : createUniverseIdentity(activeUniverseId)), [activeUniverseId])
 	const activeTransaction = transactionState?.active
 	// The owner also follows network changes, so re-check it after every render; an unchanged owner is a no-op.
 	useEffect(() => setTransactionActivityOwner(accountAddress))
@@ -58,7 +56,7 @@ export function ProtocolAppFrame({
 	return (
 		<ChainBlockNumberContext.Provider value={currentBlockNumber}>
 			<ChainTimestampContext.Provider value={currentTimestamp}>
-				<main data-universe-id={activeUniverseId?.toString()} style={{ '--universe-band-light': identity?.bandImage.light, '--universe-band-dark': identity?.bandImage.dark }}>
+				<main data-universe-id={activeUniverseId?.toString()}>
 					{activeUniverseId === undefined ? undefined : <UniverseIdentity universeId={activeUniverseId} variant='backdrop' />}
 					{heading}
 					{notices}

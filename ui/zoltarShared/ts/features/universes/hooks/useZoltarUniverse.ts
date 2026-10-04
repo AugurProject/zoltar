@@ -463,7 +463,6 @@ export function useZoltarUniverse(
 		let ownsTransaction = false
 		let requestKey: TransactionRequestKey | undefined
 		try {
-			let refreshRequired = false
 			let result: ZoltarChildUniverseActionResult | undefined
 			let outcomeLabel = getOutcomeLabelForIndex(zoltarUniverse.value?.childUniverses, outcomeIndex)
 			try {
@@ -490,16 +489,14 @@ export function useZoltarUniverse(
 				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', 'Child universe deployed', result.hash)
 				outcomeLabel = getOutcomeLabelForIndex(universe.childUniverses, outcomeIndex)
 				onTransactionPresented(createChildUniverseSuccessPresentation(result, outcomeLabel))
-				refreshRequired = true
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
 				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
+				if (!ownsTransaction) zoltarChildUniverseError.value = message
 				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)
 				return
 			}
-
-			if (!refreshRequired) return
 
 			try {
 				await refreshZoltarUniverse()

@@ -168,7 +168,7 @@ export function ZoltarMigrationSection({
 		)
 	}
 
-	const guardMessage = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
+	const guardMessage = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarUniverse)
 	const currentStepIndex = migrationWizardStepIds.indexOf(currentStepId)
 	const currentStep = wizard.steps[currentStepIndex]
 	const currentStepSatisfied = currentStep?.status === 'complete' || currentStep?.status === 'notNeeded' || currentStep?.status === 'ready'

@@ -12,8 +12,7 @@ import { repositoryRoot } from './root.mts'
 const restrictedPackages = ['viem', 'abitype']
 const sourceExtensions = /\.(?:cjs|cts|js|jsx|mjs|mts|ts|tsx)$/
 // Mirrors the generated output biome.json and the nested package configurations exclude, so both checks skip the same files.
-const generatedPathPattern =
-	/(?:^|\/)(?:vendor|dist|node_modules)\/|^(?:shared\/[^/]+|ui\/[^/]+|solidity|docs\/assets)\/js\/|^(?:coverage|reth|testnetwork)\/|^solidity\/artifacts\/|^bots\/open-oracle-arbitrager\/docs\/chart-runtime\.js$|^augurScan\/public\/app\.js$|^solidity\/ts\/testSupport\/simulator\/types\/wire-types\.js$/
+const generatedPathPattern = /(?:^|\/)(?:vendor|dist|node_modules)\/|^(?:shared\/[^/]+|ui\/[^/]+|solidity|docs\/assets)\/js\/|^(?:coverage|reth|testnetwork)\/|^solidity\/artifacts\/|^bots\/open-oracle-arbitrager\/docs\/chart-runtime\.js$|^augurScan\/public\/app\.js$/
 
 type RestrictedImportTypeFinding = { file: string; line: number; column: number; text: string }
 

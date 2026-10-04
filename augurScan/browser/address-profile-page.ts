@@ -125,7 +125,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		'Escalation deposit positions',
 		(item.escalation_positions ?? []).slice(0, 250).map(position => {
 			let state = 'Unconsumed losing principal'
-			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement', 'export', 'direct parent claim', 'forked escrow claim'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
+			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement', 'export', 'direct parent claim'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
 			else if (position['final_resolution'] == null || position['final_resolution'] === '3') state = 'Pending resolution'
 			else if (position['final_resolution'] === position['outcome']) state = 'Unconsumed winning principal; see tagged payout evidence'
 			return operationRow(`Deposit ${position['deposit_index']}`, `${exactUnit(String(position['principal_atto_rep']), 18, 'REP')} principal · ${state}`, String(position['game_address']), position['resolution_block'], operationsHref(`/escalation/${position['game_address']}`))

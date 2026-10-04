@@ -92,7 +92,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		_validateAcceptedDeposit(outcome, outcomeIndex, selectedOutcomeState.balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
-		_increaseEscrowedRepForBundle(depositor, amountAttoRep, true);
+		_increaseEscrowedRepForBundle(depositor, amountAttoRep);
 		unresolvedRepByVaultAttoRep[depositor] += amountAttoRep;
 		totalLocalUnresolvedAttoRep += amountAttoRep;
 		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] += amountAttoRep;
@@ -138,7 +138,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.childAttoRep += childRepAmountAttoRep;
 		// The carry commitment owns inherited payout identity. This record tracks
 		// only child-local escrow attributed to the immutable depositor.
-		_increaseEscrowedRepForBundle(depositor, effectiveChildAttoRep, false);
+		_increaseEscrowedRepForBundle(depositor, effectiveChildAttoRep);
 		emit ForkedEscrowRecorded(depositor, outcome, state.sourcePrincipalAttoRep, state.childAttoRep, _claimEscrowedRepByVault(depositor), totalDisputeStakedAttoRep, outcomeState[uint8(outcome)].balanceAttoRep);
 	}
 

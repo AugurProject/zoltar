@@ -19,7 +19,10 @@
 					<h1>augurScan</h1>
 				</div>
 			</a>
-			<form id="global-search" class="global-search" role="search" aria-label="Site" autocomplete="off"><label class="sr-only" for="global-search-input">Search address, transaction, block, question, pool, or report</label><input id="global-search-input" type="search" placeholder="Search address, tx, block…  /" aria-controls="global-search-results" /><div id="global-search-results" class="global-search-results" hidden></div></form>
+			<form id="global-search" class="global-search" role="search" aria-label="Site" autocomplete="off">
+				<label class="sr-only" for="global-search-input">Search address, transaction, block, question, pool, or report</label><input id="global-search-input" type="search" placeholder="Search address, tx, block…  /" aria-controls="global-search-results" />
+				<div id="global-search-results" class="global-search-results" hidden></div>
+			</form>
 			<label class="global-network"
 				><span class="sr-only">Network</span
 				><select id="global-network-filter">
@@ -61,7 +64,7 @@
 				<p id="activity-summary" class="activity-summary">Waiting for activity</p>
 
 				<div class="feed-shell">
-					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span title="Top-level transaction function or deployment action">Function</span><span>Transaction</span><span>msg.origin</span></div>
+					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span title="Top-level transaction function or deployment action">Function</span><span>Transaction</span><span>tx.origin</span></div>
 					<div id="feed-state" class="feed-state" role="status">Loading activity…</div>
 					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true"></div>
 				</div>
@@ -214,7 +217,10 @@
 				</div>
 			</section>
 			<section id="explorer" class="explorer" hidden><div id="explorer-content" aria-live="polite"></div></section>
-			<section id="not-found" class="explorer" hidden><h2>Page not found</h2><a href="/">Back to activity</a></section>
+			<section id="not-found" class="explorer" hidden>
+				<h2>Page not found</h2>
+				<a href="/">Back to activity</a>
+			</section>
 		</main>
 
 		<dialog id="detail-dialog" aria-labelledby="detail-title">

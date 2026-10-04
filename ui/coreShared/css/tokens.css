@@ -116,7 +116,8 @@
 	--space-5: 1.5rem;
 
 	/*
-	 * Font families. Only system fonts are declared because no web font is loaded;
+	 * Font families. Sans and serif use system stacks; mono leads with the vendored
+	 * IBM Plex Mono face declared in visual-foundation.css, then system fallbacks;
 	 * each stack renders the intended role (sans for copy, labels, and controls, serif for
 	 * route and hero headings, mono for addresses, hashes, and numbers).
 	 */

@@ -5,7 +5,7 @@ type DeploymentTabState = {
 	hasLoadedDeploymentStatuses: boolean
 }
 
-/** The deployment tab stays visible while anything about the deployment is unknown, failing, or incomplete. */
+/** Shows the deployment tab on a status-read failure, missing application contracts, or a loaded undeployed step; hidden until statuses load. */
 export function shouldShowDeploymentTab({ applicationDeploymentMissing, deploymentStatusError, deploymentStatuses, hasLoadedDeploymentStatuses }: DeploymentTabState) {
 	return deploymentStatusError !== undefined || applicationDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
 }

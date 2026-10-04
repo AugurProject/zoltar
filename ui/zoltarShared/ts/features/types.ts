@@ -29,6 +29,7 @@ export type DeploymentRouteContentProps = {
 	isOnActiveAppChain: boolean
 	deployNextMissingPending: boolean
 	deploymentCompleteHref?: string
+	deploymentCompleteLabel?: string
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void
 	onRetryDeploymentStatus: () => void

@@ -69,7 +69,7 @@ test('registered AugurScan CI runs its complete non-database suite while bots av
 	if (typeof manifest !== 'object' || manifest === null) throw new Error('augurScan/package.json must contain an object')
 	const scripts = Reflect.get(manifest, 'scripts')
 	if (typeof scripts !== 'object' || scripts === null) throw new Error('augurScan/package.json must declare scripts')
-	expect(Reflect.get(scripts, 'test:ci')).toBe('bun run test:unit && bun run test:api && bun run test:replay')
+	expect(Reflect.get(scripts, 'test:ci')).toBe('bun run test:unit && bun run test:api && bun run test:replay && bun run test:browser')
 
 	const augurScan = projects.find(project => project.id === 'augur-scan')
 	expect(augurScan?.tasks.integration?.command).toEqual(['bun', 'run', 'test:integration'])

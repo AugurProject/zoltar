@@ -269,7 +269,7 @@ export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn:
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
 
 // Returns how much tokenOut you receive for swapping `amountIn` of tokenIn via Uniswap V3.
-// Use WETH_ADDRESS for ETH (V3 does not support native ETH).
+// Callers pass WETH for ETH (see normalizeV3Token); V3 does not support native ETH.
 async function quoteV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fee: number): Promise<bigint> {
 	const { result } = await client.simulateContract({
 		address: getActiveNetworkProfile().uniswapV3QuoterAddress,

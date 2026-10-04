@@ -170,4 +170,28 @@ describe('DeploymentRouteContent', () => {
 		const nextStep = documentQueries.getByRole('link', { name: 'Browse questions' })
 		expect(nextStep.getAttribute('href')).toBe('#/zoltar?simulate=1&simScenario=deployed&simState=slow&universe=7&zoltarView=questions')
 	})
+
+	test('labels the Statoblast completion destination as Pools', async () => {
+		window.location.hash = '#/deploy?simulate=1&simScenario=deployed&simState=slow&universe=7'
+		const props = createProps()
+		const deploymentStatuses = props.deploymentStatuses.map(step => ({ ...step, deployed: true }))
+		const renderedComponent = await renderIntoDocument(
+			h(DeploymentRouteContent, {
+				...props,
+				deploymentCompleteLabel: 'Browse pools',
+				deploymentCompleteHref: '#/pools',
+				deploymentStatuses,
+				deploymentSections: [
+					{ title: 'Utilities', steps: deploymentStatuses.slice(0, 3) },
+					{ title: 'Zoltar', steps: deploymentStatuses.slice(3) },
+				],
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Deploy next missing' })).toBeNull()
+		const nextStep = documentQueries.getByRole('link', { name: 'Browse pools' })
+		expect(nextStep.getAttribute('href')).toBe('#/pools')
+	})
 })

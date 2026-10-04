@@ -7,13 +7,14 @@ import { fileURLToPath } from 'node:url'
 import * as ts from 'typescript'
 
 const zoltarSourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const zoltarSharedSourceRoot = resolve(zoltarSourceRoot, '../../zoltarShared/ts')
 const coreSharedSourceRoot = resolve(zoltarSourceRoot, '../../coreShared/ts')
 const zoltarAppShell = resolve(zoltarSourceRoot, '../index.html')
 
 function resolveZoltarImport(importer: string, specifier: string) {
 	let unresolved: string
 	if (specifier.startsWith('.')) unresolved = resolve(dirname(importer), specifier)
-	else if (specifier.startsWith('@zoltar/ui-zoltar-shared/')) unresolved = resolve(zoltarSourceRoot, specifier.slice('@zoltar/ui-zoltar-shared/'.length))
+	else if (specifier.startsWith('@zoltar/ui-zoltar-shared/')) unresolved = resolve(zoltarSharedSourceRoot, specifier.slice('@zoltar/ui-zoltar-shared/'.length))
 	else if (specifier.startsWith('@zoltar/ui-core-shared/')) unresolved = resolve(coreSharedSourceRoot, specifier.slice('@zoltar/ui-core-shared/'.length))
 	else if (specifier.startsWith('@zoltar/ui-')) throw new Error(`Cross-application UI import from ${importer}: ${specifier}`)
 	else return undefined
@@ -21,7 +22,7 @@ function resolveZoltarImport(importer: string, specifier: string) {
 		const relativePath = relative(sourceRoot, unresolved)
 		return relativePath !== '..' && !relativePath.startsWith('../')
 	}
-	if (!isWithinSourceRoot(zoltarSourceRoot) && !isWithinSourceRoot(coreSharedSourceRoot)) throw new Error(`Cross-application UI import from ${importer}: ${specifier}`)
+	if (!isWithinSourceRoot(zoltarSourceRoot) && !isWithinSourceRoot(coreSharedSourceRoot) && !isWithinSourceRoot(zoltarSharedSourceRoot)) throw new Error(`Cross-application UI import from ${importer}: ${specifier}`)
 	const candidates = unresolved.endsWith('.js') ? [`${unresolved.slice(0, -3)}.ts`, `${unresolved.slice(0, -3)}.tsx`] : [unresolved, `${unresolved}.ts`, `${unresolved}.tsx`, resolve(unresolved, 'index.ts'), resolve(unresolved, 'index.tsx')]
 	return candidates.find(candidate => existsSync(candidate))
 }
@@ -113,8 +114,8 @@ function collectForbiddenProductReferences(source: string, modulePath: string) {
 }
 
 function isAllowedTechnicalProductString(modulePath: string, value: string) {
-	if (value === 'statoblast') return modulePath.endsWith('/lib/activeEnvironment.ts') || modulePath.endsWith('/simulation/tevmBackend.ts')
-	if (value === 'statoblast_Multicall3_Multicall3') return modulePath.endsWith('/protocol/deployment.ts') || modulePath.endsWith('/protocol/zoltarDeploymentHelpers.ts')
+	if (value === 'statoblast') return modulePath.endsWith('/lib/activeEnvironment.ts') || modulePath.endsWith('/simulation/tevmBackend.ts') || modulePath.endsWith('/lib/localEntityStore.ts')
+	if (value === 'statoblast_Multicall3_Multicall3') return modulePath.endsWith('/protocol/deployment.ts') || modulePath.endsWith('/protocol/zoltarDeploymentHelpers.ts') || modulePath.endsWith('/protocol/contractLabels.ts')
 	if (value === 'statoblast_WETH9_WETH9') return modulePath.endsWith('/simulation/bootstrap.ts')
 	return false
 }
@@ -136,6 +137,10 @@ function collectProductionModules(entryPoint: string) {
 }
 
 describe('Zoltar production module graph', () => {
+	test('follows imports into the shared Zoltar source', () => {
+		expect(resolveZoltarImport(resolve(zoltarSourceRoot, 'app/App.tsx'), '@zoltar/ui-zoltar-shared/protocol/zoltar.js')).toBe(resolve(zoltarSourceRoot, '../../zoltarShared/ts/protocol/zoltar.ts'))
+	})
+
 	test('collects every runtime module edge while excluding type-only imports and exports', () => {
 		expect(
 			collectRuntimeImportSpecifiers(

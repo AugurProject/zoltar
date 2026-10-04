@@ -74,7 +74,7 @@ function executionModeSummary({ saved, live, queued }: ExecutionModeState, ready
 /**
  * The Execution mode panel: live execution is gated on the same prerequisites the bot enforces when it is armed, so the
  * switch cannot be flipped on until every required row is satisfied; switching a live operator back to dry run is
- * always allowed. Expects the markup from `executionModePanel`.
+ * always allowed. Expects the markup from `ExecutionModePanel` in `settings-markup.tsx`.
  */
 export function renderExecutionMode(rows: readonly ReadinessRow[], mode: ExecutionModeState) {
 	renderReadinessList(element('execution-checklist', HTMLUListElement), rows)

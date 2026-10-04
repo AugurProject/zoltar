@@ -563,8 +563,10 @@ const compileContracts = async () => {
 		console.log('Compilation complete. Hash cache updated.')
 	}
 
-	if (selectedProject === undefined) await copySolidityContractArtifact(ARTIFACTS_JSON)
-	console.log('TypeScript artifact generated.')
+	if (selectedProject === undefined) {
+		await copySolidityContractArtifact(ARTIFACTS_JSON)
+		console.log('TypeScript artifact generated.')
+	}
 }
 
 if (import.meta.main) {

@@ -34,7 +34,7 @@ export function requireFinalizedTransactionReceipt(label: string, hash: Hex, res
 
 function assertGasCostLimit(gasEstimate: bigint, maxFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
 	if (maxFeePerGas * paddedTransactionGas(gasEstimate) > maximumGasCost) {
-		throw new Error(`${label} estimated gas ceiling exceeds strategy.maximumGasCostAttoEth`)
+		throw new Error(`${label} estimated gas ceiling exceeds strategy.maximumGasCostEth`)
 	}
 }
 
@@ -62,7 +62,7 @@ export async function assertMarketPriceStillAllowed(priceStillAllowed: () => boo
 export function assertRepLimits(parameters: { acquiredAmountAttoRep?: bigint | undefined; currentPoolAttoRep: bigint; currentTotalAttoRep: bigint; depositAmountAttoRep: bigint; maximumPoolAttoRep: bigint; maximumTotalAttoRep: bigint }) {
 	const acquiredAmountAttoRep = parameters.acquiredAmountAttoRep ?? 0n
 	if (parameters.currentPoolAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumPoolAttoRep) {
-		throw new Error('REP deployment would exceed strategy.maximumAttoRepPerPool')
+		throw new Error('REP deployment would exceed strategy.maximumPerPoolRep')
 	}
 	if (parameters.currentTotalAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumTotalAttoRep) {
 		throw new Error('REP deployment would exceed strategy.maximumTotalDeployedRep')

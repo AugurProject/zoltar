@@ -60,7 +60,7 @@ export async function indexBlock(
 		const missing = [...relevantHashes].filter(hash => !receiptByHash.has(hash))
 		for (const { receipt, transaction } of await mapLimit(missing, 8, async hash => {
 			const [receipt, transaction] = await Promise.all([state.providers.client.getTransactionReceipt({ hash }), state.providers.client.getTransaction({ hash })])
-			if (transaction.hash !== hash || transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`BlockTransaction ${hash} no longer belongs to block ${number}`)
+			if (transaction.hash !== hash || transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`Transaction ${hash} no longer belongs to block ${number}`)
 			return { receipt, transaction }
 		})) {
 			requireReceiptPosition(receipt, block.hash, number)
@@ -68,7 +68,7 @@ export async function indexBlock(
 			if (receipt.status !== 'success' && (receipt.logs.length > 0 || knownLogs.some(log => log.transactionHash === receipt.transactionHash))) throw new ChainContinuityError(`Reverted transaction ${receipt.transactionHash} has inconsistent log evidence`)
 			if (transaction.transactionIndex === undefined) throw new ChainContinuityError(`Missing transaction position for ${transaction.hash}`)
 			for (const known of knownLogs.filter(log => log.transactionHash === transaction.hash)) assertSelectedLogEvidence(known, receipt)
-			transactionByHash.set(transaction.hash, { transaction, index: bigintToSafeNumber(transaction.transactionIndex, `BlockTransaction ${transaction.hash} index`) })
+			transactionByHash.set(transaction.hash, { transaction, index: bigintToSafeNumber(transaction.transactionIndex, `Transaction ${transaction.hash} index`) })
 			receipts.push(receipt)
 			receiptByHash.set(receipt.transactionHash, receipt)
 		}

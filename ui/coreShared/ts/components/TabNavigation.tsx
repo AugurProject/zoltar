@@ -70,7 +70,7 @@ function MoreSectionsMenu({ onChange, options, value }: { onChange: (value: stri
  */
 export function TabNavigation({ ariaLabel = appCopy.applicationSections, route, tabs, moreTabs = [], onRouteChange }: TabNavigationProps) {
 	const fallbackRoute = tabs[0]?.route ?? route
-	if (tabs.length + moreTabs.length <= 1) return null
+	if (tabs.length + moreTabs.length <= 1) return undefined
 	return <NavigationBar ariaLabel={ariaLabel} moreOptions={moreTabs.map(toTabOption)} options={tabs.map(toTabOption)} value={route === 'not-found' ? fallbackRoute : route} onChange={onRouteChange} />
 }
 
@@ -88,7 +88,7 @@ export function NavigationBar({ ariaLabel, moreOptions = [], onChange, options, 
 export function TabNavigationUnavailableReasons({ tabs }: { tabs: readonly RouteTabDefinition[] }) {
 	// One line per distinct reason: a workflow lock disables every tab for the same cause and should say so once.
 	const unavailableReasons = [...new Map(tabs.filter(tab => tab.disabled === true && tab.disabledReason !== undefined).map(tab => [tab.disabledReason, tab])).values()]
-	if (unavailableReasons.length === 0) return null
+	if (unavailableReasons.length === 0) return undefined
 	return (
 		<div className='tab-nav-unavailable'>
 			{unavailableReasons.map(tab => (

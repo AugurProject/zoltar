@@ -114,8 +114,6 @@ export function resolveTokenApprovalStatusMessage({
 }
 function formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel, tokenUnits }: { actionLabel: string; requirement: TokenApprovalRequirement; tokenLabel: string; tokenUnits: number }) {
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
-	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount
-	if (targetAmount === undefined) return undefined
 	return `Need ${formatAdditionalCeilingAmount(requirement.neededAmount, tokenLabel, tokenUnits)} approved before ${actionLabel}.`
 }
 function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {

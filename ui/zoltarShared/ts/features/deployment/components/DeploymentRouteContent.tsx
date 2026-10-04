@@ -27,6 +27,7 @@ export function DeploymentRouteContent({
 	isLoadingDeploymentStatuses,
 	isOnActiveAppChain,
 	deploymentCompleteHref,
+	deploymentCompleteLabel,
 	onDeploy,
 	onDeployNextMissing,
 	onRetryDeploymentStatus,
@@ -71,9 +72,9 @@ export function DeploymentRouteContent({
 				title={deploymentCopy.deterministicContractDeployment}
 				description={deploymentCopy.deploymentOverviewDetail}
 				actions={
-					deploymentComplete && deploymentComplete !== undefined ? (
+					deploymentComplete ? (
 						<a className='button-link' href={completedHref}>
-							{deploymentCopy.browseQuestions}
+							{deploymentCompleteLabel ?? deploymentCopy.browseQuestions}
 						</a>
 					) : (
 						<TransactionActionButton

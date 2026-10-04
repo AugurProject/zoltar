@@ -15,13 +15,13 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 
 describe('zoltar migration guards', () => {
 	test('blocks migration when wallet or network prerequisites are missing', () => {
-		expect(getMigrationGuardMessage(undefined, true, createUniverse(), false, true, false, 'Fork first.')).toBe('Connect wallet to continue.')
-		expect(getMigrationGuardMessage(zeroAddress, false, createUniverse(), false, true, false, 'Fork first.')).toBe('Switch to Sepolia.')
+		expect(getMigrationGuardMessage(undefined, true, createUniverse(), false)).toBe('Connect wallet to continue.')
+		expect(getMigrationGuardMessage(zeroAddress, false, createUniverse(), false)).toBe('Switch to Sepolia.')
 	})
 
-	test('waits for root universe and fork state before migration actions can proceed', () => {
-		expect(getMigrationGuardMessage(zeroAddress, true, undefined, false, false, false, '')).toBe('Refresh universe first.')
-		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse({ hasForked: false }), false, false, false, '')).toBeUndefined()
-		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse(), false, true, false, '')).toBeUndefined()
+	test('waits for the root universe before migration actions can proceed', () => {
+		expect(getMigrationGuardMessage(zeroAddress, true, undefined, false)).toBe('Refresh universe first.')
+		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse({ hasForked: false }), false)).toBeUndefined()
+		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse(), false)).toBeUndefined()
 	})
 })

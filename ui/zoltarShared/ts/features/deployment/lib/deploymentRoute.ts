@@ -9,6 +9,7 @@ type DeploymentFlow = Pick<ReturnType<typeof useDeploymentFlow>, 'busyStepId' | 
 type BuildDeploymentRouteContentPropsParameters = {
 	accountAddress: Address | undefined
 	deploymentCompleteHref?: string
+	deploymentCompleteLabel?: string
 	deploymentStateReady: boolean
 	deploymentStatusError: string | undefined
 	deploymentStatuses: DeploymentStatus[]
@@ -22,6 +23,7 @@ type BuildDeploymentRouteContentPropsParameters = {
 export function buildDeploymentRouteContentProps({
 	accountAddress,
 	deploymentCompleteHref,
+	deploymentCompleteLabel,
 	deploymentStateReady,
 	deploymentStatusError,
 	deploymentStatuses,
@@ -35,6 +37,7 @@ export function buildDeploymentRouteContentProps({
 		accountAddress,
 		busyStepId: flow.busyStepId,
 		...(deploymentCompleteHref === undefined ? {} : { deploymentCompleteHref }),
+		...(deploymentCompleteLabel === undefined ? {} : { deploymentCompleteLabel }),
 		deploymentSections: getSections(deploymentStatuses),
 		deploymentStateReady,
 		deploymentStatusError,

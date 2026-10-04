@@ -302,7 +302,7 @@ void describe('market creation helpers', () => {
 	})
 
 	test('supports invalid market type paths in creation helpers without introducing silent defaults', () => {
-		const form = {
+		const form: MarketFormState = {
 			answerUnit: '',
 			categoricalOutcomes: ['Yes', 'No'],
 			description: 'broken market',
@@ -313,7 +313,7 @@ void describe('market creation helpers', () => {
 			scalarMin: '1',
 			title: 'bad market',
 			startTime: '1000',
-		} as unknown as MarketFormState
+		}
 		expect(() => createMarketParameters(form)).toThrow('Unhandled discriminated union member: "invalid"')
 	})
 

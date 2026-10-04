@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { dashboardRecord, exactDashboardKeys } from '../runtime/dashboard-input.ts'
 import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
 
 import { getAddress, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
@@ -81,7 +82,8 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 	} else if (command.kind === 'accept-residuals') {
 		acceptResidualProfileReplacement(state.retirement, state.profileId, command.targetProfileId, command.reason, command.confirmation)
 	} else {
-		const input = JSON.parse(command.json) as Record<string, unknown>
+		const input = dashboardRecord(JSON.parse(command.json), '--register-v3-position')
+		exactDashboardKeys(input, ['fee', 'owner', 'pool', 'tickLower', 'tickUpper', 'token0', 'token1', 'workflowId'], '--register-v3-position')
 		if (command.confirmation !== `REGISTER V3 ${profileId}`) throw new Error(`Confirmation must exactly match REGISTER V3 ${profileId}`)
 		const owner = getAddress(String(input['owner']))
 		if (state.signerAddress === undefined || owner.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error('Registered V3 owner must be the durable signer')

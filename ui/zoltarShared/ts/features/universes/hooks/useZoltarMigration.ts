@@ -120,6 +120,7 @@ export function useZoltarMigration({
 				const message = formatWriteErrorMessage(error, 'Failed to migrate REP')
 				writeFailed = true
 				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
+				if (!ownsTransaction) zoltarMigrationError.value = message
 				zoltarMigrationFeedback.value = createErrorActionFeedback('splitMigrationRep', 'REP migration failed', message)
 			} finally {
 				if (environmentGuard.isCurrent()) {

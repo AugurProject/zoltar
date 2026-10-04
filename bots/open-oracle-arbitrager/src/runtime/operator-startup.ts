@@ -20,7 +20,7 @@ import { createSettlementJournal } from './settlement-stage.ts'
 
 function validateOperatorConfiguration(config: Configuration, lockManager: ExecutionLockManager | undefined) {
 	if (config.logLookbackBlocks < 0n || config.logLookbackBlocks > MAX_LOG_SCAN_RANGE) throw new Error('logLookbackBlocks must be from 0 through 256')
-	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
+	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('runtime.uiPort must be an integer from 1 to 65535')
 	if (config.ui && config.once) throw new Error('runtime.ui cannot be combined with runtime.once')
 	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
 	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')

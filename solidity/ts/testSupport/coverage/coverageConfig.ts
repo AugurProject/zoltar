@@ -14,7 +14,6 @@ const getProjectRoot = (): string => {
 	let currentPath = process.cwd()
 	while (currentPath !== path.dirname(currentPath)) {
 		if (existsSync(path.join(currentPath, 'solidity', 'artifacts', 'Contracts.json'))) return currentPath
-		if (existsSync(path.join(currentPath, 'artifacts', 'Contracts.json'))) return currentPath
 		currentPath = path.dirname(currentPath)
 	}
 	return process.cwd()

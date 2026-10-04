@@ -280,6 +280,7 @@ export function useZoltarFork(
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, errorFallback)
 				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
+				if (!ownsTransaction) zoltarForkError.value = message
 				zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 				return
 			}

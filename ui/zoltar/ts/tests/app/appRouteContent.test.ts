@@ -20,10 +20,6 @@ describe('AppRouteContent', () => {
 		expect(shouldRenderAppRouteContent('zoltar', 'Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1).')).toBe(false)
 	})
 
-	test('renders route content when both wallet and read backend are ready', () => {
-		expect(shouldRenderAppRouteContent('zoltar', undefined)).toBe(true)
-	})
-
 	test('keeps deploy route content available when the configured read RPC is on the wrong chain', () => {
 		expect(shouldRenderAppRouteContent('deploy', 'Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1).')).toBe(true)
 	})

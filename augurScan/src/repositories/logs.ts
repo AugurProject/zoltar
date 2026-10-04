@@ -1,3 +1,4 @@
+import { literalContainsPattern } from './like-pattern.ts'
 import type { SQL } from 'bun'
 import type { JsonValue } from '../ethereum.ts'
 
@@ -21,7 +22,7 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 		return `$${values.length}`
 	}
 	clauses.push(`l.chain_id = ${bind(query.chainId)}`)
-	if (query.event !== null) clauses.push(`l.event_name ILIKE ${bind(`%${query.event}%`)}`)
+	if (query.event !== null) clauses.push(`l.event_name ILIKE ${bind(literalContainsPattern(query.event))}`)
 	if (query.address !== null) {
 		const addressParameter = bind(query.address)
 		const addressPatternParameter = bind(`%${query.address}%`)

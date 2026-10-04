@@ -35,8 +35,7 @@
 							>.
 						</li>
 						<li>
-							Review the pinned runtime-code hashes: the <code>EXPECTED_*_RUNTIME_CODE_HASHES</code> maps in <a href="https://github.com/AugurProject/zoltar/blob/main/ui/zoltarShared/ts/protocol/deployment.ts"><code>ui/zoltarShared/ts/protocol/deployment.ts</code></a
-							> and <a href="https://github.com/AugurProject/zoltar/blob/main/ui/statoblastShared/ts/protocol/deployment.ts"><code>ui/statoblastShared/ts/protocol/deployment.ts</code></a
+							Review the pinned runtime-code hashes: the <code>EXPECTED_*_RUNTIME_CODE_HASHES</code> maps in <a href="https://github.com/AugurProject/zoltar/blob/main/ui/zoltarShared/ts/protocol/deployment.ts"><code>ui/zoltarShared/ts/protocol/deployment.ts</code></a> and <a href="https://github.com/AugurProject/zoltar/blob/main/ui/statoblastShared/ts/protocol/deployment.ts"><code>ui/statoblastShared/ts/protocol/deployment.ts</code></a
 							>. Check them in three ways, then publish the reviewed hashes with the release:
 							<ul>
 								<li>Run <code>bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/deployment.test.ts ui/statoblast/ts/tests/protocol/deployment.test.ts</code>. It confirms that a clean local build still matches the pinned hashes of the directly compiled steps (the deployment status oracle, Multicall3, ZoltarQuestionData, and five Statoblast artifacts); it does not cover the other pinned contracts.</li>
@@ -50,10 +49,7 @@
 				</section>
 				<section id="genesis-rep-deployment">
 					<h2>Review genesis REP allocations (Sepolia and deterministic testnets)</h2>
-					<p>
-						Sepolia genesis REP allocations are canonical source data in <a href="https://github.com/AugurProject/zoltar/blob/main/shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a
-						>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The constructor of <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> rejects an empty list, a zero address, a repeated holder, a zero balance, and a total above the cap.
-					</p>
+					<p>Sepolia genesis REP allocations are canonical source data in <a href="https://github.com/AugurProject/zoltar/blob/main/shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The constructor of <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> rejects an empty list, a zero address, a repeated holder, a zero balance, and a total above the cap.</p>
 					<p>There is no administrator, post-deployment mint, allocation correction, or recovery entrypoint, so fix an incorrect allocation in the source list before deployment and then regenerate the deterministic manifests. Because constructor arguments are part of CREATE2 init code, any allocation change produces a new genesis REP address and new addresses for every deployment step whose constructor wiring depends on it. Never continue a deployment from a manifest generated for a different allocation list.</p>
 				</section>
 			</article>

@@ -9,7 +9,9 @@
 				"proseWrap": "never",
 				"singleAttributePerLine": false,
 				"tabWidth": 4,
-				"useTabs": true
+				"useTabs": true,
+				"semi": false,
+				"singleQuote": true
 			}
 		},
 		{

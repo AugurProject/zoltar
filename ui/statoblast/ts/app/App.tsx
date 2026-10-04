@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { useCallback, useState } from 'preact/hooks'
@@ -65,6 +66,7 @@ export function App() {
 		walletScopedHookConfig,
 	} = useProtocolAppShell({
 		deploymentRoute: {
+			deploymentCompleteLabel: commonCopy.browsePools,
 			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('pools'), getTopLevelRouteSearch('pools')),
 			getSections: getStatoblastDeploymentSections,
 		},

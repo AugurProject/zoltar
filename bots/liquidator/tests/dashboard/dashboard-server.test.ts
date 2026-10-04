@@ -37,6 +37,22 @@ function putJson(server: ReturnType<typeof startDashboardServer>, pathname: stri
 }
 
 describe('liquidator dashboard server', () => {
+	test('shows startup chain and factory details while hiding unrecognized scan details', async () => {
+		const details = 'chain=1 factory=0x1111111111111111111111111111111111111111'
+		const server = startServer({
+			getState: () => ({
+				activities: [
+					{ at: '2026-08-13T00:00:00.000Z', kind: 'scan', status: 'success', message: 'Liquidator started', details },
+					{ at: '2026-08-13T00:00:00.000Z', kind: 'scan', status: 'success', message: 'Scan', details: 'private configuration details' },
+				],
+			}),
+		})
+		const response = await fetch(new URL('/api/state', server.url))
+		const snapshot: unknown = await response.json()
+		expect(snapshot).toMatchObject({ activities: [{ message: 'Liquidator started', details }, { message: 'Scan' }] })
+		expect(JSON.stringify(snapshot)).not.toContain('private configuration details')
+	})
+
 	test('returns only the fields consumed by the public dashboard', async () => {
 		const calldataMarker = `0x${'de'.repeat(64)}`
 		const protectedPath = '/protected/operator-state.json'

@@ -11,7 +11,8 @@ describe('two-way constant-product math', () => {
 			const quote = quoteExactOutput(reserveIn, reserveOut, requested, feeBps)
 			expect(quote.amountOut).toBe(requested)
 			expect(quote.amountIn - quote.feeAmount).toBe(quote.netInput)
-			expect((quote.netInput * (10_000n - feeBps)) / 10_000n <= quote.netInput).toBe(true)
+			expect((quote.amountIn * (10_000n - feeBps)) / 10_000n).toBeGreaterThanOrEqual(quote.netInput)
+			expect(((quote.amountIn - 1n) * (10_000n - feeBps)) / 10_000n).toBeLessThan(quote.netInput)
 			expect((reserveIn + quote.netInput) * (reserveOut - requested)).toBeGreaterThanOrEqual(reserveIn * reserveOut)
 		}
 	})

@@ -19,7 +19,6 @@ type ValidationFailure = {
 	relativePath: string
 }
 
-const toolingRootPath = path.join(repositoryRoot, 'tooling')
 const ariaIdReferenceAttributes = [
 	{ allowsMultiple: false, name: 'aria-activedescendant' },
 	{ allowsMultiple: true, name: 'aria-controls' },
@@ -59,7 +58,7 @@ async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> 
 		filePath,
 		ids: new Set(Array.from(window.document.querySelectorAll('[id]')).map(element => element.getAttribute('id') ?? '')),
 		rawHtml,
-		relativePath: path.relative(toolingRootPath, filePath),
+		relativePath: path.relative(repositoryRoot, filePath),
 		window,
 	}
 }

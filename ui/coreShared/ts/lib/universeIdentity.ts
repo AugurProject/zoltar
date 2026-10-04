@@ -63,7 +63,7 @@ export function createUniverseIdentity(universeId: bigint) {
 			})
 		return `${curve(contour(-1), 'M', roundness)} ${curve(contour(1).reverse(), 'L', roundness)} Z`
 	})
-	const renderImage = (dark: boolean, miniature: boolean, band: boolean) => {
+	const renderImage = (dark: boolean, miniature: boolean) => {
 		const palette = dark ? { ground: 17, fold: 24, miniature: 32, miniatureGround: 27, foldChroma: 0.075, foldRange: 2.5 } : { ground: 94, fold: 88, miniature: 84, miniatureGround: 93, foldChroma: 0.055, foldRange: 3 }
 		const groundL = miniature ? palette.miniatureGround : palette.ground
 		const baseL = miniature ? palette.miniature : palette.fold
@@ -72,10 +72,7 @@ export function createUniverseIdentity(universeId: bigint) {
 		let width = 1600
 		let height = 1000
 		let viewBox = '0 0 1600 1000'
-		if (band) {
-			height = 80
-			viewBox = '0 460 1600 80'
-		} else if (miniature) {
+		if (miniature) {
 			width = 96
 			height = 96
 			viewBox = '0 -300 1600 1600'
@@ -94,23 +91,21 @@ export function createUniverseIdentity(universeId: bigint) {
 		const crossFlow = `<g opacity="${crossing.toFixed(5)}" transform="rotate(${35 + value(13) * 110} ${curlX.toFixed(2)} ${curlY.toFixed(2)})">${paths}</g>`
 		// Keep a visible silhouette from the first screen, with gentler shading in the content column.
 		// A nonzero center also preserves recognition when portrait viewports crop the artwork.
-		const quiet =
-			miniature || band
-				? ''
-				: '<linearGradient id="quiet" x2="0" y2="1"><stop stop-color="#ddd"/><stop offset=".45" stop-color="#ddd"/><stop offset=".7" stop-color="#ddd"/><stop offset="1" stop-color="#fff"/></linearGradient><linearGradient id="margins"><stop stop-color="#fff"/><stop offset=".12" stop-color="#aaa"/><stop offset=".25" stop-color="#aaa"/><stop offset=".75" stop-color="#aaa"/><stop offset=".88" stop-color="#aaa"/><stop offset="1" stop-color="#fff"/></linearGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask><mask id="column"><rect width="1600" height="1000" fill="url(#margins)"/></mask>'
+		const quiet = miniature
+			? ''
+			: '<linearGradient id="quiet" x2="0" y2="1"><stop stop-color="#ddd"/><stop offset=".45" stop-color="#ddd"/><stop offset=".7" stop-color="#ddd"/><stop offset="1" stop-color="#fff"/></linearGradient><linearGradient id="margins"><stop stop-color="#fff"/><stop offset=".12" stop-color="#aaa"/><stop offset=".25" stop-color="#aaa"/><stop offset=".75" stop-color="#aaa"/><stop offset=".88" stop-color="#aaa"/><stop offset="1" stop-color="#fff"/></linearGradient><mask id="space"><rect width="1600" height="1000" fill="url(#quiet)"/></mask><mask id="column"><rect width="1600" height="1000" fill="url(#margins)"/></mask>'
 		// One bounded filter softens the entire composition; never allocate a full-viewport filter per fold.
-		const softness = miniature || band ? '' : '<filter id="soften" filterUnits="userSpaceOnUse" x="-72" y="-72" width="1744" height="1144" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="12"/></filter>'
+		const softness = miniature ? '' : '<filter id="soften" filterUnits="userSpaceOnUse" x="-72" y="-72" width="1744" height="1144" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="12"/></filter>'
 		const art = `<g transform="rotate(${angle} 800 500)">${paths}${crossFlow}</g>`
-		const composed = miniature || band ? art : `<g mask="url(#space)"><g mask="url(#column)"><g filter="url(#soften)">${art}</g></g></g>`
+		const composed = miniature ? art : `<g mask="url(#space)"><g mask="url(#column)"><g filter="url(#soften)">${art}</g></g></g>`
 		return encodeSvg(
 			`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice" data-winding="${winding.toFixed(5)}" data-crossing="${crossing.toFixed(5)}"><defs>${gradients}${quiet}${softness}</defs><rect x="-2000" y="-2000" width="6000" height="6000" fill="${color(hue, groundL, miniature ? 0.04 : 0.035)}"/>${composed}</svg>`,
 		)
 	}
-	const variants = (miniature: boolean, band: boolean) => ({ light: renderImage(false, miniature, band), dark: renderImage(true, miniature, band) })
+	const variants = (miniature: boolean) => ({ light: renderImage(false, miniature), dark: renderImage(true, miniature) })
 	return {
-		image: variants(false, false),
-		bandImage: variants(true, true),
-		swatchImage: variants(true, false),
+		image: variants(false),
+		swatchImage: variants(true),
 		traits: { hue, support, third, paletteSpread, winding, crossing, widthRatio, sweep, angle, count },
 	}
 }

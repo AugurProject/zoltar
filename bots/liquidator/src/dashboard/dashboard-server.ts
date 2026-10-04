@@ -100,12 +100,13 @@ function publicActivityDetails(kind: unknown, status: unknown, details: string) 
 	if (kind === 'error' || status === 'failed') return publicOperatorFailure(details)
 	if (containsSensitiveOperatorDetail(details)) return undefined
 	if (kind === 'scan' && /^block=\d+$/.test(details)) return details
+	if (kind === 'scan' && /^chain=\d+ factory=0x[0-9a-f]{40}$/i.test(details)) return details
 	if (kind !== 'configuration') return undefined
 	if (details === 'Set the chain and RPC endpoints in the dashboard') return details
 	if (/^\d+(?:, \d+)*$/.test(details)) return details
 	if (/^\d+ source\(s\) responded$/.test(details)) return details
 	if (/^\d+ CEX source\(s\) across \d+ REP asset\(s\)$/.test(details)) return details
-	if (/^chain=\d+ (?:factory=0x[0-9a-f]{40}|readRpc=[a-z0-9.:[\]-]+)$/i.test(details)) return details
+	if (/^chain=\d+ readRpc=[a-z0-9.:[\]-]+$/i.test(details)) return details
 	if (/^mode=(?:private|public) relays=\d+$/.test(details)) return details
 	return undefined
 }

@@ -33,14 +33,14 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xac6e28e67a7ad6485cf574bea9f56422ea766045c309c8ca2bfb8c1d362ee3f2',
+	escalationGameFactory: '0x0f3f13ee998f2789d03c1c02b0ecb6cb65da569a02e6b3b90711565bb8202446',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x261aadc73f4a0574ff5775db045e318637b2a237dce70ed22da64530d545abde',
-	securityPoolFactory: '0xe93f9a0b8465b10d08c44113be98dfa02632e1679da8107897d99d671d3613b0',
+	securityPoolFactory: '0xc08d4d1bf6a0639867011c182fb188e04b05c4d02a43f9d63d20b33892290f53',
 	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xcdb4670207741db440fc6b06996f2fcff32b7c42852b6325951199f3e1fc5282',
+	securityPoolForker: '0xbfeb383cdb8f9d635c6e34176ca50f010c8a396a66c3744ec21a6a8110fcd7b0',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
-	shareTokenFactory: '0xf3a779b5e0ebd7b8da756ae704be7baff98be86481a5833f8f12ca07931fd4ec',
+	shareTokenFactory: '0xd166e808a1860481541ec6f53d80cd284bdc172bfbe286c8b5b65da8978c8c93',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
@@ -74,14 +74,14 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xac6e28e67a7ad6485cf574bea9f56422ea766045c309c8ca2bfb8c1d362ee3f2',
+	escalationGameFactory: '0x0f3f13ee998f2789d03c1c02b0ecb6cb65da569a02e6b3b90711565bb8202446',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0xbef665725043c210328c50d1bfb23c586ecb0a53fab09413e5853aee974818ed',
-	securityPoolFactory: '0xeb069fe6d82aca22a0bd882ab8c230ef02005f78ba528835f8a47b6728724ba7',
+	securityPoolFactory: '0x225f70ef57582b6fb3c040c213150f57f934a4cce79110b3c851e459c7ebc52e',
 	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0x4c9b5b8caec00855d1b8c756a49a3e4527dcc43e1f2bbd4cb7c7ec8c7aa6d3df',
+	securityPoolForker: '0xd12fb332dba1a9c4679de9c238bea9b807d6797bd0fcc01c53d80dc01fb9d042',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
-	shareTokenFactory: '0x583dcbb682e4504decfb3cd959b046aa64eaf825b0438ae365c1056677e05941',
+	shareTokenFactory: '0x1bf688e11b6f3558844dcb52898e879f878b2035f6c73b92628460dabd6d6b1e',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 

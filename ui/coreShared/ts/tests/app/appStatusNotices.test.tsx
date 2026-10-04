@@ -65,6 +65,20 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Anvil boot failed')).not.toBeNull()
 	})
 
+	test('labels stale RPC warnings separately from a chain mismatch', async () => {
+		const rendered = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				readBackendMessage: 'Configured read RPC is stale.',
+				showApplicationDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+			}),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText('Stale read RPC')).not.toBeNull()
+		expect(within(document.body).queryByText('Read RPC mismatch')).toBeNull()
+	})
+
 	test('shows a read RPC mismatch notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {

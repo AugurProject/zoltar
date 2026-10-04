@@ -26,7 +26,7 @@ export enum OperationType {
 	Liquidation = 0,
 	WithdrawRep = 1,
 	SetVaultUnderwritingLimit = 2,
-	PriceRefresh = 3,
+	VaultOperations = 3,
 }
 
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n

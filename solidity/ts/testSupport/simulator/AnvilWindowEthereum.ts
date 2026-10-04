@@ -276,10 +276,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			body: JSON.stringify({ jsonrpc: '2.0', id, method: args.method, params }),
 		})
 		const json = parseJsonRpcResponse(raw, id)
-		const hasResult = 'result' in json
-		const hasError = 'error' in json
-		if (hasResult && hasError) throw new Error('Invalid JSON-RPC response: both result and error present')
-		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
 		if (json.error !== undefined) throw new JsonRpcError(json.error)
 		ensureDefined(json.result, 'json.result is undefined')
 		const requestedReceiptHash = args.method === 'eth_getTransactionReceipt' && typeof params[0] === 'string' ? params[0] : undefined
@@ -317,13 +313,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			}),
 		})
 		const json = parseJsonRpcResponse(raw, id)
-
-		// Validate JSON-RPC response structure
-		// Ensure exactly one of result or error is present (per JSON-RPC spec)
-		const hasResult = 'result' in json
-		const hasError = 'error' in json
-		if (hasResult && hasError) throw new Error('Invalid JSON-RPC response: both result and error present')
-		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
 
 		if (json.error !== undefined) {
 			if (ethCallCoverageRequest !== undefined) {
@@ -458,11 +447,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			if (receiptResult?.status === '0x0') {
 				const latestBlockTimestamp = parseBlockTimestamp(await request({ method: 'eth_getBlockByNumber', params: ['latest', false] }))
 				if (latestBlockTimestamp !== undefined) currentTimestamp = latestBlockTimestamp
-				try {
-					await request({ method: 'eth_call', params: [params[0], 'latest'], skipCoverage: true })
-				} catch (error) {
-					throw error
-				}
+				await request({ method: 'eth_call', params: [params[0], 'latest'], skipCoverage: true })
 				throw new Error('Transaction reverted')
 			}
 		}

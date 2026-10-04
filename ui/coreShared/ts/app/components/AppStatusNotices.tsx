@@ -70,7 +70,7 @@ export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZolt
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
 	if (showApplicationDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
-	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: appCopy.readRpcMismatch })
+	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: readBackendMessage.includes('stale') ? appCopy.staleReadRpc : appCopy.readRpcMismatch })
 	if (zoltarUniverseError !== undefined)
 		items.push({
 			detail: (

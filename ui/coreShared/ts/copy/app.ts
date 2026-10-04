@@ -43,6 +43,7 @@ export const formatReadRpcOverrideActiveDetail = (configuredRpcLabel: string, so
 export const customReadRpcWarningDetail = 'Custom read RPC active. Verify it before acting on displayed chain state.'
 export const readRpcOverrideIgnoredDetail = 'A custom read RPC was ignored. The configured fallback is active.'
 export const readWriteNetworkMismatchDetail = 'Displayed onchain state may not match the network this interface writes to.'
+export const staleReadRpc = 'Stale read RPC'
 export const readRpcMismatch = 'Read RPC mismatch'
 export const readRpcOverrideActive = 'Read RPC override active'
 export const setupIncomplete = 'Setup incomplete'
