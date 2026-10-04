@@ -40,7 +40,7 @@ export const closedToAdditions = 'Trading has ended for this market, so it no lo
 export { eth, percent } from './outcomes.js'
 
 export function approximateRemovalValue(amount: string) {
-	return `Worth about ${amount} ETH at the current trading pool price, if the question resolves valid.`
+	return `Worth about ${amount} ETH at the current trading pool price, if the question resolves Yes or No.`
 }
 
 export const youProvide = 'You provide'

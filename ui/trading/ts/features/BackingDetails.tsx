@@ -35,7 +35,7 @@ export function BackingDetails({ market, balances }: { market: LiveMarket; balan
 	const fees = scopedBalances === undefined ? undefined : holdingsFeeRange(market, scopedBalances, feeCollateralAttoEth)
 	return (
 		<DataGrid dense>
-			<MetricField label={fees === undefined ? payoutCopy.feeProjection : payoutCopy.positionFeeProjection}>{payoutCopy.holdingFeeValue(formatTrimmedUnits(feeReduction, 4, 4), fees)}</MetricField>
+			<MetricField label={fees === undefined ? payoutCopy.feeProjection : payoutCopy.positionFeeProjection}>{payoutCopy.formatHoldingFeeValue(formatTrimmedUnits(feeReduction, 4, 4), fees)}</MetricField>
 		</DataGrid>
 	)
 }

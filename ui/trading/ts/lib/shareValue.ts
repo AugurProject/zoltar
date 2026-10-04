@@ -82,7 +82,7 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 	const index = { INVALID: 0, YES: 1, NO: 2 }[outcome]
 	if (market.questionOutcome !== undefined && market.questionOutcome !== 3) {
 		if (market.questionOutcome !== index) return payoutCopy.zeroPayout
-		return market.systemState === 0 ? payoutCopy.redeemable(value) : payoutCopy.winningPayout(value)
+		return market.systemState === 0 ? payoutCopy.formatRedeemablePayout(value) : payoutCopy.formatUnredeemableWinningPayout(value)
 	}
 	const payout = payoutCopy.formatConditionalPayout(value, outcome)
 	return (market.universeForkTime !== undefined && market.universeForkTime !== 0n) || (market.systemState !== undefined && market.systemState !== 0) ? `${payout}; ${payoutCopy.redemptionUnavailable}` : payout
@@ -107,7 +107,7 @@ export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: Sha
 		let winning = 0n
 		if (market.questionOutcome === 1) winning = yes
 		else if (market.questionOutcome === 2) winning = no
-		return payoutCopy.formatWinningPayout(formatCollateralEth(winning, market, rounding))
+		return payoutCopy.formatLpWinningPayout(formatCollateralEth(winning, market, rounding))
 	}
 	if (yes === no) return payoutCopy.formatValidPayout(formatCollateralEth(yes, market, rounding))
 	return `${payoutCopy.formatConditionalPayout(formatCollateralEth(yes, market, rounding), 'YES')}; ${payoutCopy.formatConditionalPayout(formatCollateralEth(no, market, rounding), 'NO')}`

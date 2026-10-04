@@ -15,24 +15,24 @@ export function formatConditionalPayout(value: string, outcome: 'YES' | 'NO' | '
 }
 
 export function formatValidPayout(value: string) {
-	return `${value} if the question resolves valid`
+	return `${value} if the question resolves Yes or No`
 }
 
-export function formatWinningPayout(value: string) {
+export function formatLpWinningPayout(value: string) {
 	return `${value} winning payout`
 }
 
-export function redeemable(value: string) {
+export function formatRedeemablePayout(value: string) {
 	return `${value} redeemable`
 }
 
-export function winningPayout(value: string) {
+export function formatUnredeemableWinningPayout(value: string) {
 	return `${value} · winning payout; redemption unavailable`
 }
 
 export const positionFeeProjection = 'Holding fee on your holdings over next 30 days'
 
-export function holdingFeeValue(percent: string, fees: { minimum: string; maximum: string } | undefined) {
+export function formatHoldingFeeValue(percent: string, fees: { minimum: string; maximum: string } | undefined) {
 	if (fees === undefined) return `${percent}%`
 	if (fees.minimum === fees.maximum) return `${percent}% · ${fees.minimum}`
 	return `${percent}% · ${fees.minimum}–${fees.maximum} depending on outcome`

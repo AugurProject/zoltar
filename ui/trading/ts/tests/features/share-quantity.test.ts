@@ -41,7 +41,7 @@ test('shows current ETH backing beside share quantities without changing the qua
 
 test('values LP tokens from their reserve claims, including resolved and unavailable markets', () => {
 	const market = liveMarketFixture({ yesReserve: 2n * 10n ** 18n, noReserve: 3n * 10n ** 18n, lpTotalSupply: 10n ** 18n })
-	expect(formatLpWithValue(10n ** 18n, { ...market, noReserve: market.yesReserve })).toBe('1 LP (2 ETH if the question resolves valid)')
+	expect(formatLpWithValue(10n ** 18n, { ...market, noReserve: market.yesReserve })).toBe('1 LP (2 ETH if the question resolves Yes or No)')
 	expect(formatLpWithValue(10n ** 18n, market)).toBe('1 LP (2 ETH if the question resolves Yes; 3 ETH if the question resolves No)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, questionOutcome: 2 })).toBe('1 LP (3 ETH winning payout)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, questionOutcome: 0 })).toBe('1 LP (0 ETH winning payout)')
