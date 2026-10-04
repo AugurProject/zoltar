@@ -383,7 +383,6 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 			openInterestAttoEth: String(state['openInterestAttoEth']),
 			repPerEth1e18: String(price['repPerEth1e18'] ?? '0'),
 			securityMultiplierBps: String(state['securityMultiplierBps']),
-			targetHealthFactorBps: String(state['targetHealthFactorBps']),
 			badDebtAttoEth: String(state['badDebtAttoEth']),
 		})
 		return {
