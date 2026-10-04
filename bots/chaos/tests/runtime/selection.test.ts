@@ -161,11 +161,11 @@ test('propagates infrastructure and unexpected preflight failures without trying
 
 test('explains random skips using the scheduler candidate set', () => {
 	const evaluations = [evaluation(plan('first', 'random')), evaluation(plan('second', 'random')), evaluation(plan('urgent', 'urgent'))]
-	expect(randomOperationSkipReason(evaluations, [], 0)).toBe('Random run skipped: the allowlist excludes all 2 eligible random operations')
-	expect(randomOperationSkipReason(evaluations, undefined, 2)).toBe('Random run skipped: all 2 candidates failed preflight. See preceding failures')
+	expect(randomOperationSkipReason(evaluations, [], 0)).toBe('Random run skipped: no operations are selected for random work')
+	expect(randomOperationSkipReason(evaluations, ['first'], 2)).toBe('Random run skipped: all 2 candidates failed preflight. See preceding failures')
 	expect(randomOperationSkipReason(evaluations, ['first'], 1)).toBe('Random run skipped: the only candidate failed preflight. See preceding failures')
-	expect(randomOperationSkipReason([evaluation(plan('urgent', 'urgent'))], undefined, 0)).toBe('Random run skipped: only lifecycle operations are eligible')
-	expect(randomOperationSkipReason([evaluation(undefined, false)], undefined, 0)).toBe('Random run skipped: no random operation has an eligible plan in the current state')
+	expect(randomOperationSkipReason([evaluation(plan('urgent', 'urgent'))], ['first'], 0)).toBe('Random run skipped: only lifecycle operations are eligible')
+	expect(randomOperationSkipReason([evaluation(undefined, false)], ['first'], 0)).toBe('Random run skipped: no random operation has an eligible plan in the current state')
 })
 
 test('projects random readiness through the dashboard API without hiding manual eligibility', () => {

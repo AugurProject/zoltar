@@ -3,7 +3,7 @@ import type { createOperationDialog } from './operation-dialog.js'
 import { node, renderWhenChanged, setBadge, statusLabel } from './dom.js'
 import { type OperationEvaluation } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, publicCandidateCount } from './dashboard-format.ts'
+import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, operationIsSelectedForRandomWork, publicCandidateCount } from './dashboard-format.ts'
 
 type DashboardCatalogViewContext = {
 	elements: DashboardElements
@@ -38,12 +38,12 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
 			if (selectedClassification !== 'all' && displayedClassification(value) !== selectedClassification) return false
 			const independentlyExecutable = operationIsIndependentlyExecutable(value)
-			const eligible = independentlyExecutable && value.enabled !== false && value.eligible === true
 			let eligibility = 'blocked'
 			if (!independentlyExecutable) eligibility = 'not-selectable'
 			else if (value.enabled === false) eligibility = 'disabled'
-			else if (eligible) eligibility = 'eligible'
-			if (selectedEligibility === 'random-ready') return value.randomEligible === true && value.enabled !== false
+			else if (value.randomEligible === true) eligibility = 'eligible'
+			else if (value.classification === 'selectable' && value.randomAllowed === false) eligibility = 'random-excluded'
+			else if (value.lifecycleEligible === true) eligibility = 'lifecycle-ready'
 			if (selectedEligibility === 'random-excluded') return value.classification === 'selectable' && independentlyExecutable && value.randomAllowed === false
 			return selectedEligibility === 'all' || selectedEligibility === eligibility
 		})
@@ -98,13 +98,11 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			const eligibilityBadge = node('span')
 			if (!independentlyExecutable) setBadge(eligibilityBadge, 'Not independently selectable', 'neutral')
 			else if (!enabled) setBadge(eligibilityBadge, 'Disabled', 'neutral')
-			else if (eligible && randomExcluded) setBadge(eligibilityBadge, 'Ready, but excluded by random-operation allowlist', 'warning')
+			else if (randomExcluded) setBadge(eligibilityBadge, 'Excluded from random selection', 'neutral')
 			else if (value.randomEligible === true) setBadge(eligibilityBadge, 'Ready for random selection', 'success')
 			else if (value.lifecycleEligible === true) setBadge(eligibilityBadge, 'Lifecycle plan ready', 'info')
-			else if (eligible) setBadge(eligibilityBadge, 'Eligible now', 'success')
 			else setBadge(eligibilityBadge, 'Blocked', 'warning')
 			eligibilityCell.append(eligibilityBadge)
-			if (randomExcluded && !eligible) eligibilityCell.append(node('p', 'muted', 'Excluded by random-operation allowlist'))
 			if (!eligible) {
 				const listValue = node('ul', 'blocker-list')
 				for (const reason of displayedBlockers) listValue.append(node('li', undefined, reason))
@@ -134,7 +132,7 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 		const cards = ecosystemOrder.map(ecosystem => {
 			const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
 			const enabled = operations.filter(value => value.enabled !== false)
-			const eligible = enabled.filter(value => value.eligible === true)
+			const selected = operations.filter(operationIsSelectedForRandomWork)
 			const random = enabled.filter(value => value.randomEligible === true)
 			const lifecycle = enabled.filter(value => value.lifecycleEligible === true)
 			const card = node('article', 'panel ecosystem-card')
@@ -149,8 +147,8 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			heading.append(readiness)
 			const metrics = node('div', 'ecosystem-metrics')
 			for (const [label, amount] of [
-				['Eligible now', eligible.length],
-				['Random selections', random.length],
+				['Ready for random work', random.length],
+				['Selected for random work', selected.length],
 				['Lifecycle ready', lifecycle.length],
 			] as const) {
 				const metric = node('div')

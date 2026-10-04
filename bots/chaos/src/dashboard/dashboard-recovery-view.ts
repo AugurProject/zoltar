@@ -4,7 +4,7 @@ import { pendingTransactionSummary } from './pending-transaction-summary.js'
 import { recoveryFormSubmitting } from './recovery-form-lock.ts'
 import { type Snapshot, type OperationEvaluation, type PendingTransaction } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { ecosystemLabel, ecosystemLabels, ecosystemOrder, normalizeEcosystem, obligationDetail, operationIsIndependentlyExecutable, transactionIdentifier, transactionLine } from './dashboard-format.ts'
+import { ecosystemLabel, ecosystemLabels, ecosystemOrder, normalizeEcosystem, obligationDetail, operationIsIndependentlyExecutable, operationIsSelectedForRandomWork, transactionIdentifier, transactionLine } from './dashboard-format.ts'
 import type { DashboardState } from './dashboard-state.ts'
 
 export function createDashboardRecoveryView({ state, elements }: { state: DashboardState; elements: DashboardElements }) {
@@ -55,7 +55,7 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 	function renderCoverage(values: OperationEvaluation[]) {
 		const independent = values.filter(operationIsIndependentlyExecutable)
 		const selectable = independent.filter(value => value.classification === 'selectable')
-		const eligibleRandom = selectable.filter(value => value.enabled !== false && value.eligible === true)
+		const selected = selectable.filter(operationIsSelectedForRandomWork)
 		const random = independent.filter(value => value.enabled !== false && value.randomEligible === true)
 		const lifecycle = independent.filter(value => value.enabled !== false && value.lifecycleEligible === true)
 		const known = independent.some(value => value.randomAllowed !== undefined)
@@ -64,7 +64,6 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 		if (!known) detail = 'Waiting for operation discovery.'
 		else if (disabled) detail = 'New random work disabled by allowlist.'
 		else if (random.length > 0) detail = `${random.length.toString()} operation${random.length === 1 ? '' : 's'} permitted by the allowlist. Live preflight must pass before execution.`
-		else if (eligibleRandom.length > 0) detail = `The allowlist excludes all ${eligibleRandom.length.toString()} eligible random operation${eligibleRandom.length === 1 ? '' : 's'}.`
 		else if (lifecycle.length > 0) detail = 'Only lifecycle operations have eligible plans.'
 		const readiness = node('div', 'readiness-summary')
 		const badge = node('span')
@@ -72,25 +71,18 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 		else if (random.length > 0) setBadge(badge, 'Random work: ready for selection', 'success')
 		else setBadge(badge, 'Random work: blocked', 'warning')
 		readiness.append(badge, node('p', 'muted', detail))
-		if (disabled || (random.length === 0 && eligibleRandom.length > 0)) {
+		if (disabled) {
 			const settings = node('a', 'text-link', 'Review random-operation settings')
 			settings.href = '/settings'
 			readiness.append(settings)
 		}
 		if (disabled && state.configuration?.initializeGenesisUniverse === true) readiness.append(node('p', 'muted', 'Genesis initialization remains permitted.'))
 		const cards = ecosystemOrder.map(ecosystem => {
-			const operations = independent.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem)
-			const eligible = operations.filter(value => value.enabled !== false && value.eligible === true).length
+			const operations = selected.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem)
 			const randomCount = random.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem).length
 			const lifecycleCount = lifecycle.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem).length
 			const card = node('div', 'coverage-card')
-			card.append(
-				node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem),
-				node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`),
-				node('small', undefined, 'eligible now'),
-				node('small', undefined, `Random selections: ${randomCount.toString()}`),
-				node('small', undefined, `Lifecycle ready: ${lifecycleCount.toString()}`),
-			)
+			card.append(node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${randomCount.toString()}/${operations.length.toString()}`), node('small', undefined, 'ready / selected for random work'), node('small', undefined, `Lifecycle ready: ${lifecycleCount.toString()}`))
 			return card
 		})
 		const grid = node('div', 'coverage-grid')

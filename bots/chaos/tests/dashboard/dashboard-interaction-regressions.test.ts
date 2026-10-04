@@ -459,8 +459,9 @@ browserTest(
 		let randomAllowed = false
 		let eligible = true
 		let lifecycleEligible = true
+		let enabled = true
 		const evaluations = () => [
-			{ id: 'wrap', label: 'Wrap WETH', ecosystem: 'open-oracle', classification: 'selectable', eligible, enabled: true, randomAllowed, randomEligible: randomAllowed && eligible, lifecycleEligible: false, candidateCount: eligible ? 1 : 0, blockers: eligible ? [] : ['Insufficient ETH'], prerequisites: [] },
+			{ id: 'wrap', label: 'Wrap WETH', ecosystem: 'open-oracle', classification: 'selectable', eligible, enabled, randomAllowed, randomEligible: randomAllowed && eligible, lifecycleEligible: false, candidateCount: eligible ? 1 : 0, blockers: eligible ? [] : ['Insufficient ETH'], prerequisites: [] },
 			{ id: 'settle', label: 'Settle report', ecosystem: 'open-oracle', classification: 'lifecycle-obligation', eligible: lifecycleEligible, enabled: true, randomAllowed: false, randomEligible: false, lifecycleEligible, candidateCount: lifecycleEligible ? 1 : 0, blockers: [], prerequisites: [] },
 		]
 		await withDashboard(
@@ -491,16 +492,27 @@ browserTest(
 					lifecycleEligible = true
 					await cdp.command('Page.navigate', { url: new URL('/', String(await cdp.evaluate('location.origin'))).href })
 					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('New random work disabled by allowlist')", { message: 'allowlist explanation missing' })
+					expect(await cdp.evaluate("document.querySelector('#eligible-count')?.textContent")).toBe('0/0')
+					expect(await cdp.evaluate("document.querySelector('#coverage-summary .coverage-card:nth-child(3) strong')?.textContent")).toBe('0/0')
 					expect(await cdp.evaluate("document.querySelector('#coverage-summary')?.textContent")).toContain('Lifecycle ready: 1')
 					await cdp.evaluate("document.querySelector('#coverage-summary').scrollIntoView({block: 'center'})")
 					await capture(`readiness-blocked-${width}`)
 					randomAllowed = true
 					await refresh()
 					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('Random work: ready for selection')", { message: 'random readiness missing' })
+					expect(await cdp.evaluate("document.querySelector('#eligible-count')?.textContent")).toBe('1/1')
+					expect(await cdp.evaluate("document.querySelector('#coverage-summary .coverage-card:nth-child(3) strong')?.textContent")).toBe('1/1')
 					await capture(`readiness-ready-${width}`)
+					enabled = false
+					await refresh()
+					expect(await cdp.evaluate("document.querySelector('#eligible-count')?.textContent")).toBe('0/1')
+					expect(await cdp.evaluate("document.querySelector('#coverage-summary .coverage-card:nth-child(3) strong')?.textContent")).toBe('0/1')
+					enabled = true
 					eligible = false
 					await refresh()
 					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('Only lifecycle operations have eligible plans')", { message: 'lifecycle explanation missing' })
+					expect(await cdp.evaluate("document.querySelector('#eligible-count')?.textContent")).toBe('0/1')
+					expect(await cdp.evaluate("document.querySelector('#coverage-summary .coverage-card:nth-child(3) strong')?.textContent")).toBe('0/1')
 					await capture(`readiness-lifecycle-${width}`)
 					lifecycleEligible = false
 					await refresh()
@@ -508,14 +520,24 @@ browserTest(
 					await capture(`readiness-empty-${width}`)
 					randomAllowed = false
 					eligible = true
+					lifecycleEligible = true
 					await cdp.command('Page.navigate', { url: new URL('/catalog', String(await cdp.evaluate('location.origin'))).href })
-					await cdp.waitFor("document.querySelector('[data-operation-id=wrap]')?.textContent.includes('Ready, but excluded by random-operation allowlist')", { message: 'catalog exclusion missing' })
+					await cdp.waitFor("document.querySelector('[data-operation-id=wrap]')?.textContent.includes('Excluded from random selection')", { message: 'catalog exclusion missing' })
 					expect(await cdp.evaluate("document.querySelector('[data-operation-id=wrap] .operation-open')?.disabled")).toBe(false)
 					await cdp.evaluate("document.querySelector('#catalog-rows details').open = true; document.querySelector('[data-operation-id=wrap]').scrollIntoView({block: 'center'})")
 					expect(await cdp.evaluate("document.querySelector('[data-operation-id=wrap] .badge').getBoundingClientRect().height > 0")).toBe(true)
 					expect(await cdp.evaluate("document.querySelector('[data-selection-toggle=wrap]')?.checked")).toBe(false)
 					await capture(`catalog-excluded-${width}`)
 					expect(await cdp.evaluate('document.documentElement.scrollWidth > innerWidth')).toBe(false)
+					await cdp.evaluate("const blockedFilter = document.querySelector('#catalog-eligibility-filter'); blockedFilter.value = 'blocked'; blockedFilter.dispatchEvent(new Event('change', {bubbles: true}))")
+					expect(await cdp.evaluate("document.querySelectorAll('#catalog-rows tr').length")).toBe(0)
+					lifecycleEligible = false
+					await refresh()
+					expect(await cdp.evaluate("[...document.querySelectorAll('#catalog-rows tr')].map(row => row.dataset.operationId).filter(Boolean)")).toEqual(['settle'])
+					lifecycleEligible = true
+					await refresh()
+					await cdp.evaluate("const readyFilter = document.querySelector('#catalog-eligibility-filter'); readyFilter.value = 'eligible'; readyFilter.dispatchEvent(new Event('change', {bubbles: true}))")
+					expect(await cdp.evaluate("document.querySelectorAll('#catalog-rows tr').length")).toBe(0)
 					await cdp.evaluate("const filter = document.querySelector('#catalog-eligibility-filter'); filter.value = 'random-excluded'; filter.dispatchEvent(new Event('change', {bubbles: true}))")
 					expect(await cdp.evaluate("[...document.querySelectorAll('#catalog-rows tr')].map(row => row.dataset.operationId).filter(Boolean)")).toEqual(['wrap'])
 				}

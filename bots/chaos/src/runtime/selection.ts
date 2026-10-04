@@ -35,13 +35,10 @@ export function randomOperationPlans(evaluations: readonly EvaluatedOperation[],
 }
 
 /** Explain an empty scheduler selection using the evaluations before live preflight mutates them. */
-export function randomOperationSkipReason(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist: readonly string[] | undefined, attemptedCandidates: number) {
+export function randomOperationSkipReason(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist: readonly string[], attemptedCandidates: number) {
 	if (attemptedCandidates === 1) return 'Random run skipped: the only candidate failed preflight. See preceding failures'
 	if (attemptedCandidates > 1) return `Random run skipped: all ${attemptedCandidates.toString()} candidates failed preflight. See preceding failures`
-	const eligibleRandom = new Set(randomOperationPlans(evaluations).map(plan => plan.definitionId)).size
-	if (eligibleRandom > 0 && randomOperationPlans(evaluations, selectableOperationAllowlist).length === 0) {
-		return `Random run skipped: the allowlist excludes all ${eligibleRandom.toString()} eligible random operation${eligibleRandom === 1 ? '' : 's'}`
-	}
+	if (selectableOperationAllowlist.length === 0) return 'Random run skipped: no operations are selected for random work'
 	if (urgentOperationPlans(evaluations).length > 0) return 'Random run skipped: only lifecycle operations are eligible'
 	return 'Random run skipped: no random operation has an eligible plan in the current state'
 }

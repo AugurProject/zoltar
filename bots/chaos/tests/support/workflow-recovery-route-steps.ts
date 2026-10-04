@@ -154,7 +154,7 @@ export async function verifyEcosystemTopology(context: WorkflowRecoveryContext, 
 	const { cdp, dashboard, expectVisibleIdentifiers, waitFor } = context
 	await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
 	await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", `${viewport.label} anchored topology did not render`)
-	expect(await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-metrics')].map(metrics => [...metrics.querySelectorAll('span')].map(label => label.textContent))`)).toEqual(Array.from({ length: 4 }, () => ['Eligible now', 'Random selections', 'Lifecycle ready']))
+	expect(await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-metrics')].map(metrics => [...metrics.querySelectorAll('span')].map(label => label.textContent))`)).toEqual(Array.from({ length: 4 }, () => ['Ready for random work', 'Selected for random work', 'Lifecycle ready']))
 	expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 protocol identities · discovery complete.')
 	expect(
 		await cdp.evaluate(`({

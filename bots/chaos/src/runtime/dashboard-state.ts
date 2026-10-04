@@ -5,10 +5,10 @@ import { workflowNeedsOperatorReconciliation } from './workflows.ts'
 import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type RuntimeState } from '../state/operator-state.ts'
 import type { ConfigurationState } from './dashboard-controller.ts'
 
-function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>, selectableOperationAllowlist: readonly string[] | undefined) {
+function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>, selectableOperationAllowlist: readonly string[]) {
 	const randomPlans = new Set(randomOperationPlans(state.evaluations, selectableOperationAllowlist))
 	const lifecyclePlans = new Set(urgentOperationPlans(state.evaluations))
-	const allowed = selectableOperationAllowlist === undefined ? undefined : new Set(selectableOperationAllowlist)
+	const allowed = new Set(selectableOperationAllowlist)
 	const rows = new Map<
 		string,
 		{
@@ -44,7 +44,7 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 				id,
 				independentlyExecutable: evaluation.definition.independentlyExecutable ?? (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation'),
 				label: evaluation.definition.label,
-				randomAllowed: evaluation.definition.classification === 'selectable' && (allowed === undefined || allowed.has(id)),
+				randomAllowed: evaluation.definition.classification === 'selectable' && allowed.has(id),
 				randomEligible: evaluation.plan !== undefined && randomPlans.has(evaluation.plan),
 				lifecycleEligible: evaluation.plan !== undefined && lifecyclePlans.has(evaluation.plan),
 				prerequisites: [...new Set(evaluation.definition.discoveryInputs)],
