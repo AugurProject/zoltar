@@ -121,8 +121,15 @@ export const workflowRenderingState = state({
 		steps: workflowSteps,
 	},
 	evaluations: [
-		{ definition: { classification: 'lifecycle-obligation', description: 'Settle the anchored report.', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-1' } },
-		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, plan: { id: 'settle-2' } },
+		{
+			definition: { classification: 'lifecycle-obligation', description: 'Settle the anchored report.', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' },
+			eligibility: { blockers: [], eligible: true },
+			lifecycleEligible: true,
+			randomAllowed: false,
+			randomEligible: false,
+			plan: { id: 'settle-1' },
+		},
+		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: [], eligible: true }, lifecycleEligible: true, randomAllowed: false, randomEligible: false, plan: { id: 'settle-2' } },
 		{ definition: { classification: 'lifecycle-obligation', description: 'Settle the anchored report.', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { blockers: ['settle the anchored report'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.blocked-sibling', label: 'Blocked report sibling', risk: 'low' }, eligibility: { blockers: ['No safe fixture candidate exists'], eligible: false } },
 		{

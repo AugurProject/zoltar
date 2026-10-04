@@ -690,6 +690,10 @@ dd {
 	color: var(--operator-error);
 }
 
+.readiness-summary {
+	margin-bottom: 0.9rem;
+}
+
 .coverage-grid {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -782,6 +786,20 @@ table {
 .table-shell th:nth-child(5),
 .table-shell td:nth-child(5) {
 	width: 9%;
+}
+
+@media (min-width: 48.01rem) {
+	[data-page-content="catalog"] .table-shell th:nth-child(3),
+	[data-page-content="catalog"] .table-shell td:nth-child(3),
+	[data-page-content="catalog"] .table-shell th:nth-child(4),
+	[data-page-content="catalog"] .table-shell td:nth-child(4) {
+		width: 7%;
+	}
+
+	[data-page-content="catalog"] .table-shell th:nth-child(5),
+	[data-page-content="catalog"] .table-shell td:nth-child(5) {
+		width: 18%;
+	}
 }
 
 .table-shell td,

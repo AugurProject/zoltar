@@ -1,6 +1,12 @@
+import example from '../../config/operator.example.json'
+import { parseSettings } from '../../src/config/settings.ts'
+import { dashboardState } from '../../src/runtime/dashboard-state.ts'
+import { initialRuntimeState } from '../../src/state/initial-state.ts'
+import { publicChaosState } from '../../src/dashboard/dashboard-server.ts'
+import { parseSnapshot } from '../../src/dashboard/dashboard-data.ts'
 import { OperationRediscoveryRequired } from '../../src/execution/execution-context.ts'
 import { describe, expect, test } from 'bun:test'
-import { genesisInitializationPlan, selectExecutableOperationPlan, randomOperationPlans, urgentOperationPlans, type GenesisInitializationState } from '../../src/runtime/selection.ts'
+import { genesisInitializationPlan, selectExecutableOperationPlan, randomOperationSkipReason, randomOperationPlans, urgentOperationPlans, type GenesisInitializationState } from '../../src/runtime/selection.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 
 function plan(id: string, priority: OperationPlan['priority'], deadlineTimestamp?: string): OperationPlan {
@@ -151,4 +157,27 @@ test('propagates infrastructure and unexpected preflight failures without trying
 		),
 	).rejects.toBe(failure)
 	expect(attempts).toBe(1)
+})
+
+test('explains random skips using the scheduler candidate set', () => {
+	const evaluations = [evaluation(plan('first', 'random')), evaluation(plan('second', 'random')), evaluation(plan('urgent', 'urgent'))]
+	expect(randomOperationSkipReason(evaluations, [], 0)).toBe('Random run skipped: the allowlist excludes all 2 eligible random operations')
+	expect(randomOperationSkipReason(evaluations, undefined, 2)).toBe('Random run skipped: all 2 candidates failed preflight. See preceding failures')
+	expect(randomOperationSkipReason(evaluations, ['first'], 1)).toBe('Random run skipped: the only candidate failed preflight. See preceding failures')
+	expect(randomOperationSkipReason([evaluation(plan('urgent', 'urgent'))], undefined, 0)).toBe('Random run skipped: only lifecycle operations are eligible')
+	expect(randomOperationSkipReason([evaluation(undefined, false)], undefined, 0)).toBe('Random run skipped: no random operation has an eligible plan in the current state')
+})
+
+test('projects random readiness through the dashboard API without hiding manual eligibility', () => {
+	const settings = parseSettings(example)
+	settings.strategy.selectableOperationAllowlist = ['first']
+	const runtime = initialRuntimeState(true, undefined, settings.network.chainId)
+	runtime.evaluations = [evaluation(plan('first', 'random')), evaluation(plan('second', 'random')), evaluation(plan('urgent', 'urgent')), evaluation(plan('first', 'random'), false)]
+	const projected = dashboardState(runtime, { path: '/tmp/settings', rememberSigner: false, revision: 'test', settings })
+	const rows = parseSnapshot(publicChaosState(projected)).operationEvaluations
+	expect(rows.map(row => ({ id: row.id, eligible: row.eligible, randomAllowed: row.randomAllowed, randomEligible: row.randomEligible, lifecycleEligible: row.lifecycleEligible }))).toEqual([
+		{ id: 'first', eligible: true, randomAllowed: true, randomEligible: true, lifecycleEligible: false },
+		{ id: 'second', eligible: true, randomAllowed: false, randomEligible: false, lifecycleEligible: false },
+		{ id: 'urgent', eligible: true, randomAllowed: false, randomEligible: false, lifecycleEligible: true },
+	])
 })

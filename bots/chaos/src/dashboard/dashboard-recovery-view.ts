@@ -53,14 +53,49 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 	}
 
 	function renderCoverage(values: OperationEvaluation[]) {
+		const independent = values.filter(operationIsIndependentlyExecutable)
+		const selectable = independent.filter(value => value.classification === 'selectable')
+		const eligibleRandom = selectable.filter(value => value.enabled !== false && value.eligible === true)
+		const random = independent.filter(value => value.enabled !== false && value.randomEligible === true)
+		const lifecycle = independent.filter(value => value.enabled !== false && value.lifecycleEligible === true)
+		const known = independent.some(value => value.randomAllowed !== undefined)
+		const disabled = selectable.length > 0 && known && selectable.every(value => value.randomAllowed === false)
+		let detail = 'No random operation has an eligible plan in the current state.'
+		if (!known) detail = 'Waiting for operation discovery.'
+		else if (disabled) detail = 'New random work disabled by allowlist.'
+		else if (random.length > 0) detail = `${random.length.toString()} operation${random.length === 1 ? '' : 's'} permitted by the allowlist. Live preflight must pass before execution.`
+		else if (eligibleRandom.length > 0) detail = `The allowlist excludes all ${eligibleRandom.length.toString()} eligible random operation${eligibleRandom.length === 1 ? '' : 's'}.`
+		else if (lifecycle.length > 0) detail = 'Only lifecycle operations have eligible plans.'
+		const readiness = node('div', 'readiness-summary')
+		const badge = node('span')
+		if (!known) setBadge(badge, 'Random work: discovering', 'neutral')
+		else if (random.length > 0) setBadge(badge, 'Random work: ready for selection', 'success')
+		else setBadge(badge, 'Random work: blocked', 'warning')
+		readiness.append(badge, node('p', 'muted', detail))
+		if (disabled || (random.length === 0 && eligibleRandom.length > 0)) {
+			const settings = node('a', 'text-link', 'Review random-operation settings')
+			settings.href = '/settings'
+			readiness.append(settings)
+		}
+		if (disabled && state.configuration?.initializeGenesisUniverse === true) readiness.append(node('p', 'muted', 'Genesis initialization remains permitted.'))
 		const cards = ecosystemOrder.map(ecosystem => {
-			const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
+			const operations = independent.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem)
 			const eligible = operations.filter(value => value.enabled !== false && value.eligible === true).length
+			const randomCount = random.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem).length
+			const lifecycleCount = lifecycle.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem).length
 			const card = node('div', 'coverage-card')
-			card.append(node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`), node('small', undefined, 'eligible operations'))
+			card.append(
+				node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem),
+				node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`),
+				node('small', undefined, 'eligible now'),
+				node('small', undefined, `Random selections: ${randomCount.toString()}`),
+				node('small', undefined, `Lifecycle ready: ${lifecycleCount.toString()}`),
+			)
 			return card
 		})
-		renderWhenChanged(elements.coverageSummary, JSON.stringify(cards.map(card => card.textContent)), () => elements.coverageSummary.replaceChildren(...cards))
+		const grid = node('div', 'coverage-grid')
+		grid.append(...cards)
+		renderWhenChanged(elements.coverageSummary, JSON.stringify([readiness.outerHTML, cards.map(card => card.textContent)]), () => elements.coverageSummary.replaceChildren(readiness, grid))
 	}
 
 	/** The wait note carries relative ages, so it refreshes on its own without rebuilding the row that holds the transaction hash. */

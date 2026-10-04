@@ -3,7 +3,7 @@ import type { createOperationDialog } from './operation-dialog.js'
 import { node, renderWhenChanged, setBadge, statusLabel } from './dom.js'
 import { type OperationEvaluation } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, parsePositiveNumber, publicCandidateCount } from './dashboard-format.ts'
+import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, publicCandidateCount } from './dashboard-format.ts'
 
 type DashboardCatalogViewContext = {
 	elements: DashboardElements
@@ -43,6 +43,8 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			if (!independentlyExecutable) eligibility = 'not-selectable'
 			else if (value.enabled === false) eligibility = 'disabled'
 			else if (eligible) eligibility = 'eligible'
+			if (selectedEligibility === 'random-ready') return value.randomEligible === true && value.enabled !== false
+			if (selectedEligibility === 'random-excluded') return value.classification === 'selectable' && independentlyExecutable && value.randomAllowed === false
 			return selectedEligibility === 'all' || selectedEligibility === eligibility
 		})
 		const candidateTotal = filtered.reduce((total, value) => total + BigInt(publicCandidateCount(value.candidateCount) ?? 0), 0n)
@@ -58,6 +60,7 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			const independentlyExecutable = operationIsIndependentlyExecutable(value)
 			const displayClassification = displayedClassification(value)
 			const eligible = independentlyExecutable && enabled && value.eligible === true
+			const randomExcluded = value.classification === 'selectable' && independentlyExecutable && value.randomAllowed === false
 			let displayedBlockers: string[] = []
 			if (!eligible) {
 				displayedBlockers = value.blockers
@@ -95,9 +98,13 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			const eligibilityBadge = node('span')
 			if (!independentlyExecutable) setBadge(eligibilityBadge, 'Not independently selectable', 'neutral')
 			else if (!enabled) setBadge(eligibilityBadge, 'Disabled', 'neutral')
-			else if (eligible) setBadge(eligibilityBadge, 'Eligible', 'success')
+			else if (eligible && randomExcluded) setBadge(eligibilityBadge, 'Ready, but excluded by random-operation allowlist', 'warning')
+			else if (value.randomEligible === true) setBadge(eligibilityBadge, 'Ready for random selection', 'success')
+			else if (value.lifecycleEligible === true) setBadge(eligibilityBadge, 'Lifecycle plan ready', 'info')
+			else if (eligible) setBadge(eligibilityBadge, 'Eligible now', 'success')
 			else setBadge(eligibilityBadge, 'Blocked', 'warning')
 			eligibilityCell.append(eligibilityBadge)
+			if (randomExcluded && !eligible) eligibilityCell.append(node('p', 'muted', 'Excluded by random-operation allowlist'))
 			if (!eligible) {
 				const listValue = node('ul', 'blocker-list')
 				for (const reason of displayedBlockers) listValue.append(node('li', undefined, reason))
@@ -128,21 +135,23 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
 			const enabled = operations.filter(value => value.enabled !== false)
 			const eligible = enabled.filter(value => value.eligible === true)
-			const candidates = eligible.reduce((total, value) => total + (parsePositiveNumber(value.candidateCount) ?? 0), 0)
+			const random = enabled.filter(value => value.randomEligible === true)
+			const lifecycle = enabled.filter(value => value.lifecycleEligible === true)
 			const card = node('article', 'panel ecosystem-card')
 			card.dataset['ecosystem'] = ecosystem
 			const heading = node('div', 'panel-heading')
 			heading.append(node('h3', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem))
 			const readiness = node('span')
-			if (eligible.length > 0) setBadge(readiness, 'Ready', 'success')
+			if (random.length > 0) setBadge(readiness, 'Random ready', 'success')
+			else if (lifecycle.length > 0) setBadge(readiness, 'Lifecycle ready', 'info')
 			else if (operations.length === 0) setBadge(readiness, 'Discovering', 'neutral')
 			else setBadge(readiness, 'Blocked', 'warning')
 			heading.append(readiness)
 			const metrics = node('div', 'ecosystem-metrics')
 			for (const [label, amount] of [
-				['Independent operations', operations.length],
-				['Eligible', eligible.length],
-				['Candidates', candidates],
+				['Eligible now', eligible.length],
+				['Random selections', random.length],
+				['Lifecycle ready', lifecycle.length],
 			] as const) {
 				const metric = node('div')
 				metric.append(node('strong', undefined, amount.toString()), node('span', undefined, label))
@@ -152,7 +161,7 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			if (operations.length === 0) summary = node('p', 'muted', 'Waiting for protocol discovery.')
 			else {
 				const blockers =
-					eligible.length > 0
+					random.length > 0 || lifecycle.length > 0
 						? []
 						: [
 								...new Set(
@@ -160,6 +169,7 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 										const operation = value.label ?? value.id ?? 'Unnamed operation'
 										let reasons = value.blockers
 										if (value.enabled === false) reasons = ['Disabled by operator policy']
+										else if (value.classification === 'selectable' && value.randomAllowed === false) reasons = ['Excluded by random-operation allowlist', ...reasons]
 										else if (reasons.length === 0) reasons = ['No eligible candidate in current state']
 										return reasons.map(reason => `${operation}: ${reason}`)
 									}),

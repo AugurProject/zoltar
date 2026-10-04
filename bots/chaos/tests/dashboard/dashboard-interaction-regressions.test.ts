@@ -452,3 +452,76 @@ browserTest(
 	},
 	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
 )
+
+browserTest(
+	'readiness distinguishes allowlist exclusions, lifecycle plans, and random candidates',
+	async () => {
+		let randomAllowed = false
+		let eligible = true
+		let lifecycleEligible = true
+		const evaluations = () => [
+			{ id: 'wrap', label: 'Wrap WETH', ecosystem: 'open-oracle', classification: 'selectable', eligible, enabled: true, randomAllowed, randomEligible: randomAllowed && eligible, lifecycleEligible: false, candidateCount: eligible ? 1 : 0, blockers: eligible ? [] : ['Insufficient ETH'], prerequisites: [] },
+			{ id: 'settle', label: 'Settle report', ecosystem: 'open-oracle', classification: 'lifecycle-obligation', eligible: lifecycleEligible, enabled: true, randomAllowed: false, randomEligible: false, lifecycleEligible, candidateCount: lifecycleEligible ? 1 : 0, blockers: [], prerequisites: [] },
+		]
+		await withDashboard(
+			{
+				getConfiguration: () => {
+					const current = configuration('revision-1')
+					return { ...current, settings: { ...current.settings, strategy: { ...strategy, selectableOperationAllowlist: randomAllowed ? ['wrap'] : [] } } }
+				},
+				getState: () => state({ wallet: walletAddress, operationEvaluations: evaluations() }),
+			},
+			'/',
+			async (cdp, refresh) => {
+				async function capture(name: string) {
+					const directory = process.env['CHAOS_QA_SCREENSHOTS']
+					if (directory === undefined) return
+					const response = await cdp.command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+					const data = typeof response === 'object' && response !== null ? Reflect.get(response, 'data') : undefined
+					if (typeof data !== 'string') throw new Error('Missing readiness screenshot')
+					await Bun.write(`${directory}/${name}.png`, Buffer.from(data, 'base64'))
+				}
+				for (const { width, height } of [
+					{ width: 1440, height: 900 },
+					{ width: 390, height: 844 },
+				]) {
+					await cdp.command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 500 })
+					randomAllowed = false
+					eligible = true
+					lifecycleEligible = true
+					await cdp.command('Page.navigate', { url: new URL('/', String(await cdp.evaluate('location.origin'))).href })
+					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('New random work disabled by allowlist')", { message: 'allowlist explanation missing' })
+					expect(await cdp.evaluate("document.querySelector('#coverage-summary')?.textContent")).toContain('Lifecycle ready: 1')
+					await cdp.evaluate("document.querySelector('#coverage-summary').scrollIntoView({block: 'center'})")
+					await capture(`readiness-blocked-${width}`)
+					randomAllowed = true
+					await refresh()
+					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('Random work: ready for selection')", { message: 'random readiness missing' })
+					await capture(`readiness-ready-${width}`)
+					eligible = false
+					await refresh()
+					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('Only lifecycle operations have eligible plans')", { message: 'lifecycle explanation missing' })
+					await capture(`readiness-lifecycle-${width}`)
+					lifecycleEligible = false
+					await refresh()
+					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('No random operation has an eligible plan')", { message: 'empty readiness missing' })
+					await capture(`readiness-empty-${width}`)
+					randomAllowed = false
+					eligible = true
+					await cdp.command('Page.navigate', { url: new URL('/catalog', String(await cdp.evaluate('location.origin'))).href })
+					await cdp.waitFor("document.querySelector('[data-operation-id=wrap]')?.textContent.includes('Ready, but excluded by random-operation allowlist')", { message: 'catalog exclusion missing' })
+					expect(await cdp.evaluate("document.querySelector('[data-operation-id=wrap] .operation-open')?.disabled")).toBe(false)
+					await cdp.evaluate("document.querySelector('#catalog-rows details').open = true; document.querySelector('[data-operation-id=wrap]').scrollIntoView({block: 'center'})")
+					expect(await cdp.evaluate("document.querySelector('[data-operation-id=wrap] .badge').getBoundingClientRect().height > 0")).toBe(true)
+					expect(await cdp.evaluate("document.querySelector('[data-selection-toggle=wrap]')?.checked")).toBe(false)
+					await capture(`catalog-excluded-${width}`)
+					expect(await cdp.evaluate('document.documentElement.scrollWidth > innerWidth')).toBe(false)
+					await cdp.evaluate("const filter = document.querySelector('#catalog-eligibility-filter'); filter.value = 'random-excluded'; filter.dispatchEvent(new Event('change', {bubbles: true}))")
+					expect(await cdp.evaluate("[...document.querySelectorAll('#catalog-rows tr')].map(row => row.dataset.operationId).filter(Boolean)")).toEqual(['wrap'])
+				}
+				expect(cdp.issues.filter(issue => issue.kind === 'console-error' || issue.kind === 'pageerror')).toEqual([])
+			},
+		)
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 30_000,
+)

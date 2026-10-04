@@ -21,6 +21,9 @@ export type OperationEvaluation = {
 	id?: string | undefined
 	independentlyExecutable?: boolean | undefined
 	label?: string | undefined
+	randomAllowed?: boolean | undefined
+	randomEligible?: boolean | undefined
+	lifecycleEligible?: boolean | undefined
 	prerequisites: string[]
 	risk?: string | undefined
 }
@@ -364,6 +367,9 @@ export function parseSnapshot(value: unknown): Snapshot {
 			id: stringValue(entry['id']),
 			independentlyExecutable: booleanValue(entry['independentlyExecutable']),
 			label: stringValue(entry['label']),
+			randomAllowed: booleanValue(entry['randomAllowed']),
+			randomEligible: booleanValue(entry['randomEligible']),
+			lifecycleEligible: booleanValue(entry['lifecycleEligible']),
 			prerequisites: strings(entry['prerequisites']),
 			risk: stringValue(entry['risk']),
 		})),

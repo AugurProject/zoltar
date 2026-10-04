@@ -54,3 +54,19 @@ export function publicExplorerUrl(value: unknown) {
 	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
 	return value
 }
+
+export function publicStrings(value: unknown) {
+	return Array.isArray(value)
+		? value.flatMap(entry => {
+				const safe = safeString(entry)
+				return safe === undefined ? [] : [safe]
+			})
+		: []
+}
+
+const operationClassifications = new Set(['excluded-dangerous', 'lifecycle-obligation', 'prerequisite', 'role-restricted', 'selectable'])
+
+export function operationClassificationField(source: Record<string, unknown>, key: string) {
+	const value = stringField(source, key)
+	return value !== undefined && operationClassifications.has(value) ? value : undefined
+}
