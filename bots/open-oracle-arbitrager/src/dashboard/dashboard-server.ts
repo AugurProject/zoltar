@@ -15,6 +15,7 @@ import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { join } from 'node:path'
 import { operatorHeader } from './header.ts'
+import { REFERENCE_DOCUMENTS } from './reference-documents.ts'
 import { settingsPageMarkup } from './settings-page.tsx'
 
 type DashboardController = {
@@ -171,11 +172,41 @@ function markdownHeadingId(value: string) {
 		.replace(/\s+/g, '-')
 }
 
-function renderReadme(markdown: string) {
-	const headingIds = markdown
+/** The shared bot guide lives outside this package, so the rendered reference links to its published copy. */
+const SHARED_BOT_GUIDE_URL = 'https://github.com/AugurProject/zoltar/blob/main/bots/README.md'
+
+/** Heading lines outside fenced code blocks, where a leading `#` is a shell comment rather than a heading. */
+function markdownHeadingLines(markdown: string) {
+	let fenced = false
+	return markdown.split('\n').filter(line => {
+		if (line.trimStart().startsWith('```')) fenced = !fenced
+		return !fenced && /^#{1,6} /.test(line)
+	})
+}
+
+/** Demotes every heading one level so a companion document nests under the single page title. */
+function demoteMarkdownHeadings(markdown: string) {
+	let fenced = false
+	return markdown
 		.split('\n')
-		.filter(line => /^#{1,6} /.test(line))
-		.map(line => markdownHeadingId(line.replace(/^#{1,6} /, '')))
+		.map(line => {
+			if (line.trimStart().startsWith('```')) fenced = !fenced
+			return !fenced && /^#{1,5} /.test(line) ? `#${line}` : line
+		})
+		.join('\n')
+}
+
+function renderReference(documents: readonly string[]) {
+	const titleIds = new Map<string, string>()
+	for (const [index, document] of documents.entries()) {
+		const name = REFERENCE_DOCUMENTS[index]
+		const title = markdownHeadingLines(document)[0]
+		if (name === undefined || title === undefined) throw new Error('Reference document is missing its title heading')
+		titleIds.set(name, markdownHeadingId(title.replace(/^#{1,6} /, '')))
+	}
+	const markdown = documents.map((document, index) => (index === 0 ? document : demoteMarkdownHeadings(document))).join('\n\n')
+	const headingIds = markdownHeadingLines(markdown).map(line => markdownHeadingId(line.replace(/^#{1,6} /, '')))
+	if (new Set(headingIds).size !== headingIds.length) throw new Error('Reference documents must not repeat a heading')
 	let headingIndex = 0
 	const body = Bun.markdown
 		.html(markdown)
@@ -190,6 +221,13 @@ function renderReadme(markdown: string) {
 		.replaceAll('<pre>', '<pre tabindex="0" aria-label="Scrollable code or command example">')
 		.replaceAll('href="./docs/operator-guide.html', 'href="/documentation')
 		.replaceAll('href="./docs/market-fixture.html', 'href="/market-fixture.html')
+		.replace(/href="\.\/([A-Z]+\.md)(#[^"]*)?"/g, (_match, ...captures) => {
+			const [name, fragment] = captures
+			const titleId = typeof name === 'string' ? titleIds.get(name) : undefined
+			if (titleId === undefined) throw new Error('Reference link names an unknown document')
+			return `href="${typeof fragment === 'string' ? fragment : `#${titleId}`}"`
+		})
+		.replaceAll('href="../README.md', `href="${SHARED_BOT_GUIDE_URL}`)
 		.replace(/<a href="(https?:\/\/[^\"]+)"([^>]*)>/g, (_match, ...captures) => {
 			const [href, attributes] = captures
 			if (typeof href !== 'string' || typeof attributes !== 'string') throw new Error('README external link render was malformed')
@@ -238,7 +276,8 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(documentationDirectory, 'operator-guide.html')), { headers: securityHeaders('text/html; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/documentation/reference') {
-				return new Response(renderReadme(await Bun.file(join(projectDirectory, 'README.md')).text()), {
+				const documents = await Promise.all(REFERENCE_DOCUMENTS.map(name => Bun.file(join(projectDirectory, name)).text()))
+				return new Response(renderReference(documents), {
 					headers: securityHeaders('text/html; charset=utf-8'),
 				})
 			}

@@ -320,6 +320,50 @@ test('invariant fragment navigation clears sticky explorer controls', async () =
 	}
 })
 
+test('invariant index links reveal a filtered-out entry clear of the sticky explorer controls', async () => {
+	const cleanup = await loadDocument('docs/reference/invariants.html', 'http://localhost/docs/reference/invariants.html')
+	try {
+		const explorer = document.querySelector<HTMLElement>('#invariant-explorer')
+		const target = document.querySelector<HTMLDetailsElement>('#esc-01')
+		const keyword = document.querySelector<HTMLInputElement>('[data-invariant-filter]')
+		if (explorer === null || target === null || keyword === null) throw new Error('Invariant index navigation fixture is incomplete')
+		let scrollByOptions: ScrollToOptions | undefined
+		const runAnimationFrame = (callback: FrameRequestCallback): number => {
+			callback(0)
+			return 1
+		}
+		Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: runAnimationFrame, writable: true })
+		Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: () => ({ position: 'sticky' }), writable: true })
+		Object.defineProperty(explorer, 'getBoundingClientRect', { configurable: true, value: () => ({ bottom: 373, height: 293 }) })
+		Object.defineProperty(target, 'getBoundingClientRect', { configurable: true, value: () => ({ top: 80 }) })
+		Object.defineProperty(target, 'scrollIntoView', { configurable: true, value: () => {} })
+		Object.defineProperty(window, 'scrollBy', {
+			configurable: true,
+			value: (options: ScrollToOptions) => {
+				scrollByOptions = options
+			},
+		})
+
+		await runGeneratedRuntime('invariantExplorer')
+		keyword.value = 'UNI-01'
+		keyword.dispatchEvent(new Event('input'))
+		expect(target.hidden).toBeTrue()
+		keyword.blur()
+
+		window.location.hash = '#esc-01'
+		window.dispatchEvent(new Event('hashchange'))
+
+		expect(target.hidden).toBeFalse()
+		expect(target.open).toBeTrue()
+		expect(keyword.value).toBe('')
+		expect(document.activeElement).not.toBe(keyword)
+		expect(target.style.scrollMarginTop).toBe('309px')
+		expect(scrollByOptions).toEqual({ behavior: 'instant', top: -309 })
+	} finally {
+		cleanup()
+	}
+})
+
 test('MMR planner updates valid output and guards invalid leaf and index boundaries', async () => {
 	const cleanup = await loadDocument('docs/reference/merkle-mountain-range.html', 'http://localhost/docs/reference/merkle-mountain-range.html')
 	try {

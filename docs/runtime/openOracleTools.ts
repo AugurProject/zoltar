@@ -208,8 +208,8 @@ bindExample('#binary-censorship-example', context => {
 	const censorshipRate = Math.max(0, manipulatedPriceError - honestDisputeBarrierFraction)
 	const censorshipCost = censorshipDuration * censorshipRate * oracleReportLiquidity
 	const oracleLiquidityRatio = oracleReportLiquidity / externalPayoff
-	let safeCensorshipDuration: number | undefined
-	if (liquidationExecutable) safeCensorshipDuration = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)
+	let durationToTargetCost: number | undefined
+	if (liquidationExecutable) durationToTargetCost = censorshipRate === 0 ? Number.POSITIVE_INFINITY : (targetGriefRatio + 1) / (censorshipRate * oracleLiquidityRatio)
 	context.writeValue('honestPrice', honestPrice.toFixed(0))
 	context.writeValue('manipulatedPrice', manipulatedPrice.toFixed(0))
 	context.writeValue('liquidationThresholdPrice', liquidationThresholdPrice.toFixed(0))
@@ -225,7 +225,7 @@ bindExample('#binary-censorship-example', context => {
 	context.writeOutput('attackerPayoff', formatEth(attackerPayoff))
 	context.writeOutput('censorshipCost', formatEth(censorshipCost))
 	context.writeOutput('oracleLiquidityRatio', oracleLiquidityRatio.toFixed(2))
-	context.writeOutput('safeCensorshipDuration', formatDuration(safeCensorshipDuration))
+	context.writeOutput('durationToTargetCost', formatDuration(durationToTargetCost))
 	context.root.dataset['widgetState'] = liquidationExecutable ? 'unsafe' : 'safe'
 	const maximum = Math.max(attackerPayoff, censorshipCost, 1)
 	setMeter(context, 'attackerPayoff', attackerPayoff, maximum)

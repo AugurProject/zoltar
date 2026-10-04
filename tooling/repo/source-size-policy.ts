@@ -32,7 +32,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
 		['tooling/docs/check-docs-examples.mts', 1043],
 		['tooling/testing/coverage-report.mts', 931],
-		['tooling/docs/check-docs-reference-values.mts', 802],
+		['tooling/docs/check-docs-reference-values.mts', 791],
 		['tooling/ui/watch.mts', 781],
 		['tooling/contracts/deploy-testnet.mts', 671],
 	]),

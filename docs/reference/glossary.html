@@ -31,13 +31,13 @@
 					<dt id="rep">REP</dt>
 					<dd>Universe-specific reputation tokens used as reporting, dispute, and security capital.</dd>
 					<dt id="theoretical-rep-supply">Theoretical REP supply</dt>
-					<dd>Zoltar's per-universe REP supply figure, from which it derives the fork and non-decision thresholds. Burns reduce it, and each child universe starts from its parent's supply after the fork threshold burn plus the fork initiator's migration credit.</dd>
+					<dd>Zoltar's per-universe REP supply figure, from which it derives the fork and non-decision thresholds. Burns reduce it, and each child universe starts from its parent's supply after the fork threshold burn plus the fork initiator's migration balance.</dd>
 					<dt id="fork-threshold">Fork threshold</dt>
 					<dd>The amount of parent-universe REP that a fork initiator supplies and burns to begin a fork, derived by <code>getForkThresholdAttoRep</code> from that universe's theoretical REP supply. See <a href="../explanation/zoltar.html#accounting">migration accounting</a>.</dd>
 					<dt id="fork-haircut">Fork haircut</dt>
-					<dd>The part of the fork threshold that Zoltar burns without crediting to the initiator's migration balance: ⌊fork threshold ÷ <code>forkBurnDivisor</code>⌋, at most 20%. REP added to a migration balance after the fork starts is credited in full.</dd>
+					<dd>The part of the fork threshold that Zoltar burns without crediting to the initiator's migration balance: ⌊fork threshold ÷ <code>forkBurnDivisor</code>⌋, at most 20%. Contract comments call it the burn haircut. REP added to a migration balance after the fork starts is credited in full.</dd>
 					<dt id="migration-balance">Migration balance</dt>
-					<dd>A parent-universe credit created when REP is burned or committed for a fork. The same credited amount can be minted independently in each valid child, while per-child accounting prevents an account from consuming more than that amount in any one child.</dd>
+					<dd>A parent-universe credit (<code>migrationRepBalanceAttoRep</code>) created when REP is burned or committed for a fork. The same credited amount can be minted independently in each valid child, while per-child accounting prevents an account from consuming more than that amount in any one child.</dd>
 					<dt id="child-rep">Child REP</dt>
 					<dd>REP minted for one child universe. Its ledger and economic value are separate from parent and sibling REP.</dd>
 				</dl>
@@ -49,10 +49,12 @@
 					<dd>The Statoblast contract for one question, universe, and pool configuration (its security multiplier, which sets the REP-to-ETH backing it requires, and the gas priority fee it budgets for oracle price reports); each lineage has at most one pool per universe. It holds settlement collateral and coordinates shares, vaults, resolution, migration, and repair.</dd>
 					<dt id="lineage">Lineage</dt>
 					<dd>An origin SecurityPool and every child pool forked from it. Pools in one lineage share an origin ID and one outcome-share token contract.</dd>
+					<dt id="origin-pool">Origin pool</dt>
+					<dd>A SecurityPool deployed for a question with no parent pool (<code>deployOriginSecurityPool</code>). Child pools created by forks descend from it and form its lineage.</dd>
 					<dt id="settlement-collateral">Settlement collateral</dt>
-					<dd>ETH recorded by a SecurityPool to back outstanding outcome-share claims.</dd>
+					<dd>The ETH a SecurityPool records as backing its outcome shares (<code>settlementCollateralAttoEth</code>). Complete sets and winning shares redeem against it pro rata, and fees decay out of it into the fee reserve.</dd>
 					<dt id="open-interest">Open interest</dt>
-					<dd>The amount of settlement collateral backing complete sets that remain outstanding.</dd>
+					<dd>The ETH exposure of outstanding complete sets that vaults underwrite. The contracts measure it with settlement collateral: <code>getVaultOpenInterestAttoEth</code> returns a vault's share of settlement collateral in proportion to its underwriting commitment. When a forked child holds less settlement collateral than its inherited shares claim, the gap is a shortfall for a Truth Auction to repair, not open interest.</dd>
 					<dt id="complete-set">Complete set</dt>
 					<dd>One matching unit each of Invalid, Yes, and No shares, minted against ETH and redeemable together while the pool is operational.</dd>
 					<dt id="outcome-share">Outcome share</dt>
@@ -62,7 +64,21 @@
 					<dt id="backing-units">Backing units</dt>
 					<dd>Accounting units that represent a proportional claim on REP held for SecurityPool vaults.</dd>
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
-					<dd>A vault owner's standing ETH underwriting amount (code field <code>underwritingLimitAttoEth</code>), separate from REP backing. Its share of the pool total determines proportional settlement obligations and fee rights.</dd>
+					<dd>A vault owner's standing ETH underwriting amount, separate from REP backing. The code field is <code>underwritingLimitAttoEth</code>; liquidation parameters and events name the same quantity debt or <code>securityBondDebt</code>. Its share of the pool total determines proportional settlement obligations and fee rights.</dd>
+					<dt id="security-multiplier">Security multiplier</dt>
+					<dd>A pool's required ratio, in basis points, of a vault's REP value to its underwriting commitment (<code>statoblastSecurityMultiplierBps</code>). It is fixed when the origin pool is deployed and must exceed 10,001 BPS.</dd>
+					<dt id="vault-health">Vault health</dt>
+					<dd>Whether a vault's REP backs its whole underwriting commitment at the cached REP-per-ETH price (<code>isVaultHealthy</code>). An unhealthy vault can be liquidated; see <a href="../explanation/liquidations.html#capacity-and-health">when a vault is liquidatable</a> for the two constraints.</dd>
+					<dt id="health-factor">Health factor</dt>
+					<dd>A multiplier in basis points applied to both vault-health requirements of the receiver in a liquidation. 10,000 BPS is the protocol minimum; a liquidation approval can demand more through <code>minPostLiquidationHealthFactorBps</code>. The <code>targetHealthFactorBps</code> of a REP deposit is a separate value that must be at least the pool's security multiplier.</dd>
+					<dt id="bad-debt">Bad debt</dt>
+					<dd>An ETH amount recorded against a vault (<code>vaultBadDebtAttoEth</code>) and summed for the pool (<code>totalBadDebtAttoEth</code>). A vault that carries any can be neither the target nor the receiver of a liquidation. Fork migration moves it to the child pool with its vault, and it is cleared when the pool's last share is redeemed. Liquidation itself records none.</dd>
+					<dt id="minting-capacity">Minting capacity</dt>
+					<dd>The ceiling on a pool's settlement collateral: its total underwriting commitments while no Escalation Game exists, and zero afterwards (<code>getCurrentMintingCapacityAttoEth</code>).</dd>
+					<dt id="utilization">Utilization</dt>
+					<dd>Settlement collateral divided by minting capacity. It sets the retention rate.</dd>
+					<dt id="fee-reserve">Fee reserve</dt>
+					<dd>ETH that has decayed out of settlement collateral as fees and is not yet assigned to a vault (<code>unallocatedAccruedFeesAttoEth</code>). A vault checkpoint moves the vault's share into its claimable fees.</dd>
 					<dt id="retention">Retention</dt>
 					<dd>The per-second fraction of a SecurityPool's outstanding complete-set collateral that stays with complete-set holders; the remainder moves continuously into the pool's fee reserve. Because retention is below one, the ETH backing one complete set falls over time; see <a href="../explanation/fees.html">open-interest fees</a>.</dd>
 				</dl>
@@ -76,12 +92,16 @@
 					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>. Origin-pool deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one atto-REP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold. A child pool continuing a forked game keeps its parent's start bond.</dd>
 					<dt id="binding-capital">Binding capital</dt>
 					<dd>The median of the three outcome balances that determines the Escalation Game's scheduled deadline.</dd>
+					<dt id="required-support">Required support</dt>
+					<dd>The REP an outcome must hold to stay in contention, called attrition cost in the contracts (<code>totalCostAttoRep</code>). It is zero for the three-day activation delay, then rises from the start bond to the non-decision threshold over 49 days. The game's deadline is the moment it passes binding capital.</dd>
 					<dt id="non-decision-threshold">Non-decision threshold</dt>
-					<dd>The balance that two outcomes must each reach for the Escalation Game to enter local non-decision.</dd>
+					<dd>The balance that two outcomes must each reach for the Escalation Game to enter non-decision: half of the universe's fork threshold, rounded up, read when the game opens and fixed for that game and any game carried from it.</dd>
+					<dt id="non-decision">Non-decision</dt>
+					<dd>The Escalation Game state in which two outcomes have each reached the non-decision threshold (<code>NonDecisionState.Local</code>). The game picks no winner, and anyone can fork the universe on the pool's own question.</dd>
 					<dt id="reward-eligible-cap">Reward-eligible cap</dt>
 					<dd>One and a half times binding capital. Only the portion of winning Escalation Game deposits up to this cap earns a bonus; deposits beyond it return principal only. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
 					<dt id="escalation-haircut">Escalation haircut</dt>
-					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as a bonus, unless the pool's own fork already paid it through the fork haircut.</dd>
+					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as a bonus, unless the pool's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
 				</dl>
 			</section>
 			<section id="forks-and-repair">
@@ -89,26 +109,49 @@
 				<dl>
 					<dt id="security-pool-forker">SecurityPoolForker</dt>
 					<dd>The shared Statoblast contract that runs a SecurityPool through a fork: it snapshots the parent pool, migrates its REP and vaults into child pools, and runs each child's Truth Auction.</dd>
+					<dt id="migration-window">Migration window</dt>
+					<dd>The eight weeks (<code>MIGRATION_TIME</code>) after a parent pool enters fork mode, during which its vaults and REP can move into child pools. A child's Truth Auction can start only after it closes.</dd>
+					<dt id="carried-game">Carried game</dt>
+					<dd>An Escalation Game that a child pool continues from its parent's unresolved game, with the parent's balances and elapsed time. The game's <code>forkContinuation</code> flag marks it permanently, and it never accepts deposits from a wallet. The reference pages also call it a continuation game.</dd>
 					<dt id="fork-continuation">Fork continuation</dt>
-					<dd>The state of a child pool whose inherited Escalation Game has not yet been fully resumed. While continuation is pending, the pool rejects new collateralized operations.</dd>
+					<dd>The temporary state of a child pool whose carried game has not yet been resumed (<code>awaitingForkContinuation</code>). While it is pending, the pool rejects complete-set minting and Escalation Game deposits.</dd>
 					<dt id="truth-auction">Truth Auction</dt>
 					<dd>A Statoblast auction that sells child REP to repair a child pool's ETH collateral shortfall. It does not select truth.</dd>
+					<dt id="clearing-tick">Clearing tick</dt>
+					<dd>The price tick at which a Truth Auction clears (<code>clearingTick</code>). In a funded auction, bids above it win in full, bids below it lose, and bids at it fill in arrival order, all at its price.</dd>
+					<dt id="underfunded-threshold">Underfunded threshold</dt>
+					<dd>The ETH-per-REP price at which selling the whole REP sale cap raises exactly the ETH raise cap, rounded up (<code>underfundedThreshold</code>). In an underfunded auction, where bids never reach either cap at their own prices, only bids at or above it buy REP, and together they receive the whole REP sale cap.</dd>
+				</dl>
+			</section>
+			<section id="liquidation">
+				<h2>Liquidation</h2>
+				<dl>
+					<dt id="target-vault">Target vault</dt>
+					<dd>The unhealthy vault whose underwriting commitment a liquidation reduces (<code>targetVault</code>).</dd>
+					<dt id="receiver-vault">Receiver vault</dt>
+					<dd>The vault that accepts the transferred commitment and the REP award (<code>receiverVault</code>). It must stay healthy on its whole resulting commitment.</dd>
+					<dt id="operator">Operator</dt>
+					<dd>The account that stages a liquidation (<code>operator</code>). It is the receiver unless the receiver approved it through the LiquidationApprovalRegistry, and it receives no protocol payment.</dd>
 				</dl>
 			</section>
 			<section id="prices">
 				<h2>Prices</h2>
 				<dl>
 					<dt id="open-oracle">OpenOracle</dt>
-					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP/ETH prices, not market outcomes.</dd>
+					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-ETH prices (written REP/ETH elsewhere in these pages), not market outcomes.</dd>
 					<dt id="price-coordinator">Price coordinator</dt>
 					<dd>The per-pool contract that requests OpenOracle prices, caches accepted reports, and queues solvency-sensitive SecurityPool operations.</dd>
+					<dt id="sponsor-lane">Sponsor lane</dt>
+					<dd>The rule that, while a price report is pending, only the account that opened it (<code>pendingReportSponsor</code>) can add operations to that settlement. Other callers wait until the report finishes.</dd>
+					<dt id="vault-operations-executor">VaultOperations executor</dt>
+					<dd>The <code>VaultOperations</code> contract each price coordinator deploys. It stores a vault owner's bundle of up to four actions and is the only caller a SecurityPool accepts for price-checked REP withdrawals and liquidations.</dd>
 				</dl>
 			</section>
 			<section id="trading">
 				<h2>Trading</h2>
 				<dl>
 					<dt id="trading-pool">Trading pool</dt>
-					<dd>The constant-product pair that trades one SecurityPool's Yes and No shares against each other. The Trading factory creates at most one per SecurityPool.</dd>
+					<dd>The constant-product pair (<code>TwoWayConstantProductPair</code>, called the pair in the Trading reference) that trades one SecurityPool's Yes and No shares against each other. The Trading factory creates at most one per SecurityPool.</dd>
 					<dt id="trading-router">Trading router</dt>
 					<dd>The <code>TwoWayConstantProductRouter</code> contract that turns ETH into a position and a position back into ETH by combining SecurityPool complete-set calls with trading-pool swaps.</dd>
 					<dt id="long-shares">Long shares</dt>

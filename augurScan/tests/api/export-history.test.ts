@@ -61,7 +61,7 @@ augurscan_export_history`,
 				verifierTrace,
 				path.join(directory, 'curl-count'),
 			],
-			{ cwd: projectRoot, stdout: 'pipe', stderr: 'pipe' },
+			{ cwd: projectRoot, env: { ...processEnv(), AUGURSCAN_ACCESS_USERNAME: 'obsolete-operator', AUGURSCAN_ACCESS_PASSWORD: '' }, stdout: 'pipe', stderr: 'pipe' },
 		)
 		expect(await process.exited).toBe(0)
 		expect(await new Response(process.stderr).text()).toBe('')
@@ -73,6 +73,7 @@ augurscan_export_history`,
 		expect(dockerCommands).toContain('compose run --detach --rm --no-deps')
 		expect(dockerCommands).toContain('stop augurscan-export-test')
 		expect(dockerCommands).not.toContain('rm --force')
+		expect(dockerCommands).not.toContain('AUGURSCAN_ACCESS_')
 		const verifierCalls = (await readFile(verifierTrace, 'utf8')).trim().split('\n')
 		expect(verifierCalls).toHaveLength(2)
 		expect(verifierCalls[0]).not.toContain('page-two')

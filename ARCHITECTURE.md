@@ -11,7 +11,7 @@ This page maps the repository for contributors. Protocol behavior is explained i
 | OpenOracle | A contestable REP/ETH price feed used for solvency checks, never for market outcomes. The imported contract is a fixed compatibility contract. | `solidity/contracts/statoblast/openOracle/` | `shared/openOracle`, `ui/statoblastShared` |
 | Trading | An AMM exchange for Statoblast outcome shares; one possible venue, with no role in market creation or resolution. | `solidity/contracts/trading/` | `shared/trading`, `ui/trading` |
 | augurScan | A read-only explorer and PostgreSQL indexer for every layer. | none | `augurScan/` |
-| Bots | Permissionless operators: `liquidator`, `open-oracle-arbitrager`, and the testnet `chaos` exerciser, with common code in `bots/shared`. | `bots/open-oracle-arbitrager/contracts/` | `bots/*` |
+| Bots | Permissionless operators: `liquidator`, `open-oracle-arbitrager`, and the testnet `chaos` exerciser, with common code in `bots/shared`. | `bots/open-oracle-arbitrager/contracts/`, `solidity/contracts/chaos/` | `bots/*` |
 
 Start with the [system overview](https://augurproject.github.io/zoltar/docs/explanation/system-overview.html), then [Zoltar](https://augurproject.github.io/zoltar/docs/explanation/zoltar.html), [Statoblast](https://augurproject.github.io/zoltar/docs/explanation/statoblast.html), [OpenOracle](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html), [Trading](https://augurproject.github.io/zoltar/docs/explanation/trading.html), and the [contract architecture](https://augurproject.github.io/zoltar/docs/explanation/contract-architecture.html).
 
@@ -38,7 +38,7 @@ The UI apps are dependency leaves: shared libraries never import apps, and apps 
 
 ## Where does X live?
 
-- **A contract**: Zoltar core in `solidity/contracts/`, Statoblast and OpenOracle in `solidity/contracts/statoblast/`, Trading in `solidity/contracts/trading/`. Contract tests live in `solidity/ts/tests/`.
+- **A contract**: Zoltar core in `solidity/contracts/`, Statoblast and OpenOracle in `solidity/contracts/statoblast/`, Trading in `solidity/contracts/trading/`, and the chaos bot's Uniswap V3 seeding helper in `solidity/contracts/chaos/`. Contract tests live in `solidity/ts/tests/`.
 - **Pure protocol math, encoding, or addresses** used by more than one runtime: the lowest `shared/*` package that owns the concept. `shared/*` is runtime-neutral and has no UI code.
 - **UI code**: runtime-neutral primitives, wallet, simulation, and generic workflows in `ui/coreShared`; product capabilities in `ui/zoltarShared` or `ui/statoblastShared`; bootstrap, routes, pages, and app tests in `ui/<app>`. See [ui/AGENTS.md](./ui/AGENTS.md).
 - **Build, CI, test, and documentation tooling**: `tooling/{repo,ci,testing,contracts,docs,ui}`. The pinned Uniswap deployment input is the only file under `scripts/`.

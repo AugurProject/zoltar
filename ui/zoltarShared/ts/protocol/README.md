@@ -1,6 +1,6 @@
 # UI Protocol Client
 
-This directory owns typed reads and writes against Zoltar and Statoblast contracts. Consumers import the focused module that owns each capability; there is no compatibility barrel.
+This directory owns typed reads and writes against the Zoltar contracts, their deployment infrastructure, REP and other tokens, and Uniswap quotes. The Statoblast and OpenOracle clients live in `ui/statoblastShared/ts/protocol`. Consumers import the focused module that owns each capability; there is no compatibility barrel.
 
 UI components, hooks, and feature libraries may consume the protocol client. Dependencies must not point in the other direction: protocol modules never import from `ui/zoltarShared/ts/features`.
 

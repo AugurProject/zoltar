@@ -90,6 +90,8 @@ export const eventSourceByName: Record<string, string> = {
 	PoolAccountingCheckpoint: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
 	VaultAccountingCheckpoint: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
 	VaultLiquidated: 'solidity/contracts/statoblast/SecurityPool.sol',
+	VaultLiquidationStaged: 'solidity/contracts/statoblast/VaultOperations.sol',
+	VaultOperationsStaged: 'solidity/contracts/statoblast/VaultOperations.sol',
 	VaultEscrowUpdated: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	VaultUnresolvedTotalsExported: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	AuthorizationCanceled: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',

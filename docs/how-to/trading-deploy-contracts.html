@@ -17,15 +17,11 @@
 			</header>
 			<section id="before-you-start">
 				<h2>Before you start</h2>
-				<p>The Statoblast core, including its <code>SecurityPoolFactory</code>, must already be deployed on the network. The root mainnet and Sepolia manifests list planned addresses; they do not prove the contracts are live, as the <a href="../reference/deployment-status.html">deployment status reference</a> explains. Continue only after you have confirmed reviewed core code at those addresses.</p>
+				<p>The Statoblast core, including its <code>SecurityPoolFactory</code>, must already be deployed on the network. The manifests <code>docs/mainnet-deployment-addresses.json</code> and <code>docs/sepolia-deployment-addresses.json</code> list planned addresses; they do not prove the contracts are live, as the <a href="../reference/deployment-status.html">deployment status reference</a> explains. Continue only after you have confirmed reviewed core code at those addresses.</p>
 			</section>
 			<section id="deploy">
 				<h2>Deploy from the browser</h2>
-				<p>From <code>ui/trading</code>, start the standalone UI:</p>
-				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \
-  || docker network create zoltar
-docker compose up --build --force-recreate</code></pre>
-				<p>For local source development, run <code>bun run app:serve:trading</code> from the repository root instead.</p>
+				<p>Serve the Trading UI as <a href="./trading-set-up-development.html#build-and-run">Set up Trading development</a> describes, from source or in Docker.</p>
 				<ol>
 					<li>Open <code>http://localhost:4163/#/deploy</code>. To use another network or RPC URL, set it under <strong>Settings</strong> before connecting.</li>
 					<li>Select <strong>Connect wallet</strong>. The <strong>Trading contracts</strong> panel shows the <code>SecurityPoolFactory</code> address and the status of the <strong>TwoWayConstantProductFactory</strong> (the Trading factory) and <strong>TwoWayConstantProductRouter</strong> (the Trading router).</li>
@@ -39,8 +35,8 @@ docker compose up --build --force-recreate</code></pre>
 			</section>
 			<section id="use-local-anvil">
 				<h2>Use local Anvil</h2>
-				<p>The UIs do not offer Ethereum mainnet, so run Anvil as a Sepolia replay (chain ID <code>11155111</code>) and use the Sepolia address profile:</p>
-				<pre class="code-scroll" tabindex="0"><code>bun run anvil -- --chain-id 11155111</code></pre>
+				<p>The UIs do not offer Ethereum mainnet, so start Anvil with Sepolia's chain ID, <code>11155111</code>, and use the Sepolia address profile:</p>
+				<pre class="code-scroll" tabindex="0"><code>bun run anvil -- --chain-id 11155111 --hardfork osaka</code></pre>
 				<ol>
 					<li>Deploy to the node with the testnet deployer, following <a href="./deploy-testnet-contracts.html#deploy-locally">Deploy locally</a> with <code>--rpc-url=http://127.0.0.1:8545</code> and an Anvil account's key. It installs the core and the Trading factory and router. Its final explorer-verification step targets public Sepolia, so a failure there does not mean the local deployment failed.</li>
 					<li>In your wallet, point the chain <code>11155111</code> network at <code>http://127.0.0.1:8545</code> and import an Anvil account. Once a wallet is connected, the UI reads and sends through the wallet's RPC, so a wallet still on public Sepolia would use the real network.</li>
@@ -50,10 +46,11 @@ docker compose up --build --force-recreate</code></pre>
 			<section id="deploy-script">
 				<h2>Deploy for script and integration tests</h2>
 				<p>The local deployment script deploys independent copies at ordinary <code>CREATE</code> addresses. The UI never finds them, because it looks only at the derived addresses; use them from scripts and integration tests only.</p>
+				<p>The script needs a node whose chain ID equals the core manifest's, code at that manifest's <code>SecurityPoolFactory</code>, and an unlocked account on the node. For the Sepolia manifest below, complete step 1 of <a href="#use-local-anvil">Use local Anvil</a> first.</p>
 				<pre class="code-scroll" tabindex="0"><code>ZOLTAR_DEPLOYMENT_MANIFEST=docs/sepolia-deployment-addresses.json \
 TRADING_RPC_URL=http://127.0.0.1:8545 \
 bun run trading:deploy:local</code></pre>
-				<p>The script checks for code at the manifest's <code>SecurityPoolFactory</code>, deploys <code>TwoWayConstantProductFactory(coreFactory, feeBps)</code> and <code>TwoWayConstantProductRouter(factory)</code>, and writes a manifest of its inputs, addresses, transaction hashes, and bytecode hashes. The <a href="../reference/trading/configuration.html">configuration reference</a> lists its environment variables and output.</p>
+				<p>The script deploys <code>TwoWayConstantProductFactory(coreFactory, feeBps)</code> and <code>TwoWayConstantProductRouter(factory)</code>, writes a manifest of its inputs, addresses, transaction hashes, and bytecode hashes to <code>solidity/deployments/trading/local.json</code>, and prints it. The <a href="../reference/trading/configuration.html">configuration reference</a> lists its environment variables and output.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>
