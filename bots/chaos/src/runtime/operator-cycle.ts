@@ -5,6 +5,9 @@ import { executionProfileId } from '../config/execution-profile.ts'
 import type { OperatorSettings } from '../config/settings.ts'
 import { randomInteger } from '../core/random.ts'
 import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../core/scheduler.ts'
+import { preflightOperationPreview } from '../execution/operation-preview.ts'
+import { publicFailureReason, recordPreflightFailure } from '../execution/preflight-failure.ts'
+import { executionEnvironment } from './execution-environment.ts'
 import { TransactionAwaitingRecovery } from '../execution/transaction-executor.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
 import type { EvaluatedOperation } from '../operations/types.ts'
@@ -20,7 +23,7 @@ import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { schedulerFor } from './scheduled-operation.ts'
-import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
+import { genesisInitializationDefinitionId, genesisInitializationPlan, genesisInitializationTarget, randomOperationPlans, selectExecutableOperationPlan } from './selection.ts'
 import { ensureReadPreflight, refreshSubmissionReadiness } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
@@ -291,18 +294,6 @@ async function deferForLifecycleWork(operator: OperatorState, cycle: OperatorCyc
 	return undefined
 }
 
-function genesisInitializationTarget(scan: CanonicalScanResult) {
-	const initializerQuestion = [...scan.snapshot.questions]
-		.filter(question => question.kind === 'binary')
-		.sort((left, right) => {
-			if (BigInt(left.id) < BigInt(right.id)) return -1
-			return BigInt(left.id) > BigInt(right.id) ? 1 : 0
-		})[0]
-	const genesisPool = initializerQuestion === undefined ? undefined : scan.snapshot.pools.find(pool => pool.universeId === '0' && pool.questionId === initializerQuestion.id)
-	const genesisPair = genesisPool === undefined ? undefined : scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === genesisPool.address.toLowerCase())
-	return { genesisPair, genesisPool, initializerQuestion }
-}
-
 function genesisInitializationState(scan: CanonicalScanResult, { genesisPair, genesisPool, initializerQuestion }: ReturnType<typeof genesisInitializationTarget>) {
 	return {
 		genesisUniversePresent: scan.snapshot.universes.some(universe => universe.id === '0'),
@@ -323,7 +314,7 @@ function genesisInitializationState(scan: CanonicalScanResult, { genesisPair, ge
 
 /** Resolve the genesis-initialization step, or `undefined` when genesis initialization is disabled or complete. */
 function genesisInitialization(scan: CanonicalScanResult, settings: OperatorSettings) {
-	const target = genesisInitializationTarget(scan)
+	const target = genesisInitializationTarget(scan.snapshot)
 	const initializationState = genesisInitializationState(scan, target)
 	const definitionId = settings.strategy.initializeGenesisUniverse ? genesisInitializationDefinitionId(initializationState) : undefined
 	if (definitionId === undefined) return undefined
@@ -365,7 +356,19 @@ async function executeScheduledWork(operator: OperatorState, cycle: OperatorCycl
 		await persistState(configuration, state)
 		return settings.runtime.once
 	}
-	const plan = initialization?.plan ?? (candidates.length === 0 ? undefined : candidates[randomInteger(0, candidates.length)])
+	const selectionCandidates = initialization?.plan === undefined ? candidates : [initialization.plan]
+	const plan = await selectExecutableOperationPlan(
+		selectionCandidates,
+		async candidate => {
+			if (settings.runtime.execute) await preflightOperationPreview(executionEnvironment(settings, state, currentResources(operator)), candidate)
+		},
+		(candidate, error) => {
+			const reason = publicFailureReason(error)
+			state.evaluations = state.evaluations.map(evaluation => (evaluation.definition.id === candidate.definitionId ? { definition: evaluation.definition, eligibility: { eligible: false, blockers: [...evaluation.eligibility.blockers, reason] } } : evaluation))
+			recordPreflightFailure(state, candidate, error, `Candidate preflight rejected: ${candidate.label}`)
+			if (initialization !== undefined) state.error = `Genesis initialization is waiting for ${initialization.definitionId}: ${reason}`
+		},
+	)
 	if (plan === undefined) {
 		recordActivity(state, {
 			message: 'No random operation is currently eligible',

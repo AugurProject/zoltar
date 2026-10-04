@@ -1,9 +1,8 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { MAXIMUM_PUBLIC_FIELD_LENGTH, safeString } from '../dashboard/public-fields.ts'
+import { MAXIMUM_PUBLIC_FIELD_LENGTH } from '../dashboard/public-fields.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { recordActivity, type RuntimeState } from '../state/operator-state.ts'
 
-const withheld = 'Error detail withheld because it may contain sensitive data.'
 const truncation = '… (truncated)'
 
 function bounded(value: string) {
@@ -11,9 +10,19 @@ function bounded(value: string) {
 }
 
 export function publicFailureReason(error: unknown) {
+	// Replace only sensitive fragments, before truncation, so surrounding RPC and revert
+	// diagnostics remain useful and a credential crossing the length limit cannot leak.
+	// Mask quoted credentials before URL/path replacement can alter their escape sequences.
 	const message = errorMessage(error)
-	// Check the full message before truncating so a sensitive suffix cannot escape filtering.
-	return safeString(message) === undefined ? withheld : bounded(message.trim() || 'No error message was provided.')
+		.replace(
+			/(["']?(?:authorization|bearer|password|private[_-]?key|secret|token|api[_-]?key|rpc[_-]?(?:url|endpoint)|calldata|raw[_-]?(?:transaction|tx)|signed[_-]?(?:transaction|tx))["']?\s*[=:]\s*)(?:\[redacted(?: endpoint| path| payload| authorization)?\]|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|(?:(?:Bearer|Basic)\s+)?[^\s,;}]+)/gi,
+			'$1[redacted]',
+		)
+		.replace(/https?:\/\/[^\s<>"']+/gi, '[redacted endpoint]')
+		.replace(/(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)[^\s<>"']+/gi, '[redacted path]')
+		.replace(/\bBearer\s+[^\s,;}]+/gi, '[redacted authorization]')
+		.replace(/0x[0-9a-f]{130,}/gi, '[redacted payload]')
+	return bounded(message.trim() || 'No error message was provided.')
 }
 
 /** Preserve the reason and nested RPC/revert causes without publishing raw sensitive errors. */
@@ -28,7 +37,8 @@ function preflightFailureActivity(error: unknown) {
 		seen.add(current)
 		causes.push(publicFailureReason(current))
 	}
-	return { summary, ...(causes.length === 0 ? {} : { details: bounded(causes.join('\nCaused by: ')) }) }
+	// Show the deepest cause first so a verbose RPC wrapper cannot truncate the revert reason.
+	return { summary, ...(causes.length === 0 ? {} : { details: bounded(causes.reverse().join('\nWrapped by: ')) }) }
 }
 
 export function recordPreflightFailure(state: Pick<RuntimeState, 'activities'>, plan: Pick<OperationPlan, 'definitionId' | 'ecosystem'>, error: unknown, message: string, type: 'operation' | 'recovery' = 'operation') {

@@ -91,7 +91,7 @@ browserTest(
 		recordPreflightFailure(
 			failureState,
 			{ definitionId: 'trading.genesis-uniswap.create-pool', ecosystem: 'trading' },
-			new Error('Create pool no longer succeeds at the canonical pre-signing block', { cause: new Error('execution reverted: pool already exists') }),
+			new Error('Create pool no longer succeeds at the canonical pre-signing block', { cause: new Error('execution reverted: pool already exists; RPC https://user:password@example.com failed') }),
 			'Operation preflight stopped: Create genesis REP/WETH pool',
 		)
 		const failureActivity = failureState.activities[0]
@@ -136,7 +136,7 @@ browserTest(
 					details.querySelector('summary').click()
 					return { reason: item.querySelector('.timeline-detail').textContent, disclosure: details.querySelector('summary').textContent, cause: details.querySelector('p').textContent, open: details.open }
 				})()`),
-			).toEqual({ reason: 'Create pool no longer succeeds at the canonical pre-signing block', disclosure: 'Details', cause: 'execution reverted: pool already exists', open: true })
+			).toEqual({ reason: 'Create pool no longer succeeds at the canonical pre-signing block', disclosure: 'Details', cause: 'execution reverted: pool already exists; RPC [redacted endpoint] failed', open: true })
 			await cdp.evaluate("document.querySelector('#activity-expand').click()")
 			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 14")
 			expect(
