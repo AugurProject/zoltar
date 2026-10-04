@@ -1,5 +1,5 @@
 import { outcomeLabel } from '../copy/outcomes.js'
-import { useId } from 'preact/hooks'
+import { useId, useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -7,19 +7,20 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { formatOutcomeWithValue, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, marketSettlementPath, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
+import { marketsCopy } from '../copy/markets.js'
+import { marketOddsPercent } from '../lib/marketListing.js'
 import { positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { TradeEstimatePanel } from './TradeEstimatePanel.js'
-import { probabilityPercent, roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
+import { roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
 import { useDebouncedValue } from './live/useDebouncedValue.js'
 
 const ESTIMATE_DEBOUNCE_MILLISECONDS = 250
@@ -91,6 +92,7 @@ export function LivePositionControls({
 	market,
 	nowSeconds,
 	settings,
+	onSettingsChange,
 	ticket,
 	wallet,
 	holdings,
@@ -100,6 +102,8 @@ export function LivePositionControls({
 	market: LiveMarket
 	nowSeconds: bigint
 	settings: TradeSettings
+	/** Lets the estimate change slippage and validity in place. */
+	onSettingsChange?: ((settings: TradeSettings) => void) | undefined
 	ticket: PositionTicket
 	wallet: TicketWallet
 	holdings: TicketBalances
@@ -136,8 +140,23 @@ export function LivePositionControls({
 	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
 	const requoted = state === 'error' && ticket.requoteNotice !== undefined
+	const odds = marketOddsPercent(market)
+	const selectMode = (next: TradeMode) => {
+		ticket.setMode(next)
+		// Selling starts on the outcome the wallet holds, instead of an empty holding of the outcome last bought.
+		const held = side === 'YES' ? holdings.balances?.yes : holdings.balances?.no
+		const otherHeld = side === 'YES' ? holdings.balances?.no : holdings.balances?.yes
+		if (next === 'exit' && held === 0n && otherHeld !== undefined && otherHeld > 0n) ticket.setSide(side === 'YES' ? 'NO' : 'YES')
+	}
+	const controlsRef = useRef<HTMLDivElement>(null)
+	// Enter presses the action button itself, so every lock that disables the button also stops the key; it never stands in for the wallet step.
+	const submitFromKeyboard = () => {
+		if (walletStep !== undefined) return
+		const actionButton = controlsRef.current?.querySelector<HTMLButtonElement>('.transaction-outcome .tx-action-button')
+		if (actionButton !== null && actionButton !== undefined && !actionButton.disabled) actionButton.click()
+	}
 	return (
-		<div className='position-controls' aria-busy={revalidatingAfterReceipt}>
+		<div ref={controlsRef} className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
 				<UserMessage
 					className='trade-ticket-closed'
@@ -151,8 +170,6 @@ export function LivePositionControls({
 					}
 				/>
 			) : null}
-			{/* The reading column shows the resting odds; the ticket adds the bar only to preview how this trade moves them. */}
-			{estimate === undefined ? null : <ProbabilityBar yesPercent={probabilityPercent(estimate.quote.conditionalYesBpsAfter)} beforePercent={probabilityPercent(estimate.quote.conditionalYesBpsBefore)} />}
 			<div className='trade-ticket-switchers'>
 				<ViewTabs
 					ariaLabel={ticketCopy.tradeDirection}
@@ -160,14 +177,14 @@ export function LivePositionControls({
 					variant='segmented'
 					size='compact'
 					value={mode}
-					onChange={ticket.setMode}
+					onChange={selectMode}
 					options={[
 						{ value: 'entry', label: ticketCopy.buy, disabled: controlsDisabled },
 						{ value: 'exit', label: ticketCopy.sell, disabled: controlsDisabled },
 					]}
 				/>
 				<ViewTabs
-					ariaLabel={workflowCopy.outcome}
+					ariaLabel={odds === undefined ? workflowCopy.outcome : ticketCopy.outcomeWithOdds}
 					className='outcome-picker'
 					semantics='switcher'
 					variant='segmented'
@@ -175,10 +192,12 @@ export function LivePositionControls({
 					value={side}
 					onChange={ticket.setSide}
 					options={[
-						{ value: 'YES', label: workflowCopy.yes, disabled: controlsDisabled },
-						{ value: 'NO', label: workflowCopy.no, disabled: controlsDisabled },
+						{ value: 'YES', label: odds === undefined ? workflowCopy.yes : marketsCopy.formatOutcomePrice(workflowCopy.yes, odds.yes), disabled: controlsDisabled },
+						{ value: 'NO', label: odds === undefined ? workflowCopy.no : marketsCopy.formatOutcomePrice(workflowCopy.no, odds.no), disabled: controlsDisabled },
 					]}
 				/>
+				{/* The percentages on the outcome buttons are conditional on a valid resolution, and say so in view. */}
+				{odds === undefined ? null : <span className='trade-ticket-odds-caption'>{marketsCopy.conditionalPrice}</span>}
 			</div>
 			<FormField id={amountId} label={mode === 'entry' ? ticketCopy.youPay : ticketCopy.sharesToSell}>
 				<FormInput
@@ -190,9 +209,12 @@ export function LivePositionControls({
 					inputMode='decimal'
 					autoComplete='off'
 					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
-					error={model.amountError}
+					error={model.amountError ?? model.insufficientReason}
 					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth, market)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
+					onKeyDown={event => {
+						if (event.key === 'Enter') submitFromKeyboard()
+					}}
 				/>
 			</FormField>
 			{model.shortcuts.length === 0 ? null : (
@@ -218,7 +240,17 @@ export function LivePositionControls({
 				onSubmit={() => void ticket.submit(estimate)}
 			>
 				{estimate === undefined || model.impactTier === undefined ? null : (
-					<TradeEstimatePanel estimate={estimate} market={market} settings={settings} impactTier={model.impactTier} impactAcknowledged={model.impactAcknowledged} disabled={controlsDisabled} onAcknowledgeImpact={checked => ticket.setAcknowledgedImpactBps(checked ? estimate.impactBps : undefined)} />
+					<TradeEstimatePanel
+						estimate={estimate}
+						market={market}
+						settings={settings}
+						balances={holdings.balances}
+						onSettingsChange={onSettingsChange}
+						impactTier={model.impactTier}
+						impactAcknowledged={model.impactAcknowledged}
+						disabled={controlsDisabled}
+						onAcknowledgeImpact={checked => ticket.setAcknowledgedImpactBps(checked ? estimate.impactBps : undefined)}
+					/>
 				)}
 			</QuotedTransactionPanel>
 		</div>

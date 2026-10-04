@@ -20,5 +20,12 @@ export function minutesLabel(minutes: bigint) {
 export function protectionSummary(slippagePercent: string, minutes: bigint, cutoff?: 'question') {
 	let cutoffNote = ''
 	if (cutoff === 'question') cutoffNote = ' · ends sooner at question close'
-	return `Slippage ${slippagePercent}% · valid up to ${minutes.toString()} min${cutoffNote} · change in Settings`
+	return `${protectionTitle(slippagePercent, minutes)}${cutoffNote} · change in Settings`
 }
+
+/** The current protection values alone, titling the settings a quote offers to change in place. */
+export function protectionTitle(slippagePercent: string, minutes: bigint) {
+	return `Slippage ${slippagePercent}% · valid up to ${minutes.toString()} min`
+}
+
+export const validityEndsAtQuestionClose = 'A transaction is never valid past question close.'

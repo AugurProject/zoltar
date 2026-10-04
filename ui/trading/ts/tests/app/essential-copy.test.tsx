@@ -35,20 +35,22 @@ describe('essential trading copy', () => {
 		for (const phrase of forbiddenCopy) expect(rendered.container.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 	})
 
-	test('always shows the pool fee, minimum received, and price impact beside the conditional payout', async () => {
+	test('shows the average price, minimum received, trading fee, and price impact beside the conditional payout', async () => {
 		const market = liveMarketFixture({ feeBps: 125n, settlementCollateralAttoEth: 984_200_000_000_000_000n })
 		const buy = ticketEstimateFor(market, 'entry', '1')
 		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n * 10n ** 18n, no: 0n, invalid: 10n * 10n ** 18n, lp: 0n })
 		const entry = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
-		for (const phrase of ['You receive ≈', 'Minimum received', 'Price impact', 'Trading fee', '1.25%', 'Invalid insurance', 'ETH if the question resolves Yes', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
+		for (const phrase of ['You receive ≈', 'Average price', 'Minimum received', 'Price impact', 'Trading fee', '1.25%', 'Invalid insurance', 'ETH if the question resolves Yes', 'Profit if the question resolves Yes', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
 		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
 		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()
 		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
-		for (const phrase of ['You sell', 'You receive ≈', 'Minimum received', 'Invalid used', 'Trading fee']) expect(exit.container.textContent).toContain(phrase)
+		for (const phrase of ['You sell', 'You receive ≈', 'Average price', 'Minimum received', 'Invalid used', 'Trading fee']) expect(exit.container.textContent).toContain(phrase)
 		expect(exit.container.textContent).toContain('2 Yes (1.9684 ETH if the question resolves Yes)')
 		expect(exit.container.textContent).not.toContain('0 ETH otherwise')
+		expect(exit.container.textContent).not.toContain('Profit if the question resolves Yes')
+		expect(exit.container.textContent).not.toContain('Holding fees reduce')
 	})
 
 	test('escalates price-impact warnings and asks for acknowledgment before a high-impact trade', async () => {

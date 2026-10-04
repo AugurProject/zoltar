@@ -95,6 +95,7 @@ type RpcEnvelope = {
 	readonly id?: JsonValue
 	readonly jsonrpc?: JsonValue
 	readonly method?: JsonValue
+	readonly params?: JsonValue
 	readonly error?: JsonValue
 	readonly result?: JsonValue
 }
@@ -112,11 +113,46 @@ const parseEnvelope = (body: unknown): RpcEnvelope | undefined => {
 	}
 }
 
-const rpcErrorFrom = (envelope: RpcEnvelope | undefined): { readonly code: number; readonly message?: string } | undefined => {
+const rpcErrorFrom = (envelope: RpcEnvelope | undefined): { readonly code: number; readonly message?: string; readonly data?: JsonValue } | undefined => {
 	if (typeof envelope?.error !== 'object' || envelope.error === null || Array.isArray(envelope.error)) return undefined
 	const code = 'code' in envelope.error ? envelope.error['code'] : undefined
 	const message = 'message' in envelope.error ? envelope.error['message'] : undefined
-	return typeof code === 'number' && Number.isInteger(code) ? { code, ...(typeof message === 'string' ? { message } : {}) } : undefined
+	const data = 'data' in envelope.error ? envelope.error['data'] : undefined
+	return typeof code === 'number' && Number.isInteger(code) ? { code, ...(typeof message === 'string' ? { message } : {}), ...(data === undefined ? {} : { data }) } : undefined
+}
+
+// Console diagnostics expose only typed on-chain fields, never arbitrary provider text or URLs.
+const diagnosticHex = (value: JsonValue | undefined): string | undefined => {
+	if (typeof value !== 'string' || !/^0x[0-9a-f]*$/iu.test(value)) return undefined
+	return value.length <= 514 ? value : `${value.slice(0, 514)} [truncated]`
+}
+
+const callDiagnostics = (request: RpcEnvelope | undefined): string => {
+	if (request?.method !== 'eth_call' || !Array.isArray(request.params)) return ''
+	const fields: string[] = []
+	if (typeof request.id === 'number' && Number.isSafeInteger(request.id)) fields.push(`request id: ${request.id}`)
+	const call = request.params[0]
+	if (call !== undefined && isJsonObject(call)) {
+		for (const key of ['to', 'from', 'data', 'input', 'value', 'gas'] as const) {
+			const value = diagnosticHex(call[key])
+			if (value !== undefined) fields.push(`${key}: ${value}`)
+		}
+	}
+	const block = request.params[1]
+	const blockHex = diagnosticHex(block)
+	if (blockHex !== undefined) fields.push(`block: ${blockHex}`)
+	else if (typeof block === 'string' && ['latest', 'earliest', 'pending', 'safe', 'finalized'].includes(block)) fields.push(`block: ${block}`)
+	else if (block !== undefined && isJsonObject(block)) {
+		for (const [key, label] of [
+			['blockHash', 'block hash'],
+			['blockNumber', 'block'],
+		] as const) {
+			const value = diagnosticHex(block[key])
+			if (value !== undefined) fields.push(`${label}: ${value}`)
+		}
+		if (typeof block['requireCanonical'] === 'boolean') fields.push(`require canonical: ${block['requireCanonical']}`)
+	}
+	return fields.length === 0 ? '' : `; ${fields.join('; ')}`
 }
 
 const isRpcIdentifier = (value: unknown): value is number | string | null => value === null || typeof value === 'number' || typeof value === 'string'
@@ -188,11 +224,12 @@ export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, l
 				})
 			}
 			if (rpcError !== undefined) {
-				const name = jsonRpcErrorName(rpcError.code)
-				const providerMessage = safeRpcProviderMessage(rpcError.message)
+				const name = rpcError.code === 3 && requestEnvelope?.method === 'eth_call' ? 'Execution reverted' : jsonRpcErrorName(rpcError.code)
+				const providerMessage = safeRpcProviderMessage(rpcError.message) ?? (rpcError.message !== undefined && /^execution reverted(?:$|:)/iu.test(rpcError.message) ? 'execution reverted' : undefined)
 				const prunedStateMessage = safePrunedStateProviderMessage(rpcError.message)
 				const method = typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'
-				const message = `RPC error from ${consoleEndpoint}; method ${method}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`
+				const revertData = method === 'eth_call' ? diagnosticHex(rpcError.data) : undefined
+				const message = `RPC error from ${consoleEndpoint}; method ${method}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}${callDiagnostics(requestEnvelope)}${revertData === undefined ? '' : `; revert data: ${revertData}`}; full exchange logged to ${logPath}`
 				if (method === 'eth_getLogs' && rpcError.code === 4444 && providerMessage !== undefined) {
 					console.warn(`Historical log history unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; locating earliest retrievable block; full exchange logged to ${logPath}`)
 				} else if (historicalStateMethods.has(method) && prunedStateMessage !== undefined) {
@@ -211,7 +248,7 @@ export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, l
 				...(response === undefined ? {} : { response: { headers: response.headers, status: response.status, statusText: response.statusText, truncated: true } }),
 				transportError: error instanceof Error ? { message: error.message, name: error.name, stack: error.stack, ...('maximumBytes' in error ? { maximumBytes: error.maximumBytes, truncated: true } : {}), ...('receivedBytes' in error ? { receivedBytes: error.receivedBytes } : {}) } : error,
 			})
-			console.error(`RPC transport error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; full exchange logged to ${logPath}`)
+			console.error(`RPC transport error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}${callDiagnostics(requestEnvelope)}; full exchange logged to ${logPath}`)
 			throw error
 		}
 	}

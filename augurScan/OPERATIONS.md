@@ -22,14 +22,13 @@ The most important runtime settings are:
 - `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables override the Uniswap activity sources; an unset or empty value selects the network default, and `none` disables that source. The Uniswap V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`;
 - `SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging; Mainnet and Sepolia default to 12000;
 - `POSTGRES_URL` connects directly to PostgreSQL or through a session-mode pooler;
-- `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` enable HTTP Basic access control when both are set;
-- `API_RATE_LIMIT_PER_MINUTE` changes the default per-client API limit of 600 and also limits failed Basic-authentication attempts on protected non-API routes, while `0` disables both limits when a trusted upstream enforces them;
+- `API_RATE_LIMIT_PER_MINUTE` changes the default per-client API limit of 600 while `0` disables this limit when a trusted upstream enforces it;
 - `LIVE_BACKPRESSURE_TIMEOUT_MS` changes the default 60-second limit for a live-stream client that makes no write progress before its slot is closed and released;
 - `DISABLE_INDEXER=1` disables the dedicated indexer process. The web app already runs without indexing, but it still initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
 
-API requests and failed Basic-authentication attempts share one per-client quota. When Basic authentication is enabled, exhausting that quota temporarily blocks all protected routes for the client, including requests with valid credentials, until the window resets. Successful non-API requests do not consume quota.
+The website and API do not require authentication. API requests share one per-client quota; non-API routes do not consume quota and remain available when it is exhausted.
 
-The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
+The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
 Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are version-specific.
 
@@ -232,26 +231,10 @@ docker compose up --build --force-recreate --detach
 until curl --fail --silent --show-error "$AUGURSCAN_URL/health/ready"; do sleep 2; done
 ```
 
-If access control is enabled, export both credentials in the operator shell. This helper rejects a half-configured pair and keeps credentials out of the URL:
-
-```bash
-augurscan_curl() {
-  if test -n "${AUGURSCAN_ACCESS_USERNAME:-}" || test -n "${AUGURSCAN_ACCESS_PASSWORD:-}"; then
-    test -n "${AUGURSCAN_ACCESS_USERNAME:-}" && test -n "${AUGURSCAN_ACCESS_PASSWORD:-}" || {
-      echo 'Set both AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD.' >&2
-      return 2
-    }
-    curl --user "$AUGURSCAN_ACCESS_USERNAME:$AUGURSCAN_ACCESS_PASSWORD" "$@"
-  else
-    curl "$@"
-  fi
-}
-```
-
 Audit checkpoints, source cursors, stale networks, and recent canonical continuity:
 
 ```bash
-augurscan_curl --fail-with-body --silent --show-error "$AUGURSCAN_URL/health/indexers"
+curl --fail-with-body --silent --show-error "$AUGURSCAN_URL/health/indexers"
 ```
 
 This route returns HTTP 503 when the indexer is stale or the audit finds a problem. Its parent-hash continuity scan covers at most the latest 10,000 indexed blocks, so it does not replace the retained-history review below.

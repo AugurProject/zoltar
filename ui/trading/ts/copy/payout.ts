@@ -22,6 +22,15 @@ export function formatLpWinningPayout(value: string) {
 	return `${value} winning payout`
 }
 
+/** The gain of a winning payout over the ETH paid for it, and that gain as a return. */
+export function formatGain(amount: string, returnPercent: string) {
+	return `+${amount} (+${returnPercent})`
+}
+
+export function formatLoss(amount: string, returnPercent: string) {
+	return `−${amount} (−${returnPercent})`
+}
+
 export function formatRedeemablePayout(value: string) {
 	return `${value} redeemable`
 }

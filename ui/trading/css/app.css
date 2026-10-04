@@ -125,6 +125,11 @@
 	flex-wrap: wrap;
 	gap: var(--space-3);
 }
+.trade-ticket-odds-caption {
+	align-self: center;
+	color: var(--muted);
+	font-size: 0.875rem;
+}
 .trade-amount-shortcuts {
 	display: flex;
 	flex-wrap: wrap;
@@ -142,6 +147,11 @@
 .trade-estimate-note {
 	margin: 0;
 	color: var(--muted);
+}
+.trade-estimate-notes {
+	display: grid;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
 }
 .trade-impact-value--caution {
 	color: var(--warning);
@@ -191,6 +201,11 @@
 	padding-top: var(--space-4);
 	border-top: 1px solid var(--divider-strong);
 }
+.trade-settings--embedded {
+	margin-top: 0;
+	padding-top: 0;
+	border-top: 0;
+}
 .trade-settings-title {
 	margin: 0;
 	font-size: 1rem;
@@ -212,6 +227,10 @@
 .trade-settings-preset {
 	flex: 1 1 0;
 	min-height: var(--touch-target-min);
+	white-space: nowrap;
+}
+.trade-settings--embedded .trade-settings-preset {
+	padding-inline: var(--space-2);
 }
 .trade-settings-preset[aria-pressed="true"] {
 	border-color: var(--accent);
