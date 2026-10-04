@@ -206,7 +206,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Expires 5m after oracle settlement.')).toBe(true)
+		expect(document.body.textContent?.includes('Queued operations expire 5m after oracle settlement.')).toBe(true)
 	})
 
 	test('manual initial pricing reloads liquidation funding after an automatic quote failure', async () => {
@@ -220,9 +220,9 @@ describe('LiquidationModal', () => {
 		).cleanup
 		const page = within(document.body)
 		expect(loadFunding).not.toHaveBeenCalled()
-		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('Initial report price (REP per ETH)'), { target: { value: '3' } })
 		expect(loadFunding).toHaveBeenCalledWith(zeroAddress, 3n * ATTO_ETH_PER_ETH)
-		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '' } })
+		fireEvent.input(page.getByLabelText('Initial report price (REP per ETH)'), { target: { value: '' } })
 		expect(loadFunding).toHaveBeenCalledTimes(1)
 	})
 
@@ -238,7 +238,7 @@ describe('LiquidationModal', () => {
 		).cleanup
 		const page = within(document.body)
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
-		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('Initial report price (REP per ETH)'), { target: { value: '3' } })
 		await waitFor(() => expect(page.getByRole('button', { name: 'Queue liquidation' }).hasAttribute('disabled')).toBe(false))
 		fireEvent.click(page.getByRole('button', { name: 'Queue liquidation' }))
 		await waitFor(() => expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH))
@@ -259,7 +259,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 
 		expect(within(document.body).queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Queue liquidation' })).not.toBeNull()
@@ -293,9 +293,9 @@ describe('LiquidationModal', () => {
 			liquidationTimeoutMinutes: '0',
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 
-		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of 1–5 minutes.')
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter an execution window of 1–5 whole minutes.')
 	})
 
 	test('keeps liquidation disabled off Sepolia and explains recovery', async () => {
@@ -503,7 +503,7 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(within(container).getByRole('dialog', { name: 'Execute vault liquidation' })).not.toBeNull()
-		expect(within(container).getByRole('dialog', { name: 'Queue vault liquidation' })).not.toBeNull()
+		expect(within(container).getByRole('dialog', { name: 'Queue liquidation' })).not.toBeNull()
 		const stackedBackdrops = container.querySelectorAll('.modal-backdrop')
 		const executeBackdrop = stackedBackdrops[0]
 		if (!(executeBackdrop instanceof HTMLElement)) throw new Error('Expected execute modal backdrop')
@@ -515,7 +515,7 @@ describe('LiquidationModal', () => {
 		})
 
 		expect(within(container).getByRole('dialog', { name: 'Execute vault liquidation' })).not.toBeNull()
-		expect(within(container).queryByRole('dialog', { name: 'Queue vault liquidation' })).toBeNull()
+		expect(within(container).queryByRole('dialog', { name: 'Queue liquidation' })).toBeNull()
 		const restoredExecuteBackdrop = container.querySelector('.modal-backdrop')
 		if (!(restoredExecuteBackdrop instanceof HTMLElement)) throw new Error('Expected restored execute modal backdrop')
 		expect(restoredExecuteBackdrop.getAttribute('aria-hidden')).toBe(null)
@@ -553,7 +553,7 @@ describe('LiquidationModal', () => {
 		})
 
 		const executeDialog = within(container).getByRole('dialog', { name: 'Execute vault liquidation' })
-		const queueDialog = within(container).getByRole('dialog', { name: 'Queue vault liquidation' })
+		const queueDialog = within(container).getByRole('dialog', { name: 'Queue liquidation' })
 		const executeCloseButton = within(executeDialog).getByRole('button', { name: 'Close' })
 		const queueCloseButton = within(queueDialog).getByRole('button', { name: 'Close' })
 		const queueFocusableElements = Array.from(queueDialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"))
@@ -764,7 +764,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation executed' })).not.toBeNull()
 		expect(documentQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Execute vault liquidation' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Queue vault liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Queue liquidation' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 	})
 
@@ -782,7 +782,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Execute vault liquidation' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Execute vault liquidation' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Queue vault liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Queue liquidation' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Queue liquidation' })).toBeNull()
 	})
 
@@ -813,7 +813,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')
 		expect(within(document.body).getByText('Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')).not.toBeNull()
@@ -851,7 +851,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 
 		await waitFor(() => expect(within(document.body).getByRole('button', { name: 'Queue liquidation' }).hasAttribute('disabled')).toBe(false))
 	})
@@ -1263,7 +1263,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('The target vault is not liquidatable at the current price.')).not.toBeNull()
 		expect(documentQueries.getByText(/^OpenOracle price$/)).not.toBeNull()
 	})
 
@@ -1331,7 +1331,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('The target vault is not liquidatable at the current price.')).not.toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
@@ -1360,7 +1360,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.queryByText('No commitment is transferable at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.queryByText('No commitment can be transferred from the target vault right now.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
@@ -1390,8 +1390,8 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
-		expect(documentQueries.getByText('The selected receiver would remain below the minimum commitment after liquidation.')).not.toBeNull()
-		expect(documentQueries.queryByText('No commitment is transferable at the current target-side bounds.')).toBeNull()
+		expect(documentQueries.getByText('The receiver vault would remain below the minimum commitment after liquidation.')).not.toBeNull()
+		expect(documentQueries.queryByText('No commitment can be transferred from the target vault right now.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP backing after liquidation.')).toBeNull()
 	})
 
@@ -1757,7 +1757,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Queue vault liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Queue liquidation' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Queue liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Execute vault liquidation' })).toBeNull()
 	})
@@ -1970,7 +1970,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('The approval limits this liquidation to 3 ETH; the registry reserves at most that amount.')).not.toBeNull()
+		expect(within(document.body).getByText('The approval limits this liquidation to 3 ETH.')).not.toBeNull()
 		expect(getTransactionButtonState(document.body, 'Execute vault liquidation').reason).not.toBe('Available or per-liquidation approval quota is below the requested commitment.')
 	})
 
@@ -2017,11 +2017,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('1.25× protocol minimum')).not.toBeNull()
 		expect(documentQueries.getByText('Active')).not.toBeNull()
 		expect(documentQueries.getByText('The operator pays gas and oracle costs; the receiver receives REP backing units and commitments.')).not.toBeNull()
-		expect(
-			documentQueries.getByText(
-				'The staged commitment transfer is reserved against the approval’s cumulative ETH quota and cannot exceed its per-liquidation limit. Existing reservations survive revocation. The receiver’s live balances, minimum commitment, and signed minimum health factor are checked again at execution, so a queue-time estimate does not guarantee execution.',
-			),
-		).not.toBeNull()
+		expect(documentQueries.getByText('The transfer is reserved against the approval’s ETH quota, and reservations survive revocation. The receiver’s balances and minimum health are rechecked at execution, so queueing does not guarantee execution.')).not.toBeNull()
 	})
 
 	test('blocks a delegated receiver that passes protocol health but fails the approved minimum factor', async () => {
@@ -2065,7 +2061,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Nonce invalidated')).not.toBeNull()
+		expect(documentQueries.getByText('Invalidated')).not.toBeNull()
 		const submissionButton = document.body.querySelector('.tx-action-button')
 		if (!(submissionButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation submission button')
 		expect(submissionButton.disabled).toBe(true)
@@ -2136,7 +2132,7 @@ describe('LiquidationModal', () => {
 			loadingLiquidationReceiverVaultSummary: true,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		if (!isPriceValid) fireEvent.input(within(document.body).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		if (!isPriceValid) fireEvent.input(within(document.body).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 
 		const documentQueries = within(document.body)
 		const status = documentQueries.getByRole('status')
@@ -2370,7 +2366,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement).disabled).toBe(true)
-		expect(documentQueries.getByText('This vault is not undercollateralized at the current OpenOracle price.')).not.toBeNull()
+		expect(documentQueries.getByText('The target vault is not liquidatable at the current price.')).not.toBeNull()
 		expect(documentQueries.getByText('Target commitment')).not.toBeNull()
 		expect(documentQueries.getByText('Target vault REP backing')).not.toBeNull()
 		expect(documentQueries.getByText('Target dispute-staked REP')).not.toBeNull()
@@ -2395,7 +2391,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('dialog', { name: 'Liquidate vault' })).not.toBeNull()
-		expect(documentQueries.getByText('Refreshing price validity.')).not.toBeNull()
+		expect(documentQueries.getByText('Refreshing price validity…')).not.toBeNull()
 		expect((documentQueries.getByRole('button', { name: 'Liquidate vault' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(loadRequests).toEqual([])
 	})
@@ -2415,7 +2411,7 @@ describe('LiquidationModal', () => {
 		expect(loadRequests).toEqual([managerAddress])
 
 		await act(() => {
-			render(<LiquidationModal {...initialProps} poolOracleManagerError='Failed to load price oracle details. Reason: RPC unavailable' />, renderedComponent.container)
+			render(<LiquidationModal {...initialProps} poolOracleManagerError='Failed to load price oracle details. Reason: RPC unavailable.' />, renderedComponent.container)
 		})
 		await act(async () => {
 			await Promise.resolve()
@@ -2423,7 +2419,7 @@ describe('LiquidationModal', () => {
 		expect(loadRequests).toEqual([managerAddress])
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Failed to load price oracle details. Reason: RPC unavailable')).not.toBeNull()
+		expect(documentQueries.getByText('Failed to load price oracle details. Reason: RPC unavailable.')).not.toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry price status' }))
 		expect(loadRequests).toEqual([managerAddress, managerAddress])
 	})
@@ -2531,11 +2527,11 @@ describe('LiquidationModal', () => {
 	test('states the 1–5 minute timeout range and flags an out-of-range timeout inline', async () => {
 		const renderedComponent = await renderLiquidationModal({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }), liquidationTimeoutMinutes: '30' })
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const timeoutInput = within(document.body).getByRole('textbox', { name: /^Manual execution timeout/ })
+		const timeoutInput = within(document.body).getByRole('textbox', { name: /^Execution window \(minutes\)/ })
 		expect(timeoutInput.getAttribute('max')).toBe('5')
 		expect(timeoutInput.getAttribute('aria-invalid')).toBe('true')
-		expect(document.body.textContent).toContain('Enter 1–5 whole minutes.')
-		expect(document.body.textContent).toContain('1–5 whole minutes after oracle settlement.')
+		expect(document.body.textContent).toContain('Enter an execution window of 1–5 whole minutes.')
+		expect(document.body.textContent).toContain('Queued operations expire 1–5 whole minutes after oracle settlement.')
 	})
 
 	test('bases Max on the pool oracle price that the guard uses and shows the transferable maximum', async () => {

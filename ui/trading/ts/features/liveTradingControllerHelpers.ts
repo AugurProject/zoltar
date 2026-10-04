@@ -42,7 +42,7 @@ export function walletSummaryAvailability(configurationAvailable: boolean, confi
 	if (discoveryState === 'loading') return { status: 'loading' as const, error: undefined, errorLabel: undefined }
 	if (discoveryState === 'error') return { status: 'error' as const, error: liveCopy.describeDiscoveryFailure(discoveryLead, discoveryError), errorLabel: discoveryLead }
 	if (discoveryState === 'not-found' || selectedPoolAvailable) return undefined
-	return { status: 'error' as const, error: 'No security pool is available in the selected universe', errorLabel: 'No security pool in this universe' }
+	return { status: 'error' as const, error: 'No security pool is available in the selected universe.', errorLabel: 'No security pool in this universe' }
 }
 
 export function broadcastUncertainMessage(label: string, hash: Hash) {

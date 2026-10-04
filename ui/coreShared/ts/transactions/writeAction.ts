@@ -123,7 +123,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			if (!environmentGuard.isCurrent()) return
 		} catch (error) {
 			if (!environmentGuard.isCurrent()) return
-			const message = formatRefreshErrorMessage(error, parameters.refreshErrorFallback ?? 'Transaction succeeded, but refreshing the UI failed')
+			const message = formatRefreshErrorMessage(error, parameters.refreshErrorFallback ?? 'Transaction succeeded, but refreshing the displayed data failed')
 			if (parameters.onRefreshError === undefined) {
 				parameters.setErrorMessage(message)
 			} else {

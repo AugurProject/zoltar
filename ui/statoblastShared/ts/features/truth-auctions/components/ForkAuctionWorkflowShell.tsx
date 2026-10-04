@@ -6,6 +6,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as reportingCopy from '../../../copy/reporting.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { renderWorkflowMetricGrid } from './ForkAuctionPresentation.js'
 
@@ -53,12 +54,12 @@ export function ForkAuctionWorkflowShell({
 		<>
 			{children}
 			<RetryableNotice disabled={loadingForkAuctionDetails} message={forkAuctionError} onRetry={forkAuctionDetailsAvailable || securityPoolAddress === undefined ? undefined : () => onLoadForkAuction(securityPoolAddress)} retryLabel={forkAuctionCopy.retryForkWorkflow} />
-			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{forkAuctionCopy.loadingReportingDetails}</LoadingText> : forkAuctionCopy.retryReporting} />
+			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingReportingDetails}</LoadingText> : reportingCopy.retryReporting} />
 		</>
 	)
 	if (embedInCard) return content
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={forkAuctionCopy.forkTruthAuction}>
+		<RouteWorkflowPanel showHeader={showHeader} title={forkAuctionCopy.forkMigrationTitle}>
 			{content}
 		</RouteWorkflowPanel>
 	)

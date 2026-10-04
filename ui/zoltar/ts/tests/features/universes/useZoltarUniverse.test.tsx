@@ -343,7 +343,7 @@ describe('useZoltarUniverse', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).zoltarChildUniverseFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again')
+		expect(requireHookState(hookState).zoltarChildUniverseFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again.')
 	})
 
 	test('ignores stale question page results after the environment refresh key changes', async () => {
@@ -549,14 +549,14 @@ describe('useZoltarUniverse', () => {
 
 		expect(requireHookState(hookState).loadingZoltarQuestion).toBe(false)
 		expect(requireHookState(hookState).zoltarQuestionLookupId).toBe('0x2')
-		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Failed to load question. Reason: current question lookup failed')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Question could not be loaded. Reason: current question lookup failed.')
 
 		await act(async () => {
 			olderQuestion.resolve(createQuestion('0x1'))
 			await olderRequest
 		})
 		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
-		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Failed to load question. Reason: current question lookup failed')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Question could not be loaded. Reason: current question lookup failed.')
 	})
 
 	test('invalidates an older exact question request when the current question is cached', async () => {
@@ -693,7 +693,7 @@ describe('useZoltarUniverse', () => {
 			exactQuestion.reject(new Error('exact lookup failed first'))
 			await exactRequest
 		})
-		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Failed to load question. Reason: exact lookup failed first')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Question could not be loaded. Reason: exact lookup failed first.')
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
@@ -734,8 +734,8 @@ describe('useZoltarUniverse', () => {
 		trackCleanup(renderedComponent.cleanup)
 
 		await waitFor(() => {
-			expect(requireHookState(hookState).zoltarUniverseError).toBe('Failed to load Zoltar universe. Reason: universe RPC failed')
-			expect(requireHookState(hookState).zoltarQuestionsError).toBe('Failed to load Zoltar question count. Reason: question count RPC failed')
+			expect(requireHookState(hookState).zoltarUniverseError).toBe('Universe details could not be loaded. Reason: universe RPC failed.')
+			expect(requireHookState(hookState).zoltarQuestionsError).toBe('Questions could not be loaded. Reason: question count RPC failed.')
 		})
 	})
 
@@ -1130,6 +1130,42 @@ describe('useZoltarUniverse', () => {
 		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
 		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [existingQuestion, createdQuestion] })
 		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+	})
+
+	test('treats a lookup of a question that does not exist as finished, not failed', async () => {
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => ({ ...createQuestion('0x02'), exists: false }),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestion('0x2')
+		})
+
+		// No error leaves the fork form free to show its "No question matches this ID" hint without a Retry action.
+		expect(requireHookState(hookState).zoltarQuestionLookupId).toBe('0x2')
+		expect(requireHookState(hookState).loadingZoltarQuestion).toBe(false)
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBeUndefined()
 	})
 
 	test('reports a created question that the registry does not return', async () => {

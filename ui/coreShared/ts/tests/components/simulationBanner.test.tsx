@@ -312,9 +312,9 @@ describe('SimulationBanner', () => {
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
 			const advancedQueries = within(advancedControls)
-			const repPerEthLabel = advancedQueries.getByText('REP / ETH mock price')
+			const repPerEthLabel = advancedQueries.getByText('REP/ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
 
 			fireEvent.input(repPerEthInput, {
 				currentTarget: { value: '2' },
@@ -346,9 +346,9 @@ describe('SimulationBanner', () => {
 
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			const repPerEthLabel = within(advancedControls).getByText('REP / ETH mock price')
+			const repPerEthLabel = within(advancedControls).getByText('REP/ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
 
 			fireEvent.input(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
 			fireEvent.change(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
@@ -373,9 +373,9 @@ describe('SimulationBanner', () => {
 
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			const repPerEthLabel = within(advancedControls).getByText('REP / ETH mock price')
+			const repPerEthLabel = within(advancedControls).getByText('REP/ETH mock price')
 			const repPerEthInput = repPerEthLabel.parentElement?.querySelector('input')
-			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+			if (!(repPerEthInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
 
 			fireEvent.input(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
 			fireEvent.change(repPerEthInput, { currentTarget: { value: '0' }, target: { value: '0' } })
@@ -406,8 +406,8 @@ describe('SimulationBanner', () => {
 
 		try {
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			const oldInput = within(advancedControls).getByText('REP / ETH mock price').parentElement?.querySelector('input')
-			if (!(oldInput instanceof HTMLInputElement)) throw new Error('Expected a REP / ETH mock price input')
+			const oldInput = within(advancedControls).getByText('REP/ETH mock price').parentElement?.querySelector('input')
+			if (!(oldInput instanceof HTMLInputElement)) throw new Error('Expected a REP/ETH mock price input')
 			fireEvent.input(oldInput, { currentTarget: { value: '3' }, target: { value: '3' } })
 			fireEvent.change(oldInput, { currentTarget: { value: '3' }, target: { value: '3' } })
 
@@ -419,7 +419,7 @@ describe('SimulationBanner', () => {
 				await oldControl.promise.catch(() => undefined)
 			})
 
-			const replacementInput = within(renderedComponent.container).getByText('REP / ETH mock price').parentElement?.querySelector('input')
+			const replacementInput = within(renderedComponent.container).getByText('REP/ETH mock price').parentElement?.querySelector('input')
 			expect(getElementValue(replacementInput ?? document.createElement('div'))).toBe('2')
 			expect(within(renderedComponent.container).queryByRole('alert')).toBeNull()
 		} finally {
@@ -678,10 +678,10 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saved states' }))
 			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove corrupted saved states' }))
-			expect(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' })).toBeTruthy()
-			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
+			expect(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saved states' })).toBeTruthy()
+			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saved states' }))
 
 			await waitFor(() => {
 				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('{bad json')
@@ -1010,9 +1010,9 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saves' }))
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Remove corrupted saved states' }))
 			const cleanupDialog = await waitFor(() => documentQueries.getByRole('dialog', { name: 'Remove corrupted saved states' }))
-			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saves' }))
+			fireEvent.click(within(cleanupDialog).getByRole('button', { name: 'Remove corrupted saved states' }))
 
 			const error = await waitFor(() => documentQueries.getByRole('alert'))
 			expect(error.textContent).toContain('cleanup environment failed')
@@ -1073,8 +1073,8 @@ describe('SimulationBanner', () => {
 		try {
 			const builtInAdvancedControls = openAdvancedControls(builtInRendered.container)
 			const customAdvancedControls = openAdvancedControls(customRendered.container)
-			expect(within(builtInAdvancedControls).queryByRole('button', { name: 'Delete save' })).toBeNull()
-			expect(within(customAdvancedControls).getByRole('button', { name: 'Delete save' })).toBeTruthy()
+			expect(within(builtInAdvancedControls).queryByRole('button', { name: 'Delete saved state' })).toBeNull()
+			expect(within(customAdvancedControls).getByRole('button', { name: 'Delete saved state' })).toBeTruthy()
 			expect(customRendered.container.textContent).toContain('Saved 2026-06-02 12:34:56 UTC (2d 0h 0m ago).')
 		} finally {
 			Date.now = originalDateNow
@@ -1139,9 +1139,9 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete save' }))
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete saved state' }))
 			const deleteDialog = await waitFor(() => documentQueries.getByRole('dialog'))
-			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete save' }))
+			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete saved state' }))
 
 			await waitFor(() => {
 				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).not.toContain('saved-baseline-20260602123456')
@@ -1216,9 +1216,9 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete save' }))
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete saved state' }))
 			const deleteDialog = await waitFor(() => documentQueries.getByRole('dialog'))
-			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete save' }))
+			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete saved state' }))
 
 			await waitFor(() => {
 				expect(documentQueries.getByRole('alert').textContent).toContain('browser storage write failed')
@@ -1281,9 +1281,9 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			const advancedControls = openAdvancedControls(renderedComponent.container)
-			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete save' }))
+			fireEvent.click(within(advancedControls).getByRole('button', { name: 'Delete saved state' }))
 			const deleteDialog = await waitFor(() => documentQueries.getByRole('dialog'))
-			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete save' }))
+			fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete saved state' }))
 
 			const deletingButton = await waitFor(() => within(deleteDialog).getByRole('button', { name: 'Deleting…' }))
 			expect(deletingButton.hasAttribute('disabled')).toBe(true)
@@ -1296,7 +1296,7 @@ describe('SimulationBanner', () => {
 				expect(within(deleteDialog).getByRole('alert').textContent).toContain('replacement environment failed')
 				expect(domEnvironment.window.location.hash).toContain('simState=saved-baseline-20260602123456')
 				expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).toBe(serializedRecords)
-				expect(within(deleteDialog).getByRole('button', { name: 'Delete save' }).hasAttribute('disabled')).toBe(false)
+				expect(within(deleteDialog).getByRole('button', { name: 'Delete saved state' }).hasAttribute('disabled')).toBe(false)
 			})
 			await controller.advanceBlock()
 			expect(advanceBlock).toHaveBeenCalledTimes(1)

@@ -152,9 +152,9 @@ describe('transaction presentations', () => {
 			withdrawalTokenSymbol: 'WETH',
 		}
 
-		expect(createOpenOracleTransactionIntent('approveToken1', context).submittedTitle).toBe('Approve WETH')
+		expect(createOpenOracleTransactionIntent('approveToken1', context).submittedTitle).toBe('Approving WETH')
 		expect(createOpenOracleSuccessPresentation({ action: 'approveToken1', hash: '0x1234' }, context).title).toBe('WETH approved')
-		expect(createOpenOracleTransactionIntent('withdrawBalance', context).submittedTitle).toBe('Withdraw WETH')
+		expect(createOpenOracleTransactionIntent('withdrawBalance', context).submittedTitle).toBe('Withdrawing WETH')
 		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH withdrawn')
 	})
 
@@ -167,7 +167,7 @@ describe('transaction presentations', () => {
 	})
 
 	test('uses the user-facing report name for OpenOracle creation', () => {
-		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Creating standalone oracle report')
+		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Creating standalone OpenOracle report')
 		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report created')
 	})
 
@@ -191,7 +191,7 @@ describe('transaction presentations', () => {
 
 	test('describes OpenOracle settlement as a report lifecycle action', () => {
 		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling report')
-		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Settled report')
+		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Report settled')
 	})
 
 	test('keeps pool and action context in trading and reporting intents', () => {
@@ -322,7 +322,7 @@ describe('transaction presentations', () => {
 		}
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')
-		expect(success.title).toBe('Requested new price')
+		expect(success.title).toBe('Price requested')
 	})
 
 	test('describes truth-auction claim settlement as REP plus auctioned underwriting commitments', () => {
@@ -345,7 +345,7 @@ describe('transaction presentations', () => {
 	test('describes unresolved escalation migration as optional parent escalation-deposit accounting cleanup', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
 		expect(presentation.title).toBe('Clear unresolved parent escalation-deposit accounting')
-		expect(presentation.detail).toBe('The wallet’s unresolved parent escalation-deposit accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.')
+		expect(presentation.detail).toBe('Your unresolved parent escalation-deposit records were cleared. Your child universe backing and claim eligibility are unchanged.')
 	})
 
 	test('describes direct parent escalation claims without calling them migration', () => {
@@ -353,6 +353,6 @@ describe('transaction presentations', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimParentEscalationDeposits'))
 		expect(intent.submittedTitle).toBe('Claim parent escalation deposits')
 		expect(presentation.title).toBe('Claim parent escalation deposits')
-		expect(presentation.detail).toBe('Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.')
+		expect(presentation.detail).toBe('Selected winning parent deposits were paid in child universe REP. They cannot be claimed again in this universe or its descendants.')
 	})
 })

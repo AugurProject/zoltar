@@ -194,7 +194,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(failedDialog.querySelector('details')?.open).toBe(false)
 	})
 
-	test.each(['Action canceled in wallet.', "The pool's oracle price expired. Request a new price in Price oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
+	test.each(['Rejected in wallet.', "The pool's oracle price expired. Request a new price in Price oracle, then retry.", 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
 		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestPrice' }] }} />)
 		trackRendered(rendered)
 		const panel = within(document.body).getByRole('dialog', { name: 'Transaction status' })
@@ -286,7 +286,7 @@ describe('GlobalTransactionDialog', () => {
 		await act(() => controller.receipt(hash, 'success'))
 		const secondReview = controller.review(1).catch(() => undefined)
 		await act(() => undefined)
-		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Wrapped ETH into WETH')
+		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('ETH wrapped')
 		expect(within(document.body).getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Confirmed')
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' })))
 		await act(() => render(<GlobalTransactionDialog transaction={{ ...pending, title: 'ETH wrapped', tone: 'success' }} />, renderedComponent.container))
@@ -596,18 +596,18 @@ describe('GlobalTransactionDialog', () => {
 		expect(within(document.body).queryByRole('dialog')).toBeNull()
 
 		await act(() => {
-			render(<GlobalTransactionDialog transaction={{ detail: 'Action canceled in wallet.', dismissKey, title: 'Creating question', tone: 'error' }} />, renderedComponent.container)
+			render(<GlobalTransactionDialog transaction={{ detail: 'Rejected in wallet.', dismissKey, title: 'Creating question', tone: 'error' }} />, renderedComponent.container)
 		})
 
 		expect(within(document.body).getByText('Failed')).not.toBeNull()
-		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(within(document.body).getByText('Rejected in wallet.')).not.toBeNull()
 	})
 
 	test('renders a failed pre-submit transaction with the failure reason and dismiss control', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionDialog
 				transaction={{
-					detail: 'Action canceled in wallet.',
+					detail: 'Rejected in wallet.',
 					dismissKey: 'transaction-request-2',
 					title: 'Creating question',
 					tone: 'error',
@@ -619,7 +619,7 @@ describe('GlobalTransactionDialog', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('alert')).not.toBeNull()
 		expect(documentQueries.getByText('Failed')).not.toBeNull()
-		expect(documentQueries.getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(documentQueries.getByText('Rejected in wallet.')).not.toBeNull()
 		expect(documentQueries.queryByRole('link')).toBeNull()
 		const dismissButton = documentQueries.getByRole('button', { name: 'Dismiss' })
 		expect(dismissButton.classList.contains('primary')).toBe(true)
@@ -630,7 +630,7 @@ describe('GlobalTransactionDialog', () => {
 
 	test('does not hide a new request-scoped failure after the tray remounts', async () => {
 		const transaction = {
-			detail: 'Action canceled in wallet.',
+			detail: 'Rejected in wallet.',
 			dismissKey: 'transaction-request-remount-collision',
 			title: 'Creating question',
 			tone: 'error' as const,
@@ -648,7 +648,7 @@ describe('GlobalTransactionDialog', () => {
 		const rerenderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={transaction} />)
 		trackRendered(rerenderedComponent)
 		expect(within(document.body).getByRole('alert')).not.toBeNull()
-		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(within(document.body).getByText('Rejected in wallet.')).not.toBeNull()
 	})
 
 	test('renders a failed submitted transaction with both the failure reason and hash link', async () => {
@@ -729,13 +729,13 @@ describe('GlobalTransactionDialog', () => {
 		expect(remountedCompletion.container.textContent).toBe('')
 		await remountedCompletion.cleanup()
 
-		const freshRequestFailure = markTransactionFailed(markTransactionRequested(createInitialTransactionTrayState(), intent), { kind: 'rejected', message: 'Action canceled in wallet.' }).active
+		const freshRequestFailure = markTransactionFailed(markTransactionRequested(createInitialTransactionTrayState(), intent), { kind: 'rejected', message: 'Rejected in wallet.' }).active
 		if (freshRequestFailure === undefined) throw new Error('Fresh request failure should be active')
 		expect(freshRequestFailure.operationKey).toBe('transaction-request-1')
 		const freshRequestTray = await renderIntoDocument(<GlobalTransactionDialog transaction={freshRequestFailure} />)
 		trackRendered(freshRequestTray)
 		expect(within(freshRequestTray.container).getByRole('alert')).not.toBeNull()
-		expect(within(freshRequestTray.container).getByText('Action canceled in wallet.')).not.toBeNull()
+		expect(within(freshRequestTray.container).getByText('Rejected in wallet.')).not.toBeNull()
 	})
 
 	test('evicts the oldest remembered dismissal after the bounded limit', async () => {

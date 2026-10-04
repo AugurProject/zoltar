@@ -614,7 +614,7 @@ void describe('TradingSection', () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).not.toContain('Unavailable (no price)')
-		expect(document.body.textContent).not.toContain('Loading mint capacity.')
+		expect(document.body.textContent).not.toContain('Loading mint capacity…')
 		const button = within(document.body).getByRole('button', { name: 'Mint complete sets' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected mint button')
 		expect(button.disabled).toBe(false)
@@ -632,7 +632,7 @@ void describe('TradingSection', () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('No mint capacity remaining.')
-		expect(document.body.textContent).not.toContain('Loading mint capacity.')
+		expect(document.body.textContent).not.toContain('Loading mint capacity…')
 	})
 
 	void test('uses standing ETH limits independently of the configured UI price', async () => {
@@ -780,7 +780,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Migrate forked shares').reason).toBe('Available only after this pool forks.')
+		expect(getTransactionButtonState(document.body, 'Migrate forked shares').reason).toBe('Available only after this universe forks.')
 	})
 
 	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
@@ -866,7 +866,7 @@ void describe('TradingSection', () => {
 
 		const launcher = within(document.body).getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(launcher.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('No winning No shares to redeem.')
+		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('You hold no winning No shares to redeem.')
 	})
 
 	void test('explains that an escalation game pauses minting instead of reporting missing capacity', async () => {
@@ -934,7 +934,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('This market has already finalized.')
+		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('This question has already finalized.')
 	})
 
 	void test('shows mint write failures through the shared error notice', async () => {
@@ -971,7 +971,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem complete sets').reason).toBe('Loading wallet share balances.')
+		expect(getTransactionButtonState(document.body, 'Redeem complete sets').reason).toBe('Loading wallet share balances…')
 	})
 
 	void test('keeps scalar share migration interactive through the shared target list and picker', async () => {

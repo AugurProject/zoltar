@@ -42,7 +42,7 @@ describe('trade ticket states', () => {
 		const rendered = await renderIntoDocument(<MarketPosition market={market} holdings={disconnectedHoldings} wallet={connectedWallet} disabled={false} ownsBalanceError />)
 		cleanup = rendered.cleanup
 		const position = rendered.container.querySelector('.market-position')
-		expect(position?.textContent).toContain('Connect wallet to see your position')
+		expect(position?.textContent).toContain('Connect a wallet to see your position')
 		expect(position?.querySelector('.market-holdings')).toBeNull()
 		expect(position?.textContent).not.toContain('—')
 	})

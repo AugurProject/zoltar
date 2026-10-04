@@ -22,7 +22,8 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 							<TimestampValue timestamp={valuation.timestamp} relative={false} />
 						</MetricField>
 						<MetricField label={payoutCopy.feeEnd}>{valuation.feeEndTime === (1n << 256n) - 1n ? payoutCopy.feeEndUnknown : <TimestampValue timestamp={valuation.feeEndTime} relative={false} />}</MetricField>
-						{feeReduction === undefined ? undefined : <MetricField label={valuation.timestamp >= valuation.feeEndTime ? payoutCopy.feeEnded : payoutCopy.feeProjection}>{formatTrimmedUnits(feeReduction, 4, 4)}%</MetricField>}
+						{/* The projection is zero once accrual has ended, so the row is dropped rather than shown under a status label. */}
+						{feeReduction === undefined || valuation.timestamp >= valuation.feeEndTime ? undefined : <MetricField label={payoutCopy.feeProjection}>{formatTrimmedUnits(feeReduction, 4, 4)}%</MetricField>}
 					</>
 				)}
 			</DataGrid>

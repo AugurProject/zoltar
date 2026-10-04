@@ -1,5 +1,5 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
-import * as transactionStepsCopy from '../copy/transactionSteps.js'
+import * as transactionCopy from '../copy/transaction.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { UserMessage } from './UserMessage.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
@@ -75,7 +75,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 				...ownedWorkflow,
 				steps: ownedWorkflow.steps.map((step, index): (typeof ownedWorkflow.steps)[number] => {
 					if (index !== ownedWorkflow.activeIndex) return step
-					return { ...step, phase: 'failed', failure: step.failure ?? { kind: 'error', message: typeof activeTransaction?.detail === 'string' ? activeTransaction.detail : transactionStepsCopy.requirementsFailed } }
+					return { ...step, phase: 'failed', failure: step.failure ?? { kind: 'error', message: typeof activeTransaction?.detail === 'string' ? activeTransaction.detail : transactionCopy.failureReasonUnavailable } }
 				}),
 			})
 		ownedWorkflow.cancel()

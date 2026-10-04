@@ -5,7 +5,7 @@ import * as payoutCopy from '../copy/payout.js'
 export function OutcomeHolding({ amount, outcome, market }: { amount: bigint; outcome: ShareOutcome; market: LiveMarket }) {
 	const index = { INVALID: 0, YES: 1, NO: 2 }[outcome]
 	const value = formatCollateralEth(amount, market)
-	let payout = payoutCopy.conditionalPayout(value, outcome)
+	let payout = payoutCopy.formatConditionalPayout(value, outcome)
 	if (market.loadError !== undefined) payout = payoutCopy.unavailable
 	else if (market.questionOutcome !== 3) {
 		if (market.questionOutcome !== index) payout = payoutCopy.zeroPayout

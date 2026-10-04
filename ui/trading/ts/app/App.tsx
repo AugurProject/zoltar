@@ -48,6 +48,7 @@ function currentRoute(): ResolvedTradingRoute {
 function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = appCopy.notFound
+	if (route === 'help') label = appCopy.marketGuide
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
 	if (route === 'market') label = appCopy.markets
 	if (route.startsWith('market/')) label = appCopy.market
@@ -81,10 +82,10 @@ function readTradingUrlState(search: string) {
 async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
 	const activeChainId = getActiveNetworkProfile().chain.id
 	const core = coreDeployments.find(deployment => deployment.chainId === activeChainId)
-	if (core === undefined) throw tradingDeploymentMissingError('No canonical deployment is available for the active network')
+	if (core === undefined) throw tradingDeploymentMissingError('Trading is not available on the active network.')
 	const bootstrapConfiguration: DeploymentConfiguration = { chainId: core.chainId, chainName: core.chainName, factory: core.securityPoolFactory, feeBps: 30, router: core.securityPoolFactory, rpcUrl: core.defaultRpcUrl, securityPoolFactory: core.securityPoolFactory, zoltar: core.zoltar }
 	const client = createPublicClient(bootstrapConfiguration)
-	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out'), core.chainId)
+	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out.'), core.chainId)
 	return await runReadOperation(async operation => await resolveInstalledTradingDeployment(readOperationClient(client, operation), core, 30, core.defaultRpcUrl))
 }
 
@@ -97,7 +98,7 @@ function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveCon
 	const networkName = deploymentWalletState.networkName ?? liveConfiguration?.chainName
 	if (networkName !== undefined) return networkName
 	if (liveDeploymentStatus === 'unreachable') return appCopy.deploymentUnverified
-	if (liveDeploymentStatus === 'missing') return appCopy.contractsNotDeployed
+	if (liveDeploymentStatus === 'missing') return appCopy.notDeployed
 	return appCopy.checkingDeployment
 }
 
@@ -209,7 +210,7 @@ export function App({
 		} catch (error) {
 			setEnvironmentSwitchFailed(true)
 			setLiveConfiguration(undefined)
-			setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading environment'))
+			setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading environment.'))
 			setLiveDeploymentStatus(failedDeploymentStatus(error))
 		}
 	}, [refreshActiveEnvironment])
@@ -237,7 +238,7 @@ export function App({
 			} catch (error) {
 				if (!active) return
 				setLiveConfiguration(undefined)
-				setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading deployment'))
+				setLiveConfigurationError(publicErrorMessage(error, 'Unable to load the trading deployment.'))
 				setLiveDeploymentStatus(failedDeploymentStatus(error))
 			}
 		})()

@@ -74,7 +74,7 @@ export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs
 	return withLoading(
 		createActionAvailability(
 			walletReason(inputs),
-			inputs.operation !== 'remove' && inputs.marketClosed ? copy.marketClosedReason : undefined,
+			inputs.operation !== 'remove' && inputs.marketClosed ? copy.liquidityClosedReason : undefined,
 			inputs.submissionBlocker,
 			balanceReason(inputs),
 			amountReason(inputs.requestedAmount),

@@ -3,7 +3,6 @@ import type { CopyTemplateValue } from './types.js'
 export const active = 'Active'
 export const addToWallet = 'Add to wallet'
 export const amount = 'Amount'
-export const approvingRep = 'Approving REP…'
 export const cancel = 'Cancel'
 export const walletConnectionRequired = 'Connect wallet to continue.'
 export const formatConnectWalletBefore = (action: string) => `Connect a wallet before ${action}.`
@@ -14,7 +13,6 @@ export const copyFailed = 'Copy failed — select the value and copy it manually
 export const copyUnavailable = 'Copy unavailable'
 export const manualCopyValue = 'Exact value for manual copy'
 export const createQuestion = 'Create question'
-export const createQuestionAction = 'Create question'
 export const createSecurityPool = 'Create security pool'
 export const deployed = 'Deployed'
 export const ends = 'Ends'
@@ -33,7 +31,7 @@ export const liquidationFailed = 'Liquidation failed'
 export const liquidationSubmitted = 'Liquidation submitted'
 export const loading = 'Loading'
 export const loadingWithEllipsis = 'Loading…'
-export const loadingUniverseDetails = 'Loading universe details.'
+export const loadingUniverseDetails = 'Loading universe details…'
 export const childUniverses = 'Child universes'
 export const childUniversesEmpty = 'No child universes are deployed for this universe.'
 export const max = 'Max'
@@ -77,12 +75,9 @@ export const yes = 'Yes'
 export const zeroDecimalPlaceholder = '0.0'
 export const connectWallet = 'Connect wallet'
 export const browsePools = 'Browse pools'
-export const browsePoolsAction = 'Browse pools'
 export const createPool = 'Create pool'
-export const createPoolAction = 'Create pool'
 export const close = 'Close'
 export const readMoreInGuide = 'Read more in the guide'
-export const manualExecutionTimeout = 'Manual execution timeout'
 export const deploy = 'Deploy'
 export const goToGenesisUniverse = 'Go to Genesis universe'
 export const zoltar = 'Zoltar'
@@ -111,20 +106,20 @@ export const loadMore = 'Show more'
 export const nextPage = 'Next page'
 export const previousPage = 'Previous page'
 export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) => `${fieldLabel} must be a decimal number.`
-export const nonNegativeAmountRequiredError = 'Enter a valid nonnegative amount.'
+export const nonNegativeAmountRequiredError = 'Enter a valid non-negative amount.'
 export const formatDecimalPrecisionError = (units: number) => `Use no more than ${units} decimal places.`
 export const amountInvalidError = 'Enter a number, such as 1.5.'
 export const balance = 'Balance'
-export const formatAmountHint = (label: CopyTemplateValue, amount: CopyTemplateValue) => `${label}: ${amount}`
 export const formatAmountBelowMinimumError = (amount: CopyTemplateValue) => `Enter at least ${amount}.`
 export const formatAmountAboveMaximumError = (amount: CopyTemplateValue) => `Enter at most ${amount}.`
 export const formatAmountExceedsBalanceError = (amount: CopyTemplateValue) => `Exceeds your balance of ${amount}.`
 export const formatAmountPresetLabel = (percent: CopyTemplateValue) => `${percent}%`
-export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
+export const approvalAmountInvalidError = formatDecimalNumberRequiredError(approvalAmount)
 export const approve = 'Approve'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `${approve} ${tokenLabel}`
 export const formatApprovingToken = (tokenLabel: CopyTemplateValue) => `Approving ${tokenLabel}…`
+export const approvingRep = formatApprovingToken(rep)
 export const approvalSatisfied = 'Approval satisfied'
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
 export const formatRequiredValue = (amount: CopyTemplateValue) => `Required ${amount}`
@@ -134,7 +129,6 @@ export const requiredTotalPlaceholder = 'Required'
 export const leaveBlankForRequiredTotal = 'Leave blank for required total'
 export const emptyStateDetail = 'Nothing to show.'
 export const unlimitedApproval = 'Unlimited approval'
-export const minutes = 'minutes'
 export const moreInfo = 'More info'
 export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${actionLabel} details`
 export const noneSelected = 'None selected'
@@ -162,7 +156,7 @@ export const questionTimeline = 'Question timeline'
 export const questionType = 'Question type'
 export const selectedOutcome = 'Selected outcome'
 export const scalarValue = 'Scalar value'
-export const scalarValueHelpText = 'Enter a value on an increment.'
+export const scalarValueHelpText = 'Enter a value that matches the increment.'
 export const scalarValueInvalid = 'Enter a value between the minimum and maximum that falls on an increment.'
 export const ticks = 'Ticks'
 export const untitledQuestion = 'Untitled question'

@@ -312,7 +312,17 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			)
 			const parsedState = JSON.parse(state)
 			if (typeof parsedState === 'object' && parsedState !== null && 'body' in parsedState && typeof parsedState.body === 'string' && parsedState.body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${parsedState.body}`)
-			if (typeof parsedState === 'object' && parsedState !== null && 'body' in parsedState && typeof parsedState.body === 'string' && parsedState.body !== '' && parsedState.body !== 'Loading...' && !parsedState.body.includes('BOOTSTRAPPING') && !parsedState.body.includes('Starting simulation bootstrap')) {
+			if (
+				typeof parsedState === 'object' &&
+				parsedState !== null &&
+				'body' in parsedState &&
+				typeof parsedState.body === 'string' &&
+				parsedState.body !== '' &&
+				parsedState.body !== 'Loading...' &&
+				parsedState.body !== 'Loading…' &&
+				!parsedState.body.includes('BOOTSTRAPPING') &&
+				!parsedState.body.includes('Starting simulation bootstrap')
+			) {
 				applicationReady = true
 				break
 			}
@@ -822,8 +832,8 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	await driver.evaluate('document.body.focus()')
 	await driver.pressTab()
 	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
-	await driver.waitForButtonEnabled('Deploy next missing')
-	await driver.clickButton('Deploy next missing')
+	await driver.waitForButtonEnabled('Deploy next contract')
+	await driver.clickButton('Deploy next contract')
 	const deployedBody = await driver.waitForBodyText('1 / 15')
 	expect(deployedBody).toContain('Proxy Deployer')
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
@@ -835,7 +845,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
 	await driver.waitForBodyText('Child universes')
-	await driver.waitForBodyWithoutText('Loading outcomes…')
+	await driver.waitForBodyWithoutText('Loading child universes…')
 	expect(await driver.evaluate("document.querySelectorAll('.universe-browser .entity-card-list').length")).toBe(0)
 	expect(await driver.evaluate("document.querySelector('.universe-browser input') === null")).toBe(true)
 	// The fixture has one auction child; its fork outcome opens the child without entering its ID.

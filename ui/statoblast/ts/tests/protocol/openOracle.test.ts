@@ -209,7 +209,7 @@ describe('openOracle protocol client', () => {
 		const invalidHashClient = { ...client, readContract: createMockLoaderClient({ getBlock: client.getBlock, multicall: async () => [], readContract: async request => (request.functionName === 'oracleGame' ? `0x${'11'.repeat(32)}` : readStoredOracleFixture(request.functionName, preimage)) }).readContract }
 		await expect(loadOpenOracleReportDetails(invalidHashClient, getOpenOracleAddress(), 1n)).rejects.toThrow('stored state does not match')
 		preimage.game.flags = 0n
-		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow('did not enable stored state')
+		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow('was created without stored state')
 	})
 
 	test('keeps supported reports browsable alongside a report without stored state', async () => {
@@ -231,7 +231,7 @@ describe('openOracle protocol client', () => {
 		const page = await loadOpenOracleReportSummaries(client, 0, 10)
 		expect(page.reportCount).toBe(2n)
 		expect(page.reports.map(report => report.reportId)).toEqual([1n])
-		expect(page.unavailableReports).toEqual([{ reportId: 2n, message: 'Oracle report #2 is unavailable: it did not enable stored state and dispute history' }])
+		expect(page.unavailableReports).toEqual([{ reportId: 2n, message: 'OpenOracle report #2 is unavailable: it was created without stored state and dispute history.' }])
 	})
 
 	test('derives the dispute contribution token from the strict proposed-price direction', () => {

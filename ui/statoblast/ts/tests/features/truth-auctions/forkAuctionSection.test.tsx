@@ -189,6 +189,14 @@ describe('ForkAuctionSection', () => {
 		},
 	})
 
+	test('shows a loading message instead of a pool prompt while the embedded pool has no fork details yet', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkAuctionSectionProps(undefined, { embedInCard: true, showHeader: false, showSecurityPoolAddressInput: false })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent).toContain('Loading fork details…')
+		expect(document.body.textContent).not.toContain('Select a pool to inspect')
+	})
+
 	test('renders the embedded fork workflow navigator and reports stage changes', async () => {
 		const onSelectedStageViewChange = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ onSelectedStageViewChange })))
@@ -200,7 +208,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Migration status' })).not.toBeNull()
 
-		const forkTriggeredTab = documentQueries.getByRole('tab', { name: 'Fork readiness' })
+		const forkTriggeredTab = documentQueries.getByRole('tab', { name: 'Fork trigger' })
 		const migrationTab = documentQueries.getByRole('tab', { name: 'Migration' })
 		const auctionTab = documentQueries.getByRole('tab', { name: 'Truth auction' })
 		const settlementTab = documentQueries.getByRole('tab', { name: 'Settlement' })
@@ -387,8 +395,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Optional: Claim parent escalation deposits' })).not.toBeNull()
-		expect(documentQueries.getByText('This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: claim parent deposits' })).not.toBeNull()
+		expect(documentQueries.getByText('Claims the selected winning parent deposits directly as REP in the child universe. You can also settle them later in the child pool.')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Claim selected Yes deposits' })).not.toBeNull()
 		expect(documentQueries.queryByText('Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.')).toBeNull()
 		expect(documentQueries.queryByText(/migratable escalation deposits/i)).toBeNull()
@@ -500,17 +508,17 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Optional. Moves your vault to the selected universe and clears your unresolved parent deposits in one step; the move can’t be undone. You don’t need it to claim winning deposits, and losing carried deposits need no transaction.')).not.toBeNull()
+		expect(documentQueries.getByText('Optional. Moves your vault to the selected universe and clears your unresolved parent deposits in one step; the move can’t be undone. You don’t need it to claim winning deposits, and losing parent deposits need no transaction.')).not.toBeNull()
 		// The contract mechanics stay available under Technical details instead of leading the explanation.
 		expect(documentQueries.getByText('Technical details')).not.toBeNull()
 		expect(document.body.textContent).toContain('It then clears the three parent outcome totals in constant-size work.')
 		// Every unresolved deposit is included automatically, so the list shows no checkboxes that look selectable but cannot change.
 		expect(document.body.textContent).toContain('Deposit #4')
 		expect(document.body.querySelector('.withdraw-deposit-list input[type="checkbox"]')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
+		const button = documentQueries.getByRole('button', { name: 'Clear unresolved deposits for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Clear unresolved parent escalation-deposit accounting for Yes').reason).toBe(currentTimestamp > 100n ? 'Migration window has closed for this parent pool.' : 'Migration window ends too soon to submit.')
+		expect(getTransactionButtonState(document.body, 'Clear unresolved deposits for Yes').reason).toBe(currentTimestamp > 100n ? 'Migration window has closed for this parent pool.' : 'Migration window ends too soon to submit.')
 	})
 
 	test('renders unresolved parent escalation-deposit accounting loading with the shared accessible spinner', async () => {
@@ -545,8 +553,8 @@ describe('ForkAuctionSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const loadingStatus = within(document.body).getByText('Loading unresolved parent escalation-deposit accounting for the connected wallet…')
-		expect(loadingStatus.textContent).toContain('Loading unresolved parent escalation-deposit accounting for the connected wallet…')
+		const loadingStatus = within(document.body).getByText('Loading unresolved parent deposits for the connected wallet…')
+		expect(loadingStatus.textContent).toContain('Loading unresolved parent deposits for the connected wallet…')
 		expect(loadingStatus.getAttribute('role')).toBe('status')
 		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
 	})
@@ -614,9 +622,9 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Unresolved parent escalation-deposit accounting was already cleared. Child proof eligibility is unchanged.')).not.toBeNull()
+		expect(documentQueries.getByText('Unresolved parent deposits were already cleared. Your winning claims in the child pool are unchanged.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for No' })
+		const button = documentQueries.getByRole('button', { name: 'Clear unresolved deposits for No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(false)
 		fireEvent.click(button)
@@ -662,10 +670,10 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The window for this optional cleanup has closed. Nothing is lost: your child-pool backing and winning claims are unchanged.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear unresolved parent escalation-deposit accounting' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim parent escalation deposits' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })).toBeNull()
+		expect(documentQueries.getByText('The window for the optional cleanup of unresolved parent deposits has closed. Nothing is lost: your child-pool backing and winning claims are unchanged.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: clear unresolved parent deposits' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Optional: claim parent deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved deposits for Yes' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
 	})
 
@@ -922,10 +930,10 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
+		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes parent deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Settle selected Yes fork-carried deposits').reason).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(getTransactionButtonState(document.body, 'Settle selected Yes parent deposits').reason).toBe('Winning parent deposits can be settled after this child pool finalizes.')
 	})
 
 	test('keeps fork-carried settlement disabled when the child outcome is known before the pool becomes operational', async () => {
@@ -967,10 +975,10 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
+		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes parent deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Settle selected Yes fork-carried deposits').reason).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(getTransactionButtonState(document.body, 'Settle selected Yes parent deposits').reason).toBe('Winning parent deposits can be settled after this child pool finalizes.')
 	})
 
 	test('does not show the empty child-pools notice when a selected child pool is already known', async () => {
@@ -1423,9 +1431,9 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByText('Failed to load truth auction price levels. Reason: Bidbook RPC unavailable')).not.toBeNull()
+			expect(documentQueries.getByText('Failed to load truth auction price levels. Reason: Bidbook RPC unavailable.')).not.toBeNull()
 		})
-		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
+		expect(documentQueries.queryByText('This truth auction has no active bids.')).toBeNull()
 		fireEvent.click(documentQueries.getByText('Market depth'))
 		expect(documentQueries.queryByText('No live price levels are currently active for this auction.')).toBeNull()
 		expect(documentQueries.queryByText('No active levels are visible.')).toBeNull()
@@ -1433,7 +1441,7 @@ describe('ForkAuctionSection', () => {
 		await waitFor(() => {
 			const retryingButton = documentQueries.getByRole('button', { name: 'Retry current bids' })
 			expect(retryingButton.hasAttribute('disabled')).toBe(true)
-			expect(retryingButton.textContent).toContain('Retrying auction bids…')
+			expect(retryingButton.textContent).toContain('Retrying truth auction bids…')
 			expect(activeTickCountCalls).toBe(2)
 		})
 	})
@@ -2107,7 +2115,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Truth auction has ended.')).not.toBeNull()
+		expect(documentQueries.getByText('Truth auction has ended')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Finalize truth auction' })).not.toBeNull()
 		expect(documentQueries.getByText('Ended')).not.toBeNull()
 		expect(documentQueries.queryByText('Higher bids now raise the clearing price, so less REP is sold.')).toBeNull()
@@ -2143,7 +2151,7 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByText('No bids from this wallet are indexed for the current auction.')).not.toBeNull()
+			expect(documentQueries.getByText('No bids from this wallet were found for this truth auction.')).not.toBeNull()
 		})
 		expect(documentQueries.queryByRole('heading', { name: 'Settle selected bids' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Refund withdrawal' })).not.toBeNull()

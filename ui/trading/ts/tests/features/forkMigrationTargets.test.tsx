@@ -124,10 +124,10 @@ describe('fork migration target selection', () => {
 		const rendered = await renderIntoDocument(<ForkMigrationTargets context={context} selectedTargets={[missingTarget]} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Child pool missing')
+		expect(rendered.container.textContent).toContain('Child security pool missing')
 		expect(rendered.container.textContent).not.toContain('will be created')
 		// A list that only holds selected targets does not repeat a Selected badge on every row.
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['Child pool missing'])
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['Child security pool missing'])
 	})
 
 	test('selects labeled categorical targets independently from source INVALID, YES, and NO shares', async () => {

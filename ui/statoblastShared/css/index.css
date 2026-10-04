@@ -3976,6 +3976,12 @@ span.rep-price-status.stale,
 	align-self: start;
 }
 
+/* The form has no heading of its own, so its leading subsection does not draw a rule under the card edge. */
+.vault-operations-form > .section-block-body > .workflow-subsection.section-block.embedded:first-child {
+	padding-top: 0;
+	border-top: 0;
+}
+
 /* Security pool UX fixes: next-action buttons and vault liquidation reasons. */
 .pool-action-open {
 	display: inline-flex;

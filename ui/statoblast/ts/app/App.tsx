@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { useCallback, useState } from 'preact/hooks'
@@ -66,6 +67,7 @@ export function App() {
 	} = useProtocolAppShell({
 		deploymentRoute: {
 			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('pools'), getTopLevelRouteSearch('pools')),
+			deploymentCompleteLabel: commonCopy.browsePools,
 			getSections: getStatoblastDeploymentSections,
 		},
 		initializeEnvironment: options => initializeStatoblastActiveEnvironment(window.location, options),

@@ -7,7 +7,9 @@ import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
-import { marketNewRiskBlocker, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
+import { marketNewRiskBlocker, marketSettlementPath, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
+import * as appCopy from '../copy/app.js'
+import { formatEthAmount } from '../copy/outcomes.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as liquidityCopy from '../copy/liquidity.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
@@ -75,7 +77,8 @@ export function LiveLiquidityControls({
 	const probabilityId = `${fieldId}-probability`
 	const probabilityInvalid = operation === 'initialize' && probability.trim() !== '' && conditionalBps === undefined
 	let actionLabel = liquidityCopy.addLiquidityAction
-	if (operation === 'initialize') actionLabel = liquidityCopy.initializeLiquidityAction
+	// Without a trading pool the first deposit also creates the market, in the same transaction.
+	if (operation === 'initialize') actionLabel = market.pair === undefined ? liquidityCopy.createMarketAndAddLiquidityAction : liquidityCopy.initializeLiquidityAction
 	else if (operation === 'remove') actionLabel = liquidityCopy.removeLiquidityAction
 	const availableAmount = operation === 'remove' ? balances?.lp : walletEthAttoEth
 	const amountError = (() => {
@@ -86,8 +89,8 @@ export function LiveLiquidityControls({
 		return undefined
 	})()
 	let amountHint: string | undefined
-	if (operation === 'remove' && balances !== undefined) amountHint = liquidityCopy.lpHeld(formatLpQuantity(balances.lp, 4, 'down'))
-	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = liquidityCopy.walletEth(formatTrimmedUnits(walletEthAttoEth))
+	if (operation === 'remove' && balances !== undefined) amountHint = workflowCopy.formatHolding(formatLpQuantity(balances.lp, 4, 'down'))
+	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = workflowCopy.formatWalletBalance(formatEthAmount(formatTrimmedUnits(walletEthAttoEth)))
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n
 	// An initialized pool can never be initialized again, so the option is removed rather than disabled.
 	const operationOptions = [
@@ -97,14 +100,14 @@ export function LiveLiquidityControls({
 	]
 	return (
 		<div className='liquidity-controls'>
-			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<OperationSwitcher ariaLabel={liquidityCopy.operationLabel} value={operation} onChange={selectOperation} options={operationOptions} />
-			<FormField id={amountId} label={operation === 'remove' ? liquidityCopy.lpTokenAmount : liquidityCopy.ethAmount}>
+			<FormField id={amountId} label={liquidityCopy.amount}>
 				<FormInput
 					id={amountId}
 					name='amount'
 					value={amount}
-					placeholder={workflowCopy.amountPlaceholder}
+					placeholder={workflowCopy.zeroDecimalPlaceholder}
 					autoComplete='off'
 					disabled={workflowLocked}
 					inputMode='decimal'
@@ -119,7 +122,7 @@ export function LiveLiquidityControls({
 					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
 				</FormField>
 			) : null}
-			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.removalGuidance(!closedForAdding) : liquidityCopy.additionGuidance} />
+			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market)) : liquidityCopy.additionGuidance} />
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={availability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submit()}>
 				{estimate === undefined ? null : <LiquidityPreviewSection preview={estimate} market={market} connected={walletConnected} protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />}
 			</QuotedTransactionPanel>
@@ -128,7 +131,7 @@ export function LiveLiquidityControls({
 }
 
 function addOptionReason(initialized: boolean, newRiskBlocker: string | undefined) {
-	if (!initialized) return liquidityCopy.poolNotInitializedReason
+	if (!initialized) return liquidityCopy.marketNotInitializedReason
 	return newRiskBlocker
 }
 

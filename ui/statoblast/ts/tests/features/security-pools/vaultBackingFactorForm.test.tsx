@@ -33,12 +33,36 @@ test('shows approval buttons before the commitment send button without a review 
 	expect(send.hasAttribute('disabled')).toBe(true)
 })
 
+test.each([
+	['the selected UI price', undefined, 'This limit would make your vault liquidatable at the selected UI price. The execution price may differ.'],
+	['the valid oracle price', 3n * 10n ** 18n, 'This limit would make your vault liquidatable at the current OpenOracle price.'],
+] as const)('names %s in the liquidation risk warning', async (_scenario, executionRepPerEthPrice, warning) => {
+	const details = createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })
+	const rendered = await renderIntoDocument(
+		<VaultBackingFactorForm
+			details={details}
+			oracleManagerDetails={createOracleManagerDetails({ isPriceValid: executionRepPerEthPrice !== undefined })}
+			repPerEthPrice={3n * 10n ** 18n}
+			executionRepPerEthPrice={executionRepPerEthPrice}
+			poolSecurityMultiplierBps={20_000n}
+			blocker={undefined}
+			busy={false}
+			pending={false}
+			onAdjust={() => undefined}
+		/>,
+	)
+	cleanupRenderedComponent = rendered.cleanup
+	const page = within(document.body)
+	fireEvent.input(page.getByLabelText('Commitment limit'), { target: { value: '1000000' } })
+	expect(page.getByText(warning)).toBeDefined()
+})
+
 async function renderPreparedForm(onAdjust: (limit: string, price?: bigint) => Promise<void>) {
 	const rendered = await renderIntoDocument(<VaultBackingFactorForm details={createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })} oracleManagerDetails={createOracleManagerDetails({ isPriceValid: false })} blocker={undefined} busy={false} pending={false} onAdjust={onAdjust} />)
 	cleanupRenderedComponent = rendered.cleanup
 	const page = within(document.body)
 	fireEvent.input(page.getByLabelText('Commitment limit'), { target: { value: '1' } })
-	fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
+	fireEvent.input(page.getByLabelText('Initial report price (REP per ETH)'), { target: { value: '3' } })
 	return page
 }
 

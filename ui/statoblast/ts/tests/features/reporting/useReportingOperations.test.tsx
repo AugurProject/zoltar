@@ -318,7 +318,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the threshold')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the non-decision threshold.')
 	})
 
 	test('reportOutcome refresh blocks a newly closing response window before writing', async () => {
@@ -387,7 +387,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational.')
 	})
 
 	test.each(['wallet', 'vault'] as const)('reportOutcome uses the selected %s balance and passes the funding choice to the transaction', async contributionFunding => {
@@ -493,7 +493,7 @@ describe('useReportingOperations', () => {
 		} else {
 			// The user never saw or confirmed the fork warning, so the report stops and shows the updated state.
 			expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
-			expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting')
+			expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting.')
 			expect(requireHookState(hookState).reportingDetails).toBe(latestDetails)
 			expect(requireHookState(hookState).reportingForm.reportAmount).toBe('0.000000000000000018')
 		}
@@ -769,7 +769,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No.')
 	})
 
 	test('withdrawEscalation reports when the unresolved escalation migration window has closed', async () => {
@@ -823,7 +823,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Settle winning carried proofs in the finalized child; the optional unresolved parent escalation-deposit accounting cleanup window has closed')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Settle winning parent deposits in the finalized child pool; the window for the optional cleanup of unresolved parent deposits has closed.')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {

@@ -147,7 +147,7 @@ describe('useSecurityPoolCreation', () => {
 		await act(async () => {
 			await requireState(state).loadMarketById('0xb')
 		})
-		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before selecting a question')
+		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before selecting a question.')
 		expect(requireState(state).marketDetails).toBeUndefined()
 	})
 
@@ -241,7 +241,7 @@ describe('useSecurityPoolCreation', () => {
 		await act(async () => {
 			await requireState(state).loadMarketById('0xb')
 		})
-		expect(requireState(state).securityPoolError).toBe('No market found for that ID')
+		expect(requireState(state).securityPoolError).toBe('No question found for that ID.')
 		renderedNotFound.cleanup()
 		cleanupRenderedComponent = undefined
 
@@ -273,7 +273,7 @@ describe('useSecurityPoolCreation', () => {
 		await act(async () => {
 			await requireState(state).loadMarketById('0xb')
 		})
-		expect(requireState(state).securityPoolError).toBe('Failed to load market. Reason: backend offline')
+		expect(requireState(state).securityPoolError).toBe('Failed to load the question. Reason: backend offline.')
 	})
 
 	test('loadMarketById ignores stale results when market lookups resolve out of order', async () => {
@@ -771,7 +771,7 @@ describe('useSecurityPoolCreation', () => {
 			})
 
 			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
-			expect(requireState(state).securityPoolError).toBe('Action canceled in wallet.')
+			expect(requireState(state).securityPoolError).toBe('Rejected in wallet.')
 			const reviewSignal = requireState(state).securityPoolReviewAbortSignal
 			expect(requireState(state).securityPoolReviewAbortSignal).toBeUndefined()
 			expect(embeddedTransactionSteps.value).toBeUndefined()
@@ -978,7 +978,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
-		expect(requireState(state).securityPoolCreationFeedback?.status.detail).toContain('only be deployed for binary markets')
+		expect(requireState(state).securityPoolCreationFeedback?.status.detail).toContain('only be created for binary Yes / No questions')
 		expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
 		expect(requireState(state).marketDetails?.title).toBe('Question B')
 	})
@@ -1042,7 +1042,7 @@ describe('useSecurityPoolCreation', () => {
 		await act(async () => {
 			await requireState(state).createPool()
 		})
-		expect(requireState(state).securityPoolError).toBe('Security pool creation already in progress')
+		expect(requireState(state).securityPoolError).toBe('Security pool creation is already in progress.')
 
 		if (pendingCreate === undefined) {
 			throw new Error('Expected deferred createSecurityPool promise')

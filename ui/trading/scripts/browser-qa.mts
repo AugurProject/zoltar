@@ -181,7 +181,7 @@ const scenarios = [
 		height,
 		path: `${deployedSimulationPath}#/security-pools`,
 		evaluate: openSeededPool,
-		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/create-market/') && document.title === 'Create new market · Statoblast Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Create' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
+		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/create-market/') && document.title === 'Create market · Statoblast Trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Create' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
 	})),
 	...(
 		[
@@ -229,7 +229,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/help`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('How the market works')}); return document.title === 'Help · Statoblast Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelectorAll('.explanation-flow article').length === 4 })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('How the market works')}); return document.title === 'How the market works · Statoblast Trading' && document.querySelector('.tab-nav-more-trigger.active') !== null && document.querySelectorAll('.explanation-flow article').length === 4 })()`,
 	})),
 	...(
 		[

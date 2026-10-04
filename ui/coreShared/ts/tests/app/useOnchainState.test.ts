@@ -229,7 +229,7 @@ void describe('loadWalletState', () => {
 
 		await load.loadPromise
 
-		expect(load.observed.errorMessage ?? '').toBe(`Failed to refresh wallet balances. Reason: ${failingBalance.toLowerCase()} rpc failed`)
+		expect(load.observed.errorMessage ?? '').toBe(`Failed to refresh wallet balances. Reason: ${failingBalance.toLowerCase()} rpc failed.`)
 		expect(load.observed.accountState.chainId).toBe('0x123')
 		expect(load.observed.accountState.ethBalanceAttoEth).toBe(ethBalanceAttoEth)
 		expect(load.observed.accountState.wethBalanceAttoEth).toBe(wethBalanceAttoEth)

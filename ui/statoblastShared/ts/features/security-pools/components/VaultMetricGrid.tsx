@@ -76,7 +76,7 @@ export function VaultMetricGrid({
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
-				<MetricField label={securityPoolCopy.exposureSupported}>
+				<MetricField label={securityPoolCopy.commitmentLimit}>
 					<VaultExposureValue capacity={underwritingLimitAttoEth} />
 				</MetricField>
 				<MetricField label={commonCopy.poolHeldVaultRepBackingAttoRep}>
@@ -98,7 +98,7 @@ export function VaultMetricGrid({
 			)}
 			<div className='vault-detail-hero'>
 				<div className='vault-detail-hero-primary'>
-					<span>{securityPoolCopy.exposureSupported}</span>
+					<span>{securityPoolCopy.commitmentLimit}</span>
 					<strong>
 						<VaultExposureValue capacity={underwritingLimitAttoEth} />
 					</strong>

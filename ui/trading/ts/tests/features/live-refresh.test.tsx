@@ -565,7 +565,7 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => walletHolding('Wallet Yes') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
+		await waitForDom(() => walletHolding('Wallet Yes') === '—' && document.body.textContent?.includes('Loading balances…') === true && balanceLoads > 0, 'first balance read in flight')
 		await settle(150)
 		expect(balanceLoads).toBe(1)
 		releaseBalances()
@@ -717,7 +717,7 @@ describe('live market refresh', () => {
 		if (star === null) throw new Error('Favorite control missing')
 		await act(() => star.click())
 		expect(document.querySelectorAll('.market-record')).toHaveLength(0)
-		expect(document.body.textContent).toContain('No favorite markets.')
+		expect(document.body.textContent).toContain('No favorite markets yet')
 	})
 
 	test('pool favorites are searchable, stay separate from markets, and retain ended pools for details', async () => {
@@ -753,7 +753,7 @@ describe('live market refresh', () => {
 		await act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity')?.click())
 		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
 		await act(() => render(view('create-market'), rendered.container))
-		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently saved')
+		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently added')
 	})
 
 	test('the liquidity route exposes its controls on narrow screens without opening a dialog', async () => {

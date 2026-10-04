@@ -13,6 +13,7 @@ import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
 import { createTradingPublicClient, publicErrorMessage, settlementAvailability, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
+import * as appCopy from '../copy/app.js'
 import * as settlementCopy from '../copy/settlement.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { resolvedShareOutcome } from '../protocol/settlement.js'
@@ -25,7 +26,7 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, settlementBalanceLabel, settlementBalanceStatus, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
 import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
@@ -72,8 +73,8 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
 	let inputBlocker = settlementInputBlocker(operation, unavailableReason, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
 	if (operation === 'migrate-shares' && operationAvailable) {
-		if (forkContextState === 'loading' || forkContextState === 'idle') inputBlocker = settlementCopy.loadingForkDetailsReason
-		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailableReason
+		if (forkContextState === 'loading' || forkContextState === 'idle') inputBlocker = settlementCopy.loadingForkDetails
+		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailable
 		else inputBlocker ??= forkMigrationBatchBlocker(selectedForkTargets)
 	}
 	const workflowController = useSettlementWorkflowController({
@@ -136,7 +137,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 			.catch(caught => {
 				if (!active) return
 				setForkContextState('error')
-				setForkContextError(publicErrorMessage(caught, settlementCopy.forkDetailsLoadFailed))
+				setForkContextError(publicErrorMessage(caught, settlementCopy.forkDetailsUnavailable))
 			})
 		return () => {
 			active = false
@@ -175,7 +176,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 									id={amountId}
 									name='amount'
 									value={amount}
-									placeholder={workflowCopy.amountPlaceholder}
+									placeholder={workflowCopy.zeroDecimalPlaceholder}
 									autoComplete='off'
 									disabled={workflowLocked}
 									inputMode='decimal'
@@ -206,14 +207,14 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 						</>
 					)
 				if (operation === 'redeem-winning-shares')
-					return <UserMessage className='detail' detail={<>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</>} />
+					return <UserMessage className='detail' detail={<>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.formatWinningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</>} />
 				return (
 					<>
 						<UserMessage className='detail' detail={<>{settlementCopy.migrationGuidance}</>} />
 						<div className='field'>
-							<span>{settlementCopy.sourceShare}</span>
+							<span>{settlementCopy.shareToMigrate}</span>
 							<EnumDropdown
-								ariaLabel={settlementCopy.sourceShare}
+								ariaLabel={settlementCopy.shareToMigrate}
 								value={sourceOutcome}
 								disabled={workflowLocked}
 								options={[
@@ -227,14 +228,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 								}}
 							/>
 						</div>
-						<UserMessage
-							className='detail'
-							detail={
-								<>
-									{settlementCopy.selectedSourceBalance} {settlementBalanceLabel(balanceState, sourceBalance, market, sourceOutcome)}
-								</>
-							}
-						/>
+						<UserMessage className='detail' detail={<>{settlementBalanceStatus(balanceState, sourceBalance, market, sourceOutcome)}</>} />
 						{forkContextState === 'loading' || forkContextState === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : null}
 						{forkContextState === 'error' ? (
 							<>
@@ -266,7 +260,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 					</>
 				)
 			})()}
-			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
+			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError)} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={actionAvailability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submitCurrent()}>
 				{approval?.operation === 'redeem-complete-set' ? (
 					<section className='trade-estimate' aria-label={settlementCopy.estimateHeading}>

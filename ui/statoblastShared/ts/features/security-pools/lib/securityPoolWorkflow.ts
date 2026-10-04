@@ -1,5 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as vaultOperationsCopy from '../../../copy/vaultOperations.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { deriveHasForkActivity, getForkAuctionStageView, type ForkAuctionStageView } from '../../truth-auctions/lib/forkAuction.js'
@@ -21,7 +22,7 @@ const LEGACY_SELECTED_POOL_VIEWS = ['resolution', 'withdraw-escalation-deposits'
 export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 	switch (view) {
 		case 'vault-operations':
-			return 'Vault operations'
+			return vaultOperationsCopy.title
 		case 'vaults':
 			return 'Vaults'
 		case 'trading':

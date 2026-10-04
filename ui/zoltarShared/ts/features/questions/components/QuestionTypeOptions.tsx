@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
@@ -44,7 +45,7 @@ export function QuestionTypeOptions({ allowedMarketTypes, disabled, onChange, va
 	if (onlyType !== undefined && allowedMarketTypes.length === 1)
 		return (
 			<div className='question-type-options'>
-				<span className='question-type-options-label'>{marketCopy.questionType}</span>
+				<span className='question-type-options-label'>{commonCopy.questionType}</span>
 				<div className='question-type-fixed'>
 					<QuestionTypeCopy marketType={onlyType} showExample={false} />
 				</div>
@@ -52,7 +53,7 @@ export function QuestionTypeOptions({ allowedMarketTypes, disabled, onChange, va
 		)
 	return (
 		<fieldset className='question-type-options' disabled={disabled}>
-			<legend>{marketCopy.questionType}</legend>
+			<legend>{commonCopy.questionType}</legend>
 			<div className='question-type-option-list'>
 				{allowedMarketTypes.map(marketType => {
 					const optionId = `market-create-type-${marketType}`

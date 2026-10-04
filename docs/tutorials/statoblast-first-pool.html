@@ -41,7 +41,7 @@
 				<h2>Back the pool with REP</h2>
 				<ol>
 					<li>On the pool page, under <strong>Vault actions</strong>, select <strong>Deposit REP</strong>.</li>
-					<li>Enter <code>1000</code> in <strong>REP backing</strong>, select <strong>Approve 1k REP</strong>, and confirm the approval.</li>
+					<li>Enter <code>1000</code> in <strong>REP deposit amount</strong>, select <strong>Approve 1k REP</strong>, and confirm the approval.</li>
 					<li>When <strong>Approved REP</strong> reads 1 000.00 REP, select <strong>Deposit REP</strong> and confirm. The deposit creates your vault.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-deposit-rep" aria-labelledby="fig-statoblast-deposit-rep-caption">
@@ -54,7 +54,7 @@
 				<p>REP alone does not let the pool take collateral. Your <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a> is the ETH amount you agree to cover, and changing it needs a fresh REP/ETH price from <a href="../reference/glossary.html#open-oracle">OpenOracle</a>.</p>
 				<ol>
 					<li>Select <strong>Set commitment limit</strong>.</li>
-					<li>Enter <code>3</code> in <strong>OpenOracle REP per ETH starting price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
+					<li>Enter <code>3</code> in <strong>Initial report price (REP per ETH)</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
 					<li>Enter <code>10</code> in <strong>Commitment limit</strong>. The form prepares the funding requirements and keeps the send button disabled until they are met.</li>
 					<li>Approve WETH and REP with their separate buttons. Each approval has an editable amount; use the suggested amounts for this tutorial.</li>
 					<li>Select <strong>Set commitment limit</strong> and confirm that transaction. It funds a new price report and stages your change; the vault shows it as a staged operation.</li>
@@ -86,7 +86,7 @@
 				<h2>Mint a complete set</h2>
 				<ol>
 					<li>Select <strong>Open shares</strong>, then <strong>Mint complete sets</strong>.</li>
-					<li>Enter <code>1</code> in <strong>Mint complete sets amount</strong>, select <strong>Mint complete sets</strong>, and confirm.</li>
+					<li>Enter <code>1</code> in <strong>ETH to mint with</strong>, select <strong>Mint complete sets</strong>, and confirm.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-mint" aria-labelledby="fig-statoblast-mint-caption">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/mint-complete-sets.png"><img width="768" height="487" src="../assets/screenshots/statoblast/mint-complete-sets.png" alt="The Mint complete sets dialog showing 10.00 ETH available to mint, 1 ETH entered, and an enabled Mint complete sets button." loading="lazy" /></a>

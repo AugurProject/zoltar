@@ -167,10 +167,10 @@ describe('ZoltarRoutes', () => {
 			expect(loadZoltarQuestion).toHaveBeenCalledTimes(1)
 		})
 
-	test('shows the switch-network state in the REP tile for a connected wrong-network wallet', async () => {
+	test('shows the wrong-network state in the REP tile for a connected wrong-network wallet', async () => {
 		const { queries } = await renderRoute('overview', createUniverse({ hasForked: false }), 'ready', undefined, {}, '0x1')
-		expect(queries.queryByText('Connect a wallet') === null).toBe(true)
-		expect(document.body.textContent).toContain('Switch network')
+		expect(queries.queryByText('Wallet not connected') === null).toBe(true)
+		expect(queries.getByText('Wrong network')).toBeTruthy()
 	})
 
 	test('offers Fork and a migration preview in an unforked universe', async () => {
@@ -214,7 +214,7 @@ describe('ZoltarRoutes', () => {
 
 	test('mounts the migration workflow on the Migrate route of a forked universe', async () => {
 		const { queries } = await renderRoute('migrate', createUniverse())
-		expect(queries.getByRole('heading', { name: 'Choose outcomes' })).toBeTruthy()
+		expect(queries.getByRole('heading', { name: 'Select outcomes' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Deploy No universe' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelectorAll('.migration-wizard-steps button')).toHaveLength(4)
@@ -229,14 +229,14 @@ describe('ZoltarRoutes', () => {
 
 	test('retries missing migration details in place when the retained overview read fails', async () => {
 		const reads: Array<{ clearCurrentState?: boolean } | undefined> = []
-		const { queries } = await renderRoute('migrate', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }), 'ready', 'Failed to load Zoltar universe. Reason: RPC unavailable', {
+		const { queries } = await renderRoute('migrate', createUniverse({ childUniverses: [], relatedUniversesLoaded: false }), 'ready', 'Failed to load Zoltar universe. Reason: RPC unavailable.', {
 			loadZoltarUniverse: async options => {
 				reads.push(options)
 				return undefined
 			},
 		})
 		expect(document.querySelector('.migration-wizard')).toBeNull()
-		expect(queries.getByText('Failed to load Zoltar universe. Reason: RPC unavailable')).toBeTruthy()
+		expect(queries.getByText('Failed to load Zoltar universe. Reason: RPC unavailable.')).toBeTruthy()
 		await act(() => queries.getByRole('button', { name: 'Retry' }).click())
 		expect(reads).toEqual([{ clearCurrentState: false }])
 	})
@@ -273,7 +273,7 @@ describe('ZoltarRoutes', () => {
 		const { queries, retries } = await renderRoute('universes', undefined, 'unknown', 'RPC unavailable')
 		expect(queries.getByText('Universe details could not be loaded.')).toBeTruthy()
 		expect(queries.queryByText('RPC unavailable')).toBeNull()
-		expect(queries.queryByText('Loading universe details.')).toBeNull()
+		expect(queries.queryByText('Loading universe details…')).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Retry' }))
 		expect(retries).toEqual(['universe'])
 		await cleanupRenderedComponent?.()
@@ -325,7 +325,7 @@ describe('ZoltarRoutes', () => {
 		const { queries, viewChanges } = await renderRoute('overview', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
 		expect(queries.getByText('Alpha')).toBeTruthy()
-		expect(queries.getByText('This universe forked. Move your REP into the outcome universes you back.')).toBeTruthy()
+		expect(queries.getByText('This universe forked. Migrate your REP into the child universes you back.')).toBeTruthy()
 		expect(queries.getByText('Open, no deadline')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')
 		if (!(nextStep instanceof HTMLElement)) throw new Error('Expected the next step')

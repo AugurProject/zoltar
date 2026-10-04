@@ -70,7 +70,7 @@ export function VaultBackingFactorForm({
 	let limitAttoEth: bigint | undefined
 	let error: string | undefined
 	try {
-		limitAttoEth = parseEthAmountInput(limit, securityPoolCopy.vaultBackingFactor)
+		limitAttoEth = parseEthAmountInput(limit, securityPoolCopy.commitmentLimit)
 		nextLimit = limitAttoEth
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
@@ -104,7 +104,7 @@ export function VaultBackingFactorForm({
 				error={error}
 				errorId={errorId}
 				errorRevealed={errorRevealed}
-				hint={securityPoolCopy.vaultBackingFactorHelp}
+				hint={securityPoolCopy.commitmentLimitHelpText}
 				label={securityPoolCopy.commitmentLimit}
 				onChange={setLimit}
 				onErrorRevealedChange={setErrorRevealed}
@@ -113,10 +113,10 @@ export function VaultBackingFactorForm({
 			/>
 			<MetricGrid>
 				{directExecution ? undefined : <MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>}
-				<MetricField label={securityPoolCopy.currentCapacity}>
+				<MetricField label={securityPoolCopy.currentCommitment}>
 					<VaultExposureValue capacity={details?.underwritingLimitAttoEth} />
 				</MetricField>
-				<MetricField label={securityPoolCopy.resultingCapacity}>
+				<MetricField label={securityPoolCopy.resultingCommitment}>
 					<VaultExposureValue capacity={nextLimit} />
 				</MetricField>
 				{directExecution ? undefined : (
@@ -130,7 +130,7 @@ export function VaultBackingFactorForm({
 			{maximum === undefined && !directExecution ? <UserMessage className='detail' detail={securityPoolCopy.commitmentPriceUnavailable} /> : undefined}
 			{unsafe ? (
 				<>
-					<UserMessage className='detail' tone='warning' detail={securityPoolCopy.commitmentRiskWarning} />
+					<UserMessage className='detail' tone='warning' detail={executionRepPerEthPrice === undefined ? securityPoolCopy.commitmentRiskAtUiPriceWarning : securityPoolCopy.commitmentRiskAtOraclePriceWarning} />
 					<label className='commitment-risk-confirmation'>
 						<input type='checkbox' checked={acknowledgedRisk === riskKey} disabled={fieldsLocked} onChange={event => setAcknowledgedRisk(event.currentTarget.checked ? riskKey : undefined)} />
 						<span>{securityPoolCopy.commitmentRiskAcknowledgement}</span>
@@ -141,7 +141,7 @@ export function VaultBackingFactorForm({
 			<OracleOperationActions
 				prepared={prepared}
 				operationKey={preparationKey}
-				actionLabel={securityPoolCopy.setVaultUnderwritingLimit}
+				actionLabel={securityPoolCopy.setCommitmentLimit}
 				pendingLabel={securityPoolCopy.settingCommitmentLimitPending}
 				requiresReportFunding={needsInitialPrice}
 				directExecution={directExecution}
@@ -163,7 +163,7 @@ export function VaultBackingFactorModal({ result, error, children, ...props }: O
 		<OperationModal
 			{...props}
 			closeDisabled={props.closeDisabled || (props.embedTransactionSteps === false && transactionSteps.value?.steps.some(step => step.phase === 'wallet') === true)}
-			title={securityPoolCopy.setVaultUnderwritingLimit}
+			title={securityPoolCopy.setCommitmentLimit}
 			closeOnSuccessKey={result?.action === 'setVaultUnderwritingLimit' && result.stagedExecution?.success !== false ? result.hash : undefined}
 		>
 			{children}

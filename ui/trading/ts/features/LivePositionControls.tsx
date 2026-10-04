@@ -10,7 +10,7 @@ import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
-import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk, marketSettlementPath, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import { positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
@@ -60,11 +60,11 @@ export type TicketBalances = Readonly<{
 }>
 
 function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined) {
-	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : ticketCopy.walletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
+	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : workflowCopy.formatWalletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
 	// The sellable amount only needs saying when INVALID coverage or pool depth holds it below the holding.
-	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeQuantity(holding, side, 4, 'down'))
+	if (model.sellable >= holding) return workflowCopy.formatHolding(formatOutcomeQuantity(holding, side, 4, 'down'))
 	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side, 4, 'down'), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
 }
 
@@ -141,7 +141,7 @@ export function LivePositionControls({
 			{closed ? (
 				<UserMessage
 					className='trade-ticket-closed'
-					detail={ticketCopy.tradingEndedDetail}
+					detail={ticketCopy.formatTradingEndedDetail(marketSettlementPath(market))}
 					actions={
 						onOpenSettlement === undefined ? undefined : (
 							<button type='button' className='secondary' onClick={onOpenSettlement}>
@@ -185,7 +185,7 @@ export function LivePositionControls({
 					id={amountId}
 					name='amount'
 					value={ticket.amount}
-					placeholder={workflowCopy.amountPlaceholder}
+					placeholder={workflowCopy.zeroDecimalPlaceholder}
 					disabled={controlsDisabled}
 					inputMode='decimal'
 					autoComplete='off'

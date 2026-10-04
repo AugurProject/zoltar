@@ -34,7 +34,7 @@ export function MainnetDisabledNotice() {
 	if (!visible || backend.id === 'simulation') return undefined
 	return (
 		<WarningSurface role='alert' surface='flat' variant='prominent' className='mainnet-disabled-notice'>
-			<strong className='notice-title'>{appCopy.mainnetDisabled}</strong>
+			<strong className='notice-title'>{appCopy.mainnetDisabledTitle}</strong>
 			<p>{appCopy.mainnetDisabledDetail}</p>
 		</WarningSurface>
 	)

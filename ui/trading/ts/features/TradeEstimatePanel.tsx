@@ -9,6 +9,8 @@ import { formatRoundedUnits } from '../lib/format.js'
 import { averagePriceBps, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveMarket } from '../protocol/live.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { formatEthAmount } from '../copy/outcomes.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import * as payoutCopy from '../copy/payout.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
@@ -68,7 +70,7 @@ export function TradeEstimatePanel({
 			? [{ label: ticketCopy.youReceiveEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) }]
 			: [
 					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(estimate.quote.totalLongShares, side, ESTIMATE_DIGITS) },
-					{ label: ticketCopy.youReceiveEstimate, value: `${formatRoundedUnits(estimate.receiveAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
+					{ label: ticketCopy.youReceiveEstimate, value: formatEthAmount(formatRoundedUnits(estimate.receiveAttoEth, 18, ESTIMATE_DIGITS)) },
 				]
 	const average = estimate.kind === 'entry' ? averagePriceBps(estimate.payAttoEth, estimate.quote.totalLongShares, market) : undefined
 	const detailRows = [
@@ -76,10 +78,10 @@ export function TradeEstimatePanel({
 		...(estimate.kind === 'entry'
 			? [
 					{ label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite) },
-					{ label: ticketCopy.averagePrice, value: average === undefined ? '—' : formatScaledPercentage(average, 2) },
+					{ label: ticketCopy.averagePrice, value: average === undefined ? commonCopy.metricUnavailablePlaceholder : formatScaledPercentage(average, 2) },
 				]
 			: [{ label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side) }]),
-		{ label: ticketCopy.poolFeePaid, value: formatOutcomeQuantity(estimate.quote.feeAmount, estimate.kind === 'entry' ? opposite : side, 8) },
+		{ label: ticketCopy.tradingFeePaid, value: formatOutcomeQuantity(estimate.quote.feeAmount, estimate.kind === 'entry' ? opposite : side, 8) },
 	]
 	return (
 		<section className='trade-estimate' aria-label={ticketCopy.estimateHeading}>
@@ -87,10 +89,10 @@ export function TradeEstimatePanel({
 				variant='inline'
 				primary={primary}
 				details={[
-					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
+					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : formatEthAmount(formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)) },
 					{ label: ticketCopy.priceImpact, value: <span className={`trade-impact-value trade-impact-value--${impactTier}`}>{impact}</span> },
 					{ label: estimate.kind === 'entry' ? ticketCopy.invalidInsurance : ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.kind === 'entry' ? estimate.quote.invalidInsurance : estimate.quote.invalidRequired, shareOutcome.invalid) },
-					{ label: ticketCopy.poolFee, value: formatScaledPercentage(market.feeBps, 2) },
+					{ label: ticketCopy.tradingFee, value: formatScaledPercentage(market.feeBps, 2) },
 				]}
 			/>
 			<p className='visually-hidden' role='status'>
@@ -102,7 +104,7 @@ export function TradeEstimatePanel({
 					className='detail payout-note'
 					detail={
 						<>
-							<strong>{payoutCopy.conditionalPayout(formatCollateralEth(estimate.quote.totalLongShares, market), side)}</strong>
+							<strong>{payoutCopy.formatConditionalPayout(formatCollateralEth(estimate.quote.totalLongShares, market), side)}</strong>
 							{' · '}
 							{payoutCopy.otherwiseZero}
 						</>

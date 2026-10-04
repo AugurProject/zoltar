@@ -135,7 +135,7 @@ describe('settlement panel', () => {
 			expect(amountInput().value).toBe('2')
 			expect(buttonByLabel('Redeem complete sets').disabled).toBe(false)
 			expect(document.querySelector('.trade-estimate')?.textContent?.replaceAll('\u00a0', ' ')).toContain('2 ETH')
-			expect(document.querySelector('.trade-estimate')?.textContent).toContain('Estimate from the current collateral rate. Rechecked before submitting.')
+			expect(document.querySelector('.trade-estimate')?.textContent).toContain('Estimate from the current collateral rate. Rechecked before your wallet opens.')
 			expect(document.body.textContent).not.toContain('Getting a quote')
 			await act(async () => await Bun.sleep(400))
 			expect(walletRequests).toBe(0)
@@ -161,20 +161,20 @@ describe('settlement panel', () => {
 		const rendered = await renderPanel(closedMarket, { invalid: 0n, yes: 10n ** 18n, no: 10n ** 18n })
 		try {
 			expect(document.body.textContent).not.toContain('lifecycle state or wallet balances')
-			expect(operationButton('Fork migration').disabled).toBe(true)
-			expect(operationButton('Fork migration').getAttribute('aria-description')).toBe('The universe has not forked, so there is nothing to migrate.')
-			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Fork migration unavailable: The universe has not forked, so there is nothing to migrate.'])
+			expect(operationButton('Migrate').disabled).toBe(true)
+			expect(operationButton('Migrate').getAttribute('aria-description')).toBe('The universe has not forked, so there is nothing to migrate.')
+			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Migrate unavailable: The universe has not forked, so there is nothing to migrate.'])
 			// The disabled option is described by the visible reason, not only by a tooltip.
-			const migrationReasonId = operationButton('Fork migration').getAttribute('aria-describedby')
+			const migrationReasonId = operationButton('Migrate').getAttribute('aria-describedby')
 			expect(migrationReasonId).not.toBeNull()
 			expect(document.getElementById(migrationReasonId ?? '')?.closest('.operation-switcher-reasons')).not.toBeNull()
-			expect(describedText(operationButton('Fork migration'))).toBe('Fork migration unavailable: The universe has not forked, so there is nothing to migrate.')
+			expect(describedText(operationButton('Migrate'))).toBe('Migrate unavailable: The universe has not forked, so there is nothing to migrate.')
 			expect(Array.from(document.querySelectorAll('.operation-switcher .view-tab:not([disabled])')).every(option => !option.hasAttribute('aria-describedby'))).toBe(true)
 			// Without complete sets there is nothing to fill, and the action names the missing INVALID.
 			expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Max')).toBe(false)
 			const redeem = buttonByLabel('Redeem complete sets')
 			expect(redeem.disabled).toBe(true)
-			expect(describedText(redeem)).toContain('You hold no complete sets. Redeeming needs equal Invalid, Yes, and No shares.')
+			expect(describedText(redeem)).toContain('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		} finally {
 			await rendered.cleanup()
 		}

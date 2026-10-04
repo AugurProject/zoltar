@@ -15,12 +15,15 @@ import { previewVaultOperations } from '../lib/preview.js'
 import { getVaultRedeemRepGuardMessage } from '../../security-pools/lib/securityVaultGuards.js'
 import * as copy from '../../../copy/vaultOperations.js'
 import * as priceRequestCopy from '../../../copy/priceRequest.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
+import { getPoolExecutionFailureSentence } from '../../security-pools/lib/liquidation.js'
 
 import { vaultOperationsDependencies, type VaultOperationsDependencies } from './dependencies.js'
 
 import { getVaultOperationsSession, isTerminalVaultOperation } from './session.js'
 
-const failureMessage = (failure: unknown, fallback: string) => getErrorDetail(failure) ?? fallback
+// Pool revert reasons are terse contract strings, so they are translated like the liquidation dialog's failures.
+const failureMessage = (failure: unknown, fallback: string) => getPoolExecutionFailureSentence(getErrorDetail(failure)) ?? fallback
 
 export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOperationsParameters, contextKey: string, dependencies: VaultOperationsDependencies = vaultOperationsDependencies, onPoolChanged: (totalCommitment?: bigint) => void = () => {}) {
 	const owner = parameters.accountAddress
@@ -143,7 +146,7 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 							session.presentedTerminal = true
 							onPoolChanged()
 							if (state.status === 'executed') parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: copy.success, tone: 'success', universeId: pool.universeId })
-							else parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: state.execution?.errorMessage || copy.failure, tone: 'error', universeId: pool.universeId })
+							else parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: copy.failure, detail: getPoolExecutionFailureSentence(state.execution?.errorMessage), tone: 'error', universeId: pool.universeId })
 						})(),
 					])
 					if (isCurrent()) readError.value = undefined
@@ -256,16 +259,16 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 
 	const claimReason = (action: 'fees' | 'redeem') => {
 		if (owned.value === undefined || resolved.value === undefined) return copy.loading
-		if (action === 'fees') return owned.value.claimableFeesAttoEth > 0n ? undefined : copy.noFees
+		if (action === 'fees') return owned.value.claimableFeesAttoEth > 0n ? undefined : securityPoolCopy.noClaimableFeesReason
 		if (pool.questionOutcome === 'none') return copy.questionNotFinal
 		return getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: owned.value.disputeStakedAttoRep, redeemableRepAmountAttoRep: owned.value.vaultAttoRepBacking, underwritingLimitAttoEth: owned.value.underwritingLimitAttoEth })
 	}
 	const submit = async (claimAction?: 'fees' | 'redeem') => {
 		if (busy.value || readError.value !== undefined) return
 		if (claimAction !== undefined ? claimReason(claimAction) !== undefined : input === undefined || quote.value === undefined || inputError !== undefined) return
-		let submittedTitle = resolved.value ? copy.confirmedCommitment : copy.submit
-		if (claimAction === 'fees') submittedTitle = copy.claimFees
-		else if (claimAction === 'redeem') submittedTitle = copy.redeemRep
+		let submittedTitle = resolved.value ? copy.reducingCommitment : copy.submitting
+		if (claimAction === 'fees') submittedTitle = copy.claimingFees
+		else if (claimAction === 'redeem') submittedTitle = copy.redeemingRep
 		const snapshot = input
 		busy.value = true
 		session.busyAction.value = claimAction ?? 'bundle'

@@ -1,5 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
+import * as vaultOperationsCopy from '../../../copy/vaultOperations.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { ForkAuctionDetails, ListedSecurityPool, OracleQueueOperation } from '../../../types/contracts.js'
 
@@ -26,11 +28,11 @@ export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool 
 export function getPendingOperationLabel(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'vaultOperations':
-			return 'Vault operations'
+			return vaultOperationsCopy.title
 		case 'liquidation':
 			return securityPoolCopy.liquidation
 		case 'setVaultUnderwritingLimit':
-			return securityPoolCopy.setVaultUnderwritingLimit
+			return securityPoolCopy.setCommitmentLimit
 		case 'withdrawRep':
 			return securityPoolCopy.withdrawRep
 		default:
@@ -41,14 +43,14 @@ export function getPendingOperationLabel(operation: OracleQueueOperation) {
 export function getPendingOperationAmountPresentation(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'vaultOperations':
-			return { summaryLabel: 'Price actions', suffix: 'actions', units: 0 }
+			return { summaryLabel: undefined, suffix: 'price actions', units: 0 }
 		case 'liquidation':
-			return { summaryLabel: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, units: 18 }
+			return { summaryLabel: liquidationCopy.requestedLiquidationDebt, suffix: commonCopy.eth, units: 18 }
 		case 'withdrawRep':
 			// The action heading and REP amount already identify a withdrawal.
 			return { summaryLabel: undefined, suffix: commonCopy.rep, units: 18 }
 		case 'setVaultUnderwritingLimit':
-			return { summaryLabel: securityPoolCopy.vaultBackingFactor, suffix: commonCopy.eth, units: 18 }
+			return { summaryLabel: securityPoolCopy.commitmentLimit, suffix: commonCopy.eth, units: 18 }
 		default:
 			return assertNever(operation)
 	}

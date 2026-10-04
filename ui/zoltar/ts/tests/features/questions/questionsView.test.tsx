@@ -52,12 +52,12 @@ type ViewOverrides = {
 	zoltarQuestionsError?: string | undefined
 }
 
-function view({ canFork = false, loadPage = async () => undefined, onActiveViewChange = () => undefined, onZoltarForkQuestionIdChange = () => undefined, requestContextKey = 0, zoltarQuestionPage, zoltarQuestionsError }: ViewOverrides = {}) {
+function view({ canFork = false, hasForked = false, loadPage = async () => undefined, onActiveViewChange = () => undefined, onZoltarForkQuestionIdChange = () => undefined, requestContextKey = 0, zoltarQuestionPage, zoltarQuestionsError }: ViewOverrides = {}) {
 	return (
 		<QuestionsView
 			zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
 			canFork={canFork}
-			hasForked={false}
+			hasForked={hasForked}
 			loadingZoltarQuestions={false}
 			onActiveViewChange={onActiveViewChange}
 			onLoadZoltarQuestionPage={loadPage}
@@ -133,7 +133,7 @@ describe('QuestionsView', () => {
 			await Promise.resolve()
 		})
 		expect(getRenderedQuestionTitles()).toEqual(['Numbered question 1', 'Numbered question 2'])
-		expect(documentQueries.getByText('10 of 12 questions scanned')).not.toBeNull()
+		expect(documentQueries.getByText('10 of 12 questions checked')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Favorites (0)' })).not.toBeNull()
 
 		const details = document.querySelectorAll('details')[1]
@@ -215,9 +215,9 @@ describe('QuestionsView', () => {
 			await Promise.resolve()
 			await Promise.resolve()
 		})
-		expect(documentQueries.getByText('Unable to load questions.')).not.toBeNull()
+		expect(documentQueries.getByText('Questions could not be loaded.')).not.toBeNull()
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
 			await Promise.resolve()
 		})
 		expect(loadPage).toHaveBeenCalledTimes(2)
@@ -244,6 +244,20 @@ describe('QuestionsView', () => {
 		expect(activeViews).toEqual(['create'])
 	})
 
+	test('does not promise forking in a universe that has already forked', async () => {
+		seedQuestions([question])
+		const renderedComponent = await renderIntoDocument(view({ canFork: true, hasForked: true }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(
+			within(document.body)
+				.getByRole('button', { name: /^Universe already forked/ })
+				.hasAttribute('disabled'),
+		).toBe(true)
+		expect(document.body.textContent).not.toContain('fork this universe')
+		expect(within(document.body).getByText('Find reusable questions in the global registry and inspect their resolution terms.')).toBeDefined()
+	})
+
 	test('omits universe fork actions when no universe is available', async () => {
 		seedQuestions([question])
 		const renderedComponent = await renderIntoDocument(view())
@@ -251,7 +265,7 @@ describe('QuestionsView', () => {
 
 		expect(within(document.body).queryByRole('button', { name: 'Use for fork' })).toBeNull()
 		expect(within(document.body).getByText(question.title)).toBeDefined()
-		expect(document.body.textContent).not.toContain('fork the active universe')
+		expect(document.body.textContent).not.toContain('fork this universe')
 		expect(within(document.body).getByText('Find reusable questions in the global registry and inspect their resolution terms.')).toBeDefined()
 	})
 

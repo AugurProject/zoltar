@@ -229,7 +229,7 @@ describe('truth auction hooks', () => {
 		})
 		const hook = await renderHook(useTruthAuctionBookData, createBookProps(readClient))
 		await waitFor(() => {
-			expect(hook.state().viewerTruthAuctionBidsError).toBe('Failed to load your truth auction bids. Reason: Wallet bid RPC unavailable')
+			expect(hook.state().viewerTruthAuctionBidsError).toBe('Failed to load your truth auction bids. Reason: Wallet bid RPC unavailable.')
 		})
 		expect(hook.state().truthAuctionBookError).toBeUndefined()
 		expect(hook.state().hasLoadedTruthAuctionBook).toBe(true)
@@ -269,7 +269,7 @@ describe('truth auction hooks', () => {
 		})
 		const hook = await renderHook(useTruthAuctionBookData, createBookProps(readClient))
 		await waitFor(() => {
-			expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction bids across the visible price levels. Reason: Public bids RPC unavailable')
+			expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction bids across the visible price levels. Reason: Public bids RPC unavailable.')
 		})
 		expect(hook.state().viewerTruthAuctionBidsError).toBeUndefined()
 		expect(hook.state().hasLoadedViewerTruthAuctionBids).toBe(true)
@@ -300,7 +300,7 @@ describe('truth auction hooks', () => {
 		})
 		const hook = await renderHook(useTruthAuctionBookData, createBookProps(readClient, { accountAddress: undefined }))
 		await waitFor(() => {
-			expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: RPC unavailable')
+			expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: RPC unavailable.')
 		})
 		await act(() => {
 			hook.state().retryPublicTruthAuctionBook()
@@ -333,14 +333,14 @@ describe('truth auction hooks', () => {
 		})
 		const hook = await renderHook(useTruthAuctionBookData, createBookProps(readClient))
 		await waitFor(() => {
-			expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: Public RPC unavailable')
-			expect(hook.state().viewerTruthAuctionBidsError).toBe('Failed to load your truth auction bids. Reason: Old wallet RPC unavailable')
+			expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: Public RPC unavailable.')
+			expect(hook.state().viewerTruthAuctionBidsError).toBe('Failed to load your truth auction bids. Reason: Old wallet RPC unavailable.')
 		})
 
 		await hook.setProps({ accountAddress: otherWalletAddress })
 
 		expect(activeTickCountCalls).toBe(1)
-		expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: Public RPC unavailable')
+		expect(hook.state().truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: Public RPC unavailable.')
 		expect(hook.state().viewerTruthAuctionBidsError).toBeUndefined()
 		expect(hook.state().loadingViewerTruthAuctionBids).toBe(true)
 	})

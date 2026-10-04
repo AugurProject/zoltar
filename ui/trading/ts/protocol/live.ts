@@ -21,7 +21,7 @@ export { settlementAvailability, settlementUnavailability, submitFreshSettlement
 export { submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
 import { publicErrorMessage } from './publicError.js'
 
-export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
+export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -147,13 +147,13 @@ export type SecurityPoolDeployment = Readonly<{
 
 export function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, feeBps: number): LiveMarket {
 	return {
-		loadError: publicErrorMessage(error, 'Market reads failed'),
+		loadError: publicErrorMessage(error, 'Market data could not be read.'),
 		pool: getAddress(deployment.securityPool),
 		pair: undefined,
 		shareToken: getAddress(deployment.shareToken),
 		universeId: deployment.universeId,
 		questionId: deployment.questionId,
-		title: `SecurityPool ${formatQuestionIdHex(deployment.questionId)}`,
+		title: `Security pool ${formatQuestionIdHex(deployment.questionId)}`,
 		description: 'Live market data is temporarily unavailable.',
 		endTime: 0n,
 		statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,
@@ -210,7 +210,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		noReserve = reserves[1]
 		lpTotalSupply = supply
 		feeBps = pairFee
-		tradingStatus = bigintToSafeNumber(pairStatus, 'Pair trading status')
+		tradingStatus = bigintToSafeNumber(pairStatus, 'Trading pool status')
 	}
 	return {
 		pool,
@@ -415,7 +415,7 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 async function simulateEntryWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
 	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
-	if (pairAddress === undefined) throw new Error('Create and initialize the pair before trading')
+	if (pairAddress === undefined) throw new Error('Create the market and add liquidity before trading')
 	const {
 		blockNumber,
 		blockHash,
@@ -438,7 +438,7 @@ export async function simulateEntry(client: WalletClient, configuration: Deploym
 export async function submitFreshEntry(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateEntry>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	const refreshed = await simulateEntryWithExpiry(client, configuration, quote.market, account, quote.side, quote.amount, quote.deadline, quote.slippageBps)
 	const pairAddress = quote.market.pair
-	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
+	if (pairAddress === undefined) throw new Error('The trading pool disappeared while the transaction was checked')
 	const minimumLongShares = retainApprovedMinimum(quote.minimumLongShares, refreshed.result.totalLongShares, 'long shares')
 	return await guardedWrite(async () => {
 		await requireFreshSubmissionWindow(client, quote.market, 'entry', quote.deadline)
@@ -449,7 +449,7 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 async function simulateExitWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
 	requireTransactionSlippageBps(slippageBps)
 	const pairAddress = market.pair
-	if (pairAddress === undefined) throw new Error('Pair is unavailable')
+	if (pairAddress === undefined) throw new Error('The trading pool is unavailable')
 	const {
 		blockNumber,
 		blockHash,
@@ -501,8 +501,8 @@ export async function simulateExit(client: WalletClient, configuration: Deployme
 export async function submitFreshExit(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateExit>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	const refreshed = await simulateExitWithExpiry(client, configuration, quote.market, account, quote.side, quote.completeSets, quote.deadline, quote.slippageBps)
 	const pairAddress = quote.market.pair
-	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
-	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('Yes/No balance no longer covers the approved exit transfer; simulate again')
+	if (pairAddress === undefined) throw new Error('The trading pool disappeared while the transaction was checked')
+	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('Your Yes or No balance no longer covers this sale; try again')
 	const maximumLongShares = retainApprovedMaximum(quote.maximumLongShares, refreshed.result.totalLongShares, 'long shares')
 	const minimumEth = retainApprovedMinimum(quote.minimumEth, refreshed.result.ethOut, 'ETH output')
 	const block = await latestBlockIdentity(client)

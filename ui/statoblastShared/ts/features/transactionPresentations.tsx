@@ -17,6 +17,7 @@ import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/li
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 import { formatInitialReportPriorityFee, formatInitialReportPriorityFeeInput } from './security-pools/lib/priorityFee.js'
 import { getLiquidationExecutionFailureDetail } from './security-pools/lib/liquidation.js'
+import * as liquidationCopy from '../copy/liquidation.js'
 
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeNanoEth?: string | undefined
@@ -79,7 +80,7 @@ type SecurityVaultTransactionContext = {
 function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.repAmountAttoRep === undefined ? [] : [{ label: transactionCopy.amount, value: formatCurrencyBalanceWithUnit(context.repAmountAttoRep, context.repTokenSymbol ?? commonCopy.rep) }]),
+		...(context.repAmountAttoRep === undefined ? [] : [{ label: commonCopy.amount, value: formatCurrencyBalanceWithUnit(context.repAmountAttoRep, context.repTokenSymbol ?? commonCopy.rep) }]),
 		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]),
 		...(context.vaultAddress === undefined || context.vaultAddress.trim() === '' ? [] : [{ label: securityPoolCopy.vault, value: <AddressValue address={context.vaultAddress} /> }]),
 	]
@@ -95,7 +96,7 @@ export function getSecurityVaultActionRepAmount(actionName: SecurityVaultActionR
 }
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
-	if (actionName === 'setVaultUnderwritingLimit') return securityPoolCopy.setVaultUnderwritingLimit
+	if (actionName === 'setVaultUnderwritingLimit') return securityPoolCopy.setCommitmentLimit
 	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
 	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)
@@ -196,7 +197,7 @@ function getLiquidationTransactionRows(context: LiquidationTransactionContext | 
 	return [
 		...(getPoolUniverseTransactionRows(context) ?? []),
 		...(context?.targetVault === undefined || context.targetVault.trim() === '' ? [] : [{ label: commonCopy.targetVault, value: <AddressValue address={context.targetVault} /> }]),
-		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: securityPoolCopy.requestedLiquidationDebt, value: formatValueWithUnit(context.amount.trim(), commonCopy.eth) }]),
+		...(context?.amount === undefined || context.amount.trim() === '' ? [] : [{ label: liquidationCopy.requestedLiquidationDebt, value: formatValueWithUnit(context.amount.trim(), commonCopy.eth) }]),
 	]
 }
 

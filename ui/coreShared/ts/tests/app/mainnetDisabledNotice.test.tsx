@@ -39,7 +39,7 @@ test('notice only shows the notice for a connected mainnet wallet and follows wa
 		restore()
 		dom.cleanup()
 	}
-	const notice = () => within(rendered.container).queryByText('Ethereum mainnet is disabled.')
+	const notice = () => within(rendered.container).queryByText('Ethereum mainnet is disabled')
 	expect(notice()).toBeNull()
 	connected = true
 	refreshAccounts()

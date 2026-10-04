@@ -102,7 +102,7 @@ void describe('deployment helpers', () => {
 				prerequisiteLabel: 'ZoltarQuestionData',
 				step: blockedStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Requires ZoltarQuestionData' })
+		).toEqual({ disabled: true, reason: 'Requires ZoltarQuestionData.' })
 
 		const readyStep = createStep('zoltarQuestionData', false)
 		expect(
@@ -125,7 +125,7 @@ void describe('deployment helpers', () => {
 				prerequisiteLabel: 'ZoltarQuestionData',
 				step: createStep('zoltar', false, ['zoltarQuestionData']),
 			}),
-		).toEqual({ disabled: true, reason: 'Connect wallet to deploy this contract.' })
+		).toEqual({ disabled: true, reason: 'Connect a wallet before deploying this contract.' })
 	})
 
 	void test('getDeploymentSteps includes the deployment status oracle as a proxy deployer step', () => {

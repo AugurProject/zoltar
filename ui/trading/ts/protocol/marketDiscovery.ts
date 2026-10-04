@@ -58,7 +58,7 @@ async function loadCanonicalPoolDeployment(client: PublicClient, configuration: 
 		client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getSecurityPool', args: [originId, universeId] }),
 		client.readContract({ abi: shareTokenAbi, address: getAddress(shareToken), functionName: 'canonicalPoolByUniverse', args: [universeId] }),
 	])
-	if (getAddress(registeredPool) !== pool || getAddress(canonicalPool) !== pool) throw securityPoolNotFound('This address is not a canonical security pool.')
+	if (getAddress(registeredPool) !== pool || getAddress(canonicalPool) !== pool) throw securityPoolNotFound('This address is not a registered security pool.')
 	const [questionId, statoblastSecurityMultiplierBps, manager] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'questionId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'statoblastSecurityMultiplierBps' }),
@@ -70,7 +70,7 @@ async function loadCanonicalPoolDeployment(client: PublicClient, configuration: 
 
 export async function discoverAddressedMarket(client: PublicClient, configuration: DeploymentConfiguration, address: Address) {
 	const pool = getAddress(address)
-	if (pool === zeroAddress) throw new Error('Enter a nonzero SecurityPool address')
+	if (pool === zeroAddress) throw new Error('Enter a nonzero security pool address')
 	const deployment = await loadCanonicalPoolDeployment(client, configuration, pool)
 	const market = await loadLiveMarket(client, configuration, deployment)
 	return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [market.universeId], selectedUniverseId: market.universeId }
@@ -106,12 +106,12 @@ export async function discoverSavedMarkets(client: PublicClient, configuration: 
 			try {
 				const discovered = await runReadOperation(operation => discoverAddressedMarket(readOperationClient(client, operation), configuration, cached.pool), { isCurrent })
 				const market = discovered.markets[0]
-				if (market === undefined) throw new Error('Saved pool is unavailable')
+				if (market === undefined) throw new Error('Favorite market is unavailable')
 				return market.universeId === selectedUniverseId ? market : undefined
 			} catch (error) {
 				if (!isCurrent()) throw error
 				const market = cached.market ?? unavailableMarket({ securityPool: cached.pool, universeId: selectedUniverseId ?? 0n, shareToken: zeroAddress, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps)
-				return { ...market, loadError: publicErrorMessage(error, 'Saved pool refresh failed') }
+				return { ...market, loadError: publicErrorMessage(error, 'Favorite market refresh failed.') }
 			}
 		},
 		markets => onProgress?.({ ...result, markets }),
@@ -151,10 +151,10 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 			try {
 				const { markets } = await discoverAddressedMarket(client, configuration, deployment.securityPool)
 				const market = markets[0]
-				if (market === undefined || market.pair === undefined || market.universeId !== deployment.universeId || market.shareToken !== deployment.shareToken) throw new Error('Trading pair registry no longer matches its pool')
+				if (market === undefined || market.pair === undefined || market.universeId !== deployment.universeId || market.shareToken !== deployment.shareToken) throw new Error('The trading pool registry no longer matches its security pool')
 				return market
 			} catch (error) {
-				return { ...unavailableMarket({ ...deployment, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps), title: `Pool ${deployment.securityPool}` }
+				return { ...unavailableMarket({ ...deployment, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps), title: `Security pool ${deployment.securityPool}` }
 			}
 		},
 		markets => onProgress?.({ ...page, total: BigInt(deployments.length), markets, universeIds, selectedUniverseId }),

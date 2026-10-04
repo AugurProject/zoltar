@@ -9,15 +9,15 @@ const modalViewport = { width: 800, height: 1400 }
 const fillPoolForm: readonly UiScreenshotStep[] = [{ click: 'Create pool' }, { waitForText: 'Create question and pool' }, { fill: 'Title', value: 'Will it rain in Lisbon on 1 June 2027?' }, { fill: 'End time', value: '2027-06-02T00:00' }, { waitForEnabled: 'Create question and pool' }]
 const createPool: readonly UiScreenshotStep[] = [...fillPoolForm, { click: 'Create question and pool' }, { waitForText: 'Pool created' }]
 const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'Vault actions' }]
-const approveRep: readonly UiScreenshotStep[] = [...openPool, { click: 'Deposit REP' }, { fill: 'REP backing', value: '1000' }, { click: 'Approve 1k REP' }, { waitForNoText: 'Approve 1k REP' }, { waitForNoText: 'Approving REP' }, { waitForNoText: 'Loading' }]
+const approveRep: readonly UiScreenshotStep[] = [...openPool, { click: 'Deposit REP' }, { fill: 'REP deposit amount', value: '1000' }, { click: 'Approve 1k REP' }, { waitForNoText: 'Approve 1k REP' }, { waitForNoText: 'Approving REP' }, { waitForNoText: 'Loading' }]
 const depositRep: readonly UiScreenshotStep[] = [...approveRep, { click: 'Deposit REP', nth: -1 }, { waitForText: 'Vault REP backing' }]
-const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'OpenOracle REP per ETH starting price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }, { waitForEnabled: 'Approve ≈ 1.62 WETH' }]
+const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Set commitment limit' }, { fill: 'Initial report price (REP per ETH)', value: '3' }, { fill: 'Commitment limit', value: '10' }, { waitForText: 'Resulting commitment' }, { waitForEnabled: 'Approve ≈ 1.62 WETH' }]
 const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Approve ≈ 1.62 WETH' }, { waitForText: 'WETH approved' }, { click: 'Approve ≈ 4.85 REP' }, { waitForText: 'REP approved' }, { click: 'Set commitment limit', nth: -1 }, { waitForText: 'View in staged operations' }]
 // The report settles after eight minutes; ten keeps the staged operation inside its validity window.
 const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForEnabled: 'Settle report' }]
-const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Settled report' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Commitment limit changed' }, { waitForText: '10.00 ETH' }]
+const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Report #1 settled' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Commitment limit changed' }, { waitForText: '10.00 ETH' }]
 
-const fillMint: readonly UiScreenshotStep[] = [...settleAndReturn, { click: 'Open shares' }, { click: 'Mint complete sets', nth: -1 }, { waitForText: 'Wallet ETH' }, { fill: 'Mint complete sets amount', value: '1' }, { waitForEnabled: 'Mint complete sets' }]
+const fillMint: readonly UiScreenshotStep[] = [...settleAndReturn, { click: 'Open shares' }, { click: 'Mint complete sets', nth: -1 }, { waitForText: 'Wallet ETH' }, { fill: 'ETH to mint with', value: '1' }, { waitForEnabled: 'Mint complete sets' }]
 
 export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 	{
@@ -45,9 +45,9 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: approveRep,
-		expectText: ['REP backing', 'Required REP', 'Approved REP', 'Deposit REP'],
+		expectText: ['REP deposit amount', 'Required REP', 'Approved REP', 'Deposit REP'],
 		viewport: modalViewport,
-		crop: { selector: '[role=dialog]', containing: 'REP backing', padding: 0 },
+		crop: { selector: '[role=dialog]', containing: 'REP deposit amount', padding: 0 },
 		usedBy: tutorial,
 	},
 	{
@@ -55,7 +55,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: fillCommitment,
-		expectText: ['OpenOracle REP per ETH starting price', 'Fetch from Uniswap', 'Commitment limit', 'Resulting commitment', 'Queues for execution after oracle settlement.'],
+		expectText: ['Initial report price (REP per ETH)', 'Fetch from Uniswap', 'Commitment limit', 'Resulting commitment', 'Queues for execution after oracle settlement.'],
 		viewport: modalViewport,
 		crop: { selector: '[role=dialog] .transaction-step-actions', padding: 0, scrollIntoView: true },
 		usedBy: tutorial,
@@ -85,7 +85,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: fillMint,
-		expectText: ['Wallet ETH', 'Available to mint', 'Mint complete sets amount', 'Mint complete sets'],
+		expectText: ['Wallet ETH', 'Available to mint', 'ETH to mint with', 'Mint complete sets'],
 		viewport: modalViewport,
 		crop: { selector: '[role=dialog]', containing: 'Wallet ETH', padding: 0 },
 		usedBy: tutorial,

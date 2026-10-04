@@ -99,7 +99,7 @@ describe('deriveMigrationWizard', () => {
 	test('waits for unread balances and reports failed reads', () => {
 		const unread = input({ amountInput: '10', childMigratedAttoRep: {}, selectedOutcomeIndexes: [1n] })
 		expect(deriveMigrationWizard({ ...unread, balancesLoading: true }).steps[1]).toEqual({ id: 'amount', reason: 'Loading migration balances…', status: 'loading' })
-		expect(deriveMigrationWizard(unread).steps[1]).toEqual({ id: 'amount', reason: 'Could not read migration balances. Retry to continue.', status: 'blocked' })
+		expect(deriveMigrationWizard(unread).steps[1]).toEqual({ id: 'amount', reason: 'Migration balances could not be loaded. Retry to continue.', status: 'blocked' })
 		const walletUnread = deriveMigrationWizard(input({ amountInput: '10', selectedOutcomeIndexes: [1n], walletRepAttoRep: undefined }))
 		expect(walletUnread.steps[1]?.status).toBe('blocked')
 		const coveredWithoutWallet = deriveMigrationWizard(input({ amountInput: '10', migrationBalanceAttoRep: 10n * ATTO_REP_PER_REP, selectedOutcomeIndexes: [1n], walletRepAttoRep: undefined }))

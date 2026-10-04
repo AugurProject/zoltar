@@ -120,18 +120,18 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		{ label: forkAuctionCopy.started, value: displays.startedDisplay },
 		{ label: commonCopy.ends, value: displays.endsDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: displays.ethRaisedCapDisplay },
-		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.attoRepSold, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.clearingPrice, value: displays.clearingPriceDisplay },
 		{ label: AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
-		{ label: forkAuctionCopy.minBidSizeAttoEth, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
+		{ label: forkAuctionCopy.minBid, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.maxAttoRepBeingSold, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.truthAuctionStatus.maxAttoRepBeingSold} suffix={commonCopy.rep} /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
 		{ label: AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.settlementAvailable, value: model.settlementAvailableDisplay },
 		{ label: forkAuctionCopy.ethRaisedPerCap, value: displays.ethRaisedCapDisplay },
-		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.attoRepSold, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 	]
 	const auctionOutcomeSelector = model.isViewingOwnAuction ? (
@@ -432,7 +432,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			{!model.showSecurityPoolAddressInput && model.hasLoadedPoolContext ? undefined : (
 				<div className='form-grid'>
 					{!model.showSecurityPoolAddressInput ? undefined : <LookupFieldRow label={commonCopy.securityPoolAddress} value={model.forkAuctionForm.securityPoolAddress} onInput={securityPoolAddress => model.onForkAuctionFormChange({ securityPoolAddress })} placeholder={commonCopy.hexValuePlaceholder} />}
-					{model.hasLoadedPoolContext ? undefined : <UserMessage className='detail' detail={forkAuctionCopy.forkWorkflowDescription} />}
+					{model.hasLoadedPoolContext ? undefined : <UserMessage className='detail' loading={!model.showSecurityPoolAddressInput} detail={model.showSecurityPoolAddressInput ? forkAuctionCopy.forkWorkflowDescription : forkAuctionCopy.loadingForkDetails} />}
 				</div>
 			)}
 			{forkWorkflowStageNavigator}

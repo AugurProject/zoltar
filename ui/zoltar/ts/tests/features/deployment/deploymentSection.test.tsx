@@ -64,6 +64,9 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Deployment in progress.')
+		// The pending button is the only place that says "Deploying…".
+		expect(rendered.container.querySelector('span.badge')).toBeNull()
+		expect(rendered.container.textContent?.split('Deploying…').length).toBe(2)
 		expectTransactionButtonDisabled(document.body, 'Deploying multicall3…')
 	})
 
@@ -96,13 +99,13 @@ describe('DeploymentSection', () => {
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
-		expect(rendered.container.textContent?.match(/Requires Proxy Deployer/g) ?? []).toHaveLength(1)
-		expectTransactionButtonDisabled(document.body, 'Deploy DeploymentStatusOracle', 'Requires Proxy Deployer')
+		expect(rendered.container.textContent).toContain('Requires Proxy Deployer.')
+		expect(rendered.container.textContent?.match(/Requires Proxy Deployer\./g) ?? []).toHaveLength(1)
+		expectTransactionButtonDisabled(document.body, 'Deploy DeploymentStatusOracle', 'Requires Proxy Deployer.')
 		const button = rendered.container.querySelector('button')
 		const detailId = button?.getAttribute('aria-describedby')
 		expect(detailId).toBe('deployment-deploymentStatusOracle-status-detail')
-		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Requires Proxy Deployer')
+		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Requires Proxy Deployer.')
 		expect(rendered.container.textContent).toContain('Waiting')
 		expect(rendered.container.textContent).not.toContain('Blocked')
 		expect(rendered.container.textContent).toContain('DeploymentStatusOracle')

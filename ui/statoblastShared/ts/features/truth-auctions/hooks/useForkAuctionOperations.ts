@@ -154,7 +154,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			},
 			onError: error => {
 				forkAuctionDetails.value = undefined
-				forkAuctionError.value = getErrorMessage(error, 'Failed to load fork and auction details')
+				forkAuctionError.value = getErrorMessage(error, 'Failed to load fork and truth auction details')
 			},
 		})
 	}
@@ -283,7 +283,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						getForkPoolHeldRepAtForkAttoRep(details),
 					)
 				},
-				'Failed to migrate REP to Zoltar',
+				'Failed to migrate pool-held REP to the child universe',
 			)
 		})()
 
@@ -332,7 +332,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				if (timingGuard !== undefined) throw new Error(timingGuard)
 				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
 			},
-			'Failed to clear unresolved parent escalation-deposit accounting',
+			'Failed to clear unresolved parent deposits',
 		)
 
 	const startTruthAuction = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
@@ -369,7 +369,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 					const bidPrice = parseTruthAuctionPriceInput(submittedBidPriceInput, 'Bid price')
 					const bidTick = getTruthAuctionTickAtPrice(bidPrice)
-					if (bidTick === undefined) throw new Error('Bid price is outside the supported auction range.')
+					if (bidTick === undefined) throw new Error('Bid price is outside the supported truth auction range.')
 					if (!isCurrentSelection()) return undefined
 					return await dependencies.submitTruthAuctionBid(
 						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
@@ -395,9 +395,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				async (walletAddress, details, isCurrentSelection, context) => {
 					const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 					const normalizedBids = selectedBids === undefined ? [{ tick: parseBigIntInput(submittedRefundTick, 'Refund tick'), bidIndex: parseBigIntInput(submittedRefundBidIndex, 'Refund bid index') }] : filterSelectedSettlementBids(selectedBids)
-					if (normalizedBids.length === 0) throw new Error('Pick one or more bids to refund first.')
+					if (normalizedBids.length === 0) throw new Error('Select one or more bids to refund first.')
 					const selectedBid = normalizedBids[0]
-					if (selectedBid === undefined) throw new Error('Pick one or more bids to refund first.')
+					if (selectedBid === undefined) throw new Error('Select one or more bids to refund first.')
 					if (!isCurrentSelection()) return undefined
 					return await dependencies.refundTruthAuctionBid(
 						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
@@ -435,7 +435,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.withdrawTruthAuctionRefund(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, truthAuctionAddress)
 			},
-			'Failed to withdraw auction refund',
+			'Failed to withdraw truth auction refund',
 			securityPoolAddressOverride,
 			universeIdOverride,
 		)
@@ -453,9 +453,9 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					const bidderAddress = resolveOptionalAddressInput(submittedSettlementAddress, walletAddress, 'Bidder address')
 					const normalizedClaimBids = selectedClaimBids === undefined ? [{ tick: parseBigIntInput(submittedClaimBidTick, 'Settlement bid tick'), bidIndex: parseBigIntInput(submittedClaimBidIndex, 'Settlement bid index') }] : filterSelectedSettlementBids(selectedClaimBids)
 					const normalizedRefundBids = selectedRefundBids === undefined ? [] : filterSelectedSettlementBids(selectedRefundBids)
-					if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Pick one or more bids to settle first.')
+					if (normalizedClaimBids.length === 0 && normalizedRefundBids.length === 0) throw new Error('Select one or more bids to settle first.')
 					const selectedBid = normalizedClaimBids[0] ?? normalizedRefundBids[0]
-					if (selectedBid === undefined) throw new Error('Pick one or more bids to settle first.')
+					if (selectedBid === undefined) throw new Error('Select one or more bids to settle first.')
 					if (!isCurrentSelection()) return undefined
 					const result = await dependencies.settleTruthAuctionBids(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, bidderAddress, normalizedClaimBids, normalizedRefundBids)
 					return {
@@ -479,7 +479,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.withdrawForkedEscalationDeposits(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, outcome, proofs)
 			},
-			'Failed to settle fork-carried escalation deposits',
+			'Failed to settle parent deposits',
 		)
 
 	const forkUniverse = async () =>

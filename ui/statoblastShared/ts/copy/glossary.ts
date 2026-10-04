@@ -1,6 +1,5 @@
 export const securityPoolTerm = 'Security pool'
 export const securityPoolDefinition = 'The contract for one question in one universe. It holds the ETH behind outcome shares and the REP that secures them.'
-export const securityMultiplierTerm = 'Security multiplier'
 export const securityMultiplierDefinition = 'How much REP value a vault must hold for each ETH of its commitment limit. At 2×, a 1 ETH limit needs 2 ETH worth of REP.'
 export const openInterestFeeTerm = 'Open interest fee'
 export const openInterestFeeDefinition = 'A yearly rate charged on the ETH behind outstanding shares and paid to vaults in proportion to their commitment limits. It rises as the pool fills up.'

@@ -19,7 +19,7 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	{ reasons: ['Deadline expired', 'Transaction deadline has passed'], cause: 'The transaction deadline passed.', nextStep: 'Try again, or allow more time in Settings.' },
 	{
 		reasons: ['Question ended', 'Question resolved', 'Universe forked', 'Fork continuation pending', 'Pool inactive', 'Forked', 'Fork await', 'Fork paused'],
-		cause: 'This market no longer accepts this action.',
+		cause: 'Trading has ended for this market.',
 		nextStep: 'Reload the market to see its current status.',
 	},
 	{ reasons: ['Over capacity'], cause: 'The security pool does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
@@ -29,14 +29,14 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 		cause: 'The amount is too small to trade.',
 		nextStep: 'Enter a larger amount.',
 	},
-	{ reasons: ['Invalid output', 'Balance below reserve'], cause: 'The pool cannot fill an order this large.', nextStep: 'Try a smaller amount.' },
-	{ reasons: ['Exchange rate undefined'], cause: 'The security pool has no collateral rate yet.', nextStep: 'Wait for the pool to be funded, then try again.' },
+	{ reasons: ['Invalid output', 'Balance below reserve'], cause: 'The market does not have enough liquidity for an order this large.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Exchange rate undefined'], cause: 'The security pool has no collateral rate yet.', nextStep: 'Wait for the security pool to be funded, then try again.' },
 	{ reasons: ['Pair already initialized', 'Already initialized'], cause: 'Someone already added the first liquidity.', nextStep: 'Reload the market and add liquidity instead.' },
 ]
 
 const INSUFFICIENT_FUNDS: TransactionFailureExplanation = { cause: 'Your wallet does not have enough ETH for this amount plus gas.', nextStep: 'Lower the amount or add ETH to your wallet.' }
 const WALLET_REJECTED: TransactionFailureExplanation = { cause: transactionErrorMessages.walletRejected, nextStep: 'Nothing was sent. Press the button again when ready.' }
-export const REVERTED_ON_CHAIN: TransactionFailureExplanation = { cause: 'The transaction reverted on-chain; only the gas fee was spent.', nextStep: 'Check the market status and try again.' }
+export const REVERTED_ON_CHAIN: TransactionFailureExplanation = { cause: 'The transaction reverted onchain; only the gas fee was spent.', nextStep: 'Check the market status and try again.' }
 
 function errorTexts(error: unknown, seen = new Set<object>()): string[] {
 	if (typeof error === 'string') return [error]

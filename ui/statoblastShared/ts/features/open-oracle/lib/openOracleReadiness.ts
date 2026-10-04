@@ -3,17 +3,17 @@ import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import type { ReadinessAction } from '@zoltar/ui-zoltar-shared/features/types.js'
 
 export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; settleMessage: string | undefined }): ReadinessAction[] {
-	const baseBlocker = !hasReport ? 'Select a report first.' : undefined
+	const baseBlocker = !hasReport ? openOracleCopy.reportLoadRequired : undefined
 	const actions: ReadinessAction[] = []
 
 	if (actionMode === 'dispute') {
 		const disputeBlocker = baseBlocker ?? disputeMessage
 		actions.push({
-			actionLabel: 'Dispute & swap',
+			actionLabel: openOracleCopy.disputeAndSwap,
 			description: 'Challenge the current report and provide the replacement swap amounts.',
 			key: 'dispute-report',
 			readiness: disputeBlocker === undefined ? 'ready' : 'blocked',
-			title: 'Dispute & swap',
+			title: openOracleCopy.disputeAndSwap,
 			...(disputeBlocker === undefined ? {} : { blocker: disputeBlocker }),
 		})
 		const settleBlocker = baseBlocker ?? settleMessage

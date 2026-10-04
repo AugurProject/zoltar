@@ -58,7 +58,7 @@ test('lists recent transactions with their status and a pending count', async ()
 	expect(items[1]?.textContent).toContain('Rejected in wallet')
 	expect(
 		within(panel)
-			.getByRole('link', { name: `View transaction ${pendingHash}` })
+			.getByRole('link', { name: `View transaction ${pendingHash} on explorer (opens in a new tab)` })
 			.getAttribute('href'),
 	).toContain(pendingHash)
 	await act(() => fireEvent.keyDown(document, { key: 'Escape' }))

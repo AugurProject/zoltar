@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import { getWalletActiveAppChainActionAvailability } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ActionAvailability } from '../../types.js'
@@ -51,9 +52,9 @@ export function getDeploymentStepAvailability({
 	prerequisiteLabel: string | undefined
 	step: DeploymentStepAvailabilityState
 }): ActionAvailability {
-	if (step.deployed) return { disabled: true, reason: 'Already deployed.' }
-	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
-	const walletAvailability = getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect wallet to deploy this contract.' })
+	if (step.deployed) return { disabled: true, reason: deploymentCopy.alreadyDeployedReason }
+	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? deploymentCopy.deploymentRunningStatus : deploymentCopy.otherDeploymentRunningReason }
+	const walletAvailability = getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('deploying this contract') })
 	// Per-step rows keep the text reason: many rows stay blocked by prerequisites after connecting, so the route-level deploy action offers the wallet fix instead.
 	if (walletAvailability !== undefined) return { disabled: true, reason: walletAvailability.reason }
 	if (prerequisiteLabel !== undefined) return { disabled: true, reason: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel) }
@@ -73,11 +74,11 @@ export function getDeployNextMissingAvailability({
 	isOnActiveAppChain: boolean
 	nextMissingStep: Pick<DeploymentStatus, 'id' | 'label'> | undefined
 }): ActionAvailability {
-	if (deployNextMissingPending) return { disabled: true, reason: 'Deployment in progress.' }
-	if (busyStepId !== undefined) return { disabled: true, reason: 'Another deployment is already in progress.' }
+	if (deployNextMissingPending) return { disabled: true, reason: deploymentCopy.deploymentRunningStatus }
+	if (busyStepId !== undefined) return { disabled: true, reason: deploymentCopy.otherDeploymentRunningReason }
 	const walletAvailability = getWalletActiveAppChainActionAvailability({ accountAddress, isOnActiveAppChain })
 	if (walletAvailability !== undefined) return walletAvailability
-	if (nextMissingStep === undefined) return { disabled: true, reason: 'All deterministic contracts are already deployed.' }
+	if (nextMissingStep === undefined) return { disabled: true, reason: deploymentCopy.allContractsDeployedReason }
 	return { disabled: false, reason: undefined }
 }
 

@@ -28,7 +28,7 @@ function hasValidDecimalPrecision(value: string, units: number) {
 
 /** Parses the input or explains why it cannot be parsed, so callers can choose between silent rejection and a specific message. */
 export function parseDecimalInputResult(value: string, units: number = 18): DecimalInputResult {
-	if (!Number.isSafeInteger(units) || units < 0) throw new Error('Units must be a nonnegative safe integer')
+	if (!Number.isSafeInteger(units) || units < 0) throw new Error('Units must be a non-negative safe integer')
 	const trimmed = normalizeNumericInput(value)
 	if (trimmed === '') return { problem: 'empty' }
 	const normalized = normalizeDecimalInput(trimmed)
@@ -43,7 +43,7 @@ export function tryParseDecimalInput(value: string, units: number = 18) {
 
 export function parseDecimalInput(value: string, label: string, units: number = 18) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	if (trimmed === '') throw new Error(`${label} is required.`)
 	const parsed = tryParseDecimalInput(trimmed, units)
 	if (parsed === undefined) throw new Error(commonCopy.formatDecimalNumberRequiredError(label))
 	return parsed

@@ -9,7 +9,7 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { getOracleRequestEthGuardMessage } from '../lib/oracleRequestEth.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createPoolOracleWarningPresentation } from '../../reportingTransactionPresentations.js'
+import { createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createPoolOracleWarningPresentation, getOpenOracleFailureTitle, getOpenOraclePendingTitle, getOpenOracleSuccessTitle } from '../../reportingTransactionPresentations.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -53,18 +53,6 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 	const poolOracleManagerErrorAddress = useSignal<Address | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const nextPoolOracleManagerLoad = useRequestGuard()
-	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
-		if (actionName === 'requestPrice') return 'Requesting price'
-		return 'Executing staged operation'
-	}
-	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
-		if (actionName === 'requestPrice') return 'Price requested'
-		return 'Staged operation executed'
-	}
-	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
-		if (actionName === 'requestPrice') return 'Price request failed'
-		return 'Staged operation failed'
-	}
 
 	const loadPoolOracleManager = async (managerAddress: Address) => {
 		const isCurrent = nextPoolOracleManagerLoad()
@@ -90,7 +78,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'requestPrice'
-			poolOracleFeedback.value = createPendingActionFeedback('requestPrice', getPendingTitle('requestPrice'))
+			poolOracleFeedback.value = createPendingActionFeedback('requestPrice', getOpenOraclePendingTitle('requestPrice'))
 			await runWriteAction(
 				{
 					accountAddress,
@@ -101,7 +89,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 						poolOracleFeedback.value = undefined
 					},
 					onRefreshError: (message, hash) => {
-						poolOracleFeedback.value = createWarningActionFeedback('requestPrice', getSuccessTitle('requestPrice'), message, hash)
+						poolOracleFeedback.value = createWarningActionFeedback('requestPrice', getOpenOracleSuccessTitle('requestPrice'), message, hash)
 						const result = poolPriceOracleResult.value
 						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message, transactionContext))
 					},
@@ -109,7 +97,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 					onTransactionFinished,
 					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('requestPrice', transactionContext)),
 					onWriteError: message => {
-						poolOracleFeedback.value = createErrorActionFeedback('requestPrice', getFailureTitle('requestPrice'), message)
+						poolOracleFeedback.value = createErrorActionFeedback('requestPrice', getOpenOracleFailureTitle('requestPrice'), message)
 					},
 					refreshErrorFallback: 'Price request succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
@@ -127,8 +115,8 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 						const refreshedManagerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
 						signal?.throwIfAborted()
 						poolOracleManagerDetails.value = refreshedManagerDetails
-						if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
-						if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
+						if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available.')
+						if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('An oracle price request is already pending.')
 						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
 						if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.requiredRepAttoRep) {
@@ -155,7 +143,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 				'Failed to request price',
 				result => {
 					poolPriceOracleResult.value = result
-					poolOracleFeedback.value = createSuccessActionFeedback('requestPrice', getSuccessTitle('requestPrice'), result.hash)
+					poolOracleFeedback.value = createSuccessActionFeedback('requestPrice', getOpenOracleSuccessTitle('requestPrice'), result.hash)
 					onTransactionPresented(createPoolOracleSuccessPresentation(result, transactionContext))
 				},
 			)
@@ -169,13 +157,13 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'executeStagedOperation'
-			poolOracleFeedback.value = createPendingActionFeedback('executeStagedOperation', getPendingTitle('executeStagedOperation'))
+			poolOracleFeedback.value = createPendingActionFeedback('executeStagedOperation', getOpenOraclePendingTitle('executeStagedOperation'))
 			await runWriteAction(
 				{
 					accountAddress,
 					missingWalletMessage: commonCopy.formatConnectWalletBefore('executing a staged operation'),
 					onRefreshError: (message, hash) => {
-						poolOracleFeedback.value = createWarningActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), message, hash)
+						poolOracleFeedback.value = createWarningActionFeedback('executeStagedOperation', getOpenOracleSuccessTitle('executeStagedOperation'), message, hash)
 						const result = poolPriceOracleResult.value
 						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message, transactionContext))
 					},
@@ -183,7 +171,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 					onTransactionFinished,
 					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('executeStagedOperation', transactionContext)),
 					onWriteError: message => {
-						poolOracleFeedback.value = createErrorActionFeedback('executeStagedOperation', getFailureTitle('executeStagedOperation'), message)
+						poolOracleFeedback.value = createErrorActionFeedback('executeStagedOperation', getOpenOracleFailureTitle('executeStagedOperation'), message)
 					},
 					refreshErrorFallback: 'Staged operation execution succeeded, but refreshing price oracle details failed',
 					refreshState: async () => {
@@ -199,7 +187,7 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 				'Failed to execute staged operation',
 				result => {
 					poolPriceOracleResult.value = result
-					poolOracleFeedback.value = createSuccessActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), result.hash)
+					poolOracleFeedback.value = createSuccessActionFeedback('executeStagedOperation', getOpenOracleSuccessTitle('executeStagedOperation'), result.hash)
 					onTransactionPresented(createPoolOracleSuccessPresentation(result, transactionContext))
 				},
 			)

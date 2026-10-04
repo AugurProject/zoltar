@@ -58,7 +58,7 @@ function DraftTimestamp({ currentTimestamp, emptyValue, label, timeZone, value }
 /** Read-only summary of the draft, showing each time in the user's zone and in UTC. */
 export function QuestionDraftPreview({ children, currentTimestamp, description, endTime, marketType, outcomeItems, startTime, timeZone, title }: QuestionDraftPreviewProps) {
 	return (
-		<aside aria-label={marketCopy.draftPreviewLabel} className='question-create-preview'>
+		<aside aria-label={marketCopy.draftPreview} className='question-create-preview'>
 			<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='plain'>
 				<div className='question-draft-preview'>
 					<div className='question-draft-preview-header'>
@@ -69,7 +69,7 @@ export function QuestionDraftPreview({ children, currentTimestamp, description, 
 						<span className='question-draft-preview-chip'>{getMarketTypeLabel(marketType)}</span>
 					</div>
 					<OutcomeChipRow items={outcomeItems} />
-					<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
+					<div className='question-draft-preview-meta' role='list' aria-label={commonCopy.questionTimeline}>
 						<DraftTimestamp currentTimestamp={currentTimestamp} emptyValue={marketCopy.immediatelyAfterCreation} label={commonCopy.starts} timeZone={timeZone} value={startTime} />
 						<DraftTimestamp currentTimestamp={currentTimestamp} emptyValue={marketCopy.endTimeRequired} label={commonCopy.ends} timeZone={timeZone} value={endTime} />
 					</div>

@@ -69,7 +69,7 @@ export function useTransactionWorkflow({
 	)
 	const transaction = useTransactionSubmission({
 		operation: 'trade',
-		label: workflowCopy.tradeLabel,
+		label: workflowCopy.trade,
 		activityTitle: marketTitle === undefined ? undefined : workflowCopy.formatTradeActivity(marketTitle),
 		account,
 		chainId,

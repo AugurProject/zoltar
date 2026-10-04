@@ -137,7 +137,7 @@ void describe('security vault helpers', () => {
 	void test('parses security vault REP inputs as 18-decimal token amounts', () => {
 		expect(parseRepAmountInput('10', 'REP backing amount')).toBe(POOL_MINIMUM_VAULT_REP_ATTO_REP)
 		expect(parseRepAmountInput('10.5', 'REP backing amount')).toBe(105n * 10n ** 17n)
-		expect(parseRepAmountInput('0.25', 'REP withdraw amount')).toBe(25n * 10n ** 16n)
+		expect(parseRepAmountInput('0.25', 'REP withdrawal amount')).toBe(25n * 10n ** 16n)
 		expect(parseOptionalRepAmountInput('1')).toBe(10n ** 18n)
 		expect(parseOptionalRepAmountInput('1.5')).toBe(15n * 10n ** 17n)
 		expect(parseOptionalRepAmountInput('abc')).toBe(undefined)

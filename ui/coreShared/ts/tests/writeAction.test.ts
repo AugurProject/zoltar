@@ -284,9 +284,9 @@ describe('runWriteAction', () => {
 	})
 
 	test.each([
-		{ name: 'the active wallet account changed', backend: { accounts: [nextWalletAddress] }, expectedError: 'Wallet account changed. Review the action with the connected account and try again' },
-		{ name: 'the wallet disconnects', backend: { accounts: [] }, expectedError: 'Wallet account is no longer connected. Reconnect your wallet and try again' },
-		{ name: 'the wallet network changes', backend: { chainId: '0x5' }, expectedError: 'Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum mainnet and try again' },
+		{ name: 'the active wallet account changed', backend: { accounts: [nextWalletAddress] }, expectedError: 'Wallet account changed. Review the action with the connected account and try again.' },
+		{ name: 'the wallet disconnects', backend: { accounts: [] }, expectedError: 'Wallet account is no longer connected. Reconnect your wallet and try again.' },
+		{ name: 'the wallet network changes', backend: { chainId: '0x5' }, expectedError: 'Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum mainnet and try again.' },
 	])('fails before requesting a transaction when $name', async ({ backend, expectedError }) => {
 		let errorMessage: string | undefined
 		let transactionRequested = false
@@ -615,7 +615,7 @@ describe('runWriteAction', () => {
 		)
 
 		expect(onSuccessCalled).toBe(true)
-		expect(errorMessage).toBe('Reporting transaction succeeded, but refreshing reporting details failed. Reason: RPC unavailable')
+		expect(errorMessage).toBe('Reporting transaction succeeded, but refreshing reporting details failed. Reason: RPC unavailable.')
 	})
 
 	test('reports refresh errors to the refresh callback without using setErrorMessage', async () => {
@@ -643,7 +643,7 @@ describe('runWriteAction', () => {
 			async () => undefined,
 		)
 
-		expect(refreshErrorMessage).toBe('Refresh failure fallback. Reason: RPC unavailable')
+		expect(refreshErrorMessage).toBe('Refresh failure fallback. Reason: RPC unavailable.')
 		expect(refreshErrorHash).toBe(transactionHash)
 	})
 })

@@ -15,9 +15,9 @@ export function normalizeQuestionId(value: string) {
 }
 
 /** Parses a required hexadecimal question ID form input, throwing a user-facing error when it is missing or malformed. */
-export function parseQuestionIdInput(value: string, label = 'Question ID') {
+export function parseQuestionIdInput(value: string, label = commonCopy.questionId) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	if (trimmed === '') throw new Error(`${label} is required.`)
 	const normalized = normalizeQuestionId(trimmed)
 	if (normalized === undefined) throw new Error(commonCopy.invalidQuestionId)
 	return BigInt(normalized)

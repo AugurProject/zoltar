@@ -20,7 +20,7 @@ describe('zoltar migration guards', () => {
 	})
 
 	test('waits for root universe and fork state before migration actions can proceed', () => {
-		expect(getMigrationGuardMessage(zeroAddress, true, undefined, false, false, false, '')).toBe('Refresh universe first.')
+		expect(getMigrationGuardMessage(zeroAddress, true, undefined, false, false, false, '')).toBe('Universe details could not be loaded.')
 		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse({ hasForked: false }), false, false, false, '')).toBeUndefined()
 		expect(getMigrationGuardMessage(zeroAddress, true, createUniverse(), false, true, false, '')).toBeUndefined()
 	})

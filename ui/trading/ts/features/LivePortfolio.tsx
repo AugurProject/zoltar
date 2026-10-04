@@ -21,6 +21,8 @@ import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { liveCopy } from '../copy/live.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
+import * as appCopy from '../copy/app.js'
+import * as blockerCopy from '../copy/marketBlockers.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 import { marketsCopy } from '../copy/markets.js'
 import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
@@ -80,7 +82,7 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 					<DataGrid dense>
 						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeQuantity(yesClaim, shareOutcome.yes)}</MetricField>
 						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeQuantity(noClaim, shareOutcome.no)}</MetricField>
-						<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
+						<MetricField label={portfolioCopy.claimInsuredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>
 			)}
@@ -100,10 +102,11 @@ function showsConditionalPayoutNote(entry: PortfolioBalanceEntry) {
 }
 
 function renderPortfolioStatus(entry: PortfolioBalanceEntry) {
-	if (entry.error !== undefined) return <Badge tone='warning'>{portfolioCopy.balanceUnavailable}</Badge>
-	if (entry.market.loadError !== undefined) return <Badge tone='warning'>{portfolioCopy.marketUnavailable}</Badge>
-	if (entry.market.universeForkTime !== 0n || entry.market.systemState !== 0) return <Badge tone='warning'>{portfolioCopy.settlementRequired}</Badge>
-	if (entry.market.questionOutcome !== 3) return <Badge tone='muted'>{portfolioCopy.resolved}</Badge>
+	if (entry.error !== undefined) return <Badge tone='warning'>{portfolioCopy.balancesUnavailable}</Badge>
+	if (entry.market.loadError !== undefined) return <Badge tone='warning'>{liveCopy.marketDataUnavailable}</Badge>
+	if (entry.market.universeForkTime !== 0n) return <Badge tone='warning'>{blockerCopy.universeForked}</Badge>
+	if (entry.market.systemState !== 0) return <Badge tone='warning'>{blockerCopy.poolInactive}</Badge>
+	if (entry.market.questionOutcome !== 3) return <Badge tone='muted'>{marketsCopy.resolved}</Badge>
 	return undefined
 }
 
@@ -142,18 +145,18 @@ export function LivePortfolio({
 		<div className='portfolio-positions' aria-busy={balanceState === 'loading'}>
 			{balanceState === 'disconnected' ? (
 				<EmptyState
-					title={portfolioCopy.disconnectedGuidance}
+					title={portfolioCopy.disconnectedTitle}
 					actions={
 						walletAction === undefined ? undefined : <ActionLauncherButton idleLabel={walletAction.label} pendingLabel={walletAction.label} availability={{ disabled: walletAction.disabled, reason: walletAction.disabled ? availabilityCopy.transactionInProgressReason : undefined }} onClick={walletAction.onClick} />
 					}
 				/>
 			) : null}
-			{balanceState === 'loading' ? <EmptyState live title={portfolioCopy.loadingPoolBalances} /> : null}
+			{balanceState === 'loading' ? <EmptyState live title={appCopy.loadingBalances} /> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? (
 				<EmptyState
-					title={universeId === undefined ? portfolioCopy.noPortfolioBalances : portfolioCopy.noPositionsInUniverse(formatUniverseDisplayLabel(universeId))}
-					detail={universeId === undefined ? undefined : portfolioCopy.noPortfolioBalances}
+					title={universeId === undefined ? portfolioCopy.noPositions : portfolioCopy.noPositionsInUniverse(formatUniverseDisplayLabel(universeId))}
+					detail={portfolioCopy.noPortfolioBalances}
 					actions={
 						universeId === undefined ? undefined : (
 							<a className='button-link secondary-link' href={getTradingRouteHref('#/universe')}>

@@ -1071,7 +1071,7 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
 		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(secondReportId)
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Selected report changed. Review the current report and try again')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Selected report changed. Review the current report and try again.')
 		expect(settleOracleReport).not.toHaveBeenCalled()
 	})
 
@@ -1638,7 +1638,7 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).disputeReport()
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('The refreshed report changes this dispute to swap out WETH instead of REP. Review the refreshed report and try again')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('The refreshed report changes this dispute to swap out WETH instead of REP. Review the refreshed report and try again.')
 		expect(readOptionalMulticall).toHaveBeenCalledTimes(tokenAccessLoadsBeforeDispute)
 		expect(disputeOracleReport).not.toHaveBeenCalled()
 	})

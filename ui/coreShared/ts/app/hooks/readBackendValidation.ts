@@ -1,4 +1,4 @@
-import type { ChainBackend, ReadBackendStatus } from '../../wallet/chainBackend.js'
+import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
 import { getErrorMessage } from '../../lib/errors.js'
 import { formatTimestampWithRelative } from '../../lib/formatters.js'
 export type ChainClock = {
@@ -7,6 +7,7 @@ export type ChainClock = {
 }
 
 type ReadBackendValidationResult = {
+	readBackendIssue: ReadBackendIssue | undefined
 	readBackendMessage: string | undefined
 	validated: boolean
 }
@@ -37,6 +38,7 @@ export async function validateConfiguredReadBackend(backend: ChainBackend): Prom
 		const readChainId = await readClient.getChainId()
 		if (readChainId !== getExpectedReadChainId(backend)) {
 			return {
+				readBackendIssue: 'chain-mismatch',
 				readBackendMessage: buildReadBackendMismatchMessage(backend, readChainId),
 				validated: true,
 			}
@@ -51,11 +53,13 @@ export async function validateConfiguredReadBackend(backend: ChainBackend): Prom
 		const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000))
 		if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
 			return {
-				readBackendMessage: `Configured read RPC is stale. Latest block timestamp is ${formatTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
+				readBackendIssue: 'stale',
+				readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
 				validated: true,
 			}
 		}
 		return {
+			readBackendIssue: undefined,
 			readBackendMessage: undefined,
 			validated: true,
 		}

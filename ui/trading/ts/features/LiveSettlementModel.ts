@@ -3,7 +3,8 @@ import type { ForkTarget } from '../protocol/forks.js'
 import { settlementUnavailability, type LiveBalances, type LiveMarket, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
-import { outcomeLabel } from '../copy/outcomes.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as availabilityCopy from '../copy/availability.js'
 
 type SettlementLifecycle = Pick<LiveMarket, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>
 
@@ -30,30 +31,37 @@ export function settlementUnavailableReason(operation: SettlementOperation, mark
 export function settlementInputBlocker(operation: SettlementOperation, unavailableReason: string | undefined, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
 	if (unavailableReason !== undefined) return unavailableReason
 	if (operation === 'redeem-complete-set') {
-		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares === 0n) return 'Enter a valid positive complete-set value'
-		if (parsedAmountAttoShares > completeSetsAttoShares) return `Enter no more than the available complete-set balance of ${formatCollateralEth(completeSetsAttoShares, rate, 'down')}`
-		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n) return 'Amount too small to redeem any ETH'
+		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares === 0n) return availabilityCopy.amountRequiredReason
+		if (parsedAmountAttoShares > completeSetsAttoShares) return settlementCopy.formatCompleteSetLimit(formatCollateralEth(completeSetsAttoShares, rate, 'down'))
+		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n) return settlementCopy.completeSetAmountTooSmall
 	}
 	if (operation === 'migrate-shares') {
-		if (targetOutcomeIndexes.length === 0) return 'Select at least one child branch from the fork question'
-		if (sourceBalance === undefined || sourceBalance === 0n) return `The selected ${outcomeLabel(sourceOutcome)} balance is zero`
+		if (targetOutcomeIndexes.length === 0) return settlementCopy.childUniverseRequired
+		if (sourceBalance === undefined || sourceBalance === 0n) return settlementCopy.formatZeroShareBalance(sourceOutcome)
 	}
 	return undefined
 }
 
 export function forkMigrationBatchBlocker(targets: readonly ForkTarget[]) {
 	if (targets.length <= 1 || targets.every(target => target.canonicalPool !== undefined)) return undefined
-	return 'This selection includes a missing child pool; migrate each missing target separately for the current source share'
+	return settlementCopy.missingChildPoolBlocker
 }
 
 export function forkMigrationBatchWarning(targets: readonly ForkTarget[]) {
 	if (forkMigrationBatchBlocker(targets) === undefined) return undefined
-	return 'For this source share, submit each missing child as a separate migration. After confirmation, do not select that same source-child pair again. A different source share may batch those children once their pools are ready.'
+	return settlementCopy.missingChildPoolWarning
 }
 
+/** The wallet's balance once it has been read; undefined while it is loading, failed, or the wallet is disconnected, so prose never quotes a state in place of an amount. */
 export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate, outcome?: ShareOutcome) {
-	if (balanceState === 'loading') return 'Loading…'
-	if (balanceState === 'error') return 'Unavailable'
-	if (balanceState !== 'ready' || balance === undefined) return 'Not loaded'
+	if (balanceState !== 'ready' || balance === undefined) return undefined
 	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeQuantity(balance, outcome)
+}
+
+/** The standalone balance line: the amount when it is known, otherwise what the user is waiting for or has to do. */
+export function settlementBalanceStatus(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate, outcome?: ShareOutcome) {
+	if (balanceState === 'loading') return settlementCopy.formatShareBalance(commonCopy.loadingWithEllipsis)
+	if (balanceState === 'error') return settlementCopy.formatShareBalance(commonCopy.unavailable)
+	const label = settlementBalanceLabel(balanceState, balance, rate, outcome)
+	return label === undefined ? settlementCopy.connectToSeeBalance : settlementCopy.formatShareBalance(label)
 }

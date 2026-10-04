@@ -30,7 +30,7 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 		)
 		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
 	}
-	if (pairAddress === undefined) throw new Error('Pair is unavailable')
+	if (pairAddress === undefined) throw new Error('The trading pool is unavailable')
 	if (operation === 'add') {
 		const {
 			blockNumber,

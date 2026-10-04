@@ -281,7 +281,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -347,7 +347,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(baseTokenAddressInput.getAttribute('aria-invalid')).toBe('true')
 		expect(baseTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
 		expectPoliteFieldError('Base token address is not a readable ERC-20 contract.')
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Base token address is not a readable ERC-20 contract.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', 'Base token address is not a readable ERC-20 contract.')
 	})
 
 	test('explains the first invalid field before the default create form is touched', async () => {
@@ -364,7 +364,7 @@ describe('OpenOracleSection route create view', () => {
 		const baseTokenAddressInput = within(document.body).getByLabelText('Base token address')
 		expect(baseTokenAddressInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(baseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Enter a valid base token address.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', 'Enter a valid base token address.')
 		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
 	})
 
@@ -383,15 +383,15 @@ describe('OpenOracleSection route create view', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', openOracleCopy.readingTokenMetadata)
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', openOracleCopy.readingTokenMetadata)
 		await flushTokenMetadata()
 
 		const baseTokenAmountInput = within(document.body).getByLabelText('Base token amount')
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
 		// Once the token is read, its symbol labels the amount.
-		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual([openOracleCopy.initialToken1AmountHelpText, 'REP'])
+		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual(['REP'])
 		expect(within(document.body).getByText('REP · 18 decimals')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Base token amount must be greater than zero.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', 'Base token amount must be greater than zero.')
 		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
 	})
 
@@ -900,7 +900,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Need 100\u00a0more\u00a0ETH in this wallet to create the selected standalone OpenOracle report.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', 'Need 100\u00a0more\u00a0ETH in this wallet to create the selected standalone OpenOracle report.')
 	})
 
 	test('enables create for large token1 amounts that fit the loaded token decimals', async () => {
@@ -927,10 +927,10 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		// Create waits for the token reads so precision errors are known before submitting.
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', openOracleCopy.readingTokenMetadata)
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', openOracleCopy.readingTokenMetadata)
 		await flushTokenMetadata()
 
-		expectTransactionButtonEnabled(document.body, 'Create standalone oracle report')
+		expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report')
 	})
 
 	test('validates high-precision token1 amounts inline against the loaded token decimals', async () => {
@@ -960,7 +960,7 @@ describe('OpenOracleSection route create view', () => {
 		await flushTokenMetadata()
 
 		// An 18-decimal base token cannot represent 36 decimal places, so the amount is invalid before submitting.
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Enter a valid base token amount.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', 'Enter a valid base token amount.')
 	})
 
 	test('accepts high-precision token1 amounts once a high-decimal token is read', async () => {
@@ -989,7 +989,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await flushTokenMetadata()
 
-		expectTransactionButtonEnabled(document.body, 'Create standalone oracle report')
+		expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report')
 	})
 
 	test('uses valid timing defaults for every lifecycle parameter', async () => {
@@ -1017,7 +1017,7 @@ describe('OpenOracleSection route create view', () => {
 		await flushTokenMetadata()
 
 		const documentQueries = within(document.body)
-		expectTransactionButtonEnabled(document.body, 'Create standalone oracle report')
+		expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report')
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Escalation halt', 'Protocol fee (%)']) {
 			expect(documentQueries.getByLabelText(label)).not.toBeNull()
@@ -1051,8 +1051,8 @@ describe('OpenOracleSection route create view', () => {
 		const disputeDelayInput = documentQueries.getByLabelText('Dispute delay (seconds)')
 		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
 
-		expect(getDescriptionTexts(exactToken1ReportInput)).toEqual([openOracleCopy.initialToken1AmountHelpText])
-		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([openOracleCopy.initialToken2AmountHelpText])
+		expect(getDescriptionTexts(exactToken1ReportInput)).toEqual([])
+		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([])
 		// The ETH sent is derived from the settler reward, so it is shown read-only instead of asked for twice.
 		expect(document.body.querySelector('input[aria-label="ETH value to send"]')).toBeNull()
 		expect(getDescriptionTexts(settlerRewardInput)).toEqual([openOracleCopy.settlerRewardHelpText, 'ETH'])
@@ -1089,13 +1089,11 @@ describe('OpenOracleSection route create view', () => {
 		expectPoliteFieldError('Enter a valid quote token address.')
 		expect(document.body.textContent?.split('Enter a valid base token address.')).toHaveLength(2)
 		expect(document.body.textContent?.split('Enter a valid quote token address.')).toHaveLength(2)
-		expect(documentQueries.getByRole('button', { name: 'Create standalone oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
-		expect(documentQueries.getByText('Base-token amount to report.')).not.toBeNull()
-		expect(documentQueries.getByText('Quote-token amount to report.')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create standalone OpenOracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
 		expect(documentQueries.getByText(openOracleCopy.settlerRewardHelpText)).not.toBeNull()
 		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before settlement can begin.')).toBeNull()
-		expect(documentQueries.getByText('Base-token amount that ends escalation.')).not.toBeNull()
+		expect(documentQueries.getByText('Base token amount that ends escalation.')).not.toBeNull()
 		expect(documentQueries.getByText('Parameter details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
 		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
@@ -1128,13 +1126,13 @@ describe('OpenOracleSection route create view', () => {
 		})
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(document.getElementById('open-oracle-exact-token1-report-error')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Enter a valid base token amount.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report', 'Enter a valid base token amount.')
 		await act(() => {
 			baseTokenAmountInput.dispatchEvent(new Event('blur'))
 		})
 		expect(baseTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
 		expect(baseTokenAmountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('open-oracle-exact-token1-report-error')
-		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual(['Enter a valid base token amount.', openOracleCopy.initialToken1AmountHelpText, 'REP'])
+		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual(['Enter a valid base token amount.', 'REP'])
 		expectPoliteFieldError('Enter a valid base token amount.')
 		await act(() => {
 			fireEvent.input(baseTokenAmountInput, { target: { value: '..' } })
@@ -1153,10 +1151,10 @@ describe('OpenOracleSection route create view', () => {
 			settlementTimeInput.dispatchEvent(new Event('blur'))
 		})
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
-		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual([openOracleCopy.initialToken1AmountHelpText, 'REP'])
+		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual(['REP'])
 		expect(settlementTimeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(settlementTimeInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('open-oracle-settlement-time-error')
-		expectPoliteFieldError('Settlement time must be greater than dispute delay.')
+		expectPoliteFieldError('Settlement delay must be greater than dispute delay.')
 
 		await act(() => {
 			fireEvent.input(settlementTimeInput, { target: { value: '20' } })
@@ -1167,8 +1165,8 @@ describe('OpenOracleSection route create view', () => {
 		expect(settlementTimeInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(protocolFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
-		expectPoliteFieldError('Fee percentage plus protocol fee must not exceed 100%.')
-		expect(documentQueries.getByRole('button', { name: 'Create standalone oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
+		expectPoliteFieldError('Dispute fee plus protocol fee must not exceed 100%.')
+		expect(documentQueries.getByRole('button', { name: 'Create standalone OpenOracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 	})
 
 	test('clears address touch state when successful creation resets the form', async () => {
@@ -1287,13 +1285,13 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const page = within(document.body)
-		expect(page.getByText('Settle in 2s')).not.toBeNull()
+		expect(page.getByText('Can settle in 2s')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.getByText('Settle in 1s')).not.toBeNull()
+		expect(page.getByText('Can settle in 1s')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.queryByText('Settle in 1s')).toBeNull()
+		expect(page.queryByText('Can settle in 1s')).toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Settle report')
 		expect(reloads).toContain('report')
 		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
@@ -1326,9 +1324,9 @@ describe('OpenOracleSection route create view', () => {
 		}
 		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
 		const page = within(document.body)
-		expect(page.getByText('Settle in 1s')).not.toBeNull()
+		expect(page.getByText('Can settle in 1s')).not.toBeNull()
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.getByText('Settle in 1m 0s')).not.toBeNull()
+		expect(page.getByText('Can settle in 1m 0s')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 	})
 
@@ -1355,7 +1353,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
 		expect(reloads).toContain('report')
-		expect(within(document.body).getByText('Settle in 1m 0s')).not.toBeNull()
+		expect(within(document.body).getByText('Can settle in 1m 0s')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 	})
 
@@ -1403,10 +1401,10 @@ describe('OpenOracleSection route create view', () => {
 			)
 		).cleanup
 		const page = within(document.body)
-		expect(page.getByText('Settle in 1h 0m 2s')).not.toBeNull()
+		expect(page.getByText('Can settle in 1h 0m 2s')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.getByText('Settle in 1h 0m 1s')).not.toBeNull()
+		expect(page.getByText('Can settle in 1h 0m 1s')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 	})
 

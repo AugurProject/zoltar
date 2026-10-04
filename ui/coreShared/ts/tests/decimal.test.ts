@@ -26,7 +26,7 @@ void describe('decimal helpers', () => {
 		expect(parseDecimalInputResult('abc', 18)).toEqual({ problem: 'invalid' })
 		expect(parseDecimalInputResult('1.001', 2)).toEqual({ problem: 'precision' })
 		expect(parseDecimalInputResult('1.100', 2)).toEqual({ value: 110n })
-		expect(() => parseDecimalInputResult('1', -1)).toThrow('Units must be a nonnegative safe integer')
+		expect(() => parseDecimalInputResult('1', -1)).toThrow('Units must be a non-negative safe integer')
 	})
 
 	void test('non-negative variants reject negative amounts with a field-level reason', () => {
@@ -34,7 +34,7 @@ void describe('decimal helpers', () => {
 		expect(tryParseNonNegativeDecimalInput('-1', 18)).toBeUndefined()
 		expect(parseNonNegativeDecimalInput(' 1.5 ', 2)).toBe(150n)
 		expect(() => parseNonNegativeDecimalInput('1.234', 2)).toThrow('Use no more than 2 decimal places')
-		expect(() => parseNonNegativeDecimalInput('-1', 2)).toThrow('Enter a valid nonnegative amount')
-		expect(() => parseNonNegativeDecimalInput('.', 2)).toThrow('Enter a valid nonnegative amount')
+		expect(() => parseNonNegativeDecimalInput('-1', 2)).toThrow('Enter a valid non-negative amount')
+		expect(() => parseNonNegativeDecimalInput('.', 2)).toThrow('Enter a valid non-negative amount')
 	})
 })

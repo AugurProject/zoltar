@@ -12,7 +12,7 @@ describe('transaction failure explanations', () => {
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
 		['Deadline expired', 'The transaction deadline passed.'],
-		['Question ended', 'This market no longer accepts this action.'],
+		['Question ended', 'Trading has ended for this market.'],
 		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
 		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],
 		['Net input is zero', 'The amount is too small to trade.'],
@@ -33,7 +33,7 @@ describe('transaction failure explanations', () => {
 	})
 
 	test('explains wallet cancellations and missing gas funds', () => {
-		expect(describeTransactionFailure(Object.assign(new Error('User rejected the request.'), { code: 4001 }), 'Trade failed')).toBe('Action canceled in wallet. Nothing was sent. Press the button again when ready.')
+		expect(describeTransactionFailure(Object.assign(new Error('User rejected the request.'), { code: 4001 }), 'Trade failed')).toBe('Rejected in wallet. Nothing was sent. Press the button again when ready.')
 		expect(describeTransactionFailure(new Error('insufficient funds for gas * price + value'), 'Trade failed')).toBe('Your wallet does not have enough ETH for this amount plus gas. Lower the amount or add ETH to your wallet.')
 	})
 
@@ -45,8 +45,8 @@ describe('transaction failure explanations', () => {
 	})
 
 	test('keeps unknown failures on the sanitized public message', () => {
-		expect(describeTransactionFailure(new Error('RPC timed out'), 'Trade failed')).toBe('RPC timed out')
-		expect(describeTransactionFailure(new Error(`call args: 0x${'11'.repeat(20)}`), 'Trade failed')).toBe('Trade failed')
-		expect(describeTransactionFailure('not an error', 'Trade failed')).toBe('Trade failed')
+		expect(describeTransactionFailure(new Error('RPC timed out'), 'Trade failed')).toBe('RPC timed out.')
+		expect(describeTransactionFailure(new Error(`call args: 0x${'11'.repeat(20)}`), 'Trade failed')).toBe('Trade failed.')
+		expect(describeTransactionFailure('not an error', 'Trade failed')).toBe('Trade failed.')
 	})
 })

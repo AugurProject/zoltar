@@ -26,7 +26,8 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 		return {
 			badgeTone: 'pending',
 			detail: deploymentCopy.deploymentRunningStatus,
-			label: deploymentCopy.deploying,
+			// The pending button already reads "Deploying…"; a badge would state it a third time.
+			label: undefined,
 			buttonLabel: deploymentCopy.deploying,
 		}
 

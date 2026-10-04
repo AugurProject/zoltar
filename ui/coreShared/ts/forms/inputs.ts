@@ -10,9 +10,9 @@ export function tryParseAddressInput(value: string): Address | undefined {
 
 export function parseAddressInput(value: string, label: string): Address {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	if (trimmed === '') throw new Error(`${label} is required.`)
 	const parsed = tryParseAddressInput(value)
-	if (parsed === undefined) throw new Error(`${label} must be a valid address: ${trimmed}`)
+	if (parsed === undefined) throw new Error(`${label} must be a valid address: ${trimmed}.`)
 	return parsed
 }
 
@@ -28,13 +28,13 @@ function isBytes32Hex(value: string): value is Hex {
 
 export function parseBytes32Input(value: string, label: string): Hex {
 	const trimmed = value.trim()
-	if (!isBytes32Hex(trimmed)) throw new Error(`${label} must be a 32-byte hex value`)
+	if (!isBytes32Hex(trimmed)) throw new Error(`${label} must be a 32-byte hex value.`)
 	return trimmed
 }
 
 export function parseReportIdInput(value: string) {
 	const reportId = parseBigIntInput(value, 'Report ID')
-	if (reportId < 0n) throw new Error('Report ID must be non-negative')
+	if (reportId < 0n) throw new Error('Report ID must be non-negative.')
 	return reportId
 }
 
@@ -43,7 +43,7 @@ function parseListInput<T>(value: string, label: string, parseItem: (entry: stri
 		.split(',')
 		.map(entry => entry.trim())
 		.filter(entry => entry !== '')
-	if (values.length === 0) throw new Error(`${label} is required`)
+	if (values.length === 0) throw new Error(`${label} is required.`)
 	return values.map(parseItem)
 }
 
@@ -57,7 +57,7 @@ function getListEntries(value: string) {
 export function parseBigIntListInput(value: string, label: string) {
 	return parseListInput(value, label, (entry, index) => {
 		const parsed = tryParseBigIntInput(entry)
-		if (parsed === undefined) throw new Error(`${label} #${index + 1} must be a whole number`)
+		if (parsed === undefined) throw new Error(`${label} #${index + 1} must be a whole number.`)
 		return parsed
 	})
 }

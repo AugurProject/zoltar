@@ -24,6 +24,7 @@ import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGua
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getPendingOperationAmountPresentation, getPendingOperationLabel, getStagedOperationExecutionModeLabel } from './SecurityPoolWorkflowPresentation.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 
 export type RequestPriceReview = {
 	proposedRepPerEthPrice?: bigint | undefined
@@ -66,13 +67,13 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 	const { proposedRepPerEthPrice, error: manualPriceError } = parseOracleInitialPrice(initialPrice)
 	const manualPriceErrorShown = initialPrice.price !== '' && manualPriceError !== undefined
 	return (
-		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
+		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPrice}>
 			<OracleInitialPriceFields managerAddress={review?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={pending} fieldId={manualPriceErrorId} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
 					disabledReasonElementId={confirmationGuardMessage === undefined && manualPriceErrorShown ? `${manualPriceErrorId}-error` : undefined}
 					showDisabledReason={confirmationGuardMessage !== undefined || !manualPriceErrorShown}
-					idleLabel={securityPoolCopy.confirmPriceRequest}
+					idleLabel={securityPoolCopy.requestNewPrice}
 					pendingLabel={securityPoolCopy.requestingNewPrice}
 					onClick={() => {
 						if (review !== undefined && manualPriceError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) void onConfirm({ ...review, proposedRepPerEthPrice })
@@ -198,7 +199,7 @@ export function SecurityPoolStagedOperationsSection({
 									<TransactionActionGroup message={canExecute ? guardMessage : undefined}>{executionAction(operation.operationId, guardMessage)}</TransactionActionGroup>
 									<ReadOnlyDetailAccordion title={securityPoolCopy.operationDetails}>
 										<MetricField label={securityPoolCopy.operationId}>{operation.operationId.toString()}</MetricField>
-										<MetricField label={securityPoolCopy.initiator}>
+										<MetricField label={liquidationCopy.operator}>
 											<AddressValue address={operation.operator} />
 										</MetricField>
 									</ReadOnlyDetailAccordion>

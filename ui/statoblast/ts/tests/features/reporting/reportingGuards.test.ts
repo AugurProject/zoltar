@@ -32,9 +32,9 @@ describe('reporting guards', () => {
 		{ expected: 'Connect a wallet before reporting on a question.', name: 'without a connected wallet', overrides: { accountAddress: undefined } },
 		{ expected: 'Select an outcome side before reporting on a question.', name: 'without a selected outcome', overrides: { actualDepositAmount: undefined, selectedOutcome: undefined } },
 		{ expected: 'Enter a valid report amount greater than zero.', name: 'for a zero amount', overrides: { reportAmount: '0', selectedAmount: 0n } },
-		{ expected: 'Loading reporting details.', name: 'while reporting details are missing', overrides: { reportingStatus: 'missing' } },
+		{ expected: 'Loading reporting details…', name: 'while reporting details are missing', overrides: { reportingStatus: 'missing' } },
 		{
-			expected: "Deposit 3\u00a0more\u00a0REP into your vault's pool-held backing before reporting.",
+			expected: 'Deposit 3\u00a0more\u00a0REP into your vault’s pool-held backing before reporting.',
 			name: 'when the vault lacks pool-held REP backing',
 			overrides: { actualDepositAmount: 5n * ATTO_REP_PER_REP, reportAmount: '5', selectedAmount: 5n * ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 2n * ATTO_REP_PER_REP },
 		},
@@ -44,16 +44,16 @@ describe('reporting guards', () => {
 			overrides: { actualDepositAmount: undefined, contributionPreviewReason: 'Increase the report amount slightly to avoid a tie at the minimum bond.', selectedAmount: ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP },
 		},
 		{
-			expected: 'This contribution uses pool-held REP backing. Deposit REP into your vault before reporting.',
+			expected: 'This report uses pool-held REP backing. Deposit REP into your vault before reporting.',
 			name: 'without a vault',
 			overrides: { viewerPoolHeldVaultRepBackingAttoRep: 0n, viewerVaultExists: false },
 		},
 		{
-			expected: 'Only 2\u00a0REP remains before the selected side reaches the threshold.',
+			expected: 'Only 2\u00a0REP remains before the selected side reaches the non-decision threshold.',
 			name: 'when the contribution would exceed the remaining selected-side threshold capacity',
 			overrides: { actualDepositAmount: 5n * ATTO_REP_PER_REP, remainingSelectedOutcomeCapacity: 2n * ATTO_REP_PER_REP, reportAmount: '5', selectedAmount: 5n * ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP },
 		},
-		{ expected: 'No remaining contribution capacity is available on the selected side.', name: 'when the selected side has no remaining capacity', overrides: { remainingSelectedOutcomeCapacity: 0n } },
+		{ expected: 'The selected side has no remaining capacity.', name: 'when the selected side has no remaining capacity', overrides: { remainingSelectedOutcomeCapacity: 0n } },
 	])('blocks report submission $name', ({ expected, overrides }) => {
 		expect(getReportingReportGuardMessage(createReportGuardInput(overrides))).toBe(expected)
 	})
@@ -65,7 +65,7 @@ describe('reporting guards', () => {
 	test.each<{ expected: string | undefined; name: string; input: WithdrawGuardInput }>([
 		{ expected: 'Connect a wallet before settling escalation deposits.', name: 'blocks withdrawal without a connected wallet', input: { accountAddress: undefined, isOnActiveAppChain: true, reportingStatus: 'active' } },
 		{ expected: 'Switch to Sepolia.', name: 'blocks withdrawal off the active chain', input: { accountAddress: zeroAddress, isOnActiveAppChain: false, reportingStatus: 'active' } },
-		{ expected: 'Loading reporting details.', name: 'blocks withdrawal while reporting details are missing', input: { accountAddress: zeroAddress, isOnActiveAppChain: true, reportingStatus: 'missing' } },
+		{ expected: 'Loading reporting details…', name: 'blocks withdrawal while reporting details are missing', input: { accountAddress: zeroAddress, isOnActiveAppChain: true, reportingStatus: 'missing' } },
 		{ expected: undefined, name: 'leaves withdrawal lifecycle handling to the shared action matrix', input: { accountAddress: zeroAddress, isOnActiveAppChain: true, reportingStatus: 'active' } },
 	])('$name', ({ expected, input }) => {
 		expect(getReportingWithdrawGuardMessage(input)).toBe(expected)

@@ -22,9 +22,9 @@
 			</section>
 			<section id="choose">
 				<h2>Choose a market</h2>
-				<p>Paste a SecurityPool address into <strong>Search markets</strong> and select <strong>Open pool</strong>, or follow a shared market link. Opening a market saves it as a favorite. The <strong>Markets</strong> tab lists your favorites in the selected universe with conditional odds, liquidity, and closing time; select a title to reopen it. The star removes a market from favorites.</p>
+				<p>Paste a SecurityPool address into <strong>Search markets</strong> and select <strong>Open security pool</strong>, or follow a shared market link. Opening a market saves it as a favorite. The <strong>Markets</strong> tab lists your favorites in the selected universe with conditional price, liquidity, and closing time; select a title to reopen it. The star removes a market from favorites.</p>
 				<figure class="screenshot" id="fig-trading-markets" aria-labelledby="fig-trading-markets-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/markets.png"><img width="410" height="502" src="../assets/screenshots/trading/markets.png" alt="The market card for Will this resolve? on the Markets tab, marked Trading open, with Yes 50% and No 50% conditional odds, 0.01 ETH liquidity, and its closing date." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/markets.png"><img width="410" height="502" src="../assets/screenshots/trading/markets.png" alt="The market card for Will this resolve? on the Markets tab, marked Trading open, with a Yes 50% and No 50% conditional price, 0.01 ETH liquidity, and its closing date." loading="lazy" /></a>
 					<figcaption id="fig-trading-markets-caption"><span class="figure-label">Markets.</span> Only markets whose badge reads <strong>TRADING OPEN</strong> accept new trades.</figcaption>
 				</figure>
 			</section>
@@ -40,12 +40,12 @@
 				<h2>Buy Yes</h2>
 				<ol>
 					<li>In the market's <strong>Trade</strong> tab, select <strong>Buy</strong> and <strong>Yes</strong>.</li>
-					<li>Enter <code>0.001</code> in <strong>You pay</strong>. The estimate appears below the field: <strong>You receive ≈</strong>, <strong>Minimum received</strong>, <strong>Price impact</strong>, <strong>Invalid insurance</strong>, and <strong>Pool fee</strong>. A price impact above 5% asks you to confirm it, and above 15% the ticket refuses the trade.</li>
+					<li>Enter <code>0.001</code> in <strong>You pay</strong>. The estimate appears below the field: <strong>You receive ≈</strong>, <strong>Minimum received</strong>, <strong>Price impact</strong>, <strong>Invalid insurance</strong>, and <strong>Trading fee</strong>. A price impact above 5% asks you to confirm it, and above 15% the ticket refuses the trade.</li>
 					<li>Select <strong>Buy Yes</strong> and confirm the single <code>enterPosition</code> transaction in your wallet. The client checks the price again before the wallet opens.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-buy" aria-labelledby="fig-trading-buy-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/buy-ticket.png"><img width="480" height="1067" src="../assets/screenshots/trading/buy-ticket.png" alt="The Trade tab with Buy and Yes selected and 0.001 ETH entered. The estimate shows about 0.0019 Yes received, a minimum received, a 4.52% price impact, 0.001 Invalid insurance, and a 0.3% pool fee, above an enabled Buy Yes button." loading="lazy" /></a>
-					<figcaption id="fig-trading-buy-caption"><span class="figure-label">A Yes purchase.</span> The bar above the ticket shows how far the purchase moves the conditional odds.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/trading/buy-ticket.png"><img width="480" height="1088" src="../assets/screenshots/trading/buy-ticket.png" alt="The Trade tab with Buy and Yes selected and 0.001 ETH entered. The estimate shows about 0.0019 Yes received, a minimum received, a 4.52% price impact, 0.001 Invalid insurance, and a 0.3% trading fee, above an enabled Buy Yes button." loading="lazy" /></a>
+					<figcaption id="fig-trading-buy-caption"><span class="figure-label">A Yes purchase.</span> The bar above the ticket shows how far the purchase moves the conditional price.</figcaption>
 				</figure>
 				<p>When the transaction confirms, the <strong>Wallet Yes</strong> and <strong>Wallet Invalid</strong> balances under <strong>Your position</strong> on the market page go up. The ETH became complete sets; the router sold their No for more Yes and sent you all the Yes plus the Invalid. Your Invalid insurance equals the number of complete sets, not the larger Yes total, and you hold no new No.</p>
 			</section>
@@ -57,7 +57,7 @@
 					<li>Select <strong>Sell Yes</strong> and confirm. No approval is needed: the sale is one ShareToken transfer of your Yes and Invalid to the <a href="../reference/glossary.html#trading-router">router</a>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-sell" aria-labelledby="fig-trading-sell-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/sell-ticket.png"><img width="480" height="1035" src="../assets/screenshots/trading/sell-ticket.png" alt="The Trade tab with Sell and Yes selected and 0.001 Yes entered. The estimate shows about 0.00049 ETH received, a minimum received, a 2.49% price impact, 0.0005 Invalid used, and a 0.3% pool fee, above an enabled Sell Yes button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/sell-ticket.png"><img width="480" height="1035" src="../assets/screenshots/trading/sell-ticket.png" alt="The Trade tab with Sell and Yes selected and 0.001 Yes entered. The estimate shows about 0.00049 ETH received, a minimum received, a 2.49% price impact, 0.0005 Invalid used, and a 0.3% trading fee, above an enabled Sell Yes button." loading="lazy" /></a>
 					<figcaption id="fig-trading-sell-caption"><span class="figure-label">A Yes sale.</span> <strong>Invalid used</strong> is the insurance the sale returns to redeem complete sets for ETH.</figcaption>
 				</figure>
 				<p>When it confirms, the ETH is in your wallet, your Invalid has dropped by the amount used, and any Yes the router did not need has come back. If you ask to sell more than your Invalid can insure, the ticket offers the largest amount you can sell now; <a href="../how-to/trading-exit-a-position.html">Exit an insured position</a> covers that case and <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> explains the bound.</p>

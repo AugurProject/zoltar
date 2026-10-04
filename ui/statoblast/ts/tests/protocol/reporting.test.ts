@@ -219,7 +219,7 @@ describe('reporting protocol client', () => {
 		expect(reportPreview?.reviewDescription).toBe(
 			triggersFork
 				? 'Fills No to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.'
-				: 'Stakes REP on No. If No loses, this REP is lost; if it wins, it returns with any earned reward.',
+				: 'Deposits REP on No. If No loses, this REP is lost; if it wins, it returns with any earned reward.',
 		)
 		expect(reportPreview?.reviewAmount).toBe('0.000000000000000007\u00a0REP')
 	})
@@ -287,7 +287,7 @@ describe('reporting protocol client', () => {
 				},
 			),
 		)
-		await expect(reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'wallet')).rejects.toThrow('Fork continuations use vault-funded escalation deposits.')
+		await expect(reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'wallet')).rejects.toThrow('Reports in a pool continued after a fork are funded from your vault.')
 	})
 
 	test('reportOutcomeInSecurityPool routes active ordinary-game wallet contributions through the pool to game escrow', async () => {
@@ -314,7 +314,7 @@ describe('reporting protocol client', () => {
 		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
 		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006\u00a0REP')
 		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006\u00a0REP')
-		expect(previews[0]?.reviewDescription).toBe('Stakes REP on Yes. If Yes loses, this REP is lost; if it wins, it returns with any earned reward.')
+		expect(previews[0]?.reviewDescription).toBe('Deposits REP on Yes. If Yes loses, this REP is lost; if it wins, it returns with any earned reward.')
 
 		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()
@@ -360,7 +360,7 @@ describe('reporting protocol client', () => {
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'no', [0n], 0n)
 		expect(previews[0]?.reviewTitle).toBe('Clear No deposits (worth 0 REP)')
-		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Removes these losing deposits from your vault’s dispute stake so you can redeem your vault REP from this pool.')
+		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Removes these losing deposits from your vault’s dispute-staked REP so you can redeem your vault REP from this pool.')
 		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'yes', [0n], 4n)
 		expect(previews[1]?.reviewDescription).toBeUndefined()
 	})
@@ -1166,7 +1166,7 @@ describe('reporting protocol client', () => {
 		} as unknown as Parameters<typeof buildForkCarriedEscalationProofs>[0]
 
 		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: 1n, parentDepositIndex: secondLeaf.parentDepositIndex }])
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent carry leaf 9 is already settled.')
+		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent deposit #9 is already settled.')
 	})
 
 	test('buildForkCarriedEscalationProofs encodes global leaf indexes with the containing peak height for three- and six-leaf tail peaks', async () => {

@@ -24,7 +24,7 @@ type MarketCreationTransactionContext = {
 }
 
 function getMarketCreationTransactionRows(context: MarketCreationTransactionContext) {
-	return [...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]), { label: marketCopy.questionType, value: getMarketTypeLabel(context.marketType) }]
+	return [...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]), { label: commonCopy.questionType, value: getMarketTypeLabel(context.marketType) }]
 }
 
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
@@ -106,7 +106,7 @@ function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionCo
 	if (context === undefined) return undefined
 	return [
 		...(context.amount === undefined || context.amount.trim() === '' ? [] : [{ label: commonCopy.amount, value: formatValueWithUnit(context.amount.trim(), commonCopy.rep) }]),
-		...(context.outcomeLabels === undefined || context.outcomeLabels.length === 0 ? [] : [{ label: transactionCopy.migrationOutcomes, value: formatOutcomeLabels(context.outcomeLabels) }]),
+		...(context.outcomeLabels === undefined || context.outcomeLabels.length === 0 ? [] : [{ label: commonCopy.outcomes, value: formatOutcomeLabels(context.outcomeLabels) }]),
 	]
 }
 
@@ -120,7 +120,7 @@ export function createZoltarMigrationSuccessPresentation(result: ZoltarMigration
 		hash: result.hash,
 		rows: [
 			{ label: commonCopy.amount, value: formatCurrencyBalanceWithUnit(result.amountAttoRep, commonCopy.rep) },
-			{ label: transactionCopy.migrationOutcomes, value: formatOutcomeLabels(outcomeLabels) },
+			{ label: commonCopy.outcomes, value: formatOutcomeLabels(outcomeLabels) },
 		],
 		title: transactionCopy.repMigrated,
 		tone: 'success',

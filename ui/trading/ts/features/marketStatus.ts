@@ -6,8 +6,8 @@ export function marketStatusLabel(market: LiveMarket, nowSeconds: bigint) {
 	if (market.loadError !== undefined) return liveCopy.marketDataUnavailable
 	const blocker = marketNewRiskBlocker(market, nowSeconds)
 	if (blocker !== undefined) return blocker
-	if (market.pair === undefined) return liveCopy.pairNotCreated
-	return livePairInitialized(market) ? liveCopy.tradingOpen : liveCopy.pairUninitialized
+	if (market.pair === undefined) return liveCopy.marketNotCreated
+	return livePairInitialized(market) ? liveCopy.tradingOpen : liveCopy.noLiquidityYet
 }
 
 export function marketStatusTone(market: LiveMarket, nowSeconds: bigint) {

@@ -29,7 +29,7 @@ void describe('amount input validation', () => {
 		expect(messageFor('1e5')).toBe('Enter a number, such as 1.5.')
 		expect(validateAmountInput('-1')).toEqual({ status: 'invalid', problem: 'negative', amount: -ONE })
 		expect(messageFor('-1')).toBe('Enter an amount greater than zero.')
-		expect(messageFor('-1', { allowZero: true })).toBe('Enter a valid nonnegative amount.')
+		expect(messageFor('-1', { allowZero: true })).toBe('Enter a valid non-negative amount.')
 		expect(messageFor('0')).toBe('Enter an amount greater than zero.')
 		expect(validateAmountInput('0', { allowZero: true })).toEqual({ status: 'valid', amount: 0n })
 	})

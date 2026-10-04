@@ -14,18 +14,18 @@ export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecur
 	const input = statoblastSecurityMultiplier.trim()
 	if (input === '') return `Enter a security multiplier of at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
 	const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(input)
-	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a multiplier with at most 4 decimal places.'
+	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a security multiplier with up to four decimal places.'
 	if (statoblastSecurityMultiplierBps < MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS) return `Security multiplier must be at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
 	return undefined
 }
 
 export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeNanoEth: string) {
 	const input = initialReportPriorityFeeNanoEth.trim()
-	if (input === '') return 'Enter an initial-report priority fee in nanoETH per gas.'
+	if (input === '') return 'Enter an initial report priority fee in nanoETH per gas.'
 	const priorityFeeAttoEthPerGas = tryParseInitialReportPriorityFeeInput(input)
-	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a nanoETH value with at most 9 decimal places.'
-	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.'
-	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for OpenOracle report limits.'
+	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a nanoETH value with up to nine decimal places.'
+	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial report priority fee must be greater than 0\u00a0nanoETH per gas.'
+	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial report priority fee is too large for OpenOracle report limits.'
 	return undefined
 }
 
@@ -57,11 +57,11 @@ export function getSecurityPoolCreateDisabledReason({
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier)
 	if (statoblastSecurityMultiplierValidationMessage !== undefined) return statoblastSecurityMultiplierValidationMessage
 	if (checkingDuplicateOriginPool) return 'Checking whether a pool already exists for this question, security multiplier, and priority fee.'
-	if (securityPoolCreating) return 'Security pool creation is already in progress.'
+	if (securityPoolCreating) return securityPoolCopy.poolCreationInProgress
 	if (duplicateOriginPoolExists) return 'A pool for this question, security multiplier, and priority fee already exists.'
-	if (marketDetails === undefined) return 'Enter an exact binary Yes / No question before creating a pool.'
-	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
+	if (marketDetails === undefined) return 'Enter a binary Yes / No question before creating a pool.'
+	if (marketDetails.marketType !== 'binary') return securityPoolCopy.ineligibleQuestionDetail
 	if (currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp) return securityPoolCopy.questionEndedReason
-	if (zoltarUniverseHasForked) return 'Security pools cannot be created after this universe has forked.'
+	if (zoltarUniverseHasForked) return securityPoolCopy.poolCreationAfterForkReason
 	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeNanoEth)
 }

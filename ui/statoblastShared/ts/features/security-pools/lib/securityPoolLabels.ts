@@ -1,4 +1,5 @@
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
@@ -30,13 +31,13 @@ export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, re
 
 export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutcome, lifecycleState }: { hasForkActivity: boolean; questionOutcome?: ReportingOutcomeKey | 'none'; lifecycleState: SecurityPoolLifecycleState | undefined }) {
 	if (lifecycleState === undefined) return 'Unknown'
-	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return 'Fork migration'
-	if (lifecycleState === 'forkTruthAuction') return 'Truth auction'
+	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return securityPoolCopy.forkMigration
+	if (lifecycleState === 'forkTruthAuction') return commonCopy.truthAuction
 	if (lifecycleState === 'ended') {
 		if (questionOutcome === undefined || questionOutcome === 'none') return 'Finalized'
 		return `Finalized as ${getReportingOutcomeLabel(questionOutcome)}`
 	}
-	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork finalized' : 'Operational'
+	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork finalized' : commonCopy.operational
 	return assertNever(lifecycleState)
 }
 

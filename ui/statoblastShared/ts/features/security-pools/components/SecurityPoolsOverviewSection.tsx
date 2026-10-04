@@ -28,7 +28,7 @@ function getStateFilterLabel(filter: PoolStateFilter) {
 function getSortLabel(sortKey: PoolSortKey) {
 	if (sortKey === 'recent') return favoritesCopy.recentlySaved
 	if (sortKey === 'remainingCapacity') return securityPoolCopy.remainingCapacity
-	if (sortKey === 'endTime') return favoritesCopy.endTime
+	if (sortKey === 'endTime') return commonCopy.endTime
 	return securityPoolCopy.systemState
 }
 

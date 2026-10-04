@@ -9,7 +9,7 @@ const ATTO_ETH_PER_ETH = 10n ** 18n
 
 describe('security vault guards', () => {
 	test('uses the loaded pool backing minimum inclusively, including fractional ratios', () => {
-		expect(getTargetHealthFactorGuardMessage('2.4999', 25_000n)).toBe('Target backing ratio must be at least 2.5×')
+		expect(getTargetHealthFactorGuardMessage('2.4999', 25_000n)).toBe('Target backing ratio must be at least 2.5×.')
 		expect(getTargetHealthFactorGuardMessage('2.5', 25_000n)).toBeUndefined()
 		expect(getTargetHealthFactorGuardMessage('3', 25_000n)).toBeUndefined()
 	})
@@ -53,7 +53,7 @@ describe('security vault guards', () => {
 				isDepositBelowMinimum: false,
 				walletRepShortfallAttoRep: 2n * 10n ** 18n,
 			}),
-		).toBe('Need 2\u00a0more\u00a0REP in this wallet.')
+		).toBe('Insufficient REP balance. Deposit amount exceeds your wallet balance by 2\u00a0REP.')
 
 		expect(
 			getVaultDepositGuardMessage({
@@ -77,9 +77,9 @@ describe('security vault guards', () => {
 				walletRepShortfallAttoRep: undefined,
 			})
 
-		expect(guard('')).toBe('Target backing ratio must be a number with at most four decimal places')
-		expect(guard('abc')).toBe('Target backing ratio must be a number with at most four decimal places')
-		expect(guard('0.9999')).toBe('Target backing ratio must be at least 1×')
+		expect(guard('')).toBe('Target backing ratio must be a number with up to four decimal places.')
+		expect(guard('abc')).toBe('Target backing ratio must be a number with up to four decimal places.')
+		expect(guard('0.9999')).toBe('Target backing ratio must be at least 1×.')
 		expect(guard('1.25')).toBeUndefined()
 	})
 

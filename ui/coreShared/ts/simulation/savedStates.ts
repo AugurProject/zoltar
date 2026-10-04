@@ -248,7 +248,7 @@ function getSavedSimulationStateStorageSnapshot(storage?: Storage) {
 }
 
 function getSavedSimulationStateStorageWarningFromSnapshot(snapshot: SavedSimulationStateStorageSnapshot) {
-	if (snapshot.hasMalformedStorageValue) return 'Saved simulation state storage is corrupted in browser storage.'
+	if (snapshot.hasMalformedStorageValue) return 'Saved simulation states in browser storage are corrupted.'
 	const droppedRecordCount = snapshot.droppedRecordCount
 	if (droppedRecordCount === 0) return undefined
 	return droppedRecordCount === 1 ? 'Ignored 1 corrupted saved simulation state in browser storage.' : `Ignored ${droppedRecordCount} corrupted saved simulation states in browser storage.`

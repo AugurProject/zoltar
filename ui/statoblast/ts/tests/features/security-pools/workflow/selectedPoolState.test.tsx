@@ -331,7 +331,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 
-		expect(within(document.body).getByText('No current positions among 2 known vaults.')).not.toBeNull()
+		expect(within(document.body).getByText('No active vaults among 2 known vaults.')).not.toBeNull()
 		expect(within(document.body).queryByText('No known vaults in this pool.')).toBeNull()
 	})
 
@@ -342,10 +342,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 
-		expect(within(document.body).getByText('Registry scan limit reached. Some current positions may not be shown.')).not.toBeNull()
-		expect(within(document.body).getByText('No current positions found within the scan limit.')).not.toBeNull()
+		expect(within(document.body).getByText('Vault scan limit reached. Some active vaults may not be shown.')).not.toBeNull()
+		expect(within(document.body).getByText('No active vaults found within the scan limit.')).not.toBeNull()
 		expect(within(document.body).queryByText('Showing 0 current positions from 600 known vaults, newest-registered first.')).toBeNull()
-		expect(within(document.body).queryByText('No current positions among 600 known vaults.')).toBeNull()
+		expect(within(document.body).queryByText('No active vaults among 600 known vaults.')).toBeNull()
 	})
 
 	test('renders a selected bad-debt-only known vault as an existing position', async () => {
@@ -680,7 +680,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Select vault' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open vault' }))
 		})
 
 		expect(formChanges).toContainEqual({ selectedVaultOwner: vaultAddress })
