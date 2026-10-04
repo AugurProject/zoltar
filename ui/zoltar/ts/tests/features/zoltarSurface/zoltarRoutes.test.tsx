@@ -31,7 +31,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 }
 
 /** The operation slice the Zoltar route containers read; each test overrides the universe and view. */
-function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined) {
+function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined, forkError: string | undefined = undefined) {
 	return {
 		approveZoltarForkRep: async () => undefined,
 		createChildUniverse: async () => undefined,
@@ -59,7 +59,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined, universeE
 		zoltarChildUniversePendingOutcomeIndex: undefined,
 		zoltarForkActiveAction: undefined,
 		zoltarForkApproval: { error: undefined, loading: false, value: 0n },
-		zoltarForkError: undefined,
+		zoltarForkError: forkError,
 		zoltarForkPending: false,
 		zoltarForkQuestionId: '',
 		zoltarForkRepBalanceAttoRep: 10n,
@@ -218,6 +218,16 @@ describe('ZoltarRoutes', () => {
 		expect(queries.getByRole('button', { name: 'Deploy No universe' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		expect(document.querySelectorAll('.migration-wizard-steps button')).toHaveLength(4)
+	})
+
+	test('shows and clears REP approval errors on the Migrate route', async () => {
+		const screen = await renderRoute('migrate', createUniverse())
+		const message = 'Wallet account changed. Please try again.'
+		await screen.update({ zoltarForkError: message })
+		expect(screen.queries.getByRole('alert').textContent).toContain(message)
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		await screen.update({ zoltarForkError: undefined })
+		expect(screen.queries.queryByText(message)).toBeNull()
 	})
 
 	test('redirects a Fork route on a forked universe to migration', async () => {

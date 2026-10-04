@@ -7,7 +7,9 @@ enum CarryConsumptionReason {
 	WinningClaim,
 	LosingSettlement,
 	Export,
-	DirectParentClaim
+	DirectParentClaim,
+	// Unused; kept because removing it adds approximately 240 bytes to EscalationGame.
+	ForkedEscrowClaim
 }
 
 interface IEscalationGameEvents {

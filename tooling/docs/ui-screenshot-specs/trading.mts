@@ -1,7 +1,7 @@
 import type { UiScreenshotCrop, UiScreenshotSpec, UiScreenshotStep } from '../ui-screenshot-specs.mts'
 
 // This seeded pool address is deterministic in the deployed and trading-funded fixtures.
-const seededPool = '0xF6e0A6330d7Cf7E812014993fab1787De740a17E'
+const seededPool = '0x159473dfeF406C9A52aF60B84727E45eAD13490C'
 const openSeededPool: readonly UiScreenshotStep[] = [{ fill: 'Search markets', value: seededPool }, { click: 'Open security pool' }, { waitForText: 'Question end' }]
 const openFirstMarket: readonly UiScreenshotStep[] = openSeededPool
 const openSeededPoolForCreation: readonly UiScreenshotStep[] = [{ fill: 'Search security pools', value: seededPool }, { click: 'Open security pool' }, { waitForText: 'Question end' }]

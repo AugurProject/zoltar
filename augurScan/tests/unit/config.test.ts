@@ -242,7 +242,7 @@ describe('network configuration', () => {
 			if (override === undefined) delete process.env['SEPOLIA_AMM_FACTORY_ADDRESS']
 			else process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = override
 			const [network] = await loadNetworks()
-			expect(network?.contracts.filter(([, , kind]) => kind === 'ammFactory')).toEqual([[getAddress('0xe6345fe452a49f855efcb980a28a36f7f22441fa'), 'Augur AMM Factory', 'ammFactory']])
+			expect(network?.contracts.filter(([, , kind]) => kind === 'ammFactory')).toEqual([[getAddress('0x1c72c7d08f5fbcf5bb966f869c1cf4ec2bd98ed1'), 'Augur AMM Factory', 'ammFactory']])
 		}
 	})
 

@@ -47,6 +47,7 @@ export function ZoltarMigrationWorkflow({ universeBrowserHref, accountState, act
 					/>
 				</SectionBlock>
 			</TransactionScopeProvider>
+			<ErrorNotice message={operations.zoltarForkError} />
 			<ErrorNotice message={operations.zoltarChildUniverseError} />
 		</>
 	)

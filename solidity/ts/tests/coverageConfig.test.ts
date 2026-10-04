@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getSolidityBytecodeCoverageConfig } from '../testSupport/coverage/coverageConfig'
 
 test('resolves repository coverage paths from inside the Solidity package', async () => {
-	const root = await mkdtemp(join(tmpdir(), 'coverage-config-'))
+	const root = await realpath(await mkdtemp(join(tmpdir(), 'coverage-config-')))
 	const previousDirectory = process.cwd()
 	const previousRoot = process.env['SOLIDITY_BYTECODE_COVERAGE_ROOT_PATH']
 	try {

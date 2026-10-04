@@ -43,7 +43,6 @@ export const formatReadRpcSavedInSettingsDetail = (configuredRpcLabel: string, r
 export const customReadRpcWarningDetail = 'A custom RPC URL is active. Verify it before acting on displayed onchain state.'
 export const readRpcOverrideIgnoredDetail = 'A custom RPC URL was ignored. The configured fallback is active.'
 export const readWriteNetworkMismatchDetail = 'Displayed onchain state may not match the network this interface writes to.'
-export const staleReadRpc = 'Stale read RPC'
 export const readRpcMismatch = 'Read RPC mismatch'
 export const readRpcOverrideActive = 'Custom RPC URL active'
 export const readRpcStale = 'Read RPC out of date'

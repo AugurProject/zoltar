@@ -66,7 +66,6 @@ export function App() {
 		walletScopedHookConfig,
 	} = useProtocolAppShell({
 		deploymentRoute: {
-			deploymentCompleteLabel: commonCopy.browsePools,
 			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('pools'), getTopLevelRouteSearch('pools')),
 			deploymentCompleteLabel: commonCopy.browsePools,
 			getSections: getStatoblastDeploymentSections,

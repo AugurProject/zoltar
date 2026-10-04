@@ -111,6 +111,31 @@ function getElementValue(element: Element) {
 
 describe('SimulationBanner', () => {
 	installTestRouting()
+	test('does not reread saved state storage during ordinary rerenders', async () => {
+		const domEnvironment = installDomEnvironment()
+		const storage = domEnvironment.window.localStorage
+		const originalGetItem = storage.getItem.bind(storage)
+		const savedStateReads: string[] = []
+		Object.defineProperty(storage, 'getItem', {
+			configurable: true,
+			value: (key: string) => {
+				if (key === 'zoltar.simulation.savedStates') savedStateReads.push(key)
+				return originalGetItem(key)
+			},
+		})
+		const controller = createSimulationController()
+		const onRefresh = async () => undefined
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={onRefresh} />)
+		try {
+			expect(savedStateReads).toHaveLength(1)
+			await act(() => render(<SimulationBanner controller={controller} onRefresh={async () => undefined} />, renderedComponent.container))
+			expect(savedStateReads).toHaveLength(1)
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('shows the selected scenario description', async () => {
 		const domEnvironment = installDomEnvironment()
 		const onRefresh = mock(async () => undefined)

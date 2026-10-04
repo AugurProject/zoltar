@@ -148,7 +148,7 @@ describe('useZoltarFork', () => {
 		expect(state().zoltarForkRepBalanceAttoRep).toBe(10n)
 	})
 
-	test('does not request a fork transaction when the active wallet account changed', async () => {
+	test.each(['fork', 'approval'])('does not request a %s transaction when the active wallet account changed', async action => {
 		const ensureZoltarUniverse = mock(async () => createUniverse())
 		const onTransactionRequested = mock(() => undefined)
 		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), { action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
@@ -161,9 +161,12 @@ describe('useZoltarFork', () => {
 		const { state } = await renderForkHook(createForkParameters({ ensureZoltarUniverse, onTransactionFailed, onTransactionRequested }), createZoltarForkDependencies())
 
 		await act(async () => {
-			await state().forkZoltar()
+			if (action === 'approval') await state().approveZoltarForkRep(100n)
+			else await state().forkZoltar()
 		})
 
+		expect(state().zoltarForkError).toContain('Wallet account changed')
+		expect(state().zoltarForkFeedback?.status.detail).toBe(state().zoltarForkError)
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()

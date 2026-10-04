@@ -2,7 +2,7 @@ import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getBuiltInScenarioLocation, getSavedSimulationStateLocation, hasSavedSimulationStateRoute, refreshEnvironmentAtSimulationLocation } from '../simulation/scenarioNavigation.js'
@@ -47,7 +47,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const savedStateError = useSignal<string | undefined>(undefined)
 	const savedStateStorage = getBrowserStorage('localStorage')
-	const initialSavedStateSummary: SavedSimulationStateStorageSummary = getSavedSimulationStateStorageSummary(savedStateStorage)
+	const [initialSavedStateSummary] = useState<SavedSimulationStateStorageSummary>(() => getSavedSimulationStateStorageSummary(savedStateStorage))
 	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(initialSavedStateSummary.records)
 	const savedStateStorageWarning = useSignal<string | undefined>(initialSavedStateSummary.warning)
 	const saveName = useSignal('')
