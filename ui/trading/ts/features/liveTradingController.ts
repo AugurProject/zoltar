@@ -1,3 +1,4 @@
+import * as workflowCopy from '../copy/workflows.js'
 import { useRef } from 'preact/hooks'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -133,7 +134,7 @@ export function useLiveTradingController({
 		} catch (error) {
 			if (!balanceRequests.isCurrent(request)) return
 			setBalanceState('error')
-			setBalanceError(publicErrorMessage(error, 'Balance refresh failed'))
+			setBalanceError(publicErrorMessage(error, workflowCopy.balanceRefreshFailed))
 		}
 	}
 

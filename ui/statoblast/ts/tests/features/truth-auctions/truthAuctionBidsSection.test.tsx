@@ -5,6 +5,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/TruthAuctionBidsSection.js'
+import { ForkAuctionStartSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionActionSections.js'
 import { describe, expect, test } from 'bun:test'
 import type { ComponentChildren } from 'preact'
 
@@ -30,14 +31,14 @@ describe('TruthAuctionBidsSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(within(document.body).getByRole('heading', { name: 'Current bids' })).not.toBeNull()
-		expect(within(document.body).getByText(/Loading auction bids/)).not.toBeNull()
+		expect(within(document.body).getByText(/Loading truth auction bids/)).not.toBeNull()
 
 		await rendered.unmount()
 		cleanupRendered = undefined
 		const emptyRendered = await renderIntoDocument(<TruthAuctionBidsSection aggregatedAuctionBidCountForLoadedTicks={0n} hasMoreAggregatedAuctionBids={false} loadedTickCount={0} loadingAggregatedAuctionBids={false} onLoadNextAuctionBidPage={() => undefined} renderPriceValue={renderPriceValue} rows={[]} />)
 		cleanupRendered = emptyRendered.cleanup
 
-		expect(within(document.body).getByText('No active prices are currently visible for this auction.')).not.toBeNull()
+		expect(within(document.body).getByText('This truth auction has no active bids.')).not.toBeNull()
 	})
 
 	test('renders auction bid rows and load-more action', async () => {
@@ -70,15 +71,15 @@ describe('TruthAuctionBidsSection', () => {
 		const statusValue = within(document.body).getByText('Winning')
 		expect(priceValue.getAttribute('data-label')).toBe('Price (ETH per REP)')
 		expect(statusValue.parentElement?.getAttribute('data-label')).toBe('Status')
-		const bidHistory = within(document.body).getByRole('table', { name: 'Auction bid history' })
-		const scrollRegion = within(document.body).getByRole('region', { name: 'Scrollable auction bid history' })
+		const bidHistory = within(document.body).getByRole('table', { name: 'Current bids' })
+		const scrollRegion = within(document.body).getByRole('region', { name: 'Scrollable list of current bids' })
 		expect(scrollRegion.className).toContain('truth-auction-bid-table-scroll')
 		expect(scrollRegion.getAttribute('tabindex')).toBe('0')
 		expect(scrollRegion.contains(bidHistory)).toBe(true)
 		expect(within(bidHistory).getAllByRole('columnheader')).toHaveLength(4)
 		expect(within(bidHistory).getAllByRole('row')).toHaveLength(2)
 		expect(within(bidHistory).getAllByRole('cell')).toHaveLength(4)
-		expect(within(document.body).getByText('Showing 1 of 3 bids at the loaded prices')).not.toBeNull()
+		expect(within(document.body).getByText('Showing 1 of 3 bids at the loaded prices.')).not.toBeNull()
 		expect(within(bidHistory).queryByRole('button', { name: /Copy address/ })).toBeNull()
 		expect(within(bidHistory).queryByRole('button', { name: /Copy exact value/ })).toBeNull()
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Show more truth auction bids' }))
@@ -115,7 +116,7 @@ describe('TruthAuctionBidsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed to load truth auction bidbook')).not.toBeNull()
-		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
+		expect(documentQueries.queryByText('This truth auction has no active bids.')).toBeNull()
 		expect(documentQueries.queryByText('Visible levels')).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry current bids' }))
 		expect(retryCalls).toBe(1)
@@ -140,7 +141,7 @@ describe('TruthAuctionBidsSection', () => {
 
 		const retryingButton = within(document.body).getByRole('button', { name: 'Retry current bids' })
 		expect(retryingButton.hasAttribute('disabled')).toBe(true)
-		expect(retryingButton.textContent).toContain('Retrying auction bids…')
+		expect(retryingButton.textContent).toContain('Retrying truth auction bids…')
 	})
 })
 
@@ -290,9 +291,24 @@ describe('ViewerTruthAuctionBidsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed to load truth auction bidbook')).not.toBeNull()
-		expect(documentQueries.queryByText('No bids from this wallet are indexed for the current auction.')).toBeNull()
+		expect(documentQueries.queryByText('No bids from this wallet were found for this truth auction.')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Show more of my bids' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry my bids' }))
 		expect(retryCalls).toBe(1)
+	})
+
+	test('the start section drops the auction explanation when the truth auction is bypassed', async () => {
+		const rendered = await renderIntoDocument(<ForkAuctionStartSection actionButton={undefined} bypassReason={undefined} readyInText={undefined} />)
+		cleanupRendered = rendered.cleanup
+		expect(within(document.body).getByRole('heading', { name: 'Start truth auction' })).not.toBeNull()
+		expect(document.body.textContent).toContain('Start the ETH-for-REP truth auction')
+
+		await rendered.unmount()
+		cleanupRendered = undefined
+		const bypassRendered = await renderIntoDocument(<ForkAuctionStartSection actionButton={undefined} bypassReason='No truth auction is needed.' readyInText={undefined} />)
+		cleanupRendered = bypassRendered.cleanup
+		expect(within(document.body).getByRole('heading', { name: 'Bypass truth auction' })).not.toBeNull()
+		expect(document.body.textContent).toContain('No truth auction is needed.')
+		expect(document.body.textContent).not.toContain('Start the ETH-for-REP truth auction')
 	})
 })

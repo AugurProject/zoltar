@@ -446,7 +446,8 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe(`Configured read RPC is stale. Latest block timestamp is ${formatTimestampWithRelative(staleBlockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`))
+		await waitFor(() => expect(requireHookState(hookState).readBackendMessage).toBe(`Configured read RPC is out of date. Its latest block is from ${formatTimestampWithRelative(staleBlockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`))
+		expect(requireHookState(hookState).readBackendStatus.issue).toBe('stale')
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 
@@ -665,7 +666,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).errorMessages).toContain('Failed to refresh deployment status. Reason: deployment status RPC failed'))
+		await waitFor(() => expect(requireHookState(hookState).errorMessages).toContain('Failed to refresh deployment status. Reason: deployment status RPC failed.'))
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		resetEnvironment()
 	})
@@ -771,7 +772,7 @@ describe('useOnchainState (integration)', () => {
 		await act(async () => {
 			await requireHookState(hookState).refreshState()
 		})
-		expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: account discovery failed')
+		expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: account discovery failed.')
 		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because wallet discovery failed.')
 		expectTrustedStateInvalidated()
 
@@ -791,7 +792,7 @@ describe('useOnchainState (integration)', () => {
 		await act(async () => {
 			await requireHookState(hookState).refreshState()
 		})
-		expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: chain discovery failed')
+		expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: chain discovery failed.')
 		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because wallet discovery failed.')
 		expectTrustedStateInvalidated()
 		resetEnvironment()
@@ -819,7 +820,7 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: wallet connect failed'))
+		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Failed to refresh wallet state. Reason: wallet connect failed.'))
 		expect(requireHookState(hookState).walletBootstrapComplete).toBe(true)
 		resetEnvironment()
 	})
@@ -890,14 +891,14 @@ describe('useOnchainState (integration)', () => {
 
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
-		expect(requireHookState(hookState).chainClockError).toBe('Failed to refresh chain clock. Reason: block RPC failed')
+		expect(requireHookState(hookState).chainClockError).toBe('Failed to refresh chain clock. Reason: block RPC failed.')
 		await act(async () => {
 			await requireHookState(hookState).refreshState({
 				loadChainClock: false,
 				loadDeploymentState: false,
 			})
 		})
-		expect(requireHookState(hookState).chainClockError).toBe('Failed to refresh chain clock. Reason: block RPC failed')
+		expect(requireHookState(hookState).chainClockError).toBe('Failed to refresh chain clock. Reason: block RPC failed.')
 		resetEnvironment()
 	})
 
@@ -997,7 +998,7 @@ describe('useOnchainState (integration)', () => {
 		expect(requestAccountsCalls).toBe(1)
 
 		connectDeferred.reject(new Error('wallet rejected'))
-		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Wallet connection failed. Reason: wallet rejected'))
+		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Wallet connection failed. Reason: wallet rejected.'))
 		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
 		resetEnvironment()
 	})
@@ -1031,7 +1032,7 @@ describe('useOnchainState (integration)', () => {
 			fireEvent.click(connectButton)
 		})
 
-		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Action canceled in wallet.'))
+		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Rejected in wallet.'))
 		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
 		resetEnvironment()
 	})
@@ -1128,7 +1129,7 @@ describe('useOnchainState (integration)', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => expect(requireHookState(hookState).errorMessages).toHaveLength(3))
-		expect(requireHookState(hookState).errorMessages).toEqual(['Failed to refresh deployment status. Reason: deployment RPC failed', 'Failed to refresh ETH balance. Reason: eth RPC failed', 'Failed to refresh WETH balance. Reason: weth RPC failed'])
+		expect(requireHookState(hookState).errorMessages).toEqual(['Failed to refresh deployment status. Reason: deployment RPC failed.', 'Failed to refresh ETH balance. Reason: eth RPC failed.', 'Failed to refresh WETH balance. Reason: weth RPC failed.'])
 		resetEnvironment()
 	})
 
@@ -1229,7 +1230,7 @@ describe('useOnchainState (integration)', () => {
 		}
 
 		failureSignal.reject(new Error('bootstrap unavailable'))
-		await waitFor(() => expect(requireHookState(failureState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: bootstrap unavailable'))
+		await waitFor(() => expect(requireHookState(failureState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: bootstrap unavailable.'))
 		await failureRender.cleanup()
 		cleanupRenderedComponent = undefined
 		resetFailureEnvironment()
@@ -1270,7 +1271,7 @@ describe('useOnchainState (integration)', () => {
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 
 		readySignal.reject(new Error('replacement bootstrap failed'))
-		await waitFor(() => expect(requireHookState(hookState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: replacement bootstrap failed'))
+		await waitFor(() => expect(requireHookState(hookState).environmentBootstrapError).toBe('Failed to bootstrap simulation environment. Reason: replacement bootstrap failed.'))
 		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
 		resetEnvironment()
 	})

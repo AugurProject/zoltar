@@ -136,7 +136,7 @@ describe('deriveZoltarOverviewModel', () => {
 		expect(model.nextStep).toEqual({ kind: 'migrate-rep', view: 'migrate' })
 	})
 
-	test('sends a forked universe with a known zero balance to its outcome universes', () => {
+	test('sends a forked universe with a known zero balance to its child universes', () => {
 		const model = deriveZoltarOverviewModel(createInput({ activeUniverseId: childUniverseId, universe: forkedChild }, { preparedMigrationRepAttoRep: 0n, repBalanceAttoRep: 0n }))
 		expect(model.migratableRepAttoRep).toBe(0n)
 		expect(model.needsAttention).toBe(false)

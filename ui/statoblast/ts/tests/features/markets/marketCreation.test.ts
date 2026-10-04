@@ -85,9 +85,9 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.title).toBe('Title is required')
-		expect(validation.fieldErrors.endTime).toBe('End time is required')
-		expect(validation.fieldErrors.scalarMin).toBe('Scalar min, max, and increment do not produce a whole number of ticks')
+		expect(validation.fieldErrors.title).toBe('Title is required.')
+		expect(validation.fieldErrors.endTime).toBe('End time is required.')
+		expect(validation.fieldErrors.scalarMin).toBe('Scalar min, max, and increment do not produce a whole number of ticks.')
 		expect(validation.notice).toContain('Missing required fields: Title, End time')
 		expect(validation.notice).toContain('Fix invalid fields: Scalar min, max, and increment do not produce a whole number of ticks')
 	})
@@ -119,7 +119,7 @@ void describe('market creation helpers', () => {
 			startTime: '1000',
 		})
 		expect(oneOutcome.isValid).toBe(false)
-		expect(oneOutcome.fieldErrors.categoricalOutcomes).toBe('Outcome 2 is required')
+		expect(oneOutcome.fieldErrors.categoricalOutcomes).toBe('Outcome 2 is required.')
 
 		const duplicateOutcomes = validateMarketForm({
 			answerUnit: '',
@@ -134,7 +134,7 @@ void describe('market creation helpers', () => {
 			startTime: '1000',
 		})
 		expect(duplicateOutcomes.isValid).toBe(false)
-		expect(duplicateOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcomes must be unique')
+		expect(duplicateOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcomes must be unique.')
 	})
 
 	test('validation requires a formatted scalarStart time', () => {
@@ -152,7 +152,7 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.startTime).toBe('Start time is invalid')
+		expect(validation.fieldErrors.startTime).toBe('Start time is invalid.')
 		expect(validation.notice).toContain('Fix invalid fields: Start time is invalid')
 	})
 
@@ -171,7 +171,7 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(noOutcomes.isValid).toBe(false)
-		expect(noOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcome 1 and Outcome 2 are required')
+		expect(noOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcome 1 and Outcome 2 are required.')
 		expect(noOutcomes.notice).toContain('Missing required fields: Outcome 1, Outcome 2')
 	})
 
@@ -191,7 +191,7 @@ void describe('market creation helpers', () => {
 
 		const validation = validateMarketForm(sparseOutcomesForm)
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.categoricalOutcomes).toBe('Outcome 1 is required')
+		expect(validation.fieldErrors.categoricalOutcomes).toBe('Outcome 1 is required.')
 		expect(validation.notice).toContain('Missing required fields: Outcome 1')
 		expect(() => createMarketParameters(sparseOutcomesForm)).toThrow('Outcome 1 is required')
 	})
@@ -243,7 +243,7 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.endTime).toBe('End time is invalid')
+		expect(validation.fieldErrors.endTime).toBe('End time is invalid.')
 		expect(validation.notice).toContain('Fix invalid fields: End time is invalid')
 	})
 
@@ -262,8 +262,8 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.startTime).toBe('Start time must not be before the Unix epoch')
-		expect(validation.fieldErrors.endTime).toBe('End time must not be before the Unix epoch')
+		expect(validation.fieldErrors.startTime).toBe('Start time must not be before the Unix epoch.')
+		expect(validation.fieldErrors.endTime).toBe('End time must not be before the Unix epoch.')
 	})
 
 	test('validates a blank start time using the zero value used for submission', () => {
@@ -281,7 +281,7 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.endTime).toBe('End time must be after start time')
+		expect(validation.fieldErrors.endTime).toBe('End time must be after start time.')
 	})
 
 	test('validates start/end times during question creation', () => {
@@ -332,9 +332,9 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.scalarMin).toBe('Scalar min is required')
-		expect(validation.fieldErrors.scalarMax).toBe('Scalar max is required')
-		expect(validation.fieldErrors.scalarIncrement).toBe('Scalar increment is required')
+		expect(validation.fieldErrors.scalarMin).toBe('Scalar min is required.')
+		expect(validation.fieldErrors.scalarMax).toBe('Scalar max is required.')
+		expect(validation.fieldErrors.scalarIncrement).toBe('Scalar increment is required.')
 	})
 
 	test('validates scalar questions with malformed numeric constraints across non-keyword paths', () => {
@@ -352,9 +352,9 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.scalarMin).toBe('Scalar min, max, and increment do not produce a whole number of ticks')
-		expect(validation.fieldErrors.scalarMax).toBe('Scalar min, max, and increment do not produce a whole number of ticks')
-		expect(validation.fieldErrors.scalarIncrement).toBe('Scalar min, max, and increment do not produce a whole number of ticks')
+		expect(validation.fieldErrors.scalarMin).toBe('Scalar min, max, and increment do not produce a whole number of ticks.')
+		expect(validation.fieldErrors.scalarMax).toBe('Scalar min, max, and increment do not produce a whole number of ticks.')
+		expect(validation.fieldErrors.scalarIncrement).toBe('Scalar min, max, and increment do not produce a whole number of ticks.')
 		expect(validation.notice).toContain('Fix invalid fields: Scalar min, max, and increment do not produce a whole number of ticks')
 	})
 
@@ -410,8 +410,8 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.scalarMin).toBe('Scalar max must be greater than scalar min')
-		expect(validation.fieldErrors.scalarMax).toBe('Scalar max must be greater than scalar min')
+		expect(validation.fieldErrors.scalarMin).toBe('Scalar max must be greater than scalar min.')
+		expect(validation.fieldErrors.scalarMax).toBe('Scalar max must be greater than scalar min.')
 		expect(validation.notice).toContain('Fix invalid fields: Scalar max must be greater than scalar min')
 	})
 
@@ -474,7 +474,7 @@ void describe('market creation helpers', () => {
 	})
 
 	test('security pool creation revalidates the maximum priority fee before submission', () => {
-		expect(() => createSecurityPoolParameters({ marketId: '0x2a', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeNanoEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 9) })).toThrow('Initial-report priority fee is too large for OpenOracle report limits.')
+		expect(() => createSecurityPoolParameters({ marketId: '0x2a', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeNanoEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 9) })).toThrow('Initial report priority fee is too large for OpenOracle report limits.')
 	})
 })
 

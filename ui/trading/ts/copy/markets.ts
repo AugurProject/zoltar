@@ -1,4 +1,5 @@
 import type { CoarseDuration } from '../lib/marketListing.js'
+import { liquidity } from './app.js'
 import { no, yes } from './outcomes.js'
 
 function durationText(duration: CoarseDuration) {
@@ -6,53 +7,45 @@ function durationText(duration: CoarseDuration) {
 	return `${duration.amount.toString()} ${duration.unit}${duration.amount === 1n ? '' : 's'}`
 }
 
-function outcomeOdds(outcome: string, percent: number) {
+function formatOutcomePrice(outcome: string, percent: number) {
 	return `${outcome} ${percent.toString()}%`
 }
 
 export const marketsCopy = {
 	yes,
 	no,
-	outcomeOdds,
+	formatOutcomePrice,
 	buyOutcomeAt: (outcome: string, percent: number) => `Buy ${outcome} at a conditional ${percent.toString()}%`,
-	buyOutcome: (outcome: string) => `Buy ${outcome}`,
-	sellOutcome: (outcome: string) => `Sell ${outcome}`,
-	conditionalOdds: 'Conditional odds',
-	impliedOdds: (yesPercent: number, noPercent: number) => `Conditional odds: ${outcomeOdds(yes, yesPercent)}, ${outcomeOdds(no, noPercent)}`,
-	oddsUnavailable: 'Odds appear once the pair holds liquidity.',
-	liquidity: 'Liquidity',
-	liquidityValue: (formatted: string) => `${formatted} ETH`,
+	conditionalPrice: 'Conditional price',
+	formatConditionalPrices: (yesPercent: number, noPercent: number) => `Conditional price: ${formatOutcomePrice(yes, yesPercent)}, ${formatOutcomePrice(no, noPercent)}`,
+	priceUnavailable: 'The conditional price appears once the market has liquidity.',
+	liquidity,
 	closes: 'Closes',
 	ended: 'Ended',
 	closesIn: (duration: CoarseDuration) => `in ${durationText(duration)}`,
 	endedAgo: (duration: CoarseDuration) => `${durationText(duration)} ago`,
 	listControls: 'Market list controls',
 	searchLabel: 'Search markets',
-	searchPoolsLabel: 'Search pools',
-	searchPlaceholder: 'Search or paste a pool address',
-	filterLabel: 'Market status filter',
+	searchPoolsLabel: 'Search security pools',
+	searchPlaceholder: 'Search or paste a security pool address',
+	filterLabel: 'Status filter',
 	filterAll: 'All',
 	filterOpen: 'Open',
-	filterClosingSoon: 'Closing soon',
-	filterResolved: 'Resolved',
+	closingSoon: 'Closing soon',
+	resolved: 'Resolved',
 	sortLabel: 'Sort',
-	sortClosingSoon: 'Closing soon',
-	sortLiquidity: 'Liquidity',
 	resultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'market' : 'markets'}` : `${shown.toString()} of ${loaded.toString()} markets`),
-	poolResultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'pool' : 'pools'}` : `${shown.toString()} of ${loaded.toString()} pools`),
-	noMatches: 'No favorites match.',
-	discoverMarkets: 'Discover markets',
-	marketsNoun: 'markets',
+	poolResultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'security pool' : 'security pools'}` : `${shown.toString()} of ${loaded.toString()} security pools`),
 	clearFilters: 'Clear filters',
 	questionDescription: 'Question description',
 	noQuestionDescription: 'This question has no description.',
 	contracts: 'Contracts',
 	yourPosition: 'Your position',
-	connectToSeePosition: 'Connect wallet to see your position',
+	connectToSeePosition: 'Connect a wallet to see your position',
 	allMarkets: 'All markets',
 	shareToken: 'Share token',
 	ticket: 'Trade ticket',
-	poolNotInUniverse: 'Pool not in this universe',
+	poolNotInUniverse: 'Security pool not in this universe',
 	poolNotInUniverseDetail: 'Switch universe to open it, or return to Markets.',
 	switchUniverse: 'Switch universe',
 } as const

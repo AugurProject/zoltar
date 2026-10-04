@@ -2,17 +2,16 @@ import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export const disputeAndSwap = 'Dispute & swap'
-export const disputeAndSwapAction = 'Dispute & swap'
 export const disputeDelay = 'Dispute delay'
 export const disputeDelaySeconds = 'Dispute delay (seconds)'
 export const escalationHalt = 'Escalation halt'
-export const feePercentage = 'Fee percentage'
 export const disputeFeePercentage = 'Dispute fee (%)'
+export const disputeFeeRate = 'Dispute fee'
 export const price = 'Price'
 export const protocolFee = 'Protocol fee'
 export const protocolFeePercentage = 'Protocol fee (%)'
 export const reportId = 'Report ID'
-export const settlementTime = 'Settlement time'
+export const settlementDelay = 'Settlement delay'
 export const settlementDelaySeconds = 'Settlement delay (seconds)'
 export const settlerReward = 'Settler reward'
 export const tokenPair = 'Token pair'
@@ -21,7 +20,6 @@ export const quoteToken = 'Quote token'
 export const openOracleGame = 'OpenOracle'
 export const standaloneReportSettings = 'Standalone report settings'
 export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdrawn`
-export const browseReports = 'Browse reports'
 export const reportDirectory = 'Report directory'
 export const browseReportsDescription = 'Search favorite reports or open a report by ID.'
 export const createReportDescription = 'Create a standalone report and review its assets, funding, and escalation settings before submitting.'
@@ -30,16 +28,15 @@ export const formatReportsShownSummary = (shownCount: CopyTemplateValue, totalCo
 export const callbackContract = 'Callback contract'
 export const callbackExtra = 'Callback / extra'
 export const callbackGasLimit = 'Callback gas limit'
-export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current amount 1 (${tokenSymbol})`
-export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current amount 2 (${tokenSymbol})`
+export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current base amount (${tokenSymbol})`
+export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current quote amount (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
 // Report prices are quote tokens per base token, matching the pool oracle's REP per ETH direction.
 export const formatReportPriceUnit = (token1Symbol: string, token2Symbol: string) => `${token2Symbol} per ${token1Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · report #${reportId}`
 export const createAnother = 'Create another'
-export const createReport = 'Create report'
 export const reportCreated = 'Report created'
-export const createStandaloneOracleGame = 'Create standalone oracle report'
+export const createStandaloneReport = 'Create standalone OpenOracle report'
 export const creating = 'Creating…'
 export const reportAtAGlance = 'Report at a glance'
 export const currentPrice = 'Current price'
@@ -48,17 +45,15 @@ export const currentReporter = 'Current reporter'
 export const submittingDispute = 'Submitting dispute…'
 export const disputingTheReport = 'disputing the report'
 export const disputeOccurred = 'Dispute occurred'
-export const disputeWalletRequiredReason = commonCopy.formatConnectWalletBefore('disputing the report')
+export const disputeWalletRequiredReason = commonCopy.formatConnectWalletBefore(disputingTheReport)
 export const settlementWalletRequiredReason = commonCopy.formatConnectWalletBefore('settling the report')
 export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
-export const disputeEscalationStopAmountHelpText = 'Base-token amount that ends escalation.'
+export const disputeEscalationStopAmountHelpText = 'Base token amount that ends escalation.'
 export const ethSent = 'ETH sent'
 export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} required`
-export const initialToken1AmountHelpText = 'Base-token amount to report.'
 export const exactToken1Report = 'Base token amount'
 export const initialToken2Amount = 'Quote token amount'
-export const initialToken2AmountHelpText = 'Quote-token amount to report.'
 export const identity = 'Identity'
 export const initialEconomics = 'Initial economics'
 export const lastReportOpportunity = 'Last report opportunity'
@@ -87,20 +82,20 @@ export const reportTimestamp = 'Report timestamp'
 export const reportBlock = 'Report block'
 export const reportActions = 'Report actions'
 export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
-	if (!timeType) return `Settle in ${remaining} block${remaining === 1n ? '' : 's'}`
-	if (remaining < 60n) return `Settle in ${remaining}s`
-	if (remaining < 3600n) return `Settle in ${remaining / 60n}m ${remaining % 60n}s`
-	return `Settle in ${remaining / 3600n}h ${(remaining % 3600n) / 60n}m ${remaining % 60n}s`
+	if (!timeType) return `Can settle in ${remaining} block${remaining === 1n ? '' : 's'}`
+	if (remaining < 60n) return `Can settle in ${remaining}s`
+	if (remaining < 3600n) return `Can settle in ${remaining / 60n}m ${remaining % 60n}s`
+	return `Can settle in ${remaining / 3600n}h ${(remaining % 3600n) / 60n}m ${remaining % 60n}s`
 }
 export const searchReports = 'Search reports'
 export const reportSearchPlaceholder = 'Report ID, token symbol, or token address'
 export const noFavoriteReports = 'No favorite reports yet'
-export const noFavoriteReportsDetail = 'Reports you open are saved here.'
+export const noFavoriteReportsDetail = 'Reports you open are added here.'
 export const formatOpenReportById = (reportId: CopyTemplateValue) => `Open report #${reportId}`
 export const formatReportUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling report'
-export const reportSettled = 'Settled report'
+export const reportSettled = 'Report settled'
 export const settlerRewardHelpText = 'ETH paid to the settler, sent with the create transaction.'
 export const settlementSummary = 'Settlement summary'
 export const settlementTimestamp = 'Settlement timestamp'
@@ -133,13 +128,19 @@ export const trackDisputes = 'Track disputes'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} amount`
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
-export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. Dispute settings determine escalation timing and economics.'
+export const standaloneParameterDetails = 'Base token amount and escalation halt use the base token’s decimals.'
 
 export const settleReportTitle = (id: bigint) => `Settle report #${id}`
 
-export const settledReportNumber = (id: string) => `Settled report #${id}`
+export const formatSettledReportNumber = (id: string) => `Report #${id} settled`
 
 export const settleReport = 'Settle report'
+
+export const formatReportMissing = (reportId: CopyTemplateValue) => `OpenOracle report #${reportId} does not exist.`
+export const formatApprovingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Approving ${tokenSymbol}`
+export const formatWithdrawingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}`
+export const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'
+export const standaloneReportCreated = 'Standalone OpenOracle report created'
 
 export const formatSecondsDurationHint = (seconds: CopyTemplateValue, duration: CopyTemplateValue) => `${seconds} seconds = ${duration}`
 export const impliedInitialPrice = 'Initial price'
@@ -150,7 +151,6 @@ export const disputeOutcome = 'Dispute summary'
 export const disputeOutcomePending = 'Enter the new amounts to preview what you pay and receive.'
 export const youPay = 'You pay'
 export const disputeFee = 'Dispute fee (to current reporter)'
-export const disputeProtocolFee = 'Protocol fee'
 export const feesIncludedInPayment = 'Fees are included in the amounts you pay.'
 export const creditedToOracleBalance = 'Credited to your oracle balance'
 export const yourNewReport = 'Your new report'

@@ -7,6 +7,7 @@ import * as copy from '../../../copy/universeNavigation.js'
 
 export function resolveScalarUniverseSelection(question: ScalarQuestionDetails, tickInput: string, invalid: boolean) {
 	if (invalid) return { outcomeIndex: 0n, label: commonCopy.invalid }
+	// No outcome resolves from an empty or out-of-range value; callers must not name a universe after the `None` label.
 	if (!/^\d+$/.test(tickInput)) return { outcomeIndex: undefined, label: commonCopy.none }
 	const tick = BigInt(tickInput)
 	if (tick > question.numTicks) return { outcomeIndex: undefined, label: commonCopy.none }

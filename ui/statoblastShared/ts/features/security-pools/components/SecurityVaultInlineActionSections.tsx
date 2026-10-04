@@ -62,10 +62,10 @@ export function SecurityVaultInlineActionSections({
 	const disputeStakedAttoRep = currentSelectedVaultDetails?.disputeStakedAttoRep
 	return (
 		<>
-			<SectionBlock title={securityPoolCopy.setVaultUnderwritingLimit} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.setCommitmentLimit} variant='embedded'>
 				{adjustmentForm}
 			</SectionBlock>
-			<SectionBlock title={securityPoolCopy.claimFeesTitle} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.claimFees} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} />
 				) : (

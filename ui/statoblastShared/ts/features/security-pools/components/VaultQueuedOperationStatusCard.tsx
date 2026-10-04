@@ -1,5 +1,6 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { getQueuedVaultOperationFailureDetail } from '../lib/securityVaultActionTitles.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -103,7 +104,7 @@ function VaultQueuedOperationStatusCard({
 					</div>
 				</div>
 				<MetricGrid>
-					<MetricField label={commonCopy.stagedOperation}>{queuedVaultOperation === undefined ? securityPoolCopy.refreshing : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
+					<MetricField label={commonCopy.stagedOperation}>{queuedVaultOperation === undefined ? commonCopy.refreshingData : `#${queuedVaultOperation.operationId.toString()}`}</MetricField>
 					{queuedVaultOperation?.amount === undefined ? null : (
 						<MetricField label={amountLabel}>
 							<CurrencyValue precision='exact' value={queuedVaultOperation.amount} suffix={amountSuffix} />
@@ -214,7 +215,7 @@ export function VaultQueuedOperationStatusCards({
 			? {
 					amountLabel: securityPoolCopy.repWithdrawal,
 					amountSuffix: commonCopy.rep,
-					errorMessage: securityPoolCopy.immediateWithdrawalRejectedDetail,
+					immediateErrorMessage: securityPoolCopy.immediateWithdrawalRejectedDetail,
 					executedTitle: securityPoolCopy.repWithdrawalExecuted,
 					failedTitle: securityPoolCopy.repWithdrawalFailed,
 					missingTitle: securityPoolCopy.repWithdrawalSubmitted,
@@ -224,16 +225,16 @@ export function VaultQueuedOperationStatusCards({
 					successDescription: securityPoolCopy.immediateWithdrawalSuccessDetail,
 				}
 			: {
-					amountLabel: securityPoolCopy.vaultBackingFactor,
+					amountLabel: securityPoolCopy.commitmentLimit,
 					amountSuffix: '',
-					errorMessage: undefined,
-					executedTitle: securityPoolCopy.backingRatioChangeExecuted,
-					failedTitle: securityPoolCopy.backingRatioChangeFailed,
-					missingTitle: securityPoolCopy.backingRatioChangeSubmitted,
-					queuedTitle: securityPoolCopy.backingRatioChangeQueued,
-					refreshingDescription: securityPoolCopy.refreshingBackingRatioStatusDetail,
-					refreshingTitle: securityPoolCopy.refreshingBackingRatioStatus,
-					successDescription: securityPoolCopy.backingRatioChangeSuccessDetail,
+					immediateErrorMessage: undefined,
+					executedTitle: securityPoolCopy.commitmentLimitChangeExecuted,
+					failedTitle: securityPoolCopy.commitmentLimitChangeFailed,
+					missingTitle: securityPoolCopy.commitmentLimitChangeSubmitted,
+					queuedTitle: securityPoolCopy.commitmentLimitChangeQueued,
+					refreshingDescription: securityPoolCopy.refreshingCommitmentStatusDetail,
+					refreshingTitle: securityPoolCopy.refreshingCommitmentStatus,
+					successDescription: securityPoolCopy.commitmentLimitChangeSuccessDetail,
 				}
 	return (
 		<>
@@ -245,8 +246,16 @@ export function VaultQueuedOperationStatusCards({
 					return (
 						<VaultQueuedOperationStatusCard
 							key={result.queuedOperation?.operationId.toString() ?? result.hash}
-							{...copy}
-							errorMessage={result.stagedExecution?.errorMessage ?? copy.errorMessage}
+							amountLabel={copy.amountLabel}
+							amountSuffix={copy.amountSuffix}
+							executedTitle={copy.executedTitle}
+							failedTitle={copy.failedTitle}
+							missingTitle={copy.missingTitle}
+							queuedTitle={copy.queuedTitle}
+							refreshingDescription={copy.refreshingDescription}
+							refreshingTitle={copy.refreshingTitle}
+							successDescription={copy.successDescription}
+							errorMessage={getQueuedVaultOperationFailureDetail(result, copy.immediateErrorMessage)}
 							manualQueuedDescription={commonCopy.manualQueuedOperationDetail}
 							missingDescription={commonCopy.transactionStateUnavailableDetail}
 							onViewStagedOperations={onViewStagedOperations}

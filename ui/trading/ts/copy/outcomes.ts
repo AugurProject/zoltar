@@ -12,3 +12,7 @@ export function outcomeLabel(outcome: 'INVALID' | 'YES' | 'NO') {
 	return invalid
 }
 export { eth, percent }
+
+export function formatEthAmount(value: string) {
+	return `${value} ${eth}`
+}

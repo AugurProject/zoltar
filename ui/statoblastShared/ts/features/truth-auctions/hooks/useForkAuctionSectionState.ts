@@ -240,7 +240,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (settlementSelectionMode === 'refund') return forkAuctionCopy.refundableBidBatchSettlementDetail
 		return forkAuctionCopy.mixedBidBatchSettlementDetail
 	})()
-	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
+	const settlementActionPendingLabel = forkAuctionCopy.settlingSelectedBids
 	const auctionBidRows = buildTruthAuctionBidRows({
 		bids: aggregatedAuctionBids,
 		truthAuction: truthAuctionStatus,

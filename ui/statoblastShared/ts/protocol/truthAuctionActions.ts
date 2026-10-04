@@ -31,7 +31,7 @@ export async function submitTruthAuctionBid(client: WriteClient, securityPoolAdd
 				client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'finalized' }),
 				client.getBlock(),
 			])
-			if (finalized) throw new Error('Truth auction is already finalized.')
+			if (finalized) throw new Error(forkAuctionCopy.truthAuctionFinalizedReason)
 			const timingGuardMessage = getTruthAuctionBidTimingGuardMessage(currentBlock.timestamp, getTruthAuctionEndsAt(auctionStarted))
 			if (timingGuardMessage !== undefined) throw new Error(timingGuardMessage)
 		}

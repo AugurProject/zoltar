@@ -20,6 +20,7 @@ import { getUiRepPriceSourceCopy, renderUiRepPriceSourceLabel, type UiRepPriceSo
 import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import type { LiquidationApprovalDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
+import * as glossaryCopy from '../../../copy/glossary.js'
 
 export function QueuedLiquidationStatusCard({
 	onViewInStagedOperations,
@@ -70,8 +71,8 @@ export function QueuedLiquidationStatusCard({
 			/>
 		)
 	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard surface='flat' title={commonCopy.liquidationExecuted} badge={<Badge tone='ok'>{commonCopy.executed}</Badge>} detail={liquidationCopy.immediateLiquidationSuccessDetail} />
-	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard surface='flat' title={commonCopy.liquidationSubmitted} badge={<Badge tone='warning'>{liquidationCopy.checkState}</Badge>} detail={commonCopy.transactionStateUnavailableDetail} />
-	return <TransactionStatusCard surface='flat' title={liquidationCopy.refreshingLiquidationStateTitle} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} detail={liquidationCopy.refreshingLiquidationState} />
+	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard surface='flat' title={commonCopy.liquidationSubmitted} badge={<Badge tone='warning'>{liquidationCopy.unconfirmedBadgeLabel}</Badge>} detail={commonCopy.transactionStateUnavailableDetail} />
+	return <TransactionStatusCard surface='flat' title={liquidationCopy.refreshingLiquidationStatus} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} />
 }
 
 /** Partial or malformed input is not an address, so it is named as invalid instead of being clipped by the address abbreviation; the field below explains the error. */
@@ -143,7 +144,7 @@ export function LiquidationContextSummary({
 			</MetricField>
 			<ReadOnlyDetailAccordion title={liquidationCopy.vaultContextDetails}>
 				<DataGrid>
-					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
+					<AddressInfo address={liquidationSecurityPoolAddress} label={glossaryCopy.securityPoolTerm} />
 					<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}</MetricField>
 					<MetricField label={liquidationCopy.operator}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
 

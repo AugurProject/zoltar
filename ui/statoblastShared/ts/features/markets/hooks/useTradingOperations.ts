@@ -163,7 +163,7 @@ export function useTradingOperations(
 			onError: (error: unknown) => {
 				tradingDetails.value = undefined
 				tradingForkUniverse.value = undefined
-				tradingError.value = getErrorMessage(error, 'Failed to load trading details')
+				tradingError.value = getErrorMessage(error, 'Failed to load trading details.')
 			},
 		}
 
@@ -207,7 +207,7 @@ export function useTradingOperations(
 					onWriteError: message => {
 						tradingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
-					refreshErrorFallback: 'Trading transaction succeeded, but refreshing trading details failed',
+					refreshErrorFallback: 'Trading transaction succeeded, but refreshing trading details failed.',
 					refreshState: async () => {
 						await refreshWalletStateOnly(refreshState)
 					},
@@ -311,7 +311,7 @@ export function useTradingOperations(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.createCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount'))
 			},
-			'Failed to mint complete sets',
+			'Failed to mint complete sets.',
 		)
 
 	const redeemCompleteSet = async () =>
@@ -330,7 +330,7 @@ export function useTradingOperations(
 				if (redeemAmountAttoShares === undefined) throw new Error('Redeeming is unavailable because this pool has complete-set shares but no collateral.')
 				return await dependencies.redeemCompleteSetInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, redeemAmountAttoShares)
 			},
-			'Failed to redeem complete sets',
+			'Failed to redeem complete sets.',
 		)
 
 	const redeemShares = async () =>
@@ -340,7 +340,7 @@ export function useTradingOperations(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.redeemSharesInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress)
 			},
-			'Failed to redeem shares',
+			'Failed to redeem shares.',
 		)
 
 	const migrateShares = async () =>
@@ -358,7 +358,7 @@ export function useTradingOperations(
 					getSelectedOutcomeShareBalance(tradingDetails.value?.shareBalances, shareOutcome),
 				)
 			},
-			'Failed to migrate shares',
+			'Failed to migrate shares.',
 		)
 
 	useEffect(() => {

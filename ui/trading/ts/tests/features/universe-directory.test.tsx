@@ -175,7 +175,7 @@ describe('universe directory', () => {
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed'))
 		const notice = rendered.container.querySelector('[role="alert"]')?.textContent ?? ''
-		expect(notice).toBe('Universe discovery failed')
+		expect(notice).toBe('Universe discovery failed.')
 		expect(notice).not.toContain('Security pool')
 		expect(notice).not.toContain('0xab')
 	})

@@ -321,15 +321,15 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 			args: [],
 		},
 	])
-	if (parentSecurityPoolAddress === zeroAddress) throw new Error('Fork-carried escalation proofs require a child pool.')
-	if (childEscalationGameAddress === zeroAddress) throw new Error('Child escalation game unavailable for fork-carried settlement.')
+	if (parentSecurityPoolAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child pool.')
+	if (childEscalationGameAddress === zeroAddress) throw new Error('The child escalation game is unavailable for settling parent deposits.')
 	const parentEscalationGameAddress = await client.readContract({
 		address: parentSecurityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'escalationGame',
 		args: [],
 	})
-	if (parentEscalationGameAddress === zeroAddress) throw new Error('Parent escalation game unavailable for fork-carried settlement.')
+	if (parentEscalationGameAddress === zeroAddress) throw new Error('The parent escalation game is unavailable for settling parent deposits.')
 	const [parentHistoricalLeaves, inheritedConsumedParentDepositIndexes, localConsumedParentDepositIndexes, childOutcomeState] = await Promise.all([
 		loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
 		loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
@@ -360,11 +360,11 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, secur
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {
 		const parentDepositIndexKey = parentDepositIndex.toString()
-		if (consumedParentDepositIndexSet.has(parentDepositIndexKey)) throw new Error(`Parent carry leaf ${parentDepositIndexKey} is already settled.`)
+		if (consumedParentDepositIndexSet.has(parentDepositIndexKey)) throw new Error(`Parent deposit #${parentDepositIndexKey} is already settled.`)
 		const leafIndex = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentDepositIndex)
-		if (leafIndex === -1) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
+		if (leafIndex === -1) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
 		const targetLeaf = orderedLeaves[leafIndex]
-		if (targetLeaf === undefined) throw new Error(`Parent carry leaf ${parentDepositIndex.toString()} is unavailable.`)
+		if (targetLeaf === undefined) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
 		const { leafIndex: globalLeafIndex, merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
 		const nullifierSiblings = nullifierTree.getProof(parentDepositIndex)
 		proofs.push({

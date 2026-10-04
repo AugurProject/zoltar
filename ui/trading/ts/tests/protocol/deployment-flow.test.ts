@@ -81,7 +81,7 @@ describe('wallet trading deployment plan', () => {
 		expect(installed.router).toBe(plan.router.address)
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'factory-only'), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('trading deployment is incomplete')
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'missing'), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('Trading contracts have not been deployed')
-		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'complete', true), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('different TwoWayConstantProductFactory')
+		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(plan.core, 'complete', true), plan.core, 30, plan.core.defaultRpcUrl)).rejects.toThrow('different trading factory')
 	})
 
 	test('marks only confirmed-missing contracts as a missing deployment', async () => {
@@ -106,6 +106,6 @@ describe('wallet trading deployment plan', () => {
 				},
 			}),
 		})
-		await expect(loadTradingDeploymentStatus(client, plan)).rejects.toThrow('Canonical proxy deployer has unexpected code')
+		await expect(loadTradingDeploymentStatus(client, plan)).rejects.toThrow('The shared proxy deployer has unexpected code')
 	})
 })

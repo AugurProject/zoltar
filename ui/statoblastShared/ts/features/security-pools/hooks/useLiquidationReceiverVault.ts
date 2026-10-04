@@ -7,6 +7,7 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 
 type UseLiquidationReceiverVaultParameters = {
 	accountAddress: Address | undefined
@@ -46,15 +47,15 @@ export function useLiquidationReceiverVault({ accountAddress, latestEnvironmentR
 	const loadReceiverVaultSummary = async () => {
 		const securityPoolAddress = liquidationSecurityPoolAddress.value
 		if (securityPoolAddress === undefined) {
-			summaryError.value = 'Selected pool details are still loading.'
+			summaryError.value = liquidationCopy.selectedPoolDetailsLoading
 			return false
 		}
 		let receiver: Address
 		try {
-			receiver = parseAddressInput(receiverVault.value, 'Receiver vault')
+			receiver = parseAddressInput(receiverVault.value, liquidationCopy.receiverVault)
 		} catch (error) {
 			summary.value = undefined
-			summaryError.value = getErrorMessage(error, 'Enter a valid receiver vault')
+			summaryError.value = getErrorMessage(error, liquidationCopy.receiverVaultAddressInvalid)
 			return false
 		}
 		const requestKey = `${latestEnvironmentRefreshKey.current}:${securityPoolAddress.toLowerCase()}:${receiver.toLowerCase()}`
@@ -76,7 +77,7 @@ export function useLiquidationReceiverVault({ accountAddress, latestEnvironmentR
 			},
 			onError: error => {
 				if (getCurrentRequestKey() !== requestKey) return
-				summaryError.value = getErrorMessage(error, 'Failed to load receiver vault')
+				summaryError.value = getErrorMessage(error, 'Failed to load the receiver vault.')
 			},
 		})
 		if (summaryLoadingKey.value === requestKey) summaryLoadingKey.value = undefined

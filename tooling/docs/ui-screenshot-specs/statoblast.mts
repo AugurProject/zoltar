@@ -8,16 +8,16 @@ const pageViewport = { width: 800, height: 900 }
 const modalViewport = { width: 800, height: 1400 }
 const fillPoolForm: readonly UiScreenshotStep[] = [{ click: 'Create pool' }, { waitForText: 'Create question and pool' }, { fill: 'Title', value: 'Will it rain in Lisbon on 1 June 2027?' }, { fill: 'End time', value: '2027-06-02T00:00' }, { waitForEnabled: 'Create question and pool' }]
 const createPool: readonly UiScreenshotStep[] = [...fillPoolForm, { click: 'Create question and pool' }, { waitForText: 'Pool created' }]
-const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'Deposit REP (optional)' }]
-const approveRep: readonly UiScreenshotStep[] = [...openPool, { fill: 'Deposit REP (optional)', value: '1000' }, { click: 'Review vault operations' }, { click: 'Approve 1k REP' }, { waitForEnabled: 'Submit vault operations' }]
+const openPool: readonly UiScreenshotStep[] = [...createPool, { click: 'Open pool' }, { waitForText: 'REP deposit amount (optional)' }]
+const approveRep: readonly UiScreenshotStep[] = [...openPool, { fill: 'REP deposit amount (optional)', value: '1000' }, { click: 'Review vault operations' }, { click: 'Approve 1k REP' }, { waitForEnabled: 'Submit vault operations' }]
 const depositRep: readonly UiScreenshotStep[] = [...approveRep, { click: 'Submit vault operations' }, { waitForText: 'REP deposit confirmed' }, { waitForEnabled: 'Clear draft' }]
 const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { fill: 'Initial report price', value: '3' }, { fill: 'Commitment limit', value: '10' }, { click: 'Review vault operations' }, { waitForEnabled: 'Approve ≈ 1.62 WETH' }]
 const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Approve ≈ 1.62 WETH' }, { waitForText: 'WETH approved' }, { click: 'Approve ≈ 4.85 REP' }, { waitForText: 'REP approved' }, { click: 'Submit vault operations' }, { waitForText: 'View staged operations' }]
 // The report settles after eight minutes; ten keeps the staged operation inside its validity window.
 const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForEnabled: 'Settle report' }]
-const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Settled report' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Vault operations executed' }, { waitForText: '10.00 ETH' }]
+const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Report #1 settled' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Vault operations executed' }, { waitForText: '10.00 ETH' }]
 
-const fillMint: readonly UiScreenshotStep[] = [...settleAndReturn, { click: 'Open shares' }, { click: 'Mint complete sets', nth: -1 }, { waitForText: 'Wallet ETH' }, { fill: 'Mint complete sets amount', value: '1' }, { waitForEnabled: 'Mint complete sets' }]
+const fillMint: readonly UiScreenshotStep[] = [...settleAndReturn, { click: 'Open shares' }, { click: 'Mint complete sets', nth: -1 }, { waitForText: 'Wallet ETH' }, { fill: 'ETH to mint with', value: '1' }, { waitForEnabled: 'Mint complete sets' }]
 
 export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 	{
@@ -85,7 +85,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'statoblast',
 		scenario: 'deployed',
 		steps: fillMint,
-		expectText: ['Wallet ETH', 'Available to mint', 'Mint complete sets amount', 'Mint complete sets'],
+		expectText: ['Wallet ETH', 'Available to mint', 'ETH to mint with', 'Mint complete sets'],
 		viewport: modalViewport,
 		crop: { selector: '[role=dialog]', containing: 'Wallet ETH', padding: 0 },
 		usedBy: tutorial,

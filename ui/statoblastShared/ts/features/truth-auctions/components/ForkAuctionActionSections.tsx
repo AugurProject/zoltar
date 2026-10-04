@@ -74,13 +74,13 @@ export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finaliz
 				{forkAuctionCopy.openSettlement}
 			</button>
 		)
-	return <UserMessage placement='page' tone='success' title={forkAuctionCopy.auctionEndedStatus} detail={finalized ? forkAuctionCopy.finalizedSettlementDetail : forkAuctionCopy.truthAuctionFinalizationRequiredDetail} actions={actions} />
+	return <UserMessage placement='page' tone='success' title={forkAuctionCopy.auctionEndedTitle} detail={finalized ? forkAuctionCopy.finalizedSettlementDetail : forkAuctionCopy.truthAuctionFinalizationRequiredDetail} actions={actions} />
 }
 
 export function ForkAuctionStartSection({ actionButton, bypassReason, readyInText }: { actionButton: ComponentChildren; bypassReason: string | undefined; readyInText: string | undefined }) {
 	return (
-		<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
-			<UserMessage className='detail' detail={forkAuctionCopy.startTruthAuctionDetail} />
+		<SectionBlock title={bypassReason === undefined ? forkAuctionCopy.startTruthAuction : forkAuctionCopy.bypassTruthAuction} variant='embedded'>
+			{bypassReason === undefined ? <UserMessage className='detail' detail={forkAuctionCopy.startTruthAuctionDetail} /> : undefined}
 			{readyInText === undefined ? undefined : <UserMessage className='detail' detail={readyInText} />}
 			{bypassReason === undefined ? undefined : <UserMessage className='detail' detail={bypassReason} />}
 			<div className='actions'>{actionButton}</div>
@@ -97,7 +97,7 @@ export function ForkAuctionBidsStatusSection({ error, loading, onRetry, retrying
 			{error === undefined && !retrying ? undefined : (
 				<div className='actions'>
 					<button className='secondary' disabled={retrying} onClick={onRetry} type='button'>
-						{retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionDetails}</LoadingText> : forkAuctionCopy.retryAuctionDetails}
+						{retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionDetails}</LoadingText> : commonCopy.retry}
 					</button>
 				</div>
 			)}
@@ -186,7 +186,7 @@ export function ForkAuctionSubmitBidSection({
 	const submittedBidPrice = getTruthAuctionBidPreview(submitBidPrice)?.submittedPrice
 	const repPerEthDetail = submittedBidPrice === undefined ? undefined : formatRepPerEthDetail(submittedBidPrice)
 	return (
-		<SectionBlock title={forkAuctionCopy.submitBidTitle} variant='embedded'>
+		<SectionBlock title={forkAuctionCopy.submitBid} variant='embedded'>
 			<div className='form-grid'>
 				<BidPriceGuidance clearingPrice={clearingPrice} minimumWinningPriceInput={minimumWinningPriceInput} onBidPriceChange={onBidPriceChange} />
 				<div className='field-row truth-auction-bid-fields'>
@@ -199,7 +199,7 @@ export function ForkAuctionSubmitBidSection({
 						}
 						label={forkAuctionCopy.bidPrice}
 						onChange={onBidPriceChange}
-						unit={forkAuctionCopy.bidPriceUnit}
+						unit={forkAuctionCopy.ethRep}
 						value={submitBidPrice}
 					/>
 					<AmountField fillMax={bidAmountMax} hint={bidAmountHint === undefined ? undefined : <BidAmountHint {...bidAmountHint} />} label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />

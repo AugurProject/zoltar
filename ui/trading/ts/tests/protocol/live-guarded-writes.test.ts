@@ -121,7 +121,7 @@ describe('live guarded transaction writes', () => {
 		const largerApprovedQuote = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
 		expect(largerApprovedQuote.maximumLongShares).toBe(13n)
 		longBalance = 12n
-		await expect(submitFreshExit(client, configuration, account, largerApprovedQuote, async write => await write())).rejects.toThrow('approved exit transfer')
+		await expect(submitFreshExit(client, configuration, account, largerApprovedQuote, async write => await write())).rejects.toThrow('no longer covers this sale')
 		longBalance = 11n
 		await expect(simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)).rejects.toThrow('Insufficient Yes balance for this exit')
 	})
@@ -155,7 +155,7 @@ describe('live guarded transaction writes', () => {
 			expect(await submitFreshExit(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 			expect(submittedTransfers).toEqual([simulatedTransfers[0]])
 			longBalance = 12n
-			await expect(submitFreshExit(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved exit transfer')
+			await expect(submitFreshExit(client, configuration, account, quote, async write => await write())).rejects.toThrow('no longer covers this sale')
 			longBalance = 20n
 			longSharesSwapped = 4n
 			await expect(submitFreshExit(client, configuration, account, quote, async write => await write())).rejects.toThrow('approved maximum long shares')

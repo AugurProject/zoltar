@@ -6,7 +6,7 @@ export const transactionErrorMessages = {
 	confirmationUnavailable: 'Could not confirm the transaction. Check its status before retrying.',
 	insufficientApproval: 'Approval confirmed, but it is below the required amount. Review funding again to approve the required total before continuing.',
 	reviewCanceled: 'Remaining transactions canceled. Transactions already sent are unchanged.',
-	walletRejected: 'Action canceled in wallet.',
+	walletRejected: 'Rejected in wallet.',
 }
 
 /** True when the user closed or backed out of a transaction review, which is a cancellation rather than a failure. */
@@ -18,7 +18,7 @@ function isTransactionErrorMessage(message: string | undefined) {
 	return message !== undefined && Object.values(transactionErrorMessages).includes(message)
 }
 
-const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization', 'action canceled in wallet']
+const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization', 'rejected in wallet']
 const technicalWriteErrorPatterns = ['allowance', 'balance', 'call reverted', 'connector', 'erc20', 'estimategas', 'execution reverted', 'fee', 'gas', 'insufficient funds', 'internal json-rpc', 'json-rpc', 'network', 'nonce', 'replacement transaction', 'reverted', 'rpc', 'transaction', 'transfer', 'underpriced']
 
 export function hasErrorCode(value: unknown): value is { code: number | string } {
@@ -110,8 +110,8 @@ function normalizeComparableMessage(message: string) {
 		.toLowerCase()
 }
 
-function ensureSentence(message: string) {
-	return /[.!?]$/.test(message) ? message : `${message}.`
+export function ensureSentence(message: string) {
+	return /[.!?…]$/.test(message) ? message : `${message}.`
 }
 
 function escapeRegExp(value: string) {
@@ -207,7 +207,7 @@ export function sanitizeErrorDetail(detail: string | undefined, fallbackMessage?
 	if (contractNoDataDetail !== undefined) return contractNoDataDetail
 
 	const maxLength = 160
-	return sanitized.length > maxLength ? `${sanitized.slice(0, maxLength - 3).trimEnd()}...` : sanitized
+	return sanitized.length > maxLength ? `${sanitized.slice(0, maxLength - 1).trimEnd()}…` : sanitized
 }
 
 export function getErrorDetail(error: unknown, fallbackMessage?: string) {
@@ -233,8 +233,8 @@ export function isWalletRejection(error: unknown, seen = new Set<object>()): boo
 }
 
 function appendReason(fallbackMessage: string, detail: string | undefined) {
-	if (detail === undefined) return fallbackMessage
-	return `${ensureSentence(fallbackMessage)} Reason: ${detail}`
+	if (detail === undefined) return ensureSentence(fallbackMessage)
+	return `${ensureSentence(fallbackMessage)} Reason: ${ensureSentence(detail)}`
 }
 
 function rewriteWriteFallbackMessage(fallbackMessage: string) {
@@ -249,9 +249,9 @@ export function formatWriteErrorMessage(error: unknown, fallbackMessage: string)
 	if (isWalletRejection(error)) return transactionErrorMessages.walletRejected
 
 	const detail = getErrorDetail(error, fallbackMessage)
-	if (detail !== undefined && (isTransactionErrorMessage(detail) || shouldUseStandaloneWriteMessage(detail))) return detail
+	if (detail !== undefined && (isTransactionErrorMessage(detail) || shouldUseStandaloneWriteMessage(detail))) return ensureSentence(detail)
 	const rewrittenFallback = rewriteWriteFallbackMessage(fallbackMessage)
-	return detail === undefined ? ensureSentence(rewrittenFallback) : appendReason(rewrittenFallback, detail)
+	return appendReason(rewrittenFallback, detail)
 }
 
 export function formatRefreshErrorMessage(error: unknown, fallbackMessage: string) {

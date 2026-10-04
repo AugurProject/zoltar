@@ -1,9 +1,10 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as vaultOperationsCopy from '../../../copy/vaultOperations.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export function getTargetHealthFactorGuardMessage(targetHealthFactor: string, minimumBps?: bigint) {
@@ -42,7 +43,7 @@ export function getVaultDepositGuardMessage({
 	const targetHealthFactorGuardMessage = getTargetHealthFactorGuardMessage(targetHealthFactor, minimumBackingRatioBps)
 	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
-	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatAdditionalCurrencyBalance(walletRepShortfallAttoRep, 'REP')} in this wallet.`
+	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
 	if (minimumVaultRepDepositAttoRep === undefined) return securityPoolCopy.vaultMinimumLoading
 	if (isDepositBelowMinimum) {
 		// Pool-held REP-per-unit rounding can credit slightly less than the deposit, so an exact minimum can still fall short.
@@ -70,14 +71,14 @@ export function getVaultWithdrawGuardMessage({
 	withdrawableRepAmountAttoRep: bigint | undefined
 	walletBalanceAttoEth: bigint | undefined
 }) {
-	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
+	if (withdrawAmount === undefined) return 'Enter a valid REP withdrawal amount.'
 	if (withdrawAmount <= 0n) return undefined
-	if (disputeStakedAttoRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
+	if (disputeStakedAttoRep > 0n) return vaultOperationsCopy.withdrawEscrow
 	// Without a price the REP locked by commitments is unknown, so no amount can be offered safely.
 	if (withdrawableRepAmountAttoRep === undefined) return 'A REP price is needed to estimate how much REP your commitment keeps locked. Request a new oracle price or lower the commitment limit first.'
 	if (withdrawableRepAmountAttoRep <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalanceWithUnit(withdrawableRepAmountAttoRep, 'REP')} or less.`
-	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 1–5 minutes.'
+	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return securityPoolCopy.executionWindowRangeError
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this REP withdrawal',
 		includeBuffer: bufferRequiredEthCost,
@@ -89,7 +90,7 @@ export function getVaultWithdrawGuardMessage({
 }
 
 export function getVaultRedeemRepGuardMessage({ disputeStakedAttoRep, redeemableRepAmountAttoRep, underwritingLimitAttoEth }: { disputeStakedAttoRep: bigint | undefined; redeemableRepAmountAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint | undefined }) {
-	if (disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n) return 'Settle escalation deposits before redeeming REP.'
+	if (disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n) return securityPoolCopy.escalationWithdrawalRequiredDetail
 	if (redeemableRepAmountAttoRep === undefined || redeemableRepAmountAttoRep <= 0n) return 'No redeemable REP is available for this vault.'
 	// `redeemRepFromVault` reverts while the vault still holds a commitment.
 	if (underwritingLimitAttoEth === undefined) return 'Refresh vault details before redeeming REP.'
@@ -148,7 +149,7 @@ export function getVaultExecutePendingOperationGuardMessage({
 }) {
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('executing a staged operation') })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
+	if (!hasLoadedOracleManager) return securityPoolCopy.loadingOracleDetails
 	if (isPriceValid === false) {
 		if (resolvedPendingOperationId !== undefined && pendingSettlementOperationIds.includes(resolvedPendingOperationId)) return securityPoolCopy.autoExecAfterSettlement
 		return 'Request a new price in Price oracle before executing this operation.'

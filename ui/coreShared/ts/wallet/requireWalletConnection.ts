@@ -1,6 +1,7 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import * as commonCopy from '../copy/common.js'
+import * as userMessagesCopy from '../copy/userMessages.js'
 
 /**
  * Guards a write action by checking that a wallet backend is present and
@@ -12,7 +13,7 @@ import * as commonCopy from '../copy/common.js'
  */
 export function requireWallet(accountAddress: Address | undefined, setError: (message: string | undefined) => void, _actionLabel: string): accountAddress is Address {
 	if (!getActiveBackend().hasWallet()) {
-		setError(commonCopy.walletConnectionRequired)
+		setError(userMessagesCopy.walletInstallationRequired)
 		return false
 	}
 	if (accountAddress === undefined) {

@@ -364,15 +364,15 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 			args: [],
 		}),
 	])
-	if (isPriceValid) throw new Error('A fresh oracle price is already available')
-	if (pendingReportId > 0n) throw new Error('Oracle price request is already pending')
+	if (isPriceValid) throw new Error('A fresh oracle price is already available.')
+	if (pendingReportId > 0n) throw new Error('An oracle price request is already pending.')
 }
 
 export async function fundCoordinatorInitialReport(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, finalStep: TransactionPlanStep, extra: { actions: FundingTransaction[]; repAttoRep: bigint } = { actions: [], repAttoRep: 0n }) {
 	const fundingRequirement = await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, client.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 	const expectedWeth = requestedInitialAttoWeth > fundingRequirement.minimumToken1ReportAttoEth ? requestedInitialAttoWeth : fundingRequirement.minimumToken1ReportAttoEth
 	const expectedRep = fundingRequirement.requiredRepAttoRep
-	if (fundingRequirement.currentRepBalanceAttoRep < expectedRep + extra.repAttoRep) throw new Error('Insufficient REP balance for coordinator initial report')
+	if (fundingRequirement.currentRepBalanceAttoRep < expectedRep + extra.repAttoRep) throw new Error('Insufficient REP balance for the initial report.')
 	const requiredEth = fundingRequirement.wethShortfallAttoEth + (finalStep.value ?? 0n)
 	if ((await client.getBalance({ address: client.account.address })) < requiredEth) throw new Error('Insufficient ETH for initial report funding and the oracle fee. Gas is additional.')
 	// The final step commits its whole ETH value as the settler bounty; the coordinator retains it in full.

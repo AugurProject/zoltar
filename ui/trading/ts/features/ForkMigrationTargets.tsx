@@ -21,7 +21,7 @@ export function ForkMigrationTargets({ context, selectedTargets, disabled, onCha
 	const resolveTarget = (outcomeIndex: bigint) => selectedTargets.find(target => target.outcomeIndex === outcomeIndex) ?? context.availableTargets.find(target => target.outcomeIndex === outcomeIndex) ?? (context.kind === 'scalar' ? createScalarForkTarget(context, outcomeIndex) : undefined)
 	const toggle = (outcomeIndex: bigint) => {
 		const target = resolveTarget(outcomeIndex)
-		if (target === undefined) throw new Error(`Unknown fork target outcome ${outcomeIndex.toString()}`)
+		if (target === undefined) throw new Error(`Unknown child universe outcome ${outcomeIndex.toString()}`)
 		onChange(toggleTarget(selectedTargets, target))
 	}
 	return (

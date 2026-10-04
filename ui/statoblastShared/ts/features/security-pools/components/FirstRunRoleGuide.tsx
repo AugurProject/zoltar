@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import * as firstRunCopy from '../../../copy/firstRun.js'
 import { firstRunRoles, persistFirstRunCardDismissed, readFirstRunCardDismissed } from '../lib/firstRunRoles.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 
 /** Dismissible orientation for first-time visitors: one guide link per role. */
 export function FirstRunRoleGuide() {
@@ -28,7 +29,7 @@ export function FirstRunRoleGuide() {
 				))}
 			</ul>
 			<button className='quiet' type='button' aria-label={firstRunCopy.dismissFirstRunLabel} onClick={dismiss}>
-				{firstRunCopy.dismissFirstRun}
+				{transactionCopy.dismiss}
 			</button>
 		</section>
 	)

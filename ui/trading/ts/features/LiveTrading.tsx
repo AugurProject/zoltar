@@ -270,8 +270,8 @@ export function LiveTrading({
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
-					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
-					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={portfolioCopy.noSavedPools} detail={portfolioCopy.savePoolGuidance} /> : null}
+					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolDiscoveryFailed(discoveryError) : undefined} />
+					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={portfolioCopy.noFavoriteMarkets} detail={portfolioCopy.favoriteGuidance} /> : null}
 					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
 						<LivePortfolio
 							discoveryComplete={discoveryState === 'ready'}

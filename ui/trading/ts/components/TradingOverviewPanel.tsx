@@ -36,7 +36,7 @@ export function TradingOverviewPanel({ badges, controls, navigation, onRetryWall
 						{walletSummary.status === 'error' ? (
 							<div className='trading-wallet-error'>
 								<span title={walletSummary.error}>
-									<UserMessage placement='field' as='span' tone='error' announcement='assertive' ariaLabel={copy.walletBalanceError(walletSummary.errorLabel, walletSummary.error)} detail={walletSummary.errorLabel ?? copy.walletBalancesUnavailable} />
+									<UserMessage placement='field' as='span' tone='error' announcement='assertive' ariaLabel={copy.formatHeaderErrorLabel(walletSummary.errorLabel, walletSummary.error)} detail={walletSummary.errorLabel ?? copy.walletBalancesUnavailable} />
 								</span>
 								{onRetryWalletSummary === undefined ? undefined : (
 									<button className='secondary' type='button' onClick={onRetryWalletSummary}>
@@ -45,7 +45,7 @@ export function TradingOverviewPanel({ badges, controls, navigation, onRetryWall
 								)}
 							</div>
 						) : undefined}
-						{walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined ? <UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={copy.loadingWalletBalances} /> : undefined}
+						{walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined ? <UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={copy.loadingWalletBalance} /> : undefined}
 					</>
 				)
 			}

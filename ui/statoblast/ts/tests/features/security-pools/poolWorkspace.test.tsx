@@ -110,7 +110,7 @@ test('surfaces actionable pool exceptions independently of the selected tab', as
 		selectedPoolView: 'vaults',
 	})
 	const page = within(document.body)
-	for (const name of ['View report', 'Review operations', 'Open fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
+	for (const name of ['View report', 'Open staged operations', 'Open fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
 	expect(reports).toEqual([7n])
 	expect(views).toEqual(['staged-operations', 'fork-workflow'])
 })

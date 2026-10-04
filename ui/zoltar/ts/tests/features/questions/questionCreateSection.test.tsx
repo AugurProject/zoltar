@@ -9,6 +9,7 @@ import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/co
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { QuestionCreateSection } from '@zoltar/ui-zoltar-shared/features/questions/components/QuestionCreateSection.js'
+import { getDraftOutcomeLabels } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
@@ -99,21 +100,21 @@ describe('QuestionCreateSection', () => {
 	})
 
 	test('shows a failed question write only in the shared transaction dialog', async () => {
-		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-question-write', title: 'Question creation', tone: 'error' as const }
+		const transaction = { detail: 'Rejected in wallet.', dismissKey: 'transaction-request-question-write', title: 'Question creation', tone: 'error' as const }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={transaction}>
-				<QuestionCreateSection {...createSectionProps({ questionError: 'Action canceled in wallet.' })} />
+				<QuestionCreateSection {...createSectionProps({ questionError: 'Rejected in wallet.' })} />
 				<GlobalTransactionDialog transaction={transaction} />
 			</GlobalTransactionPresentationProvider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const queries = within(document.body)
 		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
-		expect(within(dialog).getByText('Action canceled in wallet.')).not.toBeNull()
-		expect(document.querySelector('form')?.textContent).not.toContain('Action canceled in wallet.')
+		expect(within(dialog).getByText('Rejected in wallet.')).not.toBeNull()
+		expect(document.querySelector('form')?.textContent).not.toContain('Rejected in wallet.')
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
 		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-		expect(document.querySelector('form')?.textContent).not.toContain('Action canceled in wallet.')
+		expect(document.querySelector('form')?.textContent).not.toContain('Rejected in wallet.')
 	})
 
 	test('renders the inline transaction review in place of the overridden submit button', async () => {
@@ -193,6 +194,19 @@ describe('QuestionCreateSection', () => {
 		expect(updates).toContainEqual({ marketType: 'scalar' })
 	})
 
+	test('previews missing categorical outcomes without a placeholder chip', () => {
+		expect(getDraftOutcomeLabels(createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['', ''] }), 'Outcome 1 and Outcome 2 are required.')).toEqual(['Invalid'])
+		expect(getDraftOutcomeLabels(createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Alpha', ''] }), 'Outcome 2 is required.')).toEqual(['Alpha', 'Invalid'])
+	})
+
+	test('explains the disabled remove buttons at the two-outcome minimum without asking for more outcomes', async () => {
+		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Yes', 'No'] }) })
+
+		const reason = document.getElementById('minimum-outcomes-reason')
+		expect(reason?.textContent).toBe('A categorical question needs at least 2 outcomes.')
+		expect(within(document.body).getByRole('button', { name: 'Remove outcome 1' }).getAttribute('aria-describedby')).toBe('minimum-outcomes-reason')
+	})
+
 	test('labels time inputs with the browser time zone and previews each time locally and in UTC', async () => {
 		const timeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone
 		await renderSection({ questionForm: createQuestionForm({ endTime: '1798752600', startTime: '' }) })
@@ -200,11 +214,11 @@ describe('QuestionCreateSection', () => {
 		const documentQueries = within(document.body)
 		const endTimeInput = documentQueries.getByLabelText('End time')
 		const timeZoneHelp = document.getElementById(endTimeInput.getAttribute('aria-describedby') ?? '')
-		expect(timeZoneHelp?.textContent).toMatch(/^Your time \(.+\)\. Blank start means immediately\.$/)
+		expect(timeZoneHelp?.textContent).toMatch(/^Times use your time zone \(.+\)\. Leave start time blank to start immediately\.$/)
 		if (timeZone !== 'UTC' && timeZone !== 'Etc/UTC') expect(timeZoneHelp?.textContent).toContain(timeZone)
-		const preview = document.querySelector('aside[aria-label="Question preview"]')
+		const preview = document.querySelector('aside[aria-label="Draft preview"]')
 		if (!(preview instanceof HTMLElement)) throw new Error('Expected the question preview landmark')
-		const summary = within(preview).getByRole('list', { name: 'Draft question summary' })
+		const summary = within(preview).getByRole('list', { name: 'Question timeline' })
 		const [starts, ends] = within(summary).getAllByRole('listitem')
 		expect(starts?.textContent).toContain('Immediately after creation')
 		expect(ends?.querySelector('time')?.getAttribute('dateTime')).toBe('2026-12-31T21:30:00.000Z')
@@ -215,7 +229,7 @@ describe('QuestionCreateSection', () => {
 		await renderSection({ allowedMarketTypes: ['binary'], submitFields: <input aria-label='Pool multiplier' /> })
 
 		const extraField = within(document.body).getByLabelText('Pool multiplier')
-		const preview = document.querySelector('aside[aria-label="Question preview"]')
+		const preview = document.querySelector('aside[aria-label="Draft preview"]')
 		const submitButton = within(document.body).getByRole('button', { name: 'Create question' })
 		if (preview === null) throw new Error('Expected the question preview landmark')
 		expect(extraField.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

@@ -276,7 +276,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Loading mint capacity.')
+		).toBe('Loading mint capacity…')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -308,7 +308,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active underwriting commitments.')
+		).toBe('No mint capacity. No vault has an active commitment.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -407,7 +407,7 @@ void describe('trading helpers', () => {
 				shareBalances: undefined,
 				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
-		).toBe('Loading wallet share balances.')
+		).toBe('Loading wallet share balances…')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
@@ -424,7 +424,7 @@ void describe('trading helpers', () => {
 				},
 				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
-		).toBe('Need matching Invalid, Yes, and No shares to redeem complete sets.')
+		).toBe('You need matching Yes, No, and Invalid shares to redeem complete sets.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
@@ -506,8 +506,8 @@ void describe('trading helpers', () => {
 			shareBalances,
 			targetOutcomeIndexesInput: '0, 1, 2',
 		} as const
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: { ...binaryForkUniverse, hasForked: false } })).toBe('Available only after this pool forks.')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: undefined })).toBe('Refresh the fork target universes.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: { ...binaryForkUniverse, hasForked: false } })).toBe('Available only after this universe forks.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: undefined })).toBe('Refresh the child universes.')
 	})
 
 	void test('validates share migration targets and positive balances once migration is available', () => {
@@ -658,8 +658,8 @@ void describe('trading helpers', () => {
 
 	void test('blocks resolved-share redemption without winning shares in the wallet', () => {
 		const redeemInput = { accountAddress: '0x1234567890123456789012345678901234567890', hasSelectedPool: true, isOnActiveAppChain: true } as const
-		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'yes', shareBalances: { ...shareBalances, yesAttoShares: 0n } })).toBe('No winning Yes shares to redeem.')
-		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'invalid', shareBalances: undefined })).toBe('Loading wallet share balances.')
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'yes', shareBalances: { ...shareBalances, yesAttoShares: 0n } })).toBe('You hold no winning Yes shares to redeem.')
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'invalid', shareBalances: undefined })).toBe('Loading wallet share balances…')
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'no', shareBalances })).toBeUndefined()
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})

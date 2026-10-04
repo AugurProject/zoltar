@@ -10,7 +10,7 @@ import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { loadCoordinatorInitialReportFundingRequirement, loadQueuedVaultOperationState, loadOracleManagerDetails } from '../../../protocol/oracleCoordinator.js'
 import { getPendingTitle, getSuccessTitle, getFailureTitle } from '../lib/securityVaultActionTitles.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -132,10 +132,10 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const resolveSecurityVaultPoolAddressFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => parseAddressInput(requireDefined(snapshot.effectiveSecurityPoolAddressInput, 'Security pool address is required'), 'Security pool address')
 	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
 	const resolveStagedOperationValidForSecondsFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
-		const timeoutMinutes = parseBigIntInput(snapshot.form.stagedOperationTimeoutMinutes ?? '', 'Staged operation timeout')
-		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Staged operation timeout must be 1–5 minutes')
+		const timeoutMinutes = parseBigIntInput(snapshot.form.stagedOperationTimeoutMinutes ?? '', securityPoolCopy.executionWindow)
+		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error(securityPoolCopy.executionWindowRangeError)
 		const timeoutSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
-		if (timeoutSeconds === undefined) throw new Error('Staged operation timeout must be 1–5 minutes')
+		if (timeoutSeconds === undefined) throw new Error(securityPoolCopy.executionWindowRangeError)
 		return timeoutSeconds
 	}
 
@@ -226,7 +226,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			if (details === undefined) return
 			const selectionKey = currentVaultSelectionKeyRef.current
 			await reloadSecurityVaultDetails(details.securityPoolAddress, details.vaultAddress, () => isVaultSelectionCurrent(selectionKey)).catch(error => {
-				if (isVaultSelectionCurrent(selectionKey)) securityVaultError.value = getErrorMessage(error, 'Failed to refresh security vault')
+				if (isVaultSelectionCurrent(selectionKey)) securityVaultError.value = getErrorMessage(error, 'Failed to refresh the vault.')
 			})
 		},
 	})
@@ -269,7 +269,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				securityVaultDetails.value = undefined
 				securityVaultMissing.value = false
 				clearRepLoaders()
-				securityVaultError.value = getErrorMessage(error, 'Failed to load security vault')
+				securityVaultError.value = getErrorMessage(error, 'Failed to load the vault.')
 			},
 		})
 	}
@@ -322,9 +322,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				},
 				async (walletAddress, context) => {
 					securityPoolAddress = resolveSecurityVaultPoolAddressFromSnapshot(snapshot)
-					if (securityVaultMissing.value) throw new Error('Security pool does not exist')
+					if (securityVaultMissing.value) throw new Error('This security pool does not exist.')
 					const selectedVaultOwner = resolveSelectedVaultOwnerFromSnapshot(snapshot)
-					if (!sameAddress(selectedVaultOwner, walletAddress)) throw new Error('Selected vault is read-only')
+					if (!sameAddress(selectedVaultOwner, walletAddress)) throw new Error('The selected vault is read-only.')
 					securityVaultError.value = undefined
 					securityVaultResult.value = undefined
 					return await action(
@@ -343,13 +343,13 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
 					securityVaultResult.value = result
 					if (result.stagedExecution?.success === false) {
-						const message = result.stagedExecution.errorMessage ?? 'Vault operation failed'
+						const message = result.stagedExecution.errorMessage ?? securityPoolCopy.stagedOperationFailedDetail
 						securityVaultError.value = message
 						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 						onTransactionPresented(createSecurityVaultWarningPresentation(result, message, transactionContext))
 						return
 					}
-					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
+					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName, result.stagedExecution?.success === true), result.hash)
 					onTransactionPresented(createSecurityVaultSuccessPresentation(result, transactionContext))
 					if (!isCurrentSelection()) return
 					await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress, isCurrentSelection)
@@ -366,7 +366,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			'approveRep',
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
+				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'This security pool does not exist.', isCurrentSelection)
 				if (details === undefined) return undefined
 				const approvalAmount = amount ?? parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
 				const vaultAdmissionClosed = await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)
@@ -374,7 +374,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (vaultAdmissionClosed) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				return await dependencies.approveErc20(createVaultWriteClient(vaultAddress, context), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
-			'Failed to approve REP',
+			'Failed to approve REP.',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
 				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 				if (details === undefined) return
@@ -391,19 +391,19 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
 				const depositAmount = parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
-				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
+				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero.')
 				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 				if (details === undefined) return undefined
 				const targetHealthFactorBps = details.statoblastSecurityMultiplierBps ?? 10_000n
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
-				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
+				if (currentRepBalanceAttoRep < depositAmount) throw new Error(securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(depositAmount - currentRepBalanceAttoRep)))
 				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.depositRepToVaultToSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
-			'Failed to deposit REP',
+			'Failed to deposit REP.',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection, true),
 		)
 	}
@@ -427,7 +427,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			'setVaultUnderwritingLimit',
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const factor = parseEthAmountInput(value, securityPoolCopy.vaultBackingFactor)
+				const factor = parseEthAmountInput(value, securityPoolCopy.commitmentLimit)
 				if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
 				const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 				if (!isCurrentSelection()) return undefined
@@ -451,7 +451,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setVaultUnderwritingLimit', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n, proposedRepPerEthPrice)
 				return queuedOperations.track(details.managerAddress, { ...result, action: 'setVaultUnderwritingLimit' })
 			},
-			'Failed to change commitment limit',
+			'Failed to change the commitment limit.',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 			},
@@ -469,7 +469,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.redeemSecurityVaultFees(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
 			},
-			'Failed to redeem fees',
+			'Failed to claim fees.',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 			},
@@ -482,14 +482,14 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			'redeemRepFromVault',
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
+				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'This security pool does not exist.', isCurrentSelection)
 				if (details === undefined) return undefined
 				if (!isCurrentSelection()) return undefined
 				const redeemGuard = getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: details.disputeStakedAttoRep, redeemableRepAmountAttoRep: details.vaultAttoRepBacking, underwritingLimitAttoEth: details.underwritingLimitAttoEth })
 				if (redeemGuard !== undefined) throw new Error(redeemGuard)
 				return await dependencies.redeemRepFromVaultFromSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
 			},
-			'Failed to redeem REP',
+			'Failed to redeem REP.',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection),
 		)
 	}
@@ -502,9 +502,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
 				if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
 				const amount = parseRepAmountInput(snapshot.form.repWithdrawAmount, 'REP withdraw amount')
-				if (amount <= 0n) throw new Error('REP withdraw amount must be greater than zero')
+				if (amount <= 0n) throw new Error('REP withdrawal amount must be greater than zero.')
 
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
+				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'This security pool does not exist.', isCurrentSelection)
 				if (details === undefined) return undefined
 				const { funding, walletBalanceAttoEth, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context, proposedRepPerEthPrice)
 				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({
@@ -518,7 +518,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot), proposedRepPerEthPrice)
 				return queuedOperations.track(details.managerAddress, { ...result, action: 'queueWithdrawRep' })
 			},
-			'Failed to withdraw REP',
+			'Failed to withdraw REP.',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection),
 		)
 	}

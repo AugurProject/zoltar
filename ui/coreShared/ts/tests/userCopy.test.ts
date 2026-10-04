@@ -14,22 +14,13 @@ void describe('user copy helpers', () => {
 		expect(getPoolRegistryPresentation({ mode: 'selection', state: 'ready' })).toBeUndefined()
 	})
 
-	void test('maps empty pool collection states semantically', () => {
-		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('not_checked')
-		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('Loading security pools…')
-		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBeUndefined()
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('empty')
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.detail).toBe('No security pools are available in this universe.')
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.actionHint).toBe('Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.')
-	})
-
 	void test('maps universe and report lookup states semantically', () => {
 		expect(getUniversePresentation('missing')?.key).toBe('not_found')
 		expect(getReportPresentation({ kind: 'question', state: 'unknown' })).toBeUndefined()
 		expect(getReportPresentation({ kind: 'question', state: 'missing' })?.detail).toBe('No question matches this ID. Try another question ID.')
 		expect(getReportPresentation({ kind: 'report', state: 'missing' })?.detail).toBe('No report matches this ID. Try another report ID.')
 		expect(getReportPresentation({ kind: 'question', state: 'loading' })).toEqual({
-			detail: 'retrieving…',
+			detail: 'Loading…',
 			detailIsLoading: true,
 			key: 'loading',
 		})
@@ -43,6 +34,8 @@ void describe('user copy helpers', () => {
 
 	void test('keeps disconnected wallet guidance concise', () => {
 		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isOnActiveAppChain: true })?.detail).toBe('Install or enable a wallet to continue.')
+		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isOnActiveAppChain: true })?.badgeLabel).toBe('No wallet')
+		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isOnActiveAppChain: true })?.badgeLabel).toBe('Connect wallet')
 		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isOnActiveAppChain: true })?.detail).toBe('Connect wallet to continue.')
 	})
 
@@ -61,13 +54,10 @@ void describe('user copy helpers', () => {
 		})
 	})
 
-	void test('covers collection and loading report states', () => {
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: true, mode: 'collection', poolCount: 0 })?.key).toBe('loading')
-		expect(getPoolRegistryPresentation({ hasLoaded: true, isLoading: false, mode: 'collection', poolCount: 0 })?.key).toBe('empty')
-		expect(getPoolRegistryPresentation({ hasLoaded: false, isLoading: true, mode: 'collection', poolCount: 0 })?.key).toBe('loading')
+	void test('covers loading universe and report states', () => {
 		expect(getUniversePresentation('loading')?.key).toBe('loading')
 		expect(getUniversePresentation('ready')).toBeUndefined()
-		expect(getReportPresentation({ kind: 'report', state: 'loading' })?.detail).toBe('retrieving…')
+		expect(getReportPresentation({ kind: 'report', state: 'loading' })?.detail).toBe('Loading…')
 		expect(getReportPresentation({ kind: 'report', state: 'ready' })).toBeUndefined()
 	})
 

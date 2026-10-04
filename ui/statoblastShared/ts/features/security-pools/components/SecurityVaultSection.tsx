@@ -301,7 +301,7 @@ export function SecurityVaultSection({
 	// A direct change sends no oracle request, so it needs no request funding.
 	const adjustmentFundingBlocker = commitmentChangeIsDirect
 		? undefined
-		: (oracleOperationTimingGuard ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth }))
+		: (oracleOperationTimingGuard ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueCommitmentChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth }))
 	const adjustmentForm = (
 		<VaultBackingFactorForm
 			repPerEthPrice={repPerEthPrice}
@@ -565,7 +565,7 @@ export function SecurityVaultSection({
 						placeholder={commonCopy.hexValuePlaceholder}
 						action={
 							<button className='secondary' onClick={() => onLoadSecurityVault()} disabled={loadingSecurityVault}>
-								{loadingSecurityVault ? <LoadingText announce={false}>{securityPoolCopy.refreshing}</LoadingText> : vaultLookupActionLabel}
+								{loadingSecurityVault ? <LoadingText announce={false}>{commonCopy.refreshingData}</LoadingText> : vaultLookupActionLabel}
 							</button>
 						}
 					/>

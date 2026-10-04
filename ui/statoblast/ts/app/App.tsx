@@ -68,6 +68,7 @@ export function App() {
 		deploymentRoute: {
 			deploymentCompleteLabel: commonCopy.browsePools,
 			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('pools'), getTopLevelRouteSearch('pools')),
+			deploymentCompleteLabel: commonCopy.browsePools,
 			getSections: getStatoblastDeploymentSections,
 		},
 		initializeEnvironment: options => initializeStatoblastActiveEnvironment(window.location, options),

@@ -617,6 +617,22 @@
 			"bun": "./ts/features/security-pools/lib/poolViewModel.ts",
 			"default": "./js/features/security-pools/lib/poolViewModel.js"
 		},
+		"./copy/glossary.js": {
+			"bun": "./ts/copy/glossary.ts",
+			"default": "./js/copy/glossary.js"
+		},
+		"./copy/vaultOperations.js": {
+			"bun": "./ts/copy/vaultOperations.ts",
+			"default": "./js/copy/vaultOperations.js"
+		},
+		"./features/vault-operations/lib/targets.js": {
+			"bun": "./ts/features/vault-operations/lib/targets.ts",
+			"default": "./js/features/vault-operations/lib/targets.js"
+		},
+		"./features/security-pools/lib/securityVaultActionTitles.js": {
+			"bun": "./ts/features/security-pools/lib/securityVaultActionTitles.ts",
+			"default": "./js/features/security-pools/lib/securityVaultActionTitles.js"
+		},
 		"./features/open-oracle/components/OpenOraclePriceInput.js": {
 			"bun": "./ts/features/open-oracle/components/OpenOraclePriceInput.tsx",
 			"default": "./js/features/open-oracle/components/OpenOraclePriceInput.js"

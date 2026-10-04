@@ -1,3 +1,4 @@
+import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
@@ -5,7 +6,7 @@ import { parseChainId, sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget } from './networkProfile.js'
 
 const COMMON_CHAIN_NAMES = new Map<bigint, string>([
-	[1n, 'Ethereum mainnet'],
+	[1n, appCopy.ethereumMainnet],
 	[10n, 'Optimism'],
 	[25n, 'Cronos'],
 	[56n, 'BNB Smart Chain'],
@@ -24,7 +25,7 @@ const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[43114n, 'Avalanche'],
 	[59144n, 'Linea'],
 	[81457n, 'Blast'],
-	[11155111n, 'Sepolia'],
+	[11155111n, appCopy.sepolia],
 	[534352n, 'Scroll'],
 ])
 

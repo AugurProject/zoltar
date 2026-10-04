@@ -37,7 +37,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							<h4>{forkAuctionCopy.visibleDepth}</h4>
 						</div>
 					</div>
-					{loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingOrderBook} /> : undefined}
+					{loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingPriceLevels} /> : undefined}
 					{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.auctionLiveLevelsEmpty} /> : undefined}
 					{truthAuctionDepthPoints.length === 0 ? undefined : <TruthAuctionDepthChart onSelectTick={onSelectTick} points={truthAuctionDepthPoints} {...(showDepthClearingTick && clearingTick !== undefined ? { clearingTick } : {})} />}
 				</div>
@@ -50,8 +50,6 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							</div>
 						</div>
 						<div className='truth-auction-ladder'>
-							{loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingPriceLevels} /> : undefined}
-							{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.visibleAuctionLevelsEmpty} /> : undefined}
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}
@@ -65,7 +63,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 										<div className='truth-auction-price-row-main'>
 											<strong>{renderPriceValue(point.price)}</strong>
 											<div className='truth-auction-price-row-badges'>
-												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.currentFormPrice}</span> : undefined}
+												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.yourBidPrice}</span> : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
 											</div>
 										</div>
@@ -76,7 +74,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 											<span className='truth-auction-ladder-row-cumulative'>
 												{forkAuctionCopy.loadedDepth} <CurrencyValue value={point.cumulativeBidAttoEth} suffix={commonCopy.eth} />
 											</span>
-											<span>{forkAuctionCopy.formatSubmissionsLabel(point.submissionCount.toString())}</span>
+											<span>{forkAuctionCopy.formatBidCountLabel(point.submissionCount)}</span>
 										</div>
 									</div>
 								</button>

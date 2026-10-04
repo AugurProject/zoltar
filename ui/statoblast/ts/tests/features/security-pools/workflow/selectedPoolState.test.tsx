@@ -64,17 +64,17 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(page.queryByRole('heading', { name: 'Vault actions' })).toBeNull()
 		expect(document.body.textContent).not.toContain('A valid OpenOracle price is required for commitment changes')
 		expect(page.getByRole('heading', { name: 'My vault' })).not.toBeNull()
-		expect(page.getByRole('textbox', { name: 'Deposit REP (optional)' })).not.toBeNull()
+		expect(page.getByRole('textbox', { name: 'REP deposit amount (optional)' })).not.toBeNull()
 		expect(page.getByRole('button', { name: 'Review vault operations' })).not.toBeNull()
 		expect(page.queryByText('Current commitment')).toBeNull()
 		expect(page.queryByText('Current REP backing')).toBeNull()
 		expect(page.getByText('Wallet REP balance')).not.toBeNull()
 		await openAllVaults()
-		expect(page.queryByRole('textbox', { name: 'Deposit REP (optional)' })).toBeNull()
+		expect(page.queryByRole('textbox', { name: 'REP deposit amount (optional)' })).toBeNull()
 		const readinessLink = page.getAllByRole('button', { name: 'Open vaults' })[0]
 		if (readinessLink === undefined) throw new Error('Expected vault readiness link')
 		await act(() => fireEvent.click(readinessLink))
-		expect(page.getByRole('textbox', { name: 'Deposit REP (optional)' })).not.toBeNull()
+		expect(page.getByRole('textbox', { name: 'REP deposit amount (optional)' })).not.toBeNull()
 	})
 
 	test('uses one selected-pool surface with unframed direct structural sections', async () => {
@@ -356,7 +356,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 
-		expect(within(document.body).getByText('No current positions among 2 known vaults.')).not.toBeNull()
+		expect(within(document.body).getByText('No active vaults among 2 known vaults.')).not.toBeNull()
 		expect(within(document.body).queryByText('No known vaults in this pool.')).toBeNull()
 	})
 
@@ -367,10 +367,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 
-		expect(within(document.body).getByText('Registry scan limit reached. Some current positions may not be shown.')).not.toBeNull()
-		expect(within(document.body).getByText('No current positions found within the scan limit.')).not.toBeNull()
+		expect(within(document.body).getByText('Vault scan limit reached. Some active vaults may not be shown.')).not.toBeNull()
+		expect(within(document.body).getByText('No active vaults found within the scan limit.')).not.toBeNull()
 		expect(within(document.body).queryByText('Showing 0 current positions from 600 known vaults, newest-registered first.')).toBeNull()
-		expect(within(document.body).queryByText('No current positions among 600 known vaults.')).toBeNull()
+		expect(within(document.body).queryByText('No active vaults among 600 known vaults.')).toBeNull()
 	})
 
 	test('renders a selected bad-debt-only known vault as an existing position', async () => {
@@ -706,7 +706,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Select vault' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open vault' }))
 		})
 
 		expect(formChanges).toContainEqual({ selectedVaultOwner: vaultAddress })

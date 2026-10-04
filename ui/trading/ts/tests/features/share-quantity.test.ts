@@ -29,8 +29,8 @@ test('does not label a nonzero token balance as zero at display precision', () =
 
 test('shows current ETH backing beside share quantities without changing the quantity', () => {
 	const market = { shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 9n * 10n ** 17n }
-	expect(formatOutcomeWithValue(10n ** 18n, 'YES', market)).toBe('1 Yes (0.9 ETH if Yes wins)')
-	expect(formatOutcomeWithValue(10n ** 12n, 'YES', market)).toBe('<0.0001 Yes (<0.0001 ETH if Yes wins)')
+	expect(formatOutcomeWithValue(10n ** 18n, 'YES', market)).toBe('1 Yes (0.9 ETH if the question resolves Yes)')
+	expect(formatOutcomeWithValue(10n ** 12n, 'YES', market)).toBe('<0.0001 Yes (<0.0001 ETH if the question resolves Yes)')
 	expect(formatOutcomeWithValue(0n, 'YES', market)).toBe('0 Yes (0 ETH)')
 	expect(formatOutcomeWithValue(10n ** 18n, 'YES', { ...market, questionOutcome: 2 })).toBe('1 Yes (0 ETH · lost)')
 	expect(formatOutcomeWithValue(10n ** 18n, 'YES', { ...market, questionOutcome: 1 })).toBe('1 Yes (0.9 ETH · winning payout; redemption unavailable)')
@@ -41,8 +41,8 @@ test('shows current ETH backing beside share quantities without changing the qua
 
 test('values LP tokens from their reserve claims, including resolved and unavailable markets', () => {
 	const market = liveMarketFixture({ yesReserve: 2n * 10n ** 18n, noReserve: 3n * 10n ** 18n, lpTotalSupply: 10n ** 18n })
-	expect(formatLpWithValue(10n ** 18n, { ...market, noReserve: market.yesReserve })).toBe('1 LP (2 ETH if resolved valid)')
-	expect(formatLpWithValue(10n ** 18n, market)).toBe('1 LP (2 ETH if Yes wins; 3 ETH if No wins)')
+	expect(formatLpWithValue(10n ** 18n, { ...market, noReserve: market.yesReserve })).toBe('1 LP (2 ETH if the question resolves Yes or No)')
+	expect(formatLpWithValue(10n ** 18n, market)).toBe('1 LP (2 ETH if the question resolves Yes; 3 ETH if the question resolves No)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, questionOutcome: 2 })).toBe('1 LP (3 ETH winning payout)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, questionOutcome: 0 })).toBe('1 LP (0 ETH winning payout)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, loadError: 'offline' })).toBe('1 LP (Value unavailable)')

@@ -3,6 +3,8 @@ import { getViewerPositions } from '../lib/reportingViewerStatus.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import * as escalationCopy from '../../../copy/reportingEscalation.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -80,20 +82,23 @@ function ReportingSettlementSide({
 							deposit,
 							details: [
 								<>
-									{reportingCopy.initiallyDeposited} <CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
+									{escalationCopy.initiallyDepositedLead}
+									<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 								</>,
 								claimAmount === undefined ? (
 									reportingCopy.worthAfterFinalizationPendingFinalization
 								) : (
 									<>
-										{reportingCopy.worthNow} <CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
+										{escalationCopy.worthNowLead}
+										<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 									</>
 								),
 							],
 							secondaryDetails: [
 								`${reportingCopy.currentClaimType} ${claimLabel ?? reportingCopy.pendingFinalization}`,
 								<>
-									{reportingCopy.entryDepth} <CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
+									{escalationCopy.entryDepthLead}
+									<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 								</>,
 							],
 						}
@@ -220,7 +225,7 @@ export function ReportingSettlementSection({
 	const hasImportedForkedDeposits = activeReportingDetails?.sides.some(side => side.importedUserDeposits.length > 0) ?? false
 	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required' || activeReportingDetails?.settlementState === 'migration-expired'
 	return (
-		<SectionBlock className='reporting-settlement-section' title={reportingCopy.settleEscalationDeposits} variant='embedded'>
+		<SectionBlock className='reporting-settlement-section' title={transactionCopy.settleEscalationDeposits} variant='embedded'>
 			<WalletActionFixReason
 				actionButtonRef={firstSettleActionButtonRef}
 				availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }}

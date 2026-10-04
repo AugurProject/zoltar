@@ -72,11 +72,11 @@ export function useSettlementWorkflowController({
 		if (walletClient === undefined || account === undefined || approval === undefined || balanceState !== 'ready' || previewBlocker !== undefined || transaction.workflowLocked) return
 		await transaction.submit({
 			prepare: async () => {
-				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
+				await executeWithCurrentWalletContext(account, 'Wallet network changed. Switch back before submitting.', 'Wallet account changed. Reconnect and try again.', async () => undefined)
 				return approval
 			},
 			send: async (prepared, requestSignature) => {
-				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and try again', 'Wallet account changed during settlement revalidation; reconnect and try again')
+				const guarded = createGuardedWalletWrite(account, 'Wallet network changed while the transaction was checked. Reconnect and try again.', 'Wallet account changed while the transaction was checked. Reconnect and try again.')
 				// The settlement services re-simulate at the latest block before writing and keep the approved minimums.
 				return await services.submit(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},

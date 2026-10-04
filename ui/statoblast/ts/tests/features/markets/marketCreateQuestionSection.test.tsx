@@ -140,7 +140,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(titleInput.required).toBe(true)
 		expect((documentQueries.getByLabelText('End time') as HTMLInputElement).required).toBe(true)
 		expect(documentQueries.queryByText('Required fields are marked with an asterisk (*).')).toBeNull()
-		expect(documentQueries.getByText(/^Your time \(.+\)\. Blank start means immediately\.$/)).not.toBeNull()
+		expect(documentQueries.getByText(/^Times use your time zone \(.+\)\. Leave start time blank to start immediately\.$/)).not.toBeNull()
 		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Question type Guidance' })).toBeNull()
@@ -155,16 +155,16 @@ describe('MarketCreateQuestionSection', () => {
 		expect(document.body.textContent?.includes('Statoblast origin security pools support this exact Yes / No question shape.')).toBe(false)
 		expect(documentQueries.queryByText('Context provided')).toBeNull()
 		expect(documentQueries.queryByText('Risk cue')).toBeNull()
-		expect(documentQueries.queryByText('Title is required')).toBeNull()
+		expect(documentQueries.queryByText('Title is required.')).toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBeNull()
-		expect(documentQueries.getByText('Missing required fields: Title')).not.toBeNull()
+		expect(documentQueries.getByText('Missing required fields: Title.')).not.toBeNull()
 
 		await act(() => {
 			titleInput.dispatchEvent(new Event('blur'))
 		})
 
-		expect(documentQueries.getByText('Title is required')).not.toBeNull()
-		expect(getDescribedText(titleInput)).toBe('Title is required')
+		expect(documentQueries.getByText('Title is required.')).not.toBeNull()
+		expect(getDescribedText(titleInput)).toBe('Title is required.')
 	})
 
 	test('associates chronology errors with both time fields and explains the disabled action', async () => {
@@ -177,13 +177,13 @@ describe('MarketCreateQuestionSection', () => {
 			startTimeInput.dispatchEvent(new Event('blur'))
 		})
 
-		expect(documentQueries.getAllByText('End time must be after start time')).toHaveLength(1)
+		expect(documentQueries.getAllByText('End time must be after start time.')).toHaveLength(1)
 		for (const input of [startTimeInput, endTimeInput]) {
 			expect(input.getAttribute('aria-invalid')).toBe('true')
 			expect(input.getAttribute('aria-describedby')).toBe('market-create-timing-error market-create-time-zone')
 		}
-		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time')
+		expect(documentQueries.queryByText('Missing required fields: Title.')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time.')
 	})
 
 	test('keeps scalar details and ended-state risk visible through direct submission', async () => {
@@ -315,15 +315,15 @@ describe('MarketCreateQuestionSection', () => {
 		expect(outcome1.required).toBe(true)
 		expect(outcome2.required).toBe(true)
 		expect(outcome3.required).toBe(false)
-		expect(documentQueries.queryByText('Outcome 1 is required')).toBeNull()
+		expect(documentQueries.queryByText('Outcome 1 is required.')).toBeNull()
 
 		await act(() => {
 			outcome1.dispatchEvent(new Event('blur'))
 		})
 
-		expect(documentQueries.getByText('Outcome 1 is required')).not.toBeNull()
-		expect(getDescribedText(outcome1)).toBe('Outcome 1 is required')
-		expect(getDescribedText(outcome2)).toBe('Outcome 1 is required')
+		expect(documentQueries.getByText('Outcome 1 is required.')).not.toBeNull()
+		expect(getDescribedText(outcome1)).toBe('Outcome 1 is required.')
+		expect(getDescribedText(outcome2)).toBe('Outcome 1 is required.')
 	})
 
 	test('uses canonical categorical outcome ordering in the draft preview', async () => {
@@ -382,7 +382,7 @@ describe('MarketCreateQuestionSection', () => {
 			}),
 		})
 
-		expect(within(document.body).getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
+		expect(within(document.body).getByText('Enter scalar min, max, and increment to preview the answer range.')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Create question')
 	})
 
@@ -401,8 +401,8 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		for (const { input, label } of scalarFields) {
-			expect(documentQueries.getByText(`${label} is required`)).not.toBeNull()
-			expect(getDescribedText(input)).toBe(`${label} is required`)
+			expect(documentQueries.getByText(`${label} is required.`)).not.toBeNull()
+			expect(getDescribedText(input)).toBe(`${label} is required.`)
 		}
 	})
 
@@ -493,14 +493,14 @@ describe('MarketCreateQuestionSection', () => {
 		}
 
 		const loadingRender = await renderSection({ ...scalarResultProps, loadingZoltarQuestions: true })
-		expect(within(document.body).getByRole('status', { name: 'Loading question details' })).not.toBeNull()
+		expect(within(document.body).getByRole('status', { name: 'Loading question details…' })).not.toBeNull()
 		await loadingRender.cleanup()
 		cleanupRenderedComponent = undefined
 
 		await renderSection({ ...scalarResultProps, marketError: 'Unable to load details' })
 		const missingQueries = within(document.body)
-		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: `Already forked: Question (${result.questionId})` })).not.toBeNull()
+		expect(missingQueries.getByText('Question details are unavailable.')).not.toBeNull()
+		expect(missingQueries.getByRole('button', { name: `Universe already forked: Question (${result.questionId})` })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
 		expect(missingQueries.getByRole('alert').textContent).toContain('Unable to load details')
 		expect(document.body.textContent).not.toContain('Create pool from question')

@@ -2,6 +2,7 @@ import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { attoSharesToCollateralAttoEth } from '../lib/shareValue.js'
 import { liveBalancesForMarket, type LiveBalances, type LiveMarket } from '../protocol/live.js'
+import { formatEthAmount } from '../copy/outcomes.js'
 import * as payoutCopy from '../copy/payout.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -9,7 +10,7 @@ import { lpReserveClaims } from './portfolioModel.js'
 
 function formatFeeEth(amount: bigint) {
 	const value = formatRoundedUnits(amount, 18, 6)
-	return payoutCopy.feeEth(amount > 0n && value === '0' ? '<0.000001' : value)
+	return formatEthAmount(amount > 0n && value === '0' ? '<0.000001' : value)
 }
 
 function holdingsFeeRange(market: LiveMarket, balances: LiveBalances, feeCollateralAttoEth: bigint) {
@@ -34,7 +35,7 @@ export function BackingDetails({ market, balances }: { market: LiveMarket; balan
 	const fees = scopedBalances === undefined ? undefined : holdingsFeeRange(market, scopedBalances, feeCollateralAttoEth)
 	return (
 		<DataGrid dense>
-			<MetricField label={fees === undefined ? payoutCopy.feeProjection : payoutCopy.positionFeeProjection}>{payoutCopy.holdingFeeValue(formatTrimmedUnits(feeReduction, 4, 4), fees)}</MetricField>
+			<MetricField label={fees === undefined ? payoutCopy.feeProjection : payoutCopy.positionFeeProjection}>{payoutCopy.formatHoldingFeeValue(formatTrimmedUnits(feeReduction, 4, 4), fees)}</MetricField>
 		</DataGrid>
 	)
 }

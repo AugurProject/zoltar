@@ -180,7 +180,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const reportButton = within(document.body).getByRole('button', { name: 'Report on selected side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Report on selected side').reason).toBe('Loading reporting details.')
+		expect(getTransactionButtonState(document.body, 'Report on selected side').reason).toBe('Loading reporting details…')
 	})
 
 	test('keeps reporting disabled one second before the market end timestamp', async () => {
@@ -227,9 +227,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			{ showHeader: true },
 		)
 		const page = within(document.body)
-		expect(page.getByText('Commitment limit (ETH)')).not.toBeNull()
+		expect(page.getByText('Commitment limit')).not.toBeNull()
 		expect(page.getByText('Set commitment limit')).not.toBeNull()
-		expect(page.getByText('Commitment limit (ETH)').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*ETH/)
+		expect(page.getByText('Commitment limit').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*ETH/)
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {
@@ -245,7 +245,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
-		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
+		expect(documentQueries.getByText('Executes automatically')).not.toBeNull()
 		expect(documentQueries.getByText('Operation ID')).not.toBeNull()
 		expect(documentQueries.getByText('5 REP')).not.toBeNull()
 		expect(documentQueries.getByText('Staged operation ID')).not.toBeNull()
@@ -326,7 +326,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		await rerender({ ...baseProps, poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n }) })
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
-		fireEvent.input(within(dialog).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Request new price' }))
 		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
 	})
@@ -375,20 +375,20 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const dialog = openPriceRequestDialog()
 		const confirm = within(dialog).getByRole('button', { name: 'Request new price' })
 		expect(getTransactionButtonState(dialog, 'Request new price').disabled).toBe(true)
-		const input = queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const input = queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull()
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
 			expect(getTransactionButtonState(dialog, 'Request new price').disabled).toBe(true)
-			expect(queries.getAllByText('Enter a positive REP per ETH price with up to 18 decimal places.')).toHaveLength(1)
-			expect(getTransactionButtonState(dialog, 'Request new price').reason).toContain('Enter a positive REP per ETH price')
+			expect(queries.getAllByText('Enter a positive initial report price.')).toHaveLength(1)
+			expect(getTransactionButtonState(dialog, 'Request new price').reason).toContain('Enter a positive initial report price.')
 		}
 		await act(() => {
 			input.dispatchEvent(new Event('blur'))
 		})
-		const priceError = queries.getByText('Enter a positive REP per ETH price with up to 18 decimal places.')
+		const priceError = queries.getByText('Enter a positive initial report price.')
 		expect(priceError.classList.contains('field-error')).toBe(true)
-		expect(queries.getAllByText('Enter a positive REP per ETH price with up to 18 decimal places.')).toHaveLength(1)
+		expect(queries.getAllByText('Enter a positive initial report price.')).toHaveLength(1)
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		expect(confirm.getAttribute('aria-describedby')).toBe(priceError.id)
 		fireEvent.input(input, { target: { value: '1.25' } })
@@ -419,7 +419,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		await rerender({ ...baseProps, activeUniverseId: newlySelectedPool.universeId, checkedSecurityPoolAddress: newlySelectedPool.securityPoolAddress, securityPoolAddress: newlySelectedPool.securityPoolAddress, securityPools: [newlySelectedPool] })
 
-		fireEvent.input(within(dialog).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Request new price' }))
 		expect(requests).toEqual([{ securityPoolAddress: reviewedPool.securityPoolAddress, universeId: reviewedPool.universeId }])
 	})

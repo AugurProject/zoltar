@@ -15,6 +15,8 @@ import { useKeyedConfirmation } from '../hooks/useKeyedConfirmation.js'
 import { getReportingMaxContribution } from '../lib/reportingMaxContribution.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as glossaryCopy from '../../../copy/glossary.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -54,7 +56,7 @@ type EscalationSideDisplay = {
 	userDeposits: EscalationDeposit[] | undefined
 	userStake: bigint | undefined
 }
-const LOAD_REPORTING_PRESETS_REASON = reportingCopy.presetDetailsRequired
+const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const SELECT_OUTCOME_PRESET_REASON = reportingCopy.presetOutcomeSelectionRequired
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = reportingCopy.reportingActivationHint
 function isRedundantPresetReason(reason: string | undefined) {
@@ -161,7 +163,7 @@ export function ReportingSection({
 	} else if (reportingStageKey === 'resolved') {
 		reportLifecycleReason = reportingCopy.poolFinalizedReason
 	}
-	const fullReportingLoadingReason = showFullReporting && loadingReportingDetails ? reportingCopy.reportingDetailsRequired : undefined
+	const fullReportingLoadingReason = showFullReporting && loadingReportingDetails ? reportingCopy.loadingReportingDetails : undefined
 	const reportControlsLockedReason = showFullReporting ? pickFirstReason(fullReportingLoadingReason, reportActionGuardMessage, lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, reportLifecycleReason) : preOpenLockedReason
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
@@ -172,19 +174,19 @@ export function ReportingSection({
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
 		settlementLifecycleReason = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail
 	} else if (activeReportingDetails?.settlementState === 'migration-expired') {
-		settlementLifecycleReason = reportingCopy.unresolvedMigrationExpiredDetail
+		settlementLifecycleReason = forkAuctionCopy.unresolvedMigrationExpiredDetail
 	} else if (reportingStageKey === 'activeLocked') {
 		settlementLifecycleReason = reportingCopy.questionFinalizationRequired
 	}
 	let withdrawControlsLockedReason: string | undefined
 	if (showSettlementSection && loadingReportingDetails) {
-		withdrawControlsLockedReason = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDeposits
+		withdrawControlsLockedReason = showFullReporting ? reportingCopy.loadingReportingDetails : reportingCopy.loadingEscalationDeposits
 	} else {
 		withdrawControlsLockedReason = pickFirstReason(lockedReason, reportingStageKey === 'preOpen' ? preOpenLockedReason : undefined, settlementLifecycleReason)
 	}
 	let settlementContextMessage: string | undefined
 	if (activeReportingDetails?.settlementState === 'migration-required') settlementContextMessage = forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail
-	else if (activeReportingDetails?.settlementState === 'migration-expired') settlementContextMessage = reportingCopy.unresolvedMigrationExpiredDetail
+	else if (activeReportingDetails?.settlementState === 'migration-expired') settlementContextMessage = forkAuctionCopy.unresolvedMigrationExpiredDetail
 	const withdrawControlsLocked = !withdrawEscalationEnabled || withdrawControlsLockedReason !== undefined
 	const selectedAmount = parseOptionalRepAmountInput(reportingForm.reportAmount)
 	const selectedOutcome = reportingForm.selectedOutcome
@@ -264,7 +266,7 @@ export function ReportingSection({
 		})
 	let displayedWithdrawGuardMessage = withdrawGuardMessage
 	if (loadingReportingDetails) {
-		displayedWithdrawGuardMessage = showFullReporting ? reportingCopy.reportingDetailsRequired : reportingCopy.loadingEscalationDepositsDetail
+		displayedWithdrawGuardMessage = showFullReporting ? reportingCopy.loadingReportingDetails : reportingCopy.loadingEscalationDeposits
 	}
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked && reportActionDisabledReason === reportingCopy.reportOutcomeSelectionRequired ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && forkAlreadyTriggered && onOpenForkWorkflow !== undefined
@@ -382,10 +384,10 @@ export function ReportingSection({
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
-						<MetricField label={<GlossaryTerm id='non-decision-threshold'>{reportingCopy.nonDecisionThresholdAttoRep}</GlossaryTerm>}>
+						<MetricField label={<GlossaryTerm id='non-decision-threshold'>{glossaryCopy.nonDecisionThresholdTerm}</GlossaryTerm>}>
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
-						<MetricField label={reportingCopy.startBondAttoRep}>
+						<MetricField label={reportingCopy.minimumFirstReport}>
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBondAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						{finalized || activeReportingDetails?.hasReachedNonDecision ? undefined : <MetricField label={reportingCopy.responseWindowEnds}>{activeReportingDetails === undefined ? inactiveCountdown : formatReportingDeadline(activeReportingDetails.escalationEndTime, activeReportingDetails.currentTime)}</MetricField>}
@@ -437,7 +439,7 @@ export function ReportingSection({
 							<AmountField
 								disabled={reportControlsLocked}
 								id='reporting-contribution-amount'
-								label={reportingCopy.contributionAmount}
+								label={reportingCopy.reportAmountFieldLabel}
 								fillMax={{ amount: maxContributionAmount.amountAttoRep, unavailableReason: reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason }}
 								onChange={reportAmount => onReportingFormChange({ reportAmount })}
 								placeholder={reportingCopy.reportAmountPlaceholder}

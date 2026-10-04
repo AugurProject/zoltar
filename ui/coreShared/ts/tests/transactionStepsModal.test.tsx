@@ -396,7 +396,7 @@ for (const result of ['success', 'reverted'] as const) {
 			if (result === 'success') {
 				const secondReview = controller.review()
 				await act(() => undefined)
-				expect(button('Wrap ETH ✓').hasAttribute('disabled')).toBe(true)
+				expect(button('Wrapped ETH ✓').hasAttribute('disabled')).toBe(true)
 				expect(button('Approve REP').hasAttribute('disabled')).toBe(false)
 				expect(button('Request price').hasAttribute('disabled')).toBe(true)
 				await act(() => fireEvent.click(button('Approve REP')))
@@ -528,7 +528,7 @@ test('keeps requirements failures and confirmed approvals in the review', async 
 	try {
 		const queries = within(rendered.container)
 		expect(queries.getByRole('dialog').textContent).toContain('Could not refresh funding requirements.')
-		expect(queries.getByRole('button', { name: 'Approve REP ✓' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: 'Approved REP ✓' }).hasAttribute('disabled')).toBe(true)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -606,17 +606,18 @@ for (const result of ['pending', 'reverted'] as const) {
 }
 
 test('uses one action vocabulary for queued transaction states', () => {
-	expect(completedAction('Queue liquidation')).toBe('Queued liquidation')
+	expect(completedAction('Queue liquidation')).toBe('Liquidation queued')
+	expect(completedAction('Queue custom operation')).toBe('Queued custom operation')
 	expect(formatPendingAction('Queue liquidation')).toBe('Queuing liquidation…')
 	expect(completedAction('Custom operation')).toBe('Custom operation – done')
 })
 
-test('uses past tense for shared deployment, transfer and dispute actions', () => {
+test('uses noun-first result titles for shared deployment, transfer and dispute actions', () => {
 	for (const [title, completed, pending] of [
-		['Fund proxy deployment', 'Funded proxy deployment', 'Funding proxy deployment…'],
-		['Deploy shared proxy', 'Deployed shared proxy', 'Deploying shared proxy…'],
-		['Transfer ETH', 'Transferred ETH', 'Transferring ETH…'],
-		['Dispute report', 'Disputed report', 'Disputing report…'],
+		['Fund proxy deployment', 'Proxy deployment funded', 'Funding proxy deployment…'],
+		['Deploy shared proxy', 'Shared proxy deployed', 'Deploying shared proxy…'],
+		['Transfer ETH', 'ETH transferred', 'Transferring ETH…'],
+		['Dispute report', 'Report disputed', 'Disputing report…'],
 	]) {
 		expect(completedAction(title ?? '')).toBe(completed)
 		expect(formatPendingAction(title ?? '')).toBe(pending)
@@ -640,7 +641,7 @@ test('sends a standalone page approval directly and keeps rejection retryable', 
 		expect(within(document.body).queryByRole('dialog')).toBeNull()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(await review).toBeUndefined()
-		await act(() => controller.failed({ kind: 'rejected', message: 'Action canceled in wallet.' }))
+		await act(() => controller.failed({ kind: 'rejected', message: 'Rejected in wallet.' }))
 		expect(transactionSteps.value).toBeUndefined()
 	} finally {
 		review?.catch(() => undefined)

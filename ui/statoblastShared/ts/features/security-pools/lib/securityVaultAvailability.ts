@@ -179,8 +179,8 @@ export function buildVaultReadinessActions({
 			...(depositRepToVaultEnabled ? withBlocker(visibleDepositLauncherBlocker) : {}),
 		},
 		{
-			actionLabel: securityPoolCopy.setVaultUnderwritingLimit,
-			description: securityPoolCopy.setVaultUnderwritingLimitDescription,
+			actionLabel: securityPoolCopy.setCommitmentLimit,
+			description: securityPoolCopy.setCommitmentLimitDescription,
 			key: 'adjust-backing',
 			...(adjustmentReady ? { onAction: () => onOpenModal('adjust-backing') } : {}),
 			readiness: adjustmentReady ? 'ready' : 'blocked',

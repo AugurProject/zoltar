@@ -188,7 +188,7 @@ describe('trading header', () => {
 		})
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
 		await clickConnectWallet(rendered.container)
-		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No injected wallet was found'))
+		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No browser wallet was found'))
 	})
 
 	test('renders an explicit not-found route and updates the document title', async () => {
@@ -243,7 +243,7 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')?.disabled).toBeFalse()
 		expect(rendered.container.querySelector('main .route-header .wallet-button')).toBeNull()
 		await clickConnectWallet(rendered.container)
-		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
+		expect(rendered.container.querySelector('main')?.textContent).toContain('No browser wallet was found')
 	})
 
 	test('reserves the toolbar wallet slot while the deployment is checked', async () => {
@@ -356,13 +356,13 @@ describe('trading header', () => {
 			await Bun.sleep(10)
 		})
 		await clickConnectWallet(rendered.container)
-		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
+		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No browser wallet was found')
 		await act(async () => {
 			window.history.replaceState(undefined, '', '/#/market')
 			window.dispatchEvent(new Event('hashchange'))
 			await Bun.sleep(10)
 		})
-		expect(rendered.container.querySelector('main')?.textContent).not.toContain('No injected wallet was found')
+		expect(rendered.container.querySelector('main')?.textContent).not.toContain('No browser wallet was found')
 	})
 
 	test('keeps only markets minted in the selected universe', () => {
@@ -451,8 +451,8 @@ describe('trading header', () => {
 	test('ends wallet balance loading when selected-universe discovery fails', async () => {
 		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true, 'Security pool discovery failed')?.status).toBe('loading')
 		// The universe route names its own discovery and a redacted detail is not prefixed twice.
-		expect(walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Universe discovery failed')).toEqual({ status: 'error', error: 'Universe discovery failed: RPC request failed', errorLabel: 'Universe discovery failed' })
-		expect(walletSummaryAvailability(true, undefined, 'error', 'Universe discovery failed', true, 'Universe discovery failed')?.error).toBe('Universe discovery failed')
+		expect(walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Universe discovery failed')).toEqual({ status: 'error', error: 'Universe discovery failed: RPC request failed.', errorLabel: 'Universe discovery failed' })
+		expect(walletSummaryAvailability(true, undefined, 'error', 'Universe discovery failed', true, 'Universe discovery failed')?.error).toBe('Universe discovery failed.')
 		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Security pool discovery failed')
 		if (availability === undefined) throw new Error('A discovery failure must make wallet balances unavailable')
 		const rendered = await renderIntoDocument(<TradingOverviewPanel walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)

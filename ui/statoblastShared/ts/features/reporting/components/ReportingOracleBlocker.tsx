@@ -1,6 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as copy from '../../../copy/reporting.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -89,12 +90,12 @@ export function ReportingOracleBlocker({
 					) : undefined}
 					{pendingId > 0n && ready ? (
 						<TransactionActionButton
-							idleLabel={copy.settlePriceReport(pendingId)}
+							idleLabel={openOracleCopy.settleReportTitle(pendingId)}
 							pendingLabel={copy.settlingPriceReport(pendingId)}
 							pending={pending}
 							onClick={() => (oracle === undefined ? onViewReport(pendingId) : oracle.onSettleReport())}
 							availability={withWalletGuardFirst(
-								{ disabled: oracle !== undefined && availability?.canAct !== true, reason: oracle === undefined ? undefined : (availability?.message ?? (report === undefined ? copy.loadingEscalation : undefined)) },
+								{ disabled: oracle !== undefined && availability?.canAct !== true, reason: oracle === undefined ? undefined : (availability?.message ?? (report === undefined ? copy.loadingPriceReport : undefined)) },
 								wallet ?? { blocked: false, reason: undefined, walletBlocker: undefined },
 							)}
 						/>

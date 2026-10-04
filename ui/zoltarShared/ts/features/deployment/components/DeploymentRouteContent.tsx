@@ -2,6 +2,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
+import * as marketCopy from '../../../copy/market.js'
 import type { ComponentChildren } from 'preact'
 import { useId } from 'preact/hooks'
 import { LoadableValue } from '@zoltar/ui-core-shared/components/LoadableValue.js'
@@ -27,7 +28,7 @@ export function DeploymentRouteContent({
 	isLoadingDeploymentStatuses,
 	isOnActiveAppChain,
 	deploymentCompleteHref,
-	deploymentCompleteLabel,
+	deploymentCompleteLabel = marketCopy.browseQuestions,
 	onDeploy,
 	onDeployNextMissing,
 	onRetryDeploymentStatus,
@@ -47,10 +48,6 @@ export function DeploymentRouteContent({
 				nextMissingStep,
 			})
 		: { disabled: true, reason: deploymentCopy.deploymentStatusUnavailableReason }
-	let buttonContent: ComponentChildren = deploymentCopy.deployNextMissing
-	if (deployNextMissingPending) {
-		buttonContent = deploymentCopy.deploying
-	} else if (busyStepId !== undefined) buttonContent = appCopy.deploymentInProgress
 	let nextDeployableContent: ComponentChildren = commonCopy.unavailable
 	if (isLoadingDeploymentStatuses) nextDeployableContent = <LoadingText />
 	else if (deploymentStateReady) nextDeployableContent = nextMissingStep?.label ?? deploymentCopy.allDeployed
@@ -68,18 +65,17 @@ export function DeploymentRouteContent({
 		<>
 			<RouteHeader
 				className='deployment-route-header'
-				eyebrow={commonCopy.deploy}
-				title={deploymentCopy.deterministicContractDeployment}
+				title={appCopy.deployContracts}
 				description={deploymentCopy.deploymentOverviewDetail}
 				actions={
 					deploymentComplete ? (
 						<a className='button-link' href={completedHref}>
-							{deploymentCompleteLabel ?? deploymentCopy.browseQuestions}
+							{deploymentCompleteLabel}
 						</a>
 					) : (
 						<TransactionActionButton
 							disabledReasonElementId={deploymentStateReady ? undefined : deploymentStatusReasonId}
-							idleLabel={buttonContent}
+							idleLabel={deploymentCopy.deployNextContract}
 							pendingLabel={deploymentCopy.deploying}
 							onClick={onDeployNextMissing}
 							pending={deployNextMissingPending}

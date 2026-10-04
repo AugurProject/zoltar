@@ -17,6 +17,7 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTra
 import type { SecurityVaultDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { SecurityVaultSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityVaultSection.js'
+import { getQueuedVaultOperationFailureDetail, getSuccessTitle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultActionTitles.js'
 import { SelectedVaultSummarySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SelectedVaultSummarySection.js'
 import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
@@ -178,7 +179,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		expect(prepared).toEqual([])
 		fireEvent.input(within(dialog).getByLabelText('Commitment limit'), { target: { value: '1' } })
-		fireEvent.input(within(dialog).getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '4' } })
+		fireEvent.input(within(dialog).getByLabelText('Initial report price (REP per ETH)'), { target: { value: '4' } })
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 350))
 		})
@@ -302,7 +303,7 @@ describe('SecurityVaultSection', () => {
 		await act(() => {
 			input.dispatchEvent(new Event('blur'))
 		})
-		const limitError = dialog.getByText('Commitment limit (ETH) must be a decimal number.')
+		const limitError = dialog.getByText('Commitment limit must be a decimal number.')
 		expect(limitError.classList.contains('field-error')).toBe(true)
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		expect(input.getAttribute('aria-describedby')?.split(' ')[0]).toBe(limitError.id)
@@ -375,10 +376,10 @@ describe('SecurityVaultSection', () => {
 		})
 		cleanupRenderedComponent = (await renderIntoDocument(<SecurityVaultSection {...props} />)).cleanup
 		const page = within(document.body)
-		expect(page.queryByText('A new OpenOracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.')).toBeNull()
+		expect(page.queryByText('A new OpenOracle report is needed to change the commitment limit. Set its initial price and fund the report when submitting the change.')).toBeNull()
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
-		expect(dialog.queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })).toBeNull()
+		expect(dialog.queryByRole('textbox', { name: 'Initial report price (REP per ETH)' })).toBeNull()
 		expect(dialog.getByText('The question has resolved, so this change goes straight to the pool without an oracle price. Commitments can only be lowered now; set 0 ETH to unlock REP redemption.')).toBeDefined()
 		// Commitments can only be lowered here, so nothing offers or reports a higher maximum.
 		expect(dialog.queryByRole('button', { name: 'Max' })).toBeNull()
@@ -500,7 +501,7 @@ describe('SecurityVaultSection', () => {
 				/>,
 			)
 		).cleanup
-		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
+		const input = within(document.body).getByLabelText('REP withdrawal amount') as HTMLInputElement
 		expect(input.value).toBe('')
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
 	})
@@ -517,7 +518,7 @@ describe('SecurityVaultSection', () => {
 				/>,
 			)
 		).cleanup
-		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
+		const input = within(document.body).getByLabelText('REP withdrawal amount') as HTMLInputElement
 		await act(() => {
 			input.dispatchEvent(new window.Event('blur'))
 		})
@@ -535,11 +536,11 @@ describe('SecurityVaultSection', () => {
 				/>,
 			)
 		).cleanup
-		const input = within(document.body).getByLabelText(/^Manual execution timeout/)
+		const input = within(document.body).getByLabelText(/^Execution window \(minutes\)/)
 		expect(input.getAttribute('max')).toBe('5')
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		const describedBy = (input.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
-		expect(describedBy).toEqual(['Enter 1–5 whole minutes.', '1–5 whole minutes; expires after oracle settlement.'])
+		expect(describedBy).toEqual(['Enter an execution window of 1–5 whole minutes.', 'Queued operations expire 1–5 whole minutes after oracle settlement.'])
 	})
 
 	test('uses the pool’s REP token symbol for withdrawal amounts and labels', async () => {
@@ -553,7 +554,7 @@ describe('SecurityVaultSection', () => {
 				/>,
 			)
 		).cleanup
-		expect(within(document.body).getByLabelText('REP4 withdraw amount')).not.toBeNull()
+		expect(within(document.body).getByLabelText('REP4 withdrawal amount')).not.toBeNull()
 		expect(document.body.textContent?.replaceAll(' ', ' ')).toContain('6.00 REP4')
 	})
 
@@ -616,7 +617,7 @@ describe('SecurityVaultSection', () => {
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const fields = [...dialog.querySelectorAll('input')]
 		if (!fresh) expect(dialog.textContent).toContain('A new OpenOracle report is needed to change the commitment limit.')
-		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }).id)
+		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }).id)
 	})
 
 	test.each([
@@ -646,7 +647,7 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		expect(dialog.getByText(message)).not.toBeNull()
-		if (fresh || full) expect(dialog.queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })).toBeNull()
+		if (fresh || full) expect(dialog.queryByRole('textbox', { name: 'Initial report price (REP per ETH)' })).toBeNull()
 	})
 
 	test('rounds the displayed commitment maximum down so its figure never exceeds the true maximum', async () => {
@@ -775,7 +776,7 @@ describe('SecurityVaultSection', () => {
 			await new Promise(resolve => setTimeout(resolve, 350))
 		})
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
-		const input = queries.getByLabelText('OpenOracle REP per ETH starting price')
+		const input = queries.getByLabelText('Initial report price (REP per ETH)')
 		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
 			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
@@ -868,7 +869,7 @@ describe('SecurityVaultSection', () => {
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 350))
 		})
-		const startingPrice = within(dialog).queryByRole('textbox', { name: 'OpenOracle REP per ETH starting price' })
+		const startingPrice = within(dialog).queryByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		if (startingPrice !== null) fireEvent.input(startingPrice, { target: { value: '3' } })
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 350))
@@ -1417,8 +1418,8 @@ describe('SecurityVaultSection', () => {
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		const withdrawAmountInput = within(withdrawDialog).getByLabelText('REP withdraw amount') as HTMLInputElement
-		const timeoutInput = within(withdrawDialog).getByText('Manual execution timeout').parentElement?.querySelector('input')
+		const withdrawAmountInput = within(withdrawDialog).getByLabelText('REP withdrawal amount') as HTMLInputElement
+		const timeoutInput = within(withdrawDialog).getByText('Execution window (minutes)').parentElement?.querySelector('input')
 		expect(withdrawAmountInput?.disabled).toBe(false)
 		expect(timeoutInput?.disabled).toBe(false)
 	})
@@ -1554,7 +1555,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialog.querySelectorAll('.transaction-object-context')).toHaveLength(1)
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
-		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
+		expect(depositDialogQueries.getByText('REP deposit amount')).not.toBeNull()
 	})
 
 	test('deposits do not require a commitment limit in embedded and modal layouts', async () => {
@@ -1703,7 +1704,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
 		if (withdrawal === null) throw new Error('Expected withdrawal section')
-		fireEvent.input(within(withdrawal).getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(withdrawal).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
 
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 	})
@@ -1729,7 +1730,7 @@ describe('SecurityVaultSection', () => {
 		if (withdrawal === null) throw new Error('Expected withdrawal section')
 		const page = within(withdrawal)
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
-		fireEvent.input(page.getByLabelText('OpenOracle REP per ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('Initial report price (REP per ETH)'), { target: { value: '3' } })
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Withdraw REP'))
 		fireEvent.click(page.getByRole('button', { name: 'Withdraw REP' }))
 		await waitFor(() => expect(submitted).toBe(3n * 10n ** 18n))
@@ -1897,8 +1898,8 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('If queued, this operation expires 5m after the oracle settlement window completes.')).toBe(true)
-		const input = within(document.body).getByLabelText(/^Manual execution timeout/)
+		expect(document.body.textContent?.includes('Queued operations expire 5m after oracle settlement.')).toBe(true)
+		const input = within(document.body).getByLabelText(/^Execution window \(minutes\)/)
 		const help = document.getElementById(input.getAttribute('aria-describedby') ?? '')
 		expect(help?.getAttribute('data-message-placement')).toBe('field')
 		expect(help?.getAttribute('aria-live')).toBeNull()
@@ -2195,7 +2196,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 			expect(dialog.isConnected).toBe(true)
 			expect(scope?.aborted).toBe(false)
 			await act(() => {
-				controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
+				controller?.failed({ kind: 'rejected', message: 'Rejected in wallet.' })
 				active.value = undefined
 			})
 			await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(false))
@@ -2245,4 +2246,17 @@ test('ended vault REP redemption submits once without a confirmation and stays d
 		await rendered.cleanup()
 		dom.cleanup()
 	}
+})
+
+test('describes an immediate rejection only when execution was attempted in the submitting transaction', () => {
+	const queuedOperation = { operation: 'withdrawRep', operationId: 7n, isPendingSlot: true } as const
+	const immediate = 'Rejected immediately.'
+	expect(getQueuedVaultOperationFailureDetail({ action: 'queueWithdrawRep', hash: '0x01', stagedExecution: { operation: 'withdrawRep', operationId: 7n, success: false, errorMessage: undefined } }, immediate)).toBe(immediate)
+	expect(getQueuedVaultOperationFailureDetail({ action: 'queueWithdrawRep', hash: '0x01', queuedOperation, queuedOperationState: { status: 'failed', execution: { operation: 'withdrawRep', operationId: 7n, success: false, errorMessage: 'Later failure.' } } }, immediate)).toBe('Later failure.')
+	expect(getQueuedVaultOperationFailureDetail({ action: 'queueWithdrawRep', hash: '0x01', queuedOperation, queuedOperationState: { status: 'failed' } }, immediate)).toBeUndefined()
+})
+
+test('titles an immediately executed withdrawal as executed rather than queued', () => {
+	expect(getSuccessTitle('queueWithdrawRep')).toBe('REP withdrawal queued')
+	expect(getSuccessTitle('queueWithdrawRep', true)).toBe('REP withdrawal executed')
 })

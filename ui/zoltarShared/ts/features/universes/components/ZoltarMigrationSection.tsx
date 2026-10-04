@@ -151,6 +151,7 @@ export function ZoltarMigrationSection({
 		if (currentStepId !== requestedStepId) setRequestedStepId(currentStepId)
 	}, [currentStepId, requestedStepId])
 	const navigationHintId = useId()
+	const previewReasonId = useId()
 
 	// A retained overview summary is useful context, but its omitted children are not an empty migration.
 	if (rootUniverse?.relatedUniversesLoaded === false) {
@@ -201,11 +202,15 @@ export function ZoltarMigrationSection({
 	const migrateWalletBlocked = migrateAvailability.walletBlocker !== undefined
 	// One reason line beside the forward action. The approval control states its own requirement, so the approve step does not repeat it.
 	const navigationHint = (() => {
-		if (isPreview) return zoltarCopy.migrationForkRequired
+		// The preview panel states the fork requirement itself, so the hint line does not repeat it.
+		if (isPreview) return undefined
 		if (currentStepId === 'review') return migrateWalletBlocked ? undefined : migrateHint
 		if (currentStepSatisfied || (currentStepId === 'approve' && currentStep?.status === 'incomplete')) return undefined
 		return accountAddress === undefined && currentStep?.reason === zoltarCopy.migrationBalancesReadFailed ? zoltarCopy.migrationWalletBalancesReason : currentStep?.reason
 	})()
+	let continueDescriptionId: string | undefined
+	if (isPreview) continueDescriptionId = previewReasonId
+	else if (!currentStepSatisfied && navigationHint !== undefined) continueDescriptionId = navigationHintId
 	const heldOutcomes = wizard.outcomes.filter(outcome => outcome.exists && (outcome.heldAttoRep ?? 0n) > 0n)
 	const deploymentDisabledReason = (outcome: { exists: boolean }) => getChildDeploymentAvailabilityReason({ accountAddress, exists: outcome.exists, hasForked, isOnActiveAppChain })
 	const retryButton = showRetry ? (
@@ -215,13 +220,18 @@ export function ZoltarMigrationSection({
 	) : undefined
 
 	const renderStepBody = () => {
-		if (isPreview) return <p className='detail'>{zoltarCopy.migrationOutcomesAfterFork}</p>
+		if (isPreview)
+			return (
+				<p className='detail' id={previewReasonId}>
+					{zoltarCopy.migrationForkRequired}
+				</p>
+			)
 		switch (currentStepId) {
 			case 'outcomes':
 				return (
 					<>
 						{zoltarUniverseError !== undefined && !loadingZoltarUniverse ? <RetryableNotice message={zoltarUniverseError} onRetry={onRetryUniverse} retryLabel={commonCopy.retry} /> : undefined}
-						<p className='detail'>{zoltarCopy.chooseOutcomesDetail}</p>
+						<p className='detail'>{zoltarCopy.selectOutcomesDetail}</p>
 						<MigrationOutcomeUniversesSection
 							universeBrowserHref={universeBrowserHref}
 							key={rootUniverse?.universeId.toString()}
@@ -355,7 +365,7 @@ export function ZoltarMigrationSection({
 								</p>
 								{nextStepId === undefined ? (
 									<TransactionActionButton
-										idleLabel={zoltarCopy.migrateRepAction}
+										idleLabel={zoltarCopy.migrateRep}
 										pendingLabel={zoltarCopy.migratingRepPending}
 										onClick={() => onMigrateInternalRep(wizard.walletRepToBurnAttoRep ?? 0n)}
 										pending={zoltarMigrationActiveAction === 'split'}
@@ -364,7 +374,7 @@ export function ZoltarMigrationSection({
 										showDisabledReason={migrateWalletBlocked}
 									/>
 								) : (
-									<button aria-describedby={(!isPreview && currentStepSatisfied) || navigationHint === undefined ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={isPreview || zoltarMigrationPending || !currentStepSatisfied}>
+									<button aria-describedby={continueDescriptionId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={isPreview || zoltarMigrationPending || !currentStepSatisfied}>
 										{zoltarCopy.migrationContinue}
 									</button>
 								)}
@@ -373,7 +383,7 @@ export function ZoltarMigrationSection({
 					</div>
 				)}
 				{heldOutcomes.length === 0 ? undefined : (
-					<ReadOnlyDetailAccordion title={zoltarCopy.outcomeRepInWallet}>
+					<ReadOnlyDetailAccordion title={zoltarCopy.addChildRepToWalletTitle}>
 						<DataGrid dense>
 							{heldOutcomes.map(outcome => {
 								const child = rootUniverse?.childUniverses.find(candidate => candidate.universeId === outcome.universeId)

@@ -40,7 +40,7 @@ describe('liquidity action availability', () => {
 	})
 
 	test('closed markets block additions but not removals', () => {
-		expect(resolveLiquidityAvailability({ ...readyLiquidity, marketClosed: true }).reason).toBe(copy.marketClosedReason)
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, marketClosed: true }).reason).toBe(copy.liquidityClosedReason)
 		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: shares, marketClosed: true }).disabled).toBeFalse()
 	})
 

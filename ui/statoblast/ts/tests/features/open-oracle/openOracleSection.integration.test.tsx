@@ -256,9 +256,9 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await fillOpenOracleCreateForm()
 		// Create waits for the entered tokens' decimals so amount precision is validated before submitting.
-		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone oracle report'))
+		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Create standalone oracle report' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Create standalone OpenOracle report' }))
 
 		await waitForLatestAction('createReportInstance')
 		// The receipt's report ID links straight to the new report.
@@ -296,8 +296,8 @@ describe.serial('OpenOracleSection integration', () => {
 		if (economicsSummary === undefined) throw new Error('Expected economics accordion summary')
 		await clickElement(economicsSummary)
 		await waitFor(() => {
-			expect(document.body.textContent?.includes(`Current amount 1 (${reportDetails.token1Symbol})`)).toBe(true)
-			expect(document.body.textContent?.includes(`Current amount 2 (${reportDetails.token2Symbol})`)).toBe(true)
+			expect(document.body.textContent?.includes(`Current base amount (${reportDetails.token1Symbol})`)).toBe(true)
+			expect(document.body.textContent?.includes(`Current quote amount (${reportDetails.token2Symbol})`)).toBe(true)
 		})
 		expect(within(document.body).queryByRole('button', { name: 'Initial Report' })).toBeNull()
 		// A fresh report is either waiting for its dispute window or already disputable, never a bare pending status.

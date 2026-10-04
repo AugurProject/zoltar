@@ -39,42 +39,7 @@ export function getMetricPlaceholderPresentation(value: unknown, options?: { loa
 	})
 }
 
-export function getPoolRegistryPresentation(
-	input:
-		| {
-				hasLoaded: boolean
-				isLoading: boolean
-				mode: 'collection'
-				poolCount: number
-		  }
-		| {
-				mode: 'selection'
-				state: LoadableValueState
-		  },
-) {
-	if (input.mode === 'collection') {
-		if (input.poolCount > 0) return undefined
-		if (input.isLoading)
-			return createPresentation('loading', {
-				badgeLabel: commonCopy.loading,
-				badgeTone: 'loading',
-				detail: userMessagesCopy.refreshingPoolRegistryDetail,
-				detailIsLoading: true,
-			})
-		if (!input.hasLoaded)
-			return createPresentation('not_checked', {
-				badgeLabel: userMessagesCopy.notChecked,
-				badgeTone: 'muted',
-				detail: userMessagesCopy.uncheckedPoolRegistryDetail,
-			})
-		return createPresentation('empty', {
-			actionHint: userMessagesCopy.emptyPoolRegistryActionHint,
-			badgeLabel: commonCopy.none,
-			badgeTone: 'muted',
-			detail: userMessagesCopy.emptyPoolRegistryDetail,
-		})
-	}
-
+export function getPoolRegistryPresentation(input: { mode: 'selection'; state: LoadableValueState }) {
 	switch (input.state) {
 		case 'loading':
 			return createPresentation('loading', {
@@ -134,7 +99,7 @@ export function getWalletPresentation({ accountAddress, hasInjectedWallet, hasWa
 
 	if (!walletAvailable)
 		return createPresentation('wallet_disconnected', {
-			badgeLabel: commonCopy.connectWallet,
+			badgeLabel: userMessagesCopy.noWallet,
 			badgeTone: 'blocked',
 			detail: userMessagesCopy.walletInstallationRequired,
 		})
@@ -157,7 +122,7 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 	switch (state) {
 		case 'loading':
 			return createPresentation('loading', {
-				detail: userMessagesCopy.retrieving,
+				detail: commonCopy.loadingWithEllipsis,
 				detailIsLoading: true,
 			})
 		case 'unknown':

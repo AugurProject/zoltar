@@ -115,7 +115,7 @@ export function ForkTargetPicker({ actions, disabled, onToggle, question, select
 		<WorkflowSubsection badge={actions} className='fork-target-picker' title={forkTargetCopy.targetChildUniverses}>
 			{summary}
 			<p className='fork-target-count' role='status'>
-				{forkTargetCopy.selectedTargetCount(selectedOutcomeIndexes.length)}
+				{forkTargetCopy.formatSelectedTargetCount(selectedOutcomeIndexes.length)}
 			</p>
 			{question.kind === 'categorical' ? (
 				<OutcomeSelectionList emptyMessage={forkTargetCopy.noTargetsAvailable} items={question.targets.map(target => renderTargetRow(target, selectedSet.has(target.outcomeIndex.toString()), disabled, onToggle))} />

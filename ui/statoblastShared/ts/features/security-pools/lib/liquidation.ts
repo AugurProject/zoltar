@@ -2,6 +2,7 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, getLiquidationMigrationSecurityMultiplierBps, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+import { ensureSentence } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
@@ -13,7 +14,7 @@ function getVaultUnderwritingLimitAttoEth(vault: SecurityPoolVaultSummary) {
 
 function requireVaultUnderwritingLimitAttoEth(vault: SecurityPoolVaultSummary) {
 	const underwritingLimitAttoEth = getVaultUnderwritingLimitAttoEth(vault)
-	if (underwritingLimitAttoEth === undefined) throw new Error('Vault underwriting limit is still loading')
+	if (underwritingLimitAttoEth === undefined) throw new Error('Vault commitment limit is still loading.')
 	return underwritingLimitAttoEth
 }
 
@@ -97,7 +98,7 @@ function getTargetLiquidatabilityReason({
 	statoblastSecurityMultiplierBps: bigint
 	targetVaultSummary: SecurityPoolVaultSummary
 }) {
-	if (!isVaultLiquidatable(repPerEthPrice, underwritingLimitAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return 'This vault is not undercollateralized at the current OpenOracle price.'
+	if (!isVaultLiquidatable(repPerEthPrice, underwritingLimitAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return liquidationCopy.targetNotLiquidatableError
 	if (
 		minLiquidationPriceDistanceBps !== undefined &&
 		!isLiquidationBeyondMinPriceDistance({
@@ -186,6 +187,12 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 		default:
 			return errorMessage
 	}
+}
+
+/** Result detail for a failed pool execution: known pool revert reasons are translated, and any other reason is closed as a sentence. */
+export function getPoolExecutionFailureSentence(errorMessage: string | undefined) {
+	const detail = getLiquidationExecutionFailureDetail(errorMessage)
+	return detail === undefined || detail === '' ? undefined : ensureSentence(detail)
 }
 
 /** Why the target cannot be liquidated at the given protocol price; undefined when it can, or when no price is known and a queued liquidation decides at execution. */
@@ -362,12 +369,12 @@ export function getDeterministicLiquidationFailureReason({
 	statoblastSecurityMultiplierBps?: bigint | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 }) {
-	if (requestedDebtAttoEth === undefined) return 'Enter a valid liquidation amount.'
+	if (requestedDebtAttoEth === undefined) return 'Enter a valid commitment to transfer.'
 	if (requestedDebtAttoEth <= 0n) return undefined
 	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 	const targetUnderwritingLimitAttoEth = getVaultUnderwritingLimitAttoEth(targetVaultSummary)
-	if (targetUnderwritingLimitAttoEth === undefined) return 'Target vault underwriting limit is still loading.'
-	if (targetUnderwritingLimitAttoEth === 0n) return 'This vault has no underwriting commitment to liquidate.'
+	if (targetUnderwritingLimitAttoEth === undefined) return 'Target vault commitment limit is still loading.'
+	if (targetUnderwritingLimitAttoEth === 0n) return liquidationCopy.targetHasNoCommitmentReason
 	const badDebtReason = getBadDebtReason(targetVaultSummary, callerVaultSummary)
 	if (badDebtReason !== undefined) return badDebtReason
 	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined) {
@@ -387,11 +394,11 @@ export function getDeterministicLiquidationFailureReason({
 	const callerAfterRepDeposit = receiverBackingAfterTransfer(callerVaultSummary, targetVaultSummary, transfer)
 	const resultingCallerUnderwritingLimitAttoEth = (callerVaultSummary?.underwritingLimitAttoEth ?? 0n) + underwritingLimitMovedAttoEth
 	const callerUnderwritingLimitAttoEth = callerVaultSummary === undefined ? 0n : getVaultUnderwritingLimitAttoEth(callerVaultSummary)
-	if (callerUnderwritingLimitAttoEth === undefined) return 'Receiver vault underwriting limit is still loading.'
+	if (callerUnderwritingLimitAttoEth === undefined) return 'Receiver vault commitment limit is still loading.'
 	const resultingReceiverDebtAttoEth = callerUnderwritingLimitAttoEth + debtMovedAttoEth
-	if (remainingTargetDebtAttoEth !== 0n && remainingTargetDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The target vault would fall below the minimum commitment after liquidation.'
-	if (debtMovedAttoEth !== 0n && callerAfterRepDeposit < minimumVaultRepDepositAttoRep) return 'The receiver vault would remain below the minimum REP backing after liquidation.'
-	if (debtMovedAttoEth !== 0n && resultingReceiverDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The selected receiver would remain below the minimum commitment after liquidation.'
+	if (remainingTargetDebtAttoEth !== 0n && remainingTargetDebtAttoEth < minimumSecurityBondDebtAttoEth) return liquidationCopy.targetMinimumDebtError
+	if (debtMovedAttoEth !== 0n && callerAfterRepDeposit < minimumVaultRepDepositAttoRep) return liquidationCopy.callerMinimumCollateralError
+	if (debtMovedAttoEth !== 0n && resultingReceiverDebtAttoEth < minimumSecurityBondDebtAttoEth) return liquidationCopy.callerMinimumCapacityOwnershipError
 	if (debtMovedAttoEth !== 0n && resultingCallerUnderwritingLimitAttoEth === 0n) return 'No commitment would move with this liquidation.'
 	return undefined
 }
@@ -445,10 +452,10 @@ export function getLiquidationFailureReason({
 		targetVaultSummary,
 	})
 	if (deterministicFailureReason !== undefined) return deterministicFailureReason
-	if (requestedDebtAttoEth === undefined) return 'Enter a valid liquidation amount.'
-	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined) return 'Refresh the OpenOracle before executing liquidation.'
+	if (requestedDebtAttoEth === undefined) return 'Enter a valid commitment to transfer.'
+	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined) return 'Refresh the OpenOracle price before executing the liquidation.'
 	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
-	if (minimumVaultRepDepositAttoRep === undefined) return liquidationCopy.selectedPoolReloadRequired
+	if (minimumVaultRepDepositAttoRep === undefined) return liquidationCopy.selectedPoolDetailsLoading
 
 	const simulation = simulateLiquidation({
 		callerVaultSummary,

@@ -11,6 +11,8 @@ import { formatRoundedUnits } from '../lib/format.js'
 import { averagePriceBps, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { formatEthAmount } from '../copy/outcomes.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
 import * as payoutCopy from '../copy/payout.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -49,7 +51,7 @@ function absolute(value: bigint) {
 }
 
 function formatEstimateEth(amountAttoEth: bigint) {
-	return `${formatRoundedUnits(amountAttoEth, 18, ESTIMATE_DIGITS)} ${workflowCopy.eth}`
+	return formatEthAmount(formatRoundedUnits(amountAttoEth, 18, ESTIMATE_DIGITS))
 }
 
 /**
@@ -57,7 +59,7 @@ function formatEstimateEth(amountAttoEth: bigint) {
  * digits of the payout shown beside the shares received, so the two reconcile.
  */
 function formatProfit({ profitAttoEth, returnBps }: { profitAttoEth: bigint; returnBps: bigint }) {
-	const format = profitAttoEth < 0n ? payoutCopy.loss : payoutCopy.gain
+	const format = profitAttoEth < 0n ? payoutCopy.formatLoss : payoutCopy.formatGain
 	return format(`${formatRoundedUnits(absolute(profitAttoEth), 18, PAYOUT_DIGITS)} ${workflowCopy.eth}`, formatScaledPercentage(absolute(returnBps), 2, 1))
 }
 
@@ -111,7 +113,7 @@ export function TradeEstimatePanel({
 	const detailRows = [
 		// A low price impact needs no attention, so it waits here until it reaches the caution tier.
 		...(impactTier === 'low' ? [impactRow] : []),
-		{ label: ticketCopy.poolFee, value: ticketCopy.poolFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market))) },
+		{ label: ticketCopy.tradingFee, value: ticketCopy.formatTradingFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market))) },
 		...(estimate.kind === 'entry' ? [{ label: ticketCopy.invalidInsurance, value: formatOutcomeWithValue(estimate.quote.invalidInsurance, shareOutcome.invalid, market) }] : []),
 		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(quote.completeSetShares, market) },
 		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeWithValue(estimate.quote.oppositeSharesSwapped, opposite, market) } : { label: ticketCopy.swapped(side), value: formatOutcomeWithValue(estimate.quote.longSharesSwapped, side, market) },
@@ -124,13 +126,13 @@ export function TradeEstimatePanel({
 				variant='inline'
 				primary={primary}
 				details={[
-					{ label: ticketCopy.averagePrice, value: average === undefined ? '—' : formatScaledPercentage(average, 2) },
-					...(estimate.kind === 'entry' ? [{ label: ticketCopy.profitIfWins(side), value: formatProfit(buyReturn(estimate, market)) }] : []),
-					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeWithValue(estimate.minimumLongShares, side, market, ESTIMATE_DIGITS, 'down') : `${formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)} ETH` },
+					{ label: ticketCopy.averagePrice, value: average === undefined ? commonCopy.metricUnavailablePlaceholder : formatScaledPercentage(average, 2) },
+					...(estimate.kind === 'entry' ? [{ label: ticketCopy.formatProfitIfResolves(side), value: formatProfit(buyReturn(estimate, market)) }] : []),
+					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeWithValue(estimate.minimumLongShares, side, market, ESTIMATE_DIGITS, 'down') : formatEthAmount(formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)) },
 					// A sale spends Invalid shares, so what it uses stays in view; the Invalid a buy adds is a detail.
 					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeWithValue(estimate.quote.invalidRequired, shareOutcome.invalid, market) }] : []),
 					...(impactTier === 'low' ? [] : [impactRow]),
-					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.holdingAfter(side), value: formatOutcomeWithValue(holdingAfter, side, market) }]),
+					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.formatHoldingAfter(side), value: formatOutcomeWithValue(holdingAfter, side, market) }]),
 				]}
 			/>
 			<p className='visually-hidden' role='status'>

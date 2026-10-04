@@ -30,8 +30,8 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 			title: commonCopy.createPool,
 		}
 	if (view === 'migrate') return { description: zoltarCopy.migrateRouteDescription, title: zoltarCopy.migrateRep }
-	if (view === 'universes') return { description: undefined, title: commonCopy.universe }
-	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
+	if (view === 'universes') return { description: undefined, title: zoltarCopy.universesTitle }
+	return { description: undefined, title: glossaryCopy.securityPoolTerm }
 }
 
 export function SecurityPoolsSection({ activeView, migration, createPool, onActiveViewChange, onOpenSecurityPool, overview, selectedPoolRepPrice, workflow, zoltarUniverse, universeMissing, universeError, onRetryUniverse }: SecurityPoolsSectionProps) {

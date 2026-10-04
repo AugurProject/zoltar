@@ -111,11 +111,11 @@ export function buildViewerTruthAuctionBidRows({
 			price: getTruthAuctionPriceAtTick(bid.tick),
 			settlementControl: showSettlementActionColumn
 				? {
-						ariaLabel: isSettlementBidActions ? settlementControlLabel : 'Bid is not settlement-eligible',
+						ariaLabel: isSettlementBidActions ? settlementControlLabel : 'This bid cannot be settled',
 						bidKey: settlementBidKey,
 						checked: isSettlementBidActions ? selectedBidKeys.includes(settlementBidKey) : false,
 						disabled: !isSettlementBidActions || !isSettlementBidSelectable,
-						title: isSettlementBidActions ? settlementControlLabel : 'This bid is not settlement-eligible',
+						title: isSettlementBidActions ? settlementControlLabel : 'This bid cannot be settled',
 					}
 				: undefined,
 			statusLabel,

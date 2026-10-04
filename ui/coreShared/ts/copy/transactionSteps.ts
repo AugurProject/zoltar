@@ -10,7 +10,7 @@ export const coordinatorReturnDetail = 'Both deposits return in full if undisput
 export const standaloneReturnDetail = 'If undisputed, withdraw both deposits after settlement in separate transactions. Disputes can change returns.'
 export const fundReport = 'funding the report'
 export const fundingRequired = 'Required token balances and approvals must be available.'
-export const useTransactionButtons = 'Use the transaction buttons below.'
+export const useTransactionButtons = 'Use the transaction buttons to continue.'
 export const prerequisitesRequired = 'Complete the required setup transactions first.'
 export const formatPendingAction = (title: string) => `${formatActionTense(title, 'pending')}…`
 export const requirementsFailed = 'Could not refresh transaction requirements. Close and review the action again.'

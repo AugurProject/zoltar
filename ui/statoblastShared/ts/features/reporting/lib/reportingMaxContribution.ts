@@ -20,7 +20,7 @@ export function getReportingMaxContribution({
 	usesWalletFunding: boolean
 }): ReportingMaxContribution {
 	if (selectedOutcome === undefined) return { amountAttoRep: undefined, reason: reportingCopy.presetOutcomeSelectionRequired }
-	if (details === undefined) return { amountAttoRep: undefined, reason: reportingCopy.presetDetailsRequired }
+	if (details === undefined) return { amountAttoRep: undefined, reason: reportingCopy.loadingReportingDetails }
 	if (availableReportingRep === undefined) return { amountAttoRep: undefined, reason: usesWalletFunding ? reportingCopy.loadingWalletRepBalance : reportingCopy.loadingPoolHeldVaultRepBacking }
 	if (availableReportingRep <= 0n) return { amountAttoRep: undefined, reason: usesWalletFunding ? reportingCopy.walletRepBalanceEmpty : reportingCopy.poolHeldVaultRepBackingEmpty }
 	const remainingCapacity = getRemainingSelectedOutcomeContributionCapacity(details, selectedOutcome)

@@ -16,10 +16,10 @@ const BPS_DENOMINATOR = 10_000n
 
 export function parseTargetHealthFactorBps(value: string, label = 'Target backing ratio', minimumBps = BPS_DENOMINATOR) {
 	const trimmed = value.trim()
-	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with at most four decimal places`)
+	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with up to four decimal places.`)
 	const [whole = '', fraction = ''] = trimmed.split('.')
 	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatMultiplier(minimumBps, 4)}`)
+	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatMultiplier(minimumBps, 4)}.`)
 	return factorBps
 }
 
@@ -157,7 +157,7 @@ export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefi
 export function getStagedOperationTimeoutFieldError(value: string) {
 	if (value.trim() === '') return undefined
 	const minutes = tryParseBigIntInput(value)
-	if (minutes === undefined || minutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || minutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return securityPoolCopy.stagedOperationTimeoutRangeError
+	if (minutes === undefined || minutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || minutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return securityPoolCopy.executionWindowRangeError
 	return undefined
 }
 

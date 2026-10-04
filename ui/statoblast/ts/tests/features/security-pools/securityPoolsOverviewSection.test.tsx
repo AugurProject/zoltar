@@ -658,7 +658,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 0))
 		})
-		expect(within(document.body).queryByRole('button', { name: /Discover|Downloaded|Scan again/ })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: /Discover|Downloaded/ })).toBeNull()
 	})
 
 	test('excludes unstarred cached pools from the list and search', async () => {
@@ -680,11 +680,11 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		expect(getRenderedPoolTitles()).toHaveLength(8)
-		expect(documentQueries.getByText('1 saved in other universes.')).not.toBeNull()
+		expect(documentQueries.getByText('1 more in other universes.')).not.toBeNull()
 
 		await typeSearch('numbered pool 8')
 		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 8'])
-		expect(documentQueries.getByText('1 of 8 pools matches. 1 saved in other universes.')).not.toBeNull()
+		expect(documentQueries.getByText('1 of 8 pools matches. 1 more in other universes.')).not.toBeNull()
 
 		await typeSearch(pools[6]?.securityPoolAddress.toUpperCase() ?? '')
 		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 7'])

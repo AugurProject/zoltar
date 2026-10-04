@@ -1,10 +1,11 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as zoltarCopy from '../../../copy/zoltar.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 export function getMigrationGuardMessage(accountAddress: Address | undefined, isOnActiveAppChain: boolean, rootUniverse: ZoltarUniverseSummary | undefined, loadingZoltarUniverse: boolean): string | undefined {
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : 'Refresh universe first.'
+	if (rootUniverse === undefined) return loadingZoltarUniverse ? undefined : zoltarCopy.universeUnavailableDetail
 	return undefined
 }

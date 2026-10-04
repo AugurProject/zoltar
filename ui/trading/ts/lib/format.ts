@@ -17,3 +17,6 @@ export function formatRoundedUnits(value: bigint, decimals = 18, maximumFraction
 export function formatEthAmountPair(firstAttoEth: bigint, secondAttoEth: bigint) {
 	return `${formatRoundedUnits(firstAttoEth)} / ${formatRoundedUnits(secondAttoEth)} ETH`
 }
+
+/** Closes a message with a period unless it already ends a sentence, so composed errors and reasons read as prose. */
+export { ensureSentence as endSentence } from '@zoltar/ui-core-shared/lib/errors.js'

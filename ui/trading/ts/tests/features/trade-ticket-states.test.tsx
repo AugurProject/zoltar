@@ -45,7 +45,7 @@ describe('trade ticket states', () => {
 		const rendered = await renderIntoDocument(<MarketPosition market={market} holdings={disconnectedHoldings} wallet={connectedWallet} disabled={false} ownsBalanceError />)
 		cleanup = rendered.cleanup
 		const position = rendered.container.querySelector('.market-position')
-		expect(position?.textContent).toContain('Connect wallet to see your position')
+		expect(position?.textContent).toContain('Connect a wallet to see your position')
 		expect(position?.querySelector('.market-holdings')).toBeNull()
 		expect(position?.textContent).not.toContain('—')
 	})
@@ -76,13 +76,13 @@ describe('trade ticket states', () => {
 		expect(amounts).toEqual(['0.2475', '0.495'])
 	})
 
-	test('the outcome buttons carry the conditional odds', async () => {
+	test('the outcome buttons carry the conditional price', async () => {
 		const container = await renderTicket(positionTicket())
 		const picker = container.querySelector('.outcome-picker')
-		expect(picker?.getAttribute('aria-label')).toBe('Outcome, with conditional odds')
+		expect(picker?.getAttribute('aria-label')).toBe('Outcome, with conditional price')
 		expect(Array.from(picker?.querySelectorAll('button') ?? []).map(button => button.textContent)).toEqual(['Yes 50%', 'No 50%'])
 		// With no amount entered there is no odds preview, so the caption is what says the percentages are conditional.
-		expect(container.querySelector('.trade-ticket-switchers')?.textContent).toContain('Conditional odds')
+		expect(container.querySelector('.trade-ticket-switchers')?.textContent).toContain('Conditional price')
 	})
 
 	test('switching to Sell selects the outcome the wallet holds', async () => {
@@ -135,10 +135,10 @@ describe('trade ticket states', () => {
 		const visible = container.querySelector('.transaction-review-details')?.textContent
 		for (const phrase of ['Average price', 'Minimum received', 'Yes after trade']) expect(visible).toContain(phrase)
 		// The profit is the payout shown beside the shares received less the ETH paid, with the return it makes.
-		expect(visible).toMatch(/Profit if Yes wins\+[\d.]+ ETH \(\+[\d.]+%\)/)
+		expect(visible).toMatch(/Profit if the question resolves Yes\+[\d.]+ ETH \(\+[\d.]+%\)/)
 		expect(visible).not.toContain('Price impact')
 		const details = container.querySelector('.trade-estimate details')?.textContent
-		for (const phrase of ['Price impact', 'Pool fee', '0.3% · ≈ 0.00', 'Invalid insurance', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)
+		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'Invalid insurance', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)
 		// The odds preview sits in the estimate, below the amount, so typing never moves the field.
 		expect(container.querySelector('.trade-estimate .probability')).not.toBeNull()
 		expect(container.querySelector('.position-controls > .probability')).toBeNull()

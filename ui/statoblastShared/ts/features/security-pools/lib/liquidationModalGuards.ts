@@ -46,11 +46,11 @@ export function getLiquidationModalTitle(currentPoolOracleManagerDetails: Oracle
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
 	switch (executionMode) {
 		case 'execute':
-			return liquidationCopy.executeVaultLiquidationTitle
+			return liquidationCopy.executeVaultLiquidation
 		case 'queue':
-			return liquidationCopy.queueVaultLiquidation
+			return liquidationCopy.queueLiquidation
 		case 'refreshing':
-			return liquidationCopy.liquidateVaultTitle
+			return liquidationCopy.liquidateVault
 		default:
 			return assertNever(executionMode)
 	}
@@ -216,7 +216,7 @@ export function getLiquidationBlockers({
 }): LiquidationBlocker[] {
 	return [
 		{ loading: true, reason: liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined },
-		{ loading: true, reason: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined },
+		{ loading: true, reason: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.selectedPoolDetailsLoading : undefined },
 		{ reason: trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined },
 		{ reason: trimmedLiquidationReceiverVault === '' ? liquidationCopy.receiverVaultRequired : undefined },
 		{ reason: trimmedLiquidationReceiverVault !== '' && tryParseAddressInput(trimmedLiquidationReceiverVault) === undefined ? liquidationCopy.receiverVaultAddressInvalid : undefined },
@@ -226,8 +226,7 @@ export function getLiquidationBlockers({
 		{ reason: delegatedReceiver && !liquidationReceiverVaultSummaryResolved ? liquidationCopy.receiverVaultRequiredBeforeSubmission : undefined },
 		{ reason: sameVaultWarning },
 		{ reason: liquidationDebtEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined },
-		{ reason: liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined },
-		{ reason: liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds !== undefined && liquidationTimeoutSeconds > 300n ? liquidationCopy.liquidationTimeoutMaximumReason : undefined },
+		{ reason: liquidationExecutionMode === 'queue' && (liquidationTimeoutSeconds === undefined || liquidationTimeoutSeconds > 300n) ? securityPoolCopy.executionWindowRangeError : undefined },
 		{ loading: true, reason: liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined },
 		{ reason: liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined },
 		{ loading: true, reason: liquidationExecutionMode === 'queue' && !liquidationFundingPreviewLoaded ? liquidationCopy.loadingQueueFunding : undefined },
@@ -304,6 +303,6 @@ export function getVaultLiquidationLauncherBlocker({
 	if (!isOnActiveAppChain) return wrongNetworkReason
 	if (!vaultLoaded) return securityPoolCopy.loadingVault
 	if (!vaultExistsOnchain) return securityPoolCopy.missingVaultDetail
-	if (!liquidationEnabled) return securityPoolCopy.liquidationUnavailableReason
+	if (!liquidationEnabled) return liquidationCopy.liquidationUnavailableReason
 	return notLiquidatableReason
 }

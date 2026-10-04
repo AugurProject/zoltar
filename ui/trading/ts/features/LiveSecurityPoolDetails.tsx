@@ -28,18 +28,18 @@ export function PairInitializationAction({ market, nowSeconds }: { market: LiveM
 	if (blocker !== undefined)
 		return (
 			<div className='pair-initialization'>
-				<UserMessage className='detail' detail={liveCopy.conditionalPriceUnavailable} />
+				<UserMessage className='detail' detail={liveCopy.neverInitializedDetail} />
 				<div className='actions'>
-					<ActionLauncherButton idleLabel={liveCopy.initializeTradingPool} pendingLabel={liveCopy.initializeTradingPool} availability={{ disabled: true, reason: liveCopy.pairInitializationUnavailable(blocker) }} onClick={() => undefined} />
+					<ActionLauncherButton idleLabel={liveCopy.addFirstLiquidity} pendingLabel={liveCopy.addFirstLiquidity} availability={{ disabled: true, reason: liveCopy.formatInitializationUnavailable(blocker) }} onClick={() => undefined} />
 				</div>
 			</div>
 		)
 	return (
 		<div className='pair-initialization'>
-			<UserMessage className='detail' detail={market.pair === undefined ? liveCopy.undeployedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2))} />
+			<UserMessage className='detail' detail={market.pair === undefined ? liveCopy.formatMarketNotCreatedDetail(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.formatNoLiquidityDetail(formatTrimmedUnits(market.feeBps, 2, 2))} />
 			<div className='actions'>
 				<a className='button-link primary' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
-					{market.pair === undefined ? liveCopy.deployTradingPool : liveCopy.initializeTradingPool}
+					{market.pair === undefined ? appCopy.createMarket : liveCopy.addFirstLiquidity}
 				</a>
 			</div>
 		</div>
@@ -70,13 +70,13 @@ export function LiveSecurityPoolDetails({
 	if (market.loadError !== undefined) errorMessage = liveCopy.securityPoolDetailsUnavailable(market.loadError, refreshError)
 	else if (refreshError !== undefined) errorMessage = liveCopy.securityPoolRefreshFailed(refreshError)
 	// Return to the landing whose list includes this pool: markets once a pair exists, otherwise market creation.
-	const browseBack = market.pair === undefined ? { href: '#/create-market', label: appCopy.createMarket } : { href: '#/market', label: liveCopy.marketList }
+	const browseBack = market.pair === undefined ? { href: '#/create-market', label: liveCopy.backToCreateMarket } : { href: '#/market', label: marketsCopy.allMarkets }
 	return (
 		<div className='route-view-flow'>
 			<RouteHeader
 				eyebrow={appCopy.securityPool}
 				title={market.title}
-				badge={market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='pool' /> : <Badge tone='warning'>{appCopy.poolDataUnavailable}</Badge>}
+				badge={market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='pool' /> : <Badge tone='warning'>{appCopy.securityPoolDataUnavailable}</Badge>}
 				actions={
 					<a className='button-link' href={getTradingRouteHref(browseBack.href)}>
 						{browseBack.label}
@@ -84,13 +84,13 @@ export function LiveSecurityPoolDetails({
 				}
 			/>
 			<ErrorNotice message={connectionMessage} />
-			<SectionBlock title={liveCopy.marketFacts}>
+			<SectionBlock title={liveCopy.securityPoolFacts}>
 				<div className='security-pool-details' aria-busy={refreshing}>
 					{refreshMessage === undefined ? null : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
 					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool} />
 
 					{market.loadError !== undefined ? (
-						<ReadOnlyDetailAccordion title={liveCopy.poolDetails}>
+						<ReadOnlyDetailAccordion title={liveCopy.details}>
 							<DataGrid dense>
 								<SecurityPoolIdentityFields market={market} />
 							</DataGrid>
@@ -102,13 +102,13 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.questionEnd}>
 										<TimestampValue timestamp={market.endTime} relative={false} />
 									</MetricField>
-									<MetricField label={liveCopy.systemState}>{systemStateLabel(market.systemState)}</MetricField>
+									<MetricField label={liveCopy.securityPoolState}>{systemStateLabel(market.systemState)}</MetricField>
 									<MetricField label={liveCopy.universeFork}>
 										{market.universeForkTime === 0n ? (
 											liveCopy.notForked
 										) : (
 											<>
-												{liveCopy.forkedAt} <TimestampValue timestamp={market.universeForkTime} relative={false} />
+												{liveCopy.forked} <TimestampValue timestamp={market.universeForkTime} relative={false} />
 											</>
 										)}
 									</MetricField>
@@ -121,22 +121,22 @@ export function LiveSecurityPoolDetails({
 							) : (
 								<div className='actions'>
 									<a className='button-link primary' href={getTradingRouteHref(`#/market/${market.pool}`)}>
-										{liveCopy.tradePool}
+										{liveCopy.openMarket}
 									</a>
 								</div>
 							)}
-							<ReadOnlyDetailAccordion title={liveCopy.poolDetails}>
+							<ReadOnlyDetailAccordion title={liveCopy.details}>
 								<DataGrid dense>
 									<SecurityPoolIdentityFields market={market} />
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
-							<ReadOnlyDetailAccordion title={liveCopy.capacity}>
+							<ReadOnlyDetailAccordion title={liveCopy.parameters}>
 								<DataGrid dense>
 									<MetricField label={liveCopy.securityMultiplier}>{formatMultiplier(market.statoblastSecurityMultiplierBps, 4)}</MetricField>
 									<MetricField label={liveCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(market.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
-									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
-									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
+									<MetricField label={liveCopy.retentionRatePerSecond}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
+									<MetricField label={liveCopy.commitmentLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
 							<BackingDetails market={market} />
@@ -153,10 +153,11 @@ export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, wo
 		return (
 			<EmptyState
 				live
-				title={discoveryError ?? liveCopy.securityPoolDoesNotExist}
+				title={liveCopy.securityPoolDoesNotExist}
+				detail={discoveryError}
 				actions={
 					<a className='button-link' href={getTradingRouteHref('#/create-market')}>
-						{liveCopy.backToSecurityPools}
+						{liveCopy.backToCreateMarket}
 					</a>
 				}
 			/>
@@ -174,7 +175,7 @@ export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, wo
 						{marketsCopy.switchUniverse}
 					</a>
 					<a className='button-link secondary-link' href={getTradingRouteHref('#/market')}>
-						{liveCopy.marketList}
+						{appCopy.markets}
 					</a>
 				</>
 			}

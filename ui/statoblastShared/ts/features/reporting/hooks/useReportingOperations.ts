@@ -124,8 +124,8 @@ export function useReportingOperations(
 	const previousAccountRef = useRef(accountAddress)
 
 	const getPendingTitle = (actionName: ReportingActionResult['action']) => {
-		if (actionName === 'approveReportingRep') return 'Approving REP for reporting'
-		return actionName === 'reportOutcome' ? 'Submitting report' : 'Settling escalation deposits'
+		if (actionName === 'approveReportingRep') return reportingCopy.approvingRepTitle
+		return actionName === 'reportOutcome' ? reportingCopy.submittingReportTitle : reportingCopy.settlingEscalationDepositsTitle
 	}
 	const getSuccessTitle = (actionName: ReportingActionResult['action']) => {
 		if (actionName === 'approveReportingRep') return 'Reporting REP approved'
@@ -138,7 +138,7 @@ export function useReportingOperations(
 
 	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
 		if (selectedOutcome !== undefined) return selectedOutcome
-		throw new Error('Select an outcome side before reporting on a question.')
+		throw new Error(reportingCopy.reportOutcomeSelectionRequired)
 	}
 	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey && currentAccountRef.current === accountAddress
 
@@ -264,14 +264,14 @@ export function useReportingOperations(
 		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would become dispute-staked for this report.')
 		const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)
 		if (contributionPreview.actualDepositAmount > remainingSelectedOutcomeCapacity) {
-			if (remainingSelectedOutcomeCapacity === 0n) throw new Error('No remaining contribution capacity is available on the selected side.')
-			throw new Error(`Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the threshold.`)
+			if (remainingSelectedOutcomeCapacity === 0n) throw new Error(reportingCopy.selectedSideCapacityEmpty)
+			throw new Error(`Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the non-decision threshold.`)
 		}
 		const contributionFunding = displayedFunding ?? getReportingContributionFunding(latestDetails, currentForm.contributionFunding)
 		if (contributionFunding === 'wallet') {
 			if (latestDetails.status === 'active' && latestDetails.forkContinuation && !(displayedDetails?.status === 'active' && displayedDetails.forkContinuation)) throw new Error('Reporting now needs a vault deposit first. Refresh reporting details before submitting.')
 			const walletDepositAmount = getReportingWalletDepositAmount(latestDetails, contributionPreview.actualDepositAmount)
-			if (walletDepositAmount === undefined) throw new Error('Loading vault funding requirements.')
+			if (walletDepositAmount === undefined) throw new Error(reportingCopy.loadingVaultFunding)
 			if (latestDetails.status === 'active' && latestDetails.forkContinuation && walletDepositAmount !== displayedWalletDepositAmount) {
 				reportingDetails.value = latestDetails
 				throw new Error('The required vault deposit changed. Review the updated amount and try again.')
@@ -280,7 +280,7 @@ export function useReportingOperations(
 			if (walletDepositAmount > walletRepBalanceAttoRep) throw new Error(`Insufficient wallet REP. Add ${formatAdditionalCurrencyBalance(walletDepositAmount - walletRepBalanceAttoRep, 'REP')} before reporting.`)
 		} else {
 			if ((!latestDetails.viewerVaultExists || latestDetails.viewerPoolHeldVaultRepBackingAttoRep === 0n) && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.noVaultRepSelectWallet)
-			if (!latestDetails.viewerVaultExists) throw new Error('This contribution uses pool-held REP backing. Deposit REP into your vault before reporting.')
+			if (!latestDetails.viewerVaultExists) throw new Error('This report uses pool-held REP backing. Deposit REP into your vault before reporting.')
 			const poolHeldVaultRepBackingAttoRep = latestDetails.viewerPoolHeldVaultRepBackingAttoRep ?? 0n
 			if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(poolHeldVaultRepBackingAttoRep, 'REP')))
 			if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep) throw new Error(`Insufficient pool-held vault REP backing. Deposit ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - poolHeldVaultRepBackingAttoRep, 'REP')} into your vault before reporting.`)
@@ -295,9 +295,9 @@ export function useReportingOperations(
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
 				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection, reportingDetails.value)
 				if (preflight === undefined) return undefined
-				if (preflight.walletDepositAmount === undefined) throw new Error('Loading vault funding requirements.')
-				if (preflight.contributionFunding !== 'wallet') throw new Error('This escalation contribution uses vault backing and does not require wallet REP approval.')
-				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.walletDepositAmount) throw new Error('The security pool already has enough REP allowance for this contribution.')
+				if (preflight.walletDepositAmount === undefined) throw new Error(reportingCopy.loadingVaultFunding)
+				if (preflight.contributionFunding !== 'wallet') throw new Error('This report uses vault backing and does not require wallet REP approval.')
+				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.walletDepositAmount) throw new Error('The security pool already has enough REP allowance for this report.')
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.walletDepositAmount)), amountAttoRep: preflight.walletDepositAmount }
 			},
 			'Failed to approve REP for reporting',
@@ -365,7 +365,7 @@ export function useReportingOperations(
 				const latestDetails = await dependencies.loadReportingDetails(securityPoolAddress, walletAddress)
 				if (!isCurrentSelection()) return undefined
 				if (latestDetails.status !== 'active') {
-					throw new Error('Withdrawals are unavailable until the first report or contribution deploys the escalation game.')
+					throw new Error('Deposits cannot be settled until the first report starts the escalation game.')
 				}
 				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
 				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
@@ -374,9 +374,9 @@ export function useReportingOperations(
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning carried proofs in the child continuation after it finalizes; parent deposits do not need migration.')
-				if (latestDetails.settlementState === 'migration-expired') throw new Error('Settle winning carried proofs in the finalized child; the optional unresolved parent escalation-deposit accounting cleanup window has closed.')
-				if (!latestDetails.parentWithdrawalEnabled) throw new Error('Escalation deposits cannot be settled until the question is finalized.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning parent deposits in the child pool after it finalizes; parent deposits do not need migration.')
+				if (latestDetails.settlementState === 'migration-expired') throw new Error('Settle winning parent deposits in the finalized child pool; the window for the optional cleanup of unresolved parent deposits has closed.')
+				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
 				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))

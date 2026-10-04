@@ -13,7 +13,7 @@ import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { loadScalarUniverseOutcome, type UniverseOutcome } from '../../../protocol/universeNavigation.js'
-import { formatOpenOutcomeUniverse } from '../../../copy/zoltar.js'
+import { formatOpenChildUniverse, openChildUniverse } from '../../../copy/zoltar.js'
 import * as copy from '../../../copy/universeNavigation.js'
 
 export type LoadScalarUniverseOutcome = (address: Address, universeId: bigint, outcomeIndex: bigint) => Promise<UniverseOutcome>
@@ -44,7 +44,7 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 				if (active && guard.isCurrent()) setSnapshot({ backend, loadOutcome, outcomeIndex, outcome })
 			} catch (error) {
 				if (active && guard.isCurrent())
-					setSnapshot(previous => ({ backend, loadOutcome, outcomeIndex, outcome: previous?.backend === backend && previous.loadOutcome === loadOutcome && previous.outcomeIndex === outcomeIndex ? previous.outcome : undefined, error: describeUniverseReadError(error, copy.formatChildStatusReadFailure(label)) }))
+					setSnapshot(previous => ({ backend, loadOutcome, outcomeIndex, outcome: previous?.backend === backend && previous.loadOutcome === loadOutcome && previous.outcomeIndex === outcomeIndex ? previous.outcome : undefined, error: describeUniverseReadError(error, copy.formatChildUniverseLoadError(label)) }))
 			}
 		}
 		const timer = setTimeout(() => void readSelection(), 150)
@@ -57,7 +57,7 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 		<div className='form-grid'>
 			<UniverseScalarPicker question={question} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} />
 			{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChild, detailIsLoading: true }} /> : undefined}
-			<RetryableNotice message={current?.error} retryLabel={copy.formatRetryChildOutcome(label)} onRetry={() => setRefresh(count => count + 1)} />
+			<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRefresh(count => count + 1)} />
 			<div className='actions'>
 				{outcome === undefined ? undefined : (
 					<span id={statusId}>
@@ -65,7 +65,7 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 					</span>
 				)}
 				<button type='button' aria-describedby={outcome === undefined ? undefined : statusId} className='secondary' disabled={outcomeIndex === undefined || outcome?.exists !== true} onClick={() => outcome?.exists && navigateToUniverse(outcome.universeId)}>
-					{formatOpenOutcomeUniverse(label)}
+					{outcomeIndex === undefined ? openChildUniverse : formatOpenChildUniverse(label)}
 				</button>
 			</div>
 		</div>

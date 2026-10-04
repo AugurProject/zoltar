@@ -1,6 +1,7 @@
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
+import * as userMessagesCopy from '../copy/userMessages.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from './AddressValue.js'
 import type { SimulationWalletMode } from '../simulation/simulationWallet.js'
@@ -11,7 +12,7 @@ import { Badge } from './Badge.js'
 const SIMULATION_WALLET_MODE_OPTIONS: ReadonlyArray<{ detail?: string; label: string; mode: SimulationWalletMode }> = [
 	{ label: appCopy.qaWalletConnected, mode: 'connected' },
 	{ detail: appCopy.qaWalletDisconnectedDetail, label: appCopy.qaWalletDisconnected, mode: 'disconnected' },
-	{ label: appCopy.qaWalletWrongNetwork, mode: 'wrong-chain' },
+	{ label: userMessagesCopy.wrongNetwork, mode: 'wrong-chain' },
 ]
 
 function parseSimulationWalletModeOption(value: string) {

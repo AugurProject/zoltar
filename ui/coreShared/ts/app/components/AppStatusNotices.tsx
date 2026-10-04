@@ -29,9 +29,14 @@ function getConfiguredRpcLabel(readBackendStatus: ReadBackendStatus) {
 	return readBackendStatus.transportMode === 'provider' ? appCopy.configuredFallbackReadRpc : appCopy.activeReadRpc
 }
 
-function getReadBackendNoticeDetail(readBackendMessage: string) {
-	if (readBackendMessage.includes('stale')) return `${readBackendMessage} ${appCopy.staleReadBackendDetail}`
-	return `${readBackendMessage} ${appCopy.readWriteNetworkMismatchDetail}`
+function buildReadBackendNotice(readBackendMessage: string, readBackendStatus: ReadBackendStatus | undefined): NoticeItem {
+	const stale = readBackendStatus?.issue === 'stale'
+	return {
+		detail: `${readBackendMessage} ${stale ? appCopy.staleReadBackendDetail : appCopy.readWriteNetworkMismatchDetail}`,
+		id: stale ? 'read-backend-stale' : 'read-backend-mismatch',
+		tone: 'blocking',
+		title: stale ? appCopy.readRpcStale : appCopy.readRpcMismatch,
+	}
 }
 
 function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined): NoticeItem | undefined {
@@ -59,7 +64,10 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	return {
 		detail: appCopy.customReadRpcWarningDetail,
 		id: 'read-rpc-override-active',
-		technicalDetails: appCopy.formatReadRpcOverrideActiveDetail(getConfiguredRpcLabel(readBackendStatus), formatRpcSourceLabel(readBackendStatus.rpcSource), readBackendStatus.rpcUrl),
+		technicalDetails:
+			readBackendStatus.rpcSource === 'localStorage'
+				? appCopy.formatReadRpcSavedInSettingsDetail(getConfiguredRpcLabel(readBackendStatus), readBackendStatus.rpcUrl)
+				: appCopy.formatReadRpcOverrideActiveDetail(getConfiguredRpcLabel(readBackendStatus), formatRpcSourceLabel(readBackendStatus.rpcSource), readBackendStatus.rpcUrl),
 		tone: 'pending',
 		title: appCopy.readRpcOverrideActive,
 	}
@@ -70,7 +78,7 @@ export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZolt
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
 	if (showApplicationDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
-	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: readBackendMessage.includes('stale') ? appCopy.staleReadRpc : appCopy.readRpcMismatch })
+	if (readBackendMessage !== undefined) items.push(buildReadBackendNotice(readBackendMessage, readBackendStatus))
 	if (zoltarUniverseError !== undefined)
 		items.push({
 			detail: (

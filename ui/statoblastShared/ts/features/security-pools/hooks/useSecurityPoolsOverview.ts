@@ -25,6 +25,7 @@ import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeco
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolOverviewActionResult } from '../../../types/contracts.js'
 import { defaultUseSecurityPoolsOverviewDependencies, type SecurityPoolsOverviewProductionWriteClient, type UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as liquidationCopy from '../../../copy/liquidation.js'
 
 export type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
@@ -113,7 +114,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				securityPools.value = pools
 			},
 			onError: error => {
-				const message = getErrorMessage(error, 'Failed to load security pools')
+				const message = getErrorMessage(error, 'Failed to load security pools.')
 				securityPoolOverviewError.value = message
 				securityPoolsLoadError.value = message
 				securityPoolsLoadErrorEnvironmentRefreshKey.value = requestedEnvironmentRefreshKey
@@ -184,7 +185,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			},
 			onError: error => {
 				if (getCurrentLiquidationFundingPreviewRequestKey() !== requestKey) return
-				liquidationFundingPreviewError.value = getErrorMessage(error, 'Failed to load liquidation funding')
+				liquidationFundingPreviewError.value = getErrorMessage(error, 'Failed to load liquidation funding.')
 				liquidationFundingPreviewErrorKey.value = requestKey
 			},
 		})
@@ -203,7 +204,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const loadLiquidationApproval = async () => {
 		const managerAddress = liquidationManagerAddress.value
 		if (managerAddress === undefined) {
-			liquidationApprovalError.value = 'Selected pool details are still loading.'
+			liquidationApprovalError.value = liquidationCopy.selectedPoolDetailsLoading
 			return false
 		}
 		let approvalId: Hash
@@ -211,7 +212,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			approvalId = parseBytes32Input(liquidationApprovalId.value, 'Liquidation approval ID')
 		} catch (error) {
 			liquidationApprovalDetails.value = undefined
-			liquidationApprovalError.value = getErrorMessage(error, 'Enter a valid liquidation approval ID')
+			liquidationApprovalError.value = getErrorMessage(error, liquidationCopy.invalidDelegatedApprovalId)
 			return false
 		}
 		const requestKey = `${latestEnvironmentRefreshKey.current}:${managerAddress.toLowerCase()}:${approvalId.toLowerCase()}`
@@ -233,7 +234,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			},
 			onError: error => {
 				if (getCurrentLiquidationApprovalRequestKey() !== requestKey) return
-				liquidationApprovalError.value = getErrorMessage(error, 'Failed to load liquidation approval')
+				liquidationApprovalError.value = getErrorMessage(error, 'Failed to load the liquidation approval.')
 			},
 		})
 		if (liquidationApprovalLoadingKey.value === requestKey) liquidationApprovalLoadingKey.value = undefined
@@ -349,10 +350,10 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				async (walletAddress, context) => {
 					if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
-					const receiverVault = parseAddressInput(submittedLiquidation.receiverVault, 'Receiver vault')
+					const receiverVault = parseAddressInput(submittedLiquidation.receiverVault, liquidationCopy.receiverVault)
 					const approvalId = parseBytes32Input(submittedLiquidation.approvalId, 'Liquidation approval ID')
-					const amount = parseEthAmountInput(submittedLiquidation.amount, 'Commitment to transfer')
-					if (amount <= 0n) throw new Error('Invalid liquidation amount.')
+					const amount = parseEthAmountInput(submittedLiquidation.amount, liquidationCopy.requestedLiquidationDebt)
+					if (amount <= 0n) throw new Error(liquidationCopy.liquidationAmountRequired)
 					const fundingEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
 					const fundingPreviewKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, fundingEnvironmentRefreshKey, proposedRepPerEthPrice)
 					const ensureFundingContextIsCurrent = () => {
@@ -372,14 +373,14 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					ensureFundingContextIsCurrent()
 					if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < fundingPreview.totalWalletEthRequiredAttoEth)
 						throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingPreview.totalWalletEthRequiredAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and queue this liquidation.`)
-					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')
-					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 1–5 minutes')
+					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, securityPoolCopy.executionWindow)
+					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error(securityPoolCopy.executionWindowRangeError)
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
-					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be 1–5 minutes')
+					if (validForSeconds === undefined) throw new Error(securityPoolCopy.executionWindowRangeError)
 					ensureFundingContextIsCurrent()
 					return await dependencies.queueSecurityPoolLiquidation(writeClient, managerAddress, targetVault, amount, validForSeconds, 0n, receiverVault, approvalId, proposedRepPerEthPrice)
 				},
-				'Failed to queue liquidation',
+				'Failed to queue the liquidation.',
 				async result => {
 					const nextResult: SecurityPoolOverviewActionResult = {
 						action: 'queueLiquidation',

@@ -71,9 +71,13 @@ export type TransactionRequestPreview = {
 
 type ReadTransportMode = 'provider' | 'rpc'
 
+/** Why the configured read RPC cannot be trusted: it serves another chain, or its latest block is too old. */
+export type ReadBackendIssue = 'chain-mismatch' | 'stale'
+
 export type ReadBackendStatus = {
 	blockNumber: bigint | undefined
 	blockTimestamp: bigint | undefined
+	issue?: ReadBackendIssue | undefined
 	rejectedRpcOverride?: RejectedRpcOverride | undefined
 	rpcSource: ConfiguredRpcSource
 	rpcUrl: string
@@ -173,7 +177,7 @@ async function readProviderAccounts(ethereum: InjectedEthereum | undefined) {
 }
 
 async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
-	if (ethereum === undefined) throw new Error('Unable to verify wallet network because no injected wallet was found.')
+	if (ethereum === undefined) throw new Error('Unable to verify wallet network because no browser wallet was found.')
 	let result: unknown
 	try {
 		result = await requestWalletRpc(ethereum, { method: 'eth_chainId', params: [] })
@@ -205,7 +209,7 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 		createReadClient: () => createReadClientForProfile(profile, readTransportMode, configuredRpc.url, getConfirmedBlock, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
-			if (ethereum === undefined) throw new Error('No injected wallet found')
+			if (ethereum === undefined) throw new Error('No browser wallet was found.')
 
 			const readRecoveringProvider = createRetryEmptyReadProvider(ethereum, profile, configuredRpc.url)
 
@@ -228,7 +232,7 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 		},
 		disconnectWallet: async () => {
 			const ethereum = getProvider()
-			if (ethereum === undefined) throw new Error('No injected wallet found')
+			if (ethereum === undefined) throw new Error('No browser wallet was found.')
 			await ethereum.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] })
 		},
 		getAccounts: async () => await readProviderAccounts(getProvider()),
@@ -282,7 +286,7 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 		},
 		switchNetwork: async () => {
 			const ethereum = getProvider()
-			if (ethereum === undefined) throw new Error('No injected wallet found')
+			if (ethereum === undefined) throw new Error('No browser wallet was found.')
 			await switchInjectedChain(ethereum, profile.chainIdHex)
 		},
 	}

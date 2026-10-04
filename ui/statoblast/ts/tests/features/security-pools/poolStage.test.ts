@@ -48,7 +48,7 @@ describe('pool locations', () => {
 })
 
 describe('pool lifecycle stage', () => {
-	test('maps the lifecycle and reporting axes onto Operational → Escalation → Fork / migration → Truth auction → Settled', () => {
+	test('maps the lifecycle and reporting axes onto Operational → Escalation → Fork & migration → Truth auction → Settled', () => {
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: false })).toBe('operational')
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: true })).toBe('escalation')
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: true, reportingStage: 'preOpen' })).toBe('operational')

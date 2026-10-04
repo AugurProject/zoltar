@@ -1,3 +1,4 @@
+import * as appCopy from '../../copy/app.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { requireInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
@@ -96,8 +97,8 @@ export function useWalletSessionController({
 			onWalletSummaryChange(walletSummaryRefreshState(undefined, selectedUniverseId))
 			portfolio.setBalances(undefined)
 			portfolio.setBalanceState('error')
-			portfolio.setBalanceError('Wallet context changed; reconnect to refresh balances')
-			portfolio.setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
+			portfolio.setBalanceError('Your wallet account or network changed. Reconnect to refresh balances.')
+			portfolio.setPortfolioBalanceError('Your wallet account or network changed. Reconnect to load portfolio positions.')
 			transaction.invalidateWalletContext(detail)
 		},
 		[balanceRequests, connectionRequests, onWalletSummaryChange, portfolioBalanceRequests, route, selectedUniverseId, services, session.walletProvider, walletSummaryRequests],
@@ -108,14 +109,14 @@ export function useWalletSessionController({
 			const expectedRevision = walletContextRevision.current
 			const provider = getActiveInjectedProvider()
 			if (provider === undefined || provider !== session.walletProvider) {
-				const detail = provider === undefined ? 'No injected wallet was found; reconnect before continuing' : 'Wallet provider changed; reconnect before continuing'
+				const detail = provider === undefined ? 'No browser wallet was found. Reconnect before continuing.' : 'The active wallet changed. Reconnect before continuing.'
 				if (provider === undefined) dispatch({ type: 'chainObserved', chainId: undefined })
 				invalidateIdentity(detail)
 				throw new Error(detail)
 			}
 			const requireCurrent = () => {
 				if (!mounted.current || walletContextRevision.current !== expectedRevision || getActiveInjectedProvider() !== provider || session.accountRef.current !== expectedAccount) {
-					const detail = 'Wallet context changed; reconnect before continuing'
+					const detail = 'Your wallet account or network changed. Reconnect before continuing.'
 					invalidateIdentity(detail)
 					throw new Error(detail)
 				}
@@ -154,9 +155,9 @@ export function useWalletSessionController({
 		(expectedAccount: Address, networkFailure: string, accountFailure: string) => {
 			const expectedRevision = walletContextRevision.current
 			const guardedWrite: GuardedWalletWrite = async write => {
-				if (!mounted.current || walletContextRevision.current !== expectedRevision) throw new Error('Wallet context changed during transaction revalidation; reconnect and simulate again')
+				if (!mounted.current || walletContextRevision.current !== expectedRevision) throw new Error('Your wallet account or network changed while the transaction was checked. Reconnect and try again.')
 				return await executeWithCurrentWalletContext(expectedAccount, networkFailure, accountFailure, async () => {
-					if (!mounted.current || walletContextRevision.current !== expectedRevision) throw new Error('Wallet context changed during transaction revalidation; reconnect and simulate again')
+					if (!mounted.current || walletContextRevision.current !== expectedRevision) throw new Error('Your wallet account or network changed while the transaction was checked. Reconnect and try again.')
 					return await write()
 				})
 			}
@@ -181,7 +182,7 @@ export function useWalletSessionController({
 			}
 			return true
 		}
-		if (configuration === undefined) throw new Error('Deployment configuration is unavailable')
+		if (configuration === undefined) throw new Error('Deployment configuration is unavailable.')
 		let chainId = await services.walletChainId(provider)
 		if (!requireCurrent()) return
 		if (chainId !== configuration.chainId && eventName === undefined && !restoreExisting) {
@@ -191,7 +192,7 @@ export function useWalletSessionController({
 		}
 		if (!requireCurrent()) return
 		dispatch({ type: 'chainObserved', chainId })
-		if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
+		if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}.`)
 		const connected = await (restoreExisting ? requireInjectedAccount(provider) : services.connectWallet(provider))
 		if (!requireCurrent()) return
 		subscriptionCleanup.current?.()
@@ -210,7 +211,7 @@ export function useWalletSessionController({
 		if (!requireCurrent()) return
 		const confirmedAccount = await (restoreExisting ? requireInjectedAccount(provider) : services.connectWallet(provider))
 		if (!requireCurrent()) return
-		if (confirmedChainId !== configuration.chainId || confirmedAccount !== connected) throw new Error(eventName === undefined ? 'Wallet account changed while connecting; reconnect to continue' : 'Wallet account changed while refreshing; reconnect to continue')
+		if (confirmedChainId !== configuration.chainId || confirmedAccount !== connected) throw new Error(eventName === undefined ? 'Wallet account changed while connecting. Reconnect to continue.' : 'Wallet account changed while refreshing. Reconnect to continue.')
 		balanceRequests.invalidate()
 		walletSummaryRequests.invalidate()
 		session.accountRef.current = connected
@@ -233,12 +234,12 @@ export function useWalletSessionController({
 			const provider = getActiveInjectedProvider()
 			if (provider === undefined) {
 				dispatch({ type: 'chainObserved', chainId: undefined })
-				throw new Error('No injected wallet was found')
+				throw new Error('No browser wallet was found.')
 			}
 			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request))
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || renderContextKeyRef.current !== expectedContext) return
-			invalidateIdentity(publicErrorMessage(error, 'Wallet connection failed'))
+			invalidateIdentity(publicErrorMessage(error, 'Wallet connection failed.'))
 		}
 	}
 	connectHandler.current = () => void connect()
@@ -257,7 +258,7 @@ export function useWalletSessionController({
 				if (provider === undefined) return
 				await establish(provider, renderContextKeyRef.current, isCurrent, undefined, true)
 			} catch (error) {
-				if (isCurrent()) invalidateIdentity(publicErrorMessage(error, 'Wallet connection could not be restored'))
+				if (isCurrent()) invalidateIdentity(publicErrorMessage(error, 'Wallet connection could not be restored.'))
 			}
 		})()
 		return () => {
@@ -268,10 +269,10 @@ export function useWalletSessionController({
 	async function refreshAfterEvent(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) {
 		const label = eventName === 'accountsChanged' ? 'Wallet account changed' : 'Wallet network changed'
 		if ((!allowDisconnectedRefresh && session.accountRef.current === undefined) || transaction.anyWorkflowLocked()) {
-			invalidateIdentity(`${label}. Reconnect before simulating or submitting.`)
+			invalidateIdentity(`${label}. Reconnect before submitting.`)
 			return
 		}
-		invalidateIdentity(`${label}. Refreshing wallet context…`)
+		invalidateIdentity(`${label}. Refreshing wallet connection…`)
 		const request = connectionRequests.begin()
 		const expectedContext = renderContextKey
 		try {
@@ -368,7 +369,7 @@ export function useWalletSummaryEffects({
 			},
 			error => {
 				if (!requests.isCurrent(request) || session.accountRef.current !== session.account) return
-				session.dispatch({ type: 'balancesFailed', error: publicErrorMessage(error, 'Wallet ETH and REP balances could not be loaded'), errorLabel: 'Wallet balance read failed' })
+				session.dispatch({ type: 'balancesFailed', error: publicErrorMessage(error, 'Wallet ETH balance could not be loaded.'), errorLabel: appCopy.walletBalancesUnavailable })
 			},
 		)
 		return () => requests.invalidate()

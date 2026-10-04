@@ -5,6 +5,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { getOracleOperationTimingReason, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -192,7 +193,7 @@ export function LiquidationModal({
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
 	const liquidationTimeoutError = getStagedOperationTimeoutFieldError(liquidationTimeoutDisplayValue)
-	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined || liquidationTimeoutError !== undefined ? liquidationCopy.stagedOperationTimeoutHelpText : liquidationCopy.formatTimeoutHelpTextResolved(formatDuration(liquidationTimeoutSeconds))
+	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined || liquidationTimeoutError !== undefined ? securityPoolCopy.executionWindowHelpText : securityPoolCopy.formatExecutionWindowResolvedDetail(formatDuration(liquidationTimeoutSeconds))
 	const sameVaultWarning = trimmedLiquidationReceiverVault === '' || trimmedLiquidationTargetVault === '' || !sameAddress(trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
 	const approvalRouteMismatch = isLiquidationApprovalRouteMismatch({ accountAddress, liquidationApprovalDetails, liquidationSecurityPoolAddress, trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault })
 	const approvalLatestExecutionTimestamp = currentTimestamp === undefined || liquidationTimeoutSeconds === undefined || currentPoolOracleManagerDetails?.settlementTime === undefined ? undefined : currentTimestamp + currentPoolOracleManagerDetails.settlementTime + liquidationTimeoutSeconds
@@ -248,7 +249,7 @@ export function LiquidationModal({
 	})
 	const directLiquidationReason = (() => {
 		if (liquidationExecutionMode !== 'execute') return undefined
-		if (selectedPool?.statoblastSecurityMultiplierBps === undefined) return liquidationCopy.selectedPoolReloadRequired
+		if (selectedPool?.statoblastSecurityMultiplierBps === undefined) return liquidationCopy.selectedPoolDetailsLoading
 
 		return getLiquidationFailureReason({
 			callerVaultSummary: receiverVaultSummary,
@@ -412,7 +413,7 @@ export function LiquidationModal({
 					/>
 					{liquidationExecutionMode === 'execute' ? null : (
 						<label className='field'>
-							<span>{commonCopy.manualExecutionTimeout}</span>
+							<span>{securityPoolCopy.executionWindow}</span>
 							<div className='field-inline'>
 								<FormInput
 									aria-describedby={liquidationTimeoutError === undefined ? undefined : timeoutErrorId}
@@ -426,7 +427,6 @@ export function LiquidationModal({
 									value={liquidationTimeoutDisplayValue}
 									onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)}
 								/>
-								<span className='field-inline-action'>{commonCopy.minutes}</span>
 							</div>
 							{liquidationTimeoutError === undefined ? undefined : <UserMessage placement='field' tone='error' id={timeoutErrorId} detail={liquidationTimeoutError} />}
 						</label>

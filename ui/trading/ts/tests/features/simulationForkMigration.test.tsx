@@ -115,9 +115,9 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			/>,
 		)
 		try {
-			expect(operationButton('Fork migration').disabled).toBe(false)
-			expect(operationButton('Fork migration').getAttribute('aria-pressed')).toBe('true')
-			expect(operationButton('Complete set').disabled).toBe(true)
+			expect(operationButton('Migrate').disabled).toBe(false)
+			expect(operationButton('Migrate').getAttribute('aria-pressed')).toBe('true')
+			expect(operationButton('Redeem sets').disabled).toBe(true)
 			await waitFor(() => expect(document.body.textContent).toContain('Will this resolve?'), { timeout: 10_000 })
 			const yesTarget = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Yes') === true && candidate.closest('[aria-label="Settlement operation"]') === null && candidate.closest('.enum-dropdown') === null)
 			if (!(yesTarget instanceof HTMLButtonElement)) throw new Error('Missing Yes fork target')
@@ -126,13 +126,13 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
 			if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
 			expect(acknowledgment.checked).toBe(false)
-			expect(acknowledgment.closest('label')?.textContent).toContain('into the selected branches and permanently locks my Yes transfers')
-			expect(buttonByLabel('Migrate to 1 branch').disabled).toBe(true)
+			expect(acknowledgment.closest('label')?.textContent).toContain('into the selected child universes and permanently locks my Yes transfers')
+			expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
 			await act(() => acknowledgment.click())
 			// The action also waits for the migration quote, which can land just after the acknowledgment.
-			await waitFor(() => expect(buttonByLabel('Migrate to 1 branch').disabled).toBe(false), { timeout: 10_000 })
-			await act(() => buttonByLabel('Migrate to 1 branch').click())
-			await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 branch confirmed.'), { timeout: 20_000 })
+			await waitFor(() => expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(false), { timeout: 10_000 })
+			await act(() => buttonByLabel('Migrate to 1 child universe').click())
+			await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.'), { timeout: 20_000 })
 			expect(refreshes).toBeGreaterThan(0)
 		} finally {
 			await rendered.cleanup()

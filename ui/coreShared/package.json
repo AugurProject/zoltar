@@ -294,10 +294,6 @@
 			"bun": "./ts/tests/transactionHashLink.test.tsx",
 			"default": "./js/tests/transactionHashLink.test.js"
 		},
-		"./tests/transactionNetworkValue.test.js": {
-			"bun": "./ts/tests/transactionNetworkValue.test.tsx",
-			"default": "./js/tests/transactionNetworkValue.test.js"
-		},
 		"./tests/term.test.js": {
 			"bun": "./ts/tests/term.test.tsx",
 			"default": "./js/tests/term.test.js"
@@ -601,10 +597,6 @@
 		"./components/TransactionHashLink.js": {
 			"bun": "./ts/components/TransactionHashLink.tsx",
 			"default": "./js/components/TransactionHashLink.js"
-		},
-		"./components/TransactionNetworkValue.js": {
-			"bun": "./ts/components/TransactionNetworkValue.tsx",
-			"default": "./js/components/TransactionNetworkValue.js"
 		},
 		"./components/TransactionObjectContext.js": {
 			"bun": "./ts/components/TransactionObjectContext.tsx",

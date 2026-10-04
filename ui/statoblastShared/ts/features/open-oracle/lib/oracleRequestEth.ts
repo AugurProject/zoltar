@@ -1,3 +1,4 @@
+import * as statoblastAppCopy from '../../../copy/app.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
 import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from '../../../protocol/oracleRequestFunding.js'
@@ -13,7 +14,7 @@ export function getOracleRequestEthGuardMessage({ actionLabel, includeBuffer = f
 	const requiredEthValue = includeBuffer ? getBufferedOracleRequestEthValue(requiredCostAttoEth) : requiredCostAttoEth
 	if (requiredEthValue === undefined) return undefined
 	if (requiredEthValue === 0n) return undefined
-	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (walletBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	if (walletBalanceAttoEth >= requiredEthValue) return undefined
 	return `Need ${formatAdditionalCurrencyBalance(requiredEthValue - walletBalanceAttoEth, 'ETH')} in this wallet to ${actionLabel}.`
 }

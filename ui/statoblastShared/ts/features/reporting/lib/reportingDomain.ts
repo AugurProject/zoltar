@@ -14,7 +14,7 @@ type ReportingAmountSuggestion = {
 	reason: string | undefined
 }
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
-const LOAD_REPORTING_PRESETS_REASON = reportingCopy.presetDetailsRequired
+const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
@@ -113,7 +113,7 @@ export function getHypotheticalClaimAmount(details: ActiveReportingDetails, outc
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
-	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
+	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
 	if ((isPoolQuestionFinalized(details) && details.questionOutcome === selectedOutcome) || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amountAttoRep: 0n, reason: undefined }
 	const requiredLeadAmount = largestOtherBalance + 1n - selectedSide.balance
 	const amountAttoRep = details.startBondAttoRep > requiredLeadAmount ? details.startBondAttoRep : requiredLeadAmount
@@ -122,7 +122,7 @@ function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, se
 	if (availableRoom === 0n)
 		return {
 			amountAttoRep: undefined,
-			reason: 'No remaining contribution capacity is available on the selected side.',
+			reason: reportingCopy.selectedSideCapacityEmpty,
 		}
 	if (selectedSide.balance + effectiveAmount <= largestOtherBalance) {
 		const cappedEnteredAmount = details.startBondAttoRep > availableRoom ? details.startBondAttoRep : availableRoom
@@ -186,10 +186,10 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (minContribution.amountAttoRep === undefined)
 		return {
 			amountAttoRep: undefined,
-			reason: minContribution.reason ?? 'Max reward preset is unavailable.',
+			reason: minContribution.reason ?? 'Max reward is unavailable.',
 		}
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
-	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
+	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
 	const rewardEligibleCap = largestOtherBalance + largestOtherBalance / 2n
 	const targetFinalBalance = rewardEligibleCap < details.nonDecisionThresholdAttoRep ? rewardEligibleCap : details.nonDecisionThresholdAttoRep
 	if (isUniqueWinner(selectedSide.balance, largestOtherBalance) && selectedSide.balance >= targetFinalBalance)
@@ -205,7 +205,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max reward preset unavailable because the selected side cannot fill the reward window within the remaining bond capacity.',
+			reason: 'Max reward is unavailable because the selected side cannot fill the reward window within its remaining capacity.',
 		}
 	return { amountAttoRep, reason: undefined }
 }
@@ -260,7 +260,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (amount < details.startBondAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to meet the current start bond.`,
+			reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to meet the minimum first report.`,
 		}
 	const projectedDeposit = projectEscalationDeposit({
 		amountAttoRep: amount,
@@ -272,7 +272,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (projectedDeposit === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
+			reason: 'Increase the report amount slightly to avoid a tie at the minimum report.',
 		}
 	return {
 		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,

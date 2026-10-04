@@ -24,7 +24,7 @@ const ATTO_ETH_PER_ETH = 10n ** 18n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
-const WALLET_ACCOUNT_CHANGED = 'Wallet account changed. Review the action with the connected account and try again'
+const WALLET_ACCOUNT_CHANGED = 'Wallet account changed. Review the action with the connected account and try again.'
 const PROXY_DEPLOYER_STEP: DeploymentStatus = {
 	address: zeroAddress,
 	dependencies: [],
@@ -188,17 +188,17 @@ describe('useTradingOperations', () => {
 	test.each([
 		{
 			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 10n * ATTO_ETH_PER_ETH }),
-			expectedMessage: 'Minting is unavailable because this pool has complete-set shares but no collateral',
+			expectedMessage: 'Minting is unavailable because this pool has complete-set shares but no collateral.',
 			name: 'latest pool capacity has no collateral exchange rate',
 		},
 		{
 			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n, mintingCapacityAttoEth: 0n, shareTokenSupplyAttoShares: 0n }),
-			expectedMessage: 'No mint capacity. No active underwriting commitments',
+			expectedMessage: 'No mint capacity. No vault has an active commitment.',
 			name: 'total underwriting commitments exists but none is fee eligible',
 		},
 		{
 			capacity: createMintCapacity({ escalationGameActive: true, mintingCapacityAttoEth: 0n }),
-			expectedMessage: 'Minting is paused while the outcome is disputed',
+			expectedMessage: 'Minting is paused while the outcome is disputed.',
 			name: 'an escalation game has started',
 		},
 	])('blocks complete-set mint writes when $name', async ({ capacity, expectedMessage }) => {

@@ -3,7 +3,7 @@ import { useId } from 'preact/hooks'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { formatOpenOutcomeUniverse } from '../../../copy/zoltar.js'
+import { formatOpenChildUniverse } from '../../../copy/zoltar.js'
 import * as copy from '../../../copy/universeNavigation.js'
 
 type Outcome = { exists: boolean; label: string; universeId: bigint; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
@@ -17,7 +17,7 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 			emptyMessage={emptyMessage}
 			items={outcomes.map(outcome => ({
 				key: outcome.universeId.toString(),
-				ariaLabel: selection ? outcome.label : formatOpenOutcomeUniverse(outcome.label),
+				ariaLabel: selection ? outcome.label : formatOpenChildUniverse(outcome.label),
 				describedById: `${statusId}-${outcome.universeId}`,
 				label: (
 					<>

@@ -5,7 +5,7 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 export const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
 		case 'setVaultUnderwritingLimit':
-			return securityPoolCopy.adjustingVaultBackingFactor
+			return securityPoolCopy.settingCommitmentLimit
 		case 'approveRep':
 			return 'Approving REP'
 		case 'depositRepToVault':
@@ -22,16 +22,17 @@ export const getPendingTitle = (actionName: SecurityVaultActionResult['action'])
 			return assertNever(actionName)
 	}
 }
-export const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
+/** `executedImmediately` marks a withdrawal that ran in its own transaction instead of waiting in the queue. */
+export const getSuccessTitle = (actionName: SecurityVaultActionResult['action'], executedImmediately = false) => {
 	switch (actionName) {
 		case 'setVaultUnderwritingLimit':
-			return securityPoolCopy.backingRatioChangeSubmitted
+			return securityPoolCopy.commitmentLimitChangeSubmitted
 		case 'approveRep':
 			return 'REP approved'
 		case 'depositRepToVault':
 			return 'REP deposited'
 		case 'queueWithdrawRep':
-			return 'REP withdrawal queued'
+			return executedImmediately ? securityPoolCopy.repWithdrawalExecuted : securityPoolCopy.repWithdrawalQueued
 		case 'redeemFees':
 			return 'Fees claimed'
 		case 'redeemRepFromVault':
@@ -45,13 +46,13 @@ export const getSuccessTitle = (actionName: SecurityVaultActionResult['action'])
 export const getFailureTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
 		case 'setVaultUnderwritingLimit':
-			return securityPoolCopy.backingRatioChangeFailed
+			return securityPoolCopy.commitmentLimitChangeFailed
 		case 'approveRep':
 			return 'REP approval failed'
 		case 'depositRepToVault':
 			return 'REP deposit failed'
 		case 'queueWithdrawRep':
-			return 'REP withdrawal failed'
+			return securityPoolCopy.repWithdrawalFailed
 		case 'redeemFees':
 			return 'Fee claim failed'
 		case 'redeemRepFromVault':
@@ -61,4 +62,13 @@ export const getFailureTitle = (actionName: SecurityVaultActionResult['action'])
 		default:
 			return assertNever(actionName)
 	}
+}
+
+/**
+ * The reason a vault operation failed. Only an execution attempted in the submitting transaction was rejected immediately;
+ * an operation that failed after waiting in the queue reports its own execution result.
+ */
+export function getQueuedVaultOperationFailureDetail(result: Pick<SecurityVaultActionResult, 'stagedExecution' | 'queuedOperationState'>, immediateRejectionDetail: string | undefined) {
+	if (result.stagedExecution !== undefined) return result.stagedExecution.errorMessage ?? immediateRejectionDetail
+	return result.queuedOperationState?.execution?.errorMessage
 }

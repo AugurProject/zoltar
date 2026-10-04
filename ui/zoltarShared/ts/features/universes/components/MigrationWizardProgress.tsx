@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { migrationWizardStepIds, type MigrationWizardStep, type MigrationWizardStepId, type MigrationWizardStepStatus } from '../lib/migrationWizard.js'
@@ -5,11 +6,11 @@ import { migrationWizardStepIds, type MigrationWizardStep, type MigrationWizardS
 export function getMigrationStepTitle(stepId: MigrationWizardStepId) {
 	switch (stepId) {
 		case 'outcomes':
-			return zoltarCopy.migrationStepChooseOutcomes
+			return zoltarCopy.migrationStepSelectOutcomes
 		case 'amount':
-			return zoltarCopy.migrationStepAmount
+			return commonCopy.amount
 		case 'approve':
-			return zoltarCopy.migrationStepApprove
+			return commonCopy.approve
 		case 'review':
 			return zoltarCopy.migrationStepReview
 		default:
@@ -28,9 +29,9 @@ function getStatusLabel(status: MigrationWizardStepStatus) {
 		case 'incomplete':
 			return zoltarCopy.migrationStepToDo
 		case 'loading':
-			return zoltarCopy.migrationStepLoading
+			return commonCopy.loading
 		case 'blocked':
-			return zoltarCopy.migrationStepBlocked
+			return commonCopy.blocked
 		default:
 			return assertNever(status)
 	}
