@@ -6,6 +6,8 @@ import type { DurableRetirementState } from '../state/retirement.ts'
 type RetirementOperationDisposition = 'claim-linked-migration' | 'prohibited' | 'recovery' | 'unmatched-exit'
 
 const RECOVERY_OPERATIONS = [
+	'trading.uniswap.collect-fees',
+	'trading.uniswap.remove-liquidity',
 	V3_RETIREMENT_OPERATION,
 	'open-oracle.push-or-credit',
 	'open-oracle.settle',
@@ -40,6 +42,9 @@ const RECOVERY_OPERATIONS = [
 const CLAIM_LINKED_MIGRATIONS = new Set(['statoblast.fork.create-child', 'statoblast.fork.migrate-rep', 'statoblast.fork.migrate-vault', 'statoblast.fork.migrate-vault-unresolved', 'trading.shares.migrate'])
 
 const PROHIBITED_OPERATIONS = [
+	'trading.uniswap.mint-range',
+	'trading.uniswap.swap-rep-for-weth',
+	'trading.uniswap.swap-weth-for-rep',
 	'open-oracle.approve-internal',
 	'open-oracle.deposit',
 	'open-oracle.dispute',
@@ -66,6 +71,7 @@ const PROHIBITED_OPERATIONS = [
 	'trading.genesis-uniswap.deploy-seeder',
 	'trading.genesis-uniswap.initialize-pool',
 	'trading.genesis-uniswap.seed-pool',
+	'trading.genesis-uniswap.add-liquidity',
 	'trading.liquidity.add-eth',
 	'trading.liquidity.add-shares',
 	'trading.lp.approve',
@@ -82,6 +88,7 @@ const PROHIBITED_OPERATIONS = [
 	'trading.universe-uniswap.create-pool',
 	'trading.universe-uniswap.initialize-pool',
 	'trading.universe-uniswap.seed-pool',
+	'trading.universe-uniswap.add-liquidity',
 	'zoltar.child.deploy',
 	'zoltar.migration.add',
 	'zoltar.migration.split',

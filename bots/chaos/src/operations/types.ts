@@ -1,3 +1,4 @@
+import type { UniverseUniswapSnapshot } from './uniswap-types.ts'
 import type { OperationInputValues } from './input-values.ts'
 import type { OperationDefinition } from './operation-definition.ts'
 export type { OperationDefinition } from './operation-definition.ts'
@@ -381,21 +382,6 @@ export interface PairSnapshot {
 	effectiveNoReserve: string
 	totalSupply: string
 	walletLiquidity: string
-}
-
-interface UniverseUniswapPoolSnapshot {
-	universeId: string
-	repToken: Address
-	initialized: boolean
-	liquidity: string
-	pool?: Address | undefined
-}
-
-interface UniverseUniswapSnapshot {
-	factory: boolean
-	proxy: boolean
-	seeder: boolean
-	pools: UniverseUniswapPoolSnapshot[]
 }
 
 export interface EcosystemDeployments {

@@ -1,3 +1,6 @@
+import { mintUniswapRange } from './uniswap-range.ts'
+import { uniswapRecoveryDefinition } from './uniswap-recovery.ts'
+import { uniswapSwapDefinition } from './uniswap-swap.ts'
 import { disabled } from '../planning.ts'
 import type { OperationDefinition } from '../types.ts'
 import { createPair, directLiquidity, syncPair } from './pair.ts'
@@ -6,7 +9,7 @@ import { routerEthDefinition } from './router-eth.ts'
 import { routerOwnedDefinition } from './router-owned.ts'
 import { migrateShares } from './share-migration.ts'
 import { swapDefinition } from './swap.ts'
-import { createGenesisUniswapPool, createUniverseUniswapPool, deployGenesisUniswapSeeder, initializeGenesisUniswapPool, initializeUniverseUniswapPool, seedGenesisUniswapPool, seedUniverseUniswapPool } from './uniswap-seeding.ts'
+import { addGenesisUniswapLiquidity, addUniverseUniswapLiquidity, createGenesisUniswapPool, createUniverseUniswapPool, deployGenesisUniswapSeeder, initializeGenesisUniswapPool, initializeUniverseUniswapPool, seedGenesisUniswapPool, seedUniverseUniswapPool } from './uniswap-seeding.ts'
 
 const shareApprovalDefinition: OperationDefinition = {
 	buildPlan: () => undefined,
@@ -43,9 +46,16 @@ export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	createGenesisUniswapPool,
 	initializeGenesisUniswapPool,
 	seedGenesisUniswapPool,
+	addGenesisUniswapLiquidity,
 	createUniverseUniswapPool,
 	initializeUniverseUniswapPool,
 	seedUniverseUniswapPool,
+	addUniverseUniswapLiquidity,
+	mintUniswapRange,
+	uniswapSwapDefinition('rep-for-weth'),
+	uniswapSwapDefinition('weth-for-rep'),
+	uniswapRecoveryDefinition('remove'),
+	uniswapRecoveryDefinition('collect'),
 	createPair,
 	directLiquidity('initialize'),
 	directLiquidity('add'),

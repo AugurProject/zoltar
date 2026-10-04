@@ -1,3 +1,4 @@
+import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
 import { chaosReadClients, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
@@ -133,6 +134,9 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 		limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
 		wallet: address(1),
 	})
+	expect(snapshot.universeUniswap?.pools[0]?.positions).toHaveLength(5)
+	expect(snapshot.universeUniswap?.pools[0]?.sqrtPriceX96).toBe((1n << 96n).toString())
+	expect(snapshot.universeUniswap?.routerAuthenticated).toBe(false)
 	expect(snapshot.universeUniswap).toMatchObject({
 		factory: true,
 		pools: [
@@ -140,6 +144,23 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 			{ initialized: false, liquidity: '0', pool: childPool, repToken: childRep, universeId: '1' },
 		],
 	})
+})
+
+test('discovers unpoked fees at exact ranges and gates mismatched router bindings', async () => {
+	for (const weth of [address(7), address(99)]) {
+		const factory = address(40)
+		const fake = fakeClient(10n, hash(10), { uniswapFactory: factory, uniswapRouter: canonicalUniswapDeployment(31337).router, uniswapRouterWeth: weth, uniswapPositionLiquidity: 100n, uniswapPoolsByRep: { [address(10).toLowerCase()]: { initialized: true, liquidity: 100n, pool: address(41) } } })
+		const snapshot = await discoverEcosystemSnapshot({
+			anchorBlockNumber: 10n,
+			client: fake.client,
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: factory, weth: address(7), zoltar: address(2) },
+			limits: { maxPools: 10, maxQuestions: 10, maxStagedOperationsPerPool: 10, maxUniverses: 10, maxVaultsPerPool: 10 },
+			wallet: address(1),
+		})
+		expect(snapshot.universeUniswap?.routerAuthenticated).toBe(weth === address(7))
+		expect(snapshot.universeUniswap?.pools[0]?.positions?.find(position => position.tickLower === -2000)).toMatchObject({ liquidity: '100', collectable0: '103', collectable1: '104' })
+		expect(fake.pinnedReads.every(block => block === 10n)).toBe(true)
+	}
 })
 
 test('discovers Sepolia pools using the network default when no factory override is supplied', async () => {
@@ -218,6 +239,9 @@ interface GraphOverrides {
 	routerFactory?: Address
 	tokenTheoreticalSupplyAttoRep?: bigint
 	tradingSecurityPoolFactory?: Address
+	uniswapRouter?: Address
+	uniswapRouterWeth?: Address
+	uniswapPositionLiquidity?: bigint
 	uniswapFactory?: Address
 	universeTheoreticalSupplyAttoRep?: bigint
 	uniswapPoolsByRep?: Readonly<Record<string, { initialized: boolean; liquidity: bigint; pool: Address }>>
@@ -245,6 +269,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		},
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
+			if (parameters.address === graph.uniswapRouter) return '0x01'
 			if (parameters.address === graph.missingContract || graph.missingContracts?.includes(parameters.address) === true) return '0x'
 			if ([address(2), address(3), address(4), address(5), address(6), address(7), address(8), address(9)].includes(parameters.address)) return '0x01'
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
@@ -263,7 +288,10 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return graph.forkerZoltar ?? address(2)
 				case 'securityPoolFactory':
 					return graph.tradingSecurityPoolFactory ?? address(4)
+				case 'WETH9':
+					return graph.uniswapRouterWeth ?? address(7)
 				case 'factory':
+					if (parameters.address === graph.uniswapRouter) return graph.uniswapFactory
 					return Object.values(graph.uniswapPoolsByRep ?? {}).some(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase()) ? graph.uniswapFactory : (graph.routerFactory ?? address(8))
 				case 'getPool': {
 					const rep = parameters.args?.[0]
@@ -278,9 +306,16 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				}
 				case 'fee':
 					return 10_000n
+				case 'feeGrowthGlobal0X128':
+				case 'feeGrowthGlobal1X128':
+					return graph.uniswapPositionLiquidity === undefined ? 0n : 1n << 128n
+				case 'ticks':
+					return [100n, 0n, 0n, 0n, 0n, 0n, 0, true]
+				case 'positions':
+					return graph.uniswapPositionLiquidity === undefined ? [0n, 0n, 0n, 0n, 0n] : [graph.uniswapPositionLiquidity, 0n, 0n, 3n, 4n]
 				case 'slot0': {
 					const entry = Object.values(graph.uniswapPoolsByRep ?? {}).find(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())
-					return [entry?.initialized === true ? 1n : 0n, 0, 0, 0, 0, 0, true]
+					return [entry?.initialized === true ? 1n << 96n : 0n, 0, 0, 0, 0, 0, true]
 				}
 				case 'liquidity': {
 					const entry = Object.values(graph.uniswapPoolsByRep ?? {}).find(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())
