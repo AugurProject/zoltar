@@ -518,6 +518,6 @@ test('failed preflight invalidates an earlier preview and redacts sensitive erro
 	const first = object(await controller.handle({ ...wrap, action: 'preview' }))
 	blocked = true
 	const second = object(await controller.handle({ ...wrap, action: 'preview' }))
-	expect(second['blockers']).toEqual(['Error detail withheld because it may contain sensitive data.'])
+	expect(second['blockers']).toEqual(['RPC [redacted endpoint] failed'])
 	await expect(controller.handle({ action: 'execute', previewId: first['previewId'] })).rejects.toThrow('Preview the operation again')
 })

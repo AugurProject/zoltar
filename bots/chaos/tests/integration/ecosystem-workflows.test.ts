@@ -1,3 +1,4 @@
+import { selectExecutableOperationPlan } from '../../src/runtime/selection.ts'
 import { preflightOperationPreview } from '../../src/execution/operation-preview.ts'
 import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -171,6 +172,38 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('preflights canonical pool deployment before random selection or signing', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy()
+		const stateFile = await temporaryStateFile()
+		try {
+			const context = runtimeContext(settingsFor(current, proxy, stateFile.path))
+			const scan = await canonicalRescan(context)
+			const created = await executeCanonicalOperation(context, scan, 'zoltar.question.create-binary')
+			const deployment = requiredPlan(created.scan.evaluations, 'statoblast.pool.deploy')
+			const wrap = requiredPlan(created.scan.evaluations, 'open-oracle.weth.wrap')
+			const rejected: string[] = []
+			const before = proxy.successfulSendRawTransactionParams.length
+			const selected = await selectExecutableOperationPlan(
+				[deployment, wrap],
+				plan => preflightOperationPreview(context.environment, plan),
+				(plan, error) => {
+					rejected.push(`${plan.definitionId}: ${error.message}`)
+				},
+				() => 0,
+			)
+			expect(selected).toBeDefined()
+			expect(proxy.successfulSendRawTransactionParams).toHaveLength(before)
+			expect(selected).toBe(deployment)
+			expect(rejected).toEqual([])
+			await executeCanonicalOperation(context, created.scan, 'statoblast.pool.deploy')
+		} finally {
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
 	test('executes a reviewed manual WETH operation once through the production executor', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()
