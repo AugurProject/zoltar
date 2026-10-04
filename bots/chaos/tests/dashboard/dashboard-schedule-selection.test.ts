@@ -104,7 +104,7 @@ browserTest(
 			expect(await cdp.evaluate("document.querySelector('[data-selection-toggle]').checked")).toBe(false)
 			rejectSelection = false
 			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
-			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap'")
+			await waitFor(`document.querySelector('[data-selection-toggle="open-oracle.weth.wrap"]')?.checked === true && document.querySelector('[data-selection-toggle="open-oracle.weth.wrap"]')?.disabled === false`)
 			expect(mutations[1]).toEqual({ revision: 'controls-1', operationId: 'open-oracle.weth.wrap', enabled: true })
 			// A save must not blink the rest of the catalog: only the saving toggle changes state.
 			let releaseSelection = () => {}
@@ -125,7 +125,7 @@ browserTest(
 				})`),
 			).toEqual({ otherChecked: true, otherDisabled: false, savingChecked: true })
 			releaseSelection()
-			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap\\nopen-oracle.weth.unwrap'")
+			await waitFor(`document.querySelector('[data-selection-toggle="open-oracle.weth.unwrap"]')?.checked === true && document.querySelector('[data-selection-toggle="open-oracle.weth.unwrap"]')?.disabled === false`)
 			selectionGate = undefined
 			// Only the row whose data changed is rebuilt; the rest keep their DOM nodes so the catalog never reflows.
 			const scansBeforeRefresh = scans

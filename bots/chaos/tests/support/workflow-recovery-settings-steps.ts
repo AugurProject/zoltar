@@ -24,7 +24,7 @@ export async function verifySettingsConnectivityAndSigner(context: WorkflowRecov
 			initializerHelp: document.querySelector('label[for="initialize-genesis-universe"] + p')?.textContent,
 			initializerHelpId: document.querySelector('#initialize-genesis-universe')?.getAttribute('aria-describedby'),
 			initializeGenesisUniverse: document.querySelector('#initialize-genesis-universe')?.checked,
-			selectableScopeHelp: document.querySelector('#all-selectable-operations-help')?.textContent,
+			selectionControlsAbsent: document.querySelector('#all-selectable-operations') === null && document.querySelector('#selectable-operation-allowlist') === null,
 			readRpcUrl: document.querySelector('#read-rpc-url')?.value,
 			lede: document.querySelector('#settings-chain-scope')?.textContent,
 			locked: document.querySelector('#settings-fields')?.disabled,
@@ -40,8 +40,7 @@ export async function verifySettingsConnectivityAndSigner(context: WorkflowRecov
 		initializerHelpId: 'initialize-genesis-universe-help',
 		initializeGenesisUniverse: true,
 		readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
-		selectableScopeHelp:
-			'Turn this off for a staged rollout, then enable operations in the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
+		selectionControlsAbsent: true,
 		executeDescription: 'execution-checklist',
 		executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets.',
 		lede: 'Changes apply before the next selection cycle.',
@@ -182,53 +181,6 @@ export async function verifyExecutionPolicyValidation(context: WorkflowRecoveryC
 	await cdp.command('Network.setBlockedURLs', { urls: [] })
 	await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 	await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} unresolved settings mutation did not recover after a complete refresh`)
-	expect(
-		await cdp.evaluate(`({
-			all: document.querySelector('#all-selectable-operations')?.checked,
-			allowlistDisabled: document.querySelector('#selectable-operation-allowlist')?.disabled,
-		})`),
-	).toEqual({ all: true, allowlistDisabled: true })
-	const rejectedAllowlistMutationCount = fixture.settingsMutations.length
-	await cdp.evaluate(`(() => {
-		const all = document.querySelector('#all-selectable-operations')
-		const allowlist = document.querySelector('#selectable-operation-allowlist')
-		const form = document.querySelector('#settings-form')
-		if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
-		all.checked = false
-		all.dispatchEvent(new InputEvent('input', { bubbles: true }))
-		allowlist.value = 'surface.weth9.receive'
-		form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-	})()`)
-	await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Unknown independently selectable operation definition ID surface.weth9.receive') === true", `${viewport.label} coverage-only alias was not rejected from the selectable-operation allowlist`)
-	expect(fixture.settingsMutations).toHaveLength(rejectedAllowlistMutationCount)
-	await cdp.evaluate(`(() => {
-		const all = document.querySelector('#all-selectable-operations')
-		const allowlist = document.querySelector('#selectable-operation-allowlist')
-		const form = document.querySelector('#settings-form')
-		if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
-		all.checked = false
-		all.dispatchEvent(new InputEvent('input', { bubbles: true }))
-		allowlist.value = 'open-oracle.weth.typo'
-		form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-	})()`)
-	await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Unknown independently selectable operation definition ID open-oracle.weth.typo') === true", `${viewport.label} unknown selectable operation ID was not rejected locally`)
-	expect(fixture.settingsMutations).toHaveLength(rejectedAllowlistMutationCount)
-	const stagedAllowlistMutationCount = fixture.settingsMutations.length + 1
-	await cdp.evaluate(`(() => {
-		const all = document.querySelector('#all-selectable-operations')
-		const allowlist = document.querySelector('#selectable-operation-allowlist')
-		const form = document.querySelector('#settings-form')
-		if (!(all instanceof HTMLInputElement) || !(allowlist instanceof HTMLTextAreaElement) || !(form instanceof HTMLFormElement)) return
-		all.checked = false
-		all.dispatchEvent(new InputEvent('input', { bubbles: true }))
-		allowlist.value = 'open-oracle.blocked-sibling\\ntrading.position.enter'
-		form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-	})()`)
-	await waitForSettingsMutation(stagedAllowlistMutationCount, `${viewport.label} selectable-operation canary policy was not submitted`)
-	expect(fixture.settingsMutations.at(-1)).toMatchObject({
-		patch: { strategy: { selectableOperationAllowlist: ['open-oracle.blocked-sibling', 'trading.position.enter'] } },
-	})
-	await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.' && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} selectable-operation canary policy did not reconcile`)
 	const highRiskMutationCount = fixture.settingsMutations.length + 1
 	await cdp.evaluate(`(() => {
 		window.operatorDialogReview = ''
@@ -350,7 +302,7 @@ export async function verifyExecutionPolicyValidation(context: WorkflowRecoveryC
 				maximumRepPerOperation: '10',
 				minimumEthReserve: '0',
 				minimumRepReserve: '0.000000000000000000',
-				selectableOperationAllowlist: null,
+				selectableOperationAllowlist: [],
 				workflowValidForBlocks: 288,
 			},
 		},
@@ -390,7 +342,7 @@ export async function verifyExecutionPolicyValidation(context: WorkflowRecoveryC
 				maximumRepPerOperation: '10',
 				minimumEthReserve: '0.123456789012345678',
 				minimumRepReserve: '0.000000000000000001',
-				selectableOperationAllowlist: null,
+				selectableOperationAllowlist: [],
 				workflowValidForBlocks: 288,
 			},
 		},

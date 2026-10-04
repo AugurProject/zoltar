@@ -167,9 +167,9 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(woken).toBe(false)
 	})
 
-	test('disabling one unrestricted catalog entry preserves all other selections', async () => {
+	test('disabling one catalog entry preserves other explicit selections', async () => {
 		const current = configuredSettings(true, false)
-		current.strategy.selectableOperationAllowlist = undefined
+		current.strategy.selectableOperationAllowlist = ['open-oracle.weth.wrap', 'zoltar.question.create-binary']
 		const state = runtimeState(current)
 		const { controller, configuration } = noopController(current, state)
 		if (controller.setSelection === undefined) throw new Error('Selection control is unavailable')

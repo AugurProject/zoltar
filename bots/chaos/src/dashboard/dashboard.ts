@@ -39,8 +39,6 @@ const renderActivities = createActivityTimeline()
 // which cannot run before this module finishes wiring the page.
 const settingsDraft = createExecutionPolicyDraft({
 	fields: elements.settingsFields,
-	selectAll: elements.allSelectableOperationsInput,
-	allowlist: elements.selectableOperationAllowlistInput,
 	discard: elements.discardSettingsButton,
 	status: elements.settingsSaveStatus,
 	reload: () => {
