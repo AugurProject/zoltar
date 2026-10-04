@@ -222,6 +222,7 @@ export function useTradingOperations(
 						tradingForkUniverse.value = latestForkUniverse
 					}
 					if (actionName === 'createCompleteSet') {
+						if (parseTradingAmountInput(currentForm.completeSetAmount, 'Complete set amount') <= 0n) throw new Error('Invalid mint amount.')
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
@@ -250,6 +251,7 @@ export function useTradingOperations(
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemCompleteSet') {
+						if (parseTradingAmountInput(currentForm.redeemAmount, 'Redeem amount') <= 0n) throw new Error('Invalid redeem amount.')
 						const latestMintCapacity = await dependencies.loadSecurityPoolMintCapacity(securityPoolAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,

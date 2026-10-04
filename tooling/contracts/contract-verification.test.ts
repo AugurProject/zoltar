@@ -138,13 +138,15 @@ const testInputs: StandardJsonInputs = {
 	openOracle: { compilerVersion: 'v0.8.28+commit.7893614a', inputJson: '{"language":"Solidity"}' },
 }
 
-type RecordedCall = { parameters: URLSearchParams; type: 'GET' | 'POST' }
+type RecordedCall = { bodyParameters: URLSearchParams; parameters: URLSearchParams; queryParameters: URLSearchParams; type: 'GET' | 'POST' }
 
 function createExplorerFetchStub(respond: (action: string, call: RecordedCall) => { result: unknown; status: string }): { calls: RecordedCall[]; fetchFn: ExplorerFetch } {
 	const calls: RecordedCall[] = []
 	const fetchFn: ExplorerFetch = async (requestUrl, init) => {
-		const parameters = init?.body === undefined ? new URLSearchParams(requestUrl.split('?')[1] ?? '') : new URLSearchParams(init.body)
-		const call: RecordedCall = { parameters, type: init?.method === 'POST' ? 'POST' : 'GET' }
+		const queryParameters = new URL(requestUrl).searchParams
+		const bodyParameters = new URLSearchParams(init?.body)
+		const parameters = new URLSearchParams([...queryParameters, ...bodyParameters])
+		const call: RecordedCall = { bodyParameters, parameters, queryParameters, type: init?.method === 'POST' ? 'POST' : 'GET' }
 		calls.push(call)
 		const action = parameters.get('action') ?? ''
 		const body = respond(action, call)
@@ -176,6 +178,48 @@ const alreadyVerifiedResponse = () => ({ ok: true, status: 200, json: async () =
 const rateLimitedResponse = (headers?: Headers) => (headers === undefined ? { ok: false, status: 429, json: async () => ({}) } : { ok: false, status: 429, headers, json: async () => ({}) })
 
 const runSourcify = (fetchFn: ExplorerFetch) => verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+
+for (const chainId of [1, 11_155_111]) {
+	test(`Etherscan V2 routes verification requests for chain ${chainId} through URL query parameters`, async () => {
+		const target = getExplorerTargets(chainId, { ETHERSCAN_API_KEY: 'test-key' }).find(candidate => candidate.name === 'Etherscan')
+		if (target === undefined) throw new Error('Missing Etherscan target')
+		const { calls, fetchFn } = createExplorerFetchStub((action, call) => {
+			if (call.queryParameters.get('chainid') !== chainId.toString()) return { result: 'Missing or unsupported chainid parameter (required for v2 api)', status: '0' }
+			if (action === 'getsourcecode') return { result: [{ SourceCode: '' }], status: '1' }
+			if (action === 'verifysourcecode') return { result: 'test-guid', status: '1' }
+			return { result: 'Pass - Verified', status: '1' }
+		})
+		expect((await runExplorer(fetchFn, { target })).outcomes).toEqual([{ detail: 'Pass - Verified', id: 'zoltar', status: 'verified' }])
+		expect(calls).toHaveLength(3)
+		for (const call of calls) {
+			expect(call.queryParameters.get('chainid')).toBe(chainId.toString())
+			expect(call.queryParameters.get('apikey')).toBe('test-key')
+			expect(call.queryParameters.get('module')).toBe('contract')
+			expect(call.queryParameters.get('action')).toBe(call.parameters.get('action'))
+		}
+		const submission = calls.find(call => call.type === 'POST')
+		expect(submission?.bodyParameters.get('sourceCode')).toBe(testInputs.main.inputJson)
+		expect(submission?.queryParameters.has('sourceCode')).toBe(false)
+	})
+}
+
+test('Blockscout verification preserves the standard JSON form payload', async () => {
+	const target = getExplorerTargets(11_155_111, {}).find(candidate => candidate.name === 'Blockscout')
+	if (target === undefined) throw new Error('Missing Blockscout target')
+	const { calls, fetchFn } = createExplorerFetchStub(action => {
+		if (action === 'getsourcecode') return { result: [{ SourceCode: '' }], status: '1' }
+		return { result: action === 'verifysourcecode' ? 'test-guid' : 'Pass - Verified', status: '1' }
+	})
+	const { outcomes } = await runExplorer(fetchFn, { target })
+	expect(outcomes[0]?.status).toBe('verified')
+	const submission = calls.find(call => call.type === 'POST')
+	expect(submission?.queryParameters.get('action')).toBe('verifysourcecode')
+	expect(submission?.bodyParameters.get('sourceCode')).toBe(testInputs.main.inputJson)
+	expect(submission?.bodyParameters.get('contractaddress')).toBe(testJob.address)
+	expect(submission?.bodyParameters.get('constructorArguements')).toBe(testJob.constructorArguments)
+	expect(submission?.parameters.has('apikey')).toBe(false)
+	expect(submission?.parameters.has('chainid')).toBe(false)
+})
 
 test('verification submits standard JSON and polls until the explorer reports a pass', async () => {
 	let pollCount = 0
@@ -252,7 +296,7 @@ for (const limitedAction of ['getsourcecode', 'verifysourcecode', 'checkverifyst
 			return { result: 'Pass - Verified', status: '1' }
 		})
 		const fetchFn: ExplorerFetch = async (requestUrl, init) => {
-			const action = new URLSearchParams(init?.body ?? requestUrl.split('?')[1]).get('action') ?? ''
+			const action = new URLSearchParams([...new URL(requestUrl).searchParams, ...new URLSearchParams(init?.body)]).get('action') ?? ''
 			const attempt = (attempts.get(action) ?? 0) + 1
 			attempts.set(action, attempt)
 			if (action === limitedAction && attempt === 1)

@@ -251,6 +251,7 @@ export function useReportingOperations(
 	const loadReportingContributionPreflight = async (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean, displayedDetails: ReportingDetails | undefined) => {
 		const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 		const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
+		if (reportAmount <= 0n) throw new Error('Invalid report amount.')
 		const displayedFunding = displayedDetails === undefined ? undefined : getReportingContributionFunding(displayedDetails, currentForm.contributionFunding)
 		const displayedReportAmount = displayedDetails === undefined ? undefined : previewReportingContribution(displayedDetails, selectedOutcome, reportAmount).actualDepositAmount
 		const displayedWalletDepositAmount = getReportingWalletDepositAmount(displayedDetails, displayedReportAmount)

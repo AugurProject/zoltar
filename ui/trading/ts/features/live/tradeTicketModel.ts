@@ -210,12 +210,12 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	let balanceReason: string | undefined
 	if (inputs.balanceState === 'loading') balanceReason = availabilityCopy.balancesLoadingReason
 	else if (inputs.balanceState === 'error') balanceReason = availabilityCopy.balancesUnavailableReason
-	const availability: ActionAvailability = createActionAvailability(
+	const actionAvailability = createActionAvailability(
 		inputs.networkMismatchReason,
 		inputs.marketClosed ? ticketCopy.tradingEndedReason : undefined,
 		submissionWindowBlocker(market, mode, inputs.nowSeconds),
 		balanceReason,
-		parsed.value === undefined || parsed.value === 0n ? (parsed.error ?? availabilityCopy.amountRequiredReason) : undefined,
+		parsed.error,
 		inputs.amountSettling ? ticketCopy.updatingEstimate : undefined,
 		problem,
 		insufficient,
@@ -225,6 +225,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,
 	)
+	const availability: ActionAvailability = { ...actionAvailability, disabled: actionAvailability.disabled || parsed.value === undefined || parsed.value <= 0n }
 	let primaryStep: 'connect' | 'switch-network' | 'submit' = 'submit'
 	if (inputs.networkMismatchReason !== undefined) primaryStep = 'switch-network'
 	else if (!inputs.walletConnected) primaryStep = 'connect'

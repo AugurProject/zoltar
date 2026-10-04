@@ -461,7 +461,7 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onWalletSummaryChange={observeWallet} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes', 'wallet balances shown as collateral value')
+		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes (3 ETH if the question resolves Yes)', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
 		expect(document.body.textContent).not.toContain('Open a market by security pool address')
 		expect(document.body.textContent).toContain('3 Invalid')
@@ -482,7 +482,7 @@ describe('live market refresh', () => {
 			return document.body.textContent?.includes('Yes 75.0%') === true && balanceLoads > balanceLoadsBeforeBackgroundRefresh
 		}, 'background market refresh')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeBackgroundRefresh)
-		expect([...observedBalanceLabels]).toEqual(['3 Yes'])
+		expect([...observedBalanceLabels]).toEqual(['3 Yes (3 ETH if the question resolves Yes)'])
 		expect(walletSummaries.length).toBeGreaterThan(0)
 		expect(walletSummaries.every(summary => summary.ethAttoEth === 5n * 10n ** 18n)).toBeTrue()
 		expect(document.querySelector('[aria-busy="true"]')).toBeNull()
@@ -539,7 +539,7 @@ describe('live market refresh', () => {
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
 		yesBalance = 4n * 10n ** 18n
-		await waitForDom(() => walletHolding('Wallet Yes') === '4 Yes', 'refreshed balance after failure')
+		await waitForDom(() => walletHolding('Wallet Yes') === '4 Yes (4 ETH if the question resolves Yes)', 'refreshed balance after failure')
 	})
 
 	test('lets a balance read slower than the block interval finish instead of restarting it every cycle', async () => {
@@ -569,9 +569,9 @@ describe('live market refresh', () => {
 		await settle(150)
 		expect(balanceLoads).toBe(1)
 		releaseBalances()
-		await waitForDom(() => walletHolding('Wallet Yes') === '2 Yes', 'slow balance read completes')
+		await waitForDom(() => walletHolding('Wallet Yes') === '2 Yes (2 ETH if the question resolves Yes)', 'slow balance read completes')
 		await waitForDom(() => balanceLoads > 1, 'revalidation resumes after the read completes')
-		expect(walletHolding('Wallet Yes')).toBe('2 Yes')
+		expect(walletHolding('Wallet Yes')).toBe('2 Yes (2 ETH if the question resolves Yes)')
 	})
 
 	test('portfolio ignores new blocks and refreshes only when requested', async () => {

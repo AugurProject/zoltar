@@ -47,7 +47,8 @@ describe('essential trading copy', () => {
 		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
 		for (const phrase of ['You sell', 'You receive ≈', 'Minimum received', 'Invalid used', 'Trading fee']) expect(exit.container.textContent).toContain(phrase)
-		expect(exit.container.textContent).not.toContain('if Yes wins')
+		expect(exit.container.textContent).toContain('2 Yes (1.9684 ETH if the question resolves Yes)')
+		expect(exit.container.textContent).not.toContain('0 ETH otherwise')
 	})
 
 	test('escalates price-impact warnings and asks for acknowledgment before a high-impact trade', async () => {

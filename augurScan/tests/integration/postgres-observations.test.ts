@@ -294,6 +294,9 @@ const invalidateObservationsByManifestReset = async ({ database, observationChai
 		ORDER BY occurrence.occurrence_kind
 	`
 	expect(manifestOccurrenceKinds).toEqual([{ occurrence_kind: 'address-balance' }, { occurrence_kind: 'token-metadata' }])
+	const storedCounts = await database.sql`SELECT occurrence_counts FROM chain_reorganizations
+		WHERE chain_id = ${observationChainId} AND reason = 'manifest-reset' ORDER BY id DESC LIMIT 1`
+	expect(storedCounts[0]?.occurrence_counts).toMatchObject({ 'address-balance': '1', 'token-metadata': '1' })
 	const manifestObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`), database.sql)
 	if (manifestObservationResponse === undefined) throw new Error('manifest-invalidated direct observation audit response was not returned')
 	const manifestObservations = (await manifestObservationResponse.json()) as { data: { items: Array<Record<string, unknown>>; total: number } }

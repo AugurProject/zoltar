@@ -6,7 +6,7 @@ import * as liquidationCopy from '../../ui/statoblastShared/ts/copy/liquidation.
 import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, zeroAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
@@ -354,7 +354,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			resize,
 			setInputByLabel: async (label, value) => {
 				const updated = await evaluate(
-					`(() => { const label = [...document.querySelectorAll('label')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)} || [...candidate.querySelectorAll('span')].some(span => span.textContent?.trim() === ${JSON.stringify(label)})); const input = label?.control; if (!(input instanceof HTMLInputElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set; setter?.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
+					`(() => { const label = [...document.querySelectorAll('label')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)} || [...candidate.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() === ${JSON.stringify(label)} || [...candidate.querySelectorAll('span')].some(span => span.textContent?.trim() === ${JSON.stringify(label)})); const input = label?.control; if (!(input instanceof HTMLInputElement)) return false; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set; setter?.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`,
 				)
 				if (updated !== true) throw new Error(`Unable to update browser input ${label}`)
 			},
@@ -559,37 +559,40 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 	})
 }
 
+// Stop after approvals so recovery tests can fail the deposit transaction itself.
+async function prepareVaultDeposit(driver: ProductionBrowserDriver, amount: string) {
+	await driver.waitForBodyText('Vault operations')
+	await driver.setInputByLabel('Deposit REP (optional)', amount)
+	await driver.waitForButtonEnabled('Review vault operations')
+	await driver.clickButton('Review vault operations')
+	for (let attempt = 0; attempt < 600; attempt += 1) {
+		const ready = await driver.evaluate(
+			`(() => { const actions = document.querySelector('.transaction-step-actions'); const buttons = [...(actions?.querySelectorAll('button') ?? [])]; if (buttons.some(button => button.textContent?.trim() === 'Submit vault operations' && !button.disabled)) return true; const approval = buttons.find(button => button.textContent?.trim().startsWith('Approve ') && !button.disabled); if (approval instanceof HTMLButtonElement) approval.click(); return false })()`,
+		)
+		if (ready === true) return
+		await Bun.sleep(50)
+	}
+	throw new Error(`Vault deposit approval did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
+}
+
 productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&simScenario=security-pool', { height: 844, width: 390 }, async driver => {
 	const { completeTransactionReview, openSeededPool } = createWorkflowActions(driver)
 	await openSeededPool()
 	await driver.waitForBodyWithoutText('Loading vault details…')
-	await driver.waitForButtonEnabled('Deposit REP')
-	await driver.clickButton('Deposit REP')
-	await driver.waitForBodyText('REP backing')
-	await driver.setInputByLabel('REP backing', '1')
-	let depositReady = false
-	for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
-		const readiness = await driver.evaluate(
-			`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
-		)
-		depositReady = readiness === true
-		if (!depositReady) await Bun.sleep(50)
-	}
-	expect(depositReady).toBe(true)
+	await prepareVaultDeposit(driver, '1')
 	const failureInjected = await driver.evaluate(
 		`(() => { const workers = window.__zoltarProductionWorkers; const worker = Array.isArray(workers) ? workers.at(-1) : undefined; if (!(worker instanceof Worker)) return false; const original = worker.postMessage.bind(worker); Object.defineProperty(worker, 'postMessage', { configurable: true, value: (...args) => { const message = args[0]; if (message?.type === 'rpc' && message?.method === 'eth_sendTransaction') { Object.defineProperty(worker, 'postMessage', { configurable: true, value: original }); throw new Error('Injected production workflow failure') } return original(...args) } }); return true })()`,
 	)
 	expect(failureInjected).toBe(true)
-	await driver.clickButton('Deposit REP', 1)
-	await completeTransactionReview()
+	await driver.clickButton('Submit vault operations')
 	const failedBody = await driver.waitForBodyText('Injected production workflow failure')
-	expect(failedBody).toContain('FAILED')
-	expect(failedBody).toContain('Deposit REP')
-	await driver.clickButton('Dismiss')
-	await driver.waitForButtonEnabled('Deposit REP', 1)
-	await driver.clickButton('Deposit REP', 1)
-	await completeTransactionReview('Deposit REP')
-	const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+	expect(failedBody).toContain('Transaction failed.')
+	expect(failedBody).toContain('Submit vault operations')
+	await driver.clickButton('Close')
+	await driver.waitForButtonEnabled('Review vault operations')
+	await driver.clickButton('Review vault operations')
+	await completeTransactionReview(undefined, 'REP deposit confirmed')
+	const poolBody = await driver.waitForBodyText('REP deposit confirmed')
 	expect(poolBody).toContain('All pools')
 	await driver.clickButton('Dismiss')
 })
@@ -599,22 +602,9 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
 	await driver.waitForBodyWithoutText('Loading vault details…')
-	await driver.waitForButtonEnabled('Deposit REP')
-	await driver.clickButton('Deposit REP')
-	await driver.waitForBodyText('REP backing')
-	await driver.setInputByLabel('REP backing', '2000000')
-	let reportingDepositReady = false
-	for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
-		const readiness = await driver.evaluate(
-			`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
-		)
-		reportingDepositReady = readiness === true
-		if (!reportingDepositReady) await Bun.sleep(50)
-	}
-	expect(reportingDepositReady).toBe(true)
-	await driver.clickButton('Deposit REP', 1)
-	await completeTransactionReview('Deposit REP')
-	await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+	await prepareVaultDeposit(driver, '2000000')
+	await driver.clickButton('Submit vault operations')
+	await driver.waitForBodyText('REP deposit confirmed')
 	await driver.clickButton('Dismiss')
 	await driver.clickButton('+1 year')
 	await selectPoolTool('Price oracle')
@@ -794,15 +784,13 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
 	if (captureVaultLockedQaScreenshots) {
 		await driver.clickButton('Vaults')
-		await driver.waitForBodyText('New vault REP backing is unavailable after this question ends.')
+		await driver.waitForBodyText('Vault operations')
 		await driver.waitForBodyWithoutText('Loading vault details…')
-		await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
+		await driver.evaluate(`document.querySelector('.vault-operations-form input')?.scrollIntoView({ block: 'center' })`)
 		if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)
 		if (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '') {
 			await driver.resize({ height: 844, width: 390 })
-			await driver.evaluate(
-				`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const reasonId = button?.getAttribute('aria-describedby'); if (reasonId === null || reasonId === undefined) return; document.getElementById(reasonId)?.scrollIntoView({ block: 'center' }) })()`,
-			)
+			await driver.evaluate(`document.querySelector('.vault-operations-form input')?.closest('.field')?.scrollIntoView({ block: 'center' })`)
 			await driver.captureScreenshot(vaultLockedMobileScreenshotPath)
 			await driver.resize({ height: 900, width: 1440 })
 		}
@@ -886,10 +874,6 @@ function parseDisplayedAttoAmount(value: unknown, unit: string) {
 	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
 }
 
-async function readTechnicalTransactionRow(driver: ProductionBrowserDriver, label: 'Contract' | 'Function') {
-	return await driver.evaluate(`[...document.querySelectorAll('.global-transaction-dialog .global-transaction-notice-row')].find(row => row.querySelector('dt')?.textContent?.trim() === ${JSON.stringify(label)})?.querySelector('dd')?.textContent?.trim()`)
-}
-
 async function readButtonDisabledReason(driver: ProductionBrowserDriver, label: string) {
 	return await driver.evaluate(
 		`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement)) return undefined; const ids = button.getAttribute('aria-describedby')?.split(' ') ?? []; return JSON.stringify({ disabled: button.disabled, reason: ids.map(id => document.getElementById(id)?.textContent?.trim() ?? '').join(' ') }) })()`,
@@ -897,14 +881,24 @@ async function readButtonDisabledReason(driver: ProductionBrowserDriver, label: 
 }
 
 productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&simScenario=ended-pool-commitment', { height: 900, width: 1440 }, async driver => {
-	const { openSeededPool } = createWorkflowActions(driver)
-	const readWalletRepAttoRep = async () => {
+	const { completeTransactionReview, openSeededPool } = createWorkflowActions(driver)
+	const readWalletRepAttoRep = async (expected?: bigint) => {
 		const accountMenu = 'Account menu 0x000000…0000A1'
 		await driver.clickButton(accountMenu)
 		await driver.waitForBodyText('REP/ETH')
-		const balance = await driver.evaluate(`document.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')`)
-		await driver.clickButton(accountMenu)
-		return parseDisplayedAttoAmount(balance, 'REP')
+		let lastBalance: unknown
+		for (let attempt = 0; attempt < 600; attempt += 1) {
+			lastBalance = await driver.evaluate(`document.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')`)
+			if (typeof lastBalance === 'string' && lastBalance.endsWith(' REP')) {
+				const balance = parseDisplayedAttoAmount(lastBalance, 'REP')
+				if (expected === undefined || balance === expected) {
+					await driver.clickButton(accountMenu)
+					return balance
+				}
+			}
+			await Bun.sleep(50)
+		}
+		throw new Error(`Wallet REP balance did not finish updating: ${String(lastBalance)}; expected ${String(expected)}`)
 	}
 	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (ended pool)')
@@ -912,7 +906,14 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	await driver.waitForButtonEnabled('Open vaults')
 	await driver.clickButton('Open vaults')
 	await driver.waitForBodyWithoutText('Loading vault details…')
-	await driver.waitForButtonEnabled('Set commitment limit')
+	await driver.waitForBodyText('Review commitment reduction')
+	// Record actual submissions because successful inline results omit technical transaction rows.
+	const recording = await driver.evaluate(
+		`(() => { const worker = window.__zoltarProductionWorkers?.at(-1); if (!(worker instanceof Worker)) return false; const original = worker.postMessage.bind(worker); window.__zoltarExitTransactions = []; Object.defineProperty(worker, 'postMessage', { configurable: true, value: (...args) => { const message = args[0]; if (message?.type === 'rpc' && message?.method === 'eth_sendTransaction') window.__zoltarExitTransactions.push(message.params[0]); return original(...args) } }); return true })()`,
+	)
+	expect(recording).toBe(true)
+	const poolAddress = await driver.evaluate("location.hash.split('/')[2]?.split('?')[0]")
+	expect(typeof poolAddress).toBe('string')
 	const walletRepBeforeRedemption = await readWalletRepAttoRep()
 
 	// With a commitment above 0, the ended pool blocks redemption and explains the exit path.
@@ -921,28 +922,30 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	expect(blockedBody).toContain('Vault REP backing\n10\u00a0000.00 REP')
 	expect(JSON.parse(String(await readButtonDisabledReason(driver, 'Redeem REP')))).toEqual({ disabled: true, reason: 'Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.' })
 
-	// The resolved question makes the price coordinator reject staged operations, so the change goes straight to the pool.
-	await driver.clickButton('Set commitment limit')
-	await driver.waitForBodyText('The question has resolved, so this change goes straight to the pool without an oracle price.')
+	// The resolved question reduces the commitment directly, without staging oracle operations.
 	await driver.setInputByLabel('Commitment limit', '0')
-	await driver.waitForBodyText('Resulting commitment\n0 ETH')
-	await driver.clickButton('Set commitment limit', 1)
-	await driver.waitForTransactionStatus('Confirmed', 'Set commitment limit')
-	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('setUnderwritingLimit')
-	expect(await readTechnicalTransactionRow(driver, 'Contract')).toStartWith('SecurityPool0x')
-	await driver.waitForBodyText('Commitment limit changed')
+	await driver.waitForBodyText('Estimated final commitment\n0.00 ETH')
+	await driver.waitForButtonEnabled('Review commitment reduction')
+	await driver.clickButton('Review commitment reduction')
+	await driver.waitForButtonEnabled('Reduce commitment')
+	await completeTransactionReview(undefined, 'Commitment reduced')
+	expect(await driver.evaluate('window.__zoltarExitTransactions.at(-1)?.to?.toLowerCase()')).toBe(String(poolAddress).toLowerCase())
+	expect(await driver.evaluate('window.__zoltarExitTransactions.at(-1)?.data')).toBe(encodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'setUnderwritingLimit', args: [0n] }))
 	const exitedBody = await driver.waitForBodyText('Commitment limit\n0 ETH')
 	expect(exitedBody).not.toContain('Queued')
 	await driver.clickButton('Dismiss')
 
 	await driver.waitForButtonEnabled('Redeem REP')
 	await driver.clickButton('Redeem REP')
-	await driver.waitForTransactionStatus('Confirmed', 'Redeem REP')
-	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('redeemRepFromVault')
+	await completeTransactionReview(undefined, 'Vault REP redeemed')
+	await driver.waitForBodyText('Vault REP redeemed')
+	expect(await driver.evaluate('window.__zoltarExitTransactions.at(-1)?.to?.toLowerCase()')).toBe(String(poolAddress).toLowerCase())
+	expect(await driver.evaluate('window.__zoltarExitTransactions.at(-1)?.data')).toBe(encodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'redeemRepFromVault', args: [getAddress('0x00000000000000000000000000000000000000A1')] }))
 	await driver.clickButton('Dismiss')
 	const redeemedBody = await driver.waitForBodyText('No redeemable REP is available for this vault.')
 	expect(redeemedBody).not.toContain('Vault REP backing\n10\u00a0000.00 REP')
-	expect(await readWalletRepAttoRep()).toBe(walletRepBeforeRedemption + 10_000n * 10n ** 18n)
+	const expectedWalletRep = walletRepBeforeRedemption + 10_000n * 10n ** 18n
+	expect(await readWalletRepAttoRep(expectedWalletRep)).toBe(expectedWalletRep)
 })
 
 productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?simulate=1&simScenario=liquidation-distance', { height: 900, width: 1440 }, async driver => {

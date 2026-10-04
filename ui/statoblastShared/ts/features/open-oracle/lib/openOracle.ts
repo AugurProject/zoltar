@@ -26,10 +26,7 @@ type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
 export { addOpenOracleBountyBuffer }
 export type OpenOracleDisputeInputField = 'disputeNewAmount1' | 'disputeNewAmount2'
-export type OpenOracleGateMessage = {
-	kind: 'hidden-loading' | 'visible'
-	message: string
-}
+export type OpenOracleGateMessage = { kind: 'hidden-loading' | 'visible'; message: string } | { kind: 'incomplete'; message?: undefined }
 type OpenOracleReportActionAvailability = {
 	canAct: boolean
 	message: string | undefined
@@ -140,7 +137,7 @@ function isZeroOpenOracleDecimalInput(value: string) {
 		.every(digit => digit === '0')
 }
 
-function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, input, invalidMessage, negativeMessage, zeroMessage }: { allowZero?: boolean; input: string; invalidMessage: string; negativeMessage: string; zeroMessage?: string }) {
+function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, input, invalidMessage, negativeMessage, zeroMessage }: { allowZero?: boolean; input: string; invalidMessage: string; negativeMessage: string | undefined; zeroMessage?: string }) {
 	const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
 	if (normalized === '' || !OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized)) return invalidMessage
 	if (normalized.startsWith('-')) return negativeMessage
@@ -174,8 +171,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 						allowZero: false,
 						input: form.exactToken1Report,
 						invalidMessage: 'Enter a valid base token amount.',
-						negativeMessage: 'Base token amount must be greater than zero.',
-						zeroMessage: 'Base token amount must be greater than zero.',
+						negativeMessage: undefined,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'exactToken1Report', validationMessage)
 					if (validationMessage !== undefined) return undefined
@@ -190,8 +186,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 						allowZero: false,
 						input: form.initialToken2Amount,
 						invalidMessage: 'Enter a valid quote token amount.',
-						negativeMessage: 'Quote token amount must be greater than zero.',
-						zeroMessage: 'Quote token amount must be greater than zero.',
+						negativeMessage: undefined,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'initialToken2Amount', validationMessage)
 					if (validationMessage !== undefined) return undefined
@@ -270,7 +265,11 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 		}
 	}
 
-	const firstInvalidField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => fieldErrors[field] !== undefined)
+	const positiveAmountInvalid = (input: string) => {
+		const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
+		return normalized !== '' && OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized) && (normalized.startsWith('-') || isZeroOpenOracleDecimalInput(normalized))
+	}
+	const firstInvalidField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => fieldErrors[field] !== undefined || (field === 'exactToken1Report' && positiveAmountInvalid(form.exactToken1Report)) || (field === 'initialToken2Amount' && positiveAmountInvalid(form.initialToken2Amount)))
 	return {
 		fieldErrors,
 		firstInvalidField,
@@ -279,9 +278,6 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	}
 }
 
-export function getOpenOracleCreateValidationMessage(parameters: { form: OpenOracleCreateFormState; token1Decimals?: number | undefined; token2Decimals?: number | undefined }) {
-	return getOpenOracleCreateValidation(parameters).message
-}
 function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
 	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('OpenOracle report is missing its initial report.')
 	if (report.isDistributed) return 'Settled'
@@ -455,8 +451,8 @@ function parseOpenOracleFeePercentageInput(value: string, label: string) {
 	return bigintToSafeNumber(parsed, label)
 }
 export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals: number; token2Decimals: number }) {
-	const validationMessage = getOpenOracleCreateValidationMessage({ form, token1Decimals, token2Decimals })
-	if (validationMessage !== undefined) throw new Error(validationMessage)
+	const validation = getOpenOracleCreateValidation({ form, token1Decimals, token2Decimals })
+	if (!validation.isValid) throw new Error(validation.message ?? 'Invalid oracle report parameters.')
 	return {
 		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, 'Dispute delay'), 'Dispute delay'),
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),

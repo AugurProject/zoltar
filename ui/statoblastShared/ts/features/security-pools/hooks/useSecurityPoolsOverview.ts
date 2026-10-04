@@ -353,6 +353,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					const receiverVault = parseAddressInput(submittedLiquidation.receiverVault, liquidationCopy.receiverVault)
 					const approvalId = parseBytes32Input(submittedLiquidation.approvalId, 'Liquidation approval ID')
 					const amount = parseEthAmountInput(submittedLiquidation.amount, liquidationCopy.requestedLiquidationDebt)
+					if (amount <= 0n) throw new Error(liquidationCopy.liquidationAmountRequired)
 					const fundingEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
 					const fundingPreviewKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, fundingEnvironmentRefreshKey, proposedRepPerEthPrice)
 					const ensureFundingContextIsCurrent = () => {

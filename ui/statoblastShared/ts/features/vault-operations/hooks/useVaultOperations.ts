@@ -146,7 +146,7 @@ export function useVaultOperations(pool: ListedSecurityPool, parameters: WriteOp
 							session.presentedTerminal = true
 							onPoolChanged()
 							if (state.status === 'executed') parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: copy.success, tone: 'success', universeId: pool.universeId })
-							else parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: copy.failure, detail: getPoolExecutionFailureSentence(state.execution?.errorMessage), tone: 'error', universeId: pool.universeId })
+							else parameters.onTransactionPresented({ showStatusDialog: false, hash: currentResult.hash, title: copy.failedTitle, detail: getPoolExecutionFailureSentence(state.execution?.errorMessage), tone: 'error', universeId: pool.universeId })
 						})(),
 					])
 					if (isCurrent()) readError.value = undefined

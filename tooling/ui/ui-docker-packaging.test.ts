@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { repositoryRoot } from '../repo/root.mts'
 import { basename, dirname, join, posix, relative, resolve } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../testing/packaging-parsers.ts'
@@ -9,8 +10,12 @@ import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.
 
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 const dockerignore = join(repositoryRoot, '.dockerignore')
-const ipfsDeployWorkflow = join(repositoryRoot, '.github', 'workflows', 'ipfs-deploy.yml')
-const versionDeployWorkflow = join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml')
+const workflowDefinitionPath = (name: string) => {
+	const pendingPath = join(repositoryRoot, 'workflow', name)
+	return existsSync(pendingPath) ? pendingPath : join(repositoryRoot, '.github', 'workflows', name)
+}
+const ipfsDeployWorkflow = workflowDefinitionPath('ipfs-deploy.yml')
+const versionDeployWorkflow = workflowDefinitionPath('version-deploy.yml')
 const publisherEntrypoint = join(repositoryRoot, 'tooling', 'ui', 'docker-publisher-entrypoint.sh')
 const rootPackage = join(repositoryRoot, 'package.json')
 const staticServer = join(repositoryRoot, 'tooling', 'ui', 'dockerServe.mts')
@@ -212,7 +217,7 @@ describe('UI Docker packaging', () => {
 		expect(dockerSource).toContain('FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf AS publisher')
 		expect(dockerSource.indexOf('AS local-runtime-zoltar')).toBeLessThan(dockerSource.indexOf('AS publisher'))
 		expect(dockerSource).toContain('CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]')
-		expect(await readFile(publisherEntrypoint, 'utf8')).toContain('ipfs add --api "/ip4/$IPFS_IP4_ADDRESS/tcp/5001"')
+		expect(await readFile(publisherEntrypoint, 'utf8')).toContain('exec /bin/sh /publish.sh')
 		const server = await readFile(staticServer, 'utf8')
 		expect(server).toContain('http://localhost:${port}/')
 		expect(server).not.toContain('ipfs')
@@ -221,13 +226,23 @@ describe('UI Docker packaging', () => {
 	test('keeps the default release image on the final IPFS publisher target', async () => {
 		const workflows = await Promise.all([ipfsDeployWorkflow, versionDeployWorkflow].map(path => readFile(path, 'utf8')))
 		expect(workflows.every(workflow => workflow.includes('file: ui/Dockerfile'))).toBe(true)
-		expect(workflows.every(workflow => !workflow.includes('target: local-runtime'))).toBe(true)
-		expect(workflows.some(workflow => workflow.includes('cat /ipfs_hash.txt'))).toBe(true)
+		expect(workflows.every(workflow => workflow.includes('target: publisher'))).toBe(true)
+		expect(workflows.some(workflow => workflow.includes('cat /ipfs_hash_${APP}.txt'))).toBe(true)
 		const dockerSource = await readFile(dockerfile, 'utf8')
 		expect(dockerSource.lastIndexOf('AS publisher')).toBeGreaterThan(dockerSource.lastIndexOf('AS local-runtime'))
 		expect(dockerSource.lastIndexOf('ENTRYPOINT [ "/entrypoint.sh" ]')).toBeGreaterThan(dockerSource.lastIndexOf('CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]'))
 		const stages = dockerSource.split('\n').filter(line => line.startsWith('FROM '))
 		expect(stages.at(-1)).toContain(' AS publisher')
+	})
+
+	test('release hashes each app with the same CID options as local publication', async () => {
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const publisher = requireDockerStage(stages, 'publisher')
+		const hashCommand = dockerInstructions(publisher, 'RUN').find(command => command.includes('--only-hash'))
+		expect(hashCommand).toContain('for app in zoltar statoblast trading; do')
+		expect(hashCommand).toContain('ipfs add --cid-version 1 --pin=true --quieter --only-hash --recursive "/export/$app"')
+		expect(hashCommand).toContain('> "/ipfs_hash_${app}.txt"')
+		expect(dockerInstructions(publisher, 'COPY')).toContain('--chmod=755 ./tooling/ui/docker-local-publisher-entrypoint.sh /publish.sh')
 	})
 
 	test('local and release publishers use the same complete export tree', async () => {

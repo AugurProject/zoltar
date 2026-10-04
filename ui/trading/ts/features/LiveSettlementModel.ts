@@ -1,10 +1,9 @@
-import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeWithValue, type ShareValueRate } from '../lib/shareValue.js'
 import type { ForkTarget } from '../protocol/forks.js'
 import { settlementUnavailability, type LiveBalances, type LiveMarket, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as availabilityCopy from '../copy/availability.js'
 
 type SettlementLifecycle = Pick<LiveMarket, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>
 
@@ -31,7 +30,7 @@ export function settlementUnavailableReason(operation: SettlementOperation, mark
 export function settlementInputBlocker(operation: SettlementOperation, unavailableReason: string | undefined, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
 	if (unavailableReason !== undefined) return unavailableReason
 	if (operation === 'redeem-complete-set') {
-		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares === 0n) return availabilityCopy.amountRequiredReason
+		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares === 0n) return settlementCopy.completeSetAmountRequired
 		if (parsedAmountAttoShares > completeSetsAttoShares) return settlementCopy.formatCompleteSetLimit(formatCollateralEth(completeSetsAttoShares, rate, 'down'))
 		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n) return settlementCopy.completeSetAmountTooSmall
 	}
@@ -53,9 +52,9 @@ export function forkMigrationBatchWarning(targets: readonly ForkTarget[]) {
 }
 
 /** The wallet's balance once it has been read; undefined while it is loading, failed, or the wallet is disconnected, so prose never quotes a state in place of an amount. */
-export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate, outcome?: ShareOutcome) {
+export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate & Partial<SettlementLifecycle>, outcome?: ShareOutcome) {
 	if (balanceState !== 'ready' || balance === undefined) return undefined
-	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeQuantity(balance, outcome)
+	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeWithValue(balance, outcome, rate)
 }
 
 /** The standalone balance line: the amount when it is known, otherwise what the user is waiting for or has to do. */

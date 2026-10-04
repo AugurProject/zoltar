@@ -88,7 +88,7 @@ test('keeps a directly opened advanced view visible and returns to the primary t
 	const page = within(document.body)
 	expect(page.getByRole('tab', { name: 'Staged operations' }).getAttribute('aria-selected')).toBe('true')
 	await act(() => fireEvent.click(page.getByRole('tab', { name: 'Vaults' })))
-	expect(page.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Vaults', 'Vault operations', 'Shares', 'Reporting'])
+	expect(page.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
 	// Secondary tools stay out of the layout until the More tools popover opens.
 	expect(page.queryByRole('button', { name: 'Price oracle' })).toBeNull()
 	const moreTools = page.getByRole('button', { name: 'More tools' })

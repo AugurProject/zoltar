@@ -4,7 +4,7 @@ import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, ha
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getOpenOracleDisputeSwapTokenKey } from './openOracleMath.js'
-import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
+import { getOpenOracleCreateParameterValidation } from './openOracleValidation.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -314,7 +314,7 @@ export async function createOpenOracleReportInstance(
 	assertSafeInteger(parameters.multiplier, 'Multiplier')
 	assertSafeInteger(parameters.protocolFee, 'Protocol fee')
 	assertSafeInteger(parameters.settlementTime, 'Settlement delay')
-	const validationMessage = getOpenOracleCreateParameterValidationMessage({
+	const parameterValidation = getOpenOracleCreateParameterValidation({
 		disputeDelay: BigInt(parameters.disputeDelay),
 		escalationHalt: parameters.escalationHalt,
 		exactToken1Report: parameters.exactToken1Report,
@@ -328,7 +328,7 @@ export async function createOpenOracleReportInstance(
 		token1Address: parameters.token1Address,
 		token2Address: parameters.token2Address,
 	})
-	if (validationMessage !== undefined) throw new Error(validationMessage)
+	if (parameterValidation !== undefined) throw new Error(parameterValidation.message ?? 'Invalid oracle report parameters.')
 	let wethFundingAmountAttoEth = 0n
 	if (sameAddress(parameters.token1Address, getWethAddress())) wethFundingAmountAttoEth = parameters.exactToken1Report
 	else if (sameAddress(parameters.token2Address, getWethAddress())) wethFundingAmountAttoEth = parameters.initialToken2Amount

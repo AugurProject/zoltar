@@ -27,7 +27,7 @@ type OpenOracleCreateValidationParameters = {
 
 type OpenOracleCreateParameterValidation = {
 	field: keyof OpenOracleCreateValidationParameters
-	message: string
+	message: string | undefined
 }
 
 export function getOpenOracleCreateParameterValidation(
@@ -37,9 +37,9 @@ export function getOpenOracleCreateParameterValidation(
 	if (sameAddress(token1Address, token2Address)) return { field: 'token2Address', message: 'Base and quote tokens must use different addresses.' }
 	if (sameAddress(token1Address, zeroAddress)) return { field: 'token1Address', message: 'Direct OpenOracle reports currently require two ERC-20 token addresses.' }
 	if (sameAddress(token2Address, zeroAddress)) return { field: 'token2Address', message: 'Direct OpenOracle reports currently require two ERC-20 token addresses.' }
-	if (exactToken1Report <= 0n) return { field: 'exactToken1Report', message: 'Base token amount must be greater than zero.' }
+	if (exactToken1Report <= 0n) return { field: 'exactToken1Report', message: undefined }
 	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return { field: 'exactToken1Report', message: 'Base token amount exceeds the contract maximum.' }
-	if (initialToken2Amount <= 0n) return { field: 'initialToken2Amount', message: 'Quote token amount must be greater than zero.' }
+	if (initialToken2Amount <= 0n) return { field: 'initialToken2Amount', message: undefined }
 	if (initialToken2Amount > OPEN_ORACLE_UINT128_MAX) return { field: 'initialToken2Amount', message: 'Quote token amount exceeds the contract maximum.' }
 	if (escalationHalt < 0n) return { field: 'escalationHalt', message: 'Escalation halt must be non-negative.' }
 	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return { field: 'escalationHalt', message: 'Escalation halt exceeds the contract maximum.' }
@@ -61,8 +61,4 @@ export function getOpenOracleCreateParameterValidation(
 	if (protocolFee > OPEN_ORACLE_UINT24_MAX) return { field: 'protocolFee', message: 'Protocol fee exceeds the contract maximum.' }
 	if (feePercentage + protocolFee > OPEN_ORACLE_PERCENTAGE_PRECISION) return { field: 'protocolFee', message: 'Dispute fee plus protocol fee must not exceed 100%.' }
 	return undefined
-}
-
-export function getOpenOracleCreateParameterValidationMessage(parameters: OpenOracleCreateValidationParameters, options: { skipToken1MagnitudeValidation?: boolean } = {}) {
-	return getOpenOracleCreateParameterValidation(parameters, options)?.message
 }

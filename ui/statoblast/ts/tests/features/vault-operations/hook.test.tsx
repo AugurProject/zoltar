@@ -12,6 +12,7 @@ import { useVaultOperations } from '@zoltar/ui-statoblast-shared/features/vault-
 import type { VaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/vault-operations/hooks/dependencies.js'
 import type { VaultOperationsResult } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
+import * as vaultOperationsCopy from '@zoltar/ui-statoblast-shared/copy/vaultOperations.js'
 import { createSelectedPool, createSecurityVaultDetails, createSecurityPoolVaultSummary, createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 const unit = 10n ** 18n
@@ -235,6 +236,21 @@ describe('vault operations lifecycle', () => {
 		})
 		refreshed.resolve(owned)
 		await waitFor(() => expect(current.state().owned).toEqual(owned))
+	})
+
+	test.each([
+		['a translated pool reason', 'Target safe', liquidationCopy.targetNotLiquidatableError],
+		['no detail when the pool gave no reason', undefined, undefined],
+	] as const)('presents a failed queued result with a title and %s', async (_scenario, errorMessage, detail) => {
+		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 0n, queuedOperation: { operation: 'vaultOperations', operationId: 2n, isPendingSlot: true } }
+		const loadStatus = mock(async () => ({ status: 'failed' as const, execution: { operation: 'vaultOperations' as const, operationId: 2n, success: false, errorMessage } }))
+		const current = await mount(dependencies({ submit: async () => queued, loadStatus }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '5' }))
+		await waitFor(() => expect(current.state().quote).toBeDefined())
+		await act(async () => await current.state().submit())
+		await waitFor(() => expect(current.state().status?.status).toBe('failed'))
+		expect(current.presented).toHaveBeenLastCalledWith(expect.objectContaining({ title: vaultOperationsCopy.failedTitle, detail, tone: 'error' }))
 	})
 
 	test('does not replay or poll terminal queued results after remount, and can dismiss them', async () => {

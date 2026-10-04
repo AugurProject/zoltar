@@ -304,12 +304,13 @@ export function LiquidationModal({
 	let disabledReasonElementId = !walletGuard.blocked && delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
 	if (!walletGuard.blocked && initialPriceError !== undefined && initialPrice.price !== '') disabledReasonElementId = `${initialPriceFieldId}-error`
 	const liquidationActionReason = getOracleOperationTimingReason(currentPoolOracleManagerDetails, currentTimestamp, hasUsableOraclePrice) ?? initialPriceError ?? liquidationBlocker?.reason
+	const hasPositiveLiquidationAmount = simulatedLiquidationAmount !== undefined && simulatedLiquidationAmount > 0n
 	const liquidationButtonDisabledReason = walletGuard.reason ?? liquidationLifecycleBlocker ?? liquidationActionReason
 	const liquidationKey = `${priceContextKey}:${liquidationDebtEthAmount}:${liquidationReceiverVault}:${liquidationApprovalId}:${liquidationTimeoutMinutes}:${proposedRepPerEthPrice}`
 	const sendLiquidation = () => (liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? undefined : onQueueLiquidation(liquidationManagerAddress, liquidationSecurityPoolAddress, proposedRepPerEthPrice))
 	const preparedLiquidation = usePreparedOracleOperation({
 		key: liquidationKey,
-		enabled: showLiquidationModal && liquidationExecutionMode === 'queue' && liquidationEnabled && canUseLiquidationAction && liquidationButtonDisabledReason === undefined,
+		enabled: showLiquidationModal && hasPositiveLiquidationAmount && liquidationExecutionMode === 'queue' && liquidationEnabled && canUseLiquidationAction && liquidationButtonDisabledReason === undefined,
 		busy: securityPoolOverviewActiveAction !== undefined,
 		onPrepare: sendLiquidation,
 		onCompleted: securityPoolOverviewResult?.stagedExecution?.success !== false ? closeLiquidationModal : undefined,
@@ -454,6 +455,7 @@ export function LiquidationModal({
 				directExecution={liquidationExecutionMode === 'execute'}
 				busy={securityPoolOverviewActiveAction !== undefined}
 				pending={securityPoolOverviewActiveAction === 'queueLiquidation'}
+				disabled={!hasPositiveLiquidationAmount}
 				reason={liquidationButtonDisabledReason}
 				onExecute={sendLiquidation}
 				onCancel={closeLiquidationModal}

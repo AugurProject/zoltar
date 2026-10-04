@@ -106,8 +106,9 @@ export const bindLiveLifecycle = (context: ScannerContext, network: NetworkContr
 
 	setInterval(() => {
 		if (document.hidden) return
+		const integrityRoute = /^\/operations\/integrity\/?$/u.test(location.pathname)
 		// Block notifications already refresh the route while the stream is delivering them; the poll then only keeps network status current.
-		if (shouldPollRouteRefresh(eventStreamState(liveState.stream) === 'open', liveState.lastStreamRefreshAt, Date.now(), routePollIntervalMs)) void refreshRouteAlongsideNetworkStatus(network.loadNetworks, () => context.links.requestRouteRefresh(1))
+		if (integrityRoute || shouldPollRouteRefresh(eventStreamState(liveState.stream) === 'open', liveState.lastStreamRefreshAt, Date.now(), routePollIntervalMs)) void refreshRouteAlongsideNetworkStatus(network.loadNetworks, () => context.links.requestRouteRefresh(1, integrityRoute))
 		else void network.loadNetworks()
 	}, routePollIntervalMs)
 

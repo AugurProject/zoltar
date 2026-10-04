@@ -252,8 +252,9 @@ export function ReportingSection({
 	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage
 	// The wallet blocks reporting when it is on another network, or when no earlier reason precedes the wallet-first report guard.
 	const reportWalletBlocker = !isOnActiveAppChain || pickFirstReason(vaultFundingLoadingReason, fullReportingLoadingReason, reportActionGuardMessage, reportControlsLockedReason) === undefined ? walletBlocker : undefined
+	const hasPositiveReportAmount = selectedAmount !== undefined && selectedAmount > 0n
 	const reportActionAvailability = withWalletBlocker(
-		{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason },
+		{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || !hasPositiveReportAmount || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason },
 		reportWalletBlocker,
 	)
 	const withdrawGuardMessage =
@@ -520,7 +521,7 @@ export function ReportingSection({
 											showDisabledReason={reportingRepApprovalRequired}
 											pending={reportingActiveAction === 'approveReportingRep'}
 											availability={{
-												disabled: !reportingRepApprovalRequired || !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined,
+												disabled: !reportingRepApprovalRequired || !isOnActiveAppChain || !reportOutcomeEnabled || !hasPositiveReportAmount || reportingApprovalGuardMessage !== undefined,
 												reason: !isOnActiveAppChain ? getWrongNetworkReason() : (reportingApprovalGuardMessage ?? (!reportingRepApprovalRequired ? commonCopy.approvalSatisfied : undefined)),
 											}}
 											// While the wallet blocks both actions, the report action's reason holds the row's one wallet fix.

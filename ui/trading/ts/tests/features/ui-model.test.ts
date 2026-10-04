@@ -423,7 +423,7 @@ describe('standalone trading UI model', () => {
 
 	test('explains every settlement input that keeps simulation disabled', () => {
 		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
-		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter an amount greater than zero.')
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a complete-set value greater than zero.')
 		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
 		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any ETH.')
 		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child universe')
@@ -499,11 +499,11 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceStatus('disconnected', undefined, unit)).toBe('Connect a wallet to see your balance.')
 		expect(settlementBalanceStatus('loading', 0n, unit)).toBe('Balance: Loading…')
 		expect(settlementBalanceStatus('error', 0n, unit)).toBe('Balance: Unavailable')
-		expect(settlementBalanceStatus('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('Balance: 5 Yes')
+		expect(settlementBalanceStatus('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('Balance: 5 Yes (5 ETH if the question resolves Yes)')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes (5 ETH if the question resolves Yes)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No (5 ETH if the question resolves No)')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid (5 ETH if the question resolves Invalid)')
 	})
 
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {

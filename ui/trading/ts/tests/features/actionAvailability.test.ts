@@ -49,7 +49,6 @@ describe('liquidity action availability', () => {
 		expect(resolveLiquidityAvailability(blocked).reason).toBe(copy.connectWalletReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, networkMismatchReason: 'Switch to Local.' }).reason).toBe('Switch to Local.')
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'loading' })).toEqual({ disabled: true, loading: true, reason: copy.balancesLoadingReason })
-		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready' }).reason).toBe(copy.amountRequiredReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth }).reason).toBe(copy.initializePriceInvalidReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth, initializePriceValid: true }).reason).toBe(copy.transactionInProgressReason)
 		expect(resolveLiquidityAvailability({ ...blocked, walletConnected: true, balanceState: 'ready', requestedAmount: eth, initializePriceValid: true, workflowLocked: false }).reason).toBe('Amount is too small.')

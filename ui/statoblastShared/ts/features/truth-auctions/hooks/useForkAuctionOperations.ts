@@ -366,6 +366,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					if (bidGuardMessage !== undefined) throw new Error(bidGuardMessage)
 					const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(submittedBidPriceInput)
 					if (bidPriceValidationMessage !== undefined) throw new Error(bidPriceValidationMessage)
+					if (parseTruthAuctionAmountInput(submittedBidAmountInput, 'Bid amount') <= 0n) throw new Error('Invalid bid amount.')
 					const truthAuctionAddress = requireDefined(details.truthAuctionAddress, 'Truth auction not available')
 					const bidPrice = parseTruthAuctionPriceInput(submittedBidPriceInput, 'Bid price')
 					const bidTick = getTruthAuctionTickAtPrice(bidPrice)

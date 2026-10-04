@@ -370,7 +370,7 @@ export function getDeterministicLiquidationFailureReason({
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 }) {
 	if (requestedDebtAttoEth === undefined) return 'Enter a valid commitment to transfer.'
-	if (requestedDebtAttoEth <= 0n) return 'Enter a commitment to transfer greater than zero.'
+	if (requestedDebtAttoEth <= 0n) return undefined
 	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 	const targetUnderwritingLimitAttoEth = getVaultUnderwritingLimitAttoEth(targetVaultSummary)
 	if (targetUnderwritingLimitAttoEth === undefined) return 'Target vault commitment limit is still loading.'

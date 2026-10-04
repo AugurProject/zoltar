@@ -242,11 +242,11 @@ export function getTradingMintGuardMessage({
 	}
 
 	const trimmedAmount = mintAmountInput.trim()
-	if (trimmedAmount === '') return 'Enter a mint amount greater than zero.'
+	if (trimmedAmount === '') return undefined
 	const mintAmount = tryParseTradingAmountInput(trimmedAmount)
 	if (mintAmount === undefined) return 'Enter a valid mint amount.'
 
-	if (mintAmount <= 0n) return 'Enter a mint amount greater than zero.'
+	if (mintAmount <= 0n) return undefined
 	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
 	if (ethBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
@@ -283,11 +283,11 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 	const trimmedAmount = redeemAmountInput.trim()
-	if (trimmedAmount === '') return 'Enter a redeem amount greater than zero.'
+	if (trimmedAmount === '') return undefined
 	const redeemAmount = tryParseTradingAmountInput(trimmedAmount)
 	if (redeemAmount === undefined) return 'Enter a valid redeem amount.'
 
-	if (redeemAmount <= 0n) return 'Enter a redeem amount greater than zero.'
+	if (redeemAmount <= 0n) return undefined
 	const redeemAmountAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmount, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (redeemAmountAttoShares === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
 	if (redeemAmountAttoShares > maxRedeemableCompleteSetsAttoShares) {

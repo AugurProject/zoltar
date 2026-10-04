@@ -27,9 +27,9 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { getPoolExecutionFailureSentence } from '../../security-pools/lib/liquidation.js'
 import { useId } from 'preact/hooks'
 
-type Props = { pool: ListedSecurityPool; parameters: WriteOperationsParameters; contextKey: string; networkReady: boolean; onViewStagedOperations: (operationId: bigint) => void; onPoolChanged?: (totalCommitment?: bigint) => void; dependencies?: VaultOperationsDependencies }
+type Props = { pool: ListedSecurityPool; parameters: WriteOperationsParameters; contextKey: string; networkReady: boolean; embedded?: boolean; onViewStagedOperations: (operationId: bigint) => void; onPoolChanged?: (totalCommitment?: bigint) => void; dependencies?: VaultOperationsDependencies }
 
-export function VaultOperationsPanel({ pool, parameters, contextKey, networkReady, onViewStagedOperations, onPoolChanged, dependencies }: Props) {
+export function VaultOperationsPanel({ pool, parameters, contextKey, networkReady, embedded = false, onViewStagedOperations, onPoolChanged, dependencies }: Props) {
 	const model = useVaultOperations(pool, parameters, contextKey, dependencies, onPoolChanged)
 	const initialPriceId = useId()
 	const fieldsDisabled = model.busy
@@ -82,9 +82,9 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 		<div className='vault-operations-flow'>
 			<p className='detail'>{model.resolved ? copy.resolvedDescription : copy.description}</p>
 			<MetricGrid>
-				<MetricField label={liquidationCopy.receiverVault}>{parameters.accountAddress === undefined ? commonCopy.metricUnavailablePlaceholder : <AddressValue address={parameters.accountAddress} />}</MetricField>
-				<MetricField label={copy.currentBacking}>{model.owned === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.owned.vaultAttoRepBacking} notation='compact' suffix={commonCopy.rep} />}</MetricField>
-				<MetricField label={securityPoolCopy.currentCommitment}>{model.owned === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.owned.underwritingLimitAttoEth} notation='compact' suffix={commonCopy.eth} />}</MetricField>
+				{!embedded ? <MetricField label={liquidationCopy.receiverVault}>{parameters.accountAddress === undefined ? commonCopy.metricUnavailablePlaceholder : <AddressValue address={parameters.accountAddress} />}</MetricField> : undefined}
+				{!embedded ? <MetricField label={copy.currentBacking}>{model.owned === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.owned.vaultAttoRepBacking} notation='compact' suffix={commonCopy.rep} />}</MetricField> : undefined}
+				{!embedded ? <MetricField label={securityPoolCopy.currentCommitment}>{model.owned === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.owned.underwritingLimitAttoEth} notation='compact' suffix={commonCopy.eth} />}</MetricField> : undefined}
 				<MetricField label={copy.walletBalance}>{model.balance === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.balance} notation='compact' suffix={commonCopy.rep} />}</MetricField>
 			</MetricGrid>
 			{model.loading ? <UserMessage loading detail={copy.loading} /> : undefined}
@@ -101,7 +101,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 			)}
 
 			<div className='vault-operations-layout'>
-				<SectionBlock variant='surface' className='vault-operations-form'>
+				<SectionBlock title={copy.title} variant={embedded ? 'embedded' : 'surface'} className='vault-operations-form'>
 					<WorkflowSubsection title={copy.myVault}>
 						<div className='vault-operations-fields'>
 							<AmountField
@@ -252,7 +252,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 						)}
 					</WorkflowSubsection>
 				</SectionBlock>
-				<SectionBlock title={copy.preview} variant='surface' className='vault-operations-preview'>
+				<SectionBlock title={copy.preview} variant={embedded ? 'embedded' : 'surface'} className='vault-operations-preview'>
 					<dl className='vault-operations-summary'>
 						<div>
 							<dt>{copy.previewDeposit}</dt>

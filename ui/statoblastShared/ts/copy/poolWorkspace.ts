@@ -59,7 +59,6 @@ export const actionButtonLabels = {
 	'price-oracle': securityPoolCopy.openPriceOracle,
 	reporting: 'Open reporting',
 	'staged-operations': 'Open staged operations',
-	'vault-operations': 'Open vault operations',
 	trading: 'Open shares',
 	vaults: 'Open vaults',
 } as const

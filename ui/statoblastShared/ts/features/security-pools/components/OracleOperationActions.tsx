@@ -16,6 +16,7 @@ export function OracleOperationActions({
 	pendingLabel,
 	requiresReportFunding,
 	directExecution = false,
+	disabled = false,
 	busy,
 	pending,
 	reason,
@@ -31,6 +32,7 @@ export function OracleOperationActions({
 	pendingLabel: string
 	requiresReportFunding: boolean
 	directExecution?: boolean
+	disabled?: boolean
 	busy: boolean
 	pending: boolean
 	reason: string | undefined
@@ -54,7 +56,7 @@ export function OracleOperationActions({
 					onClose={onCancel}
 					contextKey={operationKey}
 					retainedWorkflow={prepared.retainedWorkflow}
-					retryAction={prepared.retainedWorkflow?.steps.some(step => step.phase === 'failed') !== true ? undefined : { onClick: prepared.retry, availability: { disabled: busy || reason !== undefined, reason } }}
+					retryAction={prepared.retainedWorkflow?.steps.some(step => step.phase === 'failed') !== true ? undefined : { onClick: prepared.retry, availability: { disabled: disabled || busy || reason !== undefined, reason } }}
 				/>
 			) : (
 				<div className='transaction-step-actions transaction-approval-editor'>
@@ -70,9 +72,9 @@ export function OracleOperationActions({
 									showDisabledReason={showDisabledReason}
 									disabledReasonElementId={disabledReasonElementId}
 									onClick={() => {
-										if (directExecution && !busy && reason === undefined) void onExecute()
+										if (directExecution && !disabled && !busy && reason === undefined) void onExecute()
 									}}
-									availability={withWalletBlocker({ disabled: !directExecution || busy || reason !== undefined, reason: reason ?? (!directExecution ? transactionCopy.prerequisitesRequired : undefined) }, walletBlocker)}
+									availability={withWalletBlocker({ disabled: disabled || !directExecution || busy || reason !== undefined, reason: reason ?? (!directExecution ? transactionCopy.prerequisitesRequired : undefined) }, walletBlocker)}
 								/>
 								{onCancel === undefined ? undefined : (
 									<div className='actions transaction-step-close'>
@@ -82,7 +84,7 @@ export function OracleOperationActions({
 									</div>
 								)}
 							</div>
-							{prepared.retryAvailable ? <TransactionActionButton idleLabel={commonCopy.retry} pendingLabel={commonCopy.retrying} onClick={prepared.retry} availability={{ disabled: busy || reason !== undefined, reason }} tone='secondary' /> : undefined}
+							{prepared.retryAvailable ? <TransactionActionButton idleLabel={commonCopy.retry} pendingLabel={commonCopy.retrying} onClick={prepared.retry} availability={{ disabled: disabled || busy || reason !== undefined, reason }} tone='secondary' /> : undefined}
 						</div>
 					</div>
 				</div>

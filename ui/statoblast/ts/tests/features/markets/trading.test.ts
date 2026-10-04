@@ -331,22 +331,6 @@ void describe('trading helpers', () => {
 				currentTimestamp: 100n,
 				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 0n,
-				ethBalanceAttoEth: 10n ** 18n,
-				hasSelectedPool: true,
-				isOnActiveAppChain: true,
-				mintAmountInput: '0',
-				shareTokenSupplyAttoShares: 0n,
-				totalPoolHeldAttoRep: 0n,
-				mintingCapacityAttoEth: 10n ** 18n,
-			}),
-		).toBe('Enter a mint amount greater than zero.')
-
-		expect(
-			getTradingMintGuardMessage({
-				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
-				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 8n * 10n ** 17n,
 				ethBalanceAttoEth: 10n ** 18n,
 				hasSelectedPool: true,
@@ -412,19 +396,6 @@ void describe('trading helpers', () => {
 	})
 
 	void test('limits complete-set redemption to the wallet minimum across yes, no, and invalid', () => {
-		expect(
-			getTradingRedeemCompleteSetGuardMessage({
-				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
-				hasSelectedPool: true,
-				isOnActiveAppChain: true,
-				loadingTradingDetails: false,
-				redeemAmountInput: '0',
-				shareBalances,
-				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
-			}),
-		).toBe('Enter a redeem amount greater than zero.')
-
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',

@@ -291,7 +291,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			'integrity',
 			() => [
 				operationsPanel('Call trace coverage', [operationRow('Selected transaction traces', `${String(coverage['traced_transactions'] ?? 'Unavailable')} traced / ${String(coverage['selected_transactions'] ?? 'Unavailable')} selected transactions`, undefined, undefined)], '', {
-					label: 'Nested calls without logs require provider tracing. These counts do not measure unobserved activity.',
+					label: 'Event-first indexing excludes failed and eventless calls. Optional traces enrich selected transactions; counts include retained evidence.',
 				}),
 				operationsPanel(
 					'Recent reverted transactions',

@@ -1,6 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import * as vaultOperationsCopy from '../../../copy/vaultOperations.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { deriveHasForkActivity, getForkAuctionStageView, type ForkAuctionStageView } from '../../truth-auctions/lib/forkAuction.js'
@@ -12,17 +11,15 @@ import type { ListedSecurityPool, OracleManagerDetails, ReportingDetails, TruthA
 
 const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const
 export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]
-export type SelectedPoolView = 'vaults' | 'vault-operations' | 'trading' | 'reporting' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
+export type SelectedPoolView = 'vaults' | 'trading' | 'reporting' | 'fork-workflow' | 'staged-operations' | 'price-oracle'
 
-const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'vault-operations', 'trading', 'reporting']
+const SELECTED_POOL_PRIMARY_VIEWS: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting']
 const SELECTED_POOL_SECONDARY_VIEWS: readonly SelectedPoolView[] = ['staged-operations', 'price-oracle', 'fork-workflow']
 const SELECTED_POOL_VIEWS: readonly SelectedPoolView[] = [...SELECTED_POOL_PRIMARY_VIEWS, ...SELECTED_POOL_SECONDARY_VIEWS]
 const LEGACY_SELECTED_POOL_VIEWS = ['resolution', 'withdraw-escalation-deposits', 'oracle', 'fork-migration', 'fork-auction', 'fork-settlement'] as const
 
 export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 	switch (view) {
-		case 'vault-operations':
-			return vaultOperationsCopy.title
 		case 'vaults':
 			return 'Vaults'
 		case 'trading':

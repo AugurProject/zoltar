@@ -87,10 +87,7 @@ describe('deriveMigrationWizard', () => {
 		expect(wizard.steps[3]?.status).toBe('ready')
 	})
 
-	test.each([
-		{ amountInput: 'abc', reason: 'Enter a valid REP amount.' },
-		{ amountInput: '0', reason: 'Enter an amount greater than zero.' },
-	])('rejects amount $amountInput', ({ amountInput, reason }) => {
+	test.each([{ amountInput: 'abc', reason: 'Enter a valid REP amount.' }])('rejects amount $amountInput', ({ amountInput, reason }) => {
 		const wizard = deriveMigrationWizard(input({ amountInput, selectedOutcomeIndexes: [1n] }))
 		expect(wizard.steps[1]).toEqual({ id: 'amount', reason, status: 'incomplete' })
 		expect(wizard.amountAttoRep).toBeUndefined()

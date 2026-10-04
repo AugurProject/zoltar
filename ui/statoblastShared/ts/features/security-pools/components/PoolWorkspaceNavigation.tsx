@@ -10,7 +10,7 @@ import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGua
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 
-const primaryViews: readonly SelectedPoolView[] = ['vaults', 'vault-operations', 'trading', 'reporting']
+const primaryViews: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting']
 const moreViews: readonly SelectedPoolView[] = ['price-oracle', 'staged-operations', 'fork-workflow']
 
 /** Splits the pool tabs: Fork & Migration joins the main tabs once the pool has fork activity or is in a fork stage. */

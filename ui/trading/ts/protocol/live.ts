@@ -50,7 +50,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
-	if (current === undefined || projected === undefined) throw new Error('Pool fee accounting unavailable')
+	if (current === undefined || projected === undefined) throw new Error('Security pool fee accounting unavailable')
 	return {
 		questionData,
 		zoltar,
