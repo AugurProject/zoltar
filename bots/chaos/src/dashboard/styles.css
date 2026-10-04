@@ -1187,19 +1187,6 @@ tbody tr:last-child td {
 	margin: 0;
 }
 
-.selectable-operation-allowlist-label {
-	display: grid;
-	gap: 0.45rem;
-	margin-top: 1rem;
-}
-
-.selectable-operation-allowlist-label textarea {
-	min-height: 7rem;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-	font-size: 0.82rem;
-	resize: vertical;
-}
-
 .form-actions {
 	display: flex;
 	align-items: center;

@@ -21,7 +21,7 @@ export type WorkflowRecoveryFixture = {
 	failSecondStateRead: boolean
 	initialDashboardState: Record<string, unknown>
 	recoveredDashboardState: Record<string, unknown>
-	selectableOperationAllowlist: string[] | null
+	selectableOperationAllowlist: string[]
 	readonly settingsMutations: unknown[]
 	stateRequests: number
 	submissionConfigured: boolean
@@ -62,7 +62,7 @@ export function startWorkflowRecoveryDashboard(): WorkflowRecoveryServer {
 		failSecondStateRead: true,
 		initialDashboardState: firstScenario.staleState,
 		recoveredDashboardState: firstScenario.recoveredState,
-		selectableOperationAllowlist: null,
+		selectableOperationAllowlist: [],
 		settingsMutations: [],
 		stateRequests: 0,
 		submissionConfigured: true,

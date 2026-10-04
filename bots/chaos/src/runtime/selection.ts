@@ -29,9 +29,9 @@ export function urgentOperationPlans(evaluations: readonly EvaluatedOperation[])
 	})
 }
 
-export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist?: readonly string[]) {
-	const allowed = selectableOperationAllowlist === undefined ? undefined : new Set(selectableOperationAllowlist)
-	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && (allowed === undefined || allowed.has(plan.definitionId)))
+export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist: readonly string[]) {
+	const allowed = new Set(selectableOperationAllowlist)
+	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && allowed.has(plan.definitionId))
 }
 
 /** Explain an empty scheduler selection using the evaluations before live preflight mutates them. */

@@ -19,7 +19,7 @@ const strategy = {
 	maximumRepPerOperation: '10',
 	minimumEthReserve: '0.05',
 	minimumRepReserve: '10',
-	selectableOperationAllowlist: null,
+	selectableOperationAllowlist: [],
 	workflowValidForBlocks: 288,
 }
 

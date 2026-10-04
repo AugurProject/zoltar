@@ -166,7 +166,7 @@ export type Configuration = {
 	rememberSigner?: boolean | undefined
 	revision?: string | number | undefined
 	rpcQuorum?: string | number | undefined
-	selectableOperationAllowlist?: string[] | null | undefined
+	selectableOperationAllowlist?: string[] | undefined
 	wallet?: string | undefined
 	workflowValidForBlocks?: string | number | undefined
 }
@@ -205,8 +205,7 @@ function strings(value: unknown) {
 	return Array.isArray(value) ? value.flatMap(entry => (typeof entry === 'string' ? [entry] : [])) : []
 }
 
-function nullableStrings(value: unknown) {
-	if (value === null) return null
+function optionalStrings(value: unknown) {
 	return Array.isArray(value) ? strings(value) : undefined
 }
 
@@ -463,7 +462,7 @@ export function parseConfiguration(value: unknown): Configuration {
 		rememberSigner: booleanValue(source['rememberSigner']),
 		revision: scalarValue(source['revision']),
 		rpcQuorum: scalarValue(source['rpcQuorum']),
-		selectableOperationAllowlist: nullableStrings(selectableOperationAllowlist),
+		selectableOperationAllowlist: optionalStrings(selectableOperationAllowlist),
 		wallet: stringValue(source['wallet']),
 		workflowValidForBlocks: scalarValue(source['workflowValidForBlocks']),
 	}

@@ -73,7 +73,7 @@ describe('chaos operation selection', () => {
 
 	test('selects uniformly by eligible definition index and ignores blocked plans', () => {
 		const evaluations = [evaluation(plan('first', 'random')), evaluation(plan('blocked', 'random'), false), evaluation(plan('second', 'random'))]
-		expect(randomOperationPlans(evaluations).map(value => value.id)).toEqual(['first', 'second'])
+		expect(randomOperationPlans(evaluations, ['first', 'second']).map(value => value.id)).toEqual(['first', 'second'])
 	})
 
 	test('enforces the selectable-definition canary allowlist at the final random selection boundary', () => {
@@ -98,7 +98,7 @@ describe('chaos operation selection', () => {
 	test('returns no candidates when no operation has an eligible plan', () => {
 		const evaluations = [evaluation(undefined), evaluation(plan('blocked', 'random'), false)]
 		expect(urgentOperationPlans(evaluations)).toEqual([])
-		expect(randomOperationPlans(evaluations)).toEqual([])
+		expect(randomOperationPlans(evaluations, ['blocked'])).toEqual([])
 	})
 
 	test('rejects malformed urgent deadlines instead of silently misordering work', () => {

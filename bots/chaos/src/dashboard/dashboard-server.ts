@@ -23,9 +23,9 @@ function configuredRpcUrls(value: unknown) {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
 }
 
-function nullablePublicStrings(value: unknown) {
-	if (value === null || value === undefined) return null
-	return Array.isArray(value) ? publicStrings(value) : undefined
+function optionalPublicStrings(value: unknown) {
+	if (!Array.isArray(value)) return undefined
+	return publicStrings(value)
 }
 
 function publicTopologyItem(value: unknown, kind: 'auction' | 'pair' | 'pool' | 'report' | 'universe') {
@@ -550,7 +550,7 @@ export function publicChaosConfiguration(value: unknown) {
 		paused: booleanField(settings, 'paused'),
 		rememberSigner: booleanField(source, 'rememberSigner'),
 		revision: scalar(source, 'revision'),
-		selectableOperationAllowlist: nullablePublicStrings(strategy['selectableOperationAllowlist']),
+		selectableOperationAllowlist: optionalPublicStrings(strategy['selectableOperationAllowlist']),
 		wallet: stringField(source, 'wallet') ?? stringField(source, 'signerAddress'),
 		workflowValidForBlocks: scalar(strategy, 'workflowValidForBlocks'),
 	})
