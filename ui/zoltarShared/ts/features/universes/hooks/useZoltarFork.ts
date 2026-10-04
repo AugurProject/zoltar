@@ -319,6 +319,11 @@ export function useZoltarFork(
 		zoltarForkActiveAction.value = undefined
 	}, [environmentRefreshKey])
 
+	useEffect(() => {
+		zoltarForkError.value = undefined
+		zoltarForkFeedback.value = undefined
+	}, [activeUniverseId])
+
 	const approveZoltarForkRep = useCallback(
 		async (amount?: bigint) =>
 			await runZoltarForkAction(

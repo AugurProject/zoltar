@@ -60,8 +60,10 @@ export function useZoltarMigration({
 		zoltarMigrationResult.value = undefined
 		zoltarMigrationActiveAction.value = undefined
 	}, [environmentRefreshKey])
-	// Outcome indexes belong to one universe; never carry a selection over to another universe.
+	// Outcome indexes and feedback belong to one universe.
 	useEffect(() => {
+		zoltarMigrationError.value = undefined
+		zoltarMigrationFeedback.value = undefined
 		setZoltarMigrationForm(() => getDefaultZoltarMigrationFormState())
 	}, [activeUniverseId])
 

@@ -31,7 +31,7 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 }
 
 /** The operation slice the Zoltar route containers read; each test overrides the universe and view. */
-function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined, forkError: string | undefined = undefined) {
+function createOperations(universe: ZoltarUniverseSummary | undefined, universeError: string | undefined = undefined) {
 	return {
 		approveZoltarForkRep: async () => undefined,
 		createChildUniverse: async () => undefined,
@@ -59,7 +59,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined, universeE
 		zoltarChildUniversePendingOutcomeIndex: undefined,
 		zoltarForkActiveAction: undefined,
 		zoltarForkApproval: { error: undefined, loading: false, value: 0n },
-		zoltarForkError: forkError,
+		zoltarForkError: undefined,
 		zoltarForkPending: false,
 		zoltarForkQuestionId: '',
 		zoltarForkRepBalanceAttoRep: 10n,

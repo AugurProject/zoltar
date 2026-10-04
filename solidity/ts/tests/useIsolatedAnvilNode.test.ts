@@ -39,6 +39,17 @@ test('getAnvilConnectionMode remains isolated when an external gas-cost RPC is p
 	}
 })
 
+test('getAnvilConnectionMode remains isolated when ANVIL_RPC is provided', () => {
+	const originalAnvilRpc = process.env['ANVIL_RPC']
+	try {
+		process.env['ANVIL_RPC'] = 'http://127.0.0.1:8545'
+		expect(getAnvilConnectionMode()).toEqual({ type: 'spawn-isolated', rpcUrl: '', port: 0 })
+	} finally {
+		if (originalAnvilRpc === undefined) delete process.env['ANVIL_RPC']
+		else process.env['ANVIL_RPC'] = originalAnvilRpc
+	}
+})
+
 test('getGasCostsAnvilConnectionMode spawns an isolated node when GAS_COST_ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['GAS_COST_ANVIL_RPC']
 

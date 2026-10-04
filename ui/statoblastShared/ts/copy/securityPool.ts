@@ -1,3 +1,4 @@
+import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -125,7 +126,7 @@ export const reportingLockedDuringMigrationReason = 'This pool is in fork migrat
 export const parentForkMigrationRedirectDetail = 'This parent pool is forked. Continue in Fork & migration for migration and settlement.'
 export const reportingLockedDuringAuctionReason = 'This pool is in truth auction. Reporting actions unlock once the pool becomes operational.'
 export const reportingStartDetail = 'Reporting opens after the question end time.'
-export const reportingOraclePriceExpiredReason = 'The pool’s oracle price expired. Request a new price in Price oracle, then retry.'
+export const reportingOraclePriceExpiredReason = pricingCopy.poolOraclePriceExpiredError
 export const reportingOraclePriceRequiredReason = 'The pool needs an oracle price before reporting. Request one in Price oracle.'
 export const operationId = 'Operation ID'
 export const createAnotherPool = 'Create another pool'
