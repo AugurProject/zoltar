@@ -49,7 +49,7 @@ export function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMa
 export function MarketContracts({ market }: { market: LiveMarket }) {
 	return (
 		<ReadOnlyDetailAccordion title={marketsCopy.contracts}>
-			<DataGrid dense>
+			<DataGrid dense className='market-contracts-grid'>
 				<MetricField label={liveCopy.securityPoolLabel}>
 					<TradingSecurityPoolLink value={market.pool} />
 				</MetricField>

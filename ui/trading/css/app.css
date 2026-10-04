@@ -1,5 +1,14 @@
 /* Trading-only visuals. Shell, route, section, card, field, badge, tab, and button styles come from coreShared. */
 
+/* Contract verification needs columns wide enough for a full address before adding another column. */
+.market-contracts-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+}
+
+.market-contracts-grid .metric-field-value {
+	font-family: var(--font-family-mono);
+}
+
 /* Probability bar: the conditional YES / NO split of the pair. */
 .probability {
 	margin: 0;

@@ -149,7 +149,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		expect(await resetPristineStateForDeploymentProfile(state, targetProfileId, firstFactory, false, recipient, path, async () => {})).toBeTrue()
 	})
 
-	test.each(['trading.genesis-uniswap.seed-pool', 'trading.universe-uniswap.seed-pool'])('cancel, reseed, restart, and retire again uses fresh V3 balances: %s', async operationId => {
+	test.each(['trading.genesis-uniswap.seed-pool', 'trading.universe-uniswap.seed-pool', 'trading.genesis-uniswap.add-liquidity', 'trading.universe-uniswap.add-liquidity'])('cancel, reseed, restart, and retire again uses fresh V3 balances: %s', async operationId => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
 		let state = requestedState(snapshot)

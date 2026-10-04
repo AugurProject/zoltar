@@ -14,6 +14,25 @@ const pair = selection('pairs', 'Trading pair', ['metadata', 'pair'])
 const token = selection('tokens', 'Token', ['metadata', 'token'])
 const universe = selection('universes', 'Universe', ['metadata', 'universeId'])
 const schemas: Record<string, InputField[]> = {
+	'trading.uniswap.mint-range': [
+		universe,
+		{
+			key: 'range',
+			label: 'Price range',
+			kind: 'choice',
+			path: ['metadata', 'range'],
+			options: [
+				{ value: 'narrow', label: 'Narrow' },
+				{ value: 'wide', label: 'Wide' },
+				{ value: 'above', label: 'Above initial price' },
+				{ value: 'below', label: 'Below initial price' },
+			],
+		},
+	],
+	'trading.uniswap.swap-rep-for-weth': [universe],
+	'trading.uniswap.swap-weth-for-rep': [universe],
+	'trading.uniswap.remove-liquidity': [universe],
+	'trading.uniswap.collect-fees': [universe],
 	'statoblast.vault.deposit-rep': [pool, amountField(['metadata', 'amountAttoRep'], 'REP amount')],
 	'open-oracle.weth.wrap': [amountField(['value'], 'ETH amount')],
 	'open-oracle.weth.unwrap': [amountField(['args', 0], 'WETH amount')],
