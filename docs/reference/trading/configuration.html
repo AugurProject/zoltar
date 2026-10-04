@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Environment variables read by the local Trading deployment script and the manifest it writes." />
+		<meta name="description" content="Environment variables read by the local Trading deployment script, the manifest it writes, and what the client derives and stores." />
 		<title>Trading deployment configuration</title>
 		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
@@ -48,7 +48,7 @@
 						</tr>
 					</tbody>
 				</table>
-				<p>Secrets do not belong in manifests or <code>.env.example</code>.</p>
+				<p><code>TRADING_FEE_BPS</code> must be a whole number from 0 to 9999. The script stops when the RPC chain ID differs from the core manifest's, when the manifest's <code>SecurityPoolFactory</code> has no code on that chain, or when the RPC exposes no account. Manifests must not contain secrets.</p>
 			</section>
 			<section id="manifest">
 				<h2>Deployment manifest</h2>
@@ -68,10 +68,13 @@
 				<h2>What the client derives</h2>
 				<p>The standalone client reads no environment variables. At startup it uses:</p>
 				<ul>
-					<li><strong>Networks:</strong> the build writes <code>core-deployments.json</code> from the mainnet and Sepolia deployment manifests in <code>docs/</code>, with each network's default public RPC URL. The client defaults to the first supported network.</li>
+					<li><strong>Networks:</strong> the build writes <code>core-deployments.json</code> from the mainnet and Sepolia deployment manifests in <code>docs/</code>, with each network's default public RPC URL. Mainnet is listed but disabled in the UI build, and the default network is Sepolia.</li>
 					<li><strong>RPC override:</strong> <strong>Settings</strong> beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC URL.</li>
+					<li><strong>URL parameters:</strong> <code>network</code> (<code>sepolia</code>) pins the network instead of following the wallet, <code>rpcUrl</code> overrides the saved RPC URL, <code>universe</code> selects the universe shown, and <code>simulate=1</code> with an optional <code>simScenario</code> selects the <a href="../../how-to/trading-configure-ui.html#modes">simulator</a>.</li>
 					<li><strong>Trading contracts:</strong> the factory and router addresses are computed with the fixed 30 basis-point fee through the core deployment's canonical CREATE2 proxy, and each address is checked for code. If either contract is missing, the connected wallet can deploy it.</li>
-					<li><strong>Markets:</strong> pools are discovered from the canonical <code>SecurityPoolFactory</code> in bounded pages; no market address is hard-coded. Mint capacity follows <a href="../invariants.html#bal-03">BAL-03</a>.</li>
+					<li><strong>Markets:</strong> the market and SecurityPool lists show favorites saved in the browser. Opening an address reads that SecurityPool and checks it against the canonical <code>SecurityPoolFactory</code>, Zoltar, and ShareToken; no market address is hard-coded. Mint capacity follows <a href="../invariants.html#bal-03">BAL-03</a>.</li>
+					<li><strong>Trade settings:</strong> slippage tolerance (1 to 500 basis points, default 50) and transaction validity (1 to 1,440 minutes, default 20) are kept in browser local storage under <code>zoltar.trading.tradeSettings</code>.</li>
+					<li><strong>Price impact:</strong> the trade ticket cautions above 2%, requires an explicit confirmation above 5%, and refuses the trade above 15%.</li>
 				</ul>
 				<p>Quote and simulation behavior is described in the <a href="./sdk.html#transaction-helpers">Trading SDK</a>.</p>
 			</section>

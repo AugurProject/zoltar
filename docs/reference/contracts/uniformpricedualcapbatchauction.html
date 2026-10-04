@@ -19,6 +19,7 @@
 				<p>Auction summary getters are <code>maxAttoRepBeingSold</code>, <code>attoEthRaiseCap</code>, <code>finalized</code>, <code>clearingTick</code>, <code>ethFilledAtClearingAttoEth</code>, <code>attoEthRaised</code>, <code>totalAttoRepPurchased</code>, <code>auctionStarted</code>, <code>minBidSizeAttoEth</code>, <code>owner</code>, <code>underfunded</code>, <code>underfundedThreshold</code>, <code>underfundedWinningAttoEth</code>, and <code>activeTickCount</code>. <code>pendingEthRefundsAttoEth</code> reports ETH credited during settlement and available for the bidder to pull. Use <code>computeClearing</code>, <code>previewFinalization</code>, <code>tickToPrice</code>, <code>getTickSummary</code>, <code>getTickCount</code>, <code>getTickPage</code>, <code>getActiveTickPage</code>, <code>getBidCountAtTick</code>, <code>getBidPageAtTick</code>, <code>getBidderBidCount</code>, and <code>getBidderBidPage</code> before finalizing or submitting settlement indexes.</p>
 
 				<h2 id="interactions">State-changing interactions</h2>
+				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns.</p>
 				<!-- Validated read ABI fingerprint: e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc -->
 				<!-- Validated complete compiled ABI fingerprint: 9292800021cde5c8c9dd6f96beb32a33a034949cd1d8d0d68671c3f900b27d2b -->
 				<table>
@@ -33,7 +34,7 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>startAuction(attoEthRaiseCap, maxAttoRepBeingSold)</code></td>
+							<td><code>startAuction(attoEthRaiseCap, maxAttoRepBeingSold)</code><wbr /></td>
 							<td>Auction owner (<code>SecurityPoolForker</code>) only</td>
 							<td>Auction not previously started; both caps are positive; the REP cap does not exceed 11 million REP; the ETH cap fits in <code>uint128</code>; the block timestamp fits in <code>uint48</code>.</td>
 							<td>Starts the one-week auction and fixes its two caps and minimum bid.</td>
@@ -54,11 +55,11 @@
 							<td><code>BidSettled</code> per refunded bid; one aggregate <code>EthRefundCredited</code> per call when total credited ETH is positive</td>
 						</tr>
 						<tr>
-							<td><code>refundLosingBidsFor(bidder, tickIndices)</code></td>
+							<td><code>refundLosingBidsFor(bidder, tickIndices)</code><wbr /></td>
 							<td>Auction owner (<code>SecurityPoolForker</code>) only; public callers use <code>settleAuctionBids</code></td>
-							<td>Named bidder is nonzero; auction started and unfinalized; auction has reached a clearing price. Nonempty indexes additionally belong to that bidder and are strictly losing and unrefunded.</td>
-							<td>A nonempty list marks a named bidder's bids already provably below the current clearing tick and credits their ETH to <code>pendingEthRefundsAttoEth</code> without calling the bidder. An empty list changes no bids.</td>
-							<td><code>BidSettled</code> per refunded bid; one aggregate <code>EthRefundCredited</code> per call when total credited ETH is positive</td>
+							<td><code>bidder</code> is nonzero; the <code>refundLosingBids</code> prerequisites, with the indexes belonging to <code>bidder</code>.</td>
+							<td>Performs the <code>refundLosingBids</code> refund for the bids of <code>bidder</code> instead of the caller.</td>
+							<td>The <code>refundLosingBids</code> signals</td>
 						</tr>
 						<tr>
 							<td><code>finalize()</code></td>
@@ -68,10 +69,10 @@
 							<td><code>AuctionFinalized</code></td>
 						</tr>
 						<tr>
-							<td><code>withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal, repBackingUnitsTotal)</code></td>
-							<td>Auction owner only</td>
+							<td><code>withdrawBids(withdrawFor, tickIndices, proRataTotal, secondaryProRataTotal, repBackingUnitsTotal)</code><wbr /></td>
+							<td>Auction owner (<code>SecurityPoolForker</code>) only; public callers use <code>claimAuctionProceeds</code> or <code>settleAuctionBids</code></td>
 							<td>Auction finalized; caller is owner. Nonempty indexes belong to <code>withdrawFor</code> and remain unsettled.</td>
-							<td>Returns five <code>uint256</code> values in ABI order: <code>totalFilledAttoRep</code> (filled REP), <code>totalRefundAttoEth</code> (ETH refund), <code>totalProRataAllocation</code> (capacity), <code>totalSecondaryProRataAllocation</code> (bad debt), and <code>totalRepBackingUnitsAllocation</code> (REP backing units). The forker credits backing and capacity to the bidder vault and credits bad debt only while the recorded auction debt generation is current; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Capacity and debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust <code>repBackingUnitsTotal</code> without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.</td>
+							<td>Returns five <code>uint256</code> values in ABI order: <code>totalFilledAttoRep</code> (filled REP), <code>totalRefundAttoEth</code> (ETH refund), <code>totalProRataAllocation</code> (underwriting commitment), <code>totalSecondaryProRataAllocation</code> (bad debt), and <code>totalRepBackingUnitsAllocation</code> (REP backing units). The forker credits backing and underwriting commitment to the bidder vault and credits bad debt only while the recorded auction debt generation is current; the auction credits refunds to the beneficiary pull-payment balance without calling recipient code. Underwriting commitment and bad debt use fixed cumulative ETH positions. Backing units use the corresponding cumulative filled-REP positions to exhaust <code>repBackingUnitsTotal</code> without claim-order dependence. An empty list returns five zeros without changing bids or emitting events.</td>
 							<td><code>BidSettled</code> per processed bid; one <code>EthRefundCredited</code> for the call when aggregate <code>totalRefundAttoEth</code> is positive</td>
 						</tr>
 						<tr>

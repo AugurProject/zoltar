@@ -37,8 +37,8 @@
 					<h2>Global questions and fork eligibility</h2>
 					<a class="anchor-link" href="#questions" aria-label="Link to Global questions and fork eligibility">#</a>
 				</div>
-				<p>Questions are global Zoltar objects. An eligible ended question can be supplied when forking an eligible universe. Zoltar checks that the question exists and has ended and that the universe satisfies its fork conditions. Applications such as Statoblast can enforce stricter relationships between a question and the universe it forks.</p>
-				<p>A question defines the possible child keys. Categorical questions use Invalid plus their configured outcome indices. Scalar questions use Invalid or a well-formed packed scalar answer.</p>
+				<p>Questions are global Zoltar objects and are not bound to a universe. Any account can fork a universe by naming a question when three conditions hold: the universe has not forked before, so each universe forks at most once; the question exists and its end time has passed; and the caller supplies the full fork threshold in that universe's REP. Zoltar does not check that the question concerns the universe, so applications such as Statoblast enforce any stricter relationship they need.</p>
+				<p>The fork question decides which child universes can exist: one for each of its valid answers. A categorical question allows Invalid and each of its labels. A scalar question allows Invalid or a well-formed packed scalar answer. Zoltar sets no migration deadline; REP holders can add to their migration balance at any time after the fork.</p>
 			</section>
 
 			<section class="paper-section" id="guarantees">
@@ -51,7 +51,7 @@
 					<li>Only valid outcomes for the fork question can create child universes or receive child REP.</li>
 					<li>Each account cannot mint more REP into one child than its recorded migration balance permits.</li>
 					<li>Child REP is controlled by Zoltar and remains tied to its universe identity.</li>
-					<li><a href="../reference/glossary.html#fork-threshold">Fork threshold</a> and <a href="../reference/glossary.html#fork-haircut">fork haircut</a> accounting reduce the parent's <a href="../reference/glossary.html#theoretical-rep-supply">theoretical REP supply</a>, the per-universe supply figure from which fork thresholds are derived, according to the configured integer rules.</li>
+					<li>Every child starts with the parent's pre-fork <a href="../reference/glossary.html#theoretical-rep-supply">theoretical REP supply</a>, the per-universe supply figure from which <a href="../reference/glossary.html#fork-threshold">fork thresholds</a> are derived, less exactly the <a href="../reference/glossary.html#fork-haircut">fork haircut</a>.</li>
 				</ul>
 			</section>
 
@@ -75,10 +75,10 @@
 					<a class="anchor-link" href="#accounting" aria-label="Link to Deterministic identities and migration accounting">#</a>
 				</div>
 				<p>A child universe ID is derived from its parent universe ID and selected outcome. Child REP uses a predictable deployment address derived from the Zoltar address and universe ID. Adding parent REP to a migration balance burns or transfers it from the parent ledger. That balance can then materialize the same branch-specific amount in multiple valid children, with per-child accounting preventing replay beyond the source amount.</p>
-				<p>Starting a fork removes the fork threshold from parent supply. The threshold is the live universe theoretical REP supply divided by the configured divisor, rounded up, so every universe with nonzero supply has a positive fork cost. The fork haircut, a configured fraction of the threshold, is not credited to migration; the remainder becomes the initiator's migration balance.</p>
+				<p>Starting a fork removes the fork threshold from parent supply. The threshold is the live universe theoretical REP supply divided by the threshold divisor, rounded up, so every universe with nonzero supply has a positive fork cost. The fork haircut, the threshold divided by the burn divisor and rounded down, is not credited to migration; the remainder becomes the initiator's migration balance. Both divisors are fixed when Zoltar is deployed. The configured defaults are a threshold divisor of 20 and a burn divisor of 5: the threshold is 5% of supply and the haircut is 20% of the threshold, about 1% of supply. Zoltar rejects a burn divisor below 5, so the haircut never exceeds 20% of the threshold.</p>
 				<figure class="diagram" id="fig-zoltar-threshold-deposit">
-					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="348" role="img" aria-label="Fork threshold deposit divides into migration credit and the fork haircut"><span class="plot-chart-fallback">The full fork threshold leaves parent supply. Most becomes migration credit and the fork haircut is not credited.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Fork deposit.</span> With the default burn divisor, about 80% becomes migration credit and about 20% is the fork haircut, subject to integer rounding.</p>
+					<div class="plot-chart" data-plot-chart="fig-zoltar-threshold-deposit" data-plot-width="860" data-plot-height="348" role="img" aria-label="Fork threshold deposit divides into the migration balance and the fork haircut"><span class="plot-chart-fallback">The full fork threshold leaves parent supply. Most becomes the initiator's migration balance and the fork haircut is not credited.</span></div>
+					<p class="diagram-caption"><span class="figure-label">Fork deposit.</span> The default split, subject to integer rounding.</p>
 				</figure>
 				<div class="equation" id="eq-zoltar-fork-threshold">
 					<math display="block" aria-label="fork threshold equals the ceiling of live theoretical REP supply divided by the fork threshold divisor" data-source="forkThresholdAttoRep = ⌈liveTheoreticalRepSupplyAttoRep / forkThresholdDivisor⌉"><mtext>fork threshold = ⌈live theoretical REP supply ÷ threshold divisor⌉</mtext></math>
@@ -97,7 +97,7 @@
 					<h2>Question and outcome encodings</h2>
 					<a class="anchor-link" href="#encodings" aria-label="Link to Question and outcome encodings">#</a>
 				</div>
-				<p>Question IDs hash the stored question data and, for categorical questions, the ordered labels. A categorical outcome must be Invalid or an in-range label index. Scalar questions store a range and tick count; a valid packed answer allocates all ticks between its two payout fields. The all-zero word is canonical Invalid, while reserved-bit or payout-sum violations are malformed and rejected.</p>
+				<p>Question IDs hash the stored question data together with the outcome labels, which a categorical question must supply in strictly descending order of their hashes. A categorical answer is 0 for Invalid or a number from 1 to n that selects one of the n labels in that order. Scalar questions store a range and tick count; a valid packed answer allocates all ticks between its two payout fields. The all-zero word is canonical Invalid, while reserved-bit or payout-sum violations are malformed and rejected.</p>
 				<figure class="diagram" id="fig-zoltar-packed-scalar-answer">
 					<div class="plot-chart" data-plot-chart="fig-zoltar-packed-scalar-answer" data-plot-width="920" data-plot-height="640" role="img" aria-label="A packed scalar answer contains a namespace bit and two payout numerators"><span class="plot-chart-fallback">A scalar answer contains reserved bits, a namespace bit, and first and second payout numerators. Valid payout fields sum to the question's tick count.</span></div>
 					<div class="legend" aria-label="Scalar encoding diagram legend">

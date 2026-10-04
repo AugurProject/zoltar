@@ -3,21 +3,22 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Leaf encoding, peak bagging, proof shape, nullifier tree, and bounds of Statoblast's Merkle Mountain Range carry proofs." />
 		<title>Merkle Mountain Range carry proofs</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
-		<main>
+		<main id="main-content">
 			<header>
 				<h1>Merkle Mountain Range carry proofs</h1>
 				<p>Statoblast uses a <a href="https://docs.grin.mw/wiki/chain-state/merkle-mountain-range/">Merkle Mountain Range (MMR)</a> only for inherited escalation carry: the unresolved deposits a parent <a href="./glossary.html#escalation-game">Escalation Game</a> exports when its <a href="./glossary.html#universe">universe</a> forks. Each <a href="./glossary.html#child-universe">child universe</a>'s continuation game, the child Escalation Game that resumes the dispute during <a href="./glossary.html#fork-continuation">fork continuation</a>, verifies withdrawals against those compact snapshots without replaying the full parent history on-chain.</p>
-				<p>The hashing primitives live in <code>MerkleMountainRange.sol</code>. Snapshot storage, proof structs, peak bounds, and replay protection live in <code>EscalationGameTypes.sol</code>, <code>EscalationGameCarry.sol</code>, and <code>EscalationGameProofVerifier.sol</code>.</p>
+				<p>The hashing primitives live in <code>MerkleMountainRange.sol</code>. Snapshot storage, proof structs, peak bounds, and replay protection live in <code>EscalationGameTypes.sol</code>, <code>EscalationGameCarry.sol</code>, and <code>EscalationGameProofVerifier.sol</code>. Local carry appends live in <code>EscalationGameDepositDelegate.sol</code>.</p>
 			</header>
 
 			<section id="leaf-shape">
-				<h2>Leaf shape and hash order</h2>
-				<p>Each leaf hashes one unresolved deposit with <code>depositor</code>, <code>outcome</code>, <code>amount</code>, <code>parentDepositIndex</code>, <code>cumulativeAmount</code>, and <code>sourceNodeId</code>. Leaf hashes use <code>keccak256(abi.encode(...))</code>. Parent hashes use <code>keccak256(abi.encodePacked(left, right))</code>.</p>
+				<h2>Leaf fields</h2>
+				<p>Each leaf commits to one unresolved deposit. The <a href="#encoding">encoding</a> fixes the field order and hashing.</p>
 				<table>
 					<thead>
 						<tr>
@@ -35,15 +36,15 @@
 							<td>Separates Invalid, Yes, and No carry domains.</td>
 						</tr>
 						<tr>
-							<td><code>amount</code></td>
+							<td><code>amountAttoRep</code></td>
 							<td>Commits to the source principal.</td>
 						</tr>
 						<tr>
 							<td><code>parentDepositIndex</code></td>
-							<td>Provides the stable identity later consumed by nullifiers. A nullifier is a per-continuation record that a carried deposit has been claimed, so the same proof cannot be replayed.</td>
+							<td>Provides the stable identity that selects the deposit's leaf in the <a href="#nullifier-tree">nullifier tree</a>, the per-continuation record of claimed carried deposits that prevents a proof from being replayed.</td>
 						</tr>
 						<tr>
-							<td><code>cumulativeAmount</code></td>
+							<td><code>cumulativeAmountAttoRep</code></td>
 							<td>Preserves payout-order prefix data.</td>
 						</tr>
 						<tr>
@@ -52,18 +53,35 @@
 						</tr>
 					</tbody>
 				</table>
-				<p>Hash order matters. Internal nodes always hash <code>left</code> before <code>right</code>, so proofs are position-sensitive inside each peak.</p>
 			</section>
 
 			<section id="encoding">
 				<h2>Normative encoding</h2>
-				<p>The leaf application binary interface (ABI) types are <code>(address,uint8,uint256,uint256,uint256,uint256)</code>, in the order <code>depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId</code>. <code>outcome</code> is the Solidity enumeration ordinal. Leaf hashing uses standard ABI word padding through <code>abi.encode</code>; parent hashing uses the 64 raw bytes from <code>abi.encodePacked(left, right)</code>. There is no additional domain separator.</p>
+				<p>The leaf ABI types are <code>(address,uint8,uint256,uint256,uint256,uint256)</code>, in the order <code>depositor, outcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId</code>. <code>outcome</code> is the Solidity enumeration ordinal (<code>0</code> Invalid, <code>1</code> Yes, <code>2</code> No). Leaf hashing uses standard ABI word padding through <code>abi.encode</code>; parent hashing uses the 64 raw bytes from <code>abi.encodePacked(left, right)</code>, so the order of <code>left</code> and <code>right</code> is significant. There is no additional domain separator.</p>
 				<pre class="code-scroll" tabindex="0"><code>leafHash = keccak256(abi.encode(depositor, outcome, amountAttoRep,
     parentDepositIndex, cumulativeAmountAttoRep, sourceNodeId))
-parentHash = keccak256(abi.encodePacked(left, right))
-root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
-				<p>Proof verification rejects <code>leafIndex &gt;= leafCount</code>, a <code>merkleMountainRangePeakIndex</code> that is not the height of the peak containing <code>leafIndex</code>, a sibling array whose length is not <code>peakHeight + peakCount - 1</code>, a nullifier path whose length is not <code>64</code>, a root mismatch, or an already-consumed nullifier.</p>
-				<h3>Two-leaf conformance vector</h3>
+parentHash(left, right) = keccak256(abi.encodePacked(left, right))
+
+// peaks[0..peakCount-1] are the occupied peaks in ascending height order
+bagPeaks(peaks, peakCount):
+    if peakCount == 0: return bytes32(0)
+    root = peaks[peakCount - 1]
+    for i = peakCount - 1 down to 1:
+        root = parentHash(peaks[i - 1], root)
+    return root</code></pre>
+				<p>The fold starts at the highest occupied peak and places each lower peak as the left operand. With occupied heights <code>0</code>, <code>2</code>, and <code>3</code>, the root is <code>parentHash(peak0, parentHash(peak2, peak3))</code>. A single peak is the root itself, and an empty range has root <code>bytes32(0)</code>.</p>
+				<p>Proof verification rejects each of the following with the quoted revert string:</p>
+				<ul>
+					<li>an outcome whose snapshot has no leaves: <code>Carry peak absent</code>;</li>
+					<li>a zero <code>amountAttoRep</code>: <code>Proof amount zero</code>;</li>
+					<li><code>leafIndex &gt;= leafCount</code>: <code>Bad carry leaf</code>;</li>
+					<li>a <code>merkleMountainRangePeakIndex</code> that is not the height of the peak containing <code>leafIndex</code>: <code>Bad carry peak</code>;</li>
+					<li>a sibling array whose length is not <code>peakHeight + peakCount - 1</code>: <code>Bad MMR proof length</code>;</li>
+					<li>a reconstructed root that differs from the bagged snapshot peaks: <code>Bad carry proof</code>;</li>
+					<li>a nullifier path whose length is not <code>64</code>: <code>Bad nullifier length</code>;</li>
+					<li>a nullifier path that does not reproduce the current nullifier root from an empty leaf, which includes an already-consumed nullifier: <code>Bad nullifier proof</code>.</li>
+				</ul>
+				<h3>Conformance vectors</h3>
 				<table>
 					<thead>
 						<tr>
@@ -89,8 +107,24 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 							<td><code>0xe0ca39e8852dc96783e8b8f0859cfbf155338f9144ba4b9fdd6af847299fc867</code></td>
 						</tr>
 						<tr>
-							<td>Peak 1 / root</td>
+							<td>Two-leaf root</td>
 							<td><code>0x1c9c7f3c2c8bebf92ce393deb5dccdd253f2b10084af72defb5dcd4486832b27</code></td>
+						</tr>
+						<tr>
+							<td>Leaf 2 ABI values</td>
+							<td><code>0x0000000000000000000000000000000000000003, 2, 3, 2, 3, 2</code></td>
+						</tr>
+						<tr>
+							<td>Leaf 2 hash</td>
+							<td><code>0x92b2040f7e9b4f1e1b587eda2fb255419704a6ea1693789658adfddbf98389ae</code></td>
+						</tr>
+						<tr>
+							<td>Three-leaf root</td>
+							<td><code>0x3488c83edd77c5259c9432e90f972d45d0ced819fd3691eddfe41fe05d676564</code></td>
+						</tr>
+						<tr>
+							<td>Empty nullifier root</td>
+							<td><code>0xe2c3ed4052eeb1d60514b4c38ece8d73a27f37fa5b36dcbf338e70de95798caa</code></td>
 						</tr>
 					</tbody>
 				</table>
@@ -99,12 +133,12 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 			<section id="peaks">
 				<h2>Peaks and the 64-peak bound</h2>
 				<p>The carry snapshot stores one peak per set bit in the leaf count. The system fixes <code>MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64</code>, and carry initialization requires each snapshot leaf count to be less than <code>2^64</code>.</p>
-				<p>That does not cap the snapshot at 64 leaves. It caps the number of peak positions. Any leaf count from <code>0</code> up to but not including <code>2^64</code> is valid because its binary decomposition fits inside 64 peak slots.</p>
+				<p>The constant caps the number of peak positions, not the number of leaves: any leaf count from <code>0</code> up to but not including <code>2^64</code> fits inside 64 peak slots.</p>
 				<figure class="diagram diagram-wide" id="fig-mmr-peaks">
 					<div class="plot-chart" data-plot-chart="fig-mmr-peaks" data-plot-width="920" data-plot-height="534" role="img" aria-label="Merkle Mountain Range peaks are determined by set bits in the leaf count"><span class="plot-chart-fallback">A leaf count of thirteen is shown as binary one one zero one, corresponding to occupied peaks at heights zero, two, and three which are later bagged into one root.</span></div>
-					<p class="diagram-caption"><span class="figure-label">MMR peaks</span>The occupied peak heights are exactly the set bits in the snapshot leaf count. Those occupied peaks are later bagged into one root.</p>
+					<p class="diagram-caption"><span class="figure-label">MMR peaks.</span> The occupied peak heights are exactly the set bits in the snapshot leaf count.</p>
 				</figure>
-				<p>To form one root, the verifier collects occupied peaks in ascending height order and then bags them from right to left with <code>bagPeaks()</code>.</p>
+				<p>To form one root, the verifier collects the occupied peaks in ascending height order and folds them with <a href="#encoding"><code>bagPeaks</code></a>.</p>
 				<div class="equation" id="eq-mmr-peak-count-bound">
 					<math display="block" aria-label="snapshot leaf count must be less than two to the sixty fourth power" data-source="snapshotLeafCount < 2^64">
 						<mrow>
@@ -113,7 +147,7 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 							<msup><mn>2</mn><mn>64</mn></msup>
 						</mrow>
 					</math>
-					<p class="equation-note">The 64-peak constant means each inherited snapshot leaf count must fit below <code>2^64</code>.</p>
+					<p class="equation-note">Carry initialization rejects a larger leaf count with <code>Leaf count high</code>.</p>
 				</div>
 				<p>Local carry appends behave like binary addition with carries: a new leaf merges upward through occupied lower peaks until it finds the first empty peak slot. If that upward carry would reach height <code>64</code>, the append reverts with <code>MMR too tall</code>.</p>
 			</section>
@@ -141,12 +175,18 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 				</table>
 				<figure class="diagram diagram-wide" id="fig-mmr-proof-anatomy">
 					<div class="plot-chart" data-plot-chart="fig-mmr-proof-anatomy" data-plot-width="940" data-plot-height="1390" role="img" aria-label="A carried-deposit proof has an MMR membership lane and a separate nullifier lane"><span class="plot-chart-fallback">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane hashes the stable parent deposit index and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Carry proof anatomy</span>The MMR sibling array first reconstructs one selected peak and then supplies every other occupied peak. The independent 64-level nullifier path prevents the same stable deposit identity from being consumed twice.</p>
+					<p class="diagram-caption"><span class="figure-label">Carry proof anatomy.</span> The MMR sibling array first reconstructs one selected peak and then supplies every other occupied peak. The independent 64-level nullifier path prevents the same stable deposit identity from being consumed twice.</p>
 				</figure>
-				<p>The index semantics are stricter than the field names might suggest. <code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the leaf's global position across the whole snapshot. The verifier derives the peak that contains that position, requires <code>merkleMountainRangePeakIndex</code> to equal its height, and orders the in-peak siblings by the in-peak offset <code>leafIndex - peakStart</code>, where <code>peakStart</code> is the <code>peakStartIndex</code> returned by <code>getCurrentCarryPeakForLeaf</code>. Claim accounting also keys inherited-versus-local provenance and settled principal by the global position. For example, if the full snapshot has <code>13</code> leaves, the height-<code>3</code> peak holds global leaves <code>0</code> through <code>7</code>, the height-<code>2</code> peak holds <code>8</code> through <code>11</code>, and the height-<code>0</code> peak holds <code>12</code>. A proof for the third leaf of the height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and <code>leafIndex = 10</code>; its in-peak offset is <code>2</code>.</p>
+				<p><code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the ordinal position of that peak among occupied peaks. <code>leafIndex</code> is the leaf's global position across the whole snapshot. The verifier derives the peak that contains that position, requires <code>merkleMountainRangePeakIndex</code> to equal its height, and orders the in-peak siblings by the in-peak offset <code>leafIndex - peakStart</code>, where <code>peakStart</code> is the <code>peakStartIndex</code> returned by <code>getCurrentCarryPeakForLeaf</code>. Claim accounting also keys inherited-versus-local provenance and settled principal by the global position. For example, if the full snapshot has <code>13</code> leaves, the height-<code>3</code> peak holds global leaves <code>0</code> through <code>7</code>, the height-<code>2</code> peak holds <code>8</code> through <code>11</code>, and the height-<code>0</code> peak holds <code>12</code>. A proof for the third leaf of the height-<code>2</code> peak uses <code>merkleMountainRangePeakIndex = 2</code> and <code>leafIndex = 10</code>; its in-peak offset is <code>2</code>.</p>
 				<p><code>merkleMountainRangeSiblings</code> is also ordered in two phases. The first <code>merkleMountainRangePeakIndex</code> entries are the bottom-up Merkle siblings inside the selected peak. The remaining entries are the other occupied peak roots in ascending peak-height order, skipping the selected peak height. That exact ordering is why the verifier checks <code>merkleMountainRangeSiblings.length == peakHeight + peakCount - 1</code>.</p>
-				<p>Separately, the verifier requires <code>nullifierSiblings.length == NULLIFIER_DEPTH</code> with <code>NULLIFIER_DEPTH = 64</code>.</p>
-				<p>Nullifier paths are keyed by <code>uint256(keccak256(abi.encode(parentDepositIndex)))</code>, so the stable parent deposit index is the replay-prevention identity.</p>
+				<h3 id="nullifier-tree">Nullifier tree</h3>
+				<p>Each continuation outcome keeps a binary Merkle tree of fixed depth <code>NULLIFIER_DEPTH = 64</code>, hashed with the same <code>parentHash</code>.</p>
+				<ul>
+					<li>The path is <code>uint256(keccak256(abi.encode(parentDepositIndex)))</code>. Only its low 64 bits are used: bit <code>d</code>, counted from the least significant bit, selects the side at depth <code>d</code>, starting at the leaf. A <code>0</code> bit hashes <code>parentHash(node, sibling)</code>; a <code>1</code> bit hashes <code>parentHash(sibling, node)</code>.</li>
+					<li>An unconsumed leaf is <code>bytes32(0)</code>; a consumed leaf is <code>bytes32(uint256(1))</code>.</li>
+					<li>The empty root is <code>bytes32(0)</code> hashed with itself 64 times: <code>root = parentHash(root, root)</code>. Its value is in the <a href="#encoding">conformance vectors</a>.</li>
+					<li><code>nullifierSiblings</code> lists the 64 siblings from the leaf upward. The verifier recomputes the current root with the empty leaf, then stores the root recomputed with the consumed leaf.</li>
+				</ul>
 				<details class="interactive-example" id="mmr-proof-planner" open>
 					<summary>Plan a carry proof</summary>
 					<p>Choose a snapshot leaf count and one occupied peak. The planner reports the global <code>leafIndex</code> range of that peak, checks an in-peak offset, and reports the exact sibling-array lengths the verifier enforces. It does not construct hashes or replace an off-chain proof builder.</p>
@@ -234,7 +274,7 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 						</tr>
 					</tbody>
 				</table>
-				<p>The continuation application programming interface (API) exposes the current descendant carry snapshot through <code>getForkCarrySnapshot()</code> and pages only local unresolved leaves through <code>getCarryLeafPageByOutcome()</code>. The immutable inherited baseline remains in <code>snapshotPeaks</code> and <code>snapshotLeafCount</code> inside outcome state, while <code>getForkCarrySnapshot()</code> reports the current carry peaks, current leaf counts, current totals, and current nullifier roots after local appends and proof consumption.</p>
+				<p><code>getForkCarrySnapshot()</code> reports the current carry peaks, leaf counts, totals, and nullifier roots after local appends and proof consumption. <code>getCarryLeafPageByOutcome()</code> pages only local unresolved leaves.</p>
 			</section>
 
 			<section id="sources">
@@ -251,6 +291,9 @@ root = bagPeaks(occupiedPeaks, peakCount)</code></pre>
 					</li>
 					<li>
 						<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameTypes.sol"><code>EscalationGameTypes.sol</code></a>
+					</li>
+					<li>
+						<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.sol</code></a>
 					</li>
 				</ul>
 			</section>

@@ -38,14 +38,14 @@
 		{
 			"path": "explanation/contract-architecture.html",
 			"title": "Contract architecture",
-			"summary": "How the product layers and deployed contracts call, deploy, and move assets.",
+			"summary": "Which Zoltar and Statoblast contracts call each other, deploy each other, and move assets.",
 			"section": "start-here",
 			"topic": "Architecture",
 			"keywords": ["contracts", "architecture", "calls", "assets"]
 		},
 		{
 			"path": "reference/glossary.html",
-			"title": "Glossary",
+			"title": "Protocol glossary",
 			"summary": "Canonical definitions for protocol assets, states, and mechanisms.",
 			"section": "start-here",
 			"topic": "Introduction",
@@ -94,7 +94,7 @@
 		{
 			"path": "reference/contracts/securitypool.html",
 			"title": "SecurityPool",
-			"summary": "Read surface and the vault, complete-set, escalation, liquidation, fork-mode, and delegate-only entrypoints.",
+			"summary": "Read surface, security assumptions, and the vault, complete-set, escalation, executor-only, forker-only, and fallback-routed entrypoints, with accounting examples.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["collateral", "vault", "complete set", "fees", "liquidation"]
@@ -102,7 +102,7 @@
 		{
 			"path": "reference/contracts/securitypoolforker.html",
 			"title": "SecurityPoolForker",
-			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and truth-auction entrypoints.",
+			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and Truth Auction entrypoints.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["fork", "migration", "child pool", "auction"]
@@ -110,7 +110,7 @@
 		{
 			"path": "reference/contracts/escalationgame.html",
 			"title": "EscalationGame",
-			"summary": "Read surface and the start, deposit, withdrawal, claim, fork-carry, and escrow export entrypoints.",
+			"summary": "Read surface and the start, deposit, withdrawal, claim, fork-carry, escrow export, and fallback-routed entrypoints, with accounting examples.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
@@ -130,6 +130,14 @@
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["OpenOracle", "price", "coordinator", "staged operation"]
+		},
+		{
+			"path": "reference/contracts/vaultoperations.html",
+			"title": "VaultOperations",
+			"summary": "Read surface and the submitVaultOperations, execute, executeSingle, and release entrypoints of the vault bundle executor.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["vault", "bundle", "executor", "submitVaultOperations"]
 		},
 		{
 			"path": "reference/contracts/sharetoken.html",
@@ -173,7 +181,7 @@
 		},
 		{
 			"path": "how-to/launch-a-release.html",
-			"title": "Launch a protocol release",
+			"title": "Prepare a protocol release",
 			"summary": "The pre-tag checklist, runtime-hash review, and the testnet genesis REP review.",
 			"section": "how-to",
 			"topic": "Operations",
@@ -182,7 +190,7 @@
 		{
 			"path": "how-to/monitor-security-assumptions.html",
 			"title": "Monitor security assumptions",
-			"summary": "What to read, how often, and how to respond for each assumption that can change with market conditions.",
+			"summary": "Check the assumptions behind an action: what to read, how often, and how to respond when one is weak.",
 			"section": "how-to",
 			"topic": "Operations",
 			"keywords": ["monitoring", "assumptions", "operators", "signals"]
@@ -192,13 +200,13 @@
 			"title": "Subsystem guardrails",
 			"summary": "What each subsystem will and will not accept, mapped to contract sources.",
 			"section": "reference",
-			"topic": "Operations",
+			"topic": "Safety",
 			"keywords": ["operators", "guardrails", "recovery", "edge cases"]
 		},
 		{
 			"path": "reference/contract-inventory.html",
 			"title": "Contract inventory",
-			"summary": "Deployment helpers, delegate modules, SecurityPoolUtils reads, the production contract list, and testnet Uniswap dependencies.",
+			"summary": "Every production Solidity source by area, the caller and trust boundaries of deployment helpers and delegate modules, SecurityPoolUtils previews, and testnet Uniswap dependencies.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["inventory", "factories", "delegates", "SecurityPoolUtils", "trust boundary"]
@@ -208,15 +216,15 @@
 			"title": "Deployment status oracle",
 			"summary": "Deployment progress bitmask semantics, per-network bit mappings, and the 256-step limit.",
 			"section": "reference",
-			"topic": "Deployment",
+			"topic": "Contracts",
 			"keywords": ["deployment", "bitmask", "runtime bytecode", "status"]
 		},
 		{
 			"path": "reference/merkle-mountain-range.html",
 			"title": "Merkle Mountain Range carry proofs",
-			"summary": "Carry-proof hashing, snapshot peaks, bounds, and replay protection.",
+			"summary": "Carry-proof encoding, peak bagging, proof shape, nullifier tree, and bounds.",
 			"section": "reference",
-			"topic": "Proofs",
+			"topic": "Mechanisms",
 			"keywords": ["MMR", "carry proof", "hashing", "nullifier"]
 		},
 		{
@@ -248,7 +256,7 @@
 			"title": "Escalation Game",
 			"summary": "How REP deposits resolve a market locally, when they force a fork, and how games continue across forks.",
 			"section": "explanation",
-			"topic": "Architecture",
+			"topic": "Protocol",
 			"keywords": ["Escalation Game", "disputes", "deadlines", "accounting"]
 		},
 		{
@@ -278,9 +286,9 @@
 		{
 			"path": "explanation/open-oracle.html",
 			"title": "Why Statoblast uses OpenOracle",
-			"summary": "REP/ETH price oracle for Statoblast.",
+			"summary": "Why a contestable REP/ETH price guards solvency-sensitive operations, and where it stops.",
 			"section": "explanation",
-			"topic": "Architecture",
+			"topic": "Protocol",
 			"keywords": ["OpenOracle", "price", "coordinator", "callback"]
 		},
 		{
@@ -294,9 +302,9 @@
 		{
 			"path": "reference/open-oracle.html",
 			"title": "OpenOracle integration reference",
-			"summary": "Funding, sizing, callbacks, queues, recovery, parameters, and interactive estimators.",
+			"summary": "Funding, report sizing, settlement validation, recovery, parameters, and a censorship stress model.",
 			"section": "reference",
-			"topic": "Oracle",
+			"topic": "Mechanisms",
 			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]
 		},
 		{
@@ -358,7 +366,7 @@
 		{
 			"path": "how-to/trading-seed-alternative-odds.html",
 			"title": "Seed alternative conditional odds",
-			"summary": "Compute the deposits that open a pool at a chosen Conditional YES price when calling the contract directly.",
+			"summary": "Seed a new trading pool at a chosen Conditional Yes price by calling its contract directly.",
 			"section": "how-to",
 			"topic": "Trading",
 			"keywords": ["Trading", "odds", "initialize", "basis points"]
@@ -382,7 +390,7 @@
 		{
 			"path": "how-to/trading-handle-resolution.html",
 			"title": "Handle resolution",
-			"summary": "Unwind LP, redeem complete sets, and claim winning shares after resolution.",
+			"summary": "Unwind LP and redeem complete sets after question end, then claim winning shares once the market finalizes.",
 			"section": "how-to",
 			"topic": "Trading",
 			"keywords": ["Trading", "resolution", "settlement", "redeemShares", "Invalid"]
@@ -401,20 +409,20 @@
 			"summary": "One ETH entry as a complete set, a swap, and Invalid insurance.",
 			"section": "explanation",
 			"topic": "Trading",
-			"keywords": ["Trading", "constant product", "complete set", "YES", "NO"]
+			"keywords": ["Trading", "constant product", "complete set", "Yes", "No"]
 		},
 		{
 			"path": "explanation/trading/invalid-insurance.html",
 			"title": "Invalid insurance",
-			"summary": "Why INVALID is held rather than traded and what it pays.",
+			"summary": "Why Invalid is held rather than traded and what it pays.",
 			"section": "explanation",
 			"topic": "Trading",
-			"keywords": ["Trading", "INVALID", "insurance"]
+			"keywords": ["Trading", "Invalid", "insurance"]
 		},
 		{
 			"path": "explanation/trading/pricing.html",
 			"title": "Conditional pricing",
-			"summary": "What Conditional YES and NO mean and why the spot price is not an oracle.",
+			"summary": "What Conditional Yes and No mean and why the spot price is not an oracle.",
 			"section": "explanation",
 			"topic": "Trading",
 			"keywords": ["Trading", "price", "conditional", "oracle"]
@@ -433,7 +441,7 @@
 			"summary": "The three bounds on redeeming complete sets from a directional wallet.",
 			"section": "explanation",
 			"topic": "Trading",
-			"keywords": ["Trading", "exit", "bounds", "INVALID"]
+			"keywords": ["Trading", "exit", "bounds", "Invalid"]
 		},
 		{
 			"path": "explanation/trading/forks-and-resolution.html",
@@ -462,7 +470,7 @@
 		{
 			"path": "reference/trading/contracts.html",
 			"title": "Trading contracts",
-			"summary": "Factory, pair, math library, and predeployment sink entrypoints.",
+			"summary": "Factory, pair, math library, and predeployment sink constructors, entrypoints, and revert conditions.",
 			"section": "reference",
 			"topic": "Trading",
 			"keywords": ["Trading", "factory", "pair", "tradingStatus", "CREATE2"]
@@ -478,7 +486,7 @@
 		{
 			"path": "reference/trading/events.html",
 			"title": "Trading events",
-			"summary": "Factory and pair events and indexer attribution rules.",
+			"summary": "Factory, pair, and router events and indexer attribution rules.",
 			"section": "reference",
 			"topic": "Trading",
 			"keywords": ["Trading", "events", "Swap", "indexer"]
@@ -494,7 +502,7 @@
 		{
 			"path": "reference/trading/configuration.html",
 			"title": "Trading deployment configuration",
-			"summary": "Environment variables and the local deployment manifest.",
+			"summary": "Deployment script environment variables, the local manifest, and what the client derives and stores.",
 			"section": "reference",
 			"topic": "Trading",
 			"keywords": ["Trading", "configuration", "manifest", "environment"]

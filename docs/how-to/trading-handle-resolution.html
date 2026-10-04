@@ -13,16 +13,16 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Handle resolution</h1>
-				<p>Once a market's question has ended, swaps and liquidity additions are closed, but every asset you hold still has an exit. Use this guide to turn LP tokens, complete sets, and winning shares back into ETH.</p>
+				<p>A trading pool closes to swaps and added liquidity when its question ends; the market finalizes later, when its outcome is final. Use this guide from question end onward to turn LP tokens, complete sets, and winning shares back into ETH.</p>
 			</header>
 			<section id="steps">
-				<h2>Unwind after resolution</h2>
+				<h2>Unwind after question end</h2>
 				<ol>
 					<li>Remove your LP tokens from the <a href="../reference/glossary.html#trading-pool">trading pool</a> into Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> still allows it.</li>
-					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>.</li>
+					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> is <code>Operational</code> and its universe has not forked. After a fork, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a> instead.</li>
+					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>, which requires the SecurityPool to be <code>Operational</code>.</li>
 				</ol>
-				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose.</p>
+				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the SecurityPool's current collateral rate.</p>
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>

@@ -3,20 +3,20 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Funding, report sizing, settlement validation, recovery, and parameters of Statoblast's OpenOracle price coordinator." />
 		<title>OpenOracle integration reference</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
-		<main>
+		<main id="main-content">
 			<header>
 				<h1>OpenOracle integration reference</h1>
 				<p><a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle</a> supplies a fresh REP/ETH price for Statoblast's solvency-sensitive operations. It does not decide market truth; local Escalation Games and Zoltar remain responsible for truth and branching.</p>
+				<p>The <a href="../explanation/open-oracle.html">OpenOracle explanation</a> covers why Statoblast uses a contestable price and which operations depend on it. This page specifies the integration: formulas, parameters, and settlement-callback behavior. Per-function callers, preconditions, and events are in the <a href="./contracts/openoraclepricecoordinator.html">coordinator contract reference</a>.</p>
 			</header>
 			<section id="openoracle-role">
 				<h2>Token pair and cached price</h2>
-
-				<p>The <a href="../explanation/open-oracle.html">OpenOracle explanation</a> covers why Statoblast uses a contestable price and which operations depend on it; this page specifies the integration.</p>
 
 				<p>Statoblast configures WETH as <code>token1</code> and REP as <code>token2</code>. Keeping WETH on the exact side lets the coordinator size the report directly from ETH-denominated gas costs without first assuming a REP/ETH conversion price. When a report settles, the coordinator converts the settled token amounts into REP per ETH:</p>
 				<figure class="equation" id="eq-rep-eth-price">
@@ -42,17 +42,9 @@
 			</section>
 
 			<section id="optional-upstream-capabilities">
-				<h2>Optional upstream capabilities</h2>
+				<h2>Report flags</h2>
 
-				<p>The vendored <code>openPunt</code> revision adds three independent report flags. They extend what a report can record or permit; they do not change reports that omit them. Statoblast's per-pool coordinator always submits flags <code>7</code>: <code>FLAG_TIME_TYPE</code> (<code>1</code>, a timestamp clock), <code>FLAG_TRACK_DISPUTES</code> (<code>2</code>, per-dispute history), and <code>FLAG_STORE_ALL</code> (<code>4</code>, the complete report state in storage). The chaos bot's direct reports also use <code>7</code>. Neither enables an added flag (<code>16</code>, <code>32</code>, or <code>64</code>), so report economics and settlement behavior are unchanged.</p>
-
-				<ul>
-					<li><strong>Store settlement eligibility.</strong> OpenOracle records the current settlement-eligibility clock value when a report is created and refreshes it after each dispute. A lightweight application can read that deadline without storing the complete report preimage. The application must still identify whether the report uses timestamps or block numbers.</li>
-					<li><strong>Flexible escalation.</strong> A disputer may choose any token-one amount from the ordinary required escalation amount through the configured halt. This exposes larger, fully funded correction positions and can move a game to its halt sooner. The report's halt and all dispute validation still apply.</li>
-					<li><strong>Fees only at the halt.</strong> Reporter and protocol fees are zero before the prior position has reached the escalation halt and apply once the prior position is at that halt. A configuration can therefore make early corrections cheaper while retaining a recurring cost for continued disagreement at the halt.</li>
-				</ul>
-
-				<p>These flags change operational data and correction incentives, not the meaning or external correctness of a settled price. An integration that enables them must include their effects when sizing positions, monitoring deadlines, and evaluating the participation assumptions in the <a href="../reference/security-model.html#assumptions-oracle">security model</a>. The exact vendored source and build profile are recorded in <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">the OpenOracle provenance record</a>.</p>
+				<p>The coordinator always submits flags <code>7</code>: <code>FLAG_TIME_TYPE</code> (<code>1</code>, a timestamp clock), <code>FLAG_TRACK_DISPUTES</code> (<code>2</code>, per-dispute history), and <code>FLAG_STORE_ALL</code> (<code>4</code>, the complete report state in storage). It never sets the optional flags <code>8</code>, <code>16</code>, <code>32</code>, or <code>64</code>; <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">the OpenOracle provenance record</a> identifies the vendored source and build profile.</p>
 			</section>
 
 			<section id="statoblast-integration">
@@ -62,10 +54,10 @@
 
 				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>OpenOraclePriceCoordinatorFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory calls <code>setSecurityPool</code> once with the nonzero pool address.</p>
 
-				<p>Only the configured pool may seed the coordinator's inherited <code>lastPrice</code>. A child pool inherits the parent's numeric price as a starting value, but its settlement timestamp remains zero, so that number is unusable until the child accepts its own report. The coordinator's validity window then determines whether the child price can be used.</p>
+				<p>Only the configured pool may seed the coordinator's inherited <code>lastPrice</code>. A child pool inherits the parent's numeric price as a starting value, but its settlement timestamp remains zero, so that number is unusable until the child accepts its own report.</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
 					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="1170" data-plot-width="980" role="img"><span class="plot-chart-fallback">After OpenOracle settles, the coordinator validates the report. An accepted report refreshes the REP/ETH price and runs pending operations through local guardrails. A rejected report leaves the price cache unchanged and terminally fails the attached pending batch.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> The coordinator is the trust boundary between Statoblast operations and OpenOracle reports. After settlement, an accepted report refreshes the cache before guarded execution; a rejected report leaves the cache unchanged and terminally fails the attached batch.</p>
+					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> The coordinator is the trust boundary between Statoblast operations and OpenOracle reports.</p>
 				</figure>
 			</section>
 
@@ -79,26 +71,22 @@
 					<li><strong>Check the cached price.</strong> If the cached REP/ETH price is fresh, the coordinator attempts the operation immediately.</li>
 					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the coordinator creates the report as its initial reporter.</li>
 					<li><strong>Allow corrections.</strong> Other participants may replace the report by posting the position required by OpenOracle. Every valid replacement installs a new reporter and restarts the settlement window.</li>
-					<li><strong>Settle the current report.</strong> When its settlement deadline is reached without another dispute, OpenOracle settles the report and calls the coordinator.</li>
+					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls the coordinator.</li>
 					<li><strong>Accept or reject the price.</strong> The coordinator validates the report identity, history, economics, amounts, and settlement-time base fee before updating the cache.</li>
 					<li><strong>Execute queued operations.</strong> An accepted fresh price allows the coordinator to attempt the queued pool operations, each of which still performs its own current safety checks.</li>
 				</ol>
 
-				<h3>Staging rules</h3>
+				<h3>Staging preconditions</h3>
 
-				<ul>
-					<li>Liquidation and withdrawal amounts must be nonzero.</li>
-					<li><code>validForSeconds</code> must be positive and no greater than five minutes.</li>
-					<li>A liquidation's receiver vault must differ from its target vault, or staging reverts with <code>Receiver is target</code> before any report is requested. The operator may be the target; operator identity is not used as a Sybil-resistant boundary. A self-receiving operator uses a zero approval ID; a distinct receiver requires a bounded approval.</li>
-					<li>Non-liquidation operations must target the caller's own vault.</li>
-					<li>Staging is disabled after the security pool's local Escalation Game has resolved.</li>
-				</ul>
+				<p>A request that violates a staging precondition reverts before any report is requested. The preconditions of each entry point, including amounts, the validity window, vault targets, liquidation approvals, and the pending-report sponsor rule, are listed in the <a href="./contracts/openoraclepricecoordinator.html#interactions">coordinator contract reference</a>.</p>
 
 				<h3>Execution batches</h3>
 
-				<p>For a single operation with a valid cached price, the coordinator stages the operation record and then attempts immediate execution. Liquidation gates, a stale queue-time snapshot, a zero-effect withdrawal, or a downstream pool check may still cause the staged operation to fail and be consumed.</p>
+				<p>For a single operation with a valid cached price, the coordinator records the operation and attempts it in the same transaction. A liquidation gate or another pool check can still fail; the transaction then succeeds and the operation is consumed with <code>ExecutedStagedOperation</code> reporting <code>success = false</code>.</p>
 
-				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS = 4</code> price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. A bundle must fit the remaining capacity; additional single staged operations remain active outside the callback batch. If they have not expired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>.</p>
+				<p>An operation that waits for a report can also fail when it is attempted: after its expiry (<code>Staged operation expired</code>), when a liquidation target's backing units or underwriting commitment changed after staging (<code>Stale liquidation</code>), or when a withdrawal now previews to zero REP (<code>Withdraw amount has no effect</code>).</p>
+
+				<p>When a new report is needed, one settlement callback can automatically attempt up to <code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> (four) price actions, counting each commitment change, liquidation, or withdrawal inside a vault bundle separately. Deposits use no callback slot. A bundle must fit the remaining capacity; additional single staged operations remain active outside the callback batch. If they have not expired and the accepted price remains fresh, they can be executed later with <code>executeStagedOperation</code>.</p>
 
 				<p>For a vault bundle, a fresh-price failure reverts the entire submission. With a stale price, the deposit completes immediately and the deferred commitment changes, liquidations, and withdrawal later execute or fail together. See the <a href="./contracts/openoraclepricecoordinator.html">coordinator interaction reference</a>.</p>
 
@@ -129,29 +117,32 @@
 							<mn>101</mn>
 						</mrow>
 					</math>
-					<p class="equation-note"><code>callbackGasLimit</code> is the gas reserved for the settlement callback, <code>(gasConsumedSettlement + 50,000) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>; <code>gasConsumedOpenOracleReportPrice</code> is the coordinator's own report-price callback work, and the small <code>101</code> offset keeps the forwarded bounty strictly above the computed gas product so the OpenOracle-funded reward path has a positive buffer instead of landing exactly on the boundary.</p>
+					<p class="equation-note"><code>callbackGasLimit</code> is <code>(gasConsumedSettlement + SETTLEMENT_GAS_OVERHEAD) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>, returned by <code>getSettlementCallbackGasLimit()</code>. <code>101</code> is the fixed <code>REQUEST_BOUNTY_OFFSET_ATTO_ETH</code>. With the <a href="#parameters">configured values</a>, the limit is <code>4,200,000 gas</code> and the request cost is <code>block.basefee × 17,200,000 + 101</code> attoETH: <code>0.516 ETH</code> plus the offset at a <code>30 nanoETH</code> base fee.</p>
 				</figure>
-				<p id="refund-callback">Every request path takes an explicit <code>bountyAttoEth</code>. When a call opens a report, the committed bounty must cover <code>getRequestPriceCostAttoEth()</code> at inclusion and <code>msg.value</code> must cover the bounty. The coordinator then retains the whole bounty as the settler reward. If a cached price is usable, nothing is retained and the ETH is refunded. If a report is needed, only the first pending settlement slot retains the bounty. <code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> forwards exactly the bounty to OpenOracle and refunds any ETH above it. The same transaction submits the initial WETH/REP position, so the refresh sponsor funds both the ETH bounty and report position up front.</p>
+				<p id="refund-callback">Every entry point that can open a report takes an explicit <code>bountyAttoEth</code>. What happens to <code>msg.value</code> depends on the call:</p>
+				<ul>
+					<li><strong>The call opens a report.</strong> <code>bountyAttoEth</code> must be at least <code>getRequestPriceCostAttoEth()</code> in the inclusion block, and <code>msg.value</code> must be at least <code>bountyAttoEth</code>. The coordinator forwards exactly <code>bountyAttoEth</code> to OpenOracle as the report's <code>settlerReward</code> and refunds the rest. The same transaction transfers the sponsor's initial WETH and REP position, so the sponsor funds the bounty and the position up front.</li>
+					<li><strong>A staging call finds a fresh cached price.</strong> No bounty is taken, and all of <code>msg.value</code> is refunded.</li>
+					<li><strong>A staging call adds an operation while a report is pending.</strong> No bounty is taken, and all of <code>msg.value</code> is refunded.</li>
+				</ul>
 
-				<p>Both public request paths refund only a positive unused or excess amount by making a low-level native-ETH call to the caller. A contract caller must accept that callback. If it rejects the refund, the whole transaction reverts, including operation staging, immediate execution, and any report opened in the same transaction.</p>
+				<p><code>requestPrice</code>, <code>requestPriceIfNeededAndStageOperation</code>, and <code>requestPriceIfNeededAndStageLiquidation</code> refund <code>msg.sender</code>. <code>stageVaultOperations</code>, which only the coordinator's <code>vaultOperations</code> executor can call, refunds the bundle owner. Each refund is a low-level native-ETH call made only for a positive amount. If the recipient rejects it, the whole transaction reverts, including operation staging, immediate execution, and any report opened in the same transaction.</p>
 
 				<h3 id="rolling-dispute-exclusivity">Sponsor lane</h3>
 
-				<p>The coordinator refuses a direct <code>requestPrice</code> call while the cached price is still fresh, preventing a redundant report from being opened over a usable price. Once the price is stale and a report is pending, only the original <code>pendingReportSponsor</code> may add operations to that in-flight settlement. Those follow-up operations pay no additional join fee; other callers must wait until the report finishes.</p>
-
-				<p>Every successful dispute replaces the current report and restarts its settlement window. See <a href="#intentional-economic-tradeoffs">Liveness and exposure limits</a>.</p>
+				<p>The sponsor lane is the exclusive right of <code>pendingReportSponsor</code>, the account that funded the pending report, to add operations to that report's settlement. Those follow-up operations pay no additional bounty; other callers must wait until the report finishes. <code>requestPrice</code> reverts while the cached price is fresh or a report is pending.</p>
 			</section>
 
 			<section id="security-guarantee">
 				<h2>Report sizing and correction incentives</h2>
 
-				<p>OpenOracle's correctness depends on profitable arbitrage correcting inaccurate prices. The coordinator sizes each report so that correcting an error at or above the target remains profitable after modeled dispute costs and OpenOracle fees, with the configured OpenOracle security multiplier. That multiplier (<code>openOracleSecurityMultiplierBps</code>) is separate from a SecurityPool's backing multiplier, <code>statoblastSecurityMultiplierBps</code>.</p>
+				<p>The coordinator sizes each report so that correcting a price error of at least <code>targetPriceErrorForDispute</code> stays profitable after OpenOracle's fees and the modeled gas cost of one dispute multiplied by <code>openOracleSecurityMultiplierBps</code>. That multiplier is separate from a SecurityPool's backing multiplier, <code>statoblastSecurityMultiplierBps</code>.</p>
 
-				<p>In the conservative correction direction, the true REP/ETH price is <code>(1 + targetError)</code> times the reported price. Before gas, correcting that report releases the fraction <code>(targetError - fees) / (1 + targetError)</code> of the WETH position. The sizing formula therefore multiplies the modeled gas cost of one dispute by the OpenOracle security multiplier and divides by that correction-profit fraction.</p>
+				<p>A report can be corrected in either direction. The formula assumes the less profitable one, in which the true REP/ETH price is <code>(1 + targetError)</code> times the reported price, and models the correction as releasing the fraction <code>(targetError - fees) / (1 + targetError)</code> of the WETH position before gas. The required position is the multiplied gas cost divided by that fraction.</p>
 
-				<p>Because every dispute restarts the settlement clock, the minimum initial WETH position also has a floor proportional to pool open interest (<code>settlementCollateralAttoEth</code>):</p>
+				<p>The minimum initial WETH position also has a floor of <code>1%</code> of the pool's <a href="./glossary.html#settlement-collateral">settlement collateral</a> (<code>settlementCollateralAttoEth</code>), and the same floor applies to the escalation halt:</p>
 				<div class="equation" id="eq-openoracle-initial-report-size">
-					<math aria-label="all report and escalation-halt amounts are in attoETH; minimum token one report adds the priority-fee report to the larger base-fee or open-interest report; escalation halt is the greater of the open-interest report and the initial WETH report times the halt multiplier" data-source="reportAttoEth(gasPriceAttoEthPerGas) = ⌈gasPriceAttoEthPerGas \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))⌉; priorityFeeReportAttoEth = reportAttoEth(initialReportPriorityFeeAttoEthPerGas); baseFeeReportAttoEth = reportAttoEth(block.basefee); openInterestReportAttoEth = ⌈settlementCollateralAttoEth / 100⌉; minimumToken1ReportAttoEth = priorityFeeReportAttoEth + max(baseFeeReportAttoEth, openInterestReportAttoEth); escalationHaltAttoEth = max(⌊initialWethReportAttoEth \cdot escalationHaltMultiplierBps / 10000⌋, openInterestReportAttoEth)" display="block">
+					<math aria-label="all report and escalation-halt amounts are in attoETH; minimum token one report adds the priority-fee report to the larger base-fee or open-interest report; escalation halt is the greater of the open-interest report and the initial WETH report times the halt multiplier" data-source="reportAttoEth(gasPriceAttoEthPerGas) = ⌈gasPriceAttoEthPerGas \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - feePercentage))⌉; priorityFeeReportAttoEth = reportAttoEth(initialReportPriorityFeeAttoEthPerGas); baseFeeReportAttoEth = reportAttoEth(block.basefee); openInterestReportAttoEth = ⌈settlementCollateralAttoEth / 100⌉; minimumToken1ReportAttoEth = priorityFeeReportAttoEth + max(baseFeeReportAttoEth, openInterestReportAttoEth); escalationHaltAttoEth = max(⌊initialWethReportAttoEth \cdot escalationHaltMultiplierBps / 10000⌋, openInterestReportAttoEth)" display="block">
 						<mtable>
 							<mtr>
 								<mtd><mi>reportAttoEth</mi><mo>(</mo><mi>gasPriceAttoEthPerGas</mi><mo>)</mo></mtd>
@@ -160,7 +151,7 @@
 									<mo form="prefix" stretchy="true">⌈</mo>
 									<mfrac>
 										<mrow> <mi>gasPriceAttoEthPerGas</mi><mo>⋅</mo><mi>gasUnitsForOneDispute</mi><mo>⋅</mo><mi>openOracleSecurityMultiplierBps</mi> <mo>⋅</mo><mo>(</mo><mi>percentagePrecision</mi><mo>+</mo><mi>targetPriceErrorForDispute</mi><mo>)</mo> </mrow>
-										<mrow> <mn>10000</mn><mo>⋅</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>reporterFee</mi><mo>)</mo> </mrow>
+										<mrow> <mn>10000</mn><mo>⋅</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>feePercentage</mi><mo>)</mo> </mrow>
 									</mfrac>
 									<mo form="postfix" stretchy="true">⌉</mo>
 								</mtd>
@@ -195,13 +186,14 @@
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-note">All amounts are in attoETH, and <code>percentagePrecision</code> is <code>10,000,000</code>.</p>
+					<p class="equation-note">All amounts are in attoETH. <code>percentagePrecision</code> is <code>10,000,000</code>, the denominator of <code>targetPriceErrorForDispute</code>, <code>protocolFee</code>, and <code>feePercentage</code>.</p>
 				</div>
 				<p>No REP price, expected REP price movement, or individual protected-operation notional enters the minimum WETH calculation.</p>
 
 				<p>The coordinator sets <code>initialWethReportAttoEth = max(minimumToken1ReportAttoEth(), requestedInitialAttoWeth)</code>, uses that value as OpenOracle's <code>currentAmount1</code>, and derives <code>amount2 = ⌈initialWethReportAttoEth * proposedRepPerEthPrice / 1e18⌉</code> in the same transaction.</p>
 
-				<h3>Formula inputs</h3>
+				<h3 id="formula-inputs">Formula inputs</h3>
+				<p>The shared deployment configuration is the set of constants in <code>shared/statoblast/ts/initialReport/oracleInitialReport.ts</code> that the deployment passes to the coordinator factory constructor.</p>
 				<table>
 					<thead>
 						<tr>
@@ -223,7 +215,7 @@
 						</tr>
 						<tr>
 							<td><code>settlementCollateralAttoEth</code></td>
-							<td>Current pool open interest</td>
+							<td>Current pool settlement collateral</td>
 							<td>Configured security pool</td>
 						</tr>
 						<tr>
@@ -234,27 +226,32 @@
 						<tr>
 							<td><code>gasUnitsForOneDispute</code></td>
 							<td><code>300,000 gas</code></td>
-							<td><code>ORACLE_GAS_UNITS_FOR_ONE_DISPUTE</code></td>
+							<td>Factory constructor; shared deployment configuration <code>ORACLE_GAS_UNITS_FOR_ONE_DISPUTE</code></td>
 						</tr>
 						<tr>
 							<td><code>openOracleSecurityMultiplierBps</code></td>
 							<td><code>100,000 bps</code> (<code>10x</code>)</td>
-							<td>Factory constructor; initial default <code>OPEN_ORACLE_SECURITY_MULTIPLIER_BPS</code></td>
+							<td>Factory constructor; shared deployment configuration <code>OPEN_ORACLE_SECURITY_MULTIPLIER_BPS</code></td>
 						</tr>
 						<tr>
 							<td><code>targetPriceErrorForDispute</code></td>
 							<td><code>500,000 / 10,000,000</code> (<code>5%</code>)</td>
-							<td>Factory constructor; initial default <code>ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE</code></td>
+							<td>Factory constructor; shared deployment configuration <code>ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE</code></td>
 						</tr>
 						<tr>
 							<td><code>protocolFee</code></td>
-							<td><code>1%</code></td>
-							<td>Coordinator/OpenOracle report parameters</td>
+							<td><code>100,000 / 10,000,000</code> (<code>1%</code>)</td>
+							<td>Factory constructor; shared deployment configuration <code>ORACLE_PROTOCOL_FEE</code></td>
 						</tr>
 						<tr>
-							<td><code>reporterFee</code></td>
-							<td><code>0.1%</code></td>
-							<td>Coordinator/OpenOracle report parameters</td>
+							<td><code>feePercentage</code> (OpenOracle's reporter fee)</td>
+							<td><code>10,000 / 10,000,000</code> (<code>0.1%</code>)</td>
+							<td>Factory constructor; shared deployment configuration <code>ORACLE_FEE_PERCENTAGE</code></td>
+						</tr>
+						<tr>
+							<td><code>escalationHaltMultiplierBps</code></td>
+							<td><code>100,000 bps</code> (<code>10x</code>)</td>
+							<td>Factory constructor; shared deployment configuration <code>ORACLE_ESCALATION_HALT_MULTIPLIER_BPS</code></td>
 						</tr>
 					</tbody>
 				</table>
@@ -273,14 +270,12 @@
 					<li><code>maxSettlementBaseFeeMultiplierBps</code> of at least <code>1x</code></li>
 					<li><code>minLiquidationPriceDistanceBps</code> no greater than 100%</li>
 				</ol>
-				<p>It also rejects a priority fee whose constant-derived report would consume the reserved <code>uint128</code> report or escalation-halt capacity; half of that capacity remains available for the dynamic base-fee or open-interest component. The factory stores its deployment configuration, so an invalid parameter domain causes coordinator deployment to revert.</p>
+				<p>Construction also bounds <code>initialReportPriorityFeeAttoEthPerGas</code> so that the priority-fee component of the minimum report, <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas)</code>, does not exceed half of <code>min(type(uint128).max, type(uint128).max × 10000 / escalationHaltMultiplierBps)</code>; a larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>OpenOraclePriceCoordinatorFactory</code> stores the shared configuration without validating it, so an invalid configuration deploys the factory successfully and makes every later coordinator deployment revert.</p>
 
-				<p>Moving the target error toward the fee floor increases the required WETH sharply. Increasing the OpenOracle security multiplier increases the required WETH linearly. A larger target error reduces the required position, but permits a wider error before the modeled correction incentive applies.</p>
-				<div class="callout">The immutable priority fee is an operator-selected transaction-inclusion assumption, not a tip observed from the request block. Setting it too low weakens the modeled incentive for a disputer when prevailing priority fees are higher. Setting it too high raises the sponsor's initial WETH and REP requirements and the initial-report-derived escalation halt, and can make requests impractical. Child pools inherit the origin's value.</div>
-				<p>At a <code>30 nanoETH</code> base fee and a configured <code>10 nanoETH</code> priority fee, the modeled gas cost is <code>0.012 ETH</code>. After applying the <code>10x</code> OpenOracle security multiplier and the worst-direction five-percent correction fraction after fees, the minimum report with <code>100 WETH</code> of open interest is <code>3.230769230769230770 WETH</code>. With the configured <code>10x</code> halt multiplier, the initial-report-derived escalation halt is <code>32.307692307692307700 WETH</code>.</p>
+				<p>At a <code>30 nanoETH</code> base fee, a configured <code>10 nanoETH</code> priority fee, and <code>100 WETH</code> of settlement collateral, the modeled gas cost of one dispute is <code>0.012 ETH</code>, the minimum report is <code>3.230769230769230770 WETH</code>, and the escalation halt is <code>32.307692307692307700 WETH</code>.</p>
 				<details class="interactive-example" id="initial-report-estimator-example" open="">
 					<summary>Dynamic WETH report estimator</summary>
-					<p>This calculator mirrors the onchain formula. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and pool open interest can change from one request block to another.</p>
+					<p>This calculator mirrors the onchain formula. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and pool settlement collateral can change from one request block to another.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.2308 WETH</output></div>
 						<div data-primary-output><span>Fee bound</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
@@ -311,7 +306,7 @@
 								<summary>Pool security</summary>
 								<div class="example-grid">
 									<label>
-										Pool open interest
+										Pool settlement collateral
 										<input data-example-input="openInterestWeth" max="10000" min="0" step="100" type="number" inputmode="decimal" value="100" />
 										<span class="example-value" data-example-value="openInterestWeth">100 WETH</span>
 									</label>
@@ -336,7 +331,7 @@
 										<span class="example-value" data-example-value="openOracleProtocolFee">1.0%</span>
 									</label>
 									<label>
-										OpenOracle reporter fee
+										OpenOracle reporter fee (<code>feePercentage</code>)
 										<input data-example-input="openOracleReporterFee" max="2" min="0" step="0.1" type="number" inputmode="decimal" value="0.1" />
 										<span class="example-value" data-example-value="openOracleReporterFee">0.1%</span>
 									</label>
@@ -389,30 +384,26 @@
 
 				<h3 id="settlement-validation-scope">Coordinator settlement validation</h3>
 
-				<p>A callback that successfully enters the coordinator can still produce a rejected price. The coordinator clears the pending report id, emits <code>PriceReportRejected</code>, and leaves the price cache unchanged when any of the following conditions holds:</p>
+				<p>A callback that successfully enters the coordinator can still produce a rejected price. The coordinator clears the pending report state, emits <code>PriceReportRejected</code> with the quoted reason, and leaves the price cache unchanged when the first of the following conditions holds:</p>
 
 				<ul>
-					<li>the settlement base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>;</li>
-					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum, reported as <code>Counter saturated</code>;</li>
-					<li>the final history record's WETH amount is too small to support another dispute at that record's base fee plus the configured priority fee, reported as <code>Report uneconomic</code>;</li>
-					<li>settlement happens after the freshness window measured from settlement eligibility has already closed, reported as <code>Report stale</code>;</li>
-					<li>either settled token amount is zero; or</li>
-					<li>the integer REP/ETH calculation produces a zero price.</li>
+					<li>the settlement block's base fee exceeds the request-time cap, which is the base fee implied by the committed bounty scaled by <code>maxSettlementBaseFeeMultiplierBps</code>: <code>Base fee too high</code>;</li>
+					<li><code>storedGame(reportId).numReports</code> is saturated at the <code>uint24</code> maximum: <code>Counter saturated</code>;</li>
+					<li><code>numReports</code> is zero, or the settled WETH amount is below <code>reportAttoEth(initialReportPriorityFeeAttoEthPerGas) + reportAttoEth(recordedBaseFee)</code> from the <a href="#security-guarantee">sizing formula</a>, where <code>recordedBaseFee</code> is the base fee OpenOracle stored for the final report in <code>disputeHistory(reportId, numReports - 1)</code>: <code>Report uneconomic</code>;</li>
+					<li>the freshness window measured from settlement eligibility has already closed: <code>Report stale</code>;</li>
+					<li>either settled token amount is zero: <code>Empty oracle settlement</code>;</li>
+					<li>the integer REP/ETH calculation produces a zero price: <code>Oracle price is zero</code>.</li>
 				</ul>
-
-				<p>When dispute tracking is enabled, OpenOracle records each report block's base fee. If the report counter is not saturated, the coordinator selects history index <code>numReports - 1</code> and checks the final WETH position against the configured security-sizing formula using that record's base fee plus the configured priority fee. It also enforces the request-time settlement base-fee cap before recording the final ratio.</p>
 
 				<p>These checks establish only that the final WETH position meets the modeled security floor and that the callback data is structurally acceptable. They do not prove that the accepted price is externally correct, that an independent corrector exists, or that a correcting transaction will obtain inclusion.</p>
 
 				<h3>Rejected-price cleanup</h3>
 
-				<p>A rejected report does not replay its pending settlement operations. Instead, the coordinator terminally fails every operation attached to that report, removes it from the active and pending sets, and releases any liquidation-approval reservation exactly once. A caller must stage a new operation to try again with a later price.</p>
+				<p>A rejected report does not replay its pending settlement operations. Instead, the coordinator terminally fails every operation attached to that report, removes it from the active and pending sets, and releases any liquidation-approval reservation. A caller must stage a new operation to try again with a later price.</p>
 
 				<h3>Recovering a settled report after callback failure</h3>
 
-				<p>When OpenOracle has already settled but the coordinator remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report, sponsor, and base-fee cap; withdraws coordinator-owned OpenOracle balances; and terminally fails every pending settlement operation attached to the report.</p>
-
-				<p>Recovery does not treat those operations as successful and does not accept the report as a new price. Each affected liquidation reservation is released during the same cleanup, so no approval quota remains locked.</p>
+				<p>When OpenOracle has already settled but the coordinator remains pending because the low-level callback did not complete, anyone can call <code>recoverSettledPendingReport</code>. Recovery clears the pending report, sponsor, and base-fee cap; withdraws the coordinator's OpenOracle WETH and REP balances to the sponsor; and terminally fails every pending settlement operation attached to the report, releasing each liquidation-approval reservation. It does not accept the report as a new price.</p>
 			</section>
 
 			<section id="intentional-economic-tradeoffs">
@@ -420,17 +411,17 @@
 
 				<p>The coordinator has no notional exposure budget and no absolute settlement deadline; see excluded guarantees <a href="./security-model.html#excluded-guarantee-eg03">EG03</a> and <a href="./security-model.html#excluded-guarantee-eg04">EG04</a> and the <a href="../explanation/open-oracle.html#limitations">OpenOracle explanation</a>.</p>
 
-				<h3>Dispute escalation after the halt</h3>
+				<h3 id="dispute-escalation">Dispute escalation amounts</h3>
 
 				<p>In this integration, WETH is the escalation variable. Before <code>escalationHalt</code>, OpenOracle requires <code>min(⌊oldAmount1 × multiplier / 100⌋, escalationHalt)</code>. With the configured multiplier of <code>115</code>, integer flooring leaves token1 amounts from one through six attoETH unchanged; seven attoETH is the first amount that grows. At or above the halt, each replacement instead requires <code>oldAmount1 + 1</code>, adding one attoETH of WETH.</p>
 			</section>
 
 			<section id="attack-model">
-				<h2>External-payoff and censorship model</h2>
+				<h2>Stress model: external payoff and censorship</h2>
 
-				<p>This stress-test model estimates the cost to an attacker who posts a manipulated REP/ETH report and censors corrections until settlement, receiving an outside payoff only if the accepted price makes a liquidation executable. It is a continuous approximation, not a contract-enforced exposure cap or a guarantee that a correction obtains inclusion.</p>
+				<p>This section defines an analytical model, not contract behavior. It estimates the cost to an attacker who posts a manipulated REP/ETH report and censors corrections until settlement, receiving an outside payoff only if the accepted price makes a liquidation executable. It is a continuous approximation; the <a href="../explanation/open-oracle.html#limitations">OpenOracle explanation</a> states how far its results can be relied on.</p>
 
-				<p><code>honestDisputeBarrierFraction</code> is a model input, not a coordinator field: the cost an honest corrector must overcome. The <code>1.1%</code> default is only the fixed-fee floor (the <code>1%</code> protocol fee plus the <code>0.1%</code> reporter fee). A deployment analysis must replace it with a scenario-specific barrier; OpenOracle's <a href="https://docs.openoracle.org/openoracle/oracle-accuracy-cost#cost">report-cost derivation</a> adds volatility over the settlement horizon and expected loss under adversarial disputes, and gas, priority fees, price impact, and capital lockup raise it further.</p>
+				<p><code>honestDisputeBarrierFraction</code> is a model input, not a coordinator field: the cost, as a fraction of the honest price, that an honest corrector must overcome. Its <code>1.1%</code> default is the fixed-fee floor, <code>protocolFee</code> plus <code>feePercentage</code>.</p>
 
 				<div class="equation" id="eq-openoracle-binary-payoff-cost">
 					<math aria-label="binary liquidation payoff and modeled censorship cost" data-source="discountedHonestPrice = honestPrice \cdot (1 - minLiquidationPriceDistanceBps / 10000); executionErrorThreshold = max(0, liquidationThresholdPrice / discountedHonestPrice - 1); manipulatedPriceError = max(0, (manipulatedPrice - honestPrice) / honestPrice); liquidationExecutable = manipulatedPrice > liquidationThresholdPrice and manipulatedPriceError >= executionErrorThreshold; attackerPayoff = liquidationExecutable ? externalPayoff : 0; censorshipRate = max(0, manipulatedPriceError - honestDisputeBarrierFraction); censorshipCost = censorshipDuration \cdot censorshipRate \cdot oracleReportLiquidity" display="block">
@@ -485,10 +476,10 @@
 					<p class="equation-note">Price errors and the dispute barrier are fractions of the honest price. <code>externalPayoff</code> and <code>oracleReportLiquidity</code> use the same ETH-denominated unit. The liquidation design owns the exact integer threshold and distance checks.</p>
 				</div>
 
-				<p><code>targetGriefRatio</code> is the desired attacker loss net of <code>externalPayoff</code>, divided by that payoff; <code>1</code> targets censorship cost equal to twice the payoff. One model step is the interval over which <code>censorshipRate</code> accrues, not inherently a block, second, or dispute round; a deployment analysis must define that mapping.</p>
+				<p><code>targetGriefRatio</code> is the desired attacker loss net of <code>externalPayoff</code>, divided by that payoff; <code>1</code> targets censorship cost equal to twice the payoff. One model step is the interval over which <code>censorshipRate</code> accrues; the model does not tie it to a block, second, or dispute round.</p>
 
 				<div class="equation" id="eq-openoracle-safe-censorship-duration">
-					<math aria-label="safe censorship duration from report liquidity and outside payoff" data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoff; safeCensorshipDuration = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio) when liquidationExecutable and censorshipRate > 0; safeCensorshipDuration = infinity when liquidationExecutable and censorshipRate = 0; safeCensorshipDuration = not applicable otherwise" display="block">
+					<math aria-label="duration to target cost from report liquidity and outside payoff" data-source="oracleLiquidityRatio = oracleReportLiquidity / externalPayoff; durationToTargetCost = (targetGriefRatio + 1) / (censorshipRate \cdot oracleLiquidityRatio) when liquidationExecutable and censorshipRate > 0; durationToTargetCost = infinity when liquidationExecutable and censorshipRate = 0; durationToTargetCost = not applicable otherwise" display="block">
 						<mtable>
 							<mtr>
 								<mtd><mi>oracleLiquidityRatio</mi></mtd>
@@ -498,7 +489,7 @@
 								>
 							</mtr>
 							<mtr>
-								<mtd><mi>safeCensorshipDuration</mi></mtd>
+								<mtd><mi>durationToTargetCost</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
 									<mo>{</mo>
@@ -528,12 +519,12 @@
 							</mtr>
 						</mtable>
 					</math>
-					<p class="equation-note"><code>safeCensorshipDuration</code> is the model's historical name for this cost threshold; it does not establish a maximum protocol delay. Repeated funded disputes can restart the settlement window; see <a href="#intentional-economic-tradeoffs">Liveness and exposure limits</a>.</p>
+					<p class="equation-note"><code>durationToTargetCost</code> is the number of model steps of censorship after which <code>censorshipCost</code> reaches <code>(targetGriefRatio + 1) × externalPayoff</code>. It is not a maximum protocol delay.</p>
 				</div>
 
 				<details class="interactive-example" id="binary-censorship-example">
 					<summary>Binary censorship stress test</summary>
-					<p>Adjust the liquidation boundary, outside payoff, report liquidity, and censorship assumptions. The barrier starts at the fixed-fee floor and must be calibrated for the modeled deployment. Presets provide executable, guarded, and long-censorship scenarios.</p>
+					<p>Adjust the liquidation boundary, outside payoff, report liquidity, and censorship assumptions.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Liquidation executable</span><output data-example-output="liquidationExecutable">yes</output></div>
 						<div data-primary-output><span>Censorship cost</span><output data-example-output="censorshipCost">11424.00 ETH</output></div>
@@ -612,7 +603,7 @@
 								<div><span>Manipulated price error</span><output data-example-output="manipulatedPriceError">13.00%</output></div>
 								<div><span>Attacker payoff</span><output data-example-output="attackerPayoff">1000.00 ETH</output></div>
 								<div><span>Oracle liquidity ratio</span><output data-example-output="oracleLiquidityRatio">4.00</output></div>
-								<div><span>Duration to target cost (model steps)</span><output data-example-output="safeCensorshipDuration">4.20</output></div>
+								<div><span>Duration to target cost (model steps)</span><output data-example-output="durationToTargetCost">4.20</output></div>
 							</div>
 						</div>
 					</div>
@@ -622,102 +613,120 @@
 			<section id="parameters">
 				<h2>OpenOracle parameters used</h2>
 
-				<p>Values are the source constants and shared deployment configuration. A deployed coordinator exposes each configured value through a public getter.</p>
+				<p>A source constant is fixed in the Solidity source. Deployment configuration is the shared configuration that the deployment passes to the coordinator factory, named by its constant in <code>shared/statoblast/ts/initialReport/oracleInitialReport.ts</code>; a deployed coordinator exposes each configured value through a public getter. The line under each value says where it is set.</p>
 				<table>
 					<thead>
 						<tr>
 							<th>Parameter</th>
-							<th>Current integration value</th>
+							<th>Value and source</th>
 							<th>Use in Statoblast</th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr>
 							<td><code>token1Address</code> / <code>token2Address</code></td>
-							<td>WETH / REP</td>
+							<td>WETH / REP<br />The factory's WETH and the pool universe's REP token</td>
 							<td>Defines the REP/ETH price pair used for security-pool solvency checks.</td>
 						</tr>
 						<tr>
 							<td><code>minimumToken1ReportAttoEth()</code></td>
-							<td>Dynamic; see <a href="#security-guarantee">Report sizing and correction incentives</a> and the <a href="#initial-report-estimator-example">estimator</a>.</td>
+							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a> and the <a href="#initial-report-estimator-example">estimator</a>.<br />Derived per request</td>
 							<td>Minimum initial WETH position for a coordinator report.</td>
 						</tr>
 						<tr>
-							<td><code>initialReportPriorityFeeAttoEthPerGas</code></td>
-							<td>Configured per origin pool; UI default <code>10 nanoETH</code></td>
-							<td>Provides an immutable inclusion-fee component that every child pool inherits.</td>
-						</tr>
-						<tr>
 							<td>OpenOracle initial <code>currentAmount1</code></td>
-							<td>Selected initial WETH; see <a href="#security-guarantee">Report sizing and correction incentives</a></td>
-							<td>The sponsor may request and fund more than the minimum.</td>
+							<td>The greater of the minimum and the sponsor's <code>requestedInitialAttoWeth</code><br />Derived per request</td>
+							<td>Initial WETH position; the sponsor may fund more than the minimum.</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
-							<td>Derived with <code>escalationHaltMultiplierBps = 100,000</code> (<code>10x</code>); see <a href="#security-guarantee">Report sizing and correction incentives</a></td>
-							<td>Stops multiplicative report-size escalation; later disputes add one attoETH of WETH at a time.</td>
+							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.<br />Derived per request</td>
+							<td>Ends multiplicative escalation; see <a href="#dispute-escalation">Dispute escalation amounts</a>.</td>
 						</tr>
 						<tr>
-							<td><code>settlerRewardAttoEth</code></td>
-							<td>
-								Caller-committed; at least the
-								<a href="#request-funding">request cost</a>.
-							</td>
-							<td>The full committed request bounty is assigned to the account that settles the report and triggers the callback.</td>
+							<td><code>settlerReward</code></td>
+							<td>The committed <code>bountyAttoEth</code>; at least the <a href="#request-funding">request cost</a><br />Derived per request</td>
+							<td>Paid to the account that settles the report.</td>
 						</tr>
 						<tr>
-							<td><code>settlementTime</code></td>
-							<td><code>480 seconds (8 minutes)</code></td>
-							<td>
-								Sets the timestamp-based report settlement delay. The
-								<code>40 * 12</code> derivation assumes twelve-second blocks, but the configured OpenOracle <code>timeType</code> uses seconds. Staged operations expire after this delay plus their operation-specific validity window.
-							</td>
+							<td>Sizing inputs: <code>gasUnitsForOneDispute</code>, <code>openOracleSecurityMultiplierBps</code>, <code>targetPriceErrorForDispute</code>, <code>protocolFee</code>, <code>feePercentage</code>, <code>escalationHaltMultiplierBps</code>, <code>initialReportPriorityFeeAttoEthPerGas</code>, <code>OPEN_INTEREST_DIVIDER</code></td>
+							<td>See <a href="#formula-inputs">Formula inputs</a>.</td>
+							<td>Size the report and the escalation halt. The two fees also set OpenOracle's dispute fee accounting.</td>
 						</tr>
 						<tr>
-							<td><code>disputeDelay</code></td>
-							<td><code>0</code></td>
-							<td>Allows disputes immediately after each report and strictly before its settlement deadline. At the deadline, settlement is valid and a dispute is too late.</td>
+							<td><code>gasConsumedSettlement</code></td>
+							<td><code>1,000,000 gas</code><br />Deployment configuration <code>ORACLE_SETTLEMENT_GAS</code></td>
+							<td>Per-operation component of the callback gas limit.</td>
+						</tr>
+						<tr>
+							<td><code>SETTLEMENT_GAS_OVERHEAD</code></td>
+							<td><code>50,000 gas</code><br />Source constant</td>
+							<td>Per-operation allowance for coordinator bookkeeping.</td>
+						</tr>
+						<tr>
+							<td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td>
+							<td><code>4</code><br />Source constant</td>
+							<td>Price actions one settlement callback can attempt, counting each action inside a vault bundle.</td>
 						</tr>
 						<tr>
 							<td><code>callbackGasLimit</code></td>
-							<td>
-								<code>(gasConsumedSettlement + 50,000) × MAX_PENDING_SETTLEMENT_OPERATIONS</code>
-							</td>
-							<td>
-								Sets the callback gas limit for up to
-								<code>MAX_PENDING_SETTLEMENT_OPERATIONS</code> price actions, including actions inside vault bundles; settlement still needs enough surrounding gas to satisfy OpenOracle's callback headroom check.
-							</td>
+							<td><code>4,200,000 gas</code>; see <a href="#request-funding">Funding and report ownership</a>.<br />Derived from the three rows above</td>
+							<td>Gas forwarded to the settlement callback. Settlement also needs enough surrounding gas to satisfy OpenOracle's callback headroom check.</td>
 						</tr>
 						<tr>
-							<td><code>feePercentage</code> / <code>protocolFee</code></td>
-							<td><code>10000</code> / <code>100000</code></td>
-							<td>
-								Configures OpenOracle reporter and protocol fee accounting. Those fees contribute to the correction friction abstracted by
-								<a href="#attack-model"><code>honestDisputeBarrierFraction</code> in the external-payoff model</a>.
-							</td>
+							<td><code>gasConsumedOpenOracleReportPrice</code></td>
+							<td><code>100,000 gas</code><br />Deployment configuration <code>ORACLE_REPORT_GAS</code></td>
+							<td>Added to the callback gas limit in the <a href="#request-funding">request cost</a>.</td>
 						</tr>
 						<tr>
-							<td><code>protocolFeeRecipient</code></td>
-							<td><code>0x000000000000000000000000000000000000dEaD</code></td>
-							<td>Receives OpenOracle protocol fees for the coordinator-created report instance.</td>
+							<td><code>maxSettlementBaseFeeMultiplierBps</code></td>
+							<td><code>30,000 bps</code> (<code>3x</code>)<br />Deployment configuration <code>ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS</code></td>
+							<td>Scales the base fee implied by the bounty into the <a href="#settlement-validation-scope">settlement base-fee cap</a>.</td>
+						</tr>
+						<tr>
+							<td><code>minLiquidationPriceDistanceBps</code></td>
+							<td><code>1,000 bps</code> (<code>10%</code>)<br />Deployment configuration <code>ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS</code></td>
+							<td>Minimum price distance a liquidation must clear; see <a href="../explanation/liquidations.html#capacity-and-health">when a vault is liquidatable</a>.</td>
+						</tr>
+						<tr>
+							<td><code>settlementTime</code></td>
+							<td><code>480 seconds</code><br />Deployment configuration <code>ORACLE_SETTLEMENT_TIME</code></td>
+							<td>Report settlement delay on the timestamp clock. A staged operation expires once this delay plus its validity window has passed since it was queued.</td>
+						</tr>
+						<tr>
+							<td><code>disputeDelay</code></td>
+							<td><code>0</code><br />Deployment configuration <code>ORACLE_DISPUTE_DELAY</code></td>
+							<td>Allows disputes immediately after each report and strictly before its settlement deadline. At the deadline, settlement is valid and a dispute is too late.</td>
 						</tr>
 						<tr>
 							<td><code>multiplier</code></td>
-							<td><code>115</code></td>
-							<td>Before <code>escalationHalt</code>, requires WETH <code>token1</code> equal to <code>⌊prior amount × 1.15⌋</code>, capped at the halt. Integer flooring leaves prior amounts of one through six attoETH unchanged. At or above the halt, each dispute requires one more attoETH of WETH.</td>
+							<td><code>115</code> (<code>1.15x</code>)<br />Deployment configuration <code>ORACLE_MULTIPLIER</code></td>
+							<td>Growth of the WETH amount per dispute before the halt; see <a href="#dispute-escalation">Dispute escalation amounts</a>.</td>
+						</tr>
+						<tr>
+							<td><code>protocolFeeRecipient</code></td>
+							<td><code>0x000000000000000000000000000000000000dEaD</code><br />Deployment configuration <code>ORACLE_PROTOCOL_FEE_RECIPIENT</code></td>
+							<td>Receives OpenOracle protocol fees for coordinator-created reports.</td>
 						</tr>
 						<tr>
 							<td><code>timeType</code> / <code>trackDisputes</code></td>
-							<td><code>true</code> / <code>true</code></td>
-							<td>
-								The coordinator constructor requires timestamps because price freshness is measured from the final report timestamp. Coordinator reports always enable dispute history so settlement can validate the final report's recorded base fee. Settlement rejects the price if the
-								<code>uint24</code> report counter is saturated.
-							</td>
+							<td><code>true</code> / <code>true</code><br />Deployment configuration; the constructor rejects any other value</td>
+							<td>Timestamps let the coordinator measure freshness from settlement eligibility; dispute history lets settlement validate the final report's recorded base fee.</td>
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>
-							<td><code>OpenOraclePriceCoordinator</code></td>
-							<td>Routes settled amounts back into Statoblast's price cache and staged-operation executor.</td>
+							<td>The pool's <code>OpenOraclePriceCoordinator</code><br />Set by the coordinator</td>
+							<td>Routes settled amounts back into the price cache and staged-operation executor.</td>
+						</tr>
+						<tr>
+							<td><code>PRICE_VALID_FOR_SECONDS</code> / <code>SEPOLIA_PRICE_VALID_FOR_SECONDS</code></td>
+							<td>See <a href="#integration-terms">Token pair and cached price</a>.<br />Source constant</td>
+							<td>Freshness window of an accepted price.</td>
+						</tr>
+						<tr>
+							<td><code>MAX_OPERATION_VALID_FOR_SECONDS</code></td>
+							<td><code>300 seconds</code><br />Source constant</td>
+							<td>Largest <code>validForSeconds</code> a staged operation may request.</td>
 						</tr>
 					</tbody>
 				</table>

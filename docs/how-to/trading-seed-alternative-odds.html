@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Compute the Yes and No deposits that initialize a pair at a chosen Conditional Yes price." />
+		<meta name="description" content="Seed a new trading pool at a chosen Conditional Yes price by calling its contract directly, and check the result." />
 		<title>Seed alternative conditional odds</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -13,26 +13,34 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Seed alternative conditional odds</h1>
-				<p>Use this guide when you call the trading pool contract yourself and want a new <a href="../reference/glossary.html#trading-pool">trading pool</a> to open at a specific Conditional Yes price rather than 50%.</p>
+				<p>Use this guide when you call the <a href="../reference/glossary.html#trading-pool">trading pool</a> contract (the pair) yourself and want a new trading pool to open at a specific Conditional Yes price rather than 50%.</p>
 			</header>
 			<section id="prerequisites">
 				<h2>Before you call initialize</h2>
+				<p>Creating the trading pool and initializing it directly are separate transactions, so anyone can initialize it first at another price. Prefer the router's <code>createPairAndInitializeWithEth</code>, which creates and seeds in one transaction and takes the price in basis points; the UI's <strong>Initialize</strong> form uses it, as <a href="../tutorials/trading-first-market.html">Your first Trading market</a> shows. Continue only if you must call <code>initialize</code> yourself.</p>
 				<ul>
-					<li>Create the trading pool for the SecurityPool with the factory's <code>createPair(securityPool)</code>, unless it already exists.</li>
-					<li>Approve the trading pool as an operator on the canonical ShareToken; <code>initialize</code> pulls both deposits from the caller.</li>
-					<li>Make the smaller deposit larger than <code>MINIMUM_LIQUIDITY</code> (1,000 share base units). The trading pool mints that many LP base units to a lock address that no key controls, so you receive the smaller deposit minus 1,000.</li>
+					<li>The question has not ended, its universe has not forked, and the SecurityPool is <code>Operational</code> and unresolved.</li>
+					<li>The smaller deposit must exceed <code>MINIMUM_LIQUIDITY</code> (1,000 share base units). The trading pool mints that many LP base units to a lock address that no key controls, so you receive the smaller deposit minus 1,000.</li>
 				</ul>
-				<p>The <a href="../reference/trading/contracts.html#pair">trading pool reference</a> lists every revert condition.</p>
+				<p>The <a href="../reference/trading/contracts.html#pair">pair reference</a> lists the remaining preconditions of <code>initialize</code>.</p>
 			</section>
 			<section id="steps">
-				<h2>Compute the deposits</h2>
-				<p>You do not need this arithmetic in the UI: the <strong>Create market</strong> form takes a <strong>Conditional Yes price</strong> and the router's <code>createPairAndInitializeWithEth</code> computes the deposits, as <a href="../tutorials/trading-first-market.html">Your first Trading market</a> shows. Use it only when you call <code>pair.initialize(yesAmount, noAmount, minLiquidity, recipient)</code> directly.</p>
-				<p>Choose the Conditional Yes price <code>p</code> in basis points with <code>0 &lt; p &lt; 10,000</code>, and let <code>q</code> be the number of <a href="../reference/glossary.html#complete-set">complete sets</a> you created, in share base units.</p>
-				<ul>
-					<li>If <code>p ≥ 5,000</code>, deposit all <code>q</code> No and <code>⌊q × (10,000 − p) / p⌋</code> Yes.</li>
-					<li>If <code>p &lt; 5,000</code>, deposit all <code>q</code> Yes and <code>⌊q × p / (10,000 − p)⌋</code> No.</li>
-				</ul>
-				<p>Both amounts must be nonzero. <a href="../explanation/trading/pricing.html">Conditional pricing</a> works through the 70% example and explains why the larger reserve is the side you are betting against; the <a href="../reference/trading/units-and-rounding.html">units and rounding reference</a> gives the rounding directions.</p>
+				<h2>Seed the trading pool</h2>
+				<ol>
+					<li>Create <a href="../reference/glossary.html#complete-set">complete sets</a> by sending ETH to the SecurityPool's <code>createCompleteSet()</code>. Let <code>q</code> be the Yes balance it minted to you, in share base units; the ETH-to-share rate is not fixed, so read the balance.</li>
+					<li>Create the trading pool with the factory's <code>createPair(securityPool)</code>, unless it already exists.</li>
+					<li>
+						Choose the Conditional Yes price <code>p</code> in basis points with <code>0 &lt; p &lt; 10,000</code> and compute the deposits:
+						<ul>
+							<li>If <code>p ≥ 5,000</code>, deposit all <code>q</code> No and <code>⌊q × (10,000 − p) / p⌋</code> Yes.</li>
+							<li>If <code>p &lt; 5,000</code>, deposit all <code>q</code> Yes and <code>⌊q × p / (10,000 − p)⌋</code> No.</li>
+						</ul>
+					</li>
+					<li>Approve the trading pool as an operator on the canonical ShareToken with <code>setApprovalForAll</code>; <code>initialize</code> pulls both deposits from the caller.</li>
+					<li>Call <code>initialize(yesAmount, noAmount, minLiquidity, recipient)</code> on the trading pool with those deposits. Set <code>minLiquidity</code> to the smaller deposit minus 1,000.</li>
+					<li>Check the result: <code>getReserves()</code> returns your two deposits and <code>tradingStatus()</code> returns <code>Open</code>. If <code>initialize</code> reverted with <code>Already initialized</code>, someone else seeded the trading pool first.</li>
+				</ol>
+				<p><a href="../explanation/trading/pricing.html">Conditional pricing</a> works through the 70% example and explains why the larger reserve is the side you are betting against.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>
