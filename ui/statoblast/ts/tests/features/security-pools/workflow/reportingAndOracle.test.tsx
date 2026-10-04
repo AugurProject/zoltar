@@ -1,4 +1,5 @@
-import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
+import * as reportingCopy from '@zoltar/ui-statoblast-shared/copy/reporting.js'
+import { getOraclePriceValidityWindowSeconds } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -96,9 +97,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const reportButton = within(document.body).getByRole('button', { name: 'Report on selected side' })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
+		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired(getOraclePriceValidityWindowSeconds()))
 		expect(reportButton.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Report on selected side').reason).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
-		expect(document.body.textContent).not.toContain(pricingCopy.poolOraclePriceExpiredError)
 	})
 
 	test('allows reporting with a stale oracle price when the pool has no underwriting commitments', async () => {
@@ -114,8 +115,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const reportButton = within(document.body).getByRole('button', { name: /^Report No ·/ })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
+		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired(getOraclePriceValidityWindowSeconds()))
 		expect(reportButton.disabled).toBe(false)
-		expect(document.body.textContent).not.toContain(pricingCopy.poolOraclePriceExpiredError)
 	})
 
 	test.each([
@@ -167,7 +168,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		expect(within(document.body).queryByRole('button', { name: /^Report No ·/ })).toBeNull()
 		expect(document.body.textContent).toContain('Resolved as Yes.')
-		expect(document.body.textContent).not.toContain(pricingCopy.poolOraclePriceExpiredError)
+		expect(document.body.textContent).not.toContain(reportingCopy.priceExpired(getOraclePriceValidityWindowSeconds()))
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
