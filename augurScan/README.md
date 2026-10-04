@@ -21,7 +21,7 @@ The public RPC defaults are suitable for evaluation but may rate-limit a large b
 
 The Compose services join the external `zoltar` network. If this repository's Reth Compose project is running, `SEPOLIA_RPC_URL=http://reth:8545` reaches it without exposing RPC outside the host.
 
-For production configuration, access controls, backups, upgrades, restore checks, integrity review, deterministic exports, and safe shutdown, follow [OPERATIONS.md](OPERATIONS.md).
+For production configuration, backups, upgrades, restore checks, integrity review, deterministic exports, and safe shutdown, follow [OPERATIONS.md](OPERATIONS.md).
 
 ## Explore the data
 
