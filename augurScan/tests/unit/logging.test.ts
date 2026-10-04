@@ -105,6 +105,49 @@ describe('AugurScan runtime logging', () => {
 		await expect(access(filename)).rejects.toMatchObject({ code: 'ENOENT' })
 	})
 
+	test('includes reproducible eth_call context and revert bytes in console errors', async () => {
+		const filename = await rpcLogPath()
+		const to = '0x1234567890123456789012345678901234567890'
+		const from = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'
+		await withSilencedConsole(async ({ consoleError }) => {
+			const loggingFetch = createRethLoggingFetch(filename, async () => Response.json({ id: 7, jsonrpc: '2.0', error: { code: 3, message: 'execution reverted: provider detail', data: '0x08c379a0' } }))
+			await postRpc(loggingFetch, 7, 'eth_call', [{ to, from, data: '0x70a08231' }, '0x123'])
+			const output = consoleError.mock.calls.flat().join(' ')
+			for (const detail of ['code 3 (Execution reverted)', 'message: execution reverted', 'request id: 7', `to: ${to}`, `from: ${from}`, 'data: 0x70a08231', 'block: 0x123', 'revert data: 0x08c379a0']) expect(output).toContain(detail)
+			expect(output).not.toContain('provider detail')
+		})
+	})
+
+	test('bounds eth_call diagnostics and excludes unsafe provider and request text', async () => {
+		const filename = await rpcLogPath()
+		await withSilencedConsole(async ({ consoleError }) => {
+			const loggingFetch = createRethLoggingFetch(filename, async () => Response.json({ id: 'secret-id', jsonrpc: '2.0', error: { code: 3, message: 'execution reverted: https://rpc.example/private-key\ninjected line', data: `0x${'ab'.repeat(1000)}` } }))
+			await postRpc(loggingFetch, 8, 'eth_call', [
+				{ to: 'https://rpc.example/private-key', from: 'injected\nline', data: `0x${'cd'.repeat(1000)}` },
+				{ blockHash: `0x${'ab'.repeat(32)}`, requireCanonical: true },
+			])
+			const output = consoleError.mock.calls.flat().join(' ')
+			expect(output).toContain('message: execution reverted')
+			expect(output).toContain(`block hash: 0x${'ab'.repeat(32)}`)
+			expect(output).toContain('[truncated]')
+			expect(output.length).toBeLessThan(1600)
+			for (const unsafe of ['private-key', 'injected', 'secret-id', '\n']) expect(output).not.toContain(unsafe)
+		})
+	})
+
+	test('includes eth_call context when the transport fails', async () => {
+		const filename = await rpcLogPath()
+		await withSilencedConsole(async ({ consoleError }) => {
+			const loggingFetch = createRethLoggingFetch(filename, async () => {
+				throw new Error('https://rpc.example/private-key')
+			})
+			await expect(postRpc(loggingFetch, 9, 'eth_call', [{ input: '0x70a08231', value: '0x0', gas: '0xffff' }, 'latest'])).rejects.toThrow('private-key')
+			const output = consoleError.mock.calls.flat().join(' ')
+			for (const detail of ['RPC transport error', 'request id: 9', 'input: 0x70a08231', 'value: 0x0', 'gas: 0xffff', 'block: latest']) expect(output).toContain(detail)
+			expect(output).not.toContain('private-key')
+		})
+	})
+
 	test('logs invalid JSON and malformed JSON-RPC error responses as failures', async () => {
 		const filename = await rpcLogPath()
 		const responses = [new Response('not json'), Response.json({ error: { message: 'missing error code' }, id: 2, jsonrpc: '2.0' })]
