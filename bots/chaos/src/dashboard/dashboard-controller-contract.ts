@@ -1,4 +1,6 @@
 export type ChaosDashboardController = {
+	getDeploymentArchives?: (() => unknown | Promise<unknown>) | undefined
+	setDeploymentArchive?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	getConfigurationDocument?: (() => unknown | Promise<unknown>) | undefined
 	setConfigurationDocument?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	getConfiguration: () => unknown | Promise<unknown>

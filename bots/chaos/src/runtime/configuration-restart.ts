@@ -13,6 +13,7 @@ import type { ChaosProcessLocks, ConfigurationState } from './dashboard-controll
 import { assertSettingsUpdatePaused, assertSignerCompatibleWithPending, restartSafeSettings, signerAddress } from './configuration-candidates.ts'
 import { ConfigurationCommitIndeterminate, latchSafetyPause, safelyPausedSettings } from './configuration-commit.ts'
 import { assertDurableSignerScope } from './operator-context.ts'
+import { deploymentArchivePath } from './deployment-archives.ts'
 
 export type RestartConfiguration = ConfigurationState
 
@@ -36,8 +37,9 @@ async function exists(path: string) {
 }
 
 /** Save a paused configuration for the next operator run without repointing the current run's state or locks. */
-export async function prepareConfigurationRestart(options: RestartOptions, requested: OperatorSettings, rememberSigner: boolean): Promise<RestartConfiguration> {
+export async function prepareConfigurationRestart(options: RestartOptions, requested: OperatorSettings, rememberSigner: boolean, targetOwner?: { path: string; revision: string }): Promise<RestartConfiguration> {
 	const { configuration, state, locks } = options
+	const owner = targetOwner ?? configuration
 	const persistConfiguration = options.saveConfiguration ?? saveSettings
 	const persistState = options.saveState ?? saveDurableState
 	assertSettingsUpdatePaused(configuration.settings, state.paused)
@@ -59,7 +61,7 @@ export async function prepareConfigurationRestart(options: RestartOptions, reque
 		if (stateRelative === '' || stateRelative.startsWith('..')) throw new Error('Container state files must remain inside the protected .state directory')
 	}
 	if (next.runtime.ui && next.runtime.uiHost === '0.0.0.0' && options.loopbackPublished !== true) throw new Error('Bind the chaos dashboard to 127.0.0.1 unless its container port is published only on host loopback')
-	await assertSettingsProfileIsolation(configuration.path, next)
+	await assertSettingsProfileIsolation(owner.path, next)
 	const stateChanged = resolve(next.runtime.stateFile) !== resolve(configuration.settings.runtime.stateFile)
 	const nextStateLock = stateChanged ? await acquireFileProcessLock(next.runtime.stateFile, 'chaos bot replacement state') : undefined
 	let releaseSigner: (() => Promise<void>) | undefined
@@ -91,8 +93,10 @@ export async function prepareConfigurationRestart(options: RestartOptions, reque
 				if (nextState.profileId !== executionProfileId(next)) throw new Error('Selected state file belongs to another deployment')
 				assertDurableDeploymentFactory(next, nextState, next.runtime.stateFile)
 			}
-			const id = createHash('sha256').update(`${configuration.settings.runtime.stateFile}:${randomUUID()}`).digest('hex')
-			await saveSettings(`${configuration.path}.retired-${id}.json`, restartSafeSettings(safelyPausedSettings(configuration.settings), configuration.rememberSigner))
+			if (targetOwner === undefined) {
+				const id = createHash('sha256').update(`${configuration.settings.runtime.stateFile}:${randomUUID()}`).digest('hex')
+				await saveSettings(deploymentArchivePath(configuration.path, id), restartSafeSettings(safelyPausedSettings(configuration.settings), configuration.rememberSigner))
+			}
 			await persistState(next.runtime.stateFile, nextState)
 		}
 	} finally {
@@ -106,7 +110,7 @@ export async function prepareConfigurationRestart(options: RestartOptions, reque
 	const persisted = restartSafeSettings(next, rememberSigner)
 	let revision: string
 	try {
-		revision = await persistConfiguration(configuration.path, persisted, configuration.revision)
+		revision = await persistConfiguration(owner.path, persisted, owner.revision)
 	} catch (error) {
 		latchSafetyPause(state)
 		try {
@@ -116,5 +120,5 @@ export async function prepareConfigurationRestart(options: RestartOptions, reque
 		}
 		throw new ConfigurationCommitIndeterminate(error)
 	}
-	return { path: configuration.path, revision, settings: next, rememberSigner }
+	return { path: owner.path, revision, settings: next, rememberSigner }
 }
