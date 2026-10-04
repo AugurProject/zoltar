@@ -47,15 +47,15 @@
 								<dd id="next-run">Not scheduled</dd>
 							</div>
 							<div>
-								<dt>Previous delay</dt>
+								<dt>Scheduled wait</dt>
 								<dd id="last-delay">—</dd>
 							</div>
 							<div>
-								<dt>Eligible now</dt>
+								<dt>Eligible operations</dt>
 								<dd id="eligible-count">—</dd>
 							</div>
 							<div>
-								<dt>Selected operation</dt>
+								<dt>Last selected operation</dt>
 								<dd id="selected-operation">None</dd>
 							</div>
 						</dl>
@@ -72,7 +72,7 @@
 						<div class="balance-grid">
 							<div class="balance"><span>ETH</span><strong id="balance-eth">—</strong></div>
 							<div class="balance"><span>WETH</span><strong id="balance-weth">—</strong></div>
-							<div class="balance rep-balance"><span>REP positions</span><strong id="balance-rep-total">—</strong></div>
+							<div class="balance rep-balance"><span>REP tokens</span><strong id="balance-rep-total">—</strong></div>
 						</div>
 						<div id="rep-balances" class="token-list empty-state">No REP inventory observed.</div>
 					</article>
@@ -90,11 +90,11 @@
 						</div>
 						<dl class="rpc-health-grid">
 							<div>
-								<dt>Configured reads</dt>
+								<dt>Configured endpoints</dt>
 								<dd id="rpc-configured-total">—</dd>
 							</div>
 							<div>
-								<dt>Healthy reads</dt>
+								<dt>Healthy endpoints</dt>
 								<dd id="rpc-healthy-count">—</dd>
 							</div>
 							<div>
@@ -219,7 +219,7 @@
 							>Eligibility
 							<select id="catalog-eligibility-filter">
 								<option value="all">All eligibility states</option>
-								<option value="eligible">Eligible now</option>
+								<option value="eligible">Eligible operations</option>
 								<option value="blocked">Blocked now</option>
 								<option value="disabled">Policy disabled</option>
 								<option value="not-selectable">Not independently selectable</option>
