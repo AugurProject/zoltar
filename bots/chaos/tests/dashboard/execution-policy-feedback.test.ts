@@ -42,7 +42,7 @@ browserTest(
 						maximumRepPerOperation: '10',
 						minimumEthReserve: ready ? '0.05' : '0',
 						minimumRepReserve: '10',
-						selectableOperationAllowlist: null,
+						selectableOperationAllowlist: ['open-oracle.weth.wrap'],
 						workflowValidForBlocks: 288,
 					},
 					submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
@@ -120,6 +120,9 @@ browserTest(
 				await waitFor("document.querySelector('#settings-fields')?.disabled === false && document.querySelector('#execution-fieldset')?.disabled === false")
 				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-nav a'), chip => chip.textContent)")).toEqual(['1Connect', '2Execution policy', '3Go live', '4Complete configuration'])
 				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-go-live .settings-group > summary strong'), title => title.textContent)")).toEqual(['Transaction signer', 'Execution mode'])
+				expect(await cdp.evaluate("document.querySelector('#all-selectable-operations') === null && document.querySelector('#selectable-operation-allowlist') === null")).toBe(true)
+				await cdp.evaluate("document.querySelector('#settings-form').scrollIntoView({ block: 'start' }); window.scrollBy(0, -document.querySelector('.operator-shell').getBoundingClientRect().height - 16)")
+				await capture(`policy-${width}`)
 				// Nothing but the pause holds yet, so every required prerequisite is listed as missing and the switch stays locked.
 				expect(await cdp.evaluate(readiness)).toEqual(['true:Bot paused', 'false:Transaction signer', 'false:Chain and RPC endpoints', 'true:Independent quorum RPCs', 'false:Reserve policy', 'false:Canonical scan', 'false:Live inventory', 'false:Delivery', 'true~:Recovery work'])
 				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · prerequisites missing')
@@ -222,6 +225,11 @@ browserTest(
 				expect(executionMutations.at(-1)).toEqual({ execute: false, revision: String(revision - 1) })
 				expect(settingsMutations).toHaveLength(0)
 			}
+			await cdp.evaluate("document.querySelector('#allow-high-risk').click(); document.querySelector('#save-settings').click()")
+			await waitFor("document.querySelector('.operator-confirm-dialog')?.open === true")
+			await cdp.evaluate("document.querySelector('.operator-confirm-dialog button[type=submit]').click()")
+			await waitFor("document.querySelector('#settings-save-status')?.textContent === 'Execution policy saved.'")
+			expect(settingsMutations.at(-1)).toMatchObject({ patch: { strategy: { selectableOperationAllowlist: ['open-oracle.weth.wrap'] } } })
 			expect(cdp.issues).toEqual([])
 		} finally {
 			releaseSave()

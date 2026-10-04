@@ -296,14 +296,14 @@ export type ExecutionPolicyScope = 'durable-continuation' | 'novel-selection'
 
 export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[], settings: OperatorSettings, indexComplete: boolean, indexedThroughBlock: string, anchorBlock: string, ethBalanceAttoEth: bigint, scope: ExecutionPolicyScope = 'novel-selection') {
 	const enabled = new Set(settings.strategy.enabledEcosystems)
-	const selectableOperationAllowlist = settings.strategy.selectableOperationAllowlist === undefined ? undefined : new Set(settings.strategy.selectableOperationAllowlist)
+	const selectableOperationAllowlist = new Set(settings.strategy.selectableOperationAllowlist)
 	return evaluations.map(evaluation => {
 		const blockers = [...evaluation.eligibility.blockers]
 		if (!enabled.has(evaluation.definition.ecosystem)) {
 			blockers.push(`The ${evaluation.definition.ecosystem} ecosystem is disabled by policy`)
 		}
 		const genesisInitializerExemption = settings.strategy.initializeGenesisUniverse && genesisInitializationDefinitionIds.has(evaluation.definition.id)
-		if (scope === 'novel-selection' && evaluation.definition.classification === 'selectable' && !genesisInitializerExemption && selectableOperationAllowlist !== undefined && !selectableOperationAllowlist.has(evaluation.definition.id)) {
+		if (scope === 'novel-selection' && evaluation.definition.classification === 'selectable' && !genesisInitializerExemption && !selectableOperationAllowlist.has(evaluation.definition.id)) {
 			blockers.push('Random selection is disabled for this operation. Enable it in the operation catalog.')
 		}
 		if (settings.submission.mode === 'public' && evaluation.plan?.terminalSubmission !== undefined) {

@@ -229,12 +229,10 @@ describe('chaos-bot settings', () => {
 		expect(settings.scheduler).toEqual({ maximumDelaySeconds: 3_600, minimumDelaySeconds: 60 })
 	})
 
-	test('round-trips null as all selectable operations and explicit canary allowlists as exact IDs', async () => {
+	test('rejects unrestricted selection and round-trips explicit operation selections', async () => {
 		const example = await storedExample()
 		const strategy = record(example['strategy'])
-		const allSelectable = parseSettings({ ...example, strategy: { ...strategy, selectableOperationAllowlist: null } })
-		expect(allSelectable.strategy.selectableOperationAllowlist).toBeUndefined()
-		expect(serializedSettings(allSelectable).strategy.selectableOperationAllowlist).toBeNull()
+		expect(() => parseSettings({ ...example, strategy: { ...strategy, selectableOperationAllowlist: null } })).toThrow('must be an array')
 
 		const canary = parseSettings({
 			...example,

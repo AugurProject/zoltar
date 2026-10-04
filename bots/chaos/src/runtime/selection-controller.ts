@@ -42,7 +42,7 @@ export function createSelectionController(options: SelectionControllerOptions) {
 				const operationId = body['operationId']
 				if (typeof operationId !== 'string' || !selectable.includes(operationId) || typeof body['enabled'] !== 'boolean') throw new Error('Choose a selectable operation and whether to enable it')
 				const current = options.configuration.settings
-				const allowed = new Set(current.strategy.selectableOperationAllowlist ?? selectable)
+				const allowed = new Set(current.strategy.selectableOperationAllowlist)
 				if (body['enabled']) allowed.add(operationId)
 				else allowed.delete(operationId)
 				const serialized = serializedSettings(current)

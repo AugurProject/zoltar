@@ -58,7 +58,7 @@ export async function verifyDegradedSubmissionReadiness(context: WorkflowRecover
 	fixture.submissionConfigured = true
 }
 
-/** The resume dialog reports canary and unrestricted random-novelty scope with an accessible action order. */
+/** The resume dialog reports explicit and empty random-selection scope with an accessible action order. */
 export async function verifyResumeScope(context: WorkflowRecoveryContext, viewport: WorkflowViewport) {
 	const { accessibilityIdentity, cdp, dashboard, expectVisibleIdentifiers, fixture, waitFor } = context
 	fixture.initialDashboardState = pausedWorkflowRenderingState
@@ -81,11 +81,11 @@ export async function verifyResumeScope(context: WorkflowRecoveryContext, viewpo
 		})()`),
 	).toEqual({ ids: 'open-oracle.blocked-sibling\ntrading.position.enter', summary: '2-ID canary', warningHidden: true })
 	await cdp.evaluate("document.querySelector('#cancel-resume')?.click()")
-	fixture.selectableOperationAllowlist = null
+	fixture.selectableOperationAllowlist = []
 	await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
-	await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${viewport.label} unrestricted resume fixture did not render`)
+	await waitFor("document.querySelector('#mode-badge')?.textContent === 'Dry run'", `${viewport.label} empty-selection resume fixture did not render`)
 	await cdp.evaluate("document.querySelector('#pause-button')?.click()")
-	await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} unrestricted resume dialog did not open`)
+	await waitFor("document.querySelector('#resume-dialog')?.open === true", `${viewport.label} empty-selection resume dialog did not open`)
 	expect(
 		await cdp.evaluate(`(() => {
 			const scope = [...document.querySelectorAll('#resume-preflight li')].find(row => row.querySelector('span')?.textContent === 'Random novelty scope')
@@ -96,7 +96,7 @@ export async function verifyResumeScope(context: WorkflowRecoveryContext, viewpo
 				warning: document.querySelector('#resume-random-scope-warning')?.textContent,
 			}
 		})()`),
-	).toEqual({ button: 'Resume unrestricted bot', disabled: false, scope: 'ALL selectable operations', warning: 'Random novelty is unrestricted. Any due eligible selectable operation may run immediately after resume.' })
+	).toEqual({ button: 'Resume bot', disabled: false, scope: 'Lifecycle only — no random novelty', warning: '' })
 	expect(
 		await cdp.evaluate(`(() => {
 			const actions = [...document.querySelectorAll('#resume-dialog .dialog-actions button')]

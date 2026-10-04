@@ -112,8 +112,6 @@ export function createDashboardElements() {
 		highRiskInput: element('allow-high-risk', HTMLInputElement),
 		irreversibleInput: element('allow-irreversible', HTMLInputElement),
 		initializeGenesisInput: element('initialize-genesis-universe', HTMLInputElement),
-		allSelectableOperationsInput: element('all-selectable-operations', HTMLInputElement),
-		selectableOperationAllowlistInput: element('selectable-operation-allowlist', HTMLTextAreaElement),
 		minDelayInput: element('min-delay', HTMLInputElement),
 		maxDelayInput: element('max-delay', HTMLInputElement),
 		reserveEthInput: element('reserve-eth', HTMLInputElement),

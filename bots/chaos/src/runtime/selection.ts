@@ -29,9 +29,9 @@ export function urgentOperationPlans(evaluations: readonly EvaluatedOperation[])
 	})
 }
 
-export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist?: readonly string[]) {
-	const allowed = selectableOperationAllowlist === undefined ? undefined : new Set(selectableOperationAllowlist)
-	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && (allowed === undefined || allowed.has(plan.definitionId)))
+export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist: readonly string[]) {
+	const allowed = new Set(selectableOperationAllowlist)
+	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && allowed.has(plan.definitionId))
 }
 
 /** Probe randomly without replacement; no scheduler run or workflow starts until a probe succeeds. */
