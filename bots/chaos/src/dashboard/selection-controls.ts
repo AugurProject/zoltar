@@ -3,7 +3,7 @@ type ControlState = {
 	frozen: boolean
 	paused: boolean
 	revision: string | number | undefined
-	selection: string[] | null | undefined
+	selection: string[] | undefined
 	scheduledAt: string | undefined
 }
 
@@ -39,7 +39,7 @@ export function createSelectionControls(options: SelectionControlsOptions) {
 			// the whole catalog flicker between checked/enabled and unchecked/disabled styling.
 			const awaitingSave = pendingToggleIds.has(id)
 			toggle.disabled = awaitingSave || !state.available || state.frozen || !state.paused || state.selection === undefined
-			if (!awaitingSave) toggle.checked = state.selection === null || state.selection?.includes(id) === true
+			if (!awaitingSave) toggle.checked = state.selection?.includes(id) === true
 		}
 	}
 	const mutate = async (path: string, body: () => unknown, status: HTMLElement, success: string, toggleId?: string) => {

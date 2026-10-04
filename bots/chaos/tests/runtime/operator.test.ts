@@ -240,7 +240,7 @@ describe('chaos operator runtime', () => {
 			reason: 'unplanned-due-identity',
 		})
 
-		expect(randomOperationPlans(blocked)).toEqual([])
+		expect(randomOperationPlans(blocked, [selectablePlan.definitionId])).toEqual([])
 		expect(urgentOperationPlans(blocked)).toEqual([urgentPlan])
 		expect(blocked[0]?.eligibility.blockers[0]).toContain('random novelty remains blocked')
 	})

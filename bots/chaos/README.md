@@ -77,7 +77,7 @@ Keep `paused: true` and `runtime.execute: false`, then validate and run:
 Leave that command running, then open <http://127.0.0.1:4193>. Settings is grouped into setup steps with a jump bar:
 
 1. **Connect**: chain and RPCs.
-2. **Execution policy**: risk gates, allowlist, reserves, timing, and ecosystems.
+2. **Execution policy**: risk gates, reserves, timing, and ecosystems. Choose operations individually in the **Operation catalog**.
 3. **Go live**: transaction signer and execution mode.
 4. **Complete configuration**: all remaining fields, including contract addresses, discovery limits, submission, and runtime.
 

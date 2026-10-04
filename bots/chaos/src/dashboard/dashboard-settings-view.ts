@@ -95,10 +95,6 @@ export function createDashboardSettingsView(context: DashboardSettingsViewContex
 		elements.highRiskInput.checked = value.allowHighRiskOperations === true
 		elements.irreversibleInput.checked = value.allowIrreversibleOperations === true
 		elements.initializeGenesisInput.checked = value.initializeGenesisUniverse === true
-		const allSelectableOperations = value.selectableOperationAllowlist === null
-		elements.allSelectableOperationsInput.checked = allSelectableOperations
-		elements.selectableOperationAllowlistInput.value = Array.isArray(value.selectableOperationAllowlist) ? value.selectableOperationAllowlist.join('\n') : ''
-		elements.selectableOperationAllowlistInput.disabled = allSelectableOperations
 		elements.minDelayInput.value = String(value.minimumDelaySeconds ?? 60)
 		elements.maxDelayInput.value = String(value.maximumDelaySeconds ?? 3_600)
 		elements.reserveEthInput.value = String(value.minimumEthReserve ?? '0.05')

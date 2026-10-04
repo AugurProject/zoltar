@@ -18,7 +18,7 @@ export function executionPolicyScope(configuration: Configuration) {
 		configuration.allowHighRiskOperations === true,
 		configuration.allowIrreversibleOperations === true,
 		configuration.initializeGenesisUniverse === true,
-		configuration.selectableOperationAllowlist ?? null,
+		configuration.selectableOperationAllowlist,
 		String(configuration.minimumDelaySeconds ?? ''),
 		String(configuration.maximumDelaySeconds ?? ''),
 		String(configuration.minimumEthReserve ?? ''),

@@ -1406,8 +1406,8 @@ describe('chaos dashboard server', () => {
 		expect(explorerUrl(undefined)).toBeUndefined()
 	})
 
-	test('projects the internal all-selection sentinel as an explicit public null', () => {
-		expect(Reflect.get(publicChaosConfiguration({ settings: { strategy: { selectableOperationAllowlist: undefined } } }), 'selectableOperationAllowlist')).toBeNull()
+	test('leaves unavailable selection policy unavailable instead of allowing every operation', () => {
+		expect(Reflect.get(publicChaosConfiguration({ settings: { strategy: { selectableOperationAllowlist: undefined } } }), 'selectableOperationAllowlist')).toBeUndefined()
 	})
 })
 
