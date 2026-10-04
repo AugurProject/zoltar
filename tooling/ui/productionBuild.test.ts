@@ -562,7 +562,7 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 // Stop after approvals so recovery tests can fail the deposit transaction itself.
 async function prepareVaultDeposit(driver: ProductionBrowserDriver, amount: string) {
 	await driver.waitForBodyText('Vault operations')
-	await driver.setInputByLabel('Deposit REP (optional)', amount)
+	await driver.setInputByLabel('REP deposit amount (optional)', amount)
 	await driver.waitForButtonEnabled('Review vault operations')
 	await driver.clickButton('Review vault operations')
 	for (let attempt = 0; attempt < 600; attempt += 1) {
@@ -627,12 +627,12 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	]) {
 		await driver.resize(viewport)
 		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
-		await driver.waitForBodyText('Enter a starting price')
+		await driver.waitForBodyText('Enter a positive initial report price.')
 		expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
 		const emptyGeometry = await priceDialogGeometry()
 		const emptyInputWidth = await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")
 		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, 'a')
-		await driver.waitForBodyText('Enter a positive REP per ETH price')
+		await driver.waitForBodyText('Enter a positive initial report price.')
 		if (viewport.width > 600) expect(await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")).toBe(emptyInputWidth)
 		else {
 			expect(
@@ -654,7 +654,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 		expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
 		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
-		await driver.waitForBodyText('Enter a starting price')
+		await driver.waitForBodyText('Enter a positive initial report price.')
 		expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 	}
 	await driver.resize({ width: 1440, height: 900 })
@@ -662,12 +662,12 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '3')
 	await driver.waitForBodyText('Preparing funding and approvals…')
 	await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-	await completeTransactionReview('Requested new price')
-	await driver.waitForTransactionStatus('Confirmed', 'Requested new price')
+	await completeTransactionReview('Price requested')
+	await driver.waitForTransactionStatus('Confirmed', 'Price requested')
 	expect(await driver.evaluate("document.querySelector('.global-transaction-dialog .global-transaction-notice .badge')?.textContent?.trim()")).toBe('Confirmed')
 	const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('.global-transaction-dialog .global-transaction-dismiss'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
 	expect(priceResultDismissed).toBe(true)
-	await driver.waitForBodyWithoutText('Requested new price')
+	await driver.waitForBodyWithoutText('Price requested')
 	expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 	await driver.clickButton('+10 min')
 	// The price was requested from the Price oracle tool, and advancing time must not move the view off it.
@@ -680,7 +680,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.waitForButtonEnabled('Settle report')
 	await driver.clickButton('Settle report')
 	expect(await driver.evaluate("document.querySelector('.operation-modal-panel') === null")).toBe(true)
-	const settledTitle = `Settled report #${pendingReportId}`
+	const settledTitle = `Report #${pendingReportId} settled`
 	await completeTransactionReview(settledTitle)
 	await driver.waitForTransactionStatus('Confirmed', settledTitle)
 	await driver.clickButton('Dismiss')
@@ -776,9 +776,9 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 
 	await selectReportingOutcome('Yes')
 	// A submitted report clears its amount, and the filled side offers no further contribution capacity.
-	await driver.waitForBodyText('No remaining contribution capacity is available on the selected side.')
+	await driver.waitForBodyText('The selected side has no remaining capacity.')
 	expect(await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")).toBe('')
-	await driver.waitForBodyWithoutText('Submitting report…')
+	await driver.waitForBodyWithoutText('Submitting report')
 	const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
 	const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
 	const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
@@ -830,7 +830,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	await driver.waitForBodyText('Browse pools')
 	await driver.waitForBodyWithoutText('BOOTSTRAPPING')
 	const { completeTransactionReview, openSeededPool, selectPoolTool, loadSeededPools } = createWorkflowActions(driver)
-	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universes' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
 	await driver.waitForBodyText('Child universes')
 	await driver.waitForBodyWithoutText('Loading child universes…')
