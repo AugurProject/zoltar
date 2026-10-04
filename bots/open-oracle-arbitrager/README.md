@@ -84,7 +84,7 @@ The [shared bot guide](../README.md) owns the behaviour this service has in comm
 
 - the [signer lock](../README.md#signer-lock) and the `zoltar-bot-signer-locks` volume;
 - [dashboard access](../README.md#dashboard-access), including the host-loopback pairing and the password required for a network-bound listener;
-- the [environment variables](../README.md#environment-variables), including `ZOLTAR_BOT_RPC_QUORUM`, which Compose passes through from the host, and `SCAN_BLOCK_TIME_MS`.
+- the [environment variables](../README.md#environment-variables), including `SCAN_BLOCK_TIME_MS`. The Compose service does not pass `ZOLTAR_BOT_RPC_QUORUM`: set the read agreement requirement in the saved settings instead.
 
 ## Monitor without trading
 
