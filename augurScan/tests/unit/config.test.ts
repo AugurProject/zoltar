@@ -38,6 +38,20 @@ afterEach(() => {
 })
 
 describe('network configuration', () => {
+	test('starts without credential validation even when obsolete access settings are present', async () => {
+		for (const password of ['', 'secret']) {
+			const child = Bun.spawn([process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(runtimeConfig.apiRateLimitPerMinute)"], {
+				cwd: projectRoot,
+				env: { ...process.env, AUGURSCAN_ACCESS_USERNAME: 'operator', AUGURSCAN_ACCESS_PASSWORD: password, API_RATE_LIMIT_PER_MINUTE: '600' },
+				stdout: 'pipe',
+				stderr: 'pipe',
+			})
+			expect(await child.exited).toBe(0)
+			expect(await new Response(child.stdout).text()).toBe('600\n')
+			expect(await new Response(child.stderr).text()).toBe('')
+		}
+	})
+
 	test('uses a 100000 block default log scan range', async () => {
 		const environment = { ...process.env }
 		delete environment['LOG_SCAN_RANGE_SIZE']

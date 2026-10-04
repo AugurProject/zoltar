@@ -23,7 +23,7 @@ All routes are read-only. The UI supplies its selected `chainId`; direct clients
 - One entity's canonical semantic timeline: `GET /api/v1/state/timeline/:chainId/:entityType/:entityIdentity`
 - Append-only balance and token-metadata read attempts: `GET /api/v1/state/direct-observations?chainId=:chainId&kind=:kind&address=:address&canonical=:scope`
 
-Set both `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` to require HTTP Basic authentication on every route except liveness and readiness. Use it only behind TLS. API routes have a process-local per-client limit controlled by `API_RATE_LIMIT_PER_MINUTE`, which defaults to 600 and returns `429` with `Retry-After` when exceeded. Set it to `0` only when an upstream limiter is authoritative.
+The website and API do not require authentication. API routes have a process-local per-client limit controlled by `API_RATE_LIMIT_PER_MINUTE`, which defaults to 600 and returns `429` with `Retry-After` when exceeded. Set it to `0` only when an upstream limiter is authoritative.
 
 ### Direct read observations
 

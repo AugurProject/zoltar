@@ -1,14 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { reconcileIndexerOwnership } from '../../src/database/indexer-ownership-reconciliation.ts'
-import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, metricRoute, parseBasicAccessCredentials, requestAccessGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from '../../src/http.ts'
-
-// Access checks are observable only through the request guard, which admits every API request here.
-const hasBasicAccess = (request: Request, credentials: Parameters<typeof requestAccessGuard>[3]) => requestAccessGuard(request, '/', 'client', credentials, createFixedWindowRateLimiter(0, 60_000)) === undefined
-const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>>) => {
-	const denied = requestAccessGuard(new Request('http://localhost'), '/', 'client', parseBasicAccessCredentials('operator', 'secret'), createFixedWindowRateLimiter(0, 60_000), headers)
-	if (denied?.reason !== 'authentication') throw new Error('Expected the request guard to require authentication')
-	return denied.response
-}
+import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, metricRoute, requestRateLimitGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from '../../src/http.ts'
 
 describe('HTTP response policy', () => {
 	test('reconciles durable ownership heartbeats with actual PostgreSQL advisory locks', () => {
@@ -94,87 +86,31 @@ describe('HTTP response policy', () => {
 		expect(await response.json()).toEqual({ status: 'unknown', ownership })
 	})
 
-	test('supports optional browser-compatible access protection without partial credentials', async () => {
-		expect(parseBasicAccessCredentials(undefined, undefined)).toBeUndefined()
-		expect(() => parseBasicAccessCredentials('operator', undefined)).toThrow('must be configured together')
-		expect(() => parseBasicAccessCredentials('bad:name', 'secret')).toThrow('must not contain a colon')
-		const credentials = parseBasicAccessCredentials('operator', 'secret')
-		expect(hasBasicAccess(new Request('http://localhost'), credentials)).toBeFalse()
-		expect(hasBasicAccess(new Request('http://localhost', { headers: { authorization: `Basic ${btoa('operator:secret')}` } }), credentials)).toBeTrue()
-		expect(hasBasicAccess(new Request('http://localhost', { headers: { authorization: `Basic ${btoa('operator:wrong')}` } }), credentials)).toBeFalse()
-		const required = basicAccessRequiredResponse({ 'x-content-type-options': 'nosniff' })
-		expect(required.status).toBe(401)
-		expect(required.headers.get('www-authenticate')).toContain('Basic realm="augurScan"')
-	})
-
-	test('decodes Basic access credentials as strict UTF-8', () => {
-		const credentials = parseBasicAccessCredentials('opérateur', 'sëcret🔐')
-		const encoded = btoa(String.fromCharCode(...new TextEncoder().encode('opérateur:sëcret🔐')))
-		expect(hasBasicAccess(new Request('http://localhost', { headers: { authorization: `Basic ${encoded}` } }), credentials)).toBeTrue()
-
-		const malformed = btoa(String.fromCharCode(0xc3, 0x28, 0x3a, 0x78))
-		expect(hasBasicAccess(new Request('http://localhost', { headers: { authorization: `Basic ${malformed}` } }), credentials)).toBeFalse()
-	})
-
-	test('rate limits repeated API requests before rejecting invalid credentials', async () => {
-		const credentials = parseBasicAccessCredentials('operator', 'secret')
+	test('admits API requests without authentication and preserves rate-limit response policy', async () => {
 		const admit = createFixedWindowRateLimiter(2, 60_000)
-		const request = new Request('http://localhost/api/v1/logs', {
-			headers: { authorization: `Basic ${btoa('operator:wrong')}` },
-		})
-		const first = requestAccessGuard(request, '/api/v1/logs', '192.0.2.1', credentials, admit)
-		const second = requestAccessGuard(request, '/api/v1/logs', '192.0.2.1', credentials, admit)
-		const third = requestAccessGuard(request, '/api/v1/logs', '192.0.2.1', credentials, admit)
-
-		expect(first?.reason).toBe('authentication')
-		expect(first?.response.status).toBe(401)
-		expect(second?.response.status).toBe(401)
-		expect(third?.reason).toBe('rate-limit')
-		expect(third?.response.status).toBe(429)
-		expect(third?.response.headers.get('retry-after')).toBe('60')
-		expect(await third?.response.json()).toEqual({ error: 'Rate limit exceeded; retry shortly' })
+		expect(requestRateLimitGuard('/api/v1/logs', '192.0.2.1', admit)).toBeUndefined()
+		expect(requestRateLimitGuard('/api/v1/logs', '192.0.2.1', admit)).toBeUndefined()
+		const denied = requestRateLimitGuard('/api/v1/logs', '192.0.2.1', admit, SECURITY_HEADERS)
+		expect(denied?.status).toBe(429)
+		expect(denied?.headers.get('retry-after')).toBe('60')
+		expect(denied?.headers.get('www-authenticate')).toBeNull()
+		expect(denied?.headers.get('x-content-type-options')).toBe('nosniff')
+		expect(await denied?.json()).toEqual({ error: 'Rate limit exceeded; retry shortly' })
+		expect(requestRateLimitGuard('/api/v1/logs', '192.0.2.2', admit)).toBeUndefined()
 	})
 
-	test('locks out authentication attempts outside API routes without charging clean successes', () => {
-		const credentials = parseBasicAccessCredentials('operator', 'correct horse battery staple')
-		const admit = createFixedWindowRateLimiter(2, 60_000)
-		const wrongRequest = new Request('http://localhost/metrics', {
-			headers: { authorization: `Basic ${btoa('operator:wrong')}` },
-		})
-		const correctRequest = new Request('http://localhost/metrics', {
-			headers: { authorization: `Basic ${btoa('operator:correct horse battery staple')}` },
-		})
-		const first = requestAccessGuard(wrongRequest, '/metrics', '192.0.2.1', credentials, admit)
-		const second = requestAccessGuard(wrongRequest, '/metrics', '192.0.2.1', credentials, admit)
-		const lockedCorrect = requestAccessGuard(correctRequest, '/metrics', '192.0.2.1', credentials, admit)
-
-		expect(first?.reason).toBe('authentication')
-		expect(second?.reason).toBe('authentication')
-		expect(lockedCorrect?.reason).toBe('rate-limit')
-		expect(lockedCorrect?.response.status).toBe(429)
-		expect(requestAccessGuard(correctRequest, '/metrics', '192.0.2.2', credentials, admit)).toBeUndefined()
-		expect(requestAccessGuard(correctRequest, '/metrics', '192.0.2.2', credentials, admit)).toBeUndefined()
-		expect(requestAccessGuard(wrongRequest, '/metrics', '192.0.2.2', credentials, admit)?.reason).toBe('authentication')
-		expect(requestAccessGuard(wrongRequest, '/metrics', '192.0.2.2', credentials, admit)?.reason).toBe('authentication')
-	})
-
-	test('shares the API quota with protected routes only when authentication is enabled', () => {
-		const credentials = parseBasicAccessCredentials('operator', 'secret')
-		const request = new Request('http://localhost/api/v1/logs', { headers: { authorization: `Basic ${btoa('operator:secret')}` } })
+	test('keeps website and operational routes available after API quota exhaustion', () => {
 		const admit = createFixedWindowRateLimiter(1, 60_000)
-		expect(requestAccessGuard(request, '/api/v1/logs', 'client', credentials, admit)).toBeUndefined()
-		expect(requestAccessGuard(request, '/metrics', 'client', credentials, admit)?.reason).toBe('rate-limit')
-		expect(requestAccessGuard(request, '/metrics', 'client', undefined, admit)).toBeUndefined()
+		const routes = ['/', '/app.js', '/operations/integrity', '/metrics', '/health/indexers', '/health/live', '/health/ready']
+		for (const route of routes) expect(requestRateLimitGuard(route, 'client', admit)).toBeUndefined()
+		expect(requestRateLimitGuard('/api/v1/stream', 'client', admit)).toBeUndefined()
+		expect(requestRateLimitGuard('/api/v1/export', 'client', admit)?.status).toBe(429)
+		for (const route of routes) expect(requestRateLimitGuard(route, 'client', admit)).toBeUndefined()
 	})
 
-	test('checks lockout without consuming quota and allows access after expiry', () => {
-		const admit = createFixedWindowRateLimiter(1, 60_000)
-		expect(admit.check('client', 1_000)).toEqual({ allowed: true })
-		expect(admit('client', 1_000)).toEqual({ allowed: true })
-		expect(admit.check('client', 2_000)).toEqual({ allowed: false, retryAfterSeconds: 59 })
-		expect(admit.check('client', 61_000)).toEqual({ allowed: true })
-		expect(admit('client', 61_000)).toEqual({ allowed: true })
-		expect(createFixedWindowRateLimiter(0, 60_000).check('client')).toEqual({ allowed: true })
+	test('allows unlimited API requests when the limiter is disabled', () => {
+		const admit = createFixedWindowRateLimiter(0, 60_000)
+		for (let index = 0; index < 3; index++) expect(requestRateLimitGuard('/api/v1/logs', 'client', admit)).toBeUndefined()
 	})
 
 	test('bounds request admission per client and resets the fixed window', () => {
