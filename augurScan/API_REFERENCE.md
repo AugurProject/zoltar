@@ -89,7 +89,7 @@ All routes use `GET`. Limits, cursors, and consistency boundaries for every page
 
 ## Access control and rate limits
 
-Set both `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` to require HTTP Basic authentication on every route except liveness and readiness. Use it only behind TLS. API routes have a process-local per-client limit controlled by `API_RATE_LIMIT_PER_MINUTE`, which defaults to 600 and returns `429` with `Retry-After` when exceeded. Set it to `0` only when an upstream limiter is authoritative.
+The website and API do not require authentication. API routes have a process-local per-client limit controlled by `API_RATE_LIMIT_PER_MINUTE`, which defaults to 600 and returns `429` with `Retry-After` when exceeded. Set it to `0` only when an upstream limiter is authoritative.
 
 ## Health and metrics
 
@@ -118,7 +118,7 @@ A lease is recorded as released only after unlock is confirmed, or after the exa
 
 ### `GET /metrics`
 
-Returns bounded Prometheus request, rate-limit, indexer-lag, last-success, and failure metrics. It requires the same credentials as the API when access control is enabled, and is not subject to the API rate limit.
+Returns bounded Prometheus request, rate-limit, indexer-lag, last-success, and failure metrics. It is not subject to the API rate limit.
 
 ## Search and chain evidence
 

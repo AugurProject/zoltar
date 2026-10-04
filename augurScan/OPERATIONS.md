@@ -32,16 +32,15 @@ Every setting is an environment variable. The Compose column names the service t
 | `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Password of the bundled database. Compose only. |
 | `PORT` | `3000` | `app`, fixed to `3000` | Port the web app listens on. |
 | `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |
-| `AUGURSCAN_ACCESS_USERNAME`, `AUGURSCAN_ACCESS_PASSWORD` | unset | `app` | Enable HTTP Basic access control when both are set. Setting only one stops startup. |
-| `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. It also limits failed Basic-authentication attempts on protected non-API routes. `0` disables both limits when a trusted upstream enforces them. |
+| `API_RATE_LIMIT_PER_MINUTE` | `600` | `app` | Per-client API limit. `0` disables the limit when a trusted upstream enforces it. |
 | `LIVE_BACKPRESSURE_TIMEOUT_MS` | `60000` | `app` | How long a live-stream client may make no write progress before its slot is closed and released. |
 | `DISABLE_INDEXER` | unset | `indexer` (`0`); fixed to `1` on `app` | `1` starts the indexer process without indexing. See below. |
 
 `DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
 
-API requests and failed Basic-authentication attempts share one per-client quota. When Basic authentication is enabled, exhausting that quota temporarily blocks all protected routes for the client, including requests with valid credentials, until the window resets. Successful non-API requests do not consume quota.
+The website and API do not require authentication. API requests share one per-client quota; non-API routes do not consume quota and remain available when it is exhausted.
 
-The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
+The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
 Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are version-specific.
 
@@ -244,29 +243,10 @@ docker compose up --build --force-recreate --detach
 until curl --fail --silent --show-error "$AUGURSCAN_URL/health/ready"; do sleep 2; done
 ```
 
-If access control is enabled, export both credentials in the operator shell. This helper, for the manual requests in this guide, rejects a half-configured pair and keeps credentials out of the URL and the process arguments:
-
-```bash
-augurscan_curl() {
-  if test -n "${AUGURSCAN_ACCESS_USERNAME:-}" || test -n "${AUGURSCAN_ACCESS_PASSWORD:-}"; then
-    test -n "${AUGURSCAN_ACCESS_USERNAME:-}" && test -n "${AUGURSCAN_ACCESS_PASSWORD:-}" || {
-      echo 'Set both AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD.' >&2
-      return 2
-    }
-    local credentials="$AUGURSCAN_ACCESS_USERNAME:$AUGURSCAN_ACCESS_PASSWORD"
-    credentials=${credentials//\\/\\\\}
-    credentials=${credentials//\"/\\\"}
-    curl --config <(printf 'user = "%s"\n' "$credentials") "$@"
-  else
-    curl "$@"
-  fi
-}
-```
-
 Audit checkpoints, source cursors, stale networks, and recent canonical continuity:
 
 ```bash
-augurscan_curl --fail-with-body --silent --show-error "$AUGURSCAN_URL/health/indexers"
+curl --fail-with-body --silent --show-error "$AUGURSCAN_URL/health/indexers"
 ```
 
 This route returns HTTP 503 when the indexer is stale or the audit finds a problem. Its parent-hash continuity scan covers at most the latest 10,000 indexed blocks, so it does not replace the retained-history review below.
@@ -303,8 +283,6 @@ scripts/export-history.sh
 ```
 
 The script accepts two further optional variables: `AUGURSCAN_EXPORT_PORT` (default `3002`) is the host loopback port of the isolated app, and `AUGURSCAN_EXPORT_CONTAINER` (default `augurscan-export-<pid>`) is its container name.
-
-If access control is enabled, export `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` in this shell before running the script. It starts the isolated app with exactly this shell's values, not the ones in `.env`, and sends them as HTTP Basic credentials through a curl configuration file descriptor, so they appear in neither the URL nor the process arguments. With both unset, the isolated app runs without access control; it is published only on host loopback. Setting only one is rejected.
 
 The script validates the restore target and request scope, starts the isolated process, follows every continuation, verifies each page with the pinned app image, and stops the container after success. Its `EXIT` trap force-removes only the exact named export container after a readiness, transport, HTTP, or verifier failure. It does not delete the restore database or any pending, failed, invalidated, or validated evidence directory, so those remain available for diagnosis.
 

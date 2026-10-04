@@ -1,50 +1,12 @@
-export type BasicAccessCredentials = {
-	readonly username: string
-	readonly password: string
-}
-
-export const parseBasicAccessCredentials = (username: string | undefined, password: string | undefined): BasicAccessCredentials | undefined => {
-	if ((username === undefined || username === '') && (password === undefined || password === '')) return undefined
-	if (username === undefined || username === '' || password === undefined || password === '') throw new Error('AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD must be configured together')
-	if (username.includes(':')) throw new Error('AUGURSCAN_ACCESS_USERNAME must not contain a colon')
-	return { username, password }
-}
-
-const exactString = (left: string, right: string): boolean => {
-	const length = Math.max(left.length, right.length)
-	let difference = left.length ^ right.length
-	for (let index = 0; index < length; index++) difference |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0)
-	return difference === 0
-}
-
-const hasBasicAccess = (request: Request, credentials: BasicAccessCredentials | undefined): boolean => {
-	if (credentials === undefined) return true
-	const authorization = request.headers.get('authorization')
-	if (authorization === null || !authorization.startsWith('Basic ')) return false
-	try {
-		const encodedBytes = atob(authorization.slice('Basic '.length))
-		const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(encodedBytes, value => value.charCodeAt(0)))
-		const separator = decoded.indexOf(':')
-		if (separator < 0) return false
-		return exactString(decoded.slice(0, separator), credentials.username) && exactString(decoded.slice(separator + 1), credentials.password)
-	} catch (error) {
-		if (error instanceof Error) return false
-		throw error
-	}
-}
-
-const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response => Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
-
 export const createFixedWindowRateLimiter = (limit: number, windowMs: number, maximumClients = 10_000) => {
 	if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Rate limit must be a non-negative safe integer')
 	if (!Number.isSafeInteger(windowMs) || windowMs <= 0) throw new Error('Rate-limit window must be a positive safe integer')
 	if (!Number.isSafeInteger(maximumClients) || maximumClients <= 0) throw new Error('Rate-limit client capacity must be a positive safe integer')
 	const windows = new Map<string, { count: number; startedAt: number }>()
-	const admit = (client: string, now = Date.now(), consume = true): { readonly allowed: boolean; readonly retryAfterSeconds?: number } => {
+	return (client: string, now = Date.now()): { readonly allowed: boolean; readonly retryAfterSeconds?: number } => {
 		if (limit === 0) return { allowed: true }
 		let current = windows.get(client)
 		if (current === undefined || now - current.startedAt >= windowMs) {
-			if (!consume) return { allowed: true }
 			if (current === undefined && windows.size >= maximumClients) {
 				for (const [key, value] of windows) {
 					if (now - value.startedAt >= windowMs) windows.delete(key)
@@ -56,35 +18,16 @@ export const createFixedWindowRateLimiter = (limit: number, windowMs: number, ma
 			windows.set(client, current)
 		}
 		if (current.count >= limit) return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((current.startedAt + windowMs - now) / 1_000)) }
-		if (consume) current.count++
+		current.count++
 		return { allowed: true }
 	}
-	admit.check = (client: string, now = Date.now()) => admit(client, now, false)
-	return admit
 }
 
-export const requestAccessGuard = (
-	request: Request,
-	pathname: string,
-	client: string,
-	credentials: BasicAccessCredentials | undefined,
-	admitRequest: ReturnType<typeof createFixedWindowRateLimiter>,
-	headers: Readonly<Record<string, string>> = {},
-): { readonly reason: 'authentication' | 'rate-limit'; readonly response: Response } | undefined => {
-	const admissionFailure = (admission: { readonly allowed: boolean; readonly retryAfterSeconds?: number }) =>
-		admission.allowed
-			? undefined
-			: {
-					reason: 'rate-limit' as const,
-					response: Response.json({ error: 'Rate limit exceeded; retry shortly' }, { status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } }),
-				}
-	const lockout = credentials === undefined ? undefined : admissionFailure(admitRequest.check(client))
-	if (lockout !== undefined) return lockout
-	const authenticated = hasBasicAccess(request, credentials)
-	const admission = pathname.startsWith('/api/') || (credentials !== undefined && !authenticated) ? admissionFailure(admitRequest(client)) : undefined
-	if (admission !== undefined) return admission
-	if (!authenticated) return { reason: 'authentication', response: basicAccessRequiredResponse(headers) }
-	return undefined
+export const requestRateLimitGuard = (pathname: string, client: string, admitRequest: ReturnType<typeof createFixedWindowRateLimiter>, headers: Readonly<Record<string, string>> = {}): Response | undefined => {
+	if (!pathname.startsWith('/api/')) return undefined
+	const admission = admitRequest(client)
+	if (admission.allowed) return undefined
+	return Response.json({ error: 'Rate limit exceeded; retry shortly' }, { status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } })
 }
 
 export const metricRoute = (pathname: string): string => {
