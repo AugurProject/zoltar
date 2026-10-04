@@ -8,10 +8,12 @@ import { createWriteClient } from '../../../../solidity/ts/testSupport/simulator
 import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan } from '../../src/runtime/retirement-recovery-plans.ts'
-import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum } from '../../src/runtime/retirement-v3-positions.ts'
+import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal } from '../../src/runtime/retirement-v3-positions.ts'
 import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import { recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { createDurableWorkflow } from '../../src/runtime/workflows.ts'
+import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
 import { encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -184,6 +186,61 @@ async function currentV3Anchor(client: ReturnType<typeof createWriteClient>) {
 }
 
 describe('Drain & Retire on a local chain', () => {
+	test('retains successful position provenance after a reverted top-up and restart', async () => {
+		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[4])
+		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
+		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
+		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
+		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 1000n], functionName: 'mint' })
+		const seedHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -887_200, 887_200, 50n, 0n, 0n], functionName: 'seed' })
+		await owner.waitForTransactionReceipt({ hash: seedHash })
+		// An invalid pool call gives the later workflow a real reverted receipt.
+		await expect(owner.sendTransaction({ to: pool, data: '0xdeadbeef', gas: 100_000n })).rejects.toThrow('reverted')
+		const failedTransaction = (await owner.getBlock()).transactions.at(-1)
+		if (failedTransaction === undefined) throw new Error('Reverted transaction missing')
+		const failedHash = typeof failedTransaction === 'string' ? failedTransaction : failedTransaction.hash
+		expect((await owner.waitForTransactionReceipt({ hash: failedHash })).status).toBe('reverted')
+		const snapshot = snapshotFixture()
+		snapshot.genesisUniswap = { factory: true, initialized: true, liquidity: '50', pool, proxy: true, seeder: true }
+		const plan = evaluateSelectableOperationDefinition('trading.genesis-uniswap.add-liquidity', snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).plan
+		if (plan === undefined) throw new Error('Top-up plan missing')
+		plan.metadata = { ...plan.metadata, token0, token1 }
+		const seed = createDurableWorkflow({ ...plan, definitionId: 'trading.genesis-uniswap.seed-pool', id: 'seed' })
+		const topUp = createDurableWorkflow({ ...plan, id: 'top-up' })
+		seed.status = 'completed'
+		topUp.status = 'failed'
+		const seedStep = seed.steps.at(-1)
+		const topUpStep = topUp.steps.at(-1)
+		if (seedStep === undefined || topUpStep === undefined) throw new Error('Mint steps missing')
+		seedStep.status = 'confirmed'
+		seedStep.transactionHash = seedHash
+		topUpStep.status = 'failed'
+		topUpStep.transactionHash = failedHash
+		const durable = initialDurableState(31_337, false, 'integration', owner.account.address)
+		durable.workflows = [seed, topUp]
+		reconcileV3PositionJournal(durable.retirement, durable.workflows, durable.profileId, owner.account.address)
+		const position = durable.retirement.positions[0]
+		if (position === undefined) throw new Error('Position missing')
+		// This local fixture uses the 0.3% fee tier instead of the bot's 1% tier.
+		position.fee = 3000
+		const directory = await mkdtemp(join(tmpdir(), 'chaos-top-up-retirement-'))
+		try {
+			const path = join(directory, 'state.json')
+			await saveDurableState(path, durable)
+			const restored = await loadDurableState(path, 31_337)
+			reconcileV3PositionJournal(restored.retirement, restored.workflows, restored.profileId, owner.account.address)
+			const restoredPosition = restored.retirement.positions[0]
+			if (restoredPosition === undefined) throw new Error('Restored position missing')
+			const observation = await readV3Position(owner, restoredPosition, await currentV3Anchor(owner))
+			expect(restoredPosition.creationTransactionHash).toBe(seedHash)
+			expect(observation.liquidity).toBe(50n)
+			await executePlan(owner, buildV3RetirementPlan(snapshot, observation, 1))
+			expect((await readV3Position(owner, restoredPosition, await currentV3Anchor(owner))).liquidity).toBe(0n)
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
+
 	test('recovers idempotently across pre-confirmation, post-confirmation, and burn-to-collect restarts', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
 		const owner = createWriteClient(simulator, TEST_ADDRESSES[4])

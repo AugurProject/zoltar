@@ -6,7 +6,7 @@ import { routerEthDefinition } from './router-eth.ts'
 import { routerOwnedDefinition } from './router-owned.ts'
 import { migrateShares } from './share-migration.ts'
 import { swapDefinition } from './swap.ts'
-import { createGenesisUniswapPool, createUniverseUniswapPool, deployGenesisUniswapSeeder, initializeGenesisUniswapPool, initializeUniverseUniswapPool, seedGenesisUniswapPool, seedUniverseUniswapPool } from './uniswap-seeding.ts'
+import { addGenesisUniswapLiquidity, addUniverseUniswapLiquidity, createGenesisUniswapPool, createUniverseUniswapPool, deployGenesisUniswapSeeder, initializeGenesisUniswapPool, initializeUniverseUniswapPool, seedGenesisUniswapPool, seedUniverseUniswapPool } from './uniswap-seeding.ts'
 
 const shareApprovalDefinition: OperationDefinition = {
 	buildPlan: () => undefined,
@@ -43,9 +43,11 @@ export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	createGenesisUniswapPool,
 	initializeGenesisUniswapPool,
 	seedGenesisUniswapPool,
+	addGenesisUniswapLiquidity,
 	createUniverseUniswapPool,
 	initializeUniverseUniswapPool,
 	seedUniverseUniswapPool,
+	addUniverseUniswapLiquidity,
 	createPair,
 	directLiquidity('initialize'),
 	directLiquidity('add'),

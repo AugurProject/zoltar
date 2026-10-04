@@ -5,7 +5,18 @@ import { evaluateSelectableOperationDefinition, reevaluateOperationContinuation 
 import { address, snapshotFixture } from './fixture.ts'
 
 const options = { allowHighRisk: true, allowIrreversibleOperations: true, maximumBlockIntervalSeconds: 15, maxEthSpendAttoEth: (10n ** 15n).toString(), maxRepSpendAttoRep: (10n ** 15n).toString(), minimumEthReserveAttoEth: (10n ** 16n).toString(), minimumRepReserveAttoRep: 0n.toString(), seed: 2 }
-const definitions = ['trading.genesis-uniswap.seed-pool', 'trading.universe-uniswap.seed-pool', 'statoblast.oracle.request-price', 'open-oracle.deposit', 'open-oracle.report', 'zoltar.rep.burn', 'statoblast.vault.deposit-rep', 'statoblast.escalation.deposit-wallet-rep']
+const definitions = [
+	'trading.genesis-uniswap.add-liquidity',
+	'trading.universe-uniswap.add-liquidity',
+	'trading.genesis-uniswap.seed-pool',
+	'trading.universe-uniswap.seed-pool',
+	'statoblast.oracle.request-price',
+	'open-oracle.deposit',
+	'open-oracle.report',
+	'zoltar.rep.burn',
+	'statoblast.vault.deposit-rep',
+	'statoblast.escalation.deposit-wallet-rep',
+]
 
 function fixture(definitionId: string) {
 	const snapshot = snapshotFixture()
@@ -31,10 +42,10 @@ function fixture(definitionId: string) {
 		pool.settlementCollateralAttoEth = '100'
 	}
 	snapshot.deployments.uniswapV3Factory = address(40)
-	snapshot.genesisUniswap = { factory: true, initialized: true, liquidity: '0', pool: address(41), proxy: true, seeder: true }
+	snapshot.genesisUniswap = { factory: true, initialized: true, liquidity: definitionId.endsWith('add-liquidity') ? '1' : '0', pool: address(41), proxy: true, seeder: true }
 	snapshot.universes.push({ ...universe, id: '2', repToken: address(43) })
 	snapshot.wallet.tokens.push({ address: address(43), allowances: {}, balance: '1000000000000000000', openOracleCredit: '0', openOracleInternalAllowanceToSelf: '0', symbol: 'REP' })
-	snapshot.universeUniswap = { factory: true, pools: [{ initialized: true, liquidity: '0', pool: address(45), repToken: address(43), universeId: '2' }], proxy: true, seeder: true }
+	snapshot.universeUniswap = { factory: true, pools: [{ initialized: true, liquidity: definitionId.endsWith('add-liquidity') ? '1' : '0', pool: address(45), repToken: address(43), universeId: '2' }], proxy: true, seeder: true }
 	const plan = evaluateSelectableOperationDefinition(definitionId, snapshot, options).plan
 	if (plan === undefined) throw new Error(`Missing ${definitionId} plan`)
 	const approvals = plan.steps
@@ -77,7 +88,7 @@ describe('reuse sufficient ERC-20 allowances', () => {
 	}
 })
 
-for (const definitionId of definitions.slice(0, 3)) {
+for (const definitionId of ['trading.genesis-uniswap.seed-pool', 'trading.universe-uniswap.seed-pool', 'statoblast.oracle.request-price', 'trading.genesis-uniswap.add-liquidity', 'trading.universe-uniswap.add-liquidity']) {
 	test(`${definitionId} approves only the shortfall token and cleans up only its own approval`, () => {
 		const { snapshot, approvals } = fixture(definitionId)
 		const existing = approvals[0]
