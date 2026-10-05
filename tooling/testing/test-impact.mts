@@ -74,18 +74,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
-		matches: filePath =>
-			filePath.startsWith('workflow/') ||
-			filePath === '.github/actions/setup-ci/action.yml' ||
-			filePath === '.github/actions/setup-component/action.yml' ||
-			filePath === '.github/workflows/ci.yml' ||
-			filePath === '.github/workflows/browser-workflow.yml' ||
-			filePath === '.github/workflows/coverage.yml' ||
-			filePath === '.github/workflows/test-domains.yml' ||
-			filePath === '.github/workflows/test-stability.yml' ||
-			filePath === '.github/workflows/deploy-testnet.yml' ||
-			filePath === '.github/workflows/ipfs-deploy.yml' ||
-			filePath === '.github/workflows/version-deploy.yml',
+		matches: filePath => filePath.startsWith('workflow/') || filePath.startsWith('.github/workflows/') || filePath.startsWith('.github/actions/'),
 	},
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',

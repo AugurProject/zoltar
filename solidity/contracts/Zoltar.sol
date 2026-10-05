@@ -148,11 +148,7 @@ contract Zoltar {
 	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amountAttoRep) private {
 		// Genesis is using REPv2 which we cannot actually burn
 		if (address(reputationToken) == address(genesisReputationToken)) {
-			if (migrator == address(this)) {
-				IERC20(address(reputationToken)).safeTransfer(Constants.BURN_ADDRESS, amountAttoRep);
-			} else {
-				IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
-			}
+			IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
 		} else {
 			ReputationToken(address(reputationToken)).burn(migrator, amountAttoRep);
 		}

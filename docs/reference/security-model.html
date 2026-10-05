@@ -52,9 +52,7 @@
 				</table>
 				<p>The assumptions below explain what must remain true for these assets and transitions to retain their intended safety or liveness properties; they are not additional contract guarantees.</p>
 				<h3 id="security-review-orientation">Reviewing an operational concern</h3>
-				<p>
-					To classify an economic or liveness concern, find its external dependency in the <a href="#assumptions-participation">grouped assumptions</a> below and follow that entry's mechanics links. Contract-enforced properties are in the invariant catalog; fork-depth gas behavior, for example, is <a href="./invariants.html#life-05"><code>LIFE-05</code></a> and <a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
-				</p>
+				<p>To classify an economic or liveness concern, find its external dependency in the <a href="#assumptions-participation">grouped assumptions</a> below and follow that entry's mechanics links. Contract-enforced properties are in the invariant catalog; fork-depth gas behavior, for example, is <a href="./invariants.html#life-05"><code>LIFE-05</code></a> and <a href="./invariants.html#ext-05"><code>EXT-05</code></a>.</p>
 				<p>Operator work relies particularly on these assumptions:</p>
 				<ul>
 					<li><a href="#assumption-a06">A06 lifecycle executors</a></li>
@@ -100,9 +98,7 @@
 					</li>
 					<li id="assumption-a05" value="5">
 						<h3><span class="assumption-id">A05</span> Participants value continued access to the supported Statoblast lineage</h3>
-						<p>
-							The participants whose coordination determines durable use value continued access to the supported Statoblast <a href="./glossary.html#lineage">lineage</a> at least as highly as its configured <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>statoblastSecurityMultiplierBps</code></a> basis points of the value secured by that lineage. <code>BPS_DENOMINATOR = 10_000</code> converts that stored value to its human multiplier.
-						</p>
+						<p>The participants whose coordination determines durable use value continued access to the supported Statoblast <a href="./glossary.html#lineage">lineage</a> at least as highly as its configured <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>statoblastSecurityMultiplierBps</code></a> basis points of the value secured by that lineage. <code>BPS_DENOMINATOR = 10_000</code> converts that stored value to its human multiplier.</p>
 						<div class="equation assumption-equation" id="eq-statoblast-access-value" role="region" aria-label="Protocol access value assumption" tabindex="0">
 							<math display="block" aria-label="value of Statoblast access times the basis-point denominator is greater than or equal to the configured Statoblast security multiplier in basis points times secured value" data-source="statoblastAccessValue * BPS_DENOMINATOR >= statoblastSecurityMultiplierBps * securedValue">
 								<mrow>
@@ -226,9 +222,7 @@
 						<h3><span class="assumption-id">A15</span> Question selection remains aligned with user intent</h3>
 						<p>Interfaces and users verify the immutable question ID and metadata when selecting a market or pool, and the question has evidence and wording from which participants can reach an outcome or intentionally choose <code>Invalid</code>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Unverified selection can route users and capital to an unintended market or pool, while ambiguous wording or unavailable evidence can split local outcome coordination.</p>
-						<p class="assumption-links">
-							Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a> and <a href="../explanation/zoltar.html#questions">question identity</a>.
-						</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#uni-02"><code>UNI-02</code></a> and <a href="../explanation/zoltar.html#questions">question identity</a>.</p>
 					</li>
 				</ol>
 			</section>
@@ -277,13 +271,9 @@
 				<ol class="assumption-grid">
 					<li id="assumption-a21" value="21">
 						<h3><span class="assumption-id">A21</span> Genesis REP and configured WETH obey the required accounting model</h3>
-						<p>
-							Genesis REP and configured WETH move exactly the requested base units, use 18 decimals, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. These are external assumptions on both networks, with one exception: on Sepolia the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces genesis REP issuance and transfer behavior, provided <a href="#assumption-a23">A23</a> verifies its deployed bytecode and wiring and <a href="#assumption-a26">A26</a> preserves Ethereum execution. Sepolia WETH is Uniswap's published contract, which the deployer verifies only by runtime-code hash. Canonical child REP is the reviewed <code>ReputationToken</code> contract and adds no external-token assumption.
-						</p>
+						<p>Genesis REP and configured WETH move exactly the requested base units, use 18 decimals, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. These are external assumptions on both networks, with one exception: on Sepolia the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces genesis REP issuance and transfer behavior, provided <a href="#assumption-a23">A23</a> verifies its deployed bytecode and wiring and <a href="#assumption-a26">A26</a> preserves Ethereum execution. Sepolia WETH is Uniswap's published contract, which the deployer verifies only by runtime-code hash. Canonical child REP is the reviewed <code>ReputationToken</code> contract and adds no external-token assumption.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or WETH value.</p>
-						<p class="assumption-links">
-							Mechanics: <a href="./invariants.html#ext-01"><code>EXT-01</code></a> and <a href="./open-oracle.html#openoracle-role">oracle token pair</a>.
-						</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#ext-01"><code>EXT-01</code></a> and <a href="./open-oracle.html#openoracle-role">oracle token pair</a>.</p>
 					</li>
 					<li id="assumption-a22" value="22">
 						<h3><span class="assumption-id">A22</span> Participant-controlled recipients can accept required asset deliveries</h3>

@@ -74,9 +74,9 @@ const defaultServices: TradingDeploymentSetupServices = {
 
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
-function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
+function deploymentProgress(status: DeploymentStatus | undefined) {
 	if (status === undefined) return commonCopy.metricUnavailablePlaceholder
-	return `${Number(status.factory) + Number(status.router)} / ${total.toString()}`
+	return `${Number(status.factory) + Number(status.router)} / 2`
 }
 
 function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
@@ -557,7 +557,7 @@ export function TradingDeploymentSetup({
 				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<DataGrid dense>
-						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus, 2)}</MetricField>
+						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus)}</MetricField>
 					</DataGrid>
 					{inspection === undefined ? null : (
 						<Badge id={inspectionBadgeId} tone={inspection.tone}>

@@ -119,13 +119,16 @@
 			<section id="activity" class="panel" data-page-content="operations">
 				<div class="section-heading">
 					<h2>Activity</h2>
-					<label>View <select id="activity-view" aria-controls="activity-views">
-						<option value="operations-log">Operations log</option>
-						<option value="transaction-tracking">Transactions</option>
-						<option value="position-lifecycle">Positions</option>
-						<option value="execution-history">Executions</option>
-						<option value="settlement-history">Settlements</option>
-					</select></label>
+					<label
+						>View
+						<select id="activity-view" aria-controls="activity-views">
+							<option value="operations-log">Operations log</option>
+							<option value="transaction-tracking">Transactions</option>
+							<option value="position-lifecycle">Positions</option>
+							<option value="execution-history">Executions</option>
+							<option value="settlement-history">Settlements</option>
+						</select></label
+					>
 				</div>
 				<div id="activity-views">
 					<section id="operations-log" data-activity-view>
@@ -133,7 +136,15 @@
 							<div>
 								<h3>Operations log</h3>
 							</div>
-							<label>Filter <select id="operation-filter"><option value="all">All decisions</option><option value="error">Errors</option><option value="warning">Warnings</option><option value="info">Information</option></select></label>
+							<label
+								>Filter
+								<select id="operation-filter">
+									<option value="all">All decisions</option>
+									<option value="error">Errors</option>
+									<option value="warning">Warnings</option>
+									<option value="info">Information</option>
+								</select></label
+							>
 							<span id="operation-count" class="muted">0 groups</span>
 						</div>
 						<div role="region" class="table-scroll mobile-record-scroll operation-scroll" tabindex="0" aria-label="Operations log table">
@@ -187,9 +198,17 @@
 					<section id="transaction-tracking" data-activity-view hidden>
 						<div class="section-heading">
 							<div>
-							<h3>Transaction tracking</h3>
+								<h3>Transaction tracking</h3>
 							</div>
-							<label>Filter <select id="transaction-filter"><option value="all">All transactions</option><option value="confirmation-unknown">Recovery required</option><option value="confirmed">Confirmed</option><option value="failed">Failed</option></select></label>
+							<label
+								>Filter
+								<select id="transaction-filter">
+									<option value="all">All transactions</option>
+									<option value="confirmation-unknown">Recovery required</option>
+									<option value="confirmed">Confirmed</option>
+									<option value="failed">Failed</option>
+								</select></label
+							>
 							<span id="transaction-count" class="muted">0 tracked</span>
 						</div>
 						<div role="region" class="table-scroll mobile-record-scroll" tabindex="0" aria-label="Transaction tracking table">

@@ -297,7 +297,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:17
+        image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

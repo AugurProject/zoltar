@@ -35,7 +35,7 @@ async function zoltarPackageExports(botDirectory: string) {
 }
 
 async function importedZoltarSubpaths(botDirectory: string, sourceDirectory: string) {
-	const sourceGlob = new Bun.Glob('**/*.{ts,mts}')
+	const sourceGlob = new Bun.Glob('**/*.{ts,mts,tsx}')
 	const imports = new Map<string, Set<string>>()
 	for await (const file of sourceGlob.scan({ cwd: join(botDirectory, sourceDirectory), onlyFiles: true })) {
 		const source = await readFile(join(botDirectory, sourceDirectory, file), 'utf8')

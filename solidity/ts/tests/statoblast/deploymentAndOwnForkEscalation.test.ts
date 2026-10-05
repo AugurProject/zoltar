@@ -1038,7 +1038,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const aggregateBackingAfterMigration = await getERC20Balance(client, yesChildRepToken, yesChildEscalationGame)
 
-		strictEqualTypeSafe(aggregateBackingBeforeClaim - aggregateBackingAfterClaim, claimLog.args.walletRepPaidAttoRep, 'the direct claim should be paid from the selected childs aggregate escalation backing')
+		strictEqualTypeSafe(aggregateBackingBeforeClaim - aggregateBackingAfterClaim, claimLog.args.walletRepPaidAttoRep, "the direct claim should be paid from the selected child's aggregate escalation backing")
 		strictEqualTypeSafe(aggregateBackingAfterMigration, aggregateBackingAfterClaim, 'logical entitlement materialization should not mint or transfer additional child REP')
 		assert.deepStrictEqual([...exportLog.args.principalByOutcomeAttoRep], [0n, 0n, forkThresholdAttoRep], 'unresolved migration should export only the remaining no-side source principal after the yes-side claim')
 		strictEqualTypeSafe(exportLog.args.principalToTransferAttoRep, forkThresholdAttoRep, 'unresolved migration should consume only the remaining no-side source principal')

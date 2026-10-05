@@ -30,7 +30,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	}
 
 	// Snapshot initialization is contract-wide, and outcome 0 is used as the sentinel because
-	// initializeForkCarrySnapshot() sets every outcome's nullifier root in the same loop.
+	// _initializeForkCarrySnapshot() sets every outcome's nullifier root in the same loop.
 	function forkCarrySnapshotInitialized() public view returns (bool) {
 		return outcomeState[0].currentNullifierRoot != bytes32(0);
 	}
@@ -246,7 +246,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function _emitCarryDepositConsumed(uint8 outcomeIndex, address depositor, uint256 amountAttoRep, uint256 parentDepositIndex, uint256 sourceNodeId, CarryConsumptionReason reason) internal {
 		(, , bytes32 carryRoot, uint256 carryTotalAttoRep) = _getCurrentCarrySnapshot(outcomeIndex);
-		bytes memory eventData = abi.encode(BinaryOutcomes.BinaryOutcome(outcomeIndex), amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot);
+		// Every caller supplies a validated outcome; its uint8 ABI word matches the event enum.
+		bytes memory eventData = abi.encode(outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot);
 		bytes32 eventSignature = CARRY_DEPOSIT_CONSUMED_SIGNATURE;
 		assembly ('memory-safe') {
 			log4(add(eventData, 0x20), mload(eventData), eventSignature, parentDepositIndex, sourceNodeId, depositor)

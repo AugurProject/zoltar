@@ -6,7 +6,6 @@
 	"description": "Security-pool liquidation and REP health management service",
 	"imports": {
 		"#config/*": "./src/config/*.ts",
-		"#contracts/*": "./src/contracts/*.ts",
 		"#core/*": "./src/core/*.ts",
 		"#dashboard/*": "./src/dashboard/*.ts",
 		"#execution/*": "./src/execution/*.ts",

@@ -29,7 +29,7 @@ export function assertInvariantIndexMatchesEntries(invariantsHtml: string): void
 		status: metadataValue(match[4] ?? '', 'Enforcement status'),
 	}))
 	const indexSection = normalizedInvariants.match(/<section id="invariant-index">[\s\S]*?<\/section>/)?.[0] ?? ''
-	const indexRows = [...indexSection.matchAll(/<tr> <td><a href="#([^"]+)"><code>([^<]+)<\/code><\/a><\/td> <td>(.*?)<\/td> <td>(.*?)<\/td> <td>(.*?)<\/td> <\/tr>/g)].map(match => ({
+	const indexRows = [...indexSection.matchAll(/<tr> <td> ?<a href="#([^"]+)"><code>([^<]+)<\/code><\/a> ?<\/td> <td>(.*?)<\/td> <td>(.*?)<\/td> <td>(.*?)<\/td> <\/tr>/g)].map(match => ({
 		id: match[1],
 		identifier: match[2],
 		title: match[3],

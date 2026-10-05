@@ -4,8 +4,6 @@ import path from 'node:path'
 import { listRepositoryFiles } from '../repo/git.mts'
 import { repositoryRoot } from '../repo/root.mts'
 
-const toolingRootPath = path.join(repositoryRoot, 'tooling')
-
 type SourceSpan = { end: number; start: number }
 
 const rawTextElementNames = new Set(['iframe', 'noembed', 'noframes', 'plaintext', 'script', 'style', 'textarea', 'title', 'xmp'])
@@ -122,8 +120,8 @@ export function formatParagraphsOnSingleLines(html: string): string {
 }
 
 export function repositoryHtmlFilePaths(): string[] {
-	return listRepositoryFiles({ cwd: toolingRootPath, untracked: true, pathspec: [':(glob)**/*.html'] })
-		.map(filePath => path.join(toolingRootPath, filePath))
+	return listRepositoryFiles({ cwd: repositoryRoot, untracked: true, pathspec: [':(glob)**/*.html'] })
+		.map(filePath => path.join(repositoryRoot, filePath))
 		.filter(filePath => existsSync(filePath))
 }
 
@@ -140,7 +138,7 @@ export async function formatHtmlFiles(filePaths: string[], runPrettier: () => Pr
 if (import.meta.main) {
 	await formatHtmlFiles(repositoryHtmlFilePaths(), async () => {
 		const prettier = Bun.spawn(['bun', 'x', 'prettier', '--write', '**/*.html'], {
-			cwd: toolingRootPath,
+			cwd: repositoryRoot,
 			stderr: 'inherit',
 			stdout: 'inherit',
 		})

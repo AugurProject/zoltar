@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   ci-agent:
-    # if triggered by an issue_comment, the issue must be a Pull Request comment and the commentor must be semi-trusted (not internet rando)
+    # if triggered by an issue_comment, the issue must be a Pull Request comment and the commenter must be semi-trusted (not internet rando)
     if: github.event_name != 'issue_comment' || (github.event.issue.pull_request && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     container:

@@ -389,7 +389,7 @@ export async function bootstrapSimulationChain({
 }) {
 	setRuntimeNetworkProfile(profile)
 	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
-	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Firefox may be struggling with main-thread simulation startup.')
+	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Reload the page to retry.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)

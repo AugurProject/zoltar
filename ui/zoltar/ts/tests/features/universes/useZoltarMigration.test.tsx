@@ -190,6 +190,23 @@ describe('useZoltarMigration', () => {
 		expect(state().zoltarMigrationForm).toEqual({ amount: '', outcomeIndexes: [] })
 	})
 
+	test('clears wallet-account errors and feedback when the active universe changes', async () => {
+		replaceEnvironment(createFakeBackend({ accountAddress: zeroAddress }))
+		const onTransactionRequested = mock(() => undefined)
+		const { state, switchUniverse } = await renderMigrationHook({ onTransactionRequested })
+		await act(async () => {
+			await state().migrateInternalRep(10n)
+		})
+		expect(state().zoltarMigrationError).toContain('Wallet account changed')
+		expect(state().zoltarMigrationFeedback?.status.detail).toBe(state().zoltarMigrationError)
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		await act(async () => {
+			switchUniverse(2n)
+		})
+		expect(state().zoltarMigrationError).toBeUndefined()
+		expect(state().zoltarMigrationFeedback).toBeUndefined()
+	})
+
 	test('does not request a migration transaction when the active wallet network changed', async () => {
 		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
@@ -216,6 +233,7 @@ describe('useZoltarMigration', () => {
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 		expect(state().zoltarMigrationFeedback?.status.detail).toBe('Transaction failed while attempting to migrate REP. Reason: Wallet network changed. Switch to Ethereum mainnet and try again.')
+		expect(state().zoltarMigrationError).toBe('Transaction failed while attempting to migrate REP. Reason: Wallet network changed. Switch to Ethereum mainnet and try again.')
 	})
 
 	test('migrateInternalRep snapshots the submitted form before universe preflight resolves', async () => {
@@ -240,7 +258,7 @@ describe('useZoltarMigration', () => {
 		const refreshedUniverse = createUniverse({ childUniverses: [createChildUniverse({ reputationToken: getAddress('0x00000000000000000000000000000000000000b2') })] })
 		const refreshZoltarUniverse = mock(async () => refreshedUniverse)
 		const refreshZoltarForkAccess = mock(async () => undefined)
-		const { state } = await renderMigrationHook({ ensureZoltarUniverse: async () => await universeLoad.promise, refreshState, refreshZoltarForkAccess, refreshZoltarUniverse })
+		const { state, switchUniverse } = await renderMigrationHook({ ensureZoltarUniverse: async () => await universeLoad.promise, refreshState, refreshZoltarForkAccess, refreshZoltarUniverse })
 
 		await act(async () => {
 			state().setZoltarMigrationForm(current => ({
@@ -254,6 +272,11 @@ describe('useZoltarMigration', () => {
 		await act(() => {
 			migratePromise = state().migrateInternalRep(10n * 10n ** 18n)
 		})
+
+		await act(async () => switchUniverse(2n))
+		expect(state().zoltarMigrationPending).toBe(true)
+		expect(state().zoltarMigrationActiveAction).toBe('split')
+		expect(state().zoltarMigrationFeedback).toBeUndefined()
 
 		await state().migrateInternalRep(0n)
 

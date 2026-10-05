@@ -7,8 +7,8 @@
 		<!-- Apply a saved theme before the stylesheets load so the page never paints the other palette first; keep in sync with ui/coreShared/ts/lib/themePreference.ts. -->
 		<script>
 			try {
-				const theme = localStorage.getItem("zoltar.theme");
-				if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+				const theme = localStorage.getItem('zoltar.theme')
+				if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
 			} catch {}
 		</script>
 		<link rel="stylesheet" href="./css/index.css" />

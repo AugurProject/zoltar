@@ -1,3 +1,4 @@
+import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
@@ -813,7 +814,7 @@ describe('ReportingSection', () => {
 
 	test('blocks stale-price submission and links to the pool oracle recovery view', async () => {
 		let openOracleCalls = 0
-		const reason = "The pool's oracle price expired. Request a new price in Price oracle, then retry."
+		const reason = pricingCopy.poolOraclePriceExpiredError
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,

@@ -12,7 +12,6 @@
 !solidity/
 !solidity/package.json
 !solidity/bunfig.toml
-!solidity/default-config.json
 !solidity/tsconfig.json
 !solidity/tsconfig-compile.json
 !solidity/contracts/**

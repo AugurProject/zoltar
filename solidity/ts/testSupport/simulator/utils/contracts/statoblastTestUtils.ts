@@ -111,7 +111,7 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 	})
 }
 
-export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, operation: Exclude<OperationType, OperationType.PriceRefresh>, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, operation: Exclude<OperationType, OperationType.VaultOperations>, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	const costAttoEth = await getRequestPriceCostAttoEth(client, openOraclePriceCoordinator)
 	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, openOraclePriceCoordinator, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, costAttoEth)
 	await handleOracleReporting(client, mockWindow, openOraclePriceCoordinator, forceRepEthPriceTo)

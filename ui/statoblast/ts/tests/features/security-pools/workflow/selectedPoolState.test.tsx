@@ -447,8 +447,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			securityPools: [createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n, totalPoolHeldAttoRep: 10_000n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n })],
 		})
 
-		const collateralizationMetric = document.querySelector('.security-pool-collateralization-display.tone-success, .security-pool-hero-collateralization.tone-success, .security-pool-card-title-collateralization.tone-success')
-		expect(collateralizationMetric).toBeNull()
+		expect(within(document.body).queryByText(/collateraliz/i)).toBeNull()
 		expect(within(document.body).getByText('Pool-held REP')).not.toBeNull()
 	})
 

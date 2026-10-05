@@ -35,11 +35,7 @@ export const writeContractAndWait = async (client: WriteClient, execute: () => P
 	const hash = await execute()
 	const receipt = await client.waitForTransactionReceipt({ hash })
 	if (receipt.status === 'reverted') {
-		try {
-			await replayRevertedTransaction(client, hash)
-		} catch (error) {
-			throw error
-		}
+		await replayRevertedTransaction(client, hash)
 		throw new Error(`Transaction reverted: ${hash}`)
 	}
 	return hash

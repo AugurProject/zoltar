@@ -57,7 +57,7 @@ function feeTicketMarket(timestamp: bigint, currentRetentionRate: bigint, feeEnd
 }
 
 describe('trade ticket estimate', () => {
-	test('blocks last-second and60-second market windows, allowing61seconds', () => {
+	test('blocks last-second and 60-second market windows, allowing 61 seconds', () => {
 		for (const remaining of [1n, 60n, 61n]) {
 			const endingMarket = { ...market, endTime: 100n + remaining }
 			const ending = tradeTicketModel({ ...ready, market: endingMarket, ...{ nowSeconds: 100n } })

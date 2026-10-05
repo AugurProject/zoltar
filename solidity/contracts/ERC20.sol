@@ -38,8 +38,8 @@ abstract contract ERC20 is Context, IERC20, IERC20Metadata {
 	/**
 	 * @dev Sets the values for {name} and {symbol}.
 	 *
-	 * All two of these values are immutable: they can only be set once during
-	 * construction.
+	 * Derived contracts may reassign _name and _symbol after construction
+	 * (ReputationToken does so in initialize).
 	 */
 	constructor(string memory name_, string memory symbol_) {
 		_name = name_;

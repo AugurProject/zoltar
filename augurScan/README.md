@@ -88,8 +88,8 @@ bun run dev
 | `bun run test:api` | Routes, response contracts, and the export scripts. |
 | `bun run test:replay` | Indexer and replay behavior. |
 | `bun run test:integration` | Real PostgreSQL transaction, lease, reorganization, and API boundaries. |
-| `bun test tests/browser` | Browser application modules. No package script covers this directory. |
-| `bun run test:ci` | Unit, API, and replay. |
+| `bun run test:browser` | Browser application modules and browser tests. |
+| `bun run test:ci` | Unit, API, replay, and browser tests. |
 | `bun run test` | `test:ci` plus integration. |
 
 The integration tests require a dedicated disposable database because they recreate its `public` schema:

@@ -170,7 +170,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 				detailCard('Event signature', detail.event_signature ?? 'No matching ABI'),
 				detailCard('Block hash', detail.block_hash),
 				detailCard('Occurrence position', `transaction ${number(detail.transaction_index)} · log ${number(detail.log_index)}`),
-				addressDetailCard('msg.origin', detail.origin_address, { chainId: detail.chain_id }),
+				addressDetailCard('tx.origin', detail.origin_address, { chainId: detail.chain_id }),
 				addressDetailCard('To', detail.to_address, { chainId: detail.chain_id }),
 				detailCard('Gas used', number(detail.gas_used)),
 				detailCard('Transaction value', exactUnit(detail.value, 18, nativeSymbolFor(detail.chain_id))),

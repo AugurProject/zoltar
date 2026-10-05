@@ -21,6 +21,7 @@ void describe('contract enum helpers', () => {
 		expect(getSecurityPoolSystemState(2)).toBe('forkMigration')
 		expect(getSecurityPoolSystemState(3n)).toBe('forkTruthAuction')
 		expect(() => getSecurityPoolSystemState(4)).toThrow('Unhandled security pool system state: 4')
+		expect(() => getSecurityPoolSystemState(4n)).toThrow('Unhandled security pool system state: 4')
 		expect(tryGetSecurityPoolSystemState(4)).toBeUndefined()
 	})
 })

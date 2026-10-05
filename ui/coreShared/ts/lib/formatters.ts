@@ -5,7 +5,7 @@
  * | --------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
  * | Token amount    | `formatAmount` / `formatAmountDisplay`   | `1 234.57`: grouped with no-break spaces, 2 decimals, tiny values keep  |
  * |                 |                                          | 2 significant digits.                                                   |
- * |                 |                                          | digits. `≈ ` is prefixed only when rounding dropped non-zero digits,    |
+ * |                 |                                          | `≈ ` is prefixed only when rounding dropped non-zero digits,            |
  * |                 |                                          | so `2.00`, `0.00` and `10k` stay unmarked.                              |
  * | Compact amount  | `formatAmount(..., notation: 'compact')` | Below 1 000 the standard form; from 1 000 an SI suffix with 1 decimal   |
  * |                 |                                          | (`1.2k`, `1T`). Deterministic: never depends on the available width.    |

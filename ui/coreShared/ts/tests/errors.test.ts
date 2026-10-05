@@ -1,5 +1,6 @@
 /// <reference types="bun-types" />
 
+import * as pricingCopy from '../copy/pricing.js'
 import { describe, expect, test } from 'bun:test'
 import { RpcError } from '@zoltar/core-shared/evm/ethereum'
 import { ensureSentence, formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage, isCloseableErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
@@ -74,7 +75,7 @@ void describe('error helpers', () => {
 			message: 'An unknown RPC error occurred. Details: execution reverted: Stale price Version: viem@2.53.1',
 			shortMessage: 'An unknown RPC error occurred.',
 		}
-		expect(formatWriteErrorMessage(error, 'Failed to report on outcome')).toBe("The pool's oracle price expired. Request a new price in Price oracle, then retry.")
+		expect(formatWriteErrorMessage(error, 'Failed to report on outcome')).toBe(pricingCopy.poolOraclePriceExpiredError)
 	})
 
 	void test('formats refresh failures with appended reasons', () => {

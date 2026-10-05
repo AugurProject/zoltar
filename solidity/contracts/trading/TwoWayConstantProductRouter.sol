@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
-import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
+import { ISecurityPool } from '../statoblast/interfaces/ISecurityPool.sol';
 import { IERC165 } from '../statoblast/interfaces/IERC165.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
@@ -299,15 +299,6 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	function _validatePair(ITwoWayConstantProductPair pair) private view {
 		require(factory.isPair(address(pair)), 'Unrecognized pair');
 		require(address(factory.getPair(pair.securityPool())) == address(pair), 'Noncanonical pair');
-	}
-
-	function _validateCanonicalPool(ISecurityPool pool) private view {
-		require(address(pool) != address(0), 'Security pool is zero');
-		ISecurityPoolFactory securityPoolFactory = factory.securityPoolFactory();
-		require(address(pool.securityPoolFactory()) == address(securityPoolFactory), 'Wrong security pool factory');
-		bytes32 originId = securityPoolFactory.getSecurityPoolOriginId(pool);
-		require(address(securityPoolFactory.getSecurityPool(originId, pool.universeId())) == address(pool), 'Noncanonical security pool');
-		require(address(pool.shareToken().canonicalPoolByUniverse(pool.universeId())) == address(pool), 'Noncanonical share pool');
 	}
 
 	function _isDirectionalOutcome(BinaryOutcomes.BinaryOutcome outcome) private pure returns (bool longYes) {

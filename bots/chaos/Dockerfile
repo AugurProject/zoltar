@@ -22,7 +22,7 @@ COPY ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
 RUN bun install --frozen-lockfile \
 	&& bun ./tooling/repo/build-shared.mts
 
-COPY solidity/bunfig.toml solidity/default-config.json solidity/tsconfig.json solidity/tsconfig-compile.json ./solidity/
+COPY solidity/bunfig.toml solidity/tsconfig.json solidity/tsconfig-compile.json ./solidity/
 COPY solidity/contracts/ ./solidity/contracts/
 COPY solidity/ts/ ./solidity/ts/
 RUN cd solidity \

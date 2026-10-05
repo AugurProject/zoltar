@@ -398,7 +398,7 @@ const scenarios: Scenario[] = [
 		},
 	},
 	{
-		section: '5. Vault Creation & Funding',
+		section: '7. Vault REP Withdrawal',
 		label: 'vault owner withdraws REP from vault with valid price',
 		run: async () => {
 			const context = await setupPool('Gas withdraw rep')
@@ -700,7 +700,7 @@ try {
 	console.log('')
 
 	let currentSection = ''
-	for (const result of results) {
+	for (const result of results.toSorted((left, right) => Number.parseInt(left.section, 10) - Number.parseInt(right.section, 10))) {
 		if (result.section !== currentSection) {
 			if (currentSection !== '') console.log('')
 			currentSection = result.section

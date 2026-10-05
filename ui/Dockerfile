@@ -167,22 +167,25 @@ COPY --from=builder /source/ui/zoltar/dist/index.html /export/zoltar/index.html
 COPY --from=builder /source/ui/zoltar/dist/favicon.svg /export/zoltar/favicon.svg
 COPY --from=builder /source/ui/zoltar/dist/assets/ /export/zoltar/assets/
 COPY --from=builder /source/ui/zoltar/dist/css/ /export/zoltar/css/
+COPY --from=builder /source/ui/zoltar/dist/vendor/ /export/zoltar/vendor/
 COPY --from=builder /source/ui/statoblast/dist/index.html /export/statoblast/index.html
 COPY --from=builder /source/ui/statoblast/dist/favicon.svg /export/statoblast/favicon.svg
 COPY --from=builder /source/ui/statoblast/dist/assets/ /export/statoblast/assets/
 COPY --from=builder /source/ui/statoblast/dist/css/ /export/statoblast/css/
+COPY --from=builder /source/ui/statoblast/dist/vendor/ /export/statoblast/vendor/
 COPY --from=builder /source/ui/trading/dist/index.html /export/trading/index.html
 COPY --from=builder /source/ui/trading/dist/favicon.svg /export/trading/favicon.svg
 COPY --from=builder /source/ui/trading/dist/core-deployments.json /export/trading/core-deployments.json
 COPY --from=builder /source/ui/trading/dist/assets/ /export/trading/assets/
 COPY --from=builder /source/ui/trading/dist/css/ /export/trading/css/
+COPY --from=builder /source/ui/trading/dist/vendor/ /export/trading/vendor/
 
 # -------------------------------------------------
 # Publisher: Upload the production UI to host IPFS
 # -------------------------------------------------
 
-# Keep the publisher last for compatibility with the release workflow, which
-# builds the Dockerfile's default target.
+# Keep publisher as the final stage so an untargeted docker build produces it.
+# Release workflows also select target: publisher explicitly.
 FROM ipfs/kubo:v0.25.0@sha256:0c17b91cab8ada485f253e204236b712d0965f3d463cb5b60639ddd2291e7c52 AS ipfs-kubo
 
 # The Windows launcher publishes to an existing host node using this Kubo client.

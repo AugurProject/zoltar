@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { formatHtmlFiles, formatParagraphsOnSingleLines } from './format-html-prose.mts'
+import { formatHtmlFiles, formatParagraphsOnSingleLines, repositoryHtmlFilePaths } from './format-html-prose.mts'
 
 describe('formatParagraphsOnSingleLines', () => {
 	test('keeps inline elements with their surrounding prose', () => {
@@ -80,4 +80,8 @@ describe('formatParagraphsOnSingleLines', () => {
 			await rm(temporaryDirectory, { recursive: true })
 		}
 	})
+})
+
+test('discovers documentation HTML from the repository root', () => {
+	expect(repositoryHtmlFilePaths()).toContain(path.resolve('docs/documentation.html'))
 })

@@ -31,7 +31,6 @@
 		"build:prod": "bun run build && bun ../../tooling/ui/production.mts trading",
 		"watch": "bun run generate && bun ../../tooling/ui/watch.mts trading",
 		"serve": "bun ../../tooling/ui/dev-server.ts trading",
-		"qa:browser": "bun ./scripts/browser-qa.mts",
 		"docker:build": "docker build --file ../Dockerfile --target local-runtime-trading --tag zoltar-trading ../..",
 		"docker:run": "docker run --rm --env UI_APP=trading --publish 4163:8080 zoltar-trading"
 	},

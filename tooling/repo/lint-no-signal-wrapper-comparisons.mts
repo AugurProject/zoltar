@@ -22,7 +22,7 @@ function toProjectPath(filePath: string): string {
 function shouldCheckSourceFile(sourceFile: ts.SourceFile): boolean {
 	if (sourceFile.isDeclarationFile) return false
 	const relativePath = toProjectPath(sourceFile.fileName)
-	return /^ui\/(?:coreShared|zoltar|statoblast|trading)\/ts\//.test(relativePath) && (relativePath.endsWith('.ts') || relativePath.endsWith('.tsx'))
+	return /^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/ts\//.test(relativePath) && (relativePath.endsWith('.ts') || relativePath.endsWith('.tsx'))
 }
 
 function isEqualityOperator(kind: ts.SyntaxKind): boolean {

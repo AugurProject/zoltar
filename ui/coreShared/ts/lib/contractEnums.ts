@@ -60,6 +60,6 @@ export function tryGetSecurityPoolSystemState(value: bigint | number): SecurityP
 
 export function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState {
 	const state = tryGetSecurityPoolSystemState(value)
-	if (state === undefined) throw new Error(`Unhandled security pool system state: ${JSON.stringify(value)}`)
+	if (state === undefined) throw new Error(`Unhandled security pool system state: ${value.toString()}`)
 	return state
 }

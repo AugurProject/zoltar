@@ -1,5 +1,5 @@
 const [dashboardUrl, ...extra] = process.argv.slice(2)
-if (dashboardUrl === undefined || extra.length > 0) throw new Error('Usage: bun run smoke:markets -- http://127.0.0.1:8787')
+if (dashboardUrl === undefined || extra.length > 0) throw new Error('Usage: bun run smoke:markets -- http://127.0.0.1:4183')
 const origin = new URL(dashboardUrl).origin
 const response = await fetch(new URL('/api/test-market-sources', origin), {
 	body: '{}',
