@@ -4,7 +4,7 @@ import { type Workflow } from './workflow-history.js'
 import { fullIdentifier, formatDate, node, setBadge } from './dom.js'
 import { type Snapshot, type OperationEvaluation, type SubmissionHealth, type RepBalance, type PendingTransaction } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { formatClockDuration, formatRelative, operationIsIndependentlyExecutable, parsePositiveNumber, recoveryItemCount } from './dashboard-format.ts'
+import { formatClockDuration, formatRelative, operationIsSelectedForRandomWork, parsePositiveNumber, recoveryItemCount } from './dashboard-format.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import { formatAtomicAmount } from '@zoltar/bot-shared/dashboard/amount'
 import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
@@ -70,9 +70,9 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		elements.nextRun.textContent = formatDate(value.scheduler.nextRunAt)
 		const delay = parsePositiveNumber(value.scheduler.lastDelaySeconds)
 		elements.lastDelay.textContent = delay === undefined ? '—' : formatClockDuration(delay)
-		const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
-		const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true)
-		elements.eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
+		const selectedOperations = value.operationEvaluations.filter(operationIsSelectedForRandomWork)
+		const eligible = selectedOperations.filter(operation => operation.enabled !== false && operation.randomEligible === true)
+		elements.eligibleCount.textContent = `${eligible.length.toString()}/${selectedOperations.length.toString()}`
 		const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
 		elements.selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
 		elements.walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))

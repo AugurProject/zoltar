@@ -1,3 +1,4 @@
+import { groupedPublicEvaluations } from './public-operation-evaluations.ts'
 import type { ChaosDashboardController } from './dashboard-controller-contract.ts'
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
@@ -12,20 +13,11 @@ import { operatorHeader } from './header.ts'
 import { readDashboardConfiguration } from './configuration-document-route.ts'
 import { mutationRoutes } from './mutation-routes.ts'
 import { settingsPageMarkup } from './settings-page.ts'
-import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
+import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, publicStrings, operationClassificationField, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 import { indeterminateConfigurationFailure, publicFailure } from './public-failure.ts'
 
 export type { ChaosDashboardController } from './dashboard-controller-contract.ts'
-
-function publicStrings(value: unknown) {
-	return Array.isArray(value)
-		? value.flatMap(entry => {
-				const safe = safeString(entry)
-				return safe === undefined ? [] : [safe]
-			})
-		: []
-}
 
 function configuredRpcUrls(value: unknown) {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
@@ -34,20 +26,6 @@ function configuredRpcUrls(value: unknown) {
 function optionalPublicStrings(value: unknown) {
 	if (!Array.isArray(value)) return undefined
 	return publicStrings(value)
-}
-
-const operationClassifications = new Set(['excluded-dangerous', 'lifecycle-obligation', 'prerequisite', 'role-restricted', 'selectable'])
-
-function operationClassificationField(source: Record<string, unknown>, key: string) {
-	const value = stringField(source, key)
-	return value !== undefined && operationClassifications.has(value) ? value : undefined
-}
-
-function publicCandidateCount(value: unknown) {
-	if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? value : undefined
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined
-	const count = BigInt(value)
-	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
 }
 
 function publicTopologyItem(value: unknown, kind: 'auction' | 'pair' | 'pool' | 'report' | 'universe') {
@@ -381,55 +359,6 @@ function publicSubmissionHealth(value: unknown, configurationValue: unknown, now
 	const safetyFailure = freshChecks.some(({ check }) => check['status'] === 'failed' && check['failureDisposition'] !== 'connectivity-degraded')
 	const ready = !safetyFailure && proofMatchesSigner !== false && healthyOriginCount >= requiredHealthyOriginCount
 	return compact({ ...common, healthyOriginCount, proofMatchesSigner, ready, status: ready ? ('ready' as const) : ('degraded' as const) })
-}
-
-function publicEvaluation(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	const definition = record(source['definition']) ?? source
-	const eligibility = record(source['eligibility']) ?? source
-	const plan = record(source['plan'])
-	return compact({
-		blockers: publicStrings(eligibility['blockers']),
-		candidateCount: publicCandidateCount(source['candidateCount']) ?? (plan === undefined ? 0 : 1),
-		classification: operationClassificationField(definition, 'classification') ?? operationClassificationField(source, 'classification'),
-		description: stringField(definition, 'description'),
-		ecosystem: stringField(definition, 'ecosystem'),
-		eligible: booleanField(eligibility, 'eligible'),
-		enabled: booleanField(source, 'enabled'),
-		id: stringField(definition, 'id'),
-		independentlyExecutable: booleanField(definition, 'independentlyExecutable') ?? booleanField(source, 'independentlyExecutable'),
-		label: stringField(definition, 'label'),
-		prerequisites: publicStrings(source['prerequisites']),
-		risk: stringField(definition, 'risk'),
-	})
-}
-
-function groupedPublicEvaluations(value: unknown) {
-	if (!Array.isArray(value)) return []
-	const grouped = new Map<string, Record<string, unknown>>()
-	for (const entry of value) {
-		const projected = publicEvaluation(entry)
-		if (projected === undefined) continue
-		const source = record(projected)
-		if (source === undefined) continue
-		const key = [stringField(source, 'id') ?? '', stringField(source, 'ecosystem') ?? '', stringField(source, 'label') ?? '', stringField(source, 'classification') ?? ''].join('\u0000')
-		const previous = grouped.get(key)
-		if (previous === undefined) {
-			grouped.set(key, source)
-			continue
-		}
-		const previousCount = publicCandidateCount(previous['candidateCount']) ?? 0
-		const currentCount = publicCandidateCount(source['candidateCount']) ?? 0
-		const totalCount = BigInt(previousCount) + BigInt(currentCount)
-		previous['candidateCount'] = totalCount <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(totalCount) : totalCount.toString()
-		previous['blockers'] = [...new Set([...publicStrings(previous['blockers']), ...publicStrings(source['blockers'])])]
-		previous['prerequisites'] = [...new Set([...publicStrings(previous['prerequisites']), ...publicStrings(source['prerequisites'])])]
-		previous['eligible'] = previous['eligible'] === true || source['eligible'] === true
-		if (previous['enabled'] === true || source['enabled'] === true) previous['enabled'] = true
-		else if (previous['enabled'] === false || source['enabled'] === false) previous['enabled'] = false
-	}
-	return [...grouped.values()]
 }
 
 function publicWorkflow(value: unknown) {

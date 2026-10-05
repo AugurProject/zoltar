@@ -34,6 +34,15 @@ export function randomOperationPlans(evaluations: readonly EvaluatedOperation[],
 	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && allowed.has(plan.definitionId))
 }
 
+/** Explain an empty scheduler selection using the evaluations before live preflight mutates them. */
+export function randomOperationSkipReason(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist: readonly string[], attemptedCandidates: number) {
+	if (attemptedCandidates === 1) return 'Random run skipped: the only candidate failed preflight. See preceding failures'
+	if (attemptedCandidates > 1) return `Random run skipped: all ${attemptedCandidates.toString()} candidates failed preflight. See preceding failures`
+	if (selectableOperationAllowlist.length === 0) return 'Random run skipped: no operations are selected for random work'
+	if (urgentOperationPlans(evaluations).length > 0) return 'Random run skipped: No selected random work is ready. Follow-up work is ready.'
+	return 'Random run skipped: no random operation has an eligible plan in the current state'
+}
+
 /** Probe randomly without replacement; no scheduler run or workflow starts until a probe succeeds. */
 export async function selectExecutableOperationPlan(candidates: readonly OperationPlan[], preflight: (plan: OperationPlan) => Promise<void>, rejected: (plan: OperationPlan, error: OperationRediscoveryRequired) => void, pickIndex: (length: number) => number = length => randomInteger(0, length)) {
 	const remaining = [...candidates]

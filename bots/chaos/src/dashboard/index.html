@@ -50,7 +50,7 @@
 								<dd id="last-delay">—</dd>
 							</div>
 							<div>
-								<dt>Eligible operations</dt>
+								<dt>Random work ready / selected</dt>
 								<dd id="eligible-count">—</dd>
 							</div>
 							<div>
@@ -164,11 +164,11 @@
 						<div class="panel-heading">
 							<div>
 								<p class="eyebrow">Readiness</p>
-								<h3>Operation coverage</h3>
+								<h3>Operation readiness</h3>
 							</div>
 							<a class="text-link" href="/catalog">View catalog</a>
 						</div>
-						<div id="coverage-summary" class="coverage-grid"></div>
+						<div id="coverage-summary"></div>
 					</article>
 				</div>
 				<article class="panel activity-panel">
@@ -227,7 +227,8 @@
 							>Eligibility
 							<select id="catalog-eligibility-filter">
 								<option value="all">All eligibility states</option>
-								<option value="eligible">Eligible operations</option>
+								<option value="eligible">Ready for random selection</option>
+								<option value="random-excluded">Excluded from random selection</option>
 								<option value="blocked">Blocked now</option>
 								<option value="disabled">Policy disabled</option>
 								<option value="not-selectable">Not independently selectable</option>

@@ -1,10 +1,14 @@
+import { randomOperationPlans, urgentOperationPlans } from './selection.ts'
 import { schedulerIsDue } from '../core/scheduler.ts'
 import { lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS } from './obligations.ts'
 import { workflowNeedsOperatorReconciliation } from './workflows.ts'
 import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type RuntimeState } from '../state/operator-state.ts'
 import type { ConfigurationState } from './dashboard-controller.ts'
 
-function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>) {
+function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>, selectableOperationAllowlist: readonly string[]) {
+	const randomPlans = new Set(randomOperationPlans(state.evaluations, selectableOperationAllowlist))
+	const lifecyclePlans = new Set(urgentOperationPlans(state.evaluations))
+	const allowed = new Set(selectableOperationAllowlist)
 	const rows = new Map<
 		string,
 		{
@@ -18,6 +22,9 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 			id: string
 			independentlyExecutable: boolean
 			label: string
+			randomAllowed: boolean
+			randomEligible: boolean
+			lifecycleEligible: boolean
 			prerequisites: string[]
 			risk: (typeof state.evaluations)[number]['definition']['risk']
 		}
@@ -37,12 +44,17 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 				id,
 				independentlyExecutable: evaluation.definition.independentlyExecutable ?? (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation'),
 				label: evaluation.definition.label,
+				randomAllowed: evaluation.definition.classification === 'selectable' && allowed.has(id),
+				randomEligible: evaluation.plan !== undefined && randomPlans.has(evaluation.plan),
+				lifecycleEligible: evaluation.plan !== undefined && lifecyclePlans.has(evaluation.plan),
 				prerequisites: [...new Set(evaluation.definition.discoveryInputs)],
 				risk: evaluation.definition.risk,
 			})
 			continue
 		}
 		existing.candidateCount += evaluation.plan === undefined ? 0 : 1
+		existing.randomEligible ||= evaluation.plan !== undefined && randomPlans.has(evaluation.plan)
+		existing.lifecycleEligible ||= evaluation.plan !== undefined && lifecyclePlans.has(evaluation.plan)
 		existing.eligible ||= evaluation.eligibility.eligible
 		existing.blockers = [...new Set([...existing.blockers, ...evaluation.eligibility.blockers])]
 		existing.prerequisites = [...new Set([...existing.prerequisites, ...evaluation.definition.discoveryInputs])]
@@ -86,7 +98,7 @@ export function dashboardState(state: RuntimeState, configuration: Configuration
 		inventoryAvailable: state.wallet !== undefined && state.inventoryAddress?.toLowerCase() === state.wallet.toLowerCase(),
 		network: configuration.settings.network.name,
 		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed').map(obligation => ({ ...obligation, automaticRetryLimit: MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS })),
-		operationEvaluations: groupedOperationEvaluations(state, enabled),
+		operationEvaluations: groupedOperationEvaluations(state, enabled, configuration.settings.strategy.selectableOperationAllowlist),
 		scheduler: {
 			...state.scheduler,
 			due: schedulerIsDue(state.scheduler.status === 'due' ? { ...state.scheduler, status: 'scheduled' } : state.scheduler),

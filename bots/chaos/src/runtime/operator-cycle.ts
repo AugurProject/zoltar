@@ -23,7 +23,7 @@ import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { schedulerFor } from './scheduled-operation.ts'
-import { genesisInitializationDefinitionId, genesisInitializationPlan, genesisInitializationTarget, randomOperationPlans, selectExecutableOperationPlan } from './selection.ts'
+import { genesisInitializationDefinitionId, genesisInitializationPlan, genesisInitializationTarget, randomOperationPlans, randomOperationSkipReason, selectExecutableOperationPlan } from './selection.ts'
 import { ensureReadPreflight, refreshSubmissionReadiness } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
@@ -357,6 +357,7 @@ async function executeScheduledWork(operator: OperatorState, cycle: OperatorCycl
 		return settings.runtime.once
 	}
 	const selectionCandidates = initialization?.plan === undefined ? candidates : [initialization.plan]
+	const skipReason = randomOperationSkipReason(state.evaluations, settings.strategy.selectableOperationAllowlist, selectionCandidates.length)
 	const plan = await selectExecutableOperationPlan(
 		selectionCandidates,
 		async candidate => {
@@ -371,7 +372,7 @@ async function executeScheduledWork(operator: OperatorState, cycle: OperatorCycl
 	)
 	if (plan === undefined) {
 		recordActivity(state, {
-			message: 'No random operation is currently eligible',
+			message: initialization === undefined ? skipReason : `Genesis initialization skipped: ${initialization.definitionId} failed preflight. See preceding failures`,
 			status: 'skipped',
 			type: 'scheduler',
 		})

@@ -39,6 +39,10 @@ export function operationIsIndependentlyExecutable(value: OperationEvaluation) {
 	return value.independentlyExecutable ?? (value.classification === 'selectable' || value.classification === 'lifecycle-obligation')
 }
 
+export function operationIsSelectedForRandomWork(value: OperationEvaluation) {
+	return value.classification === 'selectable' && operationIsIndependentlyExecutable(value) && value.randomAllowed === true
+}
+
 export function displayedClassification(value: OperationEvaluation) {
 	if (value.classification === 'selectable' && !operationIsIndependentlyExecutable(value)) return 'coverage-alias'
 	return value.classification

@@ -154,7 +154,7 @@ export async function verifyEcosystemTopology(context: WorkflowRecoveryContext, 
 	const { cdp, dashboard, expectVisibleIdentifiers, waitFor } = context
 	await cdp.command('Page.navigate', { url: new URL('/ecosystem', dashboard.url).href })
 	await waitFor("document.querySelector('#topology-anchor')?.textContent === 'Block 4242'", `${viewport.label} anchored topology did not render`)
-	expect(await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-metrics')].map(metrics => [...metrics.querySelectorAll('span')].map(label => label.textContent))`)).toEqual(Array.from({ length: 4 }, () => ['Independent operations', 'Eligible', 'Candidates']))
+	expect(await cdp.evaluate(`[...document.querySelectorAll('#ecosystem-grid .ecosystem-metrics')].map(metrics => [...metrics.querySelectorAll('span')].map(label => label.textContent))`)).toEqual(Array.from({ length: 4 }, () => ['Ready for random work', 'Selected for random work', 'Lifecycle ready']))
 	expect(await cdp.evaluate("document.querySelector('#topology-status')?.textContent")).toBe('5 protocol identities · discovery complete.')
 	expect(
 		await cdp.evaluate(`({
@@ -186,7 +186,7 @@ export async function verifyEcosystemTopology(context: WorkflowRecoveryContext, 
 	}))`)
 	const openOracleCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'open-oracle') : undefined
 	const tradingCard = Array.isArray(ecosystemCards) ? ecosystemCards.find(card => Reflect.get(card, 'ecosystem') === 'trading') : undefined
-	expect(openOracleCard).toEqual({ blockers: [], ecosystem: 'open-oracle', readiness: 'Ready' })
+	expect(openOracleCard).toEqual({ blockers: [], ecosystem: 'open-oracle', readiness: 'Lifecycle ready' })
 	expect(tradingCard).toEqual({ blockers: ['Router enter: No safe route exists'], ecosystem: 'trading', readiness: 'Blocked', summary: 'Router enter: No safe route exists' })
 	expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 }
