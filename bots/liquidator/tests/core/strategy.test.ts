@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
-import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForUnderwritingLimit, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
+import { BPS_DENOMINATOR, PRICE_PRECISION, maximumLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForUnderwritingLimit, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
@@ -171,9 +171,9 @@ describe('dynamic-capacity liquidation strategy', () => {
 		expect(selectAllowedCandidate([lower, higher], 'largest-bonus', candidate => candidate.target.address === lower.target.address)).toBe(lower)
 	})
 
-	test('uses actual estimated debt moved for the REP acquisition ceiling', () => {
-		const candidate = { debtToMoveAttoEth: 25n * PRICE_PRECISION, target: vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION) }
-		expect(conservativeLiquidationRep(candidate, 10n * PRICE_PRECISION)).toBe(262_500000000000000000n)
+	test('reserves all target backing because the execution price can change after screening', () => {
+		const candidate = { pool: pool(), target: vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION) }
+		expect(maximumLiquidationRep(candidate)).toBe(1_000n * PRICE_PRECISION)
 	})
 
 	test('rejects a receiver whose resulting debt is below the pool minimum', () => {

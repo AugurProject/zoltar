@@ -2,15 +2,18 @@
 
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
+import { useEffect } from 'preact/hooks'
 import { createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { TransactionActivityMenu } from '../../app/components/TransactionActivityMenu.js'
 import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { serializeTransactionActivity } from '../../transactions/transactionActivity.js'
-import { setTransactionActivityOwner, transactionActivity, useTransactionActivityReceiptWatcher } from '../../transactions/transactionActivityStore.js'
-import { MAINNET_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { hasPendingTransactionActivity, recordTransactionSettled, recordTransactionSubmitted, setTransactionActivityOwner, transactionActivity, useTransactionActivityReceiptWatcher } from '../../transactions/transactionActivityStore.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { createDeferred } from '../testUtils/deferred.js'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '../testUtils/fakeBackend.js'
-import { fireEvent, within } from '../testUtils/queries.js'
+import { fireEvent, waitFor, within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 installDomTestLifecycle({
@@ -30,6 +33,12 @@ function includedReceipt(transactionHash: Hash) {
 }
 
 function WatchedMenu() {
+	useTransactionActivityReceiptWatcher()
+	return <TransactionActivityMenu />
+}
+
+function OwnedWatchedMenu({ environmentRevision }: { environmentRevision: number }) {
+	useEffect(() => setTransactionActivityOwner(account), [environmentRevision])
 	useTransactionActivityReceiptWatcher()
 	return <TransactionActivityMenu />
 }
@@ -162,4 +171,73 @@ test('resumes receipt watching for a pending transaction restored after a reload
 	expect(window.localStorage.getItem(storageKey)).toContain('"confirmed"')
 	expect(within(document.body).getByRole('button', { name: 'Activity' })).not.toBeNull()
 	await rendered.cleanup()
+})
+
+test('resumes a pending receipt after returning to its network while ignoring the previous watcher', async () => {
+	const oldReceipt = createDeferred<ReturnType<typeof includedReceipt>>()
+	const currentReceipt = createDeferred<ReturnType<typeof includedReceipt>>()
+	const speedUpHash: Hash = '0x7777000000000000000000000000000000000000000000000000000000000000'
+	const baseClient = createPublicClient({ chain: MAINNET_NETWORK_PROFILE.chain, transport: custom({ request: async () => undefined }) })
+	const waits: Parameters<typeof baseClient.waitForTransactionReceipt>[0][] = []
+	const backend = {
+		...createFakeBackend({ accountAddress: account }),
+		createReadClient: () => ({
+			...baseClient,
+			getTransaction: async () => originalTransaction,
+			waitForTransactionReceipt: async (parameters: Parameters<typeof baseClient.waitForTransactionReceipt>[0]) => {
+				waits.push(parameters)
+				return await (waits.length === 1 ? oldReceipt.promise : currentReceipt.promise)
+			},
+		}),
+	}
+	installActiveEnvironmentForTesting(backend)
+	setTransactionActivityOwner(account)
+	const storageKey = transactionActivity.value.storageKey
+	if (storageKey === undefined) throw new Error('Expected stored activity for a connected account')
+	window.localStorage.setItem(storageKey, serializeTransactionActivity([{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Trade' }]))
+	transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	const rendered = await renderIntoDocument(<OwnedWatchedMenu environmentRevision={0} />)
+	try {
+		await waitFor(() => expect(waits).toHaveLength(1))
+		await act(() => {
+			installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: account, profile: SEPOLIA_NETWORK_PROFILE }))
+			render(<OwnedWatchedMenu environmentRevision={1} />, rendered.container)
+		})
+		expect(transactionActivity.value.entries).toEqual([])
+		await act(() => {
+			installActiveEnvironmentForTesting(backend)
+			render(<OwnedWatchedMenu environmentRevision={2} />, rendered.container)
+		})
+		await waitFor(() => expect(waits).toHaveLength(2))
+		expect(hasPendingTransactionActivity(['market:0x1'])).toBeTrue()
+		const oldWait = waits[0]
+		if (oldWait?.onReplaced === undefined) throw new Error('Expected the previous watcher to track transaction replacements')
+		const onOldReplacement = oldWait.onReplaced
+
+		await act(async () => {
+			onOldReplacement({ reason: 'repriced', replacedTransaction: originalTransaction, transaction: { ...originalTransaction, hash: speedUpHash }, transactionReceipt: includedReceipt(speedUpHash) })
+			oldReceipt.resolve(includedReceipt(speedUpHash))
+			await oldReceipt.promise
+		})
+		expect(transactionActivity.value.entries).toHaveLength(1)
+		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: pendingHash, status: 'pending' })
+
+		// A late callback must not release the new watcher and cause duplicate receipt polling on another update.
+		await act(() => {
+			recordTransactionSubmitted({ hash: failedHash, scope: [], title: 'Unrelated transaction' })
+			recordTransactionSettled(failedHash, { status: 'confirmed' })
+		})
+		expect(waits).toHaveLength(2)
+		await act(async () => {
+			currentReceipt.resolve(includedReceipt(pendingHash))
+			await currentReceipt.promise
+		})
+		await waitFor(() => expect(transactionActivity.value.entries.find(entry => entry.hash === pendingHash)?.status).toBe('confirmed'))
+		expect(hasPendingTransactionActivity(['market:0x1'])).toBeFalse()
+		expect(within(document.body).getByRole('button', { name: 'Activity' })).not.toBeNull()
+	} finally {
+		oldReceipt.resolve(includedReceipt(pendingHash))
+		currentReceipt.resolve(includedReceipt(pendingHash))
+		await rendered.cleanup()
+	}
 })
