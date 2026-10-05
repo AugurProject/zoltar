@@ -164,7 +164,7 @@ test('explains random skips using the scheduler candidate set', () => {
 	expect(randomOperationSkipReason(evaluations, [], 0)).toBe('Random run skipped: no operations are selected for random work')
 	expect(randomOperationSkipReason(evaluations, ['first'], 2)).toBe('Random run skipped: all 2 candidates failed preflight. See preceding failures')
 	expect(randomOperationSkipReason(evaluations, ['first'], 1)).toBe('Random run skipped: the only candidate failed preflight. See preceding failures')
-	expect(randomOperationSkipReason([evaluation(plan('urgent', 'urgent'))], ['first'], 0)).toBe('Random run skipped: only lifecycle operations are eligible')
+	expect(randomOperationSkipReason([evaluation(plan('urgent', 'urgent'))], ['first'], 0)).toBe('Random run skipped: No selected random work is ready. Follow-up work is ready.')
 	expect(randomOperationSkipReason([evaluation(undefined, false)], ['first'], 0)).toBe('Random run skipped: no random operation has an eligible plan in the current state')
 })
 

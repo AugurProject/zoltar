@@ -64,7 +64,7 @@ export function createDashboardRecoveryView({ state, elements }: { state: Dashbo
 		if (!known) detail = 'Waiting for operation discovery.'
 		else if (disabled) detail = 'New random work disabled by allowlist.'
 		else if (random.length > 0) detail = `${random.length.toString()} operation${random.length === 1 ? '' : 's'} permitted by the allowlist. Live preflight must pass before execution.`
-		else if (lifecycle.length > 0) detail = 'Only lifecycle operations have eligible plans.'
+		else if (lifecycle.length > 0) detail = 'No selected random work is ready. Follow-up work is ready.'
 		const readiness = node('div', 'readiness-summary')
 		const badge = node('span')
 		if (!known) setBadge(badge, 'Random work: discovering', 'neutral')

@@ -510,7 +510,7 @@ browserTest(
 					enabled = true
 					eligible = false
 					await refresh()
-					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('Only lifecycle operations have eligible plans')", { message: 'lifecycle explanation missing' })
+					await cdp.waitFor("document.querySelector('#coverage-summary')?.textContent.includes('No selected random work is ready. Follow-up work is ready.')", { message: 'lifecycle explanation missing' })
 					expect(await cdp.evaluate("document.querySelector('#eligible-count')?.textContent")).toBe('0/1')
 					expect(await cdp.evaluate("document.querySelector('#coverage-summary .coverage-card:nth-child(3) strong')?.textContent")).toBe('0/1')
 					await capture(`readiness-lifecycle-${width}`)

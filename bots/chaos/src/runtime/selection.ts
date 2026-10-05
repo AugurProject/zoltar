@@ -39,7 +39,7 @@ export function randomOperationSkipReason(evaluations: readonly EvaluatedOperati
 	if (attemptedCandidates === 1) return 'Random run skipped: the only candidate failed preflight. See preceding failures'
 	if (attemptedCandidates > 1) return `Random run skipped: all ${attemptedCandidates.toString()} candidates failed preflight. See preceding failures`
 	if (selectableOperationAllowlist.length === 0) return 'Random run skipped: no operations are selected for random work'
-	if (urgentOperationPlans(evaluations).length > 0) return 'Random run skipped: only lifecycle operations are eligible'
+	if (urgentOperationPlans(evaluations).length > 0) return 'Random run skipped: No selected random work is ready. Follow-up work is ready.'
 	return 'Random run skipped: no random operation has an eligible plan in the current state'
 }
 
