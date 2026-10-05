@@ -60,12 +60,13 @@
 			"outcomes": ["ExecutedStagedOperation failure", "operation is consumed without requiring a valid price", "delegated-liquidation reservation is released"]
 		}
 	],
-	"events": ["SecurityPoolSet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "LiquidationRouteStaged", "StagedOperationQueued", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
+	"events": ["SecurityPoolSet", "LiquidationApprovalRegistrySet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "LiquidationRouteStaged", "StagedOperationQueued", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
 	"enumValues": {
 		"OperationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit", "3": "VaultOperations" },
 		"CoordinatorCheckpointReason": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" }
 	},
 	"eventDeclarations": {
+		"LiquidationApprovalRegistrySet": "LiquidationApprovalRegistrySet(address indexed registry)",
 		"SecurityPoolSet": "SecurityPoolSet(address indexed securityPool)",
 		"RepEthPriceSet": "RepEthPriceSet(uint256 price)",
 		"PriceRequested": "PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)",
