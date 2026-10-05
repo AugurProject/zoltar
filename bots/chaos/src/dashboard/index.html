@@ -19,7 +19,6 @@
 				<div id="workflow-history"><p class="empty-state">Loading workflows…</p></div>
 			</section>
 
-
 			<section data-page-content="overview" aria-labelledby="overview-title">
 				<div class="section-heading">
 					<div>
@@ -176,9 +175,18 @@
 					<div class="panel-heading">
 						<div>
 							<p class="eyebrow">Newest first</p>
-						<h3>Recent activity</h3>
-					</div>
-						<label>Filter <select id="activity-filter"><option value="all">All activity</option><option value="failed">Failures</option><option value="pending">Pending</option><option value="dry-run">Dry run</option><option value="confirmed">Confirmed</option></select></label>
+							<h3>Recent activity</h3>
+						</div>
+						<label
+							>Filter
+							<select id="activity-filter">
+								<option value="all">All activity</option>
+								<option value="failed">Failures</option>
+								<option value="pending">Pending</option>
+								<option value="dry-run">Dry run</option>
+								<option value="confirmed">Confirmed</option>
+							</select></label
+						>
 					</div>
 					<ol id="activity-list" class="timeline">
 						<li class="empty-state">No activity recorded.</li>

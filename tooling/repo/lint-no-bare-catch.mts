@@ -36,10 +36,8 @@ const ignoredPathPrefixes = [
 	'augurScan/qa',
 	'coverage',
 ]
-const ignoredFiles = new Set(['solidity/ts/testSupport/simulator/types/wire-types.js'])
 
 function shouldIgnore(relativePath: string): boolean {
-	if (ignoredFiles.has(relativePath)) return true
 	if (relativePath.split('/').includes('node_modules')) return true
 	for (const prefix of ignoredPathPrefixes) {
 		if (relativePath === prefix || relativePath.startsWith(`${prefix}/`)) return true

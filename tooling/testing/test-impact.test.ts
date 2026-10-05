@@ -9,6 +9,12 @@ import { deduplicateTestRecommendations, getImportGraphTestRecommendations, getT
 const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(changedFiles).map(recommendation => recommendation.command)
 
 describe('test impact recommendations', () => {
+	test('maps shared GitHub actions and review workflow to workflow contract tests', () => {
+		for (const path of ['.github/actions/setup-bun/action.yml', '.github/actions/build-ui-image/action.yml', '.github/workflows/review.yml']) {
+			expect(commandsFor([path])).toContain('bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts')
+		}
+	})
+
 	test('maps the subprocess formatter engine to its owning tests', () => {
 		expect(commandsFor(['tooling/contracts/prettier-solidity-batch.mjs'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/contracts/format-solidity-one-line.test.ts'])
 	})

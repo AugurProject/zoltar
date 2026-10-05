@@ -111,7 +111,7 @@ const config = (options => {
 			},
 			'ui/trading': {
 				entry: ['ts/tests/**/*.{ts,tsx}', 'ts/index.ts!', 'ts/index.dev.ts!', 'ts/simulation/tevmWorker.ts!', 'build/core-deployments.mts'],
-				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!', '!scripts/browser-qa.mts!'],
+				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
 				paths: {
 					'@zoltar/ui-core-shared/*': ['../coreShared/ts/*'],
 					'@zoltar/ui-zoltar-shared/*': ['../zoltarShared/ts/*'],

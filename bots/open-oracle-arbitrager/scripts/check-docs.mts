@@ -72,7 +72,7 @@ const assertLocalLinksResolve = async (documentPath: string, contents: string) =
 		if (path.extname(targetPath).toLowerCase() === '.md') {
 			assert.ok(markdownAnchors(target).has(fragment), `Missing Markdown fragment ${href} from ${documentPath}`)
 		} else {
-			assert.match(target, new RegExp(`\\bid="${fragment.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}"`), `Missing HTML fragment ${href} from ${documentPath}`)
+			assert.match(target, new RegExp(`\\bid="${fragment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`), `Missing HTML fragment ${href} from ${documentPath}`)
 		}
 	}
 }

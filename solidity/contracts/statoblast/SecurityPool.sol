@@ -342,7 +342,7 @@ contract SecurityPool is SecurityPoolStorage {
 		return repToken.balanceOf(address(this));
 	}
 
-	/// @notice Returns the total underwriting limit when pool-held REP backs it at a valid price and no escalation game exists; otherwise zero.
+	/// @notice Returns the total underwriting limit while no escalation game exists; otherwise zero.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		return address(escalationGame) == address(0) ? totalUnderwritingLimitAttoEth : 0;
 	}
@@ -530,7 +530,6 @@ contract SecurityPool is SecurityPoolStorage {
 		BinaryOutcomes.BinaryOutcome questionOutcome = ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this))));
 		require(questionOutcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		BinaryOutcomes.BinaryOutcome withdrawalOutcome = BinaryOutcomes.BinaryOutcome(uint8(outcome));
-		require(withdrawalOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 
 		EscalationGame escalationGameContract = EscalationGame(payable(address(escalationGame)));
 		address beneficiaryVault = address(0x0);

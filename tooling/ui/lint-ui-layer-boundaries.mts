@@ -164,7 +164,7 @@ export function findUiExportsManifestViolations(packageId: string, manifestExpor
 	const sourceFileSet = new Set(sourceFiles)
 	const sourceTargetOf = (value: unknown): string | undefined => {
 		if (typeof value === 'string') return value
-		if (typeof value === 'object' && value !== null && 'bun' in value && typeof (value as { bun: unknown }).bun === 'string') return (value as { bun: string }).bun
+		if (typeof value === 'object' && value !== null && 'bun' in value && typeof value.bun === 'string') return value.bun
 		return undefined
 	}
 	for (const [key, value] of Object.entries(manifestExports)) {

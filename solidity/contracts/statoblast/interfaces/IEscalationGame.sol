@@ -8,6 +8,7 @@ enum CarryConsumptionReason {
 	LosingSettlement,
 	Export,
 	DirectParentClaim,
+	// Unused; kept because removing it adds approximately 240 bytes to EscalationGame.
 	ForkedEscrowClaim
 }
 
@@ -29,7 +30,7 @@ interface IEscalationGameEvents {
 	event ForkCarryCheckpoint(address indexed sourceGame, bytes32 indexed snapshotId, bytes32[3] carryRoots, bytes32[3] nullifierRoots, uint256[3] leafCounts, uint256[3] unresolvedTotalsAttoRep, uint256[3] resolutionBalancesAttoRep);
 	/// @notice Resulting commitment state after one local or inherited deposit is consumed. `parentDepositIndex`
 	/// and `sourceNodeId` are stable source identities; REP values use attoREP. The reason distinguishes
-	/// claims, losing settlement, export, direct parent claim, and forked-escrow claim.
+	/// claims, losing settlement, export, and direct parent claim.
 	event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, CarryConsumptionReason reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot);
 }
 

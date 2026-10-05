@@ -60,8 +60,10 @@ export function useZoltarMigration({
 		zoltarMigrationResult.value = undefined
 		zoltarMigrationActiveAction.value = undefined
 	}, [environmentRefreshKey])
-	// Outcome indexes belong to one universe; never carry a selection over to another universe.
+	// Outcome indexes and feedback belong to one universe.
 	useEffect(() => {
+		zoltarMigrationError.value = undefined
+		zoltarMigrationFeedback.value = undefined
 		setZoltarMigrationForm(() => getDefaultZoltarMigrationFormState())
 	}, [activeUniverseId])
 
@@ -121,6 +123,7 @@ export function useZoltarMigration({
 				const message = formatWriteErrorMessage(error, 'Failed to migrate REP')
 				writeFailed = true
 				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
+				if (!ownsTransaction) zoltarMigrationError.value = message
 				zoltarMigrationFeedback.value = createErrorActionFeedback('splitMigrationRep', 'REP migration failed', message)
 			} finally {
 				if (environmentGuard.isCurrent()) {

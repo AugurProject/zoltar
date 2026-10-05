@@ -40,11 +40,11 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['docs/charts/chartRuntime.ts', 1055],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/gas-costs.ts', 714],
-		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 623],
+		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
-		['solidity/contracts/statoblast/SecurityPool.sol', 705],
+		['solidity/contracts/statoblast/SecurityPool.sol', 704],
 		['solidity/contracts/statoblast/SecurityPoolForker.sol', 617],
 		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 639],
 	]),

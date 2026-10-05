@@ -192,6 +192,49 @@ describe('liquidity workflow controller state', () => {
 		}
 	})
 
+	test('bounds add-liquidity holding fees by the market submission window', async () => {
+		let controller: Controller | undefined
+		const unit = 10n ** 18n
+		const feeAccounting = {
+			settlementCollateralAttoEth: 100n * unit,
+			totalUnderwritingLimitAttoEth: 100n * unit,
+			feeEligibleUnderwritingLimitAttoEth: 100n * unit,
+			currentRetentionRate: 999_990_000_000_000_000n,
+			lastUpdatedFeeAccumulator: 1n,
+			feeIndexRemainder: 0n,
+			totalFeesOwedRemainder: 0n,
+		}
+		const endingMarket = {
+			...market,
+			...feeAccounting,
+			endTime: 101n,
+			shareTokenSupplyAttoShares: 100n * unit,
+			yesReserve: 50n * unit,
+			noReserve: 50n * unit,
+			lpTotalSupply: 50n * unit,
+			valuation: { timestamp: 1n, feeEndTime: 10_000n, projectedCollateralAttoEth: 100n * unit, feeAccounting },
+		}
+		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const rendered = await renderIntoDocument(
+			controllerProbe(
+				walletClient,
+				{ submitFreshLiquidity: async () => transactionHash },
+				next => {
+					controller = next
+				},
+				() => undefined,
+				endingMarket,
+			),
+		)
+		try {
+			await act(() => controller?.updateAmount('1'))
+			expect(controller?.estimate?.operation).toBe('add')
+			expect(controller?.previewBlocker).toBeUndefined()
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('selects Add when initialization refreshes the pool state', async () => {
 		const services: LiveLiquidityServices = { submitFreshLiquidity: async () => transactionHash }
 		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })

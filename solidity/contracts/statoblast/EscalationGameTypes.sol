@@ -37,7 +37,7 @@ struct OutcomeState {
 	// currentNullifierRoot tracks which inherited proof indexes have been consumed in this instance.
 	// currentLeafCount/currentPeaks are the descendant export snapshot, updated incrementally as local carry changes.
 	// localHeadNodeId/localUnresolvedTotalAttoRep track local carry added after the inherited snapshot.
-	// Total principal currently assigned to this outcome by local deposits placed directly in this escalation game.
+	// Cumulative resolution balance: inherited fork-time balance in continuation games (scaled by any truth-auction haircut) plus accepted local deposits; claims and settlement do not reduce it.
 	uint256 balanceAttoRep;
 	// Local deposits are represented by localNodeIds and the authoritative nodes mapping.
 	// The inherited carry snapshot this escalation game started with for this outcome.

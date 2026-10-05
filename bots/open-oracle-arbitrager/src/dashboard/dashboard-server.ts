@@ -153,8 +153,7 @@ function publicConnectivityUpdateError(error: unknown) {
 		validationMessages: new Set([
 			'Live execution requires at least two independent quorum RPCs (three read endpoints total)',
 			'Network, RPC, and quorum settings are required',
-			'Quorum RPC URLs must be an array of URLs',
-			'Quorum RPC URLs must contain no more than 8 URLs',
+			'connectivity.quorumRpcUrls must contain only RPC URLs',
 			'Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider',
 			'RPC quorum must be 1 or 2',
 			'Select the chain profile before saving its RPC settings',

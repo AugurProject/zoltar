@@ -1,3 +1,4 @@
+import { capSubmissionDeadline } from '../../protocol/submissionWindow.js'
 import * as workflowCopy from '../../copy/workflows.js'
 import { useEffect, useState } from 'preact/hooks'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -71,7 +72,7 @@ export function useLiquidityWorkflowController({
 	if (estimate === undefined) {
 		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
 	} else if (estimate.operation === 'add')
-		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, maximumAfterSlippage(estimate.yesUsed, settings.slippageBps), maximumAfterSlippage(estimate.noUsed, settings.slippageBps), nowSeconds + settings.validityMinutes * 60n, {
+		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, maximumAfterSlippage(estimate.yesUsed, settings.slippageBps), maximumAfterSlippage(estimate.noUsed, settings.slippageBps), capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,
 			noUsed: estimate.noUsed,

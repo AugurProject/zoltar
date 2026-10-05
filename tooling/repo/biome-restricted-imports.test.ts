@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { repositoryRoot } from './root.mts'
 
-// ui/*/ts/**/*.d.ts is gitignored (generated declarations), so the UI probe lives beside the trading scripts instead.
-const probeRoots = ['tooling/repo', 'ui/trading/scripts', 'bots/shared/src', 'augurScan/src']
+// ui/*/ts/**/*.d.ts is gitignored (generated declarations), so the UI probe lives beside the trading build scripts instead.
+const probeRoots = ['tooling/repo', 'ui/trading/build', 'bots/shared/src', 'augurScan/src']
 
 /**
  * Every viem/abitype import form the retired TypeScript-AST lint rejected. Biome's noRestrictedImports reports the

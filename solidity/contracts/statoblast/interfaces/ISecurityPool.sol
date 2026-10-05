@@ -25,21 +25,21 @@ struct SecurityVault {
 struct PoolAccountingSnapshot {
 	/// @dev ETH reserved as complete-set settlement collateral, denominated in attoETH.
 	uint256 settlementCollateralAttoEth;
-	/// @dev Resulting sum of vault capacity ownerships, denominated in attoREP.
+	/// @dev Resulting sum of vault underwriting limits, in attoETH.
 	uint256 totalUnderwritingLimitAttoEth;
-	/// @dev Capacity ownership currently participating in fee accrual, denominated in attoREP.
+	/// @dev Underwriting limit currently participating in fee accrual, in attoETH.
 	uint256 feeEligibleUnderwritingLimitAttoEth;
 	/// @dev Whole attoETH already assigned to vaults but not yet redeemed.
 	uint256 totalClaimableVaultFeesAttoEth;
 	/// @dev Whole accrued attoETH not yet assigned by a vault checkpoint.
 	uint256 unallocatedAccruedFeesAttoEth;
-	/// @dev Cumulative fee per eligible capacity-ownership attoREP, scaled by 1e18.
+	/// @dev Cumulative fee per eligible attoETH of underwriting limit, scaled by 1e18.
 	uint256 feeIndex;
-	/// @dev Division carry from fee-index allocation; scoped to the current capacity-ownership denominator.
+	/// @dev Division carry from fee-index allocation; scoped to the current underwriting-limit denominator.
 	uint256 feeIndexRemainder;
 	/// @dev Fractional attoETH carry from total fee accrual, always less than 1e18.
 	uint256 totalFeesOwedRemainder;
-	/// @dev Eligible capacity ownership whose vault fee indexes have not consumed the latest global index delta.
+	/// @dev Eligible underwriting limit whose vault fee indexes have not consumed the latest global index delta.
 	uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth;
 	/// @dev Last accrual timestamp, in Unix seconds.
 	uint256 lastUpdatedFeeAccumulator;
@@ -106,7 +106,7 @@ interface ISecurityPool {
 	/// @notice Authoritative resulting accounting state after a mutation. `vault` is zero for pool-wide causes.
 	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalUnderwritingLimitAttoEth, uint256 feeEligibleUnderwritingLimitAttoEth, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
 	/// @notice Authoritative resulting vault state and the affected global denominators. REP attribution uses
-	/// REP backing units and capacity ownership use attoREP, fees use attoETH, and `feeIndex` and
+	/// REP backing units; underwriting limits and fees use attoETH, and `feeIndex` and
 	/// `vaultFeeRemainder` use 1e18 fixed-point precision.
 	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleUnderwritingLimitAttoEth);
 	/// @notice Complete sets minted for `creator`. ETH fields use attoETH; share fields use attoShares.

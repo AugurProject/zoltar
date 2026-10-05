@@ -105,9 +105,6 @@
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-4);
 }
-.wallet-balance-grid {
-	margin: 0;
-}
 /* The outcome block of every quoted-transaction panel: hash, failure, and the primary action. It takes focus
    programmatically on confirmation, so it has no outline of its own; the announcement comes from its live region. */
 .transaction-outcome {
@@ -257,7 +254,7 @@
 }
 
 /* Market list: search (which also opens a pasted pool address) beside sort, then the status filter beside the list's
-   count, freshness, and discovery, then a grid of market cards led by their odds. */
+   result count, then a grid of market cards led by their odds. */
 .market-list-controls {
 	display: flex;
 	flex-wrap: wrap;
@@ -286,17 +283,10 @@
 .market-list-subbar > .market-list-filters {
 	min-width: 0;
 }
-.market-list-subbar > .market-browse-bar {
-	flex: 1 1 auto;
-	justify-content: flex-end;
-}
 .market-list-sort {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
-}
-.market-browse-bar.local-browse-bar {
-	margin-bottom: 0;
 }
 .market-list-count {
 	margin: 0;
@@ -307,15 +297,6 @@
 .market-list.entity-card-list {
 	grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
 	align-items: stretch;
-}
-/* A slot still waiting for its market holds a card-sized placeholder so the grid does not jump as rows arrive; a loaded
-   card sizes to its content and stretches only to match the other cards in its row. */
-.market-discovery-slot {
-	display: grid;
-	min-width: 0;
-}
-.market-discovery-slot > .skeleton-list {
-	min-block-size: 20rem;
 }
 .market-card.entity-card {
 	grid-template-rows: auto 1fr auto;
@@ -521,10 +502,6 @@ button.outcome-button--no:hover:not(:disabled) {
 		min-width: 0;
 		padding-inline: var(--space-1);
 	}
-	/* The Discover control keeps its own right-aligned row, so a longer count or scan progress never moves it. */
-	.market-browse-bar > .discovery-control {
-		flex: 1 1 100%;
-	}
 }
 
 /* Narrow layouts keep the workflow in the page, ahead of the detailed market overview. */
@@ -579,11 +556,6 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 
 /* Header shell: wallet actions and balance read failures. */
-.trading-wallet-error .error {
-	color: var(--danger);
-	font-size: var(--font-label);
-	overflow-wrap: anywhere;
-}
 .trading-wallet-actions {
 	flex-wrap: wrap;
 	flex: 1;
@@ -776,8 +748,4 @@ button.outcome-button--no:hover:not(:disabled) {
 		grid-column: 1 / -1;
 		justify-self: start;
 	}
-}
-
-.market-list-heading {
-	margin: var(--space-3) 0 0;
 }

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 
 describe('bounded Trading submission window', () => {
-	test('requires more than60seconds before question close for swaps and deposits', () => {
+	test('requires more than 60 seconds before question close for swaps and deposits', () => {
 		for (const operation of ['entry', 'exit', 'initialize', 'add'] as const) {
 			for (const remaining of [1n, 60n, 61n]) expect(submissionWindowBlocker({ endTime: 100n + remaining }, operation, 100n) === undefined).toBe(remaining > 60n)
 		}

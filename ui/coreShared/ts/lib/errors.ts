@@ -1,3 +1,4 @@
+import * as pricingCopy from '../copy/pricing.js'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 
 export const transactionErrorMessages = {
@@ -166,7 +167,7 @@ function getKnownTransactionErrorDetail(details: string[]) {
 		if (message !== undefined) return message
 	}
 	for (const detail of details) {
-		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in Price oracle, then retry."
+		if (detail.toLowerCase().includes('stale price')) return pricingCopy.poolOraclePriceExpiredError
 	}
 	return undefined
 }

@@ -220,6 +220,16 @@ describe('ZoltarRoutes', () => {
 		expect(document.querySelectorAll('.migration-wizard-steps button')).toHaveLength(4)
 	})
 
+	test('shows and clears REP approval errors on the Migrate route', async () => {
+		const screen = await renderRoute('migrate', createUniverse())
+		const message = 'Wallet account changed. Please try again.'
+		await screen.update({ zoltarForkError: message })
+		expect(screen.queries.getByRole('alert').textContent).toContain(message)
+		expect(document.querySelector('.migration-wizard')).toBeTruthy()
+		await screen.update({ zoltarForkError: undefined })
+		expect(screen.queries.queryByText(message)).toBeNull()
+	})
+
 	test('redirects a Fork route on a forked universe to migration', async () => {
 		const { queries, viewChanges } = await renderRoute('fork', createUniverse())
 		expect(queries.getByText('Already forked')).toBeTruthy()

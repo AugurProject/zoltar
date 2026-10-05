@@ -148,7 +148,7 @@ describe('useZoltarFork', () => {
 		expect(state().zoltarForkRepBalanceAttoRep).toBe(10n)
 	})
 
-	test('does not request a fork transaction when the active wallet account changed', async () => {
+	test.each(['fork', 'approval'])('does not request a %s transaction when the active wallet account changed', async action => {
 		const ensureZoltarUniverse = mock(async () => createUniverse())
 		const onTransactionRequested = mock(() => undefined)
 		let transactionState = markTransactionRequested(createInitialTransactionTrayState(), { action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
@@ -158,12 +158,16 @@ describe('useZoltarFork', () => {
 		const onTransactionFailed = mock((message: string) => {
 			transactionState = markTransactionFailed(transactionState, { kind: 'error', message })
 		})
-		const { state } = await renderForkHook(createForkParameters({ ensureZoltarUniverse, onTransactionFailed, onTransactionRequested }), createZoltarForkDependencies())
+		const parameters = createForkParameters({ ensureZoltarUniverse, onTransactionFailed, onTransactionRequested })
+		const { state, rerender } = await renderForkHook(parameters, createZoltarForkDependencies())
 
 		await act(async () => {
-			await state().forkZoltar()
+			if (action === 'approval') await state().approveZoltarForkRep(100n)
+			else await state().forkZoltar()
 		})
 
+		expect(state().zoltarForkError).toContain('Wallet account changed')
+		expect(state().zoltarForkFeedback?.status.detail).toBe(state().zoltarForkError)
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
@@ -171,6 +175,12 @@ describe('useZoltarFork', () => {
 		expect(transactionState.entries[0]?.intent).toBe(admittedIntent)
 		expect(transactionState.entries[0]?.key).toBe(admittedRequestKey)
 		expect(transactionState.active).toBe(admittedPresentation)
+
+		await act(async () => {
+			rerender({ ...parameters, activeUniverseId: 2n })
+		})
+		expect(state().zoltarForkError).toBeUndefined()
+		expect(state().zoltarForkFeedback).toBeUndefined()
 	})
 
 	test('does not execute or finish a fork transaction rejected by the global admission gate', async () => {
@@ -237,7 +247,8 @@ describe('useZoltarFork', () => {
 
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
-		const { state } = await renderForkHook(createForkParameters({ ensureZoltarUniverse: async () => await universeLoad.promise, onTransactionFailed: () => undefined }), dependencies)
+		const parameters = createForkParameters({ ensureZoltarUniverse: async () => await universeLoad.promise, onTransactionFailed: () => undefined })
+		const { state, rerender } = await renderForkHook(parameters, dependencies)
 
 		await act(async () => {
 			state().setZoltarForkQuestionId('0x0b')
@@ -247,6 +258,11 @@ describe('useZoltarFork', () => {
 		await act(() => {
 			forkPromise = state().forkZoltar()
 		})
+
+		await act(async () => rerender({ ...parameters, activeUniverseId: 2n }))
+		expect(state().zoltarForkPending).toBe(true)
+		expect(state().zoltarForkActiveAction).toBe('fork')
+		expect(state().zoltarForkFeedback).toBeUndefined()
 
 		await act(async () => {
 			state().setZoltarForkQuestionId('0x0c')

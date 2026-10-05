@@ -51,7 +51,9 @@
 							</tr>
 							<tr>
 								<td>Start-bond admission</td>
-								<td>A new origin's <a href="./glossary.html#non-decision-threshold">non-decision threshold</a> must exceed its <a href="./glossary.html#start-bond">start bond</a> (<code>Escalation threshold too low</code>). <a href="./invariants.html#esc-13"><code>ESC-13</code></a> owns the start-bond formula and its later clamp.</td>
+								<td>
+									A new origin's <a href="./glossary.html#non-decision-threshold">non-decision threshold</a> must exceed its <a href="./glossary.html#start-bond">start bond</a> (<code>Escalation threshold too low</code>). <a href="./invariants.html#esc-13"><code>ESC-13</code></a> owns the start-bond formula and its later clamp.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">SecurityPoolFactory.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 							</tr>
 							<tr>
@@ -104,19 +106,25 @@
 							</tr>
 							<tr>
 								<td>Fee eligibility</td>
-								<td>Fee-eligible <a href="./glossary.html#underwriting-commitment">underwriting commitment</a> includes vault-assigned commitments and sold Truth Auction commitments awaiting claim. <a href="./invariants.html#bal-08"><code>BAL-08</code></a> owns the ledger invariant.</td>
+								<td>
+									Fee-eligible <a href="./glossary.html#underwriting-commitment">underwriting commitment</a> includes vault-assigned commitments and sold Truth Auction commitments awaiting claim. <a href="./invariants.html#bal-08"><code>BAL-08</code></a> owns the ledger invariant.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>
 								<td>Fee reserve and rounding</td>
 								<td>Settlement-collateral decay first enters an unallocated reserve; vault checkpoints and auction claims move only whole attoETH into <code>totalClaimableVaultFeesAttoEth</code> and carry sub-attoETH remainders forward. <code>totalAccruedFeesAttoEth()</code> returns reserve plus assigned claimable fees. Index carry is cleared when pool financials are installed or a vault's underwriting commitment changes or moves by liquidation; assigning finalized-auction commitment to its winning vault preserves it.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.updateSettlementCollateral</code></a
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.updateSettlementCollateral</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.updateVaultFees</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool._clearFeeIndexRemainder</code></a></td>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool._clearFeeIndexRemainder</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Terminal fee reserve</td>
-								<td>After a fork ends accrual and every eligible allocation is reconciled, the next vault fee checkpoint returns unclaimable whole reserve attoETH to settlement collateral. Fee cutoffs per pool and epoch are specified in the <a href="./contracts/securitypool.html#interactions"><code>updateSettlementCollateral</code> reference</a>.</td>
+								<td>
+									After a fork ends accrual and every eligible allocation is reconciled, the next vault fee checkpoint returns unclaimable whole reserve attoETH to settlement collateral. Fee cutoffs per pool and epoch are specified in the <a href="./contracts/securitypool.html#interactions"><code>updateSettlementCollateral</code> reference</a>.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>
@@ -147,15 +155,22 @@
 							</tr>
 							<tr>
 								<td>Vault-funded escalation deposit</td>
-								<td>Beyond the unforked-universe and <code>Operational</code>-pool requirement of other operational flows, <code>depositToEscalationGame</code> rejects a pool with an inherited fixed outcome (<code>Forked</code>), a pending fork continuation (<code>Fork await</code>), a question that has not ended when no game exists (<code>Question active</code>), and a carried game that has not resumed (<code>Fork paused</code>). It deploys the game on the first valid deposit, previews the accepted amount (<code>No deposit</code> when zero), and removes vault REP backing units rounding up (<code>REP too low</code>, <code>Escrow low</code>). With any pool commitment it requires a valid price (<code>Stale price</code>). It then applies the <a href="./invariants.html#bal-04"><code>BAL-04</code></a> checks to the vault and the pool (<code>Vault backing insufficient</code>, <code>Pool backing insufficient</code>) and requires the remaining vault REP to be zero or at least the vault REP floor (<code>Vault REP below minimum</code>). <a href="./invariants.html#esc-13"><code>ESC-13</code></a> owns the start-bond clamp applied when the game is deployed.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.depositToEscalationGame</code></a
+								<td>
+									Beyond the unforked-universe and <code>Operational</code>-pool requirement of other operational flows, <code>depositToEscalationGame</code> rejects a pool with an inherited fixed outcome (<code>Forked</code>), a pending fork continuation (<code>Fork await</code>), a question that has not ended when no game exists (<code>Question active</code>), and a carried game that has not resumed (<code>Fork paused</code>). It deploys the game on the first valid deposit, previews the accepted amount (<code>No deposit</code> when zero), and removes vault REP backing units rounding up (<code>REP too low</code>, <code>Escrow low</code>). With any pool commitment it requires a valid price (<code>Stale price</code>). It then applies the <a href="./invariants.html#bal-04"><code>BAL-04</code></a> checks to the vault and the pool (<code>Vault backing insufficient</code>, <code>Pool backing insufficient</code>) and requires the remaining vault REP to be zero or at least the vault REP floor (<code>Vault REP below minimum</code>). <a href="./invariants.html#esc-13"><code>ESC-13</code></a> owns the start-bond clamp applied when the game is deployed.
+								</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.depositToEscalationGame</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>EscalationGameFactory.deployEscalationGame</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame.recordDepositFromSecurityPool</code></a></td>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame.recordDepositFromSecurityPool</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Wallet-funded escalation deposit</td>
 								<td><code>depositWalletRepToEscalationGame</code> transfers REP from the caller's wallet straight into the game; that REP never becomes vault backing or commitment capacity. It needs no vault and no oracle price and runs no backing check. It rejects an inherited fixed outcome or a forked universe (<code>Forked</code>), a non-operational pool (<code>Pool inactive</code>), a pending fork continuation (<code>Fork await</code>), a question that has not ended when no game exists (<code>Question active</code>), and a carried game (<code>Fork game</code>).</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.depositWalletRepToEscalationGame</code></a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame</code></a></td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.depositWalletRepToEscalationGame</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Direct ETH receiver</td>
@@ -164,17 +179,19 @@
 							</tr>
 							<tr>
 								<td>Vault enumeration</td>
-								<td><code>getVaults(startIndex, count)</code> pages the vault registry newest-registered first and returns an empty array when <code>count == 0</code> or the start index is out of range; <code>getVaultCount()</code> reports the registry length. <a href="./invariants.html#vault-03"><code>VAULT-03</code></a> owns registry membership and what consumers must read before displaying an entry.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.getVaults</code></a></td>
+								<td>
+									<code>getVaults(startIndex, count)</code> pages the vault registry newest-registered first and returns an empty array when <code>count == 0</code> or the start index is out of range; <code>getVaultCount()</code> reports the registry length. <a href="./invariants.html#vault-03"><code>VAULT-03</code></a> owns registry membership and what consumers must read before displaying an entry.
+								</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.getVaults</code></a>
+								</td>
 							</tr>
 						</tbody>
 					</table>
 				</section>
 				<section id="share-migration">
 					<h2>Share migration</h2>
-					<p>
-						Share migration after a fork is user-facing asset migration, not vault REP migration. Canonical rules live in <a href="./invariants.html#fork-10"><code>FORK-10</code></a> for persistent per-child materialization, <a href="./invariants.html#share-04"><code>SHARE-04</code></a> for the economic-claim denominator, and <a href="./invariants.html#fork-11"><code>FORK-11</code></a> for unequal materialized supplies.
-					</p>
+					<p>Share migration after a fork is user-facing asset migration, not vault REP migration. Canonical rules live in <a href="./invariants.html#fork-10"><code>FORK-10</code></a> for persistent per-child materialization, <a href="./invariants.html#share-04"><code>SHARE-04</code></a> for the economic-claim denominator, and <a href="./invariants.html#fork-11"><code>FORK-11</code></a> for unequal materialized supplies.</p>
 					<table>
 						<thead>
 							<tr>
@@ -304,7 +321,9 @@
 							</tr>
 							<tr>
 								<td>Structural non-decision predicate</td>
-								<td><code>hasReachedNonDecision()</code> becomes true when two or more outcomes reach <code>nonDecisionThresholdAttoRep</code>; <code>nonDecisionState</code> separately records how that balance condition entered the lifecycle. <a href="./invariants.html#esc-13"><code>ESC-13</code></a> owns the threshold arithmetic.</td>
+								<td>
+									<code>hasReachedNonDecision()</code> becomes true when two or more outcomes reach <code>nonDecisionThresholdAttoRep</code>; <code>nonDecisionState</code> separately records how that balance condition entered the lifecycle. <a href="./invariants.html#esc-13"><code>ESC-13</code></a> owns the threshold arithmetic.
+								</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>Zoltar.getNonDecisionThresholdAttoRep</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.hasReachedNonDecision</code></a>
@@ -347,25 +366,38 @@
 							</tr>
 							<tr>
 								<td>Continuation withdrawal</td>
-								<td>After a child pool's <a href="./glossary.html#carried-game">carried game</a> resolves, anyone may relay a batch of winning carried proofs for one depositor (<code>One vault</code>). <a href="./invariants.html#esc-07"><code>ESC-07</code></a> owns the payout recipient and <a href="./invariants.html#esc-05"><code>ESC-05</code></a> the single use of each proof.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.withdrawForkedEscalationDeposits</code></a
+								<td>
+									After a child pool's <a href="./glossary.html#carried-game">carried game</a> resolves, anyone may relay a batch of winning carried proofs for one depositor (<code>One vault</code>). <a href="./invariants.html#esc-07"><code>ESC-07</code></a> owns the payout recipient and <a href="./invariants.html#esc-05"><code>ESC-05</code></a> the single use of each proof.
+								</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.withdrawForkedEscalationDeposits</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.consumeCarriedDeposit</code></a></td>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol"><code>EscalationGameDepositDelegate.consumeCarriedDeposit</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Carried payout amount</td>
 								<td>Retained principal maps the deposit's cumulative endpoints through each ancestor's auction ratio; the reward uses the separate <a href="contracts/escalationgame.html#read-surface">reward interval</a>, <a href="./glossary.html#binding-capital">binding capital</a>, winning balance, and fork-threshold scaling. Allocations within a game are fixed, so claim order cannot change payouts.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.getUnresolvedClaimInterval</code></a></td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.getUnresolvedClaimInterval</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Inherited losers</td>
 								<td>Inherited losing outcomes retire without a proof once the result is final; locally created losing deposits settle ordinarily.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a></td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Carried-claim gas</td>
-								<td>Allocation reads call each source game in the deposit's <a href="./glossary.html#lineage">lineage</a>, so gas grows with fork depth. No maximum depth is enforced; see <a href="./invariants.html#life-05"><code>LIFE-05</code></a>.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.getUnresolvedClaimInterval</code></a></td>
+								<td>
+									Allocation reads call each source game in the deposit's <a href="./glossary.html#lineage">lineage</a>, so gas grows with fork depth. No maximum depth is enforced; see <a href="./invariants.html#life-05"><code>LIFE-05</code></a
+									>.
+								</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameClaimDelegate.sol"><code>EscalationGameClaimDelegate.getUnresolvedClaimInterval</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Optional unresolved parent escalation-deposit accounting cleanup</td>
@@ -378,8 +410,12 @@
 							</tr>
 							<tr>
 								<td>Residual sweep</td>
-								<td><code>sweepResidualRepToSecurityPool</code> returns an ordinary game's residual to the security pool and burns a carried game's entire residual. <a href="./invariants.html#esc-11"><code>ESC-11</code></a> owns the preconditions.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sweepResidualRepToSecurityPool</code></a></td>
+								<td>
+									<code>sweepResidualRepToSecurityPool</code> returns an ordinary game's residual to the security pool and burns a carried game's entire residual. <a href="./invariants.html#esc-11"><code>ESC-11</code></a> owns the preconditions.
+								</td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sweepResidualRepToSecurityPool</code></a>
+								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -456,14 +492,18 @@
 							<tr>
 								<td>Continuation setup</td>
 								<td>Child creation installs the canonical carry commitment, source-game link, and aggregate backing without waiting for vault transactions or copying claims and owners. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range carry-proof peaks</a>.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerBase.sol"><code>SecurityPoolForkerBase._finalizeAwaitingForkContinuationIfReady</code></a
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerBase.sol"><code>SecurityPoolForkerBase._finalizeAwaitingForkContinuationIfReady</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry._getEffectiveInheritedUnresolvedTotalAttoRep</code></a></td>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry._getEffectiveInheritedUnresolvedTotalAttoRep</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Continuation resume</td>
 								<td>Once the child is operational and fully funded, <code>resumeForkedEscalationGame</code> resumes it in one bounded permissionless call. Winning proofs can then be relayed, and optional parent cleanup may happen independently.</td>
-								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.resumeForkedEscalationGame</code></a></td>
+								<td>
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.resumeForkedEscalationGame</code></a>
+								</td>
 							</tr>
 							<tr>
 								<td>Own-fork REP buckets</td>
@@ -476,12 +516,16 @@
 							</tr>
 							<tr id="child-pool-deployment-window">
 								<td>Child-pool deployment window</td>
-								<td>Child pools are created lazily for selected fork outcomes, only while the parent pool is <code>PoolForked</code> (<code>Parent not forked</code>) and the migration window is open (<code>Migration closed</code>). The same window bounds pool-local vault and REP migration. <a href="./invariants.html#fork-05"><code>FORK-05</code></a> owns the eight-week boundary.</td>
+								<td>
+									Child pools are created lazily for selected fork outcomes, only while the parent pool is <code>PoolForked</code> (<code>Parent not forked</code>) and the migration window is open (<code>Migration closed</code>). The same window bounds pool-local vault and REP migration. <a href="./invariants.html#fork-05"><code>FORK-05</code></a> owns the eight-week boundary.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">SecurityPoolForkerVaultMigrationBase.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol">SecurityPoolUtils.sol</a></td>
 							</tr>
 							<tr id="matching-question-child-outcome">
 								<td>Matching-question child outcome</td>
-								<td>When the parent universe forks on the pool's question, the child stores its selected branch as a fixed result. <code>depositToEscalationGame</code> and <code>depositWalletRepToEscalationGame</code> reject new local deposits, and <code>activateForkMode</code> rejects every later pool fork transition (<code>Forked</code> in each case). <a href="./invariants.html#esc-12"><code>ESC-12</code></a> owns the property; <a href="../explanation/statoblast.html#forks-migration">Forks and migration</a> gives the collateral and REP-liveness rationale.</td>
+								<td>
+									When the parent universe forks on the pool's question, the child stores its selected branch as a fixed result. <code>depositToEscalationGame</code> and <code>depositWalletRepToEscalationGame</code> reject new local deposits, and <code>activateForkMode</code> rejects every later pool fork transition (<code>Forked</code> in each case). <a href="./invariants.html#esc-12"><code>ESC-12</code></a> owns the property; <a href="../explanation/statoblast.html#forks-migration">Forks and migration</a> gives the collateral and REP-liveness rationale.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">SecurityPoolForkerVaultMigrationBase.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker.sol</a></td>
 							</tr>
 							<tr>
@@ -551,7 +595,9 @@
 							</tr>
 							<tr>
 								<td>Staging guardrails</td>
-								<td>Withdrawal and liquidation amounts must be non-zero (<code>Staged operation amount must be non-zero</code>); a zero underwriting commitment is a valid exit. Validity must be positive and no more than five minutes (<code>Staged operation timeout must be positive</code>, <code>Staged operation timeout exceeds the maximum allowed</code>). Withdrawals and underwriting-commitment changes target the operator's own vault (<code>Self operation target mismatch</code>). A liquidation receiver must differ from its target (<code>Receiver is target</code>); <a href="./invariants.html#ora-05"><code>ORA-05</code></a> owns the role rules. A delegated receiver requires a valid bounded approval and queue-time reservation, while the self-receiving operator path requires no signature.</td>
+								<td>
+									Withdrawal and liquidation amounts must be non-zero (<code>Staged operation amount must be non-zero</code>); a zero underwriting commitment is a valid exit. Validity must be positive and no more than five minutes (<code>Staged operation timeout must be positive</code>, <code>Staged operation timeout exceeds the maximum allowed</code>). Withdrawals and underwriting-commitment changes target the operator's own vault (<code>Self operation target mismatch</code>). A liquidation receiver must differ from its target (<code>Receiver is target</code>); <a href="./invariants.html#ora-05"><code>ORA-05</code></a> owns the role rules. A delegated receiver requires a valid bounded approval and queue-time reservation, while the self-receiving operator path requires no signature.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol">OpenOraclePriceCoordinatorTypes.sol</a></td>
 							</tr>
 							<tr>
@@ -586,12 +632,16 @@
 							</tr>
 							<tr>
 								<td>Consumed failures</td>
-								<td>Expired operations (<code>Staged operation expired</code>), stale liquidations (<code>Stale liquidation</code>), zero-effect withdrawals (<code>Withdraw amount has no effect</code>), and liquidations too close to threshold are consumed and emitted as failed executions. <a href="./invariants.html#ora-06"><code>ORA-06</code></a> owns the property.</td>
+								<td>
+									Expired operations (<code>Staged operation expired</code>), stale liquidations (<code>Stale liquidation</code>), zero-effect withdrawals (<code>Withdraw amount has no effect</code>), and liquidations too close to threshold are consumed and emitted as failed executions. <a href="./invariants.html#ora-06"><code>ORA-06</code></a> owns the property.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 							</tr>
 							<tr>
 								<td>Vault operation bundle</td>
-								<td><a href="./contracts/vaultoperations.html"><code>submitVaultOperations</code></a> applies a deposit, commitment change, liquidations of other vaults, and withdrawal to one pool. At most four price actions fit a bundle. A fresh-price failure reverts the submission; with a stale price the deposit remains while the remaining actions execute atomically after settlement. Any change to a queued liquidation target's REP backing units or underwriting commitment fails the whole bundle, including the owner's commitment change and withdrawal. See <a href="./contracts/openoraclepricecoordinator.html">coordinator execution and funding</a>.</td>
+								<td>
+									<a href="./contracts/vaultoperations.html"><code>submitVaultOperations</code></a> applies a deposit, commitment change, liquidations of other vaults, and withdrawal to one pool. At most four price actions fit a bundle. A fresh-price failure reverts the submission; with a stale price the deposit remains while the remaining actions execute atomically after settlement. Any change to a queued liquidation target's REP backing units or underwriting commitment fails the whole bundle, including the owner's commitment change and withdrawal. See <a href="./contracts/openoraclepricecoordinator.html">coordinator execution and funding</a>.
+								</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/VaultOperations.sol">VaultOperations.sol</a></td>
 							</tr>
 							<tr>

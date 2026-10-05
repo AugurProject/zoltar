@@ -47,10 +47,10 @@ contract EscalationGame is EscalationGameSettlement {
 	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep) {
 		// Keep one reason for this read-only quote path so the size-constrained game
 		// can retain the state-changing paths' more specific failure reasons.
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid deposit preview');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(getQuestionResolution()), 'Invalid deposit preview');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
-		require(nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(getQuestionResolution()) && currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');
+		require(currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');
 		return
 			_getAcceptedDepositAmount(outcomeIndex, amountAttoRep, currentBalance, nonDecisionThresholdAttoRep - currentBalance);
 	}

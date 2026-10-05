@@ -82,3 +82,10 @@ describe('IPFS publisher layout', () => {
 		}
 	})
 })
+
+test('exports vendored assets for every app, including fonts referenced by CSS', () => {
+	const exports = readPublisherExports()
+	for (const appId of UI_APP_IDS) {
+		expect(exports).toContainEqual({ sourcePath: `/source/ui/${appId}/dist/vendor/`, exportPath: `/export/${appId}/vendor/` })
+	}
+})

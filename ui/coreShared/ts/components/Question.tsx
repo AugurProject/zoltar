@@ -137,7 +137,7 @@ export function Question({ abbreviateIdentifier = false, additionalMetrics, clas
 			<div className={`question-summary question-summary-preview ${className}`.trim()}>
 				{!showHeading ? undefined : (
 					<div className='question-summary-heading'>
-						{showTitle ? <strong>{title}</strong> : null}
+						{showTitle ? <strong>{title}</strong> : undefined}
 						{descriptionNode}
 					</div>
 				)}

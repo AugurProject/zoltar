@@ -1,6 +1,7 @@
 import type { CopyTemplateValue } from './types.js'
 
 export const formatWrappedValue = (value: CopyTemplateValue) => `(${value})`
+export const poolOraclePriceExpiredError = 'The pool’s oracle price expired. Request a new price in Price oracle, then retry.'
 export const repPriceUnavailableDetail = 'REP per ETH price source is unavailable until a quote loads.'
 export const simulationPriceSourceDetail = 'Uses the simulation REP per ETH mock price.'
 export const uniswapV4PriceSourceDetail = 'Uses the live Uniswap V4 REP per ETH quote.'

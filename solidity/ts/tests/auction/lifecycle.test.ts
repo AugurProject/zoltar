@@ -177,14 +177,10 @@ describe('UniformPriceDualCapBatchAuction: Lifecycle & Finalization', () => {
 			await submitBid(bidClient, auctionAddress, bid.tick, bid.bidSize)
 		}
 
-		//const expectedClearing = computeClearingTypeScript(bids, maxAttoRepBeingSold, DEFAULT_MAX_REP * ATTOETH_PER_ETH )
-
 		const clearing = await computeClearing(client, auctionAddress)
 		const completelyFilling = bids.filter(x => x.tick > clearing.foundTick)
 		const completelyFillingRep = completelyFilling.reduce((a, b) => a + (b.bidSize * TRUTH_AUCTION_PRICE_PRECISION) / tickToPrice(clearing.foundTick), 0n)
 		assert.ok(completelyFillingRep < maxAttoRepBeingSold, 'selling too much rep with that tick')
-
-		//assertExpectedClearing(clearing, expectedClearing.clearingTick)
 
 		await finalizeAndVerify(client, auctionAddress)
 

@@ -183,7 +183,7 @@ export const assemblyEventEmissions: Array<{
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 	{
-		dataArguments: 'BinaryOutcomes.BinaryOutcome(outcomeIndex), amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
+		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
 		indexedArguments: 'parentDepositIndex, sourceNodeId, depositor',
 		name: 'CarryDepositConsumed',
 		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)',

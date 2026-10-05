@@ -18,7 +18,7 @@ async function rpc(method: string, params: readonly unknown[]) {
 }
 
 async function deploy(from: Address, data: Hex) {
-	const hash = requireAddressHash(await rpc('eth_sendTransaction', [{ from, data }]), 'deployment transaction hash')
+	const hash = requireTransactionHash(await rpc('eth_sendTransaction', [{ from, data }]), 'deployment transaction hash')
 	for (let attempt = 0; attempt < 120; attempt++) {
 		const receipt = await rpc('eth_getTransactionReceipt', [hash])
 		if (isRecord(receipt)) {
@@ -31,7 +31,7 @@ async function deploy(from: Address, data: Hex) {
 	throw new Error(`Timed out waiting for ${hash}`)
 }
 
-function requireAddressHash(value: unknown, label: string): Hex {
+function requireTransactionHash(value: unknown, label: string): Hex {
 	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hex value`)
 	return value as Hex
 }

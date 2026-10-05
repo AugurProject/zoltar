@@ -319,7 +319,7 @@ function canEncodeFunctionArguments(abiItem: AbiParameter, args: readonly unknow
 		return true
 	} catch (error) {
 		if (error instanceof Error) return false
-		return false
+		throw error
 	}
 }
 

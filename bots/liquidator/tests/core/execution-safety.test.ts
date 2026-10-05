@@ -174,7 +174,7 @@ describe('liquidator execution safety', () => {
 				maximumPoolAttoRep: 100n,
 				maximumTotalAttoRep: 1_000n,
 			}),
-		).toThrow('maximumAttoRepPerPool')
+		).toThrow('maximumPerPoolRep')
 		expect(() =>
 			assertRepLimits({
 				currentPoolAttoRep: 50n,
@@ -196,7 +196,7 @@ describe('liquidator execution safety', () => {
 				maximumPoolAttoRep: 100n,
 				maximumTotalAttoRep: 1_000n,
 			}),
-		).toThrow('maximumAttoRepPerPool')
+		).toThrow('maximumPerPoolRep')
 	})
 
 	test('deposits liquidation top-ups without capacity ownership and rescans before staging', () => {
@@ -386,10 +386,10 @@ describe('liquidator execution safety', () => {
 	test('applies the exact signed-transaction fee horizon to the gas-cap precheck', () => {
 		const baseFeePerGas = 10n * 10n ** 9n
 		const capThatOnlyCoversTheFormerDoubleBaseFeeEstimate = 3_000_000_000_000_000n
-		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostAttoEth')
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostEth')
 		const paddedCeiling = paddedTransactionGas(100_000n) * maximumFeePerGas(baseFeePerGas)
 		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling)).not.toThrow()
-		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling - 1n)).toThrow('maximumGasCostAttoEth')
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling - 1n)).toThrow('maximumGasCostEth')
 	})
 
 	test('classifies a failed staged operation without calling it successful', () => {

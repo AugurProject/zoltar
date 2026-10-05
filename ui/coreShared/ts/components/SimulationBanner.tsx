@@ -2,7 +2,7 @@ import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getBuiltInScenarioLocation, getSavedSimulationStateLocation, hasSavedSimulationStateRoute, refreshEnvironmentAtSimulationLocation } from '../simulation/scenarioNavigation.js'
@@ -20,7 +20,7 @@ import { ErrorNotice } from './ErrorNotice.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 import { SIMULATION_TIME_PRESETS } from '../simulation/timePresets.js'
 import { getScenarioStatus, SimulationStripSummary } from './SimulationStripSummary.js'
-import { SimulationControlField, SimulationNameField } from './SimulationControlFields.js'
+import { createSimulationInputHandler, SimulationControlField, SimulationNameField } from './SimulationControlFields.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 type SimulationBannerProps = {
@@ -47,7 +47,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const repPerUsdcPrice = useSignal(formatCurrencyInputBalance(controller.repPerUsdcPrice, 6))
 	const savedStateError = useSignal<string | undefined>(undefined)
 	const savedStateStorage = getBrowserStorage('localStorage')
-	const initialSavedStateSummary: SavedSimulationStateStorageSummary = getSavedSimulationStateStorageSummary(savedStateStorage)
+	const [initialSavedStateSummary] = useState<SavedSimulationStateStorageSummary>(() => getSavedSimulationStateStorageSummary(savedStateStorage))
 	const savedStateRecords = useSignal<SavedSimulationStateRecord[]>(initialSavedStateSummary.records)
 	const savedStateStorageWarning = useSignal<string | undefined>(initialSavedStateSummary.warning)
 	const saveName = useSignal('')
@@ -366,10 +366,38 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 						<div className='simulation-banner-controls'>
 							<div className='contract-copy'>
 								<div className='simulation-delay-grid'>
-									<SimulationControlField kind='milliseconds' label={simulationCopy.queryDelayMs} value={queryDelayMilliseconds} disabled={busy.value} onCommit={input => void runControl(async () => await controller.setQueryDelayMilliseconds(Number(input)))} />
-									<SimulationControlField kind='decimal' label={simulationCopy.repEthMockPrice} value={repPerEthPrice} disabled={busy.value} onCommit={input => commitPrice(tryParseDecimalInput(input), resetRepPerEthPriceInput, async price => await controller.setRepPerEthPrice(price))} />
-									<SimulationControlField kind='decimal' label={simulationCopy.repUsdcMockPrice} value={repPerUsdcPrice} disabled={busy.value} onCommit={input => commitPrice(tryParseDecimalInput(input, 6), resetRepPerUsdcPriceInput, async price => await controller.setRepPerUsdcPrice(price))} />
-									<SimulationControlField kind='milliseconds' label={simulationCopy.transactionReceiptDelayMs} value={transactionDelayMilliseconds} disabled={busy.value} onCommit={input => void runControl(async () => await controller.setTransactionDelayMilliseconds(Number(input)))} />
+									<SimulationControlField
+										kind='milliseconds'
+										label={simulationCopy.queryDelayMs}
+										value={queryDelayMilliseconds.value}
+										onInput={createSimulationInputHandler(queryDelayMilliseconds)}
+										disabled={busy.value}
+										onCommit={input => void runControl(async () => await controller.setQueryDelayMilliseconds(Number(input)))}
+									/>
+									<SimulationControlField
+										kind='decimal'
+										label={simulationCopy.repEthMockPrice}
+										value={repPerEthPrice.value}
+										onInput={createSimulationInputHandler(repPerEthPrice)}
+										disabled={busy.value}
+										onCommit={input => commitPrice(tryParseDecimalInput(input), resetRepPerEthPriceInput, async price => await controller.setRepPerEthPrice(price))}
+									/>
+									<SimulationControlField
+										kind='decimal'
+										label={simulationCopy.repUsdcMockPrice}
+										value={repPerUsdcPrice.value}
+										onInput={createSimulationInputHandler(repPerUsdcPrice)}
+										disabled={busy.value}
+										onCommit={input => commitPrice(tryParseDecimalInput(input, 6), resetRepPerUsdcPriceInput, async price => await controller.setRepPerUsdcPrice(price))}
+									/>
+									<SimulationControlField
+										kind='milliseconds'
+										label={simulationCopy.transactionReceiptDelayMs}
+										value={transactionDelayMilliseconds.value}
+										onInput={createSimulationInputHandler(transactionDelayMilliseconds)}
+										disabled={busy.value}
+										onCommit={input => void runControl(async () => await controller.setTransactionDelayMilliseconds(Number(input)))}
+									/>
 								</div>
 								<p className='detail'>{simulationCopy.simulationControlHelpText}</p>
 								<ErrorNotice message={controlError.value} />
@@ -454,7 +482,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				</div>
 			</details>
 			<OperationModal closeDisabled={busy.value} isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
-				<SimulationNameField id='simulation-save-name' label={simulationCopy.stateName} value={saveName} disabled={busy.value} />
+				<SimulationNameField id='simulation-save-name' label={simulationCopy.stateName} value={saveName.value} onInput={createSimulationInputHandler(saveName)} disabled={busy.value} />
 				<ErrorNotice message={savedStateError.value} />
 				<div className='actions'>
 					<button
@@ -473,7 +501,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				</div>
 			</OperationModal>
 			<OperationModal closeDisabled={exportInProgress.value} isOpen={modal.value === 'export'} onClose={closeModal} title={simulationCopy.exportSimulationState}>
-				<SimulationNameField id='simulation-export-name' label={simulationCopy.exportName} value={exportName} disabled={exportInProgress.value} />
+				<SimulationNameField id='simulation-export-name' label={simulationCopy.exportName} value={exportName.value} onInput={createSimulationInputHandler(exportName)} disabled={exportInProgress.value} />
 				<div className='field'>
 					<label htmlFor='simulation-export-json'>{simulationCopy.jsonState}</label>
 					<textarea id='simulation-export-json' aria-busy={exportInProgress.value || undefined} rows={14} value={exportStateText.value} readOnly />

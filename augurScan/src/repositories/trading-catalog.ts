@@ -1,7 +1,9 @@
+import { literalContainsPattern } from './like-pattern.ts'
 import type { SQL } from 'bun'
 
 export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: number; readonly asOfBlock: string; readonly search?: string | undefined; readonly limit: number; readonly offset: number }) => {
 	const { chainId, asOfBlock, search, limit, offset } = query
+	const pattern = search === undefined ? undefined : literalContainsPattern(search)
 	return await sql`
 		WITH markets AS (
 			SELECT DISTINCT ON (market.pair_address) market.*
@@ -53,9 +55,9 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 			WHERE event.chain_id = market.chain_id AND event.market_address = market.pair_address AND event.canonical
 				AND event.block_number <= ${asOfBlock}
 		) activity ON true
-		WHERE (${search ?? null}::text IS NULL OR market.pair_address ILIKE ${search === undefined ? null : `%${search}%`}
-			OR market.pool_address ILIKE ${search === undefined ? null : `%${search}%`}
-			OR question.title ILIKE ${search === undefined ? null : `%${search}%`})
+		WHERE (${search ?? null}::text IS NULL OR market.pair_address ILIKE ${pattern ?? null}
+			OR market.pool_address ILIKE ${pattern ?? null}
+			OR question.title ILIKE ${pattern ?? null})
 		ORDER BY price.block_number DESC NULLS LAST, market.block_number DESC, market.pair_address
 		LIMIT ${limit} OFFSET ${offset}
 	`

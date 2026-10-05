@@ -1,9 +1,10 @@
+import { resolveDevServerPort } from './devServerPort.mts'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { type ChromiumLaunchOptions, type ChromiumViewport, launchChromium, type WaitForOptions } from './chromiumDevTools.mts'
-import { getUiAppPaths, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
+import { parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 
 const MOUNT_TIMEOUT_MILLISECONDS = 120_000
 
@@ -236,14 +237,11 @@ export async function runBrowserSmoke(appId: UiAppId, baseUrl: string, options: 
 
 async function main() {
 	const appId = parseUiAppIdFromProcess('the browser smoke check')
-	const paths = getUiAppPaths(appId)
-	void paths
-	const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 4153 }
 	const explicitBaseUrl = process.env['UI_DEV_SERVER_URL']
-	if (appId !== undefined && explicitBaseUrl === undefined) {
-		throw new Error(`Set UI_DEV_SERVER_URL to the running ${appId} dev server base URL (expected http://localhost:${ports[appId]} from bun run app:serve:${appId}).`)
+	if (explicitBaseUrl === undefined) {
+		throw new Error(`Set UI_DEV_SERVER_URL to the running ${appId} dev server base URL (expected http://localhost:${resolveDevServerPort(appId)} from bun run app:serve:${appId}).`)
 	}
-	await runBrowserSmoke(appId, explicitBaseUrl ?? `http://localhost:${ports[appId]}`)
+	await runBrowserSmoke(appId, explicitBaseUrl)
 }
 
 if (import.meta.main) {

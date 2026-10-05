@@ -30,7 +30,7 @@ Provide one reliable, concrete learning journey.
 - Minimize explanation and choices.
 - Link to explanation and reference instead of importing them.
 - Do not turn the tutorial into a complete protocol tour.
-- Use visuals, screenshots, diagrams, charts, what ever makes the document easier to understand
+- Use visuals, screenshots, diagrams, charts, whatever makes the document easier to understand.
 
 ### Start-here page
 
@@ -49,7 +49,7 @@ Help a competent reader accomplish one real task.
 - Include only necessary prerequisites, actions, decisions, success checks, and task-specific recovery.
 - Use direct imperative language.
 - Do not add background teaching, architecture surveys, or general reference material for completeness.
-- Use visuals, screenshots, diagrams, charts, what ever makes the document easier to understand
+- Use visuals, screenshots, diagrams, charts, whatever makes the document easier to understand.
 
 ### Reference
 

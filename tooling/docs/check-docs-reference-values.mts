@@ -537,7 +537,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(securityPoolOperationsDelegate, /_moveEscalationClaim|previewLiquidationClaimRep|moveEscalationClaim/)
 	assert.match(escalationGameSettlement, /_claimDepositForWinning\(depositIndex, outcome, false\)/)
 	assert.match(escalationGameState, /uint256 claimUnits = _repToClaimUnits\(amountAttoRep\);[\s\S]*bundle\.disputeStakedRepClaimUnits -= claimUnits/)
-	assert.match(escalationGameDepositDelegate, /recordForkedEscrowForOutcome\([\s\S]*_increaseEscrowedRepForBundle\(depositor, effectiveChildAttoRep, false\)/)
+	assert.match(escalationGameDepositDelegate, /recordForkedEscrowForOutcome\([\s\S]*_increaseEscrowedRepForBundle\(depositor, effectiveChildAttoRep\)/)
 	assert.match(escalationGameEscrow, /function recordForkedEscrowForOutcome\([\s\S]*EscalationGameDepositDelegate\.recordForkedEscrowForOutcome/)
 	assert.match(escalationGameDepositDelegate, /function recordForkedEscrowForOutcome\([\s\S]*if \(sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0\) return;[\s\S]*emit ForkedEscrowRecorded\(/)
 	assert.match(escalationGame, /function _initializeStartParams\([\s\S]*if \(owner != msg\.sender\) revert\((?:'[^']*')?\);/)
