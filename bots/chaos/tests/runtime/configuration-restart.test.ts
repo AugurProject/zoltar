@@ -200,7 +200,9 @@ describe('UI configuration restart', () => {
 	})
 
 	test('the production CLI restarts in process, reacquires locks, and retains a memory-only signer', async () => {
-		await withController(async ({ configuration, settings }) => {
+		await withController(async context => {
+			const { configuration, settings } = context
+			const archive = await savedArchive(context)
 			const temporaryServer = Bun.serve({ port: 0, fetch: () => new Response('port allocation') })
 			const port = temporaryServer.port
 			if (port === undefined) throw new Error('Missing allocated port')
@@ -222,7 +224,31 @@ describe('UI configuration restart', () => {
 				throw new Error('Operator did not reconnect with the expected signer')
 			}
 			try {
-				const before = await waitForWallet(privateKeyToAccount(firstKey).address)
+				let before = await waitForWallet(privateKeyToAccount(firstKey).address)
+				async function selectOwner(id: string, path: string) {
+					const body = { id, revision: Reflect.get(await waitForWallet(privateKeyToAccount(firstKey).address), 'revision'), archiveRevision: (await loadSettings(path)).revision, confirmation: `OPEN RECOVERY ${id}` }
+					const select = () => fetch(`${origin}/api/deployment-archive`, { method: 'PUT', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) })
+					let response = await select()
+					for (let attempt = 0; response.status === 423 && attempt < 200; attempt += 1) {
+						await Bun.sleep(25)
+						response = await select()
+					}
+					expect(response.status, await response.text()).toBe(200)
+					for (let attempt = 0; attempt < 200; attempt += 1) {
+						try {
+							const value: unknown = await (await fetch(`${origin}/api/deployment-archives`)).json()
+							if (Array.isArray(value) && value.some(entry => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'id') === id && Reflect.get(entry, 'active') === true)) return
+						} catch (error) {
+							if (!(error instanceof TypeError)) throw error
+						}
+						await Bun.sleep(25)
+					}
+					throw new Error('Operator did not reconnect to selected deployment owner')
+				}
+				await selectOwner(archive.id, archive.path)
+				await expect(acquireFileProcessLock(archive.settings.runtime.stateFile, 'competing archived operator')).rejects.toThrow('already locked')
+				await selectOwner('current', configuration.path)
+				before = await waitForWallet(privateKeyToAccount(firstKey).address)
 				const replaceSigner = () => fetch(`${origin}/api/signer`, { method: 'PUT', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ privateKey: secondKey, remember: false, revision: Reflect.get(before, 'revision') }) })
 				let response = await replaceSigner()
 				// Startup can briefly reserve the mutation gate even while paused; 423 guarantees no change was applied.
@@ -259,7 +285,8 @@ describe('UI configuration restart', () => {
 	})
 
 	test('rejects signer and state-file replacement while a transaction needs recovery', async () => {
-		await withController(async ({ controller, settings, state, configuration, revision, next, directory }) => {
+		await withController(async context => {
+			const { controller, settings, state, configuration, revision, next, directory } = context
 			const serializedTransaction = await privateKeyToAccount(firstKey).signTransaction({ chainId: settings.network.chainId, data: '0x', gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0n, to: '0x0000000000000000000000000000000000000002', value: 0n })
 			state.pendingTransactions = [
 				{
@@ -321,6 +348,8 @@ describe('UI configuration restart', () => {
 				},
 			]
 			await saveDurableState(settings.runtime.stateFile, state)
+			const archive = await savedArchive(context)
+			await expect(archiveControl(context)({ id: archive.id, revision, archiveRevision: archive.revision, confirmation: `OPEN RECOVERY ${archive.id}` })).rejects.toThrow('pending transaction recovery')
 			const before = await readdir(directory)
 			const document = editableSettings(settings)
 			document.runtime.stateFile = join(directory, 'replacement.json')
@@ -377,5 +406,123 @@ describe('UI configuration restart', () => {
 				await server.stop(true)
 			}
 		})
+	})
+})
+
+async function savedArchive(context: Awaited<ReturnType<typeof fixture>>) {
+	const id = 'ab'.repeat(32)
+	const path = `${context.configuration.path}.retired-${id}.json`
+	const settings = { ...context.settings, runtime: { ...context.settings.runtime, stateFile: join(context.directory, 'archive-state.json'), uiPort: 9999 } }
+	const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings), privateKeyToAccount(firstKey).address)
+	state.uniswapV3Factory = settings.deployment.uniswapV3Factory
+	await saveDurableState(settings.runtime.stateFile, state)
+	const revision = await saveSettings(path, settings)
+	return { id, path, settings, revision, state }
+}
+
+function archiveControl(context: Awaited<ReturnType<typeof fixture>>) {
+	const set = context.controller.setDeploymentArchive
+	if (set === undefined) throw new Error('Missing archive selection control')
+	return set
+}
+
+test('opens archived recovery paused without replacing the current owner or making nested archives', async () => {
+	await withController(async context => {
+		const archive = await savedArchive(context)
+		const original = await readFile(context.configuration.path, 'utf8')
+		await archiveControl(context)({ id: archive.id, revision: context.revision, archiveRevision: archive.revision, confirmation: `OPEN RECOVERY ${archive.id}` })
+		const next = context.next()
+		expect(next?.path).toBe(archive.path)
+		expect(next?.settings.runtime.stateFile).toBe(archive.settings.runtime.stateFile)
+		expect(next?.settings.runtime.uiPort).toBe(context.settings.runtime.uiPort)
+		expect(next?.settings.runtime.execute).toBeFalse()
+		expect(next?.settings.paused).toBeTrue()
+		expect(await readFile(context.configuration.path, 'utf8')).toBe(original)
+		expect((await readdir(context.directory)).filter(name => name.includes('.retired-'))).toEqual([`operator.json.retired-${archive.id}.json`])
+		expect((await loadDurableState(archive.settings.runtime.stateFile, archive.settings.network.chainId)).retirement.status).toBe('inactive')
+	})
+})
+
+test('lists archives and current destination from an archived owner without exposing private keys or paths', async () => {
+	await withController(async context => {
+		const archive = await savedArchive(context)
+		context.configuration.path = archive.path
+		const get = context.controller.getDeploymentArchives
+		if (get === undefined) throw new Error('Missing archive list control')
+		const value = await get()
+		const json = JSON.stringify(value)
+		expect(json).toContain('"id":"current"')
+		expect(json).toContain(`"id":"${archive.id}"`)
+		expect(json).toContain('"active":true')
+		expect(json).toContain(context.settings.deployment.zoltar)
+		expect(json).not.toContain(firstKey)
+		expect(json).not.toContain(context.directory)
+	})
+})
+
+test('rejects unsafe, stale, and malformed archive selections before requesting a restart', async () => {
+	await withController(async context => {
+		const archive = await savedArchive(context)
+		const select = archiveControl(context)
+		const body = { id: archive.id, revision: context.revision, archiveRevision: archive.revision, confirmation: `OPEN RECOVERY ${archive.id}` }
+		await expect(select({ ...body, id: '../operator.json', confirmation: 'OPEN RECOVERY ../operator.json' })).rejects.toThrow('Invalid deployment archive ID')
+		await expect(select({ ...body, confirmation: 'yes' })).rejects.toThrow('confirmation')
+		await expect(select({ ...body, archiveRevision: 'stale' })).rejects.toThrow()
+		await expect(select({ ...body, revision: 'stale' })).rejects.toThrow()
+		context.state.paused = false
+		await expect(select(body)).rejects.toThrow('Pause')
+		context.state.paused = true
+		archive.state.profileId = 'profile:v1:wrong'
+		await saveDurableState(archive.settings.runtime.stateFile, archive.state)
+		await expect(select(body)).rejects.toThrow('durable deployment profile')
+		expect(context.next()).toBeUndefined()
+	})
+})
+
+test('returns to the current owner from an archive and retains a memory-only signer', async () => {
+	await withController(async context => {
+		const archive = await savedArchive(context)
+		const currentPath = context.configuration.path
+		const originalRevision = await saveSettings(currentPath, { ...context.settings, privateKey: undefined }, context.revision)
+		const archivedSettings = { ...archive.settings, privateKey: undefined }
+		await saveSettings(archive.path, archivedSettings, archive.revision)
+		context.configuration.path = archive.path
+		context.configuration.settings = { ...archivedSettings, privateKey: firstKey }
+		context.configuration.revision = (await loadSettings(archive.path)).revision
+		context.configuration.rememberSigner = false
+		Object.assign(context.state, initialRuntimeState(true, privateKeyToAccount(firstKey).address, archivedSettings.network.chainId, archive.state))
+		await archiveControl(context)({ id: 'current', revision: context.configuration.revision, archiveRevision: originalRevision, confirmation: 'OPEN RECOVERY current' })
+		expect(context.next()?.path).toBe(currentPath)
+		expect(context.next()?.rememberSigner).toBeFalse()
+		expect((await loadSettings(currentPath)).settings.privateKey).toBeUndefined()
+		expect(context.next()?.settings.privateKey).toBe(firstKey)
+		expect(context.next()?.settings.runtime.execute).toBeFalse()
+	})
+})
+
+test('keeps recovery snapshots discoverable when settings change while an archive is open', async () => {
+	await withController(async context => {
+		const archive = await savedArchive(context)
+		context.configuration.path = archive.path
+		context.configuration.settings = archive.settings
+		context.configuration.revision = archive.revision
+		Object.assign(context.state, initialRuntimeState(true, privateKeyToAccount(firstKey).address, archive.settings.network.chainId, archive.state))
+		const document = editableSettings(archive.settings)
+		document.runtime.stateFile = join(context.directory, 'another-state.json')
+		await context.controller.setConfigurationDocument({ settings: document, revision: archive.revision })
+		const files = (await readdir(context.directory)).filter(name => name.includes('.retired-'))
+		expect(files).toHaveLength(2)
+		expect(files.every(name => /^operator\.json\.retired-[a-f0-9]{64}\.json$/.test(name))).toBeTrue()
+	})
+})
+
+test('keeps an invalid archive visible without hiding healthy deployments or exposing its addresses', async () => {
+	await withController(async context => {
+		const archive = await savedArchive(context)
+		archive.state.profileId = 'profile:v1:wrong'
+		await saveDurableState(archive.settings.runtime.stateFile, archive.state)
+		const get = context.controller.getDeploymentArchives
+		if (get === undefined) throw new Error('Missing archive list control')
+		expect(await get()).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'current', active: true, profileId: executionProfileId(context.settings) }), { id: archive.id, active: false, error: 'Archive configuration and recovery state could not be verified.' }]))
 	})
 })

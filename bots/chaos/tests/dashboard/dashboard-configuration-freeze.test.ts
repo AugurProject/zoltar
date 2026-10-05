@@ -23,6 +23,10 @@ browserTest(
 				},
 				signerAddress: walletAddress,
 			}),
+			getDeploymentArchives: () => [
+				{ id: 'current', active: true },
+				{ id: '12'.repeat(32), active: false, revision: 'archive-revision', profileId: 'profile:v1:old', addresses: [] },
+			],
 			getState: () => state({ signerReady: true, wallet: walletAddress }),
 			hostname: '127.0.0.1',
 			setCancellation: () => {},
@@ -42,7 +46,9 @@ browserTest(
 			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => await cdp.waitFor(expression, { attempts: 200, message })
-			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
+			await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
+			await waitFor("document.querySelector('#deployment-archive-list button')?.disabled === false", 'Archive controls did not become available')
+			await cdp.evaluate('document.querySelector(\'.section-nav a[href="/settings"]\')?.click()')
 			await waitFor("document.querySelector('#signer-summary .identifier-value') !== null && document.querySelector('#signer-fieldset')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
 			await cdp.evaluate(`(() => {
 				const input = document.querySelector('#private-key')
@@ -59,6 +65,7 @@ browserTest(
 					pauseDisabled: document.querySelector('#pause-button')?.disabled,
 					settingsDisabled: document.querySelector('#settings-fields')?.disabled,
 					signerDisabled: document.querySelector('#signer-fieldset')?.disabled,
+					archiveDisabled: document.querySelector('#deployment-archive-list button')?.disabled,
 					sensitiveVisible: document.documentElement.textContent?.includes('sensitive post-rename'),
 				})`),
 			).toMatchObject({
@@ -67,6 +74,7 @@ browserTest(
 				pauseDisabled: true,
 				settingsDisabled: true,
 				signerDisabled: true,
+				archiveDisabled: true,
 				sensitiveVisible: false,
 			})
 

@@ -13,10 +13,11 @@ type MutationLatchesContext = {
 	elements: DashboardElements
 	executionModeForm: ReturnType<typeof registerExecutionModeForm>
 	selectionControls: ReturnType<typeof createSelectionControls>
+	updateAdditionalControls?: (() => void) | undefined
 }
 
 /** Keeps mutation controls frozen while an unknown mutation outcome is unreconciled or the configuration commit is indeterminate. */
-export function createMutationLatches({ state, elements, executionModeForm, selectionControls }: MutationLatchesContext) {
+export function createMutationLatches({ state, elements, executionModeForm, selectionControls, updateAdditionalControls }: MutationLatchesContext) {
 	function updateSelectionControls() {
 		const { configuration, snapshot } = state
 		selectionControls.update({
@@ -33,6 +34,7 @@ export function createMutationLatches({ state, elements, executionModeForm, sele
 	}
 
 	function applyMutationControlLatches() {
+		updateAdditionalControls?.()
 		updateSelectionControls()
 		if (state.pauseMutationUnreconciled || state.configurationCommitIndeterminate) elements.pauseButton.disabled = true
 		if (state.settingsMutationUnreconciled || state.configurationCommitIndeterminate) {
