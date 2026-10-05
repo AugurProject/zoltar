@@ -1,3 +1,4 @@
+import { createDeploymentArchives } from './deployment-archives.ts'
 import { registerCompleteConfigurationForm } from './complete-configuration-form.ts'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
 import { createActivityTimeline } from './activity-timeline.js'
@@ -63,7 +64,8 @@ const selectionControls = createSelectionControls({
 	refresh: () => controller.refresh(),
 	reconcile: (error, status) => controller.reconcileUnknownMutation(error, status, 'configuration and state', 'settings'),
 })
-const latches = createMutationLatches({ state, elements, executionModeForm, selectionControls })
+const deploymentArchives = createDeploymentArchives(state, (...args) => controller.reconcileUnknownMutation(...args))
+const latches = createMutationLatches({ state, elements, executionModeForm, selectionControls, updateAdditionalControls: () => deploymentArchives.updateControls() })
 const operationDialog = createOperationDialog({
 	// The 1.5 s status poll must not hold back state polling. Inspect and preview stay counted: the server runs a scan
 	// for them inside its mutation queue, so state reads sent meanwhile would time out; the settle wait is bounded.
@@ -102,6 +104,7 @@ registerSectionNavigation(() => {
 	// The alert actions and the complete-configuration loader depend on the page shown.
 	if (state.snapshot !== undefined) renderOperatorAlerts(elements.operatorAlerts, state.snapshot.alerts)
 	completeConfigurationForm.renderAvailability()
+	deploymentArchives.refresh()
 })
 
 elements.rpcHealthRetryButton.addEventListener('click', () => void refresh())
@@ -117,6 +120,7 @@ const completeConfigurationForm = registerCompleteConfigurationForm(state, recon
 registerSettingsForms({ state, elements, settingsDraft, put, refresh, reconcileUnknownMutation, renderConfiguration: settingsView.renderConfiguration })
 
 function renderSnapshot(value: Snapshot) {
+	deploymentArchives.refresh()
 	completeConfigurationForm.renderAvailability()
 	healthView.renderHeader(value)
 	healthView.renderOverview(value)

@@ -1612,3 +1612,11 @@ tbody tr:last-child td {
 	width: 100%;
 	font-family: monospace;
 }
+
+#deployment-archives .identifier-line {
+	overflow-wrap: anywhere;
+}
+
+#deployment-archives details {
+	margin-top: 0.5rem;
+}

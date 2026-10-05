@@ -7,7 +7,7 @@ import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { CONFIGURATION_COMMIT_INDETERMINATE } from '../runtime/configuration-commit.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
-import { browserScript } from './browser-assets.ts'
+import { readDashboardResource } from './dashboard-read-routes.ts'
 import { operatorHeader } from './header.ts'
 import { readDashboardConfiguration } from './configuration-document-route.ts'
 import { mutationRoutes } from './mutation-routes.ts'
@@ -843,8 +843,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return json({ blockers: ['runtime_snapshot_unavailable'], ready: false }, 503)
 					}
 				}
-				const script = await browserScript(url.pathname, directory)
-				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
+				const resource = await readDashboardResource(url.pathname, directory, controller, mutationBarrier)
+				if (resource !== undefined) return resource
 				if (url.pathname === '/api/state') {
 					try {
 						await mutationBarrier

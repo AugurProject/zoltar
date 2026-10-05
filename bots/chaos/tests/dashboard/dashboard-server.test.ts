@@ -1450,3 +1450,41 @@ test('public activity and workflow failures retain diagnostics without escaped c
 	expect(state['workflows']).toEqual([{ status: 'abandoned', steps: [{ status: 'blocked', failure: reason }] }])
 	expect(JSON.stringify(state)).not.toContain('SECRET_SUFFIX')
 })
+
+test('archive reads wait for mutations and archive selection uses the protected mutation route', async () => {
+	let selected = false
+	let release: () => void = () => undefined
+	const pending = new Promise<void>(resolve => {
+		release = resolve
+	})
+	const server = startDashboardServer(
+		0,
+		controller({
+			getDeploymentArchives: () => [{ id: 'current', active: true }],
+			setDeploymentArchive: async () => {
+				selected = true
+				await pending
+			},
+		}),
+	)
+	servers.push(server)
+	const origin = server.url.origin
+	const blocked = await fetch(new URL('/api/deployment-archive', server.url), { method: 'PUT', headers: { origin: 'https://other.example', 'content-type': 'application/json' }, body: '{}' })
+	expect(blocked.status).toBe(403)
+	expect(selected).toBeFalse()
+	const mutation = fetch(new URL('/api/deployment-archive', server.url), { method: 'PUT', headers: { origin, 'content-type': 'application/json' }, body: '{}' })
+	for (let attempt = 0; !selected && attempt < 100; attempt += 1) await Bun.sleep(5)
+	expect(selected).toBeTrue()
+	let readFinished = false
+	const read = fetch(new URL('/api/deployment-archives', server.url)).then(response => {
+		readFinished = true
+		return response
+	})
+	await Bun.sleep(10)
+	expect(readFinished).toBeFalse()
+	release()
+	expect((await mutation).status).toBe(200)
+	const response = await read
+	expect(response.headers.get('cache-control')).toBe('no-store')
+	expect(await response.json()).toEqual([{ id: 'current', active: true }])
+})
