@@ -75,6 +75,7 @@ contract SecurityPool is SecurityPoolStorage {
 	event CompleteSetCreated(address indexed creator, uint256 settlementCollateralProvidedAttoEth, uint256 completeSetsMintedAttoShares, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event CompleteSetRedeemed(address indexed redeemer, uint256 completeSetsBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
 	event SharesRedeemed(address indexed redeemer, uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth, uint256 resultingShareTokenSupplyAttoShares, uint256 resultingSettlementCollateralAttoEth);
+	event EthReceived(address indexed sender, uint256 amountAttoEth);
 
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
@@ -771,6 +772,7 @@ contract SecurityPool is SecurityPoolStorage {
 	/// @notice Accepts ETH only from the forker, the truth auction, or the parent pool.
 	receive() external payable {
 		require(msg.sender == securityPoolForker || msg.sender == truthAuction || msg.sender == address(parent), 'Bad ETH sender');
+		emit EthReceived(msg.sender, msg.value);
 	}
 
 	/// @notice Forwards depositRepToVaultFromExecutor, underwriting-limit, permit, and authorization vault operations to the operations delegate; rejects other selectors.

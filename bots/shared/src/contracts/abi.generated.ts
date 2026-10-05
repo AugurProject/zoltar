@@ -735,6 +735,15 @@ export const securityPoolAbi = [
 	{ type: 'event', name: 'EscalationGameSet', anonymous: false, inputs: [{ name: 'escalationGame', type: 'address', internalType: 'contract EscalationGame', indexed: false }] },
 	{
 		type: 'event',
+		name: 'EthReceived',
+		anonymous: false,
+		inputs: [
+			{ name: 'sender', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'amountAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'PoolAccountingCheckpoint',
 		anonymous: false,
 		inputs: [
@@ -1282,6 +1291,7 @@ export const liquidationApprovalRegistryAbi = [
 			{ name: 'nonce', type: 'uint256', internalType: 'uint256', indexed: false },
 		],
 	},
+	{ type: 'event', name: 'RegistryInitialized', anonymous: false, inputs: [{ name: 'coordinator', type: 'address', internalType: 'address', indexed: true }] },
 	{ type: 'function', name: 'DOMAIN_SEPARATOR', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }] },
 	{ type: 'function', name: 'LIQUIDATION_APPROVAL_TYPEHASH', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }] },
 	{
@@ -1499,6 +1509,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'errorMessage', type: 'string', internalType: 'string', indexed: false },
 		],
 	},
+	{ type: 'event', name: 'LiquidationApprovalRegistrySet', anonymous: false, inputs: [{ name: 'registry', type: 'address', internalType: 'contract LiquidationApprovalRegistry', indexed: true }] },
 	{
 		type: 'event',
 		name: 'LiquidationRouteStaged',

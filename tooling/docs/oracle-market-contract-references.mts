@@ -2,7 +2,7 @@ import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '24fef7375af443bf5477c0c4afa6d6ce6ef852f82a8b17d46bd1cea15bc3c264',
+		compiledAbiFingerprint: 'c4c3b830e96f478974149aacb56eee2bb36bee4c0ef7f104ffa43239dcb28ada',
 		name: 'LiquidationApprovalRegistry',
 		purpose: 'Stores coordinator-local, bounded authorization for a receiver vault to accept liquidation debt from an exact operator.',
 		readAbiFingerprint: '04465d90cef2bd37454bf8496fffcaccf07f0ec5808f31ffd6481d4cdc46f810',
@@ -18,7 +18,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'Binds this registry clone to one coordinator and therefore one security pool.',
 				declarations: [{ name: 'initialize' }],
 				preconditions: 'Coordinator is nonzero and the registry has not been initialized.',
-				signals: 'No event; the public `coordinator` getter records the binding.',
+				signals: '`RegistryInitialized` identifies the configured coordinator.',
 			},
 			{
 				call: '`setLiquidationApproval(params)`',
@@ -79,7 +79,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '96bf38a482665cf0e621d6345f97e7d5900965fcce217565184c1fa9783b79fb',
+		compiledAbiFingerprint: '3368808f4fa10d2152b5a15004a47c23b93c40c08f47149ac7b48819bdda6309',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.',
 		readAbiFingerprint: '2b4e03586a6b112405e3e8dc00ce49eac9a94cdd943685325ed5b875db742a45',
@@ -215,7 +215,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				effect: 'Binds the coordinator-local approval registry once.',
 				declarations: [{ name: 'setLiquidationApprovalRegistry' }],
 				preconditions: 'Registry is nonzero and no registry was previously installed (`Registry setup invalid` for any failed condition, including the caller).',
-				signals: 'No event; deterministic factory deployment and the public getter identify the registry.',
+				signals: '`LiquidationApprovalRegistrySet` identifies the configured registry.',
 			},
 			{
 				call: '`setSecurityPool(securityPool)`',

@@ -238,11 +238,13 @@ describe('network configuration', () => {
 
 	test('registers the deployed Sepolia AMM factory without an environment override', async () => {
 		process.env['NETWORKS'] = 'sepolia'
+		const expectedAmmFactories = parseManifestValue(sepoliaManifest, 'sepolia.json').filter(([, , kind]) => kind === 'ammFactory')
+		expect(expectedAmmFactories).toHaveLength(1)
 		for (const override of [undefined, '', '   ']) {
 			if (override === undefined) delete process.env['SEPOLIA_AMM_FACTORY_ADDRESS']
 			else process.env['SEPOLIA_AMM_FACTORY_ADDRESS'] = override
 			const [network] = await loadNetworks()
-			expect(network?.contracts.filter(([, , kind]) => kind === 'ammFactory')).toEqual([[getAddress('0x1c72c7d08f5fbcf5bb966f869c1cf4ec2bd98ed1'), 'Augur AMM Factory', 'ammFactory']])
+			expect(network?.contracts.filter(([, , kind]) => kind === 'ammFactory')).toEqual(expectedAmmFactories)
 		}
 	})
 

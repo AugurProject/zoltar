@@ -54,6 +54,7 @@ contract OpenOraclePriceCoordinator {
 	address private immutable coordinatorFactory;
 
 	event SecurityPoolSet(ISecurityPool indexed securityPool);
+	event LiquidationApprovalRegistrySet(LiquidationApprovalRegistry indexed registry);
 	event RepEthPriceSet(uint256 price);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
@@ -131,6 +132,7 @@ contract OpenOraclePriceCoordinator {
 	function setLiquidationApprovalRegistry(LiquidationApprovalRegistry registry) external {
 		require(msg.sender == coordinatorFactory && address(liquidationApprovalRegistry) == address(0) && address(registry) != address(0), 'Registry setup invalid');
 		liquidationApprovalRegistry = registry;
+		emit LiquidationApprovalRegistrySet(registry);
 	}
 
 	/// @notice Sets the security pool this coordinator serves; callable once.
