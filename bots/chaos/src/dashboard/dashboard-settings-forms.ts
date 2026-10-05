@@ -2,7 +2,6 @@ import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation
 import { connectivityScope } from './configuration-draft-scope.ts'
 import type { Configuration } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
-import { operationIsIndependentlyExecutable } from './dashboard-format.ts'
 import type { ReconcileUnknownMutation } from './dashboard-refresh.ts'
 import type { DashboardPut } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
@@ -156,19 +155,6 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 					return [toggle.dataset['ecosystemToggle']]
 				})
 				if (enabledEcosystems.length === 0) throw new Error('Enable at least one ecosystem.')
-				const selectableOperationAllowlist = elements.allSelectableOperationsInput.checked
-					? null
-					: (() => {
-							const operationIds = elements.selectableOperationAllowlistInput.value
-								.split(/[\n,]/)
-								.map(value => value.trim())
-								.filter(value => value !== '')
-							if (new Set(operationIds).size !== operationIds.length) throw new Error('Selectable operation allowlist must not contain duplicate definition IDs.')
-							const selectableIds = new Set(state.snapshot?.operationEvaluations.flatMap(operation => (operation.classification === 'selectable' && operationIsIndependentlyExecutable(operation) && operation.id !== undefined ? [operation.id] : [])) ?? [])
-							const unknown = operationIds.find(operationId => !selectableIds.has(operationId))
-							if (unknown !== undefined) throw new Error(`Unknown independently selectable operation definition ID ${unknown}. Copy the exact ID from Operation catalog.`)
-							return operationIds
-						})()
 				const maximumEthPerOperation = parseReserve(elements.maximumEthOperationInput, 'Maximum ETH per operation', 'positive')
 				const maximumGasCostEth = parseReserve(elements.maximumGasCostInput, 'Maximum gas cost', 'positive')
 				const maximumRepPerOperation = parseReserve(elements.maximumRepOperationInput, 'Maximum REP per operation', 'positive')
@@ -190,7 +176,7 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 						maximumRepPerOperation,
 						minimumEthReserve,
 						minimumRepReserve,
-						selectableOperationAllowlist,
+						selectableOperationAllowlist: configuration.selectableOperationAllowlist ?? [],
 						workflowValidForBlocks,
 					},
 				}

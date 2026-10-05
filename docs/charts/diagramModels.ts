@@ -238,7 +238,7 @@ export const diagramGraphSpecs = {
 			section(
 				'openoracle-integration',
 				[
-					node('operation', 'User operation', 'blue', ['liquidate or withdraw REP']),
+					node('operation', 'User operation', 'blue', ['withdraw, recommit, or liquidate']),
 					node('coordinator-request', 'Coordinator', 'gold', ['price cache', 'staging guards']),
 					node('oracle', 'OpenOracle', 'blue', ['sponsor funds', 'disputer may replace']),
 					node('settlement', 'OpenOracle settlement', 'teal', ['settler finalizes'], 260),

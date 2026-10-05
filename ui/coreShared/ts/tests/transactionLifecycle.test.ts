@@ -71,10 +71,10 @@ describe('transaction lifecycle', () => {
 	})
 
 	test('fails before broadcast without a hash and never un-confirms a transaction', () => {
-		const rejected = transitionTransactionLifecycle({ phase: 'wallet' }, { type: 'failed', failure: { kind: 'rejected', message: 'Action canceled in wallet.' } })
+		const rejected = transitionTransactionLifecycle({ phase: 'wallet' }, { type: 'failed', failure: { kind: 'rejected', message: 'Rejected in wallet.' } })
 		const confirmed: TransactionLifecycle = { phase: 'confirmed', hash }
 
-		expect(rejected).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Action canceled in wallet.' }, hash: undefined })
+		expect(rejected).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Rejected in wallet.' }, hash: undefined })
 		expect(transitionTransactionLifecycle(confirmed, { type: 'failed', failure: { kind: 'error', message: 'late' } })).toBe(confirmed)
 	})
 
@@ -93,6 +93,6 @@ describe('transaction lifecycle', () => {
 		expect(getTransactionFailureKind({ code: 4001, message: 'User rejected the request.' })).toBe('rejected')
 		// A message that merely mentions a revert is not classified by its wording.
 		expect(getTransactionFailureKind(new Error('Transaction reverted.'))).toBe('error')
-		expect(createTransactionFailure({ code: 4001 }, 'Action canceled in wallet.')).toEqual({ kind: 'rejected', message: 'Action canceled in wallet.' })
+		expect(createTransactionFailure({ code: 4001 }, 'Rejected in wallet.')).toEqual({ kind: 'rejected', message: 'Rejected in wallet.' })
 	})
 })

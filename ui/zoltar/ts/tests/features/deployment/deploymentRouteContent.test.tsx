@@ -88,15 +88,15 @@ describe('DeploymentRouteContent', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Deploy next missing', 'Connect wallet to continue.')
-		expectTransactionButtonDisabled(document.body, 'Deploy ZoltarQuestionData', 'Connect wallet to deploy this contract.')
+		expectTransactionButtonDisabled(document.body, 'Deploy next contract', 'Connect wallet to continue.')
+		expectTransactionButtonDisabled(document.body, 'Deploy ZoltarQuestionData', 'Connect a wallet before deploying this contract.')
 	})
 
 	test('enables deploy-next when a deterministic step is ready to deploy', async () => {
 		const renderedComponent = await renderIntoDocument(h(DeploymentRouteContent, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Deploy next missing')
+		expectTransactionButtonEnabled(document.body, 'Deploy next contract')
 	})
 
 	test('disables all deployment actions while the deployment snapshot is unavailable', async () => {
@@ -108,7 +108,7 @@ describe('DeploymentRouteContent', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Deploy next missing', 'Deployment status is unavailable.')
+		expectTransactionButtonDisabled(document.body, 'Deploy next contract', 'Deployment status is unavailable.')
 		expectTransactionButtonDisabled(document.body, 'Deploy ZoltarQuestionData', 'Deployment status is unavailable.')
 		expect(document.body.textContent).not.toContain('Not deployed')
 		expect(document.body.textContent).not.toContain('Can deploy now.')
@@ -166,8 +166,19 @@ describe('DeploymentRouteContent', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Deploy next missing' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Deploy next contract' })).toBeNull()
 		const nextStep = documentQueries.getByRole('link', { name: 'Browse questions' })
 		expect(nextStep.getAttribute('href')).toBe('#/zoltar?simulate=1&simScenario=deployed&simState=slow&universe=7&zoltarView=questions')
+	})
+
+	test('labels a custom deployment-complete destination with the label the app supplies', async () => {
+		const props = createProps()
+		const deploymentStatuses = props.deploymentStatuses.map(step => ({ ...step, deployed: true }))
+		const renderedComponent = await renderIntoDocument(h(DeploymentRouteContent, { ...props, deploymentCompleteHref: '#/pools', deploymentCompleteLabel: 'Browse pools', deploymentStatuses, deploymentSections: [{ title: 'Utilities', steps: deploymentStatuses }] }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('link', { name: 'Browse questions' })).toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Browse pools' }).getAttribute('href')).toBe('#/pools')
 	})
 })

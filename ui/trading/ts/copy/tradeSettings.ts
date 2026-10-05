@@ -7,10 +7,10 @@ export const lowSlippageWarning = 'Below 0.1%, small price moves can make transa
 export const transactionValidFor = 'Transaction valid for'
 export const validityPresets = 'Validity presets'
 export const customValidity = 'Custom validity, minutes'
-export const percent = '%'
+export { percent } from './outcomes.js'
 export const minutes = 'min'
 export const validityValidation = 'Enter a whole number from 1 to 1440 minutes.'
-export const settingsHelp = 'Transactions revert if the price moves further than this or they are included after their deadline.'
+export const settingsHelp = 'Transactions revert if the price moves beyond the slippage tolerance or they confirm after the validity window.'
 
 export function minutesLabel(minutes: bigint) {
 	return `${minutes.toString()} min`
@@ -20,5 +20,12 @@ export function minutesLabel(minutes: bigint) {
 export function protectionSummary(slippagePercent: string, minutes: bigint, cutoff?: 'question') {
 	let cutoffNote = ''
 	if (cutoff === 'question') cutoffNote = ' · ends sooner at question close'
-	return `Slippage ${slippagePercent}% · valid up to ${minutes.toString()} min${cutoffNote} · change in Settings`
+	return `${protectionTitle(slippagePercent, minutes)}${cutoffNote} · change in Settings`
 }
+
+/** The current protection values alone, titling the settings a quote offers to change in place. */
+export function protectionTitle(slippagePercent: string, minutes: bigint) {
+	return `Slippage ${slippagePercent}% · valid up to ${minutes.toString()} min`
+}
+
+export const validityEndsAtQuestionClose = 'A transaction is never valid past question close.'

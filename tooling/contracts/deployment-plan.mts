@@ -1,11 +1,12 @@
-import { encodeDeployData, getCreate2Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { CANONICAL_TRADING_FEE_BPS, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { deployViaProxy, EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps as getZoltarDeploymentSteps } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import { EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
 import type { NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import type { UniswapDeployment } from './uniswap-deployment.mts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
+import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryContract, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerContract } from '../../solidity/ts/types/contractArtifact.ts'
 
 const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
@@ -32,10 +33,13 @@ function getExpectedRuntimeCodeHash(id: string) {
 
 function getTradingDeploymentSteps(profile: NetworkProfile) {
 	const { securityPoolFactory } = getInfraContractAddresses(profile)
-	// Match the Trading UI and chaos bot's canonical 0.30% deployment.
-	const factoryData = encodeDeployData({ abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}`, args: [securityPoolFactory, 30n] })
-	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: PROXY_DEPLOYER_ADDRESS, salt: ZERO_SALT })
-	const routerData = encodeDeployData({ abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}`, args: [factoryAddress] })
+	const { factoryAddress, factoryData, routerAddress, routerData } = tradingDeploymentData(
+		PROXY_DEPLOYER_ADDRESS,
+		securityPoolFactory,
+		CANONICAL_TRADING_FEE_BPS,
+		{ abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}` },
+		{ abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` },
+	)
 	return [
 		{
 			address: factoryAddress,
@@ -45,7 +49,7 @@ function getTradingDeploymentSteps(profile: NetworkProfile) {
 			label: 'Trading factory',
 		},
 		{
-			address: getCreate2Address({ bytecode: routerData, from: PROXY_DEPLOYER_ADDRESS, salt: ZERO_SALT }),
+			address: routerAddress,
 			dependencies: ['proxyDeployer', 'tradingFactory'],
 			deploy: async (client: WriteClient) => await deployViaProxy(client, routerData),
 			id: 'tradingRouter',

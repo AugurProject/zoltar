@@ -192,4 +192,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '1cea6a33459224884c546010dfce8f35cace7198d0134a31d2dd305fad8f75eb'
+export const referencedEventAbiFingerprint = '37b0ebe4d6970558d4c0791a9c61fe61fa7970b897e24c7d1dfa0944339a2b7a'

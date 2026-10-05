@@ -27,7 +27,7 @@ type OpenOracleCreateValidationParameters = {
 
 type OpenOracleCreateParameterValidation = {
 	field: keyof OpenOracleCreateValidationParameters
-	message: string
+	message: string | undefined
 }
 
 export function getOpenOracleCreateParameterValidation(
@@ -37,9 +37,9 @@ export function getOpenOracleCreateParameterValidation(
 	if (sameAddress(token1Address, token2Address)) return { field: 'token2Address', message: 'Base and quote tokens must use different addresses.' }
 	if (sameAddress(token1Address, zeroAddress)) return { field: 'token1Address', message: 'Direct OpenOracle reports currently require two ERC-20 token addresses.' }
 	if (sameAddress(token2Address, zeroAddress)) return { field: 'token2Address', message: 'Direct OpenOracle reports currently require two ERC-20 token addresses.' }
-	if (exactToken1Report <= 0n) return { field: 'exactToken1Report', message: 'Base token amount must be greater than zero.' }
+	if (exactToken1Report <= 0n) return { field: 'exactToken1Report', message: undefined }
 	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return { field: 'exactToken1Report', message: 'Base token amount exceeds the contract maximum.' }
-	if (initialToken2Amount <= 0n) return { field: 'initialToken2Amount', message: 'Quote token amount must be greater than zero.' }
+	if (initialToken2Amount <= 0n) return { field: 'initialToken2Amount', message: undefined }
 	if (initialToken2Amount > OPEN_ORACLE_UINT128_MAX) return { field: 'initialToken2Amount', message: 'Quote token amount exceeds the contract maximum.' }
 	if (escalationHalt < 0n) return { field: 'escalationHalt', message: 'Escalation halt must be non-negative.' }
 	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return { field: 'escalationHalt', message: 'Escalation halt exceeds the contract maximum.' }
@@ -48,21 +48,17 @@ export function getOpenOracleCreateParameterValidation(
 	if (ethValueAttoEth < 0n) return { field: 'ethValueAttoEth', message: 'ETH sent must be non-negative.' }
 	if (ethValueAttoEth > OPEN_ORACLE_UINT96_MAX) return { field: 'ethValueAttoEth', message: 'ETH sent exceeds the contract maximum.' }
 	if (ethValueAttoEth !== settlerRewardAttoEth) return { field: 'ethValueAttoEth', message: 'ETH sent must equal the settler reward for ERC-20 token pairs.' }
-	if (settlementTime < 0n) return { field: 'settlementTime', message: 'Enter a valid settlement time.' }
-	if (settlementTime > OPEN_ORACLE_UINT48_MAX) return { field: 'settlementTime', message: 'Settlement time exceeds the contract maximum.' }
+	if (settlementTime < 0n) return { field: 'settlementTime', message: 'Enter a valid settlement delay.' }
+	if (settlementTime > OPEN_ORACLE_UINT48_MAX) return { field: 'settlementTime', message: 'Settlement delay exceeds the contract maximum.' }
 	if (disputeDelay < 0n) return { field: 'disputeDelay', message: 'Enter a valid dispute delay.' }
 	if (disputeDelay > OPEN_ORACLE_UINT24_MAX) return { field: 'disputeDelay', message: 'Dispute delay exceeds the contract maximum.' }
-	if (settlementTime <= disputeDelay) return { field: 'settlementTime', message: 'Settlement time must be greater than dispute delay.' }
+	if (settlementTime <= disputeDelay) return { field: 'settlementTime', message: 'Settlement delay must be greater than dispute delay.' }
 	if (multiplier < OPEN_ORACLE_MULTIPLIER_PRECISION) return { field: 'multiplier', message: 'Multiplier must be at least 1×.' }
 	if (multiplier > OPEN_ORACLE_UINT16_MAX) return { field: 'multiplier', message: `Multiplier must be at most ${formatMultiplier(OPEN_ORACLE_UINT16_MAX, 2)}.` }
-	if (feePercentage < 0n) return { field: 'feePercentage', message: 'Fee percentage must be non-negative.' }
-	if (feePercentage > OPEN_ORACLE_UINT24_MAX) return { field: 'feePercentage', message: 'Fee percentage exceeds the contract maximum.' }
+	if (feePercentage < 0n) return { field: 'feePercentage', message: 'Dispute fee must be non-negative.' }
+	if (feePercentage > OPEN_ORACLE_UINT24_MAX) return { field: 'feePercentage', message: 'Dispute fee exceeds the contract maximum.' }
 	if (protocolFee < 0n) return { field: 'protocolFee', message: 'Protocol fee must be non-negative.' }
 	if (protocolFee > OPEN_ORACLE_UINT24_MAX) return { field: 'protocolFee', message: 'Protocol fee exceeds the contract maximum.' }
-	if (feePercentage + protocolFee > OPEN_ORACLE_PERCENTAGE_PRECISION) return { field: 'protocolFee', message: 'Fee percentage plus protocol fee must not exceed 100%.' }
+	if (feePercentage + protocolFee > OPEN_ORACLE_PERCENTAGE_PRECISION) return { field: 'protocolFee', message: 'Dispute fee plus protocol fee must not exceed 100%.' }
 	return undefined
-}
-
-export function getOpenOracleCreateParameterValidationMessage(parameters: OpenOracleCreateValidationParameters, options: { skipToken1MagnitudeValidation?: boolean } = {}) {
-	return getOpenOracleCreateParameterValidation(parameters, options)?.message
 }

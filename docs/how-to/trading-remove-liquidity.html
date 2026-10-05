@@ -19,11 +19,11 @@
 				<h2>Remove in the UI</h2>
 				<ol>
 					<li>Open the market and select the <strong>Liquidity</strong> tab, then <strong>Remove</strong>.</li>
-					<li>Enter an amount in <strong>LP tokens</strong>. <strong>You receive ≈</strong> shows the Yes and No you get back.</li>
+					<li>Enter the LP tokens to remove in <strong>Amount</strong>. <strong>You receive ≈</strong> shows the Yes and No you get back.</li>
 					<li>Select <strong>Remove liquidity</strong> and confirm. The transaction reverts if it would return less than the estimate allows after your slippage tolerance.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-remove-liquidity" aria-labelledby="fig-trading-remove-liquidity-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/remove-liquidity.png"><img width="480" height="881" src="../assets/screenshots/trading/remove-liquidity.png" alt="The Liquidity tab with Remove selected, 0.001 LP tokens entered, the note that removal returns Yes and No shares to the wallet rather than ETH, an expected 0.001 Yes and 0.001 No worth about 0.001 ETH at the current pool price, and an enabled Remove liquidity button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/remove-liquidity.png"><img width="480" height="954" src="../assets/screenshots/trading/remove-liquidity.png" alt="The Liquidity tab with Remove selected, 0.001 LP entered, the note that removal returns Yes and No shares to the wallet rather than ETH, an expected 0.001 Yes and 0.001 No worth about 0.001 ETH at the current trading pool price, and an enabled Remove liquidity button." loading="lazy" /></a>
 					<figcaption id="fig-trading-remove-liquidity-caption"><span class="figure-label">Removing liquidity.</span> The UI calls the trading pool directly, so it never asks for a router allowance.</figcaption>
 				</figure>
 			</section>
@@ -33,7 +33,8 @@
 					<li>Compute the outputs from <code>getEffectiveReserves()</code>: each reserve × <code>liquidity</code> ÷ LP total supply, rounded down. Removal first synchronizes the reserves, so donated shares count.</li>
 					<li>Call the trading pool's <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code> with <code>minYes</code> and <code>minNo</code> set from those outputs and your tolerance. The deadline is enforced on chain.</li>
 				</ol>
-				<p>Integrations that need router-based removal can call the router's <code>removeLiquidityWithPermit</code>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>, with an exact-amount ERC-2612 signature. Ordinary exact allowances also work for already submitted permits, Safes, and clients without signature support. Never grant a permanent or infinite allowance.</p>
+				<p>After either path, your LP balance has fallen by <code>liquidity</code>, your Yes and No balances have risen by the outputs, and the trading pool has emitted <code>LiquidityRemoved</code>.</p>
+				<p>Integrations that need router-based removal call the router's <a href="../reference/trading/router.html#entrypoints"><code>removeLiquidityWithPermit</code></a>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>. The router reference gives the values the permit must sign and the allowance fallback. Never grant a permanent or infinite allowance.</p>
 			</section>
 			<section id="what-removal-does-not-do">
 				<h2>What removal does not do</h2>

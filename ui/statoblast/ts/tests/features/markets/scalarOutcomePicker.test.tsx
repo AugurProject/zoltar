@@ -113,7 +113,7 @@ describe('ScalarOutcomePicker', () => {
 		expect(scalarHelp?.getAttribute('data-message-placement')).toBe('field')
 		expect(scalarHelp?.tagName).toBe('SPAN')
 		expect(scalarValueInput.closest('strong')).toBeNull()
-		expect(documentQueries.getByText('Enter a value on an increment.')).not.toBeNull()
+		expect(documentQueries.getByText('Enter a value that matches the increment.')).not.toBeNull()
 
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '70' } })
@@ -126,7 +126,7 @@ describe('ScalarOutcomePicker', () => {
 		})
 		expect(slider.value).toBe('0')
 		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
-		expect(documentQueries.queryByText('Enter a value on an increment.')).toBeNull()
+		expect(documentQueries.queryByText('Enter a value that matches the increment.')).toBeNull()
 	})
 
 	test('restores the canonical scalar value after leaving invalid mode', async () => {

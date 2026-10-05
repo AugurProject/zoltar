@@ -1,6 +1,6 @@
 # UI Features
 
-Feature directories own reusable product components, hooks, and domain presentation logic. Keep code inside the feature that gives it meaning; move cross-product code to `ui/coreShared/ts` or Zoltar-specific shared code to `ui/zoltarShared/ts` only when it is genuinely reusable across features.
+Feature directories own reusable product components, hooks, and domain presentation logic. Keep code inside the feature that gives it meaning; move cross-product code to `ui/coreShared/ts` or Zoltar-specific shared code to `ui/zoltarShared/ts/lib` only when it is genuinely reusable across features.
 
 Feature `lib` modules may own UI-agnostic calculations used only by that feature. If the protocol client also needs a calculation, place it in `ui/zoltarShared/ts/protocol` or the appropriate shared `lib`; protocol modules never import from feature directories.
 

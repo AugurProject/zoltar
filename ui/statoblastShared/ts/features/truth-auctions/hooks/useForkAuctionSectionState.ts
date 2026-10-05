@@ -1,4 +1,5 @@
 import { getUnresolvedEscalationMigrationSubmissionGuard } from '../../../protocol/forkMigrationTiming.js'
+import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { usePendingAuctionRefund } from './usePendingAuctionRefund.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
@@ -239,7 +240,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (settlementSelectionMode === 'refund') return forkAuctionCopy.refundableBidBatchSettlementDetail
 		return forkAuctionCopy.mixedBidBatchSettlementDetail
 	})()
-	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
+	const settlementActionPendingLabel = forkAuctionCopy.settlingSelectedBids
 	const auctionBidRows = buildTruthAuctionBidRows({
 		bids: aggregatedAuctionBids,
 		truthAuction: truthAuctionStatus,
@@ -389,6 +390,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		return { disabled: reason !== undefined, reason }
 	})()
 	const submitBidGuardMessage = truthAuctionBidGuardMessage ?? bidPriceValidationMessage
+	const hasValidBidInputs = (tryParseTruthAuctionAmountInput(context.forkAuctionForm.submitBidAmount) ?? 0n) > 0n && enteredBidPreview !== undefined
 	const migrationStateBadge = getMigrationStateBadge({
 		currentTimestamp: context.effectiveCurrentTimestamp,
 		effectiveTruthAuctionStartedAt,
@@ -449,6 +451,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		stageActionContext,
 		truthAuctionEndsAt,
 		submitBidGuardMessage,
+		hasValidBidInputs,
 		submitBidLabel,
 		bidAmountHint,
 		bidAmountMax,

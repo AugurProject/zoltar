@@ -65,7 +65,7 @@ export function ReportingSides({
 				) : undefined}
 			</div>
 			{!finalized && displayBindingCapital !== undefined && displayBindingCapital > 0n ? <UserMessage className='detail' detail={reportingCopy.bindingCapitalHelp} /> : undefined}
-			<div className='escalation-sides' role={finalized ? undefined : 'radiogroup'} aria-label={reportingCopy.reportOutcomeAriaLabel}>
+			<div className='escalation-sides' role={finalized ? undefined : 'radiogroup'} aria-label={finalized ? reportingCopy.results : reportingCopy.reportOutcome}>
 				{outcomeSides.map((side, index) => (
 					<EscalationSide
 						key={side.key}

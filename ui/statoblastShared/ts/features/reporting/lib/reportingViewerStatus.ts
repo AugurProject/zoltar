@@ -1,6 +1,5 @@
 import { getDisplayedLeadingEscalationOutcome, getReportingOutcomeLabel } from './reporting.js'
 import { formatCurrencyBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { metricUnavailablePlaceholder } from '@zoltar/ui-core-shared/copy/common.js'
 import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
@@ -24,7 +23,7 @@ export function getViewerPositions(details: ActiveReportingDetails) {
 			const leading = leader === side.key
 			const minimum = getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 			const lead = leading ? copy.winningStatusLead(side.label) : copy.losingStatusLead(side.label)
-			const detail = leading ? copy.winningStatusDetail(formatCurrencyBalance(stake), formatCurrencyBalance(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? metricUnavailablePlaceholder : formatCurrencyBalance(minimum), deadline, formatCurrencyBalance(stake))
+			const detail = leading ? copy.winningStatusDetail(formatCurrencyBalance(stake), formatCurrencyBalance(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? undefined : formatCurrencyBalance(minimum), deadline, formatCurrencyBalance(stake))
 			let positionStatus = copy.losingPosition
 			if (details.hasReachedNonDecision || details.systemState !== 'operational') positionStatus = copy.forkPosition
 			else if (worth === undefined) positionStatus = copy.tiedPosition
@@ -40,6 +39,6 @@ export function getViewerStatusSentence(details: ActiveReportingDetails) {
 	if (details.sides.every(side => side.balance === 0n)) return `${copy.tieStatusLead} ${copy.zeroBalanceStatusDetail}`
 	if (leader === undefined) return `${copy.tieStatusLead} ${copy.tieStatusDetail(formatReportingDeadline(details.escalationEndTime, details.currentTime))}${copy.tiesResolve}${copy.tieStatusEnd}`
 	const positions = getViewerPositions(details)
-	if (positions.length === 0) return copy.activeNext(formatReportingDeadline(details.escalationEndTime, details.currentTime), getReportingOutcomeLabel(leader))
+	if (positions.length === 0) return copy.formatLeaderWinsNext(formatReportingDeadline(details.escalationEndTime, details.currentTime), getReportingOutcomeLabel(leader))
 	return positions.map(position => `${position.lead} ${position.detail}`).join(' ')
 }

@@ -217,7 +217,7 @@ export function useMarketDiscoveryController({
 			}
 			if (wallet.accountRef.current !== undefined) {
 				portfolio.setBalanceState('error')
-				portfolio.setBalanceError('Market refresh failed before wallet balances could be revalidated')
+				portfolio.setBalanceError('The market could not be refreshed, so wallet balances were not reloaded.')
 			}
 		} finally {
 			if (foregroundDiscovery.current?.request === request) foregroundDiscovery.current = undefined

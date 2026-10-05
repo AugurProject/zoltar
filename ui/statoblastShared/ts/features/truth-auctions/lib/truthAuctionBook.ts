@@ -9,6 +9,7 @@ import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transa
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
 import { formatTruthAuctionTickPriceInput, formatTruthAuctionValidationPrice, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 export { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
 
 type TruthAuctionDisposition = {
@@ -425,11 +426,11 @@ export function getTruthAuctionBidPreview(submitBidPriceInput: string) {
 }
 
 export function getTruthAuctionBidPriceValidationMessage(submitBidPriceInput: string) {
-	if (submitBidPriceInput.trim() === '') return 'Enter a bid price greater than zero.'
+	if (submitBidPriceInput.trim() === '') return undefined
 	if (isTruthAuctionPriceInputDefinitelyOutOfRange(submitBidPriceInput)) return TRUTH_AUCTION_PRICE_RANGE_MESSAGE
 	const enteredBidPrice = tryParseTruthAuctionPriceInput(submitBidPriceInput)
 	if (enteredBidPrice === undefined) return 'Enter a valid bid price.'
-	if (enteredBidPrice <= 0n) return 'Enter a bid price greater than zero.'
+	if (enteredBidPrice <= 0n) return undefined
 	if (getTruthAuctionTickAtPrice(enteredBidPrice) === undefined) return TRUTH_AUCTION_PRICE_RANGE_MESSAGE
 	return undefined
 }
@@ -451,20 +452,20 @@ export function getTruthAuctionBidGuardMessage({
 }) {
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('submitting a truth auction bid') })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (truthAuction === undefined) return 'Loading truth auction.'
-	if (truthAuction.finalized) return 'Truth auction is already finalized.'
-	if (truthAuction.timeRemaining === 0n) return 'Truth auction has ended.'
+	if (truthAuction === undefined) return forkAuctionCopy.loadingTruthAuction
+	if (truthAuction.finalized) return forkAuctionCopy.truthAuctionFinalizedReason
+	if (truthAuction.timeRemaining === 0n) return forkAuctionCopy.auctionEndedReason
 	const timingGuardMessage = getTruthAuctionBidTimingGuardMessage(currentTimestamp, truthAuction.auctionEndsAt)
 	if (timingGuardMessage !== undefined) return timingGuardMessage
 
 	const trimmedAmount = submitBidAmountInput.trim()
-	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
+	if (trimmedAmount === '') return undefined
 	const bidAmount = tryParseTruthAuctionAmountInput(trimmedAmount)
 	if (bidAmount === undefined) return 'Enter a valid bid amount.'
 
-	if (bidAmount <= 0n) return 'Enter a bid amount greater than zero.'
+	if (bidAmount <= 0n) return undefined
 	if (bidAmount < truthAuction.minBidSizeAttoEth) return `Bid must be at least ${formatCurrencyBalanceWithUnit(truthAuction.minBidSizeAttoEth, 'ETH')}.`
-	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (walletBalanceAttoEth === undefined) return forkAuctionCopy.loadingWalletEthBalance
 	if (bidAmount > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(bidAmount - walletBalanceAttoEth, 'ETH')} in this wallet to bid the selected amount.`
 	return undefined
 }

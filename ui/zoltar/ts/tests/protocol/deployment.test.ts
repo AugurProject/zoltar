@@ -666,7 +666,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('signer nonce has already been consumed')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('its one-time deployment transaction was already used')
 		expect(sendCalled).toBe(false)
 	})
 
@@ -742,7 +742,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('before signer funding')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('rejected the proxy deployer transaction before it was funded')
 		expect(fundingCalled).toBe(false)
 	})
 
@@ -899,7 +899,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('confirmed without installing code')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('confirmed, but no contract code was found')
 		expect(retryDelays).toEqual([250, 500, 1_000, 2_000, 4_000])
 	})
 

@@ -160,7 +160,7 @@ describe('useQuestionCreation', () => {
 		const missing = await renderHook({ deploymentStatuses: [] })
 		await act(async () => await missing.hookState().createQuestion())
 		expect(missing.createQuestion).not.toHaveBeenCalled()
-		expect(missing.hookState().questionFeedback?.status.detail).toContain('Deploy ZoltarQuestionData')
+		expect(missing.hookState().questionFeedback?.status.detail).toContain('Deploy the ZoltarQuestionData contract')
 	})
 
 	test('does not execute or finish a question transaction rejected by the global admission gate', async () => {
@@ -201,7 +201,7 @@ describe('useQuestionCreation', () => {
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
 		await act(async () => await harness.hookState().createQuestion())
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
-		expect(harness.hookState().questionError).toBe('Question creation already in progress')
+		expect(harness.hookState().questionError).toBe('Question creation is already in progress.')
 		await act(async () => {
 			deferred.resolve(CREATION_RESULT)
 			await firstSubmission

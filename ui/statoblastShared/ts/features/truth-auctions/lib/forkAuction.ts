@@ -2,6 +2,8 @@ import type { ForkOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-sh
 import type { ForkAuctionDetails, SecurityPoolVaultSummary, TruthAuctionMetrics } from '../../../types/contracts.js'
 import { getTimeRemaining as getSharedTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { deriveHasForkActivity } from '../../../protocol/forkActivity.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 
 export { deriveHasForkActivity }
 
@@ -13,10 +15,10 @@ export const AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL = 'Auctioned underwriti
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'
 
 const FORK_AUCTION_STAGE_LABELS: Record<ForkAuctionStageView, string> = {
-	initiate: 'Trigger',
-	migration: 'Migration',
-	auction: 'Truth auction',
-	settlement: 'Settlement',
+	initiate: forkAuctionCopy.forkTrigger,
+	migration: forkAuctionCopy.migration,
+	auction: commonCopy.truthAuction,
+	settlement: commonCopy.settlement,
 }
 
 type ForkAuctionStageSource = {

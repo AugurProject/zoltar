@@ -13,26 +13,26 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Handle resolution</h1>
-				<p>Once a market's question has ended, swaps and liquidity additions are closed, but every asset you hold still has an exit. Use this guide to turn LP tokens, complete sets, and winning shares back into ETH.</p>
+				<p>A trading pool closes to swaps and added liquidity when its question ends; the market finalizes later, when its outcome is final. Use this guide from question end onward to turn LP tokens, complete sets, and winning shares back into ETH.</p>
 			</header>
 			<section id="steps">
-				<h2>Unwind after resolution</h2>
+				<h2>Unwind after question end</h2>
 				<ol>
 					<li>Remove your LP tokens from the <a href="../reference/glossary.html#trading-pool">trading pool</a> into Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> still allows it.</li>
-					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>.</li>
+					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> is <code>Operational</code> and its universe has not forked. After a fork, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a> instead.</li>
+					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>, which requires the SecurityPool to be <code>Operational</code>.</li>
 				</ol>
-				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including pool fees earned as LP, are worth nothing once they lose.</p>
+				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the SecurityPool's current collateral rate.</p>
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>
 				<p>Open the market. A closed market opens on its <strong>Settlement</strong> tab.</p>
 				<ul>
-					<li>To redeem complete sets, select <strong>Complete set</strong>, enter the ETH value in <strong>Complete-set value to redeem</strong>, check <strong>You receive ≈</strong>, and select <strong>Redeem complete sets</strong>.</li>
+					<li>To redeem complete sets, select <strong>Redeem sets</strong>, enter the ETH value in <strong>Complete-set value to redeem</strong>, check <strong>You receive ≈</strong>, and select <strong>Redeem complete sets</strong>.</li>
 					<li>Once the market finalizes, a <strong>Redeem Yes</strong>, <strong>Redeem No</strong>, or <strong>Redeem Invalid</strong> option appears for the winning outcome. It redeems your entire balance of that share through this exact SecurityPool. Before finalization the option is absent.</li>
 				</ul>
 				<figure class="screenshot" id="fig-trading-settlement" aria-labelledby="fig-trading-settlement-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="753" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Complete set selected, 0.001 ETH entered as the complete-set value to redeem, a Max button, a note that you hold 0.005 complete sets worth 0.0045 ETH, an estimate of about 0.001 ETH received with a 0.0009 ETH minimum, and an enabled Redeem complete sets button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="753" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Redeem sets selected, 0.001 ETH entered as the complete-set value to redeem, a Max button, a note that you hold 0.005 complete sets worth 0.0045 ETH, an estimate of about 0.001 ETH received with a 0.0009 ETH minimum, and an enabled Redeem complete sets button." loading="lazy" /></a>
 					<figcaption id="fig-trading-settlement-caption"><span class="figure-label">Settlement after the question ends.</span> The market has not finalized yet, so only complete-set redemption and fork migration are offered.</figcaption>
 				</figure>
 				<p>Every settlement transaction is simulated again at the latest block before your wallet opens, and stops if it would now fail.</p>

@@ -391,7 +391,7 @@ export function OpenOracleReportDetailsCard({
 				<ReadOnlyDetailAccordion title={commonCopy.settlement}>
 					{renderReportFields([
 						{
-							label: openOracleCopy.settlementTime,
+							label: openOracleCopy.settlementDelay,
 							value: formatOpenOracleTimingDuration(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType),
 						},
 						{
@@ -399,7 +399,7 @@ export function OpenOracleReportDetailsCard({
 							value: formatOpenOracleTimingDuration(openOracleReportDetails.disputeDelay, openOracleReportDetails.timeType),
 						},
 						{
-							label: openOracleCopy.feePercentage,
+							label: openOracleCopy.disputeFeeRate,
 							value: formatOpenOracleFeePercentage(openOracleReportDetails.feePercentage),
 						},
 						{

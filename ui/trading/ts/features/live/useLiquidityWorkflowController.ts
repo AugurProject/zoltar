@@ -68,8 +68,9 @@ export function useLiquidityWorkflowController({
 	})
 	const estimate = parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
 	let previewBlocker: string | undefined
-	if (estimate === undefined) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
-	else if (estimate.operation === 'add')
+	if (estimate === undefined) {
+		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
+	} else if (estimate.operation === 'add')
 		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, maximumAfterSlippage(estimate.yesUsed, settings.slippageBps), maximumAfterSlippage(estimate.noUsed, settings.slippageBps), nowSeconds + settings.validityMinutes * 60n, {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,
@@ -97,7 +98,7 @@ export function useLiquidityWorkflowController({
 		}
 		await transaction.submit({
 			prepare: async () => {
-				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
+				await executeWithCurrentWalletContext(account, 'Wallet network changed. Switch back before submitting.', 'Wallet account changed. Reconnect and try again.', async () => undefined)
 				return {
 					market,
 					operation,
@@ -113,7 +114,7 @@ export function useLiquidityWorkflowController({
 				}
 			},
 			send: async (prepared, requestSignature) => {
-				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during liquidity revalidation; reconnect and try again', 'Wallet account changed during liquidity revalidation; reconnect and try again')
+				const guarded = createGuardedWalletWrite(account, 'Wallet network changed while the transaction was checked. Reconnect and try again.', 'Wallet account changed while the transaction was checked. Reconnect and try again.')
 				// submitFreshLiquidity re-simulates at the latest block and keeps the approved minimums.
 				return await services.submitFreshLiquidity(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},

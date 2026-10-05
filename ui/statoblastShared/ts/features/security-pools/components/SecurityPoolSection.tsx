@@ -78,13 +78,6 @@ export function SecurityPoolSection({
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
-	const fallbackMarketForm = {
-		...getDefaultMarketFormState(),
-		description: securityPoolCopy.createQuestionForPoolTitle,
-		endTime: '4102444800',
-		startTime: '4102358400',
-		title: securityPoolCopy.createQuestionForPoolTitle,
-	}
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	// An unfinished question-and-pool flow keeps its question; otherwise use an explicitly selected ID or start a new question.
 	const [questionSource, setQuestionSource] = useState<'existing' | 'new'>(marketResult !== undefined || (securityPoolForm.marketId.trim() === '' && marketDetails === undefined) ? 'new' : 'existing')
@@ -183,7 +176,7 @@ export function SecurityPoolSection({
 			createdQuestionDetails = carriedPoolCreationMarketDetails
 		}
 
-	let createButtonLabel: ComponentChildren = commonCopy.createPoolAction
+	let createButtonLabel: ComponentChildren = commonCopy.createPool
 	if (securityPoolCreating) {
 		createButtonLabel = <LoadingText>{securityPoolCopy.creatingPool}</LoadingText>
 	} else if (checkingDuplicateOriginPool) {
@@ -214,7 +207,7 @@ export function SecurityPoolSection({
 				errorRevealed={priorityFeeErrorRevealed}
 				hint={securityPoolCopy.initialReportPriorityFeeHelpText}
 				id='security-pool-initial-report-priority-fee'
-				label={securityPoolCopy.initialReportPriorityFee}
+				label={commonCopy.initialReportPriorityFee}
 				onChange={initialReportPriorityFeeNanoEth => onSecurityPoolFormChange({ initialReportPriorityFeeNanoEth })}
 				onErrorRevealedChange={setPriorityFeeErrorRevealed}
 				unit={securityPoolCopy.initialReportPriorityFeeUnit}
@@ -275,7 +268,7 @@ export function SecurityPoolSection({
 									<AddressValue address={securityPoolResult.securityPoolAddress} responsiveAbbreviation />
 								</MetricField>
 								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</MetricField>
-								<MetricField label={securityPoolCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(securityPoolResult.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
+								<MetricField label={commonCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(securityPoolResult.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 							</>
 						}
 					/>
@@ -351,7 +344,7 @@ export function SecurityPoolSection({
 						) : undefined}
 
 						{questionSource === 'new' && marketResult === undefined ? (
-							<SectionBlock className='security-pool-create-question' description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
+							<SectionBlock className='security-pool-create-question' title={commonCopy.createQuestion} variant='plain'>
 								<MarketCreateQuestionSection
 									accountAddress={accountState.address}
 									formDisabled={questionSourceLocked}
@@ -360,7 +353,7 @@ export function SecurityPoolSection({
 									loadingZoltarQuestions={false}
 									marketCreating={marketCreating}
 									marketError={marketError}
-									marketForm={marketForm ?? fallbackMarketForm}
+									marketForm={marketForm}
 									marketResult={marketResult}
 									onCreateMarket={onCreateMarket}
 									{...(onCreateQuestionAndSecurityPool === undefined

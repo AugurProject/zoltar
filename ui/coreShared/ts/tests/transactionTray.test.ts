@@ -426,14 +426,14 @@ describe('transactionTray', () => {
 			submittedTitle: 'Creating question',
 			failedTitle: 'Question creation',
 		})
-		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Action canceled in wallet.' })
+		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Rejected in wallet.' })
 
 		expect(failed.active?.tone).toBe('error')
 		expect(failed.active?.title).toBe('Question creation')
-		expect(failed.active?.detail).toBe('Action canceled in wallet.')
+		expect(failed.active?.detail).toBe('Rejected in wallet.')
 		expect(failed.active?.hash).toBeUndefined()
 		expect(failed.active?.dismissKey).toBe('transaction-request-1')
-		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Action canceled in wallet.' }, hash: undefined })
+		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Rejected in wallet.' }, hash: undefined })
 	})
 
 	test('clears requested transaction state when a write is canceled before submission', () => {

@@ -57,7 +57,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 						retry,
 						pageStart: previous?.backend === backend && previous.loadPage === loadPage ? previous.pageStart : undefined,
 						page: previous?.backend === backend && previous.loadPage === loadPage ? previous.page : undefined,
-						error: describeUniverseReadError(error, copy.outcomeReadFailure),
+						error: describeUniverseReadError(error, copy.childUniversesLoadError),
 					}))
 			}
 		})()
@@ -80,7 +80,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 		>
 			<div className='form-grid'>
 				{page?.title === undefined ? undefined : <p className='detail'>{page.title}</p>}
-				{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingOutcomes, detailIsLoading: true }} /> : undefined}
+				{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChildUniverses, detailIsLoading: true }} /> : undefined}
 				{page?.scalarQuestion === undefined ? (
 					<OutcomeUniverseList
 						emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
@@ -96,7 +96,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 					<ScalarUniverseOutcomePicker address={address} universeId={universeId} question={page.scalarQuestion} loadOutcome={loadOutcome} />
 				)}
 
-				<RetryableNotice message={current?.error} retryLabel={copy.retryOutcomes} onRetry={() => setRetry(count => count + 1)} />
+				<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />
 				<PaginationControls
 					loading={loading}
 					hasPreviousPage={start > 0n}

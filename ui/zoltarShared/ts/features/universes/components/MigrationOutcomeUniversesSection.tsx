@@ -7,6 +7,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import * as marketCopy from '../../../copy/market.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -66,7 +67,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 							.filter(outcome => outcome.selected)
 							.map(outcome => (
 								<button key={outcome.outcomeIndex.toString()} type='button' className='secondary' disabled={disabled} onClick={() => onToggleOutcomeIndex(outcome.outcomeIndex)} aria-label={zoltarCopy.formatRemoveOutcome(outcome.label)}>
-									{outcome.label} <span aria-hidden='true'>×</span>
+									{outcome.label} <span aria-hidden='true'>{transactionCopy.closeSymbol}</span>
 								</button>
 							))}
 					</div>
@@ -78,32 +79,32 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 					<Badge tone={resolvingSelection ? 'loading' : 'muted'}>{resolvingSelection ? commonCopy.loading : commonCopy.notDeployed}</Badge>
 					<TransactionActionButton
 						tone='secondary'
-						idleLabel={zoltarCopy.formatDeployOutcomeUniverse(selection.label)}
+						idleLabel={zoltarCopy.formatDeployChildUniverse(selection.label)}
 						pendingLabel={marketCopy.deployingUniverse}
 						pending={pendingOutcomeIndex === selection.outcomeIndex}
 						onClick={() => {
 							if (selection.outcomeIndex !== undefined) onDeployChildUniverse(selection.outcomeIndex)
 						}}
-						availability={{ disabled: resolvingSelection || disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: resolvingSelection ? commonCopy.loading : deploymentReason }}
+						availability={{ disabled: resolvingSelection || disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: resolvingSelection ? commonCopy.loadingWithEllipsis : deploymentReason }}
 					/>
 				</div>
 			) : undefined}
 			<OutcomeUniverseList
 				selection
 				className='migration-outcome-section'
-				emptyMessage={scalarQuestion === undefined ? zoltarCopy.outcomeUniversesEmpty : undefined}
+				emptyMessage={scalarQuestion === undefined ? zoltarCopy.migrationChildUniversesEmpty : undefined}
 				outcomes={visibleOutcomes.map(outcome => {
 					const deployReason = deploymentDisabledReason(outcome)
 					return {
 						actions: outcome.exists ? (
 							<UniverseLink href={browser === undefined ? undefined : buildRouteHref(browser.routeHash, writeUniverseQueryParam(browser.search, outcome.universeId))} className='button-link secondary-link' universeId={outcome.universeId}>
-								{zoltarCopy.formatOpenOutcomeUniverse(outcome.label)}
+								{zoltarCopy.formatOpenChildUniverse(outcome.label)}
 							</UniverseLink>
 						) : (
 							<TransactionActionButton
 								tone='secondary'
 								showDisabledReason={false}
-								idleLabel={zoltarCopy.formatDeployOutcomeUniverse(outcome.label)}
+								idleLabel={zoltarCopy.formatDeployChildUniverse(outcome.label)}
 								pendingLabel={marketCopy.deployingUniverse}
 								pending={pendingOutcomeIndex === outcome.outcomeIndex}
 								onClick={() => onDeployChildUniverse(outcome.outcomeIndex)}

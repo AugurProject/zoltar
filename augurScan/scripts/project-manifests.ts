@@ -1,5 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { encodeDeployData, getAddress, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { CANONICAL_TRADING_FEE_BPS, createDeploymentStatusOracleAddressHelper, tradingDeploymentData, zoltarDeploymentStatusStepAddresses } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { DeploymentStatusOracle_DeploymentStatusOracle as statusOracleContract, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryContract, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerContract } from '../../solidity/ts/types/contractArtifact.ts'
 import { systemContractMappings } from './project-system-contracts.ts'
 
 type DeploymentFile = {
@@ -61,6 +64,31 @@ async function projectManifest(projectRoot: string, networkId: keyof typeof usdc
 		if (kind === undefined) throw new Error(`${deploymentPath}: unmapped deployment ID ${id}`)
 		return manifestEntry(address, label, kind)
 	})
+	const requiredDeploymentAddress = (id: string) => {
+		const entry = deployment.deploymentSteps.find(entry => entry.id === id)
+		if (entry === undefined) throw new Error(`${deploymentPath}: missing deployment ${id}`)
+		return getAddress(entry.address)
+	}
+	const trading = tradingDeploymentData(
+		requiredDeploymentAddress('proxyDeployer'),
+		requiredDeploymentAddress('securityPoolFactory'),
+		CANONICAL_TRADING_FEE_BPS,
+		{ abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}` },
+		{ abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` },
+	)
+	configured.push(manifestEntry(trading.factoryAddress, 'Augur AMM Factory', 'ammFactory'), manifestEntry(trading.routerAddress, 'Augur AMM Router', 'ammRouter'))
+	const zoltarStepAddresses = zoltarDeploymentStatusStepAddresses(networkId, getAddress(deployment.network.genesisRepTokenAddress), {
+		proxyDeployer: requiredDeploymentAddress('proxyDeployer'),
+		multicall3: requiredDeploymentAddress('multicall3'),
+		zoltarQuestionData: requiredDeploymentAddress('zoltarQuestionData'),
+		zoltar: requiredDeploymentAddress('zoltar'),
+	})
+	const zoltarStatusOracle = createDeploymentStatusOracleAddressHelper({
+		deploymentStatusOracleBytecode: () => encodeDeployData({ abi: statusOracleContract.abi, bytecode: `0x${statusOracleContract.evm.bytecode.object}`, args: [zoltarStepAddresses] }),
+		proxyDeployerAddress: requiredDeploymentAddress('proxyDeployer'),
+		zeroSalt: toHex(0, { size: 32 }),
+	}).getDeploymentStatusOracleAddress()
+	configured.push(manifestEntry(zoltarStatusOracle, 'Zoltar Deployment Status Oracle', 'deploymentStatusOracle'))
 	configured.push(manifestEntry(deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'), manifestEntry(deployment.network.wethAddress, 'Wrapped Ether', 'weth'), manifestEntry(usdcAddress[networkId], 'USD Coin', 'usdc'))
 	const current = [...new Map(configured.map(entry => [entry[0].toLowerCase(), entry])).values()]
 	return serializeManifest(current)

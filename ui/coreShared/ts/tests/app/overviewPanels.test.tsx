@@ -342,11 +342,24 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByTitle('1.234567 USDC')).toBeDefined()
 	})
 
+	test.each([
+		{ name: 'a disconnected wallet', overrides: {} },
+		{ name: 'an account without REP in the forked universe', overrides: { accountState: connectedAccount, universeRepBalanceAttoRep: 0n } },
+	])('reports the fork without a migration prompt for $name', async ({ overrides }) => {
+		const documentQueries = await renderOverviewPanels({ ...overrides, migrateRepHref: '#/zoltar?zoltarView=migrate', universeForkTime: 123n, universeHasForked: true })
+
+		expect(documentQueries.getByText(/This universe forked on/)).toBeDefined()
+		expect(document.body.textContent).not.toContain('Migrate your REP to a child universe.')
+		expect(documentQueries.queryByRole('link', { name: 'Migrate REP' })).toBeNull()
+	})
+
 	test('explains a forked universe politely and links to the application migration flow', async () => {
 		const documentQueries = await renderOverviewPanels({
 			migrateRepHref: '#/zoltar?zoltarView=migrate',
+			accountState: connectedAccount,
 			universeForkTime: 123n,
 			universeHasForked: true,
+			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 
 		const notice = document.body.querySelector('.universe-fork-notice')

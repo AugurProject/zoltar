@@ -124,15 +124,24 @@ describe('liquidity panel', () => {
 		try {
 			await typeAmount('0.1')
 			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('0.1 Invalid')
-			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Estimate from your price and the current collateral rate. Rechecked before submitting.')
+			expect(document.querySelector('section[aria-label="Liquidity estimate"]')?.textContent).toContain('Estimate from your price and the current collateral rate. Rechecked before your wallet opens.')
 			expect(document.body.textContent).not.toContain('Getting a quote…')
 			await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
 			expect(requests).toBe(0)
-			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Initialize pool')
+			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Create market and add liquidity')
 			expect(action?.disabled).toBe(false)
 			expect(requests).toBe(0)
 		} finally {
 			await rendered.cleanup()
+		}
+		// An existing trading pool without liquidity is only initialized, so the action does not claim to create the market.
+		const existing = await renderPanel({ ...openMarket, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, true, undefined, services, walletClient)
+		try {
+			const labels = Array.from(document.querySelectorAll('button')).map(button => button.textContent)
+			expect(labels).toContain('Add first liquidity')
+			expect(labels).not.toContain('Create market and add liquidity')
+		} finally {
+			await existing.cleanup()
 		}
 	})
 
@@ -142,11 +151,9 @@ describe('liquidity panel', () => {
 			await typeAmount('1.2.3')
 			expect(amountInput().getAttribute('aria-invalid')).toBe('true')
 			expect(amountErrorText()).toContain('Enter an ETH amount with at most 18 decimal places.')
-			expect(amountErrorText()).not.toContain('greater than zero')
 			await typeAmount(`0.${'1'.repeat(19)}`)
 			expect(amountErrorText()).toContain('at most 18 decimal places')
 			await typeAmount('0')
-			expect(amountErrorText()).toContain('greater than zero')
 			await act(() => operationButton('Remove').click())
 			await typeAmount('1.2.3')
 			expect(amountErrorText()).toContain('Enter an LP amount with at most 18 decimal places.')
@@ -178,12 +185,12 @@ describe('liquidity panel', () => {
 		}
 		const empty = await renderPanel({ ...openMarket, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, true)
 		try {
-			expect(operationButtons().map(button => button.textContent?.trim())).toEqual(['Initialize', 'Add', 'Remove'])
-			expect(operationButton('Initialize').getAttribute('aria-pressed')).toBe('true')
-			expect(operationButton('Add').getAttribute('aria-description')).toBe('Initialize the pool first.')
-			expect(operationButton('Remove').getAttribute('aria-description')).toBe('The pool has no liquidity yet.')
+			expect(operationButtons().map(button => button.textContent?.trim())).toEqual(['Create market', 'Add', 'Remove'])
+			expect(operationButton('Create market').getAttribute('aria-pressed')).toBe('true')
+			expect(operationButton('Add').getAttribute('aria-description')).toBe('Create the market first.')
+			expect(operationButton('Remove').getAttribute('aria-description')).toBe('The market has no liquidity yet.')
 			// The reasons are also visible text, so touch users do not depend on a hover tooltip.
-			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Add unavailable: Initialize the pool first.', 'Remove unavailable: The pool has no liquidity yet.'])
+			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Add unavailable: Create the market first.', 'Remove unavailable: The market has no liquidity yet.'])
 		} finally {
 			await empty.cleanup()
 		}
@@ -196,14 +203,14 @@ describe('liquidity panel', () => {
 			const estimate = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(estimate?.textContent).toContain('1 LP')
 			expect(estimate?.textContent).toContain('1 Invalid')
-			expect(estimate?.textContent).toContain('Estimate from the current pool state.')
+			expect(estimate?.textContent).toContain('Estimate from the current trading pool state.')
 			expect(estimate?.textContent).not.toContain('Connect a wallet to submit.')
 			await act(() => operationButton('Remove').click())
 			await typeAmount('5')
 			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(removal?.textContent).toContain('5 Yes')
 			expect(removal?.textContent).toContain('5 No')
-			expect(removal?.textContent).toContain('Worth about 5 ETH at the current pool price')
+			expect(removal?.textContent).toContain('Worth about 5 ETH at the current trading pool price')
 			expect(document.body.textContent).toContain('Removing liquidity returns Yes and No shares to your wallet, not ETH. Next, sell them on the Trade tab')
 			expect(document.body.textContent).not.toContain('raw Yes and No')
 		} finally {

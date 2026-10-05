@@ -254,7 +254,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		const documentQueries = within(document.body)
 
 		await waitFor(() => {
-			expect(documentQueries.getByText('Unable to check whether the Yes child universe exists. Reason: Registry RPC unavailable')).not.toBeNull()
+			expect(documentQueries.getByText('Unable to check whether the Yes child universe exists. Reason: Registry RPC unavailable.')).not.toBeNull()
 		})
 		expect(documentQueries.queryByText('Yes universe does not exist.')).toBeNull()
 
@@ -263,7 +263,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		})
 		await waitFor(() => {
 			expect(recoveryAttempts).toBe(2)
-			expect(documentQueries.queryByText('Unable to check whether the Yes child universe exists. Reason: Registry RPC unavailable')).toBeNull()
+			expect(documentQueries.queryByText('Unable to check whether the Yes child universe exists. Reason: Registry RPC unavailable.')).toBeNull()
 			expectTransactionButtonEnabled(document.body, 'Start truth auction')
 		})
 	})
@@ -299,10 +299,10 @@ describe('ForkAuctionSection child pool recovery', () => {
 			if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected loading truth auction action to be a button')
 			expect(submitBidButton.disabled).toBe(true)
 			expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-			expect(currentBidsHeading.closest('section')?.textContent).toContain('Loading auction bids…')
+			expect(currentBidsHeading.closest('section')?.textContent).toContain('Loading truth auction bids…')
 			const loadingMessages = Array.from(document.body.querySelectorAll('.loading-value'))
 			expect(loadingMessages.some(message => message.textContent?.includes('Loading truth auction…') === true)).toBe(true)
-			expect(loadingMessages.some(message => message.textContent?.includes('Loading auction bids…') === true)).toBe(true)
+			expect(loadingMessages.some(message => message.textContent?.includes('Loading truth auction bids…') === true)).toBe(true)
 			expect(loadingMessages.every(message => message.querySelector('.spinner') !== null)).toBe(true)
 		})
 		expect(document.body.textContent).not.toContain('Load the truth auction before bidding.')
@@ -318,17 +318,17 @@ describe('ForkAuctionSection child pool recovery', () => {
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByText('Unable to load auction details for the Yes child universe. Reason: Child auction RPC unavailable')).not.toBeNull()
+			expect(documentQueries.getByText('Unable to load truth auction details for the Yes child universe. Reason: Child auction RPC unavailable.')).not.toBeNull()
 		})
-		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
+		expect(documentQueries.queryByText('This truth auction has no active bids.')).toBeNull()
 		await act(async () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
 			await Promise.resolve()
 		})
 		await waitForFlushed(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(2)
-			expect(documentQueries.queryByText('Unable to load auction details for the Yes child universe. Reason: Child auction RPC unavailable')).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: 'Retrying auction details…' })).toBeNull()
+			expect(documentQueries.queryByText('Unable to load truth auction details for the Yes child universe. Reason: Child auction RPC unavailable.')).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Retrying truth auction details…' })).toBeNull()
 		})
 	})
 

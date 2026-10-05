@@ -82,9 +82,9 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 	const index = { INVALID: 0, YES: 1, NO: 2 }[outcome]
 	if (market.questionOutcome !== undefined && market.questionOutcome !== 3) {
 		if (market.questionOutcome !== index) return payoutCopy.zeroPayout
-		return market.systemState === 0 ? payoutCopy.redeemable(value) : payoutCopy.winningPayout(value)
+		return market.systemState === 0 ? payoutCopy.formatRedeemablePayout(value) : payoutCopy.formatUnredeemableWinningPayout(value)
 	}
-	const payout = payoutCopy.conditionalPayout(value, outcome)
+	const payout = payoutCopy.formatConditionalPayout(value, outcome)
 	return (market.universeForkTime !== undefined && market.universeForkTime !== 0n) || (market.systemState !== undefined && market.systemState !== 0) ? `${payout}; ${payoutCopy.redemptionUnavailable}` : payout
 }
 
@@ -100,17 +100,17 @@ export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRat
 /** LP tokens represent reserve claims, not a fixed number of complete sets. */
 export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: ShareValueRounding = 'nearest') {
 	if (amount === 0n) return '0 ETH'
-	if (market.loadError !== undefined || market.lpTotalSupply === 0n) return 'Value unavailable'
+	if (market.loadError !== undefined || market.lpTotalSupply === 0n) return payoutCopy.valueUnavailable
 	const yes = (market.yesReserve * amount) / market.lpTotalSupply
 	const no = (market.noReserve * amount) / market.lpTotalSupply
 	if (market.questionOutcome !== 3) {
 		let winning = 0n
 		if (market.questionOutcome === 1) winning = yes
 		else if (market.questionOutcome === 2) winning = no
-		return `${formatCollateralEth(winning, market, rounding)} winning payout`
+		return payoutCopy.formatLpWinningPayout(formatCollateralEth(winning, market, rounding))
 	}
-	if (yes === no) return `${formatCollateralEth(yes, market, rounding)} if resolved valid`
-	return `${formatCollateralEth(yes, market, rounding)} if Yes wins; ${formatCollateralEth(no, market, rounding)} if No wins`
+	if (yes === no) return payoutCopy.formatValidPayout(formatCollateralEth(yes, market, rounding))
+	return `${payoutCopy.formatConditionalPayout(formatCollateralEth(yes, market, rounding), 'YES')}; ${payoutCopy.formatConditionalPayout(formatCollateralEth(no, market, rounding), 'NO')}`
 }
 
 export function formatLpWithValue(amount: bigint, market: LiveMarket, digits = 4, rounding: ShareValueRounding = 'nearest') {

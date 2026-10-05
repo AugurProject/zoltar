@@ -1,3 +1,4 @@
+import { uniswapPositionRange } from '../core/uniswap-ranges.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { getAddress, type Address, type PublicClient } from '@zoltar/bot-shared/ethereum'
 import { retirementUniswapV3PositionAbi } from '../contracts/retirement-abi.ts'
@@ -97,7 +98,14 @@ export function buildV3RetirementPlan(snapshot: EcosystemSnapshot, observation: 
 }
 
 export function reconcileV3PositionJournal(retirement: DurableRetirementState, workflows: DurableState['workflows'], profileId: string, owner: Address, now = new Date().toISOString()) {
-	for (const workflow of workflows.filter(candidate => candidate.operationId === 'trading.genesis-uniswap.seed-pool' || candidate.operationId === 'trading.universe-uniswap.seed-pool')) {
+	for (const workflow of workflows.filter(
+		candidate =>
+			candidate.operationId === 'trading.genesis-uniswap.seed-pool' ||
+			candidate.operationId === 'trading.universe-uniswap.seed-pool' ||
+			candidate.operationId === 'trading.genesis-uniswap.add-liquidity' ||
+			candidate.operationId === 'trading.universe-uniswap.add-liquidity' ||
+			candidate.operationId === 'trading.uniswap.mint-range',
+	)) {
 		const metadata = workflow.metadata
 		const blockerId = `v3-workflow:${workflow.id}`
 		if (typeof metadata['pool'] !== 'string' || typeof metadata['token0'] !== 'string' || typeof metadata['token1'] !== 'string') {
@@ -105,6 +113,11 @@ export function reconcileV3PositionJournal(retirement: DurableRetirementState, w
 			continue
 		}
 		retirement.blockers = retirement.blockers.filter(blocker => blocker.id !== blockerId)
+		const range = workflow.operationId === 'trading.uniswap.mint-range' ? uniswapPositionRange(metadata['tickLower'], metadata['tickUpper']) : uniswapPositionRange(-887_200, 887_200)
+		if (range === undefined) {
+			retirement.blockers.push({ category: 'ambiguous-position', details: `Workflow ${workflow.id} has an unsupported Uniswap tick range`, id: blockerId })
+			continue
+		}
 		const pool = getAddress(metadata['pool'])
 		const seedStep = workflow.steps.find(step => step.id.includes('seed'))
 		const confirmed = seedStep?.status === 'confirmed'
@@ -122,8 +135,8 @@ export function reconcileV3PositionJournal(retirement: DurableRetirementState, w
 			profileId,
 			registeredBy: confirmed || recoverable ? 'workflow' : 'backfill',
 			status: positionStatus,
-			tickLower: -887_200,
-			tickUpper: 887_200,
+			tickLower: range.tickLower,
+			tickUpper: range.tickUpper,
 			token0: getAddress(metadata['token0']),
 			token1: getAddress(metadata['token1']),
 		}
@@ -132,7 +145,8 @@ export function reconcileV3PositionJournal(retirement: DurableRetirementState, w
 		const existing = retirement.positions.find(candidate => candidate.id === key)
 		if (existing !== undefined) {
 			if (confirmed && existing.status === 'pending-confirmation') existing.status = 'active'
-			if (seedStep?.transactionHash !== undefined) existing.creationTransactionHash = seedStep.transactionHash
+			// A failed or pending addition cannot replace the receipt proving an existing position.
+			if (confirmed && seedStep?.transactionHash !== undefined) existing.creationTransactionHash = seedStep.transactionHash
 			continue
 		}
 		retirement.positions.push({ ...position, id: key, positionKey })

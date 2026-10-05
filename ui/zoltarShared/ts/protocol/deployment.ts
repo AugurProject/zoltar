@@ -1,6 +1,6 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper, PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper, PROXY_DEPLOYER_RUNTIME_CODE, zoltarDeploymentStatusStepAddresses } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
@@ -100,11 +100,13 @@ async function proxyDeployerIsInstalled(client: Pick<ReadClient, 'getCode'>) {
 	return true
 }
 
+const PROXY_DEPLOYER_TRANSACTION_USED_ERROR = 'The proxy deployer cannot be deployed on this network: its one-time deployment transaction was already used, but the contract is missing.'
+
 export async function assertCanonicalRawTransactionFeeCompatible(client: Pick<ReadClient, 'getBlock'>, label: string) {
 	const { baseFeePerGas } = await client.getBlock()
-	if (baseFeePerGas === undefined) throw new Error(`${label} requires an EIP-1559 base fee before its canonical raw transaction can be funded`)
+	if (baseFeePerGas === undefined) throw new Error(`${label} cannot be deployed because this network does not report a base fee.`)
 	if (baseFeePerGas > CANONICAL_DEPLOYER_RAW_GAS_PRICE) {
-		throw new Error(`${label} canonical raw transaction gas price is ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas, below the current base fee ${baseFeePerGas.toString()} attoETH per gas; no signer funding was sent`)
+		throw new Error(`${label} cannot be deployed right now: its fixed gas price of ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas is below the current base fee of ${baseFeePerGas.toString()} attoETH per gas. No ETH was sent.`)
 	}
 }
 
@@ -145,14 +147,14 @@ async function proxyDeployerIsInstalledAfterReceipt(client: WriteClient, wait?: 
 }
 
 async function resolveConfirmedProxyDeployer(client: WriteClient, wait?: RpcStateRetryWait) {
-	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error('The deterministic proxy deployer signer nonce has already been consumed, but the canonical proxy is missing')
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(PROXY_DEPLOYER_TRANSACTION_USED_ERROR)
 	accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
 	return PROXY_DEPLOYER_RAW_TRANSACTION_HASH
 }
 
 async function waitForCanonicalProxyDeployer(client: WriteClient, wait?: RpcStateRetryWait) {
 	const { hash } = await waitForSubmittedTransactionReceipt(client, PROXY_DEPLOYER_RAW_TRANSACTION_HASH)
-	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical proxy deployer transaction ${hash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Proxy deployer transaction ${hash} confirmed, but no contract code was found at ${PROXY_DEPLOYER_ADDRESS}.`)
 	return hash
 }
 
@@ -170,7 +172,7 @@ async function resolveProxyDeployerBroadcastRace(client: WriteClient, broadcastE
 		try {
 			return await resolveConfirmedProxyDeployer(client, wait)
 		} catch (error) {
-			throw new Error('The deterministic proxy deployer signer nonce was consumed without installing the canonical proxy', { cause: error ?? broadcastError })
+			throw new Error(PROXY_DEPLOYER_TRANSACTION_USED_ERROR, { cause: error ?? broadcastError })
 		}
 	}
 	throw broadcastError
@@ -201,13 +203,13 @@ async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsuffi
 		try {
 			return await resolveProxyDeployerBroadcastRace(client, error, wait)
 		} catch (resolvedError) {
-			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical proxy deployer raw transaction before signer funding: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
+			if (allowInsufficientFunds) throw new Error(`The network rejected the proxy deployer transaction before it was funded: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
 			throw resolvedError
 		}
 	}
 	client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 	const { hash: resolvedDeployHash } = await waitForSubmittedTransactionReceipt(client, deployHash)
-	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Canonical proxy deployer transaction ${resolvedDeployHash} confirmed without installing code at ${PROXY_DEPLOYER_ADDRESS}`)
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Proxy deployer transaction ${resolvedDeployHash} confirmed, but no contract code was found at ${PROXY_DEPLOYER_ADDRESS}.`)
 	return resolvedDeployHash
 }
 
@@ -231,7 +233,7 @@ function markDeploymentTransactionPrepared(
 
 export function getZoltarDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
 	const addresses = getZoltarContractAddresses(profile)
-	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
+	return zoltarDeploymentStatusStepAddresses(profile.id, profile.genesisRepTokenAddress, { proxyDeployer: PROXY_DEPLOYER_ADDRESS, ...addresses })
 }
 
 function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {

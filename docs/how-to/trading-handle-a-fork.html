@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="After a fork closes the parent pair, remove LP, migrate each source share into the branches you choose, and open a new pair in the child." />
+		<meta name="description" content="After a fork closes the parent trading pool, remove LP, migrate each share into the child universes you choose, and open a new trading pool in the child." />
 		<title>Handle a universe fork</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -19,15 +19,15 @@
 				<h2>Migrate a position</h2>
 				<ol>
 					<li>Remove parent LP into parent Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>Decide the destination branch or branches for each of your Invalid, Yes, and No balances. Nothing in Trading chooses a branch or migrates LP for you.</li>
+					<li>Decide the destination child universe or universes for each of your Invalid, Yes, and No balances. Nothing in Trading chooses a child universe or migrates LP for you.</li>
 					<li>For every nonzero parent balance you intend to migrate, submit one <code>ShareToken.migrate(fromId, targetOutcomeIndexes)</code> call with that token ID and the explicitly chosen, strictly increasing target outcome indexes. Each call mints the matching child-universe share balance. The parent balance stays visible, but that source token ID is locked for the wallet and can no longer be transferred.</li>
 					<li>After each call, verify the expected child token ID and balance, then refresh or discover the canonical child SecurityPool.</li>
-					<li>Wait until migration and <a href="../reference/glossary.html#truth-auction">Truth Auction</a> processing return the child pool to <code>Operational</code>, then create a new trading pool for it. A child pool can take a trading pool only if the fork happened before the question's end date. Parent and child token IDs and reserves stay separate.</li>
+					<li>Wait until migration and <a href="../reference/glossary.html#truth-auction">Truth Auction</a> processing return the child SecurityPool to <code>Operational</code>, then create a new trading pool for it. A child SecurityPool can take a trading pool only if it is back to <code>Operational</code> before the question's end date. Parent and child token IDs and reserves stay separate.</li>
 				</ol>
 			</section>
 			<section id="choosing-targets">
 				<h2>Choose fork targets</h2>
-				<p>Source and destination are independent: a parent Invalid, Yes, or No share can migrate into any valid branch of the fork question, and the child receives the same share outcome as the source. Migrating parent Yes into three scalar branches, for example, produces child Yes shares in all three children.</p>
+				<p>Source and destination are independent: a parent Invalid, Yes, or No share can migrate into any valid child universe of the fork question, and the child receives the same share outcome as the source. Migrating parent Yes into three scalar child universes, for example, produces child Yes shares in all three children.</p>
 				<ul>
 					<li>For a categorical fork, select Invalid or one or more labeled answers.</li>
 					<li>For a scalar fork, select Invalid or add one or more exact scalar ticks. The UI displays the human value and derives the packed onchain outcome index.</li>
@@ -36,7 +36,15 @@
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>
-				<p>Open the market's <strong>Settlement</strong> tab and select <strong>Fork migration</strong>. Choose the <strong>Source share</strong> (Invalid, Yes, or No), then pick one or more target branches from the fork question's categorical answers or scalar ticks, and select <strong>Migrate to N branches</strong>. The transaction copies and locks your entire balance of the selected source share. Repeat for each source share you want to move. <a href="../explanation/trading/forks-and-resolution.html">Forks and resolution</a> explains why the pool behaves this way.</p>
+				<ol>
+					<li>Open the market's <strong>Settlement</strong> tab and select <strong>Migrate</strong>.</li>
+					<li>Choose the <strong>Share to migrate</strong> (Invalid, Yes, or No).</li>
+					<li>Pick one or more child universes from the fork question's categorical answers or scalar ticks.</li>
+					<li>Tick the acknowledgment that the migration moves your entire balance and permanently locks that share's transfers in the parent universe.</li>
+					<li>Select <strong>Migrate to N child universes</strong>. The transaction copies and locks your entire balance of the selected source share.</li>
+					<li>Repeat for each source share you want to move.</li>
+				</ol>
+				<p><a href="../explanation/trading/forks-and-resolution.html">Forks and resolution</a> explains why the trading pool behaves this way.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

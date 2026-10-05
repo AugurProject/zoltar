@@ -3,6 +3,7 @@ import { FormField, RequiredFieldLabel } from '@zoltar/ui-core-shared/components
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../../../copy/market.js'
+import * as zoltarCopy from '../../../copy/zoltar.js'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
@@ -13,10 +14,9 @@ import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Qu
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { getMarketCreationOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '../lib/questionCreation.js'
+import { getDraftOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '../lib/questionCreation.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
+import { isInvalidOutcomeLabel } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
 import { clampScalarTickIndex, parseScalarFormInputs } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -71,25 +71,6 @@ function getScalarCreatePreviewDetails(questionForm: MarketFormState, scalarInpu
 	}
 }
 
-function getDraftOutcomeLabels(questionForm: MarketFormState, categoricalOutcomesError: string | undefined) {
-	switch (questionForm.marketType) {
-		case 'binary':
-			return appendInvalidOutcomeLabelIfMissing(getMarketCreationOutcomeLabels(questionForm))
-		case 'categorical': {
-			if (categoricalOutcomesError === undefined) {
-				return appendInvalidOutcomeLabelIfMissing(getMarketCreationOutcomeLabels(questionForm))
-			}
-
-			const normalizedOutcomes = questionForm.categoricalOutcomes.map(outcome => outcome.trim()).filter(outcome => outcome !== '')
-			return normalizedOutcomes.length > 0 ? appendInvalidOutcomeLabelIfMissing(normalizedOutcomes) : [marketCopy.minimumOutcomeCountReason, commonCopy.invalid]
-		}
-		case 'scalar':
-			return [marketCopy.scalar, commonCopy.invalid]
-		default:
-			return assertNever(questionForm.marketType)
-	}
-}
-
 export function QuestionCreateSection({
 	allowedMarketTypes = ['binary', 'categorical', 'scalar'],
 	accountAddress,
@@ -131,7 +112,7 @@ export function QuestionCreateSection({
 	}))
 	const normalizedDescription = questionForm.description.trim()
 	const draftDescription = normalizedDescription === '' ? undefined : questionForm.description
-	const draftTitle = questionForm.title.trim() === '' ? marketCopy.untitledQuestion : questionForm.title
+	const draftTitle = questionForm.title.trim() === '' ? commonCopy.untitledQuestion : questionForm.title
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? questionFormValidation.fieldErrors[field] : undefined)
 	const timingRelationshipError = questionFormValidation.fieldErrors.startTime !== undefined && questionFormValidation.fieldErrors.startTime === questionFormValidation.fieldErrors.endTime && (touchedFields.has('startTime') || touchedFields.has('endTime')) ? questionFormValidation.fieldErrors.startTime : undefined
@@ -157,7 +138,7 @@ export function QuestionCreateSection({
 						},
 						{ accountAddress, isOnActiveAppChain },
 					),
-					idleLabel: commonCopy.createQuestionAction,
+					idleLabel: commonCopy.createQuestion,
 					onSubmit: onCreateQuestion,
 					pending: questionCreating,
 					pendingLabel: marketCopy.createQuestionPendingLabel,
@@ -195,7 +176,7 @@ export function QuestionCreateSection({
 						<div className='actions'>
 							{canUseForFork ? (
 								<button
-									aria-label={hasForked ? marketCopy.formatAlreadyForkedLabel(selectedQuestionTitle, questionResult.questionId) : marketCopy.formatUseForForkLabel(selectedQuestionTitle, questionResult.questionId)}
+									aria-label={hasForked ? marketCopy.formatUniverseAlreadyForkedLabel(selectedQuestionTitle, questionResult.questionId) : marketCopy.formatUseForForkLabel(selectedQuestionTitle, questionResult.questionId)}
 									className='secondary'
 									disabled={hasForked}
 									onClick={() => {
@@ -204,7 +185,7 @@ export function QuestionCreateSection({
 										onOpenForkTab()
 									}}
 								>
-									{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
+									{hasForked ? marketCopy.universeAlreadyForked : marketCopy.useForFork}
 								</button>
 							) : undefined}
 							{renderResultActions?.({ marketType: questionResult.marketType, questionId: questionResult.questionId, questionTitle: selectedQuestionTitle })}
@@ -219,7 +200,7 @@ export function QuestionCreateSection({
 							if (selectedQuestionDetails === undefined) {
 								if (loadingZoltarQuestions)
 									return (
-										<span className='loading-value' role='status' aria-label={marketCopy.loadingQuestionDetails}>
+										<span className='loading-value' role='status' aria-label={commonCopy.questionDetailsLoadingLabel}>
 											<span className='spinner' aria-hidden='true' />
 										</span>
 									)
@@ -282,10 +263,10 @@ export function QuestionCreateSection({
 										onInput={event => onQuestionFormChange({ startTime: event.currentTarget.value })}
 									/>
 								</FormField>
-								<FormField id='market-create-endTime' label={marketCopy.endTime} required>
+								<FormField id='market-create-endTime' label={commonCopy.endTime} required>
 									<FormInput
 										id='market-create-endTime'
-										aria-label={marketCopy.endTime}
+										aria-label={commonCopy.endTime}
 										aria-describedby={timingDescribedBy}
 										invalid={endTimeError !== undefined}
 										error={timingRelationshipError === undefined ? endTimeError : undefined}
@@ -303,13 +284,13 @@ export function QuestionCreateSection({
 							{questionForm.marketType === 'categorical' ? (
 								<div className='field' role='group' aria-labelledby='market-create-outcomes-label'>
 									<span id='market-create-outcomes-label'>
-										<RequiredFieldLabel>{marketCopy.outcomes}</RequiredFieldLabel>
+										<RequiredFieldLabel>{commonCopy.outcomes}</RequiredFieldLabel>
 									</span>
 									<div className='categorical-outcomes'>
 										{questionForm.categoricalOutcomes.map((outcome, outcomeIndex) => (
 											<div className='categorical-outcome-row' key={`categorical-outcome-${outcomeIndex}`}>
 												<label className='field'>
-													<span className='visually-hidden'>{`${commonCopy.outcome} ${outcomeIndex + 1}`}</span>
+													<span className='visually-hidden'>{zoltarCopy.formatUnnamedOutcome(outcomeIndex + 1)}</span>
 													<FormInput
 														aria-describedby={getVisibleFieldError('categoricalOutcomes') === undefined ? undefined : 'market-create-outcomes-error'}
 														invalid={getVisibleFieldError('categoricalOutcomes') !== undefined}
@@ -317,7 +298,7 @@ export function QuestionCreateSection({
 														value={outcome}
 														onBlur={() => markFieldTouched('categoricalOutcomes')}
 														onInput={event => updateCategoricalOutcome(outcomeIndex, event.currentTarget.value)}
-														placeholder={`${commonCopy.outcome} ${outcomeIndex + 1}`}
+														placeholder={zoltarCopy.formatUnnamedOutcome(outcomeIndex + 1)}
 													/>
 												</label>
 												<button
@@ -357,8 +338,8 @@ export function QuestionCreateSection({
 										/>
 									</FormField>
 									<label className='field'>
-										<span>{marketCopy.answerUnit}</span>
-										<FormInput value={questionForm.answerUnit} onInput={event => onQuestionFormChange({ answerUnit: event.currentTarget.value })} placeholder={marketCopy.usd} />
+										<span>{commonCopy.answerUnit}</span>
+										<FormInput value={questionForm.answerUnit} onInput={event => onQuestionFormChange({ answerUnit: event.currentTarget.value })} placeholder={marketCopy.answerUnitPlaceholder} />
 									</label>
 								</div>
 							) : undefined}

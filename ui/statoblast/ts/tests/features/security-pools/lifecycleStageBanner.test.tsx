@@ -44,14 +44,14 @@ describe('LifecycleStageBanner', () => {
 	test('renders stage detail as plain text without a loading spinner for standard and warning stages', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<>
-				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading reporting details.', key: 'reportingOpen', label: 'Reporting open', tone: 'success' }} />
+				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading reporting details…', key: 'reportingOpen', label: 'Reporting open', tone: 'success' }} />
 				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading warning details.', key: 'warning', label: 'Warning', tone: 'warning' }} />
 			</>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Loading reporting details.').classList.contains('detail')).toBe(true)
+		expect(documentQueries.getByText('Loading reporting details…').classList.contains('detail')).toBe(true)
 		expect(documentQueries.getByText('Loading warning details.').classList.contains('detail')).toBe(true)
 		expect(documentQueries.queryByRole('status')).toBeNull()
 		expect(document.body.querySelector('.spinner')).toBeNull()

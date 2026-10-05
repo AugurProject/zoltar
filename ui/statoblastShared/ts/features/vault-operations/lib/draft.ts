@@ -33,5 +33,5 @@ export function parseVaultOperationsDraft(draft: VaultOperationsDraft, owner: Ad
 }
 
 export function getVaultOperationsPrice(proposedPrice: string, cachedPrice: bigint, isPriceValid: boolean) {
-	return isPriceValid || proposedPrice.trim() === '' ? cachedPrice : parseRepAmountInput(proposedPrice, copy.initialPriceLabel)
+	return isPriceValid || proposedPrice.trim() === '' ? cachedPrice : parseRepAmountInput(proposedPrice, copy.initialPrice)
 }

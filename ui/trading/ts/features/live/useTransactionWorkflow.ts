@@ -1,20 +1,11 @@
 import { useCallback, useRef, useState } from 'preact/hooks'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import * as workflowCopy from '../../copy/workflows.js'
+import { ticketInputsAfterSelection, type TicketInputs } from './tradeTicketModel.js'
 import { transactionMarketKey } from './transactionWorkflow.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
 
 export type TradeMode = 'entry' | 'exit'
-
-type TicketInputs = Readonly<{
-	mode: TradeMode
-	side: 'YES' | 'NO'
-	amount: string
-	/** The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment. */
-	acknowledgedImpactBps: bigint | undefined
-	/** Set when the last submission stopped because the chain re-quoted past the estimate; the ticket shows it as a prompt to review, not a failure. */
-	requoteNotice: string | undefined
-}>
 
 // Amount fields start empty: a prefilled value reads like a recommendation.
 const emptyTicketInputs: TicketInputs = { mode: 'entry', side: 'YES', amount: '', acknowledgedImpactBps: undefined, requoteNotice: undefined }
@@ -43,6 +34,12 @@ export function useTransactionWorkflow({
 	const [ticketInputs, setTicketInputs] = useState<Readonly<Record<string, TicketInputs>>>({})
 	const inputs = ticketInputs[currentMarket] ?? emptyTicketInputs
 	const updateInputs = (target: string, update: Partial<TicketInputs>) => setTicketInputs(current => ({ ...current, [target]: { ...(current[target] ?? emptyTicketInputs), ...update } }))
+	const selectTrade = (selection: Partial<Pick<TicketInputs, 'mode' | 'side'>>) =>
+		setTicketInputs(current => {
+			const previous = current[currentMarket] ?? emptyTicketInputs
+			const next = ticketInputsAfterSelection(previous, selection)
+			return next === previous ? current : { ...current, [currentMarket]: next }
+		})
 	const liquidityWorkflowLockedRef = useRef(false)
 	const knownReceiptRef = useRef<() => void>(() => undefined)
 	// The ref answers synchronous checks inside callbacks; the state re-renders the tickets when a lock changes.
@@ -69,7 +66,7 @@ export function useTransactionWorkflow({
 	)
 	const transaction = useTransactionSubmission({
 		operation: 'trade',
-		label: workflowCopy.tradeLabel,
+		label: workflowCopy.trade,
 		activityTitle: marketTitle === undefined ? undefined : workflowCopy.formatTradeActivity(marketTitle),
 		account,
 		chainId,
@@ -84,8 +81,8 @@ export function useTransactionWorkflow({
 
 	return {
 		...inputs,
-		setMode: (mode: TradeMode) => updateInputs(currentMarket, { mode }),
-		setSide: (side: 'YES' | 'NO') => updateInputs(currentMarket, { side }),
+		setMode: (mode: TradeMode) => selectTrade({ mode }),
+		setSide: (side: 'YES' | 'NO') => selectTrade({ side }),
 		setAmount: (amount: string) => updateInputs(currentMarket, { amount }),
 		setAcknowledgedImpactBps: (acknowledgedImpactBps: bigint | undefined) => updateInputs(currentMarket, { acknowledgedImpactBps }),
 		/** Clears the amount a confirmed trade used on its own market, whichever market is on screen by then. */

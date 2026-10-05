@@ -173,7 +173,7 @@ describe('Security vault integration', () => {
 	test('quotes protect minimum deposits and combined wallet funding', async () => {
 		const input = { depositAttoRep: 1n, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }
 		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, input, 0n)).rejects.toThrow('below the pool minimum')
-		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...input, depositAttoRep: 10n ** 50n }, 0n)).rejects.toThrow('Insufficient wallet REP')
+		await expect(quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, { ...input, depositAttoRep: 10n ** 50n }, 0n)).rejects.toThrow('Insufficient REP balance')
 	})
 
 	test('quotes reject another report sponsor and a second pending commitment change', async () => {

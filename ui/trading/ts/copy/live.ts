@@ -1,45 +1,13 @@
+import { forked, initialReportPriorityFee, operational, outcome } from '@zoltar/ui-core-shared/copy/common.js'
 import * as appCopy from './app.js'
+import { endSentence } from '../lib/format.js'
+import { initializeLiquidityAction } from './liquidity.js'
 import { marketDataUnavailable } from './marketBlockers.js'
-import { invalid, no, yes } from './outcomes.js'
+import { tradingFee } from './tradeTicket.js'
 
-const pairNotCreated = 'Pair not created'
-const tradingOpen = 'Trading open'
-const pairUninitialized = 'Pair uninitialized'
-const operational = 'Operational'
-const poolForked = 'Pool forked'
-const forkMigration = 'Fork migration'
-const forkTruthAuction = 'Fork truth auction'
-const unresolvedOutcome = 'None (unresolved)'
-const conditionalPriceUnavailable = 'Conditional price unavailable until initialization.'
-const deployTradingPool = 'Deploy trading pool'
-const initializeTradingPool = 'Initialize trading pool'
-const refreshingSecurityPool = 'Refreshing security pool; showing the last successful result.'
-const retryingSecurityPoolDetails = 'Retrying security pool details…'
-const retryRefresh = 'Retry refresh'
-const retrySecurityPool = 'Retry security pool'
-const questionEnd = 'Question end'
-const systemState = 'System state'
-const universeFork = 'Universe fork'
-const notForked = 'Not forked'
-const outcome = 'Outcome'
-const securityMultiplier = 'Security multiplier'
-const initialReportPriorityFee = 'Initial report priority fee'
-const registeredVaults = 'Registered vaults'
-const perSecondRetentionMultiplier = 'Per-second retention multiplier'
-const totalAndFeeEligibleUnderwritingLimits = 'Total / fee-eligible underwriting commitments'
-const mintingCapacity = 'Minting capacity'
-const unknownDiscovery = 'unknown discovery error'
-const loadingSecurityPoolDetails = 'Loading security pool details…'
-const retryDiscovery = 'Retry discovery'
-const discoveringSecurityPoolsFromFactory = 'Discovering security pools from the configured factory…'
-const discoveringSecurityPools = 'Discovering security pools…'
-const securityPoolPages = 'Security pool pages'
-const previousPools = 'Previous pools'
-const nextPools = 'Next pools'
-const securityPool = appCopy.securityPool
-const securityPoolLabel = 'Security pool'
-const pair = 'Pair'
-const ammFee = 'AMM fee'
+const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
+const universeDiscoveryFailedLead = 'Universe discovery failed'
+const unknownDiscovery = 'unknown error'
 
 function unknownSystemState(state: number) {
 	return `Unknown state ${state.toString()}`
@@ -49,30 +17,26 @@ function unknownQuestionOutcome(outcome: number) {
 	return `Unknown outcome ${outcome.toString()}`
 }
 
-function pairInitializationUnavailable(blocker: string) {
-	return `${blocker} — pair initialization unavailable`
+/** `blocker` is the short market status, such as `Question ended`, that rules out the first liquidity. */
+function formatInitializationUnavailable(blocker: string) {
+	return `${endSentence(blocker)} This market can no longer be created.`
 }
 
-function undeployedPairDescription(feePercent: string) {
-	return `This security pool is available to browse, but it does not have a trading pool yet. Deployment is combined with the initial liquidity transaction. Trading fee: ${feePercent}%.`
+function formatMarketNotCreatedDetail(feePercent: string) {
+	return `This security pool does not have a market yet. Creating the market and adding the first liquidity happen in one transaction. Trading fee: ${feePercent}%.`
 }
 
-function uninitializedPairDescription(feePercent: string) {
-	return `The trading pool exists but needs initial liquidity before trading can open. Trading fee: ${feePercent}%.`
+function formatNoLiquidityDetail(feePercent: string) {
+	return `This market needs its first liquidity before trading can open. Trading fee: ${feePercent}%.`
 }
 
 function securityPoolDetailsUnavailable(loadError: string, refreshError?: string) {
-	return refreshError === undefined ? `Security pool details could not be loaded: ${loadError}` : `Security pool details could not be loaded: ${loadError}. Latest retry failed: ${refreshError}`
+	return refreshError === undefined ? `Security pool details could not be loaded: ${endSentence(loadError)}` : `Security pool details could not be loaded: ${endSentence(loadError)} Latest retry failed: ${endSentence(refreshError)}`
 }
 
 function securityPoolRefreshFailed(refreshError: string) {
-	return `Security pool refresh failed; showing the last successful result: ${refreshError}`
+	return `Security pool refresh failed; showing the last successful result: ${endSentence(refreshError)}`
 }
-
-const forkedAt = 'Forked'
-
-const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
-const universeDiscoveryFailedLead = 'Universe discovery failed'
 
 /** The lead a route's discovery failure is reported under: the universe route discovers universes, every other live route discovers security pools. */
 function discoveryFailureLead(route: string) {
@@ -81,106 +45,73 @@ function discoveryFailureLead(route: string) {
 
 /** Composes a discovery failure under its lead; a detail that already carries the lead (a redacted error) is not prefixed twice. */
 function describeDiscoveryFailure(lead: string, detail?: string) {
-	if (detail === undefined) return `${lead}: ${unknownDiscovery}`
-	return detail.startsWith(lead) ? detail : `${lead}: ${detail}`
+	if (detail === undefined) return `${lead}: ${endSentence(unknownDiscovery)}`
+	return endSentence(detail.startsWith(lead) ? detail : `${lead}: ${detail}`)
 }
 
-function securityPoolDiscoveryFailed(error: string) {
-	return describeDiscoveryFailure(securityPoolDiscoveryFailedLead, error)
-}
-
-function securityPoolFactoryDiscoveryFailed(error?: string) {
+function securityPoolDiscoveryFailed(error?: string) {
 	return describeDiscoveryFailure(securityPoolDiscoveryFailedLead, error)
 }
 
 function securityPoolCouldNotLoad(error: string) {
-	return `This security pool could not be loaded. No trading, liquidity, or settlement action is available until its authoritative reads succeed: ${error}`
-}
-
-function poolPageRange(first: bigint, last: bigint, total: bigint) {
-	return `${first.toString()}–${last.toString()} of ${total.toString()}`
+	return `This security pool could not be loaded. Trading, liquidity, and settlement are unavailable until it loads: ${endSentence(error)}`
 }
 
 export const liveCopy = {
-	securityPoolDoesNotExist: 'Security pool does not exist.',
-	backToSecurityPools: 'Back to security pools',
-	openByAddress: 'Open by address',
-	openPoolAddress: 'Security pool address',
-	poolAddressPlaceholder: '0x…',
-	invalidPoolAddress: 'Enter a valid, nonzero security pool address.',
-	openPool: 'Open pool',
-	tradePool: 'Trade this pool',
+	securityPoolDoesNotExist: 'Security pool does not exist',
+	backToCreateMarket: 'Back to create market',
+	openSecurityPool: 'Open security pool',
+	openMarket: 'Open market',
 	marketDataUnavailable,
-	pairNotCreated,
-	tradingOpen,
-	pairUninitialized,
+	marketNotCreated: 'Market not created',
+	tradingOpen: 'Trading open',
+	noLiquidityYet: 'No liquidity yet',
 	operational,
-	poolForked,
-	forkMigration,
-	forkTruthAuction,
-	invalid,
-	yes,
-	no,
-	unresolvedOutcome,
-	conditionalPriceUnavailable,
-	deployTradingPool,
-	initializeTradingPool,
-	refreshingSecurityPool,
-	retryingSecurityPoolDetails,
-	retryRefresh,
-	retrySecurityPool,
-	questionEnd,
-	systemState,
-	universeFork,
-	notForked,
+	poolForked: 'Security pool forked',
+	forkMigration: 'Fork migration',
+	forkTruthAuction: 'Fork truth auction',
+	unresolvedOutcome: 'None (unresolved)',
+	neverInitializedDetail: 'This market was never created, so it has no conditional price.',
+	addFirstLiquidity: initializeLiquidityAction,
+	refreshingSecurityPool: 'Refreshing security pool; showing the last successful result.',
+	retryingSecurityPoolDetails: 'Retrying security pool details…',
+	retryRefresh: 'Retry refresh',
+	retrySecurityPool: 'Retry security pool',
+	questionEnd: 'Question end',
+	securityPoolState: 'Security pool state',
+	universeFork: 'Universe fork',
+	notForked: 'Not forked',
 	outcome,
-	securityMultiplier,
+	securityMultiplier: 'Security multiplier',
 	initialReportPriorityFee,
-	registeredVaults,
-	perSecondRetentionMultiplier,
-	totalAndFeeEligibleUnderwritingLimits,
-	mintingCapacity,
+	registeredVaults: 'Registered vaults',
+	retentionRatePerSecond: 'Retention rate per second',
+	commitmentLimits: 'Total / fee-eligible commitment limit',
+	mintingCapacity: 'Minting capacity',
 	unknownDiscovery,
-	loadingSecurityPoolDetails,
-	retryDiscovery,
-	discoveringSecurityPoolsFromFactory,
-	discoveringSecurityPools,
-	noEligiblePools: 'No favorite security pools.',
-	noEligiblePoolsDetail: 'Open a pool address to save it here.',
-	noMarkets: 'No favorite markets.',
-	noMarketsDetail: 'Open a pool address to save its market here.',
-	marketList: 'Markets',
-	favoriteMarkets: 'Favorites',
-	otherMarkets: 'Other markets',
-	securityPoolList: appCopy.securityPools,
-	securityPoolListDescription: 'Favorite security pools in this universe without a trading market.',
-	trade: 'Trade',
-	manageLiquidity: 'Liquidity',
-	createMarketAction: 'Create market',
-	poolDetails: 'Details',
-	marketFacts: 'Pool facts',
-	lifecycle: 'Lifecycle',
-	capacity: 'Capacity',
-	notDeployed: 'Not deployed',
-	securityPoolPages,
-	previousPools,
-	nextPools,
-	securityPool,
-	securityPoolLabel,
-	pair,
-	ammFee,
+	loadingSecurityPoolDetails: 'Loading security pool details…',
+	retryDiscovery: 'Retry discovery',
+	discoveringSecurityPools: 'Discovering security pools…',
+	noFavoritePools: 'No favorite security pools yet',
+	noFavoritePoolsDetail: 'Open a security pool by address to add it here.',
+	noFavoriteMarkets: 'No favorite markets yet',
+	noFavoriteMarketsDetail: 'Open a security pool by address to add its market here.',
+	details: 'Details',
+	securityPoolFacts: 'Security pool facts',
+	parameters: 'Security pool parameters',
+	securityPool: appCopy.securityPool,
+	tradingPool: 'Trading pool',
+	tradingFee,
+	forked,
 	unknownSystemState,
 	unknownQuestionOutcome,
-	pairInitializationUnavailable,
-	undeployedPairDescription,
-	uninitializedPairDescription,
+	formatInitializationUnavailable,
+	formatMarketNotCreatedDetail,
+	formatNoLiquidityDetail,
 	securityPoolDetailsUnavailable,
 	securityPoolRefreshFailed,
-	forkedAt,
 	securityPoolDiscoveryFailed,
-	securityPoolFactoryDiscoveryFailed,
 	discoveryFailureLead,
 	describeDiscoveryFailure,
 	securityPoolCouldNotLoad,
-	poolPageRange,
 } as const

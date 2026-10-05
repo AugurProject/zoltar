@@ -4,7 +4,7 @@ import { OutcomeHolding } from './OutcomeHolding.js'
 import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { marketsCopy } from '../copy/markets.js'
-import * as ticketCopy from '../copy/tradeTicket.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as workflowCopy from '../copy/workflows.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import { BackingDetails } from './BackingDetails.js'
@@ -13,9 +13,10 @@ import type { TicketBalances, TicketWallet } from './LivePositionControls.js'
 
 function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, balanceState: BalanceState, market: LiveMarket) {
 	if (value !== undefined) return <OutcomeHolding amount={value} outcome={outcome} market={market} />
-	if (balanceState === 'loading') return appCopy.loadingBalances
+	// One loading line under the list speaks for all three cells.
+	if (balanceState === 'loading') return commonCopy.metricUnavailablePlaceholder
 	if (balanceState === 'error') return appCopy.unavailable
-	return ticketCopy.noBalance
+	return commonCopy.metricUnavailablePlaceholder
 }
 
 /**
@@ -44,8 +45,8 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 					))}
 				</ul>
 			)}
-			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
-			{ownsBalanceError && holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={disabled} /> : null}
+			{holdings.balanceState === 'loading' ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
+			{ownsBalanceError && holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={disabled} /> : null}
 			<BackingDetails market={market} balances={holdings.balances} />
 		</section>
 	)

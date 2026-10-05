@@ -10,8 +10,8 @@ export function getTruthAuctionEndsAt(auctionStarted: bigint | undefined) {
 
 export function getTruthAuctionBidTimingGuardMessage(currentTimestamp: bigint | undefined, auctionEndsAt: bigint | undefined) {
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (auctionEndsAt === undefined || auctionEndsAt <= 0n) return 'Loading truth auction deadline.'
-	if (currentTimestamp >= auctionEndsAt) return forkAuctionCopy.auctionEndedStatus
+	if (auctionEndsAt === undefined || auctionEndsAt <= 0n) return 'Loading truth auction deadline…'
+	if (currentTimestamp >= auctionEndsAt) return forkAuctionCopy.auctionEndedReason
 	if (!hasSubmissionWindow(currentTimestamp, auctionEndsAt)) return forkAuctionCopy.auctionEndsTooSoonToBid
 	return undefined
 }

@@ -22,11 +22,11 @@ export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket
 				<ReadOnlyAddressValue address={scope.shareToken} responsiveAbbreviation />
 			</MetricField>
 			<MetricField label={identityCopy.currentUniverseId}>{identity.currentUniverseId.toString()}</MetricField>
-			<MetricField label={identityCopy.marketLineageOriginUniverseId}>{identity.originUniverseId?.toString() ?? identityCopy.unavailableOriginUniverse}</MetricField>
+			<MetricField label={identityCopy.originUniverseId}>{identity.originUniverseId?.toString() ?? identityCopy.unavailable}</MetricField>
 			<MetricField label={identityCopy.questionId}>
 				<IdentifierValue value={formatQuestionIdHex(market.questionId)} />
 			</MetricField>
-			<MetricField label={identityCopy.outcomeTokenIds}>{identityCopy.outcomeTokenIdSummary(scope.invalidTokenId.toString(), scope.yesTokenId.toString(), scope.noTokenId.toString())}</MetricField>
+			<MetricField label={identityCopy.outcomeTokenIds}>{identityCopy.outcomeTokenIdSummary(scope.yesTokenId.toString(), scope.noTokenId.toString(), scope.invalidTokenId.toString())}</MetricField>
 		</>
 	)
 }

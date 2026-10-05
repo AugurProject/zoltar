@@ -461,7 +461,7 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onWalletSummaryChange={observeWallet} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes (3 ETH if Yes wins)', 'wallet balances shown as collateral value')
+		await waitForDom(() => walletHolding('Wallet Yes') === '3 Yes (3 ETH if the question resolves Yes)', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
 		expect(document.body.textContent).not.toContain('Open a market by security pool address')
 		expect(document.body.textContent).toContain('3 Invalid')
@@ -482,7 +482,7 @@ describe('live market refresh', () => {
 			return document.body.textContent?.includes('Yes 75.0%') === true && balanceLoads > balanceLoadsBeforeBackgroundRefresh
 		}, 'background market refresh')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeBackgroundRefresh)
-		expect([...observedBalanceLabels]).toEqual(['3 Yes (3 ETH if Yes wins)'])
+		expect([...observedBalanceLabels]).toEqual(['3 Yes (3 ETH if the question resolves Yes)'])
 		expect(walletSummaries.length).toBeGreaterThan(0)
 		expect(walletSummaries.every(summary => summary.ethAttoEth === 5n * 10n ** 18n)).toBeTrue()
 		expect(document.querySelector('[aria-busy="true"]')).toBeNull()
@@ -539,7 +539,7 @@ describe('live market refresh', () => {
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
 		yesBalance = 4n * 10n ** 18n
-		await waitForDom(() => walletHolding('Wallet Yes') === '4 Yes (4 ETH if Yes wins)', 'refreshed balance after failure')
+		await waitForDom(() => walletHolding('Wallet Yes') === '4 Yes (4 ETH if the question resolves Yes)', 'refreshed balance after failure')
 	})
 
 	test('lets a balance read slower than the block interval finish instead of restarting it every cycle', async () => {
@@ -565,13 +565,13 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => walletHolding('Wallet Yes') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
+		await waitForDom(() => walletHolding('Wallet Yes') === '—' && document.body.textContent?.includes('Loading balances…') === true && balanceLoads > 0, 'first balance read in flight')
 		await settle(150)
 		expect(balanceLoads).toBe(1)
 		releaseBalances()
-		await waitForDom(() => walletHolding('Wallet Yes') === '2 Yes (2 ETH if Yes wins)', 'slow balance read completes')
+		await waitForDom(() => walletHolding('Wallet Yes') === '2 Yes (2 ETH if the question resolves Yes)', 'slow balance read completes')
 		await waitForDom(() => balanceLoads > 1, 'revalidation resumes after the read completes')
-		expect(walletHolding('Wallet Yes')).toBe('2 Yes (2 ETH if Yes wins)')
+		expect(walletHolding('Wallet Yes')).toBe('2 Yes (2 ETH if the question resolves Yes)')
 	})
 
 	test('portfolio ignores new blocks and refreshes only when requested', async () => {
@@ -717,7 +717,7 @@ describe('live market refresh', () => {
 		if (star === null) throw new Error('Favorite control missing')
 		await act(() => star.click())
 		expect(document.querySelectorAll('.market-record')).toHaveLength(0)
-		expect(document.body.textContent).toContain('No favorite markets.')
+		expect(document.body.textContent).toContain('No favorite markets yet')
 	})
 
 	test('pool favorites are searchable, stay separate from markets, and retain ended pools for details', async () => {
@@ -753,7 +753,7 @@ describe('live market refresh', () => {
 		await act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity')?.click())
 		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
 		await act(() => render(view('create-market'), rendered.container))
-		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently saved')
+		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Recently added')
 	})
 
 	test('the liquidity route exposes its controls on narrow screens without opening a dialog', async () => {
@@ -792,11 +792,11 @@ describe('live market refresh', () => {
 			Reflect.set(window, 'matchMedia', originalMatchMedia)
 		}
 		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
-		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('No')
+		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('No 50%')
 		expect(document.querySelector('.trade-ticket-switchers .view-tabs:not(.outcome-picker) button[aria-pressed="true"]')?.textContent).toBe('Sell')
 		// The selection stays in the hash, so a refresh restores it.
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-no`)
-		await act(async () => buttonByLabel('Yes').click())
+		await act(async () => buttonByLabel('Yes 50%').click())
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-yes`)
 		await act(async () => buttonByLabel('Buy').click())
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)
@@ -843,7 +843,7 @@ describe('live market refresh', () => {
 			await act(() => render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
 			await waitForDom(() => document.querySelector('.market-ticket__panel') !== null, 'visible ticket')
 			expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(false)
-			expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('Yes')
+			expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('Yes 50%')
 			expect(document.querySelector('.trade-ticket-switchers .view-tabs:not(.outcome-picker) button[aria-pressed="true"]')?.textContent).toBe('Buy')
 			expect(document.querySelector('[role="dialog"]')).toBeNull()
 		} finally {

@@ -15,7 +15,7 @@ import {
 	formatOpenOracleMultiplier,
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateGuardMessage,
-	getOpenOracleCreateValidationMessage,
+	getOpenOracleCreateValidation,
 	getOpenOracleDisputeAvailability,
 	getOpenOracleReportProgress,
 	getOpenOracleSelectedReportActionMode,
@@ -702,7 +702,6 @@ describe('OpenOracle helpers', () => {
 	test('dispute submission blockers name the report tokens', () => {
 		const flexibleReport = { ...createDisputeSubmissionPreviewReport(), escalationHalt: 300n, flexibleEscalation: true, multiplier: 200n }
 		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '', reportDetails: flexibleReport }).blockMessage?.message).toBe('Enter a valid new REP amount.')
-		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '0' }).blockMessage?.message).toBe('Enter a valid new WETH amount greater than zero.')
 	})
 
 	test('dispute submission derives the swapped token from the proposed price', () => {
@@ -782,29 +781,28 @@ describe('OpenOracle helpers', () => {
 			token2Address: WETH_ADDRESS,
 		}
 
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '0' } })).toBe('Base token amount must be greater than zero.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, token2Address: token1Address } })).toBe('Base and quote tokens must use different addresses.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than dispute delay.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } })).toBe('Fee percentage plus protocol fee must not exceed 100%.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '0.99' } })).toBe('Multiplier must be at least 1×.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '2' } })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '1.5' } })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '1.505' } })).toBe('Enter a valid multiplier, such as 1.5.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1 000 000 000' } })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '.' } })).toBe('Enter a valid base token amount.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '-.' } })).toBe('Enter a valid base token amount.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '.' } })).toBe('Enter a valid escalation halt.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '-.' } })).toBe('Enter a valid escalation halt.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '655.35' } })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '655.36' } })).toBe('Multiplier must be at most 655.35×.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } })).toBe('Dispute delay exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } })).toBe('Settlement time exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Base token amount exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Escalation halt exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, token2Address: token1Address } }).message).toBe('Base and quote tokens must use different addresses.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlementTime: '9' } }).message).toBe('Settlement delay must be greater than dispute delay.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } }).message).toBe('Dispute fee plus protocol fee must not exceed 100%.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '0.99' } }).message).toBe('Multiplier must be at least 1×.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '2' } }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '1.5' } }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '1.505' } }).message).toBe('Enter a valid multiplier, such as 1.5.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: '1 000 000 000' } }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: '.' } }).message).toBe('Enter a valid base token amount.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: '-.' } }).message).toBe('Enter a valid base token amount.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: '.' } }).message).toBe('Enter a valid escalation halt.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: '-.' } }).message).toBe('Enter a valid escalation halt.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '655.35' } }).message).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '655.36' } }).message).toBe('Multiplier must be at most 655.35×.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } }).message).toBe('Dispute delay exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } }).message).toBe('Settlement delay exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Base token amount exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Escalation halt exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } }).message).toBe('Settler reward exceeds the contract maximum.')
 	})
 
 	test('open oracle create parser accepts high-decimal token1 amounts once token decimals are known', () => {
@@ -872,7 +870,7 @@ describe('OpenOracle helpers', () => {
 				token1Decimals: 18,
 				token2Decimals: 18,
 			}),
-		).toThrow('Fee percentage plus protocol fee must not exceed 100%.')
+		).toThrow('Dispute fee plus protocol fee must not exceed 100%.')
 		expect(() =>
 			parseOpenOracleCreateFormSubmission({
 				form: {
@@ -900,7 +898,7 @@ describe('OpenOracle helpers', () => {
 	})
 
 	test('selected report action mode follows the report lifecycle', () => {
-		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('OpenOracle report is missing its atomic initial report')
+		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('OpenOracle report is missing its initial report.')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n, disputeOccurred: true }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n }))).toBe('settle')
@@ -994,11 +992,11 @@ describe('OpenOracle helpers', () => {
 		})
 		expect(getOpenOracleDisputeAvailability(noInitialReport)).toEqual({
 			canAct: false,
-			message: 'This report is invalid because its atomic initial report is missing.',
+			message: 'This report is invalid because its initial report is missing.',
 		})
 		expect(getOpenOracleSettleAvailability(noInitialReport)).toEqual({
 			canAct: false,
-			message: 'This report is invalid because its atomic initial report is missing.',
+			message: 'This report is invalid because its initial report is missing.',
 		})
 
 		const settledReport = createOpenOracleLifecycleReport({
@@ -1022,9 +1020,9 @@ describe('OpenOracle helpers', () => {
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: SettleTooEarly()'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x3edf6050'))).toBe('This report is not ready to settle.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement callback failed'))).toBe('Transaction failed while settling the report. Reason: settlement callback failed')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement callback failed'))).toBe('Transaction failed while settling the report. Reason: settlement callback failed.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: AlreadySettled()'))).toBe('This report is already settled.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: NoReportYet()'))).toBe('This report is invalid because its atomic initial report is missing.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: NoReportYet()'))).toBe('This report is invalid because its initial report is missing.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle report instead.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
@@ -1415,7 +1413,7 @@ describe('OpenOracle helpers', () => {
 		})
 		await client.waitForTransactionReceipt({ hash: transferHash })
 
-		await expect(requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)).rejects.toThrow('Insufficient REP balance for coordinator initial report')
+		await expect(requestOraclePrice(uiWriteClient, managerAddress, minimumToken1ReportAttoEth)).rejects.toThrow('Insufficient REP balance for the initial report.')
 		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)).toBe(startWethBalanceAttoEth)
 	})
 

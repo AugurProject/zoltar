@@ -2,7 +2,7 @@ import { type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
-import { sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
+import { ensureSentence, sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getOpenOracleDisputeSwapTokenKey } from '../../../protocol/openOracleMath.js'
@@ -35,7 +35,7 @@ function formatOpenOracleDisputeBalanceStatusUnavailableMessage({ reason, tokenL
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
 	const segments = [`Unable to verify ${resolvedTokenLabel} balance for this dispute.`]
 	const sanitizedReason = sanitizeErrorDetail(reason)
-	if (sanitizedReason !== undefined) segments.push(`Reason: ${sanitizedReason}.`)
+	if (sanitizedReason !== undefined) segments.push(`Reason: ${ensureSentence(sanitizedReason)}`)
 	segments.push('Retry loading the report or balance status before disputing this report.')
 	return segments.join(' ')
 }
@@ -193,22 +193,25 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	const setInputBlockMessage = (message: OpenOracleGateMessage, field?: OpenOracleDisputeInputField) => {
 		inputBlockMessage = message
 		blockMessage = message
-		if (field !== undefined) inputFieldErrors[field] = message.message
+		if (field !== undefined && message.message !== undefined) inputFieldErrors[field] = message.message
 	}
 	if (reportDetails === undefined) {
-		setInputBlockMessage(createVisibleGateMessage('Select a report first'))
+		setInputBlockMessage(createVisibleGateMessage(openOracleCopy.reportLoadRequired))
 	} else {
 		const disputeAvailability = getOpenOracleDisputeAvailability(reportDetails)
 		if (!disputeAvailability.canAct) {
 			setInputBlockMessage(createVisibleGateMessage(disputeAvailability.message ?? 'This report is not ready to dispute.'))
 		} else if (token1Decimals === undefined) {
-			setInputBlockMessage(createHiddenLoadingGateMessage(`Loading ${token1Label} decimal metadata.`))
+			setInputBlockMessage(createHiddenLoadingGateMessage(`Loading ${token1Label} details…`))
 		} else if (token2Decimals === undefined) {
-			setInputBlockMessage(createHiddenLoadingGateMessage(`Loading ${token2Label} decimal metadata.`))
+			setInputBlockMessage(createHiddenLoadingGateMessage(`Loading ${token2Label} details…`))
 		} else if (newAmount1 === undefined) {
 			setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token1Label} amount.`), 'disputeNewAmount1')
-		} else if (newAmount2 === undefined || newAmount2 <= 0n) {
-			setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token2Label} amount greater than zero.`), 'disputeNewAmount2')
+		} else if (newAmount2 === undefined) {
+			if (disputeNewAmount2Input.trim() === '') setInputBlockMessage({ kind: 'incomplete', message: undefined })
+			else setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token2Label} amount.`), 'disputeNewAmount2')
+		} else if (newAmount2 <= 0n) {
+			setInputBlockMessage({ kind: 'incomplete', message: undefined })
 		} else if (expectedNewAmount1 === undefined) {
 			setInputBlockMessage(createVisibleGateMessage(`Unable to determine the required new ${token1Label} amount.`))
 		} else if (!amount1Allowed) {
@@ -245,9 +248,9 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 					}),
 				)
 			} else if (token1Balance === undefined) {
-				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} balance.`)
+				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} balance…`)
 			} else if (token2Balance === undefined) {
-				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} balance.`)
+				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} balance…`)
 			} else if (token1ContributionAmount !== undefined && token1Balance < token1ContributionAmount) {
 				blockMessage = createVisibleGateMessage(
 					formatOpenOracleDisputeInsufficientBalanceMessage({
@@ -267,9 +270,9 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 					}),
 				)
 			} else if (approvedToken1Amount === undefined) {
-				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} approval.`)
+				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token1Label} approval…`)
 			} else if (approvedToken2Amount === undefined) {
-				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} approval.`)
+				blockMessage = createHiddenLoadingGateMessage(`Loading current ${token2Label} approval…`)
 			} else if (!token1Approval.hasSufficientApproval) {
 				blockMessage = createVisibleGateMessage(`${token1Label} approval required`)
 			} else if (!token2Approval.hasSufficientApproval) blockMessage = createVisibleGateMessage(`${token2Label} approval required`)

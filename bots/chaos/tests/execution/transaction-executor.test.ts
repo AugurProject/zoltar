@@ -95,6 +95,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 			allowHighRiskOperations: true,
 			allowIrreversibleOperations: false,
 			initializeGenesisUniverse: false,
+			selectableOperationAllowlist: [],
 			enabledEcosystems: ['statoblast'],
 			maximumEthPerOperationAttoEth: 1n,
 			maximumGasCostAttoEth: 1n,
@@ -1872,6 +1873,7 @@ test('read-only preview applies the signing gas ceiling after successful RPC sim
 	current.clock = () => 1_000
 	const plan = executablePlan()
 	await expect(preflightOperationPreview(current, plan)).rejects.toThrow('estimated gas ceiling exceeds strategy.maximumGasCostEth')
+	await expect(preflightOperationPreview(current, plan)).rejects.toBeInstanceOf(OperationRediscoveryRequired)
 	for (const server of [first, second]) {
 		expect(server.requestedMethods).toContain('eth_call')
 		expect(server.requestedMethods).toContain('eth_estimateGas')

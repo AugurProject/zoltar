@@ -4,6 +4,7 @@ import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/Tran
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
+import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -28,8 +29,8 @@ import { OpenOracleReportBrowser } from './OpenOracleReportBrowser.js'
 import { OpenOracleReportDetailsCard } from './OpenOracleReportDetailsCard.js'
 
 function getOpenOracleRouteHeader(view: OpenOracleView) {
-	if (view === 'browse') return { description: openOracleCopy.browseReportsDescription, title: openOracleCopy.browseReports }
-	if (view === 'create') return { description: openOracleCopy.createReportDescription, title: openOracleCopy.createReport }
+	if (view === 'browse') return { description: openOracleCopy.browseReportsDescription, title: appCopy.browseReports }
+	if (view === 'create') return { description: openOracleCopy.createReportDescription, title: appCopy.createReport }
 	return { description: openOracleCopy.selectedReportDescription, title: openOracleCopy.openOracleReportDetails }
 }
 
@@ -293,7 +294,6 @@ export function OpenOracleSection({
 												aria-label={openOracleCopy.exactToken1Report}
 												error={exactToken1ReportError}
 												errorId={getOpenOracleCreateFieldErrorId('exactToken1Report')}
-												hint={openOracleCopy.initialToken1AmountHelpText}
 												inputMode='decimal'
 												liveError
 												onBlur={() => markCreateFieldTouched('exactToken1Report')}
@@ -308,7 +308,6 @@ export function OpenOracleSection({
 												aria-label={openOracleCopy.initialToken2Amount}
 												error={initialToken2AmountError}
 												errorId={getOpenOracleCreateFieldErrorId('initialToken2Amount')}
-												hint={openOracleCopy.initialToken2AmountHelpText}
 												inputMode='decimal'
 												liveError
 												onBlur={() => markCreateFieldTouched('initialToken2Amount')}
@@ -336,35 +335,67 @@ export function OpenOracleSection({
 
 								<ReadOnlyDetailAccordion title={openOracleCopy.advancedDisputeAndTimingSettings}>
 									<UserMessage className='detail' detail={openOracleCopy.advancedDisputeAndTimingSettingsDetail} />
-									<div className='field-row'>
-										<label className='field'>
-											<span>{openOracleCopy.disputeFeePercentage}</span>
-											<FormInput
-												aria-label={openOracleCopy.disputeFeePercentage}
-												error={feePercentageError}
-												errorId={getOpenOracleCreateFieldErrorId('feePercentage')}
-												inputMode='decimal'
-												liveError
-												onBlur={() => markCreateFieldTouched('feePercentage')}
-												onInput={event => editCreateField('feePercentage', { feePercentage: event.currentTarget.value })}
-												value={openOracleCreateForm.feePercentage}
-											/>
-										</label>
-										<label className='field'>
-											<span>{commonCopy.multiplier}</span>
-											<FormInput
-												adornment={openOracleCopy.multiplierUnit}
-												aria-label={commonCopy.multiplier}
-												error={multiplierError}
-												errorId={getOpenOracleCreateFieldErrorId('multiplier')}
-												hint={openOracleCopy.escalationMultiplierHelpText}
-												inputMode='decimal'
-												liveError
-												onBlur={() => markCreateFieldTouched('multiplier')}
-												onInput={event => editCreateField('multiplier', { multiplier: event.currentTarget.value })}
-												value={openOracleCreateForm.multiplier}
-											/>
-										</label>
+									<div className='form-grid'>
+										<div className='field-row'>
+											<label className='field'>
+												<span>{openOracleCopy.disputeFeePercentage}</span>
+												<FormInput
+													aria-label={openOracleCopy.disputeFeePercentage}
+													error={feePercentageError}
+													errorId={getOpenOracleCreateFieldErrorId('feePercentage')}
+													inputMode='decimal'
+													liveError
+													onBlur={() => markCreateFieldTouched('feePercentage')}
+													onInput={event => editCreateField('feePercentage', { feePercentage: event.currentTarget.value })}
+													value={openOracleCreateForm.feePercentage}
+												/>
+											</label>
+											<label className='field'>
+												<span>{commonCopy.multiplier}</span>
+												<FormInput
+													adornment={openOracleCopy.multiplierUnit}
+													aria-label={commonCopy.multiplier}
+													error={multiplierError}
+													errorId={getOpenOracleCreateFieldErrorId('multiplier')}
+													hint={openOracleCopy.escalationMultiplierHelpText}
+													inputMode='decimal'
+													liveError
+													onBlur={() => markCreateFieldTouched('multiplier')}
+													onInput={event => editCreateField('multiplier', { multiplier: event.currentTarget.value })}
+													value={openOracleCreateForm.multiplier}
+												/>
+											</label>
+										</div>
+										<div className='field-row'>
+											<label className='field'>
+												<span>{openOracleCopy.escalationHalt}</span>
+												<FormInput
+													adornment={token1Symbol}
+													aria-label={openOracleCopy.escalationHalt}
+													error={escalationHaltError}
+													errorId={getOpenOracleCreateFieldErrorId('escalationHalt')}
+													hint={openOracleCopy.disputeEscalationStopAmountHelpText}
+													inputMode='decimal'
+													liveError
+													onBlur={() => markCreateFieldTouched('escalationHalt')}
+													onInput={event => editCreateField('escalationHalt', { escalationHalt: event.currentTarget.value })}
+													value={openOracleCreateForm.escalationHalt}
+												/>
+											</label>
+											<label className='field'>
+												<span>{openOracleCopy.protocolFeePercentage}</span>
+												<FormInput
+													aria-label={openOracleCopy.protocolFeePercentage}
+													error={protocolFeeError}
+													errorId={getOpenOracleCreateFieldErrorId('protocolFee')}
+													inputMode='decimal'
+													liveError
+													onBlur={() => markCreateFieldTouched('protocolFee')}
+													onInput={event => editCreateField('protocolFee', { protocolFee: event.currentTarget.value })}
+													value={openOracleCreateForm.protocolFee}
+												/>
+											</label>
+										</div>
 									</div>
 									<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
 										<div className='field-row'>
@@ -383,23 +414,6 @@ export function OpenOracleSection({
 												/>
 											</label>
 											<label className='field'>
-												<span>{openOracleCopy.escalationHalt}</span>
-												<FormInput
-													adornment={token1Symbol}
-													aria-label={openOracleCopy.escalationHalt}
-													error={escalationHaltError}
-													errorId={getOpenOracleCreateFieldErrorId('escalationHalt')}
-													hint={openOracleCopy.disputeEscalationStopAmountHelpText}
-													inputMode='decimal'
-													liveError
-													onBlur={() => markCreateFieldTouched('escalationHalt')}
-													onInput={event => editCreateField('escalationHalt', { escalationHalt: event.currentTarget.value })}
-													value={openOracleCreateForm.escalationHalt}
-												/>
-											</label>
-										</div>
-										<div className='field-row'>
-											<label className='field'>
 												<span>{openOracleCopy.disputeDelaySeconds}</span>
 												<FormInput
 													aria-label={openOracleCopy.disputeDelaySeconds}
@@ -413,19 +427,6 @@ export function OpenOracleSection({
 													value={openOracleCreateForm.disputeDelay}
 												/>
 											</label>
-											<label className='field'>
-												<span>{openOracleCopy.protocolFeePercentage}</span>
-												<FormInput
-													aria-label={openOracleCopy.protocolFeePercentage}
-													error={protocolFeeError}
-													errorId={getOpenOracleCreateFieldErrorId('protocolFee')}
-													inputMode='decimal'
-													liveError
-													onBlur={() => markCreateFieldTouched('protocolFee')}
-													onInput={event => editCreateField('protocolFee', { protocolFee: event.currentTarget.value })}
-													value={openOracleCreateForm.protocolFee}
-												/>
-											</label>
 										</div>
 									</SectionBlock>
 									<h4>{openOracleCopy.parameterDetails}</h4>
@@ -434,7 +435,7 @@ export function OpenOracleSection({
 
 								<div className='actions'>
 									<TransactionActionButton
-										idleLabel={openOracleCopy.createStandaloneOracleGame}
+										idleLabel={openOracleCopy.createStandaloneReport}
 										pendingLabel={openOracleCopy.creating}
 										onClick={onCreateOpenOracleGame}
 										pending={loadingOpenOracleCreate}

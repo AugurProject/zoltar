@@ -1,6 +1,8 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
+import * as glossaryCopy from '@zoltar/ui-statoblast-shared/copy/glossary.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
@@ -17,15 +19,15 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool
-		if (activeSecurityPoolsView === 'operate') return statoblastAppCopy.poolPageTitle
+		if (activeSecurityPoolsView === 'operate') return glossaryCopy.securityPoolTerm
 		if (activeSecurityPoolsView === 'migrate') return appCopy.migrateRep
-		if (activeSecurityPoolsView === 'universes') return commonCopy.universe
+		if (activeSecurityPoolsView === 'universes') return zoltarCopy.universesTitle
 		return commonCopy.securityPools
 	}
 	if (route === 'open-oracle') {
 		if (activeOpenOracleView === 'create') return statoblastAppCopy.createOracleReport
 		if (activeOpenOracleView === 'selected-report') return statoblastAppCopy.oracleReportDetails
-		return statoblastAppCopy.oracleReports
+		return statoblastAppCopy.openOracle
 	}
 	return appCopy.pageNotFoundTitle
 }

@@ -1,5 +1,5 @@
 import { parseDecimalInput } from '../forms/decimal.js'
-import { sanitizeErrorDetail } from '../lib/errors.js'
+import { ensureSentence, sanitizeErrorDetail } from '../lib/errors.js'
 import { formatAdditionalCeilingAmount, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
 const maxUint200 = 2n ** 200n - 1n
 export type TokenApprovalState = {
@@ -69,7 +69,7 @@ export function formatTokenApprovalUnavailableMessage({ actionLabel, reason, tok
 	const resolvedTokenLabel = tokenLabel?.trim() || 'token'
 	const sanitizedReason = sanitizeErrorDetail(reason)
 	const segments = [`Unable to verify ${resolvedTokenLabel} approval${actionLabel === undefined ? '' : ` before ${actionLabel}`}.`]
-	if (sanitizedReason !== undefined) segments.push(`Reason: ${sanitizedReason}.`)
+	if (sanitizedReason !== undefined) segments.push(`Reason: ${ensureSentence(sanitizedReason)}`)
 	segments.push('Retry loading the approval status before continuing.')
 	return segments.join(' ')
 }

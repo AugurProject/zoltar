@@ -170,7 +170,7 @@ export function ForkZoltarSection({
 					<MetricField label={commonCopy.forkThresholdAttoRep}>
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={zoltarCopy.forkWalletRep}>
+					<MetricField label={zoltarCopy.walletRep}>
 						<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 					<MetricField label={zoltarCopy.permanentRepBurn}>
@@ -221,10 +221,10 @@ export function ForkZoltarSection({
 						guardMessage={approvalGuardMessage}
 						onApprove={amount => onApproveZoltarForkRep(amount)}
 						pending={zoltarForkActiveAction === 'approve'}
-						pendingLabel={zoltarCopy.forkRepApprovalPending}
+						pendingLabel={commonCopy.approvingRep}
 						requiredAmount={rootUniverse?.forkThresholdAttoRep}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThresholdAttoRep.toString() ?? ''}`}
-						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
+						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? commonCopy.rep}
 						tokenUnits={18}
 					/>
 				) : undefined}

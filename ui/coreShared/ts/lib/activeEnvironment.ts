@@ -122,7 +122,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		try {
 			savedState = getSavedSimulationStateEnvelope(savedStateId)
 		} catch (error) {
-			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')}. Falling back to the baseline scenario.`
+			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')} Falling back to the baseline scenario.`
 		}
 		if (savedState === undefined && initialBootstrapError === undefined) {
 			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`

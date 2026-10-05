@@ -133,11 +133,11 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 	})()
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader description={canFork ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse} title={marketCopy.browseQuestions} />
+			<RouteHeader description={canFork && !hasForked ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse} title={marketCopy.browseQuestions} />
 			<SectionBlock title={marketCopy.questions} variant='plain'>
 				<LocalBrowseBar directory={directory} discoverLabel={marketCopy.discoverQuestions} freshness={zoltarQuestionsFreshness} nounPlural={marketCopy.questionsNoun} />
 				<LocalBrowseSearchField label={marketCopy.searchDownloadedQuestions} onChange={directory.setSearchText} placeholder={marketCopy.questionSearchPlaceholder} value={directory.searchText} />
-				<RetryableNotice disabled={discovery.loading} message={loadError} onRetry={discovery.retry} retryLabel={discovery.loading ? commonCopy.retrying : marketCopy.retryQuestions} />
+				<RetryableNotice disabled={discovery.loading} message={loadError} onRetry={discovery.retry} retryLabel={discovery.loading ? commonCopy.retrying : commonCopy.retry} />
 				{content}
 			</SectionBlock>
 		</div>

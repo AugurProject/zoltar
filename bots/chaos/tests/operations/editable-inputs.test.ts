@@ -14,6 +14,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { address, snapshotFixture } from './fixture.ts'
+import { uniswapActionsFixture } from './uniswap-fixture.ts'
 
 const options = {
 	seed: 123,
@@ -29,6 +30,9 @@ const options = {
 
 function editableSnapshot() {
 	const snapshot = snapshotFixture()
+	const uniswap = uniswapActionsFixture().universeUniswap
+	if (uniswap === undefined) throw new Error('Missing Uniswap fixture')
+	snapshot.universeUniswap = uniswap
 	const question = snapshot.questions[0]
 	const pool = snapshot.pools[0]
 	if (question === undefined || pool === undefined) throw new Error('Missing fixture')

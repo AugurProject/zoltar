@@ -1,3 +1,5 @@
+import * as zoltarCopy from '../../../copy/zoltar.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
@@ -105,7 +107,7 @@ function resolveForkQuestionId(submittedQuestionId: string, universe: ZoltarUniv
 	if (!universe.hasForked) return resolveSubmittedForkQuestionId(submittedQuestionId)
 
 	const universeQuestionId = universe.forkQuestionDetails?.questionId
-	if (universeQuestionId === undefined || universeQuestionId === '') throw new Error('Fork question ID is missing')
+	if (universeQuestionId === undefined || universeQuestionId === '') throw new Error('Fork question ID is missing.')
 	return BigInt(universeQuestionId)
 }
 
@@ -156,8 +158,8 @@ export function useZoltarFork(
 	const forkAccessScopeGeneration = currentForkAccessScope.current.generation
 	const loadedForkAccessScopeGeneration = useRef<number | undefined>(undefined)
 	const resolveActionResultName = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'approveForkRep' : 'forkZoltar')
-	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Approving REP for fork' : 'Forking universe')
-	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Universe fork submitted')
+	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar)
+	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted)
 	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approval failed' : 'Universe fork failed')
 
 	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = currentUniverseRef.current) => {
@@ -208,7 +210,7 @@ export function useZoltarFork(
 				}
 			} else {
 				zoltarForkApproval.value = {
-					error: getErrorMessage(approvalResult?.error, 'Failed to load token approval'),
+					error: getErrorMessage(approvalResult?.error, 'REP approval could not be loaded.'),
 					loading: false,
 					value: undefined,
 				}
@@ -295,7 +297,7 @@ export function useZoltarFork(
 				await loadZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
-				const message = formatRefreshErrorMessage(error, 'Universe fork transaction succeeded, but refreshing the UI failed')
+				const message = formatRefreshErrorMessage(error, 'The universe forked, but the page could not be refreshed.')
 				zoltarForkFeedback.value = createWarningActionFeedback(result.action, getSuccessTitle(actionName), message, result.hash)
 				onTransactionPresented(createZoltarForkWarningPresentation(result, message))
 			}
@@ -334,7 +336,7 @@ export function useZoltarFork(
 		await runZoltarForkAction(
 			'fork',
 			async (walletAddress, universe, questionId) => {
-				if (universe.hasForked) throw new Error('This universe has already forked')
+				if (universe.hasForked) throw new Error(zoltarCopy.alreadyForkedReason)
 				return await dependencies.forkZoltarUniverse(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, universe.universeId, questionId)
 			},
 			'Failed to fork the universe',
@@ -344,7 +346,7 @@ export function useZoltarFork(
 	useEffect(() => {
 		if (!shouldAutoLoadForkAccess) return
 		void loadZoltarForkAccess().catch(error => {
-			zoltarForkError.value = getErrorMessage(error, 'Failed to load universe fork access')
+			zoltarForkError.value = getErrorMessage(error, 'Your REP balance and approval could not be loaded.')
 			console.error('[zoltar-fork] failed to auto-load fork access', error)
 		})
 	}, [accountAddress, activeUniverseId, environmentRefreshKey, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => `${child.universeId.toString()}:${child.exists ? 'deployed' : 'undeployed'}:${child.reputationToken}`).join(',')])

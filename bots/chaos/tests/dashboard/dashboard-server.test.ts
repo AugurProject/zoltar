@@ -1406,8 +1406,8 @@ describe('chaos dashboard server', () => {
 		expect(explorerUrl(undefined)).toBeUndefined()
 	})
 
-	test('projects the internal all-selection sentinel as an explicit public null', () => {
-		expect(Reflect.get(publicChaosConfiguration({ settings: { strategy: { selectableOperationAllowlist: undefined } } }), 'selectableOperationAllowlist')).toBeNull()
+	test('leaves unavailable selection policy unavailable instead of allowing every operation', () => {
+		expect(Reflect.get(publicChaosConfiguration({ settings: { strategy: { selectableOperationAllowlist: undefined } } }), 'selectableOperationAllowlist')).toBeUndefined()
 	})
 })
 
@@ -1438,6 +1438,15 @@ test('workflow history publishes safe failure reasons through the browser parser
 	})
 	const steps = parseSnapshot(state).workflows[0]?.steps
 	expect(steps?.[0]).toHaveProperty('failure', 'Create REP/WETH pool estimated gas ceiling exceeds strategy.maximumGasCostEth: estimated maximum 0.1165 ETH; configured maximum 0.02 ETH.')
-	expect(steps?.[1]).toHaveProperty('failure', 'Error detail withheld because it may contain sensitive data.')
+	expect(steps?.[1]).toHaveProperty('failure', 'RPC [redacted endpoint] failed')
 	expect(JSON.stringify(state)).not.toContain('password')
+})
+
+test('public activity and workflow failures retain diagnostics without escaped credential suffixes', () => {
+	const raw = `RPC failed: ${JSON.stringify({ password: 'prefix"SECRET_SUFFIX\\tail', authorization: 'prefix\\"SECRET_SUFFIX' })}; execution reverted: pool exists`
+	const reason = 'RPC failed: {"password":[redacted],"authorization":[redacted]}; execution reverted: pool exists'
+	const state = publicChaosState({ activities: [{ message: 'Operation failed', summary: raw, details: raw }], workflows: [{ status: 'abandoned', steps: [{ status: 'blocked', failure: raw }] }] })
+	expect(state['activities']).toEqual([{ label: 'Operation failed', summary: reason, details: reason }])
+	expect(state['workflows']).toEqual([{ status: 'abandoned', steps: [{ status: 'blocked', failure: reason }] }])
+	expect(JSON.stringify(state)).not.toContain('SECRET_SUFFIX')
 })

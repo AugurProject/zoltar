@@ -24,7 +24,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 	const atChainTimeOne = { chainTimestamp: 1n }
 	const endedPoolAt = (securityPoolAddress: Address) => createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress })
 	const yesReportingForm = (securityPoolAddress: Address | '') => createReportingForm({ securityPoolAddress, selectedOutcome: 'yes' })
-	const forkAuctionFailure = (onLoadForkAuction: () => void) => createForkAuctionProps({ forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable', onLoadForkAuction })
+	const forkAuctionFailure = (onLoadForkAuction: () => void) => createForkAuctionProps({ forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable.', onLoadForkAuction })
 
 	test('refreshes an already loaded queue when opening staged operations', async () => {
 		let loads = 0
@@ -108,7 +108,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 				onLoadReporting: () => {
 					reportingLoadCalls += 1
 				},
-				reportingError: 'Failed to load reporting details. Reason: RPC unavailable',
+				reportingError: 'Failed to load reporting details. Reason: RPC unavailable.',
 				reportingForm: yesReportingForm(zeroAddress),
 			}),
 			securityPools: [endedPoolAt(zeroAddress)],

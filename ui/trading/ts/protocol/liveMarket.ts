@@ -63,6 +63,16 @@ export function marketNewRiskBlocker(market: MarketLifecycle, nowSeconds: bigint
 	return undefined
 }
 
+/** What Settlement offers a holder once trading has ended: ETH redemption needs an operational security pool in a universe that has not forked. */
+export type MarketSettlementPath = 'redeem-complete-sets' | 'redeem-winning-shares' | 'migrate-shares' | 'unavailable'
+
+export function marketSettlementPath(market: Pick<MarketLifecycle, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>): MarketSettlementPath {
+	if (market.loadError !== undefined) return 'unavailable'
+	if (market.universeForkTime !== 0n) return 'migrate-shares'
+	if (market.systemState !== 0) return 'unavailable'
+	return market.questionOutcome === 3 ? 'redeem-complete-sets' : 'redeem-winning-shares'
+}
+
 export function marketAcceptsNewRisk(market: MarketLifecycle, nowSeconds: bigint) {
 	return marketNewRiskBlocker(market, nowSeconds) === undefined
 }

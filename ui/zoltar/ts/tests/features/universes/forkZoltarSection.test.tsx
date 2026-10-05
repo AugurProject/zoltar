@@ -118,7 +118,7 @@ describe('ForkZoltarSection', () => {
 				expect(document.querySelector('[role="alert"]')?.textContent).toContain('REP balance')
 				fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' }))
 				expect(retry).toHaveBeenCalledTimes(1)
-				expect(document.body.textContent?.split('Could not read your REP balance.').length).toBe(2)
+				expect(document.body.textContent?.split('Your REP balance could not be loaded.').length).toBe(2)
 				render(<ForkZoltarSection {...props} loadingZoltarForkAccess={true} />, rendered.container)
 				expect(document.querySelector('[role="alert"]')).toBeNull()
 				render(<ForkZoltarSection {...props} zoltarForkRepBalanceAttoRep={0n} />, rendered.container)
@@ -160,7 +160,7 @@ describe('ForkZoltarSection', () => {
 		)
 
 		expect(isForkButtonDisabled()).toBe(true)
-		expect(document.body.textContent).toContain('Loading universe details.')
+		expect(document.body.textContent).toContain('Loading universe details…')
 		expect(document.body.textContent).not.toContain('Refresh universe data')
 	})
 
@@ -195,10 +195,10 @@ describe('ForkZoltarSection', () => {
 			const props = createProps({ onForkZoltar, zoltarForkQuestionId: questionId, zoltarQuestions: [{ ...createQuestion(), questionId }] })
 			const renderedComponent = await renderSection({ ...props, hasLoadedZoltarQuestions: false, loadingZoltarQuestion: true, zoltarQuestions: [] })
 
-			expect(document.body.textContent).toContain('retrieving…')
+			expect(document.body.textContent).toContain('Loading…')
 			expect(isForkButtonDisabled()).toBe(true)
 			render(<ForkZoltarSection {...props} />, renderedComponent.container)
-			expect(document.body.textContent).not.toContain('retrieving…')
+			expect(document.body.textContent).not.toContain('Loading…')
 			expect(document.body.textContent).toContain('Fork question title')
 			const questionInput = within(document.body).getByRole('textbox', { name: 'Fork question ID' })
 			if (!(questionInput instanceof HTMLInputElement)) throw new Error('Expected the question ID field')
@@ -290,7 +290,7 @@ describe('ForkZoltarSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(isForkButtonDisabled()).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Loading current chain time before checking whether the selected question has ended.')
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Loading chain time…')
 
 		render(atChainTime(1n), renderedComponent.container)
 		const expectedActiveReason = `The selected question must end before the universe can fork. It ends ${formatTimestamp(2n)} (${formatRelativeTimestamp(2n, 1n)}).`

@@ -29,6 +29,8 @@ export type DeploymentRouteContentProps = {
 	isOnActiveAppChain: boolean
 	deployNextMissingPending: boolean
 	deploymentCompleteHref?: string
+	/** Names the destination of the deployment-complete link; defaults to the Zoltar question browser. */
+	deploymentCompleteLabel?: string
 	onDeploy: (stepId: DeploymentStepId) => Promise<void>
 	onDeployNextMissing: () => void
 	onRetryDeploymentStatus: () => void

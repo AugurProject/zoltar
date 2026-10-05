@@ -533,7 +533,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					</button>
 				</div>
 			</OperationModal>
-			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title={simulationCopy.removeCorruptedSavedStatesTitle}>
+			<OperationModal isOpen={modal.value === 'cleanup'} onClose={closeModal} title={simulationCopy.removeCorruptedSaves}>
 				<p className='detail'>{simulationCopy.invalidSavedStateCleanupHint}</p>
 				{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
 				<ErrorNotice message={savedStateError.value} />

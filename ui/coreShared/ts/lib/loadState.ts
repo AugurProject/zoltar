@@ -85,7 +85,7 @@ export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeout
 		return await track(async () => {
 			onStart?.()
 			try {
-				if (waitUntilReady !== undefined) await withTimeout(waitUntilReady(), 120_000, 'Backend readiness timed out. Please retry.')
+				if (waitUntilReady !== undefined) await withTimeout(waitUntilReady(), 120_000, 'The network connection took too long to become ready. Retry.')
 				if (!isCurrentRequest()) return undefined
 				const result = await runReadOperation(load, { timeoutMilliseconds, isCurrent: isCurrentRequest })
 				if (!isCurrentRequest()) return undefined

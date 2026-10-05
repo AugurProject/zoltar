@@ -11,6 +11,8 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { useVaultOperations } from '@zoltar/ui-statoblast-shared/features/vault-operations/hooks/useVaultOperations.js'
 import type { VaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/vault-operations/hooks/dependencies.js'
 import type { VaultOperationsResult } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
+import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
+import * as vaultOperationsCopy from '@zoltar/ui-statoblast-shared/copy/vaultOperations.js'
 import { createSelectedPool, createSecurityVaultDetails, createSecurityPoolVaultSummary, createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 const unit = 10n ** 18n
@@ -84,6 +86,30 @@ describe('vault operations lifecycle', () => {
 		await act(async () => await current.state().redeemRep())
 		expect(deps.claim).toHaveBeenCalledWith(owner, pool.securityPoolAddress, 'redeem', expect.anything())
 	})
+	test('translates a pool revert reason like the liquidation dialog does', async () => {
+		const current = await mount(
+			dependencies({
+				quote: async () => {
+					throw new Error('Target safe')
+				},
+			}),
+		)
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '1' }))
+		await waitFor(() => expect(current.state().quoteError).toBe(liquidationCopy.targetNotLiquidatableError))
+	})
+	test('closes an unmapped pool revert reason as a sentence', async () => {
+		const current = await mount(
+			dependencies({
+				quote: async () => {
+					throw new Error('Pool is paused')
+				},
+			}),
+		)
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '1' }))
+		await waitFor(() => expect(current.state().quoteError).toBe('Pool is paused.'))
+	})
 	test('can clear a persisted operational draft after the question resolves', async () => {
 		let resolved = false
 		const deps = dependencies({ loadResolved: async () => resolved })
@@ -116,7 +142,7 @@ describe('vault operations lifecycle', () => {
 		fees = 0n
 		await act(async () => await current.state().claimFees())
 		expect(deps.claim).not.toHaveBeenCalled()
-		expect(current.state().claimError).toContain('No claimable fees')
+		expect(current.state().claimError).toContain('No fees are available to claim')
 	})
 	test('claiming fees preserves the receipt and polling of a queued bundle', async () => {
 		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 0n, queuedOperation: { operation: 'vaultOperations', operationId: 2n, isPendingSlot: true } }
@@ -212,6 +238,21 @@ describe('vault operations lifecycle', () => {
 		await waitFor(() => expect(current.state().owned).toEqual(owned))
 	})
 
+	test.each([
+		['a translated pool reason', 'Target safe', liquidationCopy.targetNotLiquidatableError],
+		['no detail when the pool gave no reason', undefined, undefined],
+	] as const)('presents a failed queued result with a title and %s', async (_scenario, errorMessage, detail) => {
+		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 0n, queuedOperation: { operation: 'vaultOperations', operationId: 2n, isPendingSlot: true } }
+		const loadStatus = mock(async () => ({ status: 'failed' as const, execution: { operation: 'vaultOperations' as const, operationId: 2n, success: false, errorMessage } }))
+		const current = await mount(dependencies({ submit: async () => queued, loadStatus }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ deposit: '5' }))
+		await waitFor(() => expect(current.state().quote).toBeDefined())
+		await act(async () => await current.state().submit())
+		await waitFor(() => expect(current.state().status?.status).toBe('failed'))
+		expect(current.presented).toHaveBeenLastCalledWith(expect.objectContaining({ title: vaultOperationsCopy.failedTitle, detail, tone: 'error' }))
+	})
+
 	test('does not replay or poll terminal queued results after remount, and can dismiss them', async () => {
 		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 0n, queuedOperation: { operation: 'vaultOperations', operationId: 2n, isPendingSlot: true } }
 		const loadStatus = mock(async () => ({ status: 'executed' as const }))
@@ -265,12 +306,12 @@ describe('vault operations lifecycle', () => {
 		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
 		const claim = within(rendered.container).getByRole<HTMLButtonElement>('button', { name: 'Claim fees' })
 		await waitFor(() => expect(claim.disabled).toBe(fees === 0n))
-		if (fees === 0n) expect(rendered.container.textContent).toContain('No claimable fees')
+		if (fees === 0n) expect(rendered.container.textContent).toContain('No fees are available to claim')
 	})
 	test('panel presents confirmation in the submission area', async () => {
 		const rendered = await mountPanel(dependencies())
 		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
-		const deposit = within(rendered.container).getByLabelText('Deposit REP (optional)')
+		const deposit = within(rendered.container).getByLabelText('REP deposit amount (optional)')
 		await act(() => fireEvent.input(deposit, { target: { value: '5' } }))
 		const review = within(rendered.container).getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
 		await waitFor(() => expect(review.disabled).toBe(false))
@@ -284,7 +325,7 @@ describe('vault operations lifecycle', () => {
 		const queued: VaultOperationsResult = { hash: '0x02', depositAttoRep: 5n * unit, queuedOperation: { operation: 'vaultOperations', operationId: 42n, isPendingSlot: true } }
 		const rendered = await mountPanel(dependencies({ submit: async () => queued }), target, viewStaged)
 		const queries = within(rendered.container)
-		await act(() => fireEvent.input(queries.getByLabelText('Deposit REP (optional)'), { target: { value: '5' } }))
+		await act(() => fireEvent.input(queries.getByLabelText('REP deposit amount (optional)'), { target: { value: '5' } }))
 		const review = queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
 		await waitFor(() => expect(review.disabled).toBe(false))
 		await act(() => fireEvent.click(review))
@@ -297,7 +338,7 @@ describe('vault operations lifecycle', () => {
 		const pending = createDeferred<VaultOperationsResult>()
 		const rendered = await mountPanel(dependencies({ submit: () => pending.promise }))
 		const queries = within(rendered.container)
-		await act(() => fireEvent.input(queries.getByLabelText('Deposit REP (optional)'), { target: { value: '5' } }))
+		await act(() => fireEvent.input(queries.getByLabelText('REP deposit amount (optional)'), { target: { value: '5' } }))
 		const review = queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
 		await waitFor(() => expect(review.disabled).toBe(false))
 		await act(() => fireEvent.click(review))
@@ -310,7 +351,7 @@ describe('vault operations lifecycle', () => {
 		const rendered = await mountPanel(dependencies({ loadOwned: async () => ({ ...owned, minimumVaultRepDepositAttoRep: minimum }) }))
 		const expected = minimum === 10n * unit ? 'Minimum vault backing: 10 REP' : 'Minimum vault backing: 0.125 REP'
 		await waitFor(() => expect(rendered.container.textContent).toContain(expected))
-		const deposit = within(rendered.container).getByLabelText('Deposit REP (optional)')
+		const deposit = within(rendered.container).getByLabelText('REP deposit amount (optional)')
 		const hint = within(rendered.container).getByText(expected)
 		expect(deposit.closest('.amount-field')?.contains(hint)).toBe(true)
 		expect(deposit.getAttribute('aria-describedby')?.split(' ')).toContain(hint.id)
@@ -382,10 +423,10 @@ describe('vault operations lifecycle', () => {
 			appBlockWatcher.reportBlock(9100n)
 			appBlockWatcher.reportBlock(9101n)
 		})
-		await waitFor(() => expect(rendered.container.textContent).toContain('Target vault is unavailable'))
+		await waitFor(() => expect(rendered.container.textContent).toContain('This vault has no commitment to liquidate'))
 		expect(checkbox.disabled).toBe(false)
 		await act(() => fireEvent.click(checkbox))
-		await waitFor(() => expect(within(rendered.container).queryByText('Commitment to take over')).toBeNull())
+		await waitFor(() => expect(within(rendered.container).queryByText('Commitment to transfer')).toBeNull())
 	})
 	test('pool render copies do not restart or starve vault reads', async () => {
 		const loadOwned = mock(async () => owned)

@@ -81,6 +81,31 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Configured read RPC reports chain 11155111, but this app requires Ethereum mainnet (1). Displayed onchain state may not match the network this interface writes to.')).not.toBeNull()
 	})
 
+	test('titles an out-of-date read RPC from its typed issue, not its message text', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				errorMessage: undefined,
+				readBackendMessage: 'Configured read RPC is out of date.',
+				readBackendStatus: {
+					blockNumber: undefined,
+					blockTimestamp: undefined,
+					issue: 'stale',
+					rpcSource: 'default',
+					rpcUrl: 'https://ethereum.dark.florist',
+					transportMode: 'rpc',
+				},
+				showApplicationDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Read RPC out of date')).not.toBeNull()
+		expect(documentQueries.queryByText('Read RPC mismatch')).toBeNull()
+		expect(documentQueries.getByText('Configured read RPC is out of date. Displayed onchain state may be behind the latest chain state. Switch to an up-to-date RPC before sending transactions.')).not.toBeNull()
+	})
+
 	test('warns when the read RPC comes from the page URL', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
@@ -100,10 +125,10 @@ describe('AppStatusNotices', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('URL-provided read RPC')).not.toBeNull()
-		expect(documentQueries.getByText('Custom read RPC active. Verify it before acting on displayed chain state.')).not.toBeNull()
+		expect(documentQueries.getByText('Custom RPC URL from page URL')).not.toBeNull()
+		expect(documentQueries.getByText('A custom RPC URL is active. Verify it before acting on displayed onchain state.')).not.toBeNull()
 		expect(documentQueries.getByText('Technical details')).not.toBeNull()
-		expect(documentQueries.getByText('Active read RPC came from the page URL: https://query.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
+		expect(documentQueries.getByText('Active read RPC came from the page URL: https://query.example/path.')).not.toBeNull()
 	})
 
 	test('shows source and URL for a stored read RPC override', async () => {
@@ -125,9 +150,9 @@ describe('AppStatusNotices', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Read RPC override active')).not.toBeNull()
-		expect(documentQueries.getByText('Custom read RPC active. Verify it before acting on displayed chain state.')).not.toBeNull()
-		expect(documentQueries.getByText('Active read RPC came from local storage: https://storage.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
+		expect(documentQueries.getByText('Custom RPC URL active')).not.toBeNull()
+		expect(documentQueries.getByText('A custom RPC URL is active. Verify it before acting on displayed onchain state.')).not.toBeNull()
+		expect(documentQueries.getByText('Active read RPC is the custom RPC URL saved in Settings: https://storage.example/path.')).not.toBeNull()
 	})
 
 	test('warns when a stored read RPC override is ignored', async () => {
@@ -154,9 +179,9 @@ describe('AppStatusNotices', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Read RPC override ignored')).not.toBeNull()
-		expect(documentQueries.getByText('A custom read RPC was ignored. The configured fallback is active.')).not.toBeNull()
-		expect(documentQueries.getByText('Ignored local storage RPC override (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
+		expect(documentQueries.getByText('Custom RPC URL ignored')).not.toBeNull()
+		expect(documentQueries.getByText('A custom RPC URL was ignored. The configured fallback is active.')).not.toBeNull()
+		expect(documentQueries.getByText('Ignored the custom RPC URL from Settings (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
 	})
 
 	test('shows deployment setup and top-level errors without a wrong-network notice', async () => {

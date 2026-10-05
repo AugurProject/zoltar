@@ -33,7 +33,7 @@ export function isBrowserSmokeReady(state: BrowserSmokeState, applicationTitle: 
 		state.width === viewport.width &&
 		state.height === viewport.height &&
 		state.body !== '' &&
-		state.body !== 'Loading...' &&
+		state.body !== 'Loading…' &&
 		includesText(applicationTitle) &&
 		(explicitReadyStateReached || (!state.body.includes('BOOTSTRAPPING') && !state.body.includes('Starting simulation bootstrap'))) &&
 		(readyText === undefined || includesText(readyText))

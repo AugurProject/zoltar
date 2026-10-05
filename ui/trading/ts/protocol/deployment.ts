@@ -1,5 +1,5 @@
-import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { getAddress, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { PROXY_DEPLOYER_RUNTIME_CODE, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -40,32 +40,13 @@ type TradingDeploymentWallet = Readonly<{
 
 const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-const zeroSalt = toHex(0, { size: 32 })
-
-function requireFeeBps(feeBps: number) {
-	if (!Number.isSafeInteger(feeBps) || feeBps < 0 || feeBps >= 10_000) throw new Error('Trading fee must be a whole number from 0 to 9999 basis points')
-	return feeBps
-}
-
 export function getTradingDeploymentPlan(core: CoreDeployment, feeBps: number): TradingDeploymentPlan {
-	const checkedFeeBps = requireFeeBps(feeBps)
-	const factoryData = encodeDeployData({
-		abi: factoryContract.abi,
-		bytecode: `0x${factoryContract.evm.bytecode.object}`,
-		args: [core.securityPoolFactory, BigInt(checkedFeeBps)],
-	})
-	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: core.proxyDeployer, salt: zeroSalt })
-	const routerData = encodeDeployData({
-		abi: routerContract.abi,
-		bytecode: `0x${routerContract.evm.bytecode.object}`,
-		args: [factoryAddress],
-	})
-	const routerAddress = getCreate2Address({ bytecode: routerData, from: core.proxyDeployer, salt: zeroSalt })
+	const { factoryAddress, factoryData, routerAddress, routerData } = tradingDeploymentData(core.proxyDeployer, core.securityPoolFactory, feeBps, { abi: factoryContract.abi, bytecode: `0x${factoryContract.evm.bytecode.object}` }, { abi: routerContract.abi, bytecode: `0x${routerContract.evm.bytecode.object}` })
 	return {
 		core,
-		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'TwoWayConstantProductFactory' },
-		feeBps: checkedFeeBps,
-		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'TwoWayConstantProductRouter' },
+		factory: { address: factoryAddress, data: factoryData, dependencies: [], id: 'factory', label: 'Trading factory' },
+		feeBps,
+		router: { address: routerAddress, data: routerData, dependencies: ['factory'], id: 'router', label: 'Trading router' },
 	}
 }
 
@@ -101,26 +82,26 @@ async function requireCode(client: Pick<PublicClient, 'getCode'>, address: Addre
 
 async function validateTradingFactory(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
 	const [securityPoolFactory, feeBps] = await Promise.all([client.readContract({ abi: factoryContract.abi, address: plan.factory.address, functionName: 'securityPoolFactory' }), client.readContract({ abi: factoryContract.abi, address: plan.factory.address, functionName: 'feeBps' })])
-	if (getAddress(securityPoolFactory) !== plan.core.securityPoolFactory) throw new Error('TwoWayConstantProductFactory references a different SecurityPoolFactory')
-	if (feeBps !== BigInt(plan.feeBps)) throw new Error('TwoWayConstantProductFactory fee does not match the selected fee')
+	if (getAddress(securityPoolFactory) !== plan.core.securityPoolFactory) throw new Error('The trading factory references a different security pool factory')
+	if (feeBps !== BigInt(plan.feeBps)) throw new Error('The trading factory fee does not match the selected fee')
 }
 
 async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
 	const factory = await client.readContract({ abi: routerContract.abi, address: plan.router.address, functionName: 'factory' })
-	if (getAddress(factory) !== plan.factory.address) throw new Error('TwoWayConstantProductRouter references a different TwoWayConstantProductFactory')
+	if (getAddress(factory) !== plan.factory.address) throw new Error('The trading router references a different trading factory')
 }
 
 export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan) {
 	const [proxyCode] = await Promise.all([client.getCode({ address: plan.core.proxyDeployer }), requireCode(client, plan.core.securityPoolFactory, 'SecurityPoolFactory')])
-	if (proxyCode === undefined || proxyCode === '0x') throw tradingDeploymentMissingError(`Canonical proxy deployer has no code at ${plan.core.proxyDeployer}`)
-	if (proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Canonical proxy deployer has unexpected code at ${plan.core.proxyDeployer}`)
+	if (proxyCode === undefined || proxyCode === '0x') throw tradingDeploymentMissingError(`The shared proxy deployer has no code at ${plan.core.proxyDeployer}`)
+	if (proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`The shared proxy deployer has unexpected code at ${plan.core.proxyDeployer}`)
 	const factoryCode = await client.getCode({ address: plan.factory.address })
 	const factoryDeployed = factoryCode !== undefined && factoryCode !== '0x'
 	if (factoryDeployed) await validateTradingFactory(client, plan)
 	const routerCode = await client.getCode({ address: plan.router.address })
 	const routerDeployed = routerCode !== undefined && routerCode !== '0x'
 	if (routerDeployed) {
-		if (!factoryDeployed) throw new Error('TwoWayConstantProductRouter exists without its expected TwoWayConstantProductFactory')
+		if (!factoryDeployed) throw new Error('The trading router exists without its expected trading factory')
 		await validateTradingRouter(client, plan)
 	}
 	return { factory: factoryDeployed, router: routerDeployed }

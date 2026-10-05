@@ -179,7 +179,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'))
 						expect(rendered.container.textContent).not.toContain('discovery failed')
 						expect(rendered.container.textContent).not.toContain('Retry')
-						const back = Array.from(rendered.container.querySelectorAll('a')).find(link => link.textContent === 'Back to security pools')
+						const back = Array.from(rendered.container.querySelectorAll('a')).find(link => link.textContent === 'Back to create market')
 						expect(back?.getAttribute('href')).toContain('#/create-market')
 					} finally {
 						rendered.cleanup()
@@ -320,7 +320,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						}),
 					)
 					try {
-						await waitFor(() => expect(addressed.container.textContent).toContain(directRoute.startsWith('security-pool/') ? 'Registered vaults' : 'AMM fee'), { timeout: 10_000 })
+						await waitFor(() => expect(addressed.container.textContent).toContain(directRoute.startsWith('security-pool/') ? 'Registered vaults' : 'Trading fee'), { timeout: 10_000 })
 						expect(addressed.container.querySelector('.market-list')).toBeNull()
 						expect(addressed.container.querySelector('.mobile-return')).toBeNull()
 					} finally {
@@ -426,7 +426,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			const market = discovery.markets[0]
 			if (market === undefined) throw new Error('Expected an unavailable market row')
 			expect(market.pool).toBe(pool)
-			expect(market.loadError).toBe('Market reads failed')
+			expect(market.loadError).toBe('Market data could not be read.')
 			expect(market.loadError).not.toContain('1793')
 			expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
 		}, 180_000)

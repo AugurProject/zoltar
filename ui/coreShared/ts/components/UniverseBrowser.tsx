@@ -119,7 +119,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 					</div>
 					{universe.hasForked && universe.forkTime > 0n ? (
 						<p className='detail'>
-							{universeCopy.forkedOnLabel} <TimestampValue timestamp={universe.forkTime} />
+							{commonCopy.forked} <TimestampValue timestamp={universe.forkTime} />
 						</p>
 					) : undefined}
 					{actions === undefined ? undefined : <div className='actions'>{actions}</div>}

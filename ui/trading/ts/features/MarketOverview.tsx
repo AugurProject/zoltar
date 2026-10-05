@@ -12,6 +12,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { liveCopy } from '../copy/live.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { marketsCopy } from '../copy/markets.js'
@@ -36,9 +37,9 @@ export function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMa
 				</>
 			}
 			items={[
-				{ label: liveCopy.securityPoolLabel, value: <TradingSecurityPoolLink value={market.pool} /> },
+				{ label: liveCopy.securityPool, value: <TradingSecurityPoolLink value={market.pool} /> },
 				...(market.loadError === undefined
-					? [{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> }, ...(liquidity === undefined ? [] : [{ label: marketsCopy.liquidity, value: liquidity }]), { label: liveCopy.ammFee, value: formatScaledPercentage(market.feeBps, 2) }]
+					? [{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> }, ...(liquidity === undefined ? [] : [{ label: marketsCopy.liquidity, value: liquidity }]), { label: liveCopy.tradingFee, value: formatScaledPercentage(market.feeBps, 2) }]
 					: []),
 			]}
 		/>
@@ -49,11 +50,11 @@ export function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMa
 export function MarketContracts({ market }: { market: LiveMarket }) {
 	return (
 		<ReadOnlyDetailAccordion title={marketsCopy.contracts}>
-			<DataGrid dense>
-				<MetricField label={liveCopy.securityPoolLabel}>
+			<DataGrid dense className='market-contracts-grid'>
+				<MetricField label={liveCopy.securityPool}>
 					<TradingSecurityPoolLink value={market.pool} />
 				</MetricField>
-				<MetricField label={liveCopy.pair}>{market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation />}</MetricField>
+				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation />}</MetricField>
 				<MetricField label={marketsCopy.shareToken}>
 					<ReadOnlyAddressValue address={market.shareToken} responsiveAbbreviation />
 				</MetricField>
@@ -92,13 +93,13 @@ export function MarketOverview({ market, position }: { market: LiveMarket; posit
 	const liquidity = formatMarketLiquidity(market)
 	return (
 		<div className='market-overview'>
-			{yesTenths === undefined ? <UserMessage className='detail' detail={marketsCopy.oddsUnavailable} /> : <ProbabilityBar yesPercent={yesTenths / 10} />}
+			{yesTenths === undefined ? <UserMessage className='detail' detail={marketsCopy.priceUnavailable} /> : <ProbabilityBar yesPercent={yesTenths / 10} />}
 			<DataGrid className='market-facts'>
 				<MetricField label={liveCopy.questionEnd}>
 					<TimestampValue timestamp={market.endTime} relative={false} />
 				</MetricField>
 				{liquidity === undefined ? undefined : <MetricField label={marketsCopy.liquidity}>{liquidity}</MetricField>}
-				<MetricField label={liveCopy.ammFee}>{formatScaledPercentage(market.feeBps, 2)}</MetricField>
+				<MetricField label={liveCopy.tradingFee}>{formatScaledPercentage(market.feeBps, 2)}</MetricField>
 			</DataGrid>
 			{position}
 			<section className='market-description' aria-labelledby='market-description-heading'>

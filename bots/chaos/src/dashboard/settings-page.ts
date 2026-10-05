@@ -53,19 +53,6 @@ function PolicySwitches() {
 			label: 'Initialize genesis universe',
 			name: 'initializeGenesisUniverse',
 		}),
-		h(DescribedSwitch, {
-			description: h(
-				Fragment,
-				null,
-				'Turn this off for a staged rollout, then enable operations in the',
-				' ',
-				h('a', { id: 'selectable-operation-catalog-link', class: 'text-link', href: '/catalog' }, 'Operation catalog'),
-				'. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
-			),
-			id: 'all-selectable-operations',
-			label: 'Allow every selectable operation',
-			name: 'allSelectableOperations',
-		}),
 	)
 }
 
@@ -91,12 +78,7 @@ function PolicyPanel() {
 				'fieldset',
 				{ id: 'settings-fields', disabled: true },
 				h(PolicySwitches, null),
-				h(
-					'label',
-					{ class: 'selectable-operation-allowlist-label', for: 'selectable-operation-allowlist' },
-					h('span', null, 'Selectable operation allowlist'),
-					h('textarea', { id: 'selectable-operation-allowlist', 'aria-describedby': 'all-selectable-operations-help', placeholder: 'One exact definition ID per line, for example:\nopen-oracle.weth.wrap', rows: 5, spellcheck: false }),
-				),
+				h('p', { class: 'section-note' }, 'Choose operations in the ', h('a', { id: 'selectable-operation-catalog-link', class: 'text-link', href: '/catalog' }, 'Operation catalog'), '.'),
 				h(
 					'div',
 					{ class: 'field-grid' },

@@ -1,3 +1,5 @@
+import { portfolioBalancesUnavailable } from '../../copy/portfolio.js'
+import * as workflowCopy from '../../copy/workflows.js'
 import { createPortfolioReadQueue } from './portfolioReadQueue.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -86,7 +88,7 @@ export function usePortfolioRefreshEffects({
 			portfolioBalanceRequests.invalidate()
 			portfolioQueue.current = undefined
 			queries.setPortfolioBalanceState(walletContextInvalidated ? 'error' : 'disconnected')
-			queries.setPortfolioBalanceError(walletContextInvalidated ? 'Wallet context changed; reconnect before loading portfolio positions' : undefined)
+			queries.setPortfolioBalanceError(walletContextInvalidated ? 'Your wallet account or network changed. Reconnect to load portfolio positions.' : undefined)
 			return
 		}
 		const queueKey = `${scopeKey}|${configuration.rpcUrl}|${configuration.zoltar}|${queries.portfolioRefreshNonce.toString()}`
@@ -106,7 +108,7 @@ export function usePortfolioRefreshEffects({
 						const loaded = await withReadTimeout(services.loadLiveBalances(client, market, account))
 						return { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
 					} catch (error) {
-						return { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
+						return { market, balances: undefined, error: publicErrorMessage(error, workflowCopy.balanceRefreshFailed) }
 					}
 				}),
 			}
@@ -131,7 +133,7 @@ export function usePortfolioRefreshEffects({
 			.catch(error => {
 				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
 				queries.setPortfolioBalanceState('error')
-				queries.setPortfolioBalanceError(publicErrorMessage(error, 'Portfolio balance refresh failed'))
+				queries.setPortfolioBalanceError(publicErrorMessage(error, portfolioBalancesUnavailable))
 			})
 	}, [account, configuration, marketRevision, queries.portfolioRefreshNonce, route, selectedUniverseId, walletContextInvalidated])
 
@@ -178,7 +180,7 @@ export function usePortfolioRefreshEffects({
 				settle()
 				if (!balanceRequests.isCurrent(request)) return
 				queries.setBalanceState('error')
-				queries.setBalanceError(publicErrorMessage(error, 'Balance refresh failed'))
+				queries.setBalanceError(publicErrorMessage(error, workflowCopy.balanceRefreshFailed))
 			},
 		)
 	}, [account, configuration, route, selected, walletContextInvalidated])

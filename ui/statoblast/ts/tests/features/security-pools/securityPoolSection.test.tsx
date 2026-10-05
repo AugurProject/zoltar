@@ -130,21 +130,21 @@ describe('SecurityPoolSection', () => {
 	})
 
 	test('shows a failed pool write only in the shared transaction dialog', async () => {
-		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Security pool creation', tone: 'error' as const }
+		const transaction = { detail: 'Rejected in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Security pool creation', tone: 'error' as const }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={transaction}>
-				<SecurityPoolSection {...createProps({ securityPoolError: 'Action canceled in wallet.' })} />
+				<SecurityPoolSection {...createProps({ securityPoolError: 'Rejected in wallet.' })} />
 				<GlobalTransactionDialog transaction={transaction} />
 			</GlobalTransactionPresentationProvider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const queries = within(document.body)
 		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
-		expect(within(dialog).getByText('Action canceled in wallet.')).not.toBeNull()
-		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Action canceled in wallet.')
+		expect(within(dialog).getByText('Rejected in wallet.')).not.toBeNull()
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Rejected in wallet.')
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
 		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
-		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Action canceled in wallet.')
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Rejected in wallet.')
 		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 	})
 
@@ -240,7 +240,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = blockedRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Create pool', 'Security pools can only be created for exact binary Yes / No questions.')
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Security pools can only be created for binary Yes / No questions. Enter an eligible question to proceed.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -260,7 +260,7 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
-		expect(documentQueries.getByText('Starting open interest fee / year')).not.toBeNull()
+		expect(documentQueries.getByText('Initial open interest fee / year')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open interest fee / year (%)' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
@@ -327,7 +327,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const message = 'Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.'
+		const message = 'Initial report priority fee must be greater than 0\u00a0nanoETH per gas.'
 		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial report priority fee' })
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBeNull()
 		expect(document.getElementById('security-pool-initial-report-priority-fee-error')).toBeNull()
@@ -349,8 +349,8 @@ describe('SecurityPoolSection', () => {
 			['', 'Enter a security multiplier of at least 1.0002×.'],
 			['1', 'Security multiplier must be at least 1.0002×.'],
 			['1.0001', 'Security multiplier must be at least 1.0002×.'],
-			['bad', 'Enter a multiplier with at most 4 decimal places.'],
-			['2.00001', 'Enter a multiplier with at most 4 decimal places.'],
+			['bad', 'Enter a security multiplier with up to four decimal places.'],
+			['2.00001', 'Enter a security multiplier with up to four decimal places.'],
 		] as const) {
 			const renderedComponent = await renderIntoDocument(
 				h(
@@ -436,14 +436,14 @@ describe('SecurityPoolSection', () => {
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Missing required fields: Title, End time')
+		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Missing required fields: Title, End time.')
 	})
 
 	test('blocks a duplicate question and links its existing pool', async () => {
 		const poolAddress = getAddress('0x0000000000000000000000000000000000000002')
 		await renderNewQuestionForm({ existingQuestionCheck: { status: 'existing', questionId: '123', poolAddress }, marketForm: readyBinaryMarketForm })
 		expect(within(document.body).queryByRole('button', { name: 'Create question and pool' })).toBeNull()
-		const existingPoolLink = within(document.body).getByRole('link', { name: 'Open existing pool →' })
+		const existingPoolLink = within(document.body).getByRole('link', { name: 'Open existing pool' })
 		expect(existingPoolLink.getAttribute('href')).toContain(poolAddress)
 		expect(existingPoolLink.classList.contains('existing-pool-action')).toBe(true)
 		expect(document.body.textContent).toContain('A pool already exists for this question and configuration.')
@@ -468,7 +468,7 @@ describe('SecurityPoolSection', () => {
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
+		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Security pools can only be created for binary Yes / No questions. Enter an eligible question to proceed.')
 		fireEvent.click(button)
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
 		expect(document.querySelector('.question-type-fixed')?.textContent).toContain('Binary')
@@ -575,7 +575,7 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Enter an exact binary Yes / No Zoltar question ID.')).not.toBeNull()
+		expect(documentQueries.getByText('Enter the ID of a binary Yes / No question.')).not.toBeNull()
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Load Question' })).toBeNull()
@@ -672,7 +672,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
 		expectTransactionButtonDisabled(document.body, 'Pool already exists', 'A pool for this question, security multiplier, and priority fee already exists.')
-		expect(document.body.textContent).toContain('Change the priority fee or security multiplier to create a different origin pool.')
+		expect(document.body.textContent).toContain('Change the priority fee or security multiplier to create a different pool.')
 		expect(document.querySelector(`a[href*='${duplicatePoolAddress}']`)).not.toBeNull()
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -755,7 +755,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
 		})
 
-		const warning = within(document.body).getByText('This pool belongs to Universe 0x1')
+		const warning = within(document.body).getByText('This pool belongs to Universe 0x1.')
 		expect(warning.closest('.entity-card') !== null).toBe(true)
 		expect(within(document.body).queryByText('Universe mismatch') === null).toBe(true)
 	})

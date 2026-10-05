@@ -1,6 +1,7 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, getTruthAuctionWinningThresholdPrice, type TruthAuctionBidDisposition } from './truthAuctionBook.js'
 
 export type TruthAuctionSettlementBidRow = {
@@ -134,11 +135,11 @@ export function getTruthAuctionSettlementActionAvailabilityMessage({
 	truthAuction: TruthAuctionMetrics | undefined
 }) {
 	const bidActionAvailability = (() => {
-		if (selectedRows.length === 0) return 'Pick one or more of your bids before settlement.'
-		if (truthAuction === undefined) return 'Loading truth auction.'
+		if (selectedRows.length === 0) return 'Select one or more of your bids to settle.'
+		if (truthAuction === undefined) return forkAuctionCopy.loadingTruthAuction
 		if (truthAuction.finalized && selectionHasClaims && claimingAvailable === false) return 'Finalized settlement is not available for this pool.'
 		if (selectionHasClaims && !truthAuction.finalized) return 'Winning bids can only be settled after the truth auction is finalized.'
-		if (!truthAuction.finalized && (!truthAuction.hitCap || truthAuction.clearingTick === undefined)) return 'Losing bids cannot be refunded until the auction has a clearing tick.'
+		if (!truthAuction.finalized && (!truthAuction.hitCap || truthAuction.clearingTick === undefined)) return 'Losing bids cannot be refunded until the truth auction has a clearing price.'
 		return undefined
 	})()
 

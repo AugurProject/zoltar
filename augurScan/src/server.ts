@@ -2,10 +2,11 @@ import path from 'node:path'
 import { handleApi } from './api.ts'
 import { runtimeConfig } from './config.ts'
 import { readIndexerHealth, ScannerDatabase } from './database.ts'
-import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, liveStreamResponse, metricRoute, requestAccessGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from './http.ts'
+import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, liveStreamResponse, metricRoute, requestRateLimitGuard, SECURITY_HEADERS, staticAssetResponse, staticContentType, withSecurityHeaders } from './http.ts'
 import { createConcurrencyGate } from './limits.ts'
 import { createLiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
+import { apiFailureLog } from './api-failure-log.ts'
 import { initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
 
 installConsoleTimestamps()
@@ -93,10 +94,10 @@ const server = Bun.serve({
 				}),
 			)
 		}
-		const accessGuard = requestAccessGuard(request, url.pathname, server.requestIP(request)?.address ?? 'unknown', runtimeConfig.accessCredentials, apiRateLimit, securityHeaders)
-		if (accessGuard !== undefined) {
-			if (accessGuard.reason === 'rate-limit') requestMetrics.recordRateLimitRejection()
-			return respond(accessGuard.response)
+		const rateLimitResponse = requestRateLimitGuard(url.pathname, server.requestIP(request)?.address ?? 'unknown', apiRateLimit, securityHeaders)
+		if (rateLimitResponse !== undefined) {
+			requestMetrics.recordRateLimitRejection()
+			return respond(rateLimitResponse)
 		}
 		if (url.pathname === '/metrics') {
 			try {
@@ -147,7 +148,7 @@ const server = Bun.serve({
 						}
 						return Response.json({ error: 'Not found' }, { status: 404, headers: securityHeaders })
 					} catch (error) {
-						console.error(`augurScan API transaction failed (${error instanceof Error ? error.name : typeof error})`)
+						console.error(apiFailureLog(request, error, startedAt, 'transaction'))
 						return Response.json({ error: 'Internal server error' }, { status: 500, headers: securityHeaders })
 					}
 				}),

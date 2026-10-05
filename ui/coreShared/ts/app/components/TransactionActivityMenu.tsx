@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef } from 'preact/hooks'
 import { useDisclosurePopover } from '../../hooks/useDisclosurePopover.js'
 import { abbreviateAddress } from '../../lib/address.js'
+import * as commonCopy from '../../copy/common.js'
+import * as transactionCopy from '../../copy/transaction.js'
 import * as copy from '../../copy/transactionActivity.js'
 import { Badge } from '../../components/Badge.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
@@ -11,8 +13,8 @@ import { buildTransactionExplorerUrl } from '../../wallet/networkProfile.js'
 import type { BadgeTone } from '../../types/components.js'
 
 function getStatusPresentation(entry: TransactionActivityEntry): { label: string; tone: BadgeTone } {
-	if (entry.status === 'pending') return { label: copy.pending, tone: 'pending' }
-	if (entry.status === 'confirmed') return { label: copy.confirmed, tone: 'ok' }
+	if (entry.status === 'pending') return { label: commonCopy.pending, tone: 'pending' }
+	if (entry.status === 'confirmed') return { label: transactionCopy.confirmed, tone: 'ok' }
 	switch (entry.failureKind) {
 		case 'rejected':
 			return { label: copy.rejected, tone: 'danger' }
@@ -23,7 +25,7 @@ function getStatusPresentation(entry: TransactionActivityEntry): { label: string
 		case 'dropped':
 			return { label: copy.dropped, tone: 'warning' }
 		default:
-			return { label: copy.failed, tone: 'danger' }
+			return { label: commonCopy.failed, tone: 'danger' }
 	}
 }
 
@@ -44,7 +46,7 @@ function ActivityRow({ entry }: { entry: TransactionActivityEntry }) {
 				{explorerUrl === undefined ? (
 					<span className='transaction-activity-hash'>{abbreviateAddress(entry.hash, 10, 6)}</span>
 				) : (
-					<a className='transaction-activity-hash' href={explorerUrl} target='_blank' rel='noreferrer' aria-label={copy.formatViewTransaction(entry.hash)}>
+					<a className='transaction-activity-hash' href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewTransactionOnExplorer(entry.hash)}>
 						{abbreviateAddress(entry.hash, 10, 6)}
 					</a>
 				)}

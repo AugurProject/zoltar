@@ -63,7 +63,7 @@ export function getRouteSecondaryNavigation({
 					options: [
 						{ href: getPoolsViewHref('browse'), label: commonCopy.browsePools, value: 'browse' },
 						{ href: getPoolsViewHref('create'), label: commonCopy.createPool, value: 'create' },
-						{ href: getPoolsViewHref('universes'), label: commonCopy.universe, value: 'universes' },
+						{ href: getPoolsViewHref('universes'), label: zoltarCopy.universesTitle, value: 'universes' },
 						...(activeSecurityPoolsView === 'migrate' ? [{ href: getPoolsViewHref('migrate'), label: zoltarCopy.migrateRep, value: 'migrate' as const }] : []),
 					],
 				})

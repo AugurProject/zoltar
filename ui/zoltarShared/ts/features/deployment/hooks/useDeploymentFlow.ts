@@ -1,4 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import * as deploymentCopy from '../../../copy/deployment.js'
 import { useSignal } from '@preact/signals'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
@@ -45,7 +47,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 				message => {
 					const resolvedMessage = message ?? commonCopy.walletConnectionRequired
 					errorMessage.value = resolvedMessage
-					deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', resolvedMessage)
+					deploymentFeedback.value = createErrorActionFeedback(feedbackAction, deploymentCopy.deploymentFailed, resolvedMessage)
 				},
 				'deploying',
 			)
@@ -58,9 +60,9 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 
 		const prerequisiteLabel = getPrerequisiteLabel(deploymentStatuses, stepIndex)
 		if (prerequisiteLabel !== undefined) {
-			const message = `Deploy ${prerequisiteLabel} first`
+			const message = deploymentCopy.formatDeployPrerequisiteFirstError(prerequisiteLabel)
 			errorMessage.value = message
-			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment blocked', message)
+			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, deploymentCopy.deploymentBlocked, message)
 			return
 		}
 
@@ -69,14 +71,14 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 
 		busyStepId.value = step.id
 		errorMessage.value = undefined
-		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, `Deploying ${step.label}`)
+		deploymentFeedback.value = createPendingActionFeedback(feedbackAction, transactionCopy.formatDeployingValue(step.label))
 		let ownsTransaction = false
 		let requestKey: TransactionRequestKey | undefined
 
 		try {
 			await assertActiveWallet(accountAddress)
 			if (!environmentGuard.isCurrent()) return
-			if (step.expectedRuntimeCodeHash === undefined && !step.trustedSimulationCodePresence) throw new Error(`Exact runtime-code verification is unavailable for ${step.label} on the active network`)
+			if (step.expectedRuntimeCodeHash === undefined && !step.trustedSimulationCodePresence) throw new Error(deploymentCopy.formatDeploymentUnverifiableError(step.label))
 			const client = createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted })
 			const existingCode = await client.getCode({ address: step.address })
 			if (!environmentGuard.isCurrent()) return
@@ -102,21 +104,21 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 			)
 			if (!environmentGuard.isCurrent()) return
 			if (!assertDeploymentStepRuntimeCode(step, code)) {
-				const message = 'Deployment verification failed: no contract code was found at the expected address. Check the selected network and retry.'
+				const message = deploymentCopy.deploymentVerificationFailedError
 				errorMessage.value = message
 				onTransactionFailed?.(message, { requestKey })
-				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
+				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, deploymentCopy.deploymentFailed, message)
 				return
 			}
 			setDeploymentStatuses(current => current.map(currentStep => (currentStep.id === step.id ? { ...currentStep, deployed: true } : currentStep)))
-			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, `${step.label} deployed`, hash)
+			deploymentFeedback.value = createSuccessActionFeedback(feedbackAction, transactionCopy.formatValueDeployed(step.label), hash)
 			onTransactionPresented(createDeploymentSuccessPresentation(step.label, hash))
 		} catch (error) {
 			if (!environmentGuard.isCurrent()) return
 			const message = formatWriteErrorMessage(error, `Failed to deploy ${step.label}`)
 			errorMessage.value = message
 			if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
-			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', message)
+			deploymentFeedback.value = createErrorActionFeedback(feedbackAction, deploymentCopy.deploymentFailed, message)
 		} finally {
 			if (environmentGuard.isCurrent()) {
 				busyStepId.value = undefined

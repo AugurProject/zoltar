@@ -4,6 +4,7 @@ import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 import { getUniswapNetworkDeployment, MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { DEFAULT_NETWORK, MAINNET_ENABLED } from './networkAvailability.js'
 import { sameChainId } from './chainId.js'
+import * as appCopy from '../copy/app.js'
 
 export type NetworkProfile = {
 	chain: Chain
@@ -31,7 +32,7 @@ const SEPOLIA_USDC_ADDRESS = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7
 
 const simulationChain = defineChain({
 	id: 1337,
-	name: 'Browser simulation',
+	name: appCopy.browserSimulation,
 	nativeCurrency: {
 		decimals: 18,
 		name: 'Ether',
@@ -47,7 +48,7 @@ const simulationChain = defineChain({
 export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	chain: mainnet,
 	chainIdHex: '0x1',
-	displayName: 'Ethereum mainnet',
+	displayName: appCopy.ethereumMainnet,
 	genesisRepTokenAddress: '0x221657776846890989a759ba2973e427dff5c9bb',
 	id: 'mainnet',
 	isSupportedAppChain: true,
@@ -64,7 +65,7 @@ export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 	chain: sepolia,
 	chainIdHex: '0xaa36a7',
-	displayName: 'Sepolia',
+	displayName: appCopy.sepolia,
 	genesisRepTokenAddress: SEPOLIA_GENESIS_REP_ADDRESS,
 	id: 'sepolia',
 	isSupportedAppChain: true,
@@ -97,7 +98,7 @@ export function getPublicNetworkProfileForChainId(chainId: string | undefined) {
 }
 
 export function getNetworkSwitchTarget(profile: NetworkProfile) {
-	return profile.id === 'mainnet' ? 'Ethereum mainnet' : profile.displayName
+	return profile.id === 'mainnet' ? appCopy.ethereumMainnet : profile.displayName
 }
 
 declare global {
@@ -120,7 +121,7 @@ export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }:
 	return {
 		chain: simulationChain,
 		chainIdHex: '0x539',
-		displayName: 'Browser simulation',
+		displayName: appCopy.browserSimulation,
 		genesisRepTokenAddress,
 		id: 'simulation',
 		isSupportedAppChain: true,
@@ -143,8 +144,4 @@ export function buildAddressExplorerUrl(profile: NetworkProfile, address: string
 	const base = profile.transactionExplorerBaseUrl
 	if (base === undefined || !base.endsWith('/tx/')) return undefined
 	return `${base.slice(0, -4)}/address/${address}`
-}
-
-export function formatTransactionNetworkLabel(profile: NetworkProfile) {
-	return profile.id === 'simulation' ? `${profile.displayName} · local sandbox` : profile.displayName
 }

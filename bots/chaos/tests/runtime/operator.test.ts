@@ -1,3 +1,4 @@
+import { genesisInitializationTarget } from '../../src/runtime/selection.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -239,7 +240,7 @@ describe('chaos operator runtime', () => {
 			reason: 'unplanned-due-identity',
 		})
 
-		expect(randomOperationPlans(blocked)).toEqual([])
+		expect(randomOperationPlans(blocked, [selectablePlan.definitionId])).toEqual([])
 		expect(urgentOperationPlans(blocked)).toEqual([urgentPlan])
 		expect(blocked[0]?.eligibility.blockers[0]).toContain('random novelty remains blocked')
 	})
@@ -1204,4 +1205,16 @@ describe('chaos operator runtime', () => {
 		expect(repairDurableSelectableFailures(state).requiresSafetyStop).toBeTrue()
 		expect(state.activities).toHaveLength(activityCount)
 	})
+})
+
+test('genesis initialization bypasses expired questions without a pool while retaining established topology', () => {
+	const snapshot = snapshotFixture()
+	const question = snapshot.questions[0]
+	if (question === undefined) throw new Error('Missing genesis question')
+	snapshot.questions.unshift({ ...question, id: '1' })
+	expect(genesisInitializationTarget(snapshot).initializerQuestion?.id).toBe('77')
+	snapshot.pools = []
+	expect(genesisInitializationTarget(snapshot).initializerQuestion).toBeUndefined()
+	snapshot.questions.push({ ...question, endTime: '2000001000', id: '78' })
+	expect(genesisInitializationTarget(snapshot).initializerQuestion?.id).toBe('78')
 })

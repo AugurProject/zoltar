@@ -6,7 +6,7 @@ import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-sha
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
-import { formatWriteErrorMessage, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
+import { ensureSentence, formatWriteErrorMessage, getErrorDetail, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
@@ -17,6 +17,7 @@ import type { TokenApprovalRequirement } from '@zoltar/ui-core-shared/transactio
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
 import { getOpenOracleCreateParameterValidation } from '../../../protocol/openOracleValidation.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
@@ -25,10 +26,7 @@ type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
 export { addOpenOracleBountyBuffer }
 export type OpenOracleDisputeInputField = 'disputeNewAmount1' | 'disputeNewAmount2'
-export type OpenOracleGateMessage = {
-	kind: 'hidden-loading' | 'visible'
-	message: string
-}
+export type OpenOracleGateMessage = { kind: 'hidden-loading' | 'visible'; message: string } | { kind: 'incomplete'; message?: undefined }
 type OpenOracleReportActionAvailability = {
 	canAct: boolean
 	message: string | undefined
@@ -61,30 +59,30 @@ export type OpenOracleDisputeSubmissionDetails = {
 }
 export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to settle report') {
 	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
-	if (genericMessage === 'Action canceled in wallet.') return genericMessage
+	if (genericMessage === transactionErrorMessages.walletRejected) return genericMessage
 	const detail = getErrorDetail(error, fallbackMessage)
-	const normalizedDetail = detail?.toLowerCase()
-	if (normalizedDetail === undefined) return 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
+	if (detail === undefined) return 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
+	const normalizedDetail = detail.toLowerCase()
 	// Match only OpenOracle custom error names and their selectors.
 	if (normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('0x98bdb2e0')) return 'Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.'
 	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('0x3edf6050')) return 'This report is not ready to settle.'
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return 'This report is already settled.'
-	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('0x15c7bbe9')) return 'This report is invalid because its atomic initial report is missing.'
-	if (genericMessage === detail) return detail
-	return `Transaction failed while settling the report. Reason: ${detail}`
+	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('0x15c7bbe9')) return 'This report is invalid because its initial report is missing.'
+	if (genericMessage === ensureSentence(detail)) return genericMessage
+	return `Transaction failed while settling the report. Reason: ${ensureSentence(detail)}`
 }
 export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to dispute report') {
 	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
-	if (genericMessage === 'Action canceled in wallet.') return genericMessage
+	if (genericMessage === transactionErrorMessages.walletRejected) return genericMessage
 	const detail = getErrorDetail(error, fallbackMessage)
-	const normalizedDetail = detail?.toLowerCase()
-	if (normalizedDetail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
-	if (genericMessage === detail) return detail
+	if (detail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
+	const normalizedDetail = detail.toLowerCase()
+	if (genericMessage === ensureSentence(detail)) return genericMessage
 	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute.'
 	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle report instead.'
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
-	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its atomic initial report is missing.'
-	return `Transaction failed while disputing the report. Reason: ${detail}`
+	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its initial report is missing.'
+	return `Transaction failed while disputing the report. Reason: ${ensureSentence(detail)}`
 }
 export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
@@ -96,7 +94,7 @@ export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRew
 	// Standalone reports are ERC-20 pairs, so the transaction sends exactly the settler reward in ETH.
 	const ethSentAttoEth = getOpenOracleCreateEthSent(settlerRewardInput)
 	if (ethSentAttoEth === undefined) return 'Enter a valid settler reward.'
-	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
+	if (walletBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	if (ethSentAttoEth > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethSentAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone OpenOracle report.`
 	return undefined
 }
@@ -139,7 +137,7 @@ function isZeroOpenOracleDecimalInput(value: string) {
 		.every(digit => digit === '0')
 }
 
-function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, input, invalidMessage, negativeMessage, zeroMessage }: { allowZero?: boolean; input: string; invalidMessage: string; negativeMessage: string; zeroMessage?: string }) {
+function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, input, invalidMessage, negativeMessage, zeroMessage }: { allowZero?: boolean; input: string; invalidMessage: string; negativeMessage: string | undefined; zeroMessage?: string }) {
 	const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
 	if (normalized === '' || !OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized)) return invalidMessage
 	if (normalized.startsWith('-')) return negativeMessage
@@ -173,8 +171,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 						allowZero: false,
 						input: form.exactToken1Report,
 						invalidMessage: 'Enter a valid base token amount.',
-						negativeMessage: 'Base token amount must be greater than zero.',
-						zeroMessage: 'Base token amount must be greater than zero.',
+						negativeMessage: undefined,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'exactToken1Report', validationMessage)
 					if (validationMessage !== undefined) return undefined
@@ -189,8 +186,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 						allowZero: false,
 						input: form.initialToken2Amount,
 						invalidMessage: 'Enter a valid quote token amount.',
-						negativeMessage: 'Quote token amount must be greater than zero.',
-						zeroMessage: 'Quote token amount must be greater than zero.',
+						negativeMessage: undefined,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'initialToken2Amount', validationMessage)
 					if (validationMessage !== undefined) return undefined
@@ -219,7 +215,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	if (settlerRewardAttoEth === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', 'Enter a valid settler reward.')
 
 	const settlementTime = tryParseBigIntInput(form.settlementTime)
-	if (settlementTime === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlementTime', 'Enter a valid settlement time.')
+	if (settlementTime === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlementTime', 'Enter a valid settlement delay.')
 	const disputeDelay = tryParseBigIntInput(form.disputeDelay)
 	if (disputeDelay === undefined) setOpenOracleCreateFieldError(fieldErrors, 'disputeDelay', 'Enter a valid dispute delay.')
 
@@ -227,7 +223,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	if (multiplier === undefined || multiplier < 0n) setOpenOracleCreateFieldError(fieldErrors, 'multiplier', 'Enter a valid multiplier, such as 1.5.')
 
 	const feePercentage = tryParseDecimalInput(form.feePercentage, 5)
-	if (feePercentage === undefined) setOpenOracleCreateFieldError(fieldErrors, 'feePercentage', 'Enter a valid fee percentage.')
+	if (feePercentage === undefined) setOpenOracleCreateFieldError(fieldErrors, 'feePercentage', 'Enter a valid dispute fee.')
 	const protocolFee = tryParseDecimalInput(form.protocolFee, 5)
 	if (protocolFee === undefined) setOpenOracleCreateFieldError(fieldErrors, 'protocolFee', 'Enter a valid protocol fee.')
 
@@ -269,7 +265,11 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 		}
 	}
 
-	const firstInvalidField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => fieldErrors[field] !== undefined)
+	const positiveAmountInvalid = (input: string) => {
+		const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
+		return normalized !== '' && OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized) && (normalized.startsWith('-') || isZeroOpenOracleDecimalInput(normalized))
+	}
+	const firstInvalidField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => fieldErrors[field] !== undefined || (field === 'exactToken1Report' && positiveAmountInvalid(form.exactToken1Report)) || (field === 'initialToken2Amount' && positiveAmountInvalid(form.initialToken2Amount)))
 	return {
 		fieldErrors,
 		firstInvalidField,
@@ -278,11 +278,8 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	}
 }
 
-export function getOpenOracleCreateValidationMessage(parameters: { form: OpenOracleCreateFormState; token1Decimals?: number | undefined; token2Decimals?: number | undefined }) {
-	return getOpenOracleCreateValidation(parameters).message
-}
 function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
-	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('OpenOracle report is missing its atomic initial report')
+	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('OpenOracle report is missing its initial report.')
 	if (report.isDistributed) return 'Settled'
 	if (report.disputeOccurred) return 'Disputed'
 	return 'Pending'
@@ -370,7 +367,7 @@ export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDe
 	if (!hasOpenOracleAtomicInitialReport(report))
 		return {
 			canAct: false,
-			message: 'This report is invalid because its atomic initial report is missing.',
+			message: 'This report is invalid because its initial report is missing.',
 		}
 	if (report.isDistributed)
 		return {
@@ -418,7 +415,7 @@ export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDet
 	if (!hasOpenOracleAtomicInitialReport(report))
 		return {
 			canAct: false,
-			message: 'This report is invalid because its atomic initial report is missing.',
+			message: 'This report is invalid because its initial report is missing.',
 		}
 	if (report.isDistributed)
 		return {
@@ -454,18 +451,18 @@ function parseOpenOracleFeePercentageInput(value: string, label: string) {
 	return bigintToSafeNumber(parsed, label)
 }
 export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals: number; token2Decimals: number }) {
-	const validationMessage = getOpenOracleCreateValidationMessage({ form, token1Decimals, token2Decimals })
-	if (validationMessage !== undefined) throw new Error(validationMessage)
+	const validation = getOpenOracleCreateValidation({ form, token1Decimals, token2Decimals })
+	if (!validation.isValid) throw new Error(validation.message ?? 'Invalid oracle report parameters.')
 	return {
 		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, 'Dispute delay'), 'Dispute delay'),
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
 		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
 		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
 		ethValueAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
-		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Fee percentage'),
+		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Dispute fee'),
 		multiplier: bigintToSafeNumber(parseDecimalInput(form.multiplier, 'Multiplier', OPEN_ORACLE_MULTIPLIER_DECIMALS), 'Multiplier'),
 		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
-		settlementTime: bigintToSafeNumber(parseBigIntInput(form.settlementTime, 'Settlement time'), 'Settlement time'),
+		settlementTime: bigintToSafeNumber(parseBigIntInput(form.settlementTime, 'Settlement delay'), 'Settlement delay'),
 		settlerRewardAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
 		token1Address: parseAddressInput(form.token1Address, 'Base token address'),
 		token2Address: parseAddressInput(form.token2Address, 'Quote token address'),

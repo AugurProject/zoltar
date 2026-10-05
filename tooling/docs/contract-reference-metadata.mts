@@ -12,15 +12,16 @@ type Interaction = {
 	signals: string
 }
 
+// A `fallback-routed` declaration names a selector the documented contract reaches only through its fallback; `sourcePath` is the delegate source that implements it.
 export type ContractDeclaration = {
-	kind?: 'receive'
+	kind?: 'receive' | 'fallback-routed'
 	name: string
 	sourcePath?: string
 }
 
 export type ContractReference = {
 	compiledAbiFingerprint: string
-	delegatedInteractions?: string
+	interactionNotes?: string
 	interactions: Interaction[]
 	name: string
 	purpose: string
@@ -28,6 +29,7 @@ export type ContractReference = {
 	readDeclarations: ContractDeclaration[]
 	readStorageDeclarations?: ContractDeclaration[]
 	readSurface: string
+	// Rendered under `securityBoundaryHeading`, or under the shared "Security assumptions" heading when no page-specific heading is set.
 	securityBoundary?: string
 	securityBoundaryHeading?: string
 	sourcePath: string

@@ -63,6 +63,7 @@ export function LiveTrading({
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
 	tradeSettings = DEFAULT_TRADE_SETTINGS,
+	onTradeSettingsChange,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -86,6 +87,8 @@ export function LiveTrading({
 	walletConnectRequestNonce?: number
 	/** Slippage and validity from the application Settings menu; every Trading transaction uses them. */
 	tradeSettings?: TradeSettings
+	/** Lets the trade ticket change the same settings in place; without it the ticket only points to the Settings menu. */
+	onTradeSettingsChange?: ((settings: TradeSettings) => void) | undefined
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -267,8 +270,8 @@ export function LiveTrading({
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
-					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
-					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={portfolioCopy.noSavedPools} detail={portfolioCopy.savePoolGuidance} /> : null}
+					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolDiscoveryFailed(discoveryError) : undefined} />
+					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={portfolioCopy.noFavoriteMarkets} detail={portfolioCopy.favoriteGuidance} /> : null}
 					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
 						<LivePortfolio
 							discoveryComplete={discoveryState === 'ready'}
@@ -376,7 +379,17 @@ export function LiveTrading({
 								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 								{activeView === 'trade' && selectedPairInitialized ? (
-									<LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={ticketLocked} onOpenSettlement={marketOpen ? undefined : () => openView('settlement')} />
+									<LivePositionControls
+										market={selected}
+										nowSeconds={nowSeconds}
+										settings={tradeSettings}
+										onSettingsChange={onTradeSettingsChange}
+										ticket={position}
+										wallet={ticketWallet}
+										holdings={ticketHoldings}
+										externallyLocked={ticketLocked}
+										onOpenSettlement={marketOpen ? undefined : () => openView('settlement')}
+									/>
 								) : null}
 							</div>
 						</SectionBlock>

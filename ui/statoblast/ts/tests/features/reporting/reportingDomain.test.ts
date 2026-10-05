@@ -269,7 +269,7 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Max reward preset unavailable because the reward window is already filled on the selected side.',
+			reason: 'Max reward is unavailable because the reward window is already filled on the selected side.',
 		})
 	})
 
@@ -421,7 +421,7 @@ for (const end of [300n, 600n]) {
 		const details = createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: end })
 		const stage = getReportingStagePresentation({ reportingDetails: details, marketDetails: details.marketDetails, effectiveCurrentTimestamp: details.currentTime, forkAlreadyTriggered: false })
 		expect(stage?.label).toBe('Response window')
-		expect(stage?.detail).toBe(`If nobody outbids No by ${formatReportingDeadline(end, details.currentTime)}, No wins.`)
+		expect(stage?.detail).toBe(`If no other side overtakes No by ${formatReportingDeadline(end, details.currentTime)}, No wins.`)
 	})
 }
 

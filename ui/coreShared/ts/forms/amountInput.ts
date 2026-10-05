@@ -44,7 +44,7 @@ export function formatAmountForDisplay(amount: bigint, decimals: number = 18, un
 	return unit === undefined ? formatted : formatValueWithUnit(formatted, unit)
 }
 
-/** Returns the user-facing reason for a rejected amount, or `undefined` when the amount is empty or valid. */
+/** Returns actionable amount errors; empty and nonpositive inputs remain validation states without a prerequisite notice. */
 export function getAmountInputErrorMessage(validation: AmountInputValidation, { allowZero = false, balance, decimals = 18, maximum, minimum, unit }: AmountInputLimits & { unit?: string | undefined } = {}) {
 	if (validation.status !== 'invalid') return undefined
 	switch (validation.problem) {
@@ -53,9 +53,9 @@ export function getAmountInputErrorMessage(validation: AmountInputValidation, { 
 		case 'precision':
 			return commonCopy.formatDecimalPrecisionError(decimals)
 		case 'negative':
-			return allowZero ? commonCopy.nonNegativeAmountRequiredError : commonCopy.positiveAmountRequired
+			return allowZero ? commonCopy.nonNegativeAmountRequiredError : undefined
 		case 'zero':
-			return commonCopy.positiveAmountRequired
+			return undefined
 		case 'belowMinimum':
 			// A truncated minimum could read lower than the real bound, so show it exactly.
 			return minimum === undefined ? commonCopy.amountInvalidError : commonCopy.formatAmountBelowMinimumError(unit === undefined ? formatCurrencyBalance(minimum, decimals) : formatCurrencyBalanceWithUnit(minimum, unit, decimals))

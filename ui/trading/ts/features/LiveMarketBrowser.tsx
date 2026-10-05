@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
@@ -21,19 +22,19 @@ import { MarketCard } from './MarketCard.js'
 const FILTER_OPTIONS: readonly { value: MarketFilter; label: string }[] = [
 	{ value: 'all', label: marketsCopy.filterAll },
 	{ value: 'open', label: marketsCopy.filterOpen },
-	{ value: 'closing-soon', label: marketsCopy.filterClosingSoon },
-	{ value: 'resolved', label: marketsCopy.filterResolved },
+	{ value: 'closing-soon', label: marketsCopy.closingSoon },
+	{ value: 'resolved', label: marketsCopy.resolved },
 ]
 
 const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
-	{ value: 'closing-soon', label: marketsCopy.sortClosingSoon },
-	{ value: 'liquidity', label: marketsCopy.sortLiquidity },
+	{ value: 'closing-soon', label: marketsCopy.closingSoon },
+	{ value: 'liquidity', label: marketsCopy.liquidity },
 	{ value: 'recent', label: favoritesCopy.recentlySaved },
 ]
 
 function listPresentation(listKind: TradingListKind) {
-	if (listKind === 'security-pools') return { empty: liveCopy.noEligiblePools, emptyDetail: liveCopy.noEligiblePoolsDetail }
-	return { empty: liveCopy.noMarkets, emptyDetail: liveCopy.noMarketsDetail }
+	if (listKind === 'security-pools') return { empty: liveCopy.noFavoritePools, emptyDetail: liveCopy.noFavoritePoolsDetail }
+	return { empty: liveCopy.noFavoriteMarkets, emptyDetail: liveCopy.noFavoriteMarketsDetail }
 }
 
 /** A pasted security pool address opens that pool in the lookup route's workflow, whether or not it is among the downloaded markets. */
@@ -59,7 +60,7 @@ function MarketSearchRow({ options, arrangeable, lookupRoute, onChange }: { opti
 				<FormInput type='search' aria-label={lookupRoute === 'create-market' ? marketsCopy.searchPoolsLabel : marketsCopy.searchLabel} placeholder={marketsCopy.searchPlaceholder} value={options.query} onInput={event => onChange({ ...options, query: event.currentTarget.value })} />
 				{address === undefined ? undefined : (
 					<button className='primary' type='submit'>
-						{liveCopy.openPool}
+						{liveCopy.openSecurityPool}
 					</button>
 				)}
 			</form>
@@ -127,7 +128,7 @@ export function LiveMarketBrowser({
 	else if (shownMarkets.length === 0)
 		list = (
 			<EmptyState
-				title={marketsCopy.noMatches}
+				title={commonCopy.noMatches}
 				actions={
 					<button type='button' onClick={() => setListOptions(DEFAULT_MARKET_LIST_OPTIONS)}>
 						{marketsCopy.clearFilters}
@@ -140,7 +141,7 @@ export function LiveMarketBrowser({
 		<SectionBlock className='market-browser' variant='plain'>
 			<p className='detail'>{favoritesCopy.formatCollectionTab(favoritesCopy.favorites, markets.length)}</p>
 			<MarketSearchRow options={listOptions} arrangeable={markets.length > 0} lookupRoute={lookupRoute} onChange={setListOptions} />
-			{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
+			{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolDiscoveryFailed(discoveryError)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
 			{markets.length > 0 ? (
 				<div className='market-list-subbar'>
 					<ViewTabs ariaLabel={marketsCopy.filterLabel} className='market-list-filters' semantics='switcher' size='compact' variant='segmented' value={listOptions.filter} onChange={filter => setListOptions({ ...listOptions, filter })} options={FILTER_OPTIONS.map(option => ({ ...option }))} />

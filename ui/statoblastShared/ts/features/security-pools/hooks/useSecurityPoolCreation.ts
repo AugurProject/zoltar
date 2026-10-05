@@ -171,7 +171,7 @@ export function useSecurityPoolCreation({
 
 	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
-			securityPoolError.value = 'Deploy ZoltarQuestionData before selecting a question'
+			securityPoolError.value = 'Deploy ZoltarQuestionData before selecting a question.'
 			return
 		}
 
@@ -190,21 +190,21 @@ export function useSecurityPoolCreation({
 			onSuccess: details => {
 				if (!details.exists) {
 					marketDetails.value = undefined
-					securityPoolError.value = 'No market found for that ID'
+					securityPoolError.value = 'No question found for that ID.'
 					return
 				}
 				marketDetails.value = details
 			},
 			onError: error => {
 				marketDetails.value = undefined
-				securityPoolError.value = getErrorMessage(error, 'Failed to load market')
+				securityPoolError.value = getErrorMessage(error, 'Failed to load the question.')
 			},
 		})
 	}
 
 	const createPool = async (questionIdOverride?: string, securityPoolFormOverride?: SecurityPoolFormState, newQuestionForm?: MarketFormState) => {
 		if (securityPoolSubmissionInProgress.value) {
-			securityPoolError.value = 'Security pool creation already in progress'
+			securityPoolError.value = securityPoolCopy.poolCreationInProgress
 			return
 		}
 		const baseSecurityPoolForm = securityPoolFormOverride ?? securityPoolForm.value
@@ -261,8 +261,8 @@ export function useSecurityPoolCreation({
 					},
 				},
 				async walletAddress => {
-					if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool')
-					if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
+					if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool.')
+					if (zoltarUniverseHasForked) throw new Error(securityPoolCopy.poolCreationAfterForkReason)
 
 					if (newQuestionForm !== undefined && newQuestionForm.marketType !== 'binary') throw new Error('Security pools require a binary question')
 					const newQuestion = newQuestionForm === undefined ? undefined : createMarketParameters(newQuestionForm)
@@ -285,14 +285,14 @@ export function useSecurityPoolCreation({
 					} else {
 						details = { ...newQuestion.questionData, marketType: 'binary', outcomeLabels: newQuestion.outcomeLabels, questionId: formatQuestionIdHex(parameters.questionId), exists: true, createdAt: 0n }
 					}
-					if (!details.exists) throw new Error('No market found for that ID')
+					if (!details.exists) throw new Error('No question found for that ID.')
 					const block = await createConnectedReadClient().getBlock()
 					if (details.endTime <= block.timestamp) throw new Error(securityPoolCopy.questionEndedReason)
 					if (details.marketType !== 'binary') {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
 							marketDetails.value = details
 						}
-						throw new Error('Security pools can only be deployed for binary markets')
+						throw new Error(securityPoolCopy.ineligibleQuestionDetail)
 					}
 					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)) {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
@@ -312,12 +312,12 @@ export function useSecurityPoolCreation({
 						throw new Error('A security pool for this question, security multiplier, and priority fee already exists.')
 					}
 
-					const reviewLabels = { title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
+					const reviewLabels = { title: newQuestion === undefined ? commonCopy.createSecurityPool : securityPoolCopy.createQuestionAndPoolReviewTitle }
 					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: review.signal }), parameters, newQuestion?.questionData, reviewLabels)
 					capturedDetails = result.questionCreatedAt === undefined ? details : { ...details, createdAt: result.questionCreatedAt }
 					return { ...result, hash: result.deployPoolHash }
 				},
-				'Failed to create security pool',
+				'Failed to create the security pool.',
 				result => {
 					if (capturedDetails !== undefined) {
 						poolCreationMarketDetails.value = capturedDetails

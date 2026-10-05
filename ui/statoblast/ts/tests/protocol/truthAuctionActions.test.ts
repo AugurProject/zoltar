@@ -35,8 +35,8 @@ describe('truth auction writes', () => {
 		{ currentTimestamp: 604_800n, auctionStarted: 1n, finalized: false, expected: 'Truth auction ends too soon to submit a bid.' },
 		{ currentTimestamp: 604_741n, auctionStarted: 1n, finalized: false, expected: 'Truth auction ends too soon to submit a bid.' },
 		{ currentTimestamp: 604_801n, auctionStarted: 1n, finalized: false, expected: 'Truth auction has ended.' },
-		{ currentTimestamp: 1n, auctionStarted: 0n, finalized: false, expected: 'Loading truth auction deadline.' },
-		{ currentTimestamp: undefined, auctionStarted: 1n, finalized: false, expected: 'Loading current chain time.' },
+		{ currentTimestamp: 1n, auctionStarted: 0n, finalized: false, expected: 'Loading truth auction deadline…' },
+		{ currentTimestamp: undefined, auctionStarted: 1n, finalized: false, expected: 'Loading current chain time…' },
 		{ currentTimestamp: 1n, auctionStarted: 1n, finalized: true, expected: 'Truth auction is already finalized.' },
 	]) {
 		test(`blocks ${expected} at ${currentTimestamp} without sending`, async () => {

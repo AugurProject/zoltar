@@ -1,4 +1,6 @@
-import type { EvaluatedOperation, OperationPlan } from '../operations/types.ts'
+import { randomInteger } from '../core/random.ts'
+import { OperationRediscoveryRequired } from '../execution/execution-context.ts'
+import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
 
 function eligibleOperationPlans(evaluations: readonly EvaluatedOperation[]) {
 	return evaluations.flatMap(evaluation => {
@@ -27,9 +29,39 @@ export function urgentOperationPlans(evaluations: readonly EvaluatedOperation[])
 	})
 }
 
-export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist?: readonly string[]) {
-	const allowed = selectableOperationAllowlist === undefined ? undefined : new Set(selectableOperationAllowlist)
-	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && (allowed === undefined || allowed.has(plan.definitionId)))
+export function randomOperationPlans(evaluations: readonly EvaluatedOperation[], selectableOperationAllowlist: readonly string[]) {
+	const allowed = new Set(selectableOperationAllowlist)
+	return eligibleOperationPlans(evaluations).filter(plan => plan.priority === 'random' && !plan.obligation && allowed.has(plan.definitionId))
+}
+
+/** Probe randomly without replacement; no scheduler run or workflow starts until a probe succeeds. */
+export async function selectExecutableOperationPlan(candidates: readonly OperationPlan[], preflight: (plan: OperationPlan) => Promise<void>, rejected: (plan: OperationPlan, error: OperationRediscoveryRequired) => void, pickIndex: (length: number) => number = length => randomInteger(0, length)) {
+	const remaining = [...candidates]
+	while (remaining.length !== 0) {
+		const [plan] = remaining.splice(pickIndex(remaining.length), 1)
+		if (plan === undefined) throw new Error('Operation selection returned an invalid candidate index')
+		try {
+			await preflight(plan)
+			return plan
+		} catch (error) {
+			// Connectivity failures and unexpected errors must still stop the cycle safely.
+			if (!(error instanceof OperationRediscoveryRequired)) throw error
+			rejected(plan, error)
+		}
+	}
+	return undefined
+}
+
+export function genesisInitializationTarget(snapshot: Pick<EcosystemSnapshot, 'anchor' | 'questions' | 'pools' | 'pairs'>) {
+	const initializerQuestion = [...snapshot.questions]
+		.filter(question => question.kind === 'binary' && (BigInt(question.endTime) > BigInt(snapshot.anchor.timestamp) || snapshot.pools.some(pool => pool.universeId === '0' && pool.questionId === question.id)))
+		.sort((left, right) => {
+			if (BigInt(left.id) < BigInt(right.id)) return -1
+			return BigInt(left.id) > BigInt(right.id) ? 1 : 0
+		})[0]
+	const genesisPool = initializerQuestion === undefined ? undefined : snapshot.pools.find(pool => pool.universeId === '0' && pool.questionId === initializerQuestion.id)
+	const genesisPair = genesisPool === undefined ? undefined : snapshot.pairs.find(pair => pair.pool.toLowerCase() === genesisPool.address.toLowerCase())
+	return { genesisPair, genesisPool, initializerQuestion }
 }
 
 export type GenesisInitializationState = {

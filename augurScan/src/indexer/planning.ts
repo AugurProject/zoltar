@@ -14,7 +14,6 @@ export type RpcBlockHeader = {
 	readonly hash: Hash
 	readonly parentHash: Hash
 	readonly timestamp: bigint
-	readonly transactions?: Block['transactions']
 }
 
 export type IndexerRpcProvider = RpcProvider & { readonly logClient: PublicClient }
@@ -23,7 +22,7 @@ export const requireRpcBlockHeader = (block: Block, blockNumber: bigint): RpcBlo
 	if (block.hash === undefined || block.parentHash === undefined || block.number !== blockNumber) {
 		throw new Error(`RPC returned an invalid canonical header for block ${blockNumber}`)
 	}
-	return { hash: block.hash, parentHash: block.parentHash, timestamp: block.timestamp, transactions: block.transactions }
+	return { hash: block.hash, parentHash: block.parentHash, timestamp: block.timestamp }
 }
 
 const RPC_CONCURRENCY = 5

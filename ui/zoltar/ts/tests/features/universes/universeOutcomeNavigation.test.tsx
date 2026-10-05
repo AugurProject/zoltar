@@ -46,10 +46,10 @@ describe('outcome-based universe traversal', () => {
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open Beta universe' }).hasAttribute('disabled')).toBe(true))
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
 		await waitFor(() => expect(starts).toEqual([0n, 10n]))
-		await waitFor(() => expect(q.queryByText('Loading outcomes…')).toBeNull())
+		await waitFor(() => expect(q.queryByText('Loading child universes…')).toBeNull())
 		await act(() => appBlockWatcher.invalidate())
 		await waitFor(() => expect(starts).toEqual([0n, 10n, 10n]))
-		expect(q.queryByText('Loading outcomes…')).toBeNull()
+		expect(q.queryByText('Loading child universes…')).toBeNull()
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
 		await act(async () => {
 			pending.resolve({ ...page, choices: page.choices.map(choice => ({ ...choice, exists: true })) })
@@ -68,11 +68,11 @@ describe('outcome-based universe traversal', () => {
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
 		await act(() => appBlockWatcher.invalidate())
-		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(false)
-		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
-		expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).toBeNull()
+		expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).toBeNull()
 		expect(calls).toBe(3)
 	})
 
@@ -97,9 +97,9 @@ describe('outcome-based universe traversal', () => {
 			next.reject(new Error('RPC unavailable'))
 			await Promise.resolve()
 		})
-		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
 		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
-		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
 		await waitFor(() => expect(calls).toBe(3))
 		expect(q.getByRole('button', { name: 'Open Alpha universe' }).hasAttribute('disabled')).toBe(true)
 		await act(async () => {
@@ -135,14 +135,14 @@ describe('outcome-based universe traversal', () => {
 		const loader: LoadUniverseOutcomes = async () => (++calls === 1 ? await pending.promise : page)
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
 		const q = within(view.container)
-		expect(q.queryByText('Loading outcomes…')).not.toBeNull()
+		expect(q.queryByText('Loading child universes…')).not.toBeNull()
 		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		await act(async () => {
 			pending.reject(new Error('RPC unavailable'))
 			await Promise.resolve()
 		})
-		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
-		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
+		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
 		await waitFor(() => expect(q.queryByText('Which proposal wins?')).not.toBeNull())
 		expect(calls).toBe(2)
 	})
@@ -158,13 +158,13 @@ describe('outcome-based universe traversal', () => {
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
-		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
 		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		const next = q.queryByRole('button', { name: 'Next page' })
 		expect(next === null || next.hasAttribute('disabled')).toBe(true)
 		if (next !== null) fireEvent.click(next)
 		expect(starts).toEqual([0n, 10n])
-		fireEvent.click(q.getByRole('button', { name: 'Retry child outcomes' }))
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
 		await waitFor(() => expect(q.queryByText('Gamma')).not.toBeNull())
 		expect(starts).toEqual([0n, 10n, 10n])
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
@@ -182,12 +182,12 @@ describe('outcome-based universe traversal', () => {
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
-		await waitFor(() => expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).not.toBeNull())
 		expect(q.getByRole('button', { name: 'Previous page' }).hasAttribute('disabled')).toBe(false)
 		expect(q.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 		fireEvent.click(q.getByRole('button', { name: 'Previous page' }))
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
-		expect(q.queryByText('Child outcomes could not be read. Reason: RPC unavailable')).toBeNull()
+		expect(q.queryByText('Child universes could not be loaded. Reason: RPC unavailable.')).toBeNull()
 		expect(starts).toEqual([0n, 10n, 0n])
 	})
 
@@ -276,7 +276,7 @@ describe('outcome-based universe traversal', () => {
 		fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '10000000000000000000000001' } })
 		await waitFor(() => expect(q.queryByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull())
 		expect(indexes).toHaveLength(2)
-		expect(q.getByRole('button', { name: 'Open None universe' }).hasAttribute('disabled')).toBe(true)
+		expect(q.getByRole('button', { name: 'Open child universe' }).hasAttribute('disabled')).toBe(true)
 		fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: question.numTicks.toString() } })
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open 10000000000000000000000000 units universe' }).hasAttribute('disabled')).toBe(false))
 		fireEvent.click(q.getByRole('button', { name: 'Open 10000000000000000000000000 units universe' }))
@@ -345,7 +345,7 @@ describe('outcome-based universe traversal', () => {
 		expect(indexes).toEqual([getScalarOutcomeIndex(question, 0n), getScalarOutcomeIndex(question, 3n)])
 	})
 
-	test('names the scalar outcome and preserves a nested timeout reason with a specific retry', async () => {
+	test('names the scalar outcome and preserves a nested timeout reason with a retry', async () => {
 		const question = { answerUnit: '°C', numTicks: 20n, displayValueMin: 0n, displayValueMax: 100n * 10n ** 18n }
 		const indexes: bigint[] = []
 		const view = lifecycle.trackRendered(
@@ -362,8 +362,8 @@ describe('outcome-based universe traversal', () => {
 			),
 		)
 		const q = within(view.container)
-		await waitFor(() => expect(q.queryByText('The 0 °C universe deployment status could not be read. Reason: RPC read timed out. Retry loading data')).not.toBeNull())
-		fireEvent.click(q.getByRole('button', { name: 'Retry 0 °C universe' }))
+		await waitFor(() => expect(q.queryByText('The 0 °C child universe could not be loaded. Reason: RPC read timed out. Retry loading data.')).not.toBeNull())
+		fireEvent.click(q.getByRole('button', { name: 'Retry' }))
 		await waitFor(() => expect(q.getByRole('button', { name: 'Open 0 °C universe' }).hasAttribute('disabled')).toBe(false))
 		expect(indexes).toHaveLength(2)
 	})
@@ -379,8 +379,8 @@ describe('outcome-based universe traversal', () => {
 				/>,
 			),
 		)
-		await waitFor(() => expect(view.container.textContent).toContain('Child outcomes could not be read. Reason: The data source did not provide error details'))
-		expect(within(view.container).getByRole('button', { name: 'Retry child outcomes' })).toBeTruthy()
+		await waitFor(() => expect(view.container.textContent).toContain('Child universes could not be loaded. Reason: The data source did not provide error details.'))
+		expect(within(view.container).getByRole('button', { name: 'Retry' })).toBeTruthy()
 	})
 
 	test('unforked universes never request outcomes', async () => {

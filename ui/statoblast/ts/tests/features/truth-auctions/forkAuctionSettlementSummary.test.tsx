@@ -245,7 +245,7 @@ describe('ForkAuctionSection settlement summary', () => {
 		expect(documentQueries.getByText('1.50 REP')).not.toBeNull()
 		expect(documentQueries.getByText('3.00 ETH')).not.toBeNull()
 		expect(documentQueries.getByText('1.50 ETH')).not.toBeNull()
-		expect(documentQueries.getByText('These are pre-transaction estimates. Final on-chain settlement can differ slightly because claim math is rounded on-chain.')).not.toBeNull()
+		expect(documentQueries.getByText('These are pre-transaction estimates. Final onchain settlement can differ slightly because claim math is rounded onchain.')).not.toBeNull()
 		expect(documentQueries.getByText('Estimated ETH refunded includes fully losing bids and any unfilled remainder on partially cleared winning bids.')).not.toBeNull()
 	})
 

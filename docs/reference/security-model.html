@@ -14,16 +14,16 @@
 				<p class="security-model-lede">Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules onchain. Their economic safety and practical liveness still depend on the participant, market, asset, deployment, client, data, Ethereum, and cryptographic assumptions below.</p>
 				<p>An assumption is not a guarantee enforced by the contracts. Each entry says what must remain true, what can fail if it does not, and where the related mechanics are explained. The <a href="./invariants.html">Statoblast and Zoltar invariants</a> catalog lists contract-enforced properties and their implementation evidence.</p>
 				<nav class="assumption-nav" aria-label="Security assumption groups">
-					<a href="#assumptions-participation">Participation</a>
-					<a href="#assumptions-forks">Forks and markets</a>
-					<a href="#assumptions-oracle">Oracle and liveness</a>
-					<a href="#assumptions-technical">Technical foundation</a>
-					<a href="#excluded-guarantees">Excluded guarantees</a>
+					<a href="#assumptions-participation">Participation and coordination</a>
+					<a href="#assumptions-forks">Forks, truth, value, and liquidity</a>
+					<a href="#assumptions-oracle">Oracle correction, inclusion, and operational data</a>
+					<a href="#assumptions-technical">Assets, clients, deployment, Ethereum, and cryptography</a>
+					<a href="#excluded-guarantees">Guarantees deliberately not made</a>
 				</nav>
 			</header>
 			<section id="orientation">
 				<h2>Security-model orientation</h2>
-				<p>This catalogue protects <a href="./glossary.html#rep">REP</a>, ETH <a href="./glossary.html#settlement-collateral">settlement collateral</a>, <a href="./glossary.html#outcome-share">outcome shares</a>, <a href="./glossary.html#vault">vault</a> backing, <a href="./glossary.html#escalation-game">Escalation Game</a> deposits, <a href="./glossary.html#child-universe">child-universe</a> accounting, and the integrity of event-derived state.</p>
+				<p>The assets and state at stake are <a href="./glossary.html#rep">REP</a>, ETH <a href="./glossary.html#settlement-collateral">settlement collateral</a>, <a href="./glossary.html#outcome-share">outcome shares</a>, <a href="./glossary.html#vault">vault</a> backing, <a href="./glossary.html#escalation-game">Escalation Game</a> deposits, <a href="./glossary.html#child-universe">child-universe</a> accounting, and the integrity of event-derived state.</p>
 				<table>
 					<thead>
 						<tr>
@@ -53,7 +53,7 @@
 				<p>The assumptions below explain what must remain true for these assets and transitions to retain their intended safety or liveness properties; they are not additional contract guarantees.</p>
 				<h3 id="security-review-orientation">Reviewing an operational concern</h3>
 				<p>
-					Before classifying an economic or liveness concern, use the <a href="#assumptions-participation">grouped assumptions</a> below to identify external dependencies, then follow their mechanics links. The invariant catalog owns the current requirement, status, and evidence for <a href="./invariants.html#ext-05"><code>EXT-05</code> recursive-fork gas behavior</a>.
+					To classify an economic or liveness concern, find its external dependency in the <a href="#assumptions-participation">grouped assumptions</a> below and follow that entry's mechanics links. Contract-enforced properties are in the invariant catalog; fork-depth gas behavior, for example, is <a href="./invariants.html#life-05"><code>LIFE-05</code></a> and <a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
 				</p>
 				<p>Operator work relies particularly on these assumptions:</p>
 				<ul>
@@ -62,7 +62,7 @@
 					<li><a href="#assumption-a20">A20 chain-data and proof availability</a></li>
 					<li><a href="#assumption-a22">A22 asset-recipient compatibility</a></li>
 					<li><a href="#assumption-a23">A23 verified deployments</a></li>
-					<li><a href="#assumption-a24">A24 client, remote procedure call (RPC), and wallet integrity</a></li>
+					<li><a href="#assumption-a24">A24 client, RPC, and wallet integrity</a></li>
 					<li><a href="#assumption-a25">A25 safe immutable parameters</a></li>
 					<li><a href="#assumption-a26">A26 Ethereum execution and finality</a></li>
 					<li><a href="#assumption-a27">A27 cryptographic security</a></li>
@@ -71,7 +71,7 @@
 			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
-				<h2 id="assumptions-value">Participation and coordination</h2>
+				<h2>Participation and coordination</h2>
 				<p class="assumption-group-intro">These assumptions explain why someone performs the economically useful action instead of merely being permitted to perform it.</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a01" value="1">
@@ -94,9 +94,9 @@
 					</li>
 					<li id="assumption-a04" value="4">
 						<h3><span class="assumption-id">A04</span> Participants can mobilize REP to raise an alarm</h3>
-						<p>Market participants can mobilize enough vault-backed REP through vault owners to fund an early competing <code>Invalid</code>, <code>Yes</code>, or <code>No</code> deposit and keep the local contest active while additional capital reacts.</p>
+						<p>Market participants can mobilize enough REP, from a wallet or from vault backing through its vault owner, to fund an early competing <code>Invalid</code>, <code>Yes</code>, or <code>No</code> deposit and keep the local contest active while additional capital reacts. Wallet REP cannot fund a deposit in a fork-continuation game.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A wrong local outcome can become final before better-capitalized participants enter.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#local-resolution">escalation resolution</a>, <a href="../explanation/escalation-game.html#payouts">escalation accounting</a>, and <a href="./operator-guardrails.html#escalation-resolution-and-deposits">operator guardrails</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#local-resolution">escalation resolution</a>, <a href="../explanation/escalation-game.html#payouts">escalation accounting</a>, and <a href="./operator-guardrails.html#escalation-resolution-and-deposits">escalation guardrails</a>.</p>
 					</li>
 					<li id="assumption-a05" value="5">
 						<h3><span class="assumption-id">A05</span> Participants value continued access to the supported Statoblast lineage</h3>
@@ -124,7 +124,7 @@
 						<h3><span class="assumption-id">A06</span> At least one executor advances every required public transition</h3>
 						<p>An adequately funded participant or service monitors and calls each needed permissionless transition, including liquidation initiation, local escalation deposits and settlement, fork activation, child creation, vault and share migration, auction start and finalization, bid settlement, OpenOracle report settlement, settled-report callback recovery, overflow operation execution, and proof-based claims.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Permissionless state can remain stalled even though no contract authorization prevents progress.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">lifecycle liveness</a>, <a href="./operator-guardrails.html#fork-migration">fork operations</a>, and <a href="./operator-guardrails.html#repeth-oracle-operations">oracle operations</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#lifecycle">lifecycle liveness</a>, <a href="./operator-guardrails.html#fork-migration">fork migration guardrails</a>, and <a href="./operator-guardrails.html#repeth-oracle-operations">oracle guardrails</a>.</p>
 					</li>
 				</ol>
 			</section>
@@ -192,7 +192,7 @@
 						<h3><span class="assumption-id">A11</span> Migration is operationally practical</h3>
 						<p>Users, exchanges, interfaces, custodians, and other integrations are willing and able to migrate assets and state into the child universe or universes they support during the applicable windows.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Supported branches can remain illiquid or undercollateralized because economic claims and backing do not move there.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">operator migration guidance</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">pool migration</a>, and <a href="./operator-guardrails.html#share-migration">share migration guardrails</a>.</p>
 					</li>
 					<li id="assumption-a12" value="12">
 						<h3><span class="assumption-id">A12</span> Truth Auctions can convert supported child REP efficiently</h3>
@@ -278,7 +278,7 @@
 					<li id="assumption-a21" value="21">
 						<h3><span class="assumption-id">A21</span> Genesis REP and configured WETH obey the required accounting model</h3>
 						<p>
-							Genesis REP and configured WETH move exactly the requested base units, use 18 decimals, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. On mainnet these token behaviors are external assumptions, and Sepolia WETH is Uniswap's published contract whose runtime code the deployer verifies only by hash, so its behavior is an external assumption as well. On Sepolia, the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces issuance and transfer behavior, provided A23 verifies its deployed bytecode and wiring and A26 preserves Ethereum execution. The burn address's inaccessibility remains an external assumption on Sepolia as well as mainnet. Canonical child REP is likewise implemented by the reviewed <code>ReputationToken</code> contract rather than being an additional external-token assumption.
+							Genesis REP and configured WETH move exactly the requested base units, use 18 decimals, return supported ERC-20 values, and do not rebase, charge transfer fees, invoke unexpected callbacks, blacklist protocol contracts, pause required transfers, or permit unauthorized minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is accurate, and the hard-coded <code>Constants.BURN_ADDRESS</code> burn sink remains inaccessible. These are external assumptions on both networks, with one exception: on Sepolia the reviewed <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> enforces genesis REP issuance and transfer behavior, provided <a href="#assumption-a23">A23</a> verifies its deployed bytecode and wiring and <a href="#assumption-a26">A26</a> preserves Ethereum execution. Sepolia WETH is Uniswap's published contract, which the deployer verifies only by runtime-code hash. Canonical child REP is the reviewed <code>ReputationToken</code> contract and adds no external-token assumption.
 						</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Origin-pool, genesis-fork, or oracle accounting can overstate balances, backing, burned supply, or WETH value.</p>
 						<p class="assumption-links">
@@ -289,7 +289,7 @@
 						<h3><span class="assumption-id">A22</span> Participant-controlled recipients can accept required asset deliveries</h3>
 						<p>Vaults, oracle sponsors, traders, share holders, and other caller-controlled recipients use addresses that accept native ETH when claiming fees, collateral, or proceeds. Truth-auction settlement instead credits bidder-specific pull escrow without calling the bidder; the bidder must accept ETH only when withdrawing that credit. Contract recipients also return the required ERC-1155 receiver selector when complete-set creation, share migration, or an outcome-share transfer delivers tokens to them. A rejected ETH pull or push reverts that transfer, and a rejected ERC-1155 callback reverts the mint or transfer and its surrounding protocol action. No protocol path can force a rejecting address to accept a later delivery or redirect every payout or mint.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A contract account that rejects ETH or the required ERC-1155 callback can strand its own payout or make its complete-set, migration, transfer, or claim action unavailable even while protocol-wide accounting remains safe.</p>
-						<p class="assumption-links">Mechanics: <a href="./invariants.html#ext-02">ETH callback safety</a>, <a href="./invariants.html#ext-03">ERC-1155 callback safety</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/truth-auctions.html#clearing">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">pool payout guardrails</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./invariants.html#ext-02">ETH callback safety</a>, <a href="./invariants.html#ext-03">ERC-1155 callback safety</a>, <a href="./contracts/sharetoken.html">share-token receipt</a>, <a href="../explanation/truth-auctions.html#clearing">auction refunds</a>, <a href="./open-oracle.html#refund-callback">oracle request refunds</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>.</p>
 					</li>
 					<li id="assumption-a23" value="23">
 						<h3><span class="assumption-id">A23</span> Users select verified canonical deployments</h3>
@@ -305,7 +305,7 @@
 					</li>
 					<li id="assumption-a25" value="25">
 						<h3><span class="assumption-id">A25</span> Immutable parameters preserve economic and executable security margins</h3>
-						<p>The selected parameter relationships keep the <a href="./glossary.html#fork-threshold">fork threshold</a> and <a href="./glossary.html#fork-haircut">fork haircut</a> economically meaningful, the initial escalation deposit affordable, the pool multiplier and effective pool-held vault REP backing multiplier large enough for their distinct coverage roles (the contract floors the latter at the 10,500-BPS liquidation-award reserve), the oracle target error profitable to correct after fees and gas, dispute and settlement windows usable, and callback and transition gas executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is distinct from <code>openOracleSecurityMultiplierBps</code>.</p>
+						<p>The selected parameter relationships keep the <a href="./glossary.html#fork-threshold">fork threshold</a> and <a href="./glossary.html#fork-haircut">fork haircut</a> economically meaningful, the <a href="./glossary.html#start-bond">start bond</a> affordable, the pool multiplier and the pool-held-REP branch multiplier derived from it (<a href="./invariants.html#bal-04"><code>BAL-04</code></a>) large enough for their distinct coverage roles, the oracle target error profitable to correct after fees and gas, dispute and settlement windows usable, and callback and transition gas executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is distinct from <code>openOracleSecurityMultiplierBps</code>.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or internally inconsistent immutable parameters can defeat the economic or liveness argument even when the canonical contracts function exactly as configured.</p>
 						<p class="assumption-links">Mechanics: <a href="./contracts/securitypoolfactory.html#interactions">Statoblast pool parameters</a>, <a href="../explanation/zoltar.html#accounting">fork economics</a>, <a href="../explanation/liquidations.html#rule">liquidation economics</a>, <a href="./open-oracle.html#parameters">oracle parameters</a>, and <a href="./open-oracle.html#attack-model">oracle attack model</a>.</p>
 					</li>
@@ -320,13 +320,13 @@
 						<p>Keccak-256 remains collision- and preimage-resistant at the truncated widths used by the protocol, and CREATE2 identity remains sound. secp256k1 ECDSA signatures remain unforgeable with correct EOA signer recovery for Ethereum transactions and EIP-712 authorizations. OpenOracle's fixed Permit2 singleton and <code>LiquidationApprovalRegistry.permitLiquidationApproval</code>, through <code>SignatureValidation</code>, additionally validate either an EOA signature or an ERC-1271 contract-account signature correctly.</p>
 						<p>OpenOracle fixes the Permit2 address, requires the exact permitted amount, sends the requested tokens to itself, and constructs the witness from the beneficiary, relayer, token owner, and intent. Permit2 defines the EIP-712 domain, deadline, permitted-amount ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature validation. Verification under <a href="#assumption-a23">A23</a> must cover the pinned Permit2 implementation at that fixed address.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Forged identities, colliding questions or universes, false carry proofs, forged EOA transactions, incorrect EOA recovery or ERC-1271 acceptance, or broken domain and nonce enforcement can violate otherwise-correct guards or authorize an unintended token transfer.</p>
-						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SignatureValidation.sol">liquidation-approval signature validation</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic deployments</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">universe identity</a>, <a href="../reference/merkle-mountain-range.html#leaf-shape">proof hashing</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol">Permit2 deposit authorization</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/interfaces/ISignatureTransfer.sol">Permit2 signature interface</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SignatureValidation.sol">liquidation-approval signature validation</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md#permit2-dependency">pinned Permit2 implementation provenance</a>, and <a href="./operator-guardrails.html#security-pool-guardrails">deterministic address guardrails</a>.</p>
 					</li>
 					<li id="assumption-a28" value="28">
 						<h3><span class="assumption-id">A28</span> Participants retain control of account authority</h3>
 						<p>Participants protect the private keys, signing devices, session permissions, and delegated ERC-20 or ERC-1155 approvals that authorize their accounts. Account recovery and custody arrangements do not give an unintended party effective control during a security-sensitive window.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A stolen key, compromised signer, or overbroad approval can authorize valid but unwanted transfers, deposits, bids, migrations, or configuration changes without violating a contract guard.</p>
-						<p class="assumption-links">Mechanics: <a href="./contracts.html">transaction authority</a>, <a href="./operator-guardrails.html#security-pool-guardrails">vault and pool operations</a>, and <a href="../how-to/monitor-security-assumptions.html#assumption-monitoring">account-authority monitoring</a>.</p>
+						<p class="assumption-links">Mechanics: <a href="./contracts.html">transaction authority</a>, <a href="./operator-guardrails.html#security-pool-guardrails">security pool guardrails</a>, and <a href="../how-to/monitor-security-assumptions.html#assumption-monitoring">account-authority monitoring</a>.</p>
 					</li>
 				</ol>
 			</section>

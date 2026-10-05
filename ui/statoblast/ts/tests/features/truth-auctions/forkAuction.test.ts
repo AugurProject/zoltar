@@ -160,7 +160,7 @@ void describe('fork auction helpers', () => {
 	})
 
 	void test('maps stage labels and order values', () => {
-		expect(getForkAuctionStageLabel('initiate')).toBe('Trigger')
+		expect(getForkAuctionStageLabel('initiate')).toBe('Fork trigger')
 		expect(getForkAuctionStageLabel('migration')).toBe('Migration')
 		expect(getForkAuctionStageLabel('auction')).toBe('Truth auction')
 		expect(getForkAuctionStageLabel('settlement')).toBe('Settlement')
@@ -270,7 +270,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: undefined,
 				walletBalanceAttoEth: 100n,
 			}),
-		).toBe('Loading truth auction.')
+		).toBe('Loading truth auction…')
 
 		expect(
 			getTruthAuctionBidGuardMessage({
@@ -282,17 +282,6 @@ void describe('fork auction helpers', () => {
 				walletBalanceAttoEth: 100n,
 			}),
 		).toBe('Truth auction has ended.')
-
-		expect(
-			getTruthAuctionBidGuardMessage({
-				accountAddress: zeroAddress,
-				currentTimestamp: 10n,
-				isOnActiveAppChain: true,
-				submitBidAmountInput: '',
-				truthAuction: createTruthAuction(),
-				walletBalanceAttoEth: 100n,
-			}),
-		).toBe('Enter a bid amount greater than zero.')
 
 		expect(
 			getTruthAuctionBidGuardMessage({
@@ -385,7 +374,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: createTruthAuction(),
 				walletBalanceAttoEth: undefined,
 			}),
-		).toBe('Loading wallet ETH balance.')
+		).toBe('Loading wallet ETH balance…')
 	})
 
 	void test('derives depth points from visible tick summaries', () => {
@@ -903,7 +892,7 @@ void describe('fork auction helpers', () => {
 			disabled: false,
 			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH per REP',
 		})
-		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
+		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('This bid cannot be settled')
 		expect(rowsViewModel.rows[0]?.estimate).toBeUndefined()
 		expect(rowsViewModel.rows[1]?.estimate).toEqual({ refundAttoEth: 0n, repAttoRep: getTruthAuctionBidSettlementEstimate(winningBid, finalizedAuction).purchasedRepAmountAttoRep })
 		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], winningBidKey, true)).toEqual([winningBidKey])

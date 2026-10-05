@@ -215,7 +215,7 @@ describe('useZoltarMigration', () => {
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
-		expect(state().zoltarMigrationFeedback?.status.detail).toBe('Transaction failed while attempting to migrate REP. Reason: Wallet network changed. Switch to Ethereum mainnet and try again')
+		expect(state().zoltarMigrationFeedback?.status.detail).toBe('Transaction failed while attempting to migrate REP. Reason: Wallet network changed. Switch to Ethereum mainnet and try again.')
 	})
 
 	test('migrateInternalRep snapshots the submitted form before universe preflight resolves', async () => {

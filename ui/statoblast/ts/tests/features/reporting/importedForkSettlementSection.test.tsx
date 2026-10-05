@@ -61,14 +61,14 @@ describe('ImportedForkSettlementSection', () => {
 		)
 		cleanupRendered = rendered.cleanup
 
-		expect(within(document.body).getByRole('heading', { name: 'Settle fork-carried escalation deposits' })).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Settle parent deposits' })).not.toBeNull()
 		expect(within(document.body).getByText('Parent deposit #7')).not.toBeNull()
 		expect(within(document.body).getByText('Worth now: Pending final settlement')).not.toBeNull()
-		expect(within(document.body).getByText(/Imported entry depth:/)).not.toBeNull()
+		expect(within(document.body).getByText(/Parent entry depth:/)).not.toBeNull()
 		expect(within(document.body).queryByText(/Imported ordering start:/)).toBeNull()
 		expect(renderedActions).toEqual([
 			{
-				guardMessage: 'Winning fork-carried escalation deposits can be settled after this child pool finalizes.',
+				guardMessage: 'Winning parent deposits can be settled after this child pool finalizes.',
 				outcome: 'yes',
 				sideLabel: 'Yes',
 			},

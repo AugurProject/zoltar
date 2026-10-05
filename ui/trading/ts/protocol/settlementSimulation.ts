@@ -14,7 +14,7 @@ export function outcomeValue(outcome: ShareOutcome) {
 }
 
 function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
-	if (targetOutcomeIndexes.length === 0) throw new Error('Select at least one fork target')
+	if (targetOutcomeIndexes.length === 0) throw new Error('Select at least one child universe')
 	const normalized = [...targetOutcomeIndexes].sort((left, right) => {
 		if (left < right) return -1
 		if (left > right) return 1
@@ -22,8 +22,8 @@ function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
 	})
 	for (let index = 0; index < normalized.length; index++) {
 		const outcomeIndex = normalized[index]
-		if (outcomeIndex === undefined || outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork target is outside uint256')
-		if (index > 0 && outcomeIndex === normalized[index - 1]) throw new Error('Select each fork target only once')
+		if (outcomeIndex === undefined || outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Child universe outcome is outside uint256')
+		if (index > 0 && outcomeIndex === normalized[index - 1]) throw new Error('Select each child universe only once')
 	}
 	return normalized
 }
@@ -73,7 +73,7 @@ export async function simulateSettlement(
 		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockNumber: block.blockNumber }))
 		return { blockNumber, blockHash, operation, market }
 	}
-	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a source share and at least one fork target')
+	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a share and at least one child universe')
 	const sourceOutcome = parameters.sourceOutcome
 	const targetOutcomeIndexes = normalizeForkOutcomeIndexes(parameters.targetOutcomeIndexes)
 	const sourceTokenId = (market.universeId << 8n) | outcomeValue(sourceOutcome)

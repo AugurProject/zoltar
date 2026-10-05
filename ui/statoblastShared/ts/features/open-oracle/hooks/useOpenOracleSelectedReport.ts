@@ -14,6 +14,7 @@ import { isOpenOracleReportMissingError } from '../../../protocol/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/formDefaults.js'
 import { getOpenOracleDisputeFormDefaults } from '../lib/openOracleDispute.js'
 import type { OpenOracleReportLookupState } from '../../oracleTypes.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 
 type LoadedOracleReportResult = {
 	details: OpenOracleReportDetails
@@ -133,7 +134,7 @@ export function useOpenOracleSelectedReport({
 				resetOpenOracleTokenAccessState(false)
 				const reportMissing = isOpenOracleReportMissingError(error)
 				openOracleReportLookupState.value = reportMissing ? 'missing' : 'load-failed'
-				openOracleError.value = reportMissing ? undefined : getErrorMessage(error, 'Failed to load oracle report')
+				openOracleError.value = reportMissing ? undefined : getErrorMessage(error, 'Failed to load OpenOracle report')
 			},
 		})
 	}
@@ -157,7 +158,7 @@ export function useOpenOracleSelectedReport({
 	}
 
 	const requireLoadedCurrentSelectedReport = () => {
-		const reportDetails = requireDefined(openOracleReportDetails.value, 'Select an oracle report first')
+		const reportDetails = requireDefined(openOracleReportDetails.value, openOracleCopy.reportLoadRequired)
 		assertSelectedReportCurrent(reportDetails.reportId.toString())
 		return reportDetails
 	}

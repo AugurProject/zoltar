@@ -1,3 +1,4 @@
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -177,7 +178,7 @@ export function useQuestionCreation(
 
 	const createQuestion = async ({ refreshQuestionList = true }: { refreshQuestionList?: boolean } = {}) => {
 		if (questionSubmissionScopesRef.current.has(questionActionScopeKey)) {
-			questionError.value = { storageKey: questionActionScopeKey, value: 'Question creation already in progress' }
+			questionError.value = { storageKey: questionActionScopeKey, value: 'Question creation is already in progress.' }
 			return
 		}
 		const submittedQuestionDraftStorageKey = questionDraftStorageKey
@@ -191,7 +192,7 @@ export function useQuestionCreation(
 		}
 		questionSubmissionScopesRef.current.add(submittedQuestionActionScopeKey)
 		questionResult.value = undefined
-		questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createPendingActionFeedback('createMarket', 'Creating question') }
+		questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createPendingActionFeedback('createMarket', transactionCopy.creatingQuestion) }
 		let createdResult: MarketCreationResult | undefined
 		try {
 			await runWriteAction(
@@ -199,7 +200,7 @@ export function useQuestionCreation(
 					accountAddress,
 					missingWalletMessage: commonCopy.formatConnectWalletBefore('creating a question'),
 					onRefreshError: (message, hash) => {
-						questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createWarningActionFeedback('createMarket', 'Question created', message, hash) }
+						questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createWarningActionFeedback('createMarket', transactionCopy.questionCreated, message, hash) }
 						const result = getValueForStorageKey(questionResult.value, submittedQuestionActionScopeKey)
 						if (result !== undefined && isCurrentQuestionActionScope()) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
 					},
@@ -232,7 +233,7 @@ export function useQuestionCreation(
 					},
 				},
 				async (walletAddress, context) => {
-					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
+					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy the ZoltarQuestionData contract before creating a question.')
 					return await dependencies.createQuestion(
 						walletAddress,
 						{
@@ -252,7 +253,7 @@ export function useQuestionCreation(
 					createdResult = result
 					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm, normalizeForm)
 					questionResult.value = { storageKey: submittedQuestionActionScopeKey, value: result }
-					questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
+					questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createSuccessActionFeedback('createMarket', transactionCopy.questionCreated, result.hash) }
 					if (isCurrentQuestionActionScope()) {
 						onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
 						zoltar.setZoltarForkQuestionId(result.questionId)

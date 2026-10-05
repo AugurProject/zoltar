@@ -51,7 +51,7 @@ export async function validateLiveDeployment(client: PublicClient, configuration
 		client.readContract({ abi: router.abi, address: configuration.router, functionName: 'factory' }),
 	])
 	validateRpcChainId(rpcChainId, configuration.chainId)
-	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('TwoWayConstantProductFactory references a different SecurityPoolFactory')
-	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('TwoWayConstantProductFactory fee does not match the deterministic deployment')
-	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
+	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('The trading factory references a different security pool factory')
+	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('The trading factory fee does not match the expected deployment')
+	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('The trading router references a different trading factory')
 }

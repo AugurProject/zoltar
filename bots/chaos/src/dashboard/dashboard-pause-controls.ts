@@ -60,8 +60,7 @@ export function registerPauseControls({ state, elements, put, refresh, reconcile
 		const signerDetail = value.signerReady === true && value.wallet !== undefined ? fullIdentifier(value.wallet, 'recovery signer address') : 'Missing'
 		const selectionPolicy = state.configuration?.selectableOperationAllowlist
 		let randomScope: HTMLElement | string = 'Unavailable — keep paused'
-		if (selectionPolicy === null) randomScope = 'ALL selectable operations'
-		else if (Array.isArray(selectionPolicy)) {
+		if (Array.isArray(selectionPolicy)) {
 			if (selectionPolicy.length === 0) randomScope = 'Lifecycle only — no random novelty'
 			else {
 				const scope = node('span', 'resume-random-scope')
@@ -86,15 +85,11 @@ export function registerPauseControls({ state, elements, put, refresh, reconcile
 				return row
 			}),
 		)
-		const unrestricted = selectionPolicy === null
-		let randomScopeWarning = ''
-		if (unrestricted) randomScopeWarning = 'Random novelty is unrestricted. Any due eligible selectable operation may run immediately after resume.'
-		else if (selectionPolicy === undefined) randomScopeWarning = 'The current random-selection policy is unavailable. Reload configuration before resuming.'
-		resumeRandomScopeWarning.classList.toggle('hidden', !unrestricted && selectionPolicy !== undefined)
-		resumeRandomScopeWarning.textContent = randomScopeWarning
+		resumeRandomScopeWarning.classList.toggle('hidden', selectionPolicy !== undefined)
+		resumeRandomScopeWarning.textContent = selectionPolicy === undefined ? 'The current random-selection policy is unavailable. Reload configuration before resuming.' : ''
 		resumeStaleWarning.classList.toggle('hidden', !state.snapshotStale)
 		confirmResume.disabled = selectionPolicy === undefined || state.snapshotStale || state.configurationCommitIndeterminate
-		confirmResume.textContent = unrestricted ? 'Resume unrestricted bot' : 'Resume bot'
+		confirmResume.textContent = 'Resume bot'
 		resumeDialog.showModal()
 		cancelResume.focus()
 	}

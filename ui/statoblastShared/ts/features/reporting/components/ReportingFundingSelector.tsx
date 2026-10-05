@@ -2,6 +2,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 
 type FundingSource = 'wallet' | 'vault'
 
@@ -13,8 +14,8 @@ export function ReportingFundingSelector({ value, onChange, disabled }: { value:
 			value={value}
 			onChange={onChange}
 			options={[
-				{ value: 'wallet', label: reportingCopy.walletRepSource, disabled },
-				{ value: 'vault', label: reportingCopy.vaultRepSource, disabled },
+				{ value: 'wallet', label: transactionCopy.walletRep, disabled },
+				{ value: 'vault', label: transactionCopy.vaultBackedRep, disabled },
 			]}
 		/>
 	)

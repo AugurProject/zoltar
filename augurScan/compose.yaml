@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    command: ["postgres", "-c", "max_wal_size=${POSTGRES_MAX_WAL_SIZE:-8GB}"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: augurscan
@@ -29,9 +30,8 @@ services:
       DISABLE_INDEXER: 1
       NETWORKS: ${NETWORKS:-mainnet,sepolia}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
-      AUGURSCAN_ACCESS_USERNAME: ${AUGURSCAN_ACCESS_USERNAME:-}
-      AUGURSCAN_ACCESS_PASSWORD: ${AUGURSCAN_ACCESS_PASSWORD:-}
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-600}
+      LIVE_BACKPRESSURE_TIMEOUT_MS: ${LIVE_BACKPRESSURE_TIMEOUT_MS:-60000}
     ports:
       - "${AUGURSCAN_PORT:-3000}:3000"
     stop_grace_period: 60s
@@ -63,6 +63,9 @@ services:
       SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS: ${SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       LOG_SCAN_RANGE_SIZE: ${LOG_SCAN_RANGE_SIZE:-100000}
+      # Passed through only when set, so an unset value keeps the per-network default.
+      SCAN_BLOCK_TIME_MS:
+      TRACE_SELECTED_TRANSACTIONS: ${TRACE_SELECTED_TRANSACTIONS:-0}
       RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl
     volumes:
       - augurscan-logs:/var/log/augurscan

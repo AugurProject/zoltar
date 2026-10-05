@@ -66,7 +66,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositQueries = within(depositDialog)
-		const depositAmountInput = depositQueries.getByLabelText('REP backing') as HTMLInputElement
+		const depositAmountInput = depositQueries.getByLabelText('REP deposit amount') as HTMLInputElement
 		const approvalAmountInput = depositQueries.getByText('REP approval amount').parentElement?.querySelector('input')
 		expect(depositAmountInput?.disabled).toBe(true)
 		expect(approvalAmountInput?.disabled).toBe(true)
@@ -78,7 +78,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		})
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		const withdrawDialog = await openDialog('Withdraw REP')
-		expect((within(withdrawDialog).getByLabelText('REP withdraw amount') as HTMLInputElement).disabled).toBe(false)
+		expect((within(withdrawDialog).getByLabelText('REP withdrawal amount') as HTMLInputElement).disabled).toBe(false)
 	})
 
 	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
@@ -214,7 +214,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const depositDialog = await openDialog('Deposit REP')
 		const modalQueries = within(depositDialog)
-		const depositInput = modalQueries.getByLabelText('REP backing')
+		const depositInput = modalQueries.getByLabelText('REP deposit amount')
 		await act(() => {
 			depositInput.dispatchEvent(new Event('blur'))
 		})
@@ -239,7 +239,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const withdrawDialog = await openDialog('Withdraw REP')
 		expectTransactionButtonDisabled(withdrawDialog, 'Withdraw REP', 'Reduce the withdrawal to 5 000\u00a0REP or less.')
-		const withdrawInput = within(withdrawDialog).getByLabelText('REP withdraw amount')
+		const withdrawInput = within(withdrawDialog).getByLabelText('REP withdrawal amount')
 		await act(() => {
 			withdrawInput.dispatchEvent(new Event('blur'))
 		})

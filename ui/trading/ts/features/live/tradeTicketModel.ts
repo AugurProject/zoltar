@@ -147,11 +147,15 @@ function sellShortcuts(market: LiveMarket, side: Side, balances: LiveBalances | 
 	].filter(shortcut => shortcut.value > 0n)
 }
 
-/** The buy Max shortcut: the wallet's ETH less the gas reserve, trimmed to eight decimals like the sell shortcuts. */
+/** The 25%, 50%, and Max shortcuts for a buy: shares of the wallet's ETH less the gas reserve, trimmed to eight decimals like the sell shortcuts. */
 function buyShortcuts(walletEthAttoEth: bigint | undefined) {
 	if (walletEthAttoEth === undefined) return []
-	const spendable = roundDownShortcut(getSpendableEthBalance(walletEthAttoEth))
-	return spendable === 0n ? [] : [{ label: ticketCopy.max, value: spendable }]
+	const spendable = getSpendableEthBalance(walletEthAttoEth)
+	return [
+		{ label: ticketCopy.quarter, value: roundDownShortcut(spendable / 4n) },
+		{ label: ticketCopy.half, value: roundDownShortcut(spendable / 2n) },
+		{ label: ticketCopy.max, value: roundDownShortcut(spendable) },
+	].filter(shortcut => shortcut.value > 0n)
 }
 
 /** A buy above the wallet balance cannot be paid; one that only eats into the gas reserve would leave nothing to send it with. */
@@ -166,6 +170,54 @@ function invalidCoverageShortfall(estimate: TradeEstimate | undefined, balances:
 	if (estimate?.kind !== 'exit' || balances === undefined) return undefined
 	if (estimate.quote.invalidRequired <= balances.invalid) return undefined
 	return { invalidRequired: estimate.quote.invalidRequired, invalidHeld: balances.invalid }
+}
+
+/** What a buy pays out if its outcome wins, at the pool's current backing, and the gain over the ETH paid. */
+export function buyReturn(estimate: BuyEstimate, market: LiveMarket) {
+	const payoutAttoEth = attoSharesToCollateralAttoEth(estimate.quote.totalLongShares, market)
+	const profitAttoEth = payoutAttoEth - estimate.payAttoEth
+	return { payoutAttoEth, profitAttoEth, returnBps: (profitAttoEth * BPS) / estimate.payAttoEth }
+}
+
+/**
+ * The pool fee in ETH. The pair takes it in the outcome sold into it, so it is valued at that outcome's price before
+ * the trade and the pool's current backing; an approximation, shown as one.
+ */
+export function poolFeeAttoEth(estimate: TradeEstimate, market: LiveMarket) {
+	const feeOutcomeIsYes = estimate.kind === 'entry' ? estimate.side === 'NO' : estimate.side === 'YES'
+	const feeOutcomeBps = feeOutcomeIsYes ? estimate.quote.conditionalYesBpsBefore : BPS - estimate.quote.conditionalYesBpsBefore
+	return attoSharesToCollateralAttoEth((estimate.quote.feeAmount * feeOutcomeBps) / BPS, market)
+}
+
+/** The wallet's holding of the traded outcome once the trade settles; undefined while balances are unknown or below the sale. */
+export function holdingAfterTrade(estimate: TradeEstimate, balances: LiveBalances | undefined) {
+	const held = estimate.side === 'YES' ? balances?.yes : balances?.no
+	if (held === undefined) return undefined
+	if (estimate.kind === 'entry') return held + estimate.quote.totalLongShares
+	return held < estimate.quote.totalLongShares ? undefined : held - estimate.quote.totalLongShares
+}
+
+/** What the trade ticket holds for one market between renders. */
+export type TicketInputs = Readonly<{
+	mode: TradeMode
+	side: Side
+	amount: string
+	/** The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment. */
+	acknowledgedImpactBps: bigint | undefined
+	/** Set when the last submission stopped because the chain re-quoted past the estimate; the ticket shows it as a prompt to review, not a failure. */
+	requoteNotice: string | undefined
+}>
+
+/**
+ * Changes what the ticket trades. The amount is ETH on a buy and shares of one outcome on a sell, so it is cleared
+ * whenever the selection changes its unit; an accepted price impact named the previous trade, so it never carries over.
+ * Selecting what is already selected returns the same inputs.
+ */
+export function ticketInputsAfterSelection(previous: TicketInputs, selection: Partial<Pick<TicketInputs, 'mode' | 'side'>>): TicketInputs {
+	const next = { ...previous, ...selection }
+	if (next.mode === previous.mode && next.side === previous.side) return previous
+	const amountUnitChanged = next.mode !== previous.mode || next.mode === 'exit'
+	return { ...next, amount: amountUnitChanged ? '' : previous.amount, acknowledgedImpactBps: undefined }
 }
 
 export function probabilityPercent(yesBps: bigint) {
@@ -210,12 +262,12 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	let balanceReason: string | undefined
 	if (inputs.balanceState === 'loading') balanceReason = availabilityCopy.balancesLoadingReason
 	else if (inputs.balanceState === 'error') balanceReason = availabilityCopy.balancesUnavailableReason
-	const availability: ActionAvailability = createActionAvailability(
+	const actionAvailability = createActionAvailability(
 		inputs.networkMismatchReason,
 		inputs.marketClosed ? ticketCopy.tradingEndedReason : undefined,
 		submissionWindowBlocker(market, mode, inputs.nowSeconds),
 		balanceReason,
-		parsed.value === undefined || parsed.value === 0n ? (parsed.error ?? availabilityCopy.amountRequiredReason) : undefined,
+		parsed.error,
 		inputs.amountSettling ? ticketCopy.updatingEstimate : undefined,
 		problem,
 		insufficient,
@@ -225,6 +277,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,
 	)
+	const availability: ActionAvailability = { ...actionAvailability, disabled: actionAvailability.disabled || parsed.value === undefined || parsed.value <= 0n }
 	let primaryStep: 'connect' | 'switch-network' | 'submit' = 'submit'
 	if (inputs.networkMismatchReason !== undefined) primaryStep = 'switch-network'
 	else if (!inputs.walletConnected) primaryStep = 'connect'
@@ -234,6 +287,8 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		amountError: parsed.error,
 		estimate,
 		estimateProblem: problem,
+		/** A buy the wallet cannot pay for or a sell above the holding, said at the amount field as well as the button. */
+		insufficientReason: insufficient,
 		impactTier,
 		needsAcknowledgment,
 		impactAcknowledged,

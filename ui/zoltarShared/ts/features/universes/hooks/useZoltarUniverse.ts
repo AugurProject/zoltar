@@ -1,3 +1,7 @@
+import * as zoltarCopy from '../../../copy/zoltar.js'
+import * as userMessagesCopy from '@zoltar/ui-core-shared/copy/userMessages.js'
+import * as marketCopy from '../../../copy/market.js'
+import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { useSignal } from '@preact/signals'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
@@ -151,9 +155,8 @@ export function useZoltarUniverse(
 
 		const loadedUniverse = await loadZoltarUniverse()
 		if (loadedUniverse !== undefined) return loadedUniverse
-		if (zoltarUniverseMissing.value) throw new Error('Zoltar universe does not exist')
-
-		throw new Error('Failed to load current Zoltar universe')
+		if (zoltarUniverseMissing.value) throw new Error(userMessagesCopy.missingUniverseDetail)
+		throw new Error(zoltarCopy.universeUnavailableDetail)
 	}
 
 	const loadZoltarUniverse = async (options: { clearCurrentState?: boolean } = {}) => {
@@ -195,7 +198,7 @@ export function useZoltarUniverse(
 			},
 			onError: error => {
 				if (!isCurrentZoltarContext(universeLoadContext) || scalarOutcomeIndexes.current !== requestedScalarOutcomeIndexes) return
-				zoltarUniverseError.value = getErrorMessage(error, 'Failed to load Zoltar universe')
+				zoltarUniverseError.value = getErrorMessage(error, zoltarCopy.universeUnavailableDetail)
 			},
 		})
 	}
@@ -233,7 +236,7 @@ export function useZoltarUniverse(
 			onError: error => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
-				zoltarQuestionsError.value = getErrorMessage(error, 'Failed to load Zoltar question count')
+				zoltarQuestionsError.value = getErrorMessage(error, marketCopy.questionPageLoadError)
 			},
 		})
 	}
@@ -294,7 +297,7 @@ export function useZoltarUniverse(
 					zoltarQuestionPage.value = buildQuestionPageFromQuestions(questions, currentQuestionPage)
 				}
 			},
-			errorFallback: 'Failed to load Zoltar questions',
+			errorFallback: marketCopy.questionPageLoadError,
 		})
 	}
 
@@ -312,7 +315,7 @@ export function useZoltarUniverse(
 				zoltarQuestions.value = mergedQuestions
 				clearResolvedQuestionLookupError(mergedQuestions)
 			},
-			errorFallback: 'Failed to load Zoltar question page',
+			errorFallback: marketCopy.questionPageLoadError,
 		})
 	}
 
@@ -338,16 +341,13 @@ export function useZoltarUniverse(
 			load: async operation => await dependencies.loadMarketDetails(readOperationClient(dependencies.createConnectedReadClient(), operation), BigInt(normalizedQuestionId)),
 			onSuccess: question => {
 				if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
-				if (!question.exists) {
-					if (!includesQuestionId(zoltarQuestions.value, normalizedQuestionId)) zoltarQuestionLookupError.value = 'Question not found'
-					return
-				}
+				if (!question.exists) return
 				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, [question])
 				zoltarQuestionLookupError.value = undefined
 			},
 			onError: error => {
 				if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
-				if (!includesQuestionId(zoltarQuestions.value, normalizedQuestionId)) zoltarQuestionLookupError.value = getErrorMessage(error, 'Failed to load question')
+				if (!includesQuestionId(zoltarQuestions.value, normalizedQuestionId)) zoltarQuestionLookupError.value = getErrorMessage(error, 'Question could not be loaded.')
 			},
 		})
 	}
@@ -356,7 +356,7 @@ export function useZoltarUniverse(
 	const loadCreatedQuestion = async (questionId: string): Promise<void> => {
 		if (!isMounted.current || !zoltarDeployed) return
 		const normalizedQuestionId = normalizeQuestionId(questionId)
-		if (normalizedQuestionId === undefined) throw new Error('Created question ID is invalid')
+		if (normalizedQuestionId === undefined) throw new Error('The created question ID is invalid.')
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
 		const readClient = dependencies.createConnectedReadClient()
@@ -370,7 +370,7 @@ export function useZoltarUniverse(
 			onSuccess: ([question, questionCount]) => {
 				if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				if (!question.exists) {
-					loadError = new Error('Created question was not found')
+					loadError = new Error('The created question could not be found.')
 					return
 				}
 				const registry = insertCreatedQuestion({ questionCount: zoltarQuestionCount.value, questionPage: zoltarQuestionPage.value, questions: zoltarQuestions.value }, question, questionCount)
@@ -458,7 +458,7 @@ export function useZoltarUniverse(
 		const environmentGuard = createActiveEnvironmentGuard()
 
 		zoltarChildUniverseError.value = undefined
-		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', 'Deploying child universe')
+		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', transactionCopy.deployingChildUniverse)
 		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
 		let ownsTransaction = false
 		let requestKey: TransactionRequestKey | undefined
@@ -478,7 +478,7 @@ export function useZoltarUniverse(
 				requestKey = typeof request === 'string' ? request : undefined
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
-				if (!universe.hasForked) throw new Error('This universe must fork before child universes can be deployed')
+				if (!universe.hasForked) throw new Error(marketCopy.childUniversesNotForkedReason)
 				const transaction = await dependencies.createZoltarChildUniverse(dependencies.createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, outcomeIndex)
 				if (!environmentGuard.isCurrent()) return
 				result = {
@@ -487,7 +487,7 @@ export function useZoltarUniverse(
 					outcomeIndex,
 					universeId: universe.universeId,
 				}
-				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', 'Child universe deployed', result.hash)
+				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', transactionCopy.childUniverseDeployed, result.hash)
 				outcomeLabel = getOutcomeLabelForIndex(universe.childUniverses, outcomeIndex)
 				onTransactionPresented(createChildUniverseSuccessPresentation(result, outcomeLabel))
 				refreshRequired = true
@@ -505,8 +505,8 @@ export function useZoltarUniverse(
 				await refreshZoltarUniverse()
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
-				const message = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
-				zoltarChildUniverseFeedback.value = createWarningActionFeedback('createChildUniverse', 'Child universe deployed', message, result?.hash)
+				const message = formatRefreshErrorMessage(error, 'The child universe was deployed, but the page could not be refreshed.')
+				zoltarChildUniverseFeedback.value = createWarningActionFeedback('createChildUniverse', transactionCopy.childUniverseDeployed, message, result?.hash)
 				if (result !== undefined) onTransactionPresented(createChildUniverseWarningPresentation(result, outcomeLabel, message))
 			}
 		} finally {

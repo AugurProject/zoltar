@@ -8,6 +8,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
+import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 
 const primaryViews: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting']
 const moreViews: readonly SelectedPoolView[] = ['price-oracle', 'staged-operations', 'fork-workflow']
@@ -87,7 +88,7 @@ export function PoolOracleStatusRow({ needsPrice, oracle, onRequestPrice, onView
 	if (pendingReportId !== undefined)
 		action = (
 			<button type='button' className='secondary' onClick={() => onViewReport(pendingReportId)}>
-				{copy.viewReport}
+				{coreAppCopy.viewReport}
 			</button>
 		)
 	else if (needsPrice)
