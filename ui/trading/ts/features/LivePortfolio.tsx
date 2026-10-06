@@ -104,9 +104,9 @@ function showsConditionalPayoutNote(entry: PortfolioBalanceEntry) {
 function renderPortfolioStatus(entry: PortfolioBalanceEntry) {
 	if (entry.error !== undefined) return <Badge tone='warning'>{portfolioCopy.balancesUnavailable}</Badge>
 	if (entry.market.loadError !== undefined) return <Badge tone='warning'>{liveCopy.marketDataUnavailable}</Badge>
+	if (entry.market.systemState === 0 && entry.market.questionOutcome !== 3) return <Badge tone='muted'>{marketsCopy.resolved}</Badge>
 	if (entry.market.universeForkTime !== 0n) return <Badge tone='warning'>{blockerCopy.universeForked}</Badge>
 	if (entry.market.systemState !== 0) return <Badge tone='warning'>{blockerCopy.poolInactive}</Badge>
-	if (entry.market.questionOutcome !== 3) return <Badge tone='muted'>{marketsCopy.resolved}</Badge>
 	return undefined
 }
 

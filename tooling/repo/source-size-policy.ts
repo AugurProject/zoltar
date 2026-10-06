@@ -26,7 +26,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 684],
-		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 605],
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [

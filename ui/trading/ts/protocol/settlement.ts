@@ -16,7 +16,7 @@ export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
 type SettlementLifecycle = Pick<MarketLifecycle, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>
 type SettlementBalances = Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined
 
-export type SettlementUnavailableReason = Readonly<{ code: 'market-data-unavailable' | 'universe-not-forked' | 'no-shares-to-migrate' | 'universe-forked' | 'pool-not-operational' | 'no-complete-sets' | 'question-not-resolved' }> | Readonly<{ code: 'no-winning-shares'; outcome: ShareOutcome }>
+export type SettlementUnavailableReason = Readonly<{ code: 'market-data-unavailable' | 'universe-not-forked' | 'no-shares-to-migrate' | 'universe-forked' | 'pool-not-operational' | 'no-complete-sets' | 'question-not-resolved' | 'question-resolved' }> | Readonly<{ code: 'no-winning-shares'; outcome: ShareOutcome }>
 
 const SHARE_OUTCOME_BY_KEY = { invalid: 'INVALID', yes: 'YES', no: 'NO' } as const satisfies Record<'invalid' | 'yes' | 'no', ShareOutcome>
 
@@ -41,17 +41,18 @@ function settlementHoldings(market: SettlementLifecycle, balances: SettlementBal
 export function settlementUnavailability(operation: SettlementOperation, market: SettlementLifecycle, balances: SettlementBalances): SettlementUnavailableReason | undefined {
 	const holdings = settlementHoldings(market, balances)
 	if (market.loadError !== undefined) return { code: 'market-data-unavailable' }
+	const outcome = resolvedShareOutcome(market.questionOutcome)
 	if (operation === 'migrate-shares') {
 		if (market.universeForkTime === 0n) return { code: 'universe-not-forked' }
+		if (outcome !== undefined) return { code: 'question-resolved' }
 		return holdings.directionalBalance === 0n ? { code: 'no-shares-to-migrate' } : undefined
 	}
 	if (operation === 'redeem-complete-set') {
-		if (market.universeForkTime !== 0n) return { code: 'universe-forked' }
+		if (market.universeForkTime !== 0n) return { code: outcome === undefined ? 'universe-forked' : 'question-resolved' }
 		if (market.systemState !== 0) return { code: 'pool-not-operational' }
 		return holdings.completeSets === 0n ? { code: 'no-complete-sets' } : undefined
 	}
 	if (market.systemState !== 0) return { code: 'pool-not-operational' }
-	const outcome = resolvedShareOutcome(market.questionOutcome)
 	if (outcome === undefined) return { code: 'question-not-resolved' }
 	return holdings.winningBalance === 0n ? { code: 'no-winning-shares', outcome } : undefined
 }

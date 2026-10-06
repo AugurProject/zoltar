@@ -7,6 +7,24 @@ describe('escalation math', () => {
 		expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(1n, 8n, 4n)).toBe((ESCALATION_TIME_LENGTH * 2n) / 3n)
 	})
 
+	test('maps a zero-log curve to its terminal step without an early projected deadline', () => {
+		const bond = 10n ** 18n
+		const threshold = bond + 10n ** 12n
+		expect(computeEscalationBindingCapitalAttoRep(bond, threshold, ESCALATION_TIME_LENGTH - 1n)).toBe(bond)
+		expect(computeEscalationBindingCapitalAttoRep(bond, threshold, ESCALATION_TIME_LENGTH)).toBe(threshold)
+		for (const [cost, expectedTime] of [
+			[0n, 0n],
+			[bond, 0n],
+			[bond + 1n, ESCALATION_TIME_LENGTH],
+			[bond + 10n ** 11n, ESCALATION_TIME_LENGTH],
+			[threshold - 1n, ESCALATION_TIME_LENGTH],
+			[threshold, ESCALATION_TIME_LENGTH],
+			[threshold + 1n, ESCALATION_TIME_LENGTH],
+		] as const) {
+			expect(computeEscalationTimeSinceStartFromAttritionCostAttoRep(bond, threshold, cost)).toBe(expectedTime)
+		}
+	})
+
 	test('shares the contract forward curve and deposit projection', () => {
 		expect(computeEscalationBindingCapitalAttoRep(1n, 8n, 0n)).toBe(1n)
 		expect(computeEscalationBindingCapitalAttoRep(1n, 8n, ESCALATION_TIME_LENGTH / 3n)).toBe(2n)

@@ -18,6 +18,7 @@
 			<section id="steps">
 				<h2>Migrate a position</h2>
 				<ol>
+					<li>Check the market's outcome. If it has already finalized, follow <a href="./trading-handle-resolution.html">Handle resolution</a> to redeem winning shares through its SecurityPool. Continue below only while the question is unresolved.</li>
 					<li>Remove parent LP into parent Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
 					<li>Decide the destination child universe or universes for each of your Invalid, Yes, and No balances. Nothing in Trading chooses a child universe or migrates LP for you.</li>
 					<li>For every nonzero parent balance you intend to migrate, submit one <code>ShareToken.migrate(fromId, targetOutcomeIndexes)</code> call with that token ID and the explicitly chosen, strictly increasing target outcome indexes. Each call mints the matching child-universe share balance. The parent balance stays visible, but that source token ID is locked for the wallet and can no longer be transferred.</li>

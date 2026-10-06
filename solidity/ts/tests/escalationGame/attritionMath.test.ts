@@ -113,6 +113,25 @@ describe('Escalation Game: attrition math', () => {
 		assert.strictEqual(timeFromHighCost, ESCALATION_TIME_LENGTH, 'threshold maps to max time')
 	})
 
+	test('a zero-resolution logarithm maps interior costs monotonically to the terminal curve step', async () => {
+		const { escalationGameAddress } = await fixture.deployEscalationGameWithProofPool()
+		const threshold = reportBond + 10n ** 12n
+		await fixture.startEscalation(escalationGameAddress, reportBond, threshold)
+		assert.strictEqual(await readIterativeAttritionCost(client, escalationGameAddress, ESCALATION_TIME_LENGTH - 1n), reportBond, 'the rounded curve stays at its bond before the terminal step')
+		assert.strictEqual(await readIterativeAttritionCost(client, escalationGameAddress, ESCALATION_TIME_LENGTH), threshold, 'the terminal step reaches the threshold')
+		for (const [cost, expectedTime] of [
+			[0n, 0n],
+			[reportBond, 0n],
+			[reportBond + 1n, ESCALATION_TIME_LENGTH],
+			[reportBond + 10n ** 11n, ESCALATION_TIME_LENGTH],
+			[threshold - 1n, ESCALATION_TIME_LENGTH],
+			[threshold, ESCALATION_TIME_LENGTH],
+			[threshold + 1n, ESCALATION_TIME_LENGTH],
+		] as const) {
+			assert.strictEqual(await readTimeSinceStartFromAttritionCost(client, escalationGameAddress, cost), expectedTime, 'zero-log inversion must preserve both boundaries and every sampled interior cost')
+		}
+	})
+
 	test('totalCostAttoRep: returns 0 before game starts and nonDecisionThresholdAttoRep after timeout', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
 

@@ -19,8 +19,8 @@
 				<h2>Unwind after question end</h2>
 				<ol>
 					<li>Remove your LP tokens from the <a href="../reference/glossary.html#trading-pool">trading pool</a> into Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> is <code>Operational</code> and its universe has not forked. After a fork, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a> instead.</li>
-					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>, which requires the SecurityPool to be <code>Operational</code>.</li>
+					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> is <code>Operational</code> and its universe has not forked. If the universe forks while the question is unresolved, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</li>
+					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>, which requires the SecurityPool to be <code>Operational</code>. Keep redeeming through this pool if its universe forks later; resolved shares cannot migrate.</li>
 				</ol>
 				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including trading fees earned as LP, are worth nothing once they lose. Each redemption burns the redeemed shares and pays ETH at the SecurityPool's current collateral rate.</p>
 			</section>
