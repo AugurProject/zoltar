@@ -6,15 +6,25 @@ import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRout
 installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
 test('shows one primary row with Pools and OpenOracle', () => {
-	const tabs = getStatoblastRouteTabs({ route: 'pools', showDeployTab: false })
+	const tabs = getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
 	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'OpenOracle'])
 	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
 })
 
 test('keeps deployment reachable while needed and while its route is active', () => {
-	expect(getStatoblastRouteTabs({ route: 'pools', showDeployTab: true })[0]?.route).toBe('deploy')
-	expect(getStatoblastRouteTabs({ route: 'deploy', showDeployTab: false })[0]?.route).toBe('deploy')
+	expect(getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'pools', showDeployTab: true })[0]?.route).toBe('deploy')
+	expect(getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'deploy', showDeployTab: false })[0]?.route).toBe('deploy')
+})
+
+test('disables the other sections with a reason while required contracts are missing', () => {
+	const tabs = getStatoblastRouteTabs({ applicationDeploymentMissing: true, route: 'deploy', showDeployTab: true })
+	expect(tabs.map(tab => [tab.route, tab.disabled === true, tab.disabledReason])).toEqual([
+		['deploy', false, undefined],
+		['pools', true, 'Deploy the required contracts first'],
+		['open-oracle', true, 'Deploy the required contracts first'],
+	])
+	expect(getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'deploy', showDeployTab: true }).some(tab => tab.disabled === true)).toBe(false)
 })
 
 test('lists pool views as paths without a Manage Pool peer and preserves the universe', () => {

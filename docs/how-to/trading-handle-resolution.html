@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="After a market resolves, unwind LP, redeem complete sets, and claim winning shares through the SecurityPool." />
-		<title>Handle resolution</title>
+		<title>Handle resolution · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -28,11 +28,11 @@
 				<h2>In the UI</h2>
 				<p>Open the market. A closed market opens on its <strong>Settlement</strong> tab.</p>
 				<ul>
-					<li>To redeem complete sets, select <strong>Redeem sets</strong>, enter the ETH value in <strong>Complete-set value to redeem</strong>, check <strong>You receive ≈</strong>, and select <strong>Redeem complete sets</strong>.</li>
+					<li>To redeem complete sets, select <strong>Redeem sets</strong>, enter an amount in <strong>ETH to redeem</strong>, check <strong>You receive ≈</strong>, and select <strong>Redeem complete sets</strong>.</li>
 					<li>Once the market finalizes, a <strong>Redeem Yes</strong>, <strong>Redeem No</strong>, or <strong>Redeem Invalid</strong> option appears for the winning outcome. It redeems your entire balance of that share through this exact SecurityPool. Before finalization the option is absent.</li>
 				</ul>
 				<figure class="screenshot" id="fig-trading-settlement" aria-labelledby="fig-trading-settlement-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="753" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Redeem sets selected, 0.001 ETH entered as the complete-set value to redeem, a Max button, a note that you hold 0.005 complete sets worth 0.0045 ETH, an estimate of about 0.001 ETH received with a 0.0009 ETH minimum, and an enabled Redeem complete sets button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="753" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Redeem sets selected, 0.001 entered in ETH to redeem, a Max button, a note that you hold 0.005 complete sets worth 0.0045 ETH, an estimate of about 0.001 ETH received with a 0.0009 ETH minimum, and an enabled Redeem complete sets button." loading="lazy" /></a>
 					<figcaption id="fig-trading-settlement-caption"><span class="figure-label">Settlement after the question ends.</span> The market has not finalized yet, so only complete-set redemption and fork migration are offered.</figcaption>
 				</figure>
 				<p>Every settlement transaction is simulated again at the latest block before your wallet opens, and stops if it would now fail.</p>

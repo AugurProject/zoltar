@@ -26,7 +26,7 @@ describe('ActionLauncherButton', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Start fork' })
-		const reason = documentQueries.getByRole('note', { name: 'Start fork details' })
+		const reason = documentQueries.getByRole('note')
 		const descriptionIds = button.getAttribute('aria-describedby')?.split(' ') ?? []
 
 		expect(reason.textContent).toContain('Select a question first.')
@@ -44,12 +44,16 @@ describe('ActionLauncherButton', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Opening…' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected a button')
-		expect(button.disabled).toBe(true)
+		// The pending launcher stays focusable so keyboard focus is not dropped while it works.
+		expect(button.getAttribute('aria-disabled')).toBe('true')
 		expect(button.getAttribute('aria-busy')).toBe('true')
 		expect(button.querySelector('.tx-action-label-placeholder[data-label="Open dialog"]')).not.toBeNull()
 		expect(button.querySelector('.tx-action-label-placeholder[data-label="Opening…"]')).not.toBeNull()
 		expect(button.querySelector('.spinner')).not.toBeNull()
-		expect(documentQueries.getByRole('note', { name: 'Open dialog details' }).textContent).toContain('Connect a wallet first.')
+		const reason = documentQueries.getByRole('note')
+		expect(reason.textContent).toContain('Connect a wallet first.')
+		expect(reason.hasAttribute('aria-label')).toBe(false)
+		expect(button.getAttribute('aria-describedby')).toBe(reason.id)
 	})
 
 	test('renders no feedback slot while the action is available', async () => {

@@ -58,12 +58,14 @@ export function ProtocolAppFrame({
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main data-universe-id={activeUniverseId?.toString()}>
 					{activeUniverseId === undefined ? undefined : <UniverseIdentity universeId={activeUniverseId} variant='backdrop' />}
-					{heading}
-					{notices}
 					{header}
+					{/* Notices follow the header, so one appearing or clearing never moves the brand, navigation, or account controls. */}
+					{notices}
 					<WalletActionsProvider walletActions={walletActions}>
 						<GlobalTransactionPresentationProvider transaction={activeTransaction}>
 							<div id='app-content' tabIndex={-1}>
+								{/* The page heading opens the content, so focus moved to it on a page change continues into the page. */}
+								{heading}
 								<TransactionActionButtonLockProvider lock={lock}>
 									<fieldset className='route-shell' disabled={routeContentDisabled}>
 										{children}

@@ -1,11 +1,10 @@
-import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { bigintToSafeNumber, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../../../types/contracts.js'
 import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
-import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { getDecimalSeparatorError, parseDecimalInput, parseDecimalInputResult, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ensureSentence, formatWriteErrorMessage, getErrorDetail, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
@@ -21,7 +20,8 @@ import * as statoblastAppCopy from '../../../copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
-const OPEN_ORACLE_DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
+/** ERC-20 decimals are a uint8, so reading an amount at this scale never rejects precision a real token allows. */
+const OPEN_ORACLE_UNKNOWN_SCALE_DECIMALS = 255
 type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
 export { addOpenOracleBountyBuffer }
@@ -120,28 +120,17 @@ type OpenOracleCreateValidation = {
 	message: string | undefined
 }
 
-function normalizeOpenOracleUnknownScaleDecimalInput(value: string) {
-	const trimmed = normalizeNumericInput(value)
-	if (trimmed === '') return trimmed
-	if (trimmed === '.' || trimmed === '-.') return trimmed
-	if (trimmed.startsWith('.')) return `0${trimmed}`
-	if (trimmed.endsWith('.')) return `${trimmed}0`
-	return trimmed
-}
-
-function isZeroOpenOracleDecimalInput(value: string) {
-	return value
-		.replace('-', '')
-		.replace('.', '')
-		.split('')
-		.every(digit => digit === '0')
+/** Reads an amount before its token decimals are known with the shared parser, so it accepts exactly what the amount fields accept, including a locale decimal comma. */
+function parseOpenOracleUnknownScaleDecimalInput(value: string) {
+	return parseDecimalInputResult(value, OPEN_ORACLE_UNKNOWN_SCALE_DECIMALS)
 }
 
 function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, input, invalidMessage, negativeMessage, zeroMessage }: { allowZero?: boolean; input: string; invalidMessage: string; negativeMessage: string | undefined; zeroMessage?: string }) {
-	const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
-	if (normalized === '' || !OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized)) return invalidMessage
-	if (normalized.startsWith('-')) return negativeMessage
-	if (!allowZero && isZeroOpenOracleDecimalInput(normalized)) return zeroMessage ?? negativeMessage
+	const parsed = parseOpenOracleUnknownScaleDecimalInput(input)
+	if (parsed.problem === 'separator') return getDecimalSeparatorError()
+	if (parsed.value === undefined) return invalidMessage
+	if (parsed.value < 0n || input.trim().startsWith('-')) return negativeMessage
+	if (!allowZero && parsed.value === 0n) return zeroMessage ?? negativeMessage
 	return undefined
 }
 
@@ -266,8 +255,8 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	}
 
 	const positiveAmountInvalid = (input: string) => {
-		const normalized = normalizeOpenOracleUnknownScaleDecimalInput(input)
-		return normalized !== '' && OPEN_ORACLE_DECIMAL_INPUT_PATTERN.test(normalized) && (normalized.startsWith('-') || isZeroOpenOracleDecimalInput(normalized))
+		const parsed = parseOpenOracleUnknownScaleDecimalInput(input)
+		return parsed.value !== undefined && (parsed.value <= 0n || input.trim().startsWith('-'))
 	}
 	const firstInvalidField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => fieldErrors[field] !== undefined || (field === 'exactToken1Report' && positiveAmountInvalid(form.exactToken1Report)) || (field === 'initialToken2Amount' && positiveAmountInvalid(form.initialToken2Amount)))
 	return {

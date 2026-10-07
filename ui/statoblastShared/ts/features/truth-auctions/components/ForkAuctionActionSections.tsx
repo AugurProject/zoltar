@@ -171,7 +171,7 @@ export function ForkAuctionSubmitBidSection({
 	submitBidPrice,
 }: {
 	bidAmountHint: { availableAttoEth: bigint; minimumBidAttoEth: bigint } | undefined
-	bidAmountMax: { amount: bigint | undefined; unavailableReason: string | undefined }
+	bidAmountMax: { amount: bigint | undefined; unavailableReason: string | undefined; showUnavailableReason: boolean }
 	bidPricePosition: TruthAuctionBidPricePosition | undefined
 	bidPriceRounding: { roundUpPriceInput: string | undefined; submittedPriceInput: string } | undefined
 	clearingPrice: bigint | undefined

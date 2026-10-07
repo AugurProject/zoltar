@@ -89,7 +89,8 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		reporting.setReportingForm((current: ReportingFormState) => applyReportingFormUpdate(current, update))
 	}
-	const overview = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
+	// Only the pool this session just created waits for the registry to list it; any other unknown address resolves as not found at once.
+	const overview = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce, expectedSecurityPoolAddress: securityPoolResult?.securityPoolAddress })
 	const { checkedSecurityPoolAddress, loadSecurityPools, refreshSecurityPools, securityPools } = overview
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload, and again
 	// when the view returns, because a report settled from another route can change it without a new block arriving.

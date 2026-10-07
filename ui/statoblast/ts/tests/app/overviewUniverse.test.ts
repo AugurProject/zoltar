@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
-import { getStatoblastOverviewUniverse } from '../../app/lib/overviewUniverse.js'
+import { getStatoblastOverviewUniverse, getStatoblastUniversePresentation } from '../../app/lib/overviewUniverse.js'
 
 const unforkedUniverse = { forkTime: 0n, hasForked: false, totalTheoreticalSupplyAttoRep: 11_000_000n * 10n ** 18n }
 
@@ -22,6 +22,13 @@ describe('Statoblast top bar universe', () => {
 		const overview = getStatoblastOverviewUniverse({ loadingZoltarForkAccess: true, zoltarForkRepBalanceAttoRep: undefined, zoltarUniverse: unforkedUniverse })
 		expect(overview.universeRepBalanceAttoRep).toBeUndefined()
 		expect(overview.isLoadingUniverseRepBalance).toBe(true)
+	})
+
+	test('shows the not-found hint for a universe link that names no deployed universe', () => {
+		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: false, zoltarUniverse: undefined, zoltarUniverseMissing: true })?.key).toBe('not_found')
+		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: true, zoltarUniverse: undefined, zoltarUniverseMissing: false })).toBeUndefined()
+		expect(getStatoblastUniversePresentation({ canReadOnchainData: false, loadingZoltarUniverse: false, zoltarUniverse: undefined, zoltarUniverseMissing: true })).toBeUndefined()
+		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: false, zoltarUniverse: unforkedUniverse, zoltarUniverseMissing: false })).toBeUndefined()
 	})
 
 	test('omits the migration link on the active migration screen', () => {

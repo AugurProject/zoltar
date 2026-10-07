@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="Find the largest complete-set exit your wallet can insure and simulate the router call before submitting." />
-		<title>Exit an insured position</title>
+		<title>Exit an insured position · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -27,7 +27,7 @@
 					<figcaption id="fig-trading-exit-caption"><span class="figure-label">An insured Yes exit.</span> The hint under the amount is the limit set by your Invalid, your Yes, and the trading pool's liquidity.</figcaption>
 				</figure>
 				<p>If Invalid is the binding limit and you enter more than it covers, the ticket shows <strong>Not enough Invalid shares to insure this sale.</strong> and offers <strong>Sell … instead</strong> with the largest amount. The shares you do not sell stay in your wallet. Acquiring more Invalid helps only when Invalid is the binding limit; <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> works through the bounds.</p>
-				<p>When the sale confirms, <strong>Wallet Invalid</strong> under <strong>Your position</strong> has dropped by <strong>Invalid used</strong> and the ETH is in your wallet.</p>
+				<p>When the sale confirms, the Invalid balance under <strong>Your position</strong> has dropped by <strong>Invalid used</strong> and the ETH is in your wallet.</p>
 			</section>
 			<section id="through-the-sdk">
 				<h2>Exit through the SDK</h2>

@@ -6,7 +6,7 @@ import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback, type ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createLiquidationFailurePresentation, createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../../transactionPresentations.js'
@@ -29,13 +29,19 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 
 export type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
-type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext & { environmentRefreshKey: number }
+type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
+	TransactionCancellationParameters &
+	WriteOperationContext & {
+		environmentRefreshKey: number
+		/** A pool this session just created; only its first read waits for the registry to show it. */
+		expectedSecurityPoolAddress?: string | undefined
+	}
 
 /** The selected pool's lineage, refreshed in place on each new block. */
 const securityPoolLineageQueries = appQueryCache.createStore<ListedSecurityPool[]>()
 
 function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
-	{ accountAddress, environmentRefreshKey, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters,
+	{ accountAddress, environmentRefreshKey, expectedSecurityPoolAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters,
 	dependencies: UseSecurityPoolsOverviewDependencies<TWriteClient>,
 ) {
 	const latestAccountAddress = useRef(accountAddress)
@@ -103,7 +109,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
 			load: async operation => {
 				if (nextCheckedAddress === undefined) return []
-				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress, operation)
+				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress, operation, { expectDeployment: sameAddress(nextCheckedAddress, expectedSecurityPoolAddress) })
 			},
 			onSuccess: pools => {
 				securityPoolsCommitVersion.current += 1

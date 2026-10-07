@@ -211,6 +211,13 @@ describe('liquidation modal guards', () => {
 		expect(findBlockerReason(createBlockerInput({ delegatedReceiver: true, liquidationReceiverVaultSummaryResolved: false, trimmedLiquidationReceiverVault: '0x1234' }))).toEqual({ reason: liquidationCopy.receiverVaultAddressInvalid })
 		expect(findBlockerReason(createBlockerInput({ sameVaultWarning: 'same' }))).toEqual({ reason: 'same' })
 		expect(findBlockerReason(createBlockerInput({ liquidationDebtEthAmount: ' ' }))).toEqual({ reason: liquidationCopy.liquidationAmountRequired })
+		// The modal opens at 0, which cannot be sent, so zero asks for an amount in both execution modes instead of a bare disabled button.
+		for (const liquidationExecutionMode of ['execute', 'queue'] as const) {
+			expect(findBlockerReason(createBlockerInput({ liquidationDebtEthAmount: '0', liquidationExecutionMode }))).toEqual({ reason: liquidationCopy.liquidationAmountRequired })
+			expect(findBlockerReason(createBlockerInput({ liquidationDebtEthAmount: '0.000', liquidationExecutionMode }))).toEqual({ reason: liquidationCopy.liquidationAmountRequired })
+		}
+		// Unparseable text keeps its own validity reason from the liquidation simulation.
+		expect(findBlockerReason(createBlockerInput({ liquidationDebtEthAmount: 'abc' }))).toBeUndefined()
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: undefined }))).toEqual({ reason: securityPoolCopy.executionWindowRangeError })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: 301n }))?.reason).toBe('Enter an execution window of 1–5 whole minutes.')
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', loadingLiquidationFundingPreview: true }))).toEqual({ loading: true, reason: liquidationCopy.loadingQueueFunding })

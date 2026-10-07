@@ -422,8 +422,10 @@ if (
 	diagramModelsSource.includes('labelX:') ||
 	!runtimeSource.includes('return markDrivenDiagramChart(spec)') ||
 	!runtimeSource.includes("mount.closest<HTMLElement>('figure.diagram, .example-visual')") ||
-	!runtimeSource.includes('overflowEnvelope.tabIndex = 0') ||
-	!runtimeSource.includes('Responsive diagram: ${spec.ariaLabel}') ||
+	// A fitted chart is not a scroll surface, so only the full-screen scroll surface becomes a keyboard stop.
+	runtimeSource.includes('overflowEnvelope.tabIndex = 0') ||
+	!runtimeSource.includes('scrollSurface.tabIndex = 0') ||
+	!runtimeSource.includes("overflowEnvelope.setAttribute('aria-label', spec.ariaLabel)") ||
 	!runtimeSource.includes('fitArrowEndpointOutsideRectangles(item.points, data.rectangles') ||
 	!runtimeSource.includes('...rectangleMarks(rectangleLayers.background), ...lineMarks, ...rectangleMarks(rectangleLayers.foreground)') ||
 	!runtimeSource.includes("document.addEventListener('keydown'") ||

@@ -3,7 +3,7 @@
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
 import { TimestampValue } from '../components/TimestampValue.js'
-import { formatTimestamp } from '../lib/formatters.js'
+import { formatLocalTimestamp, formatTimestamp } from '../lib/formatters.js'
 import { ChainTimestampContext } from '../wallet/chainTimestamp.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -55,13 +55,32 @@ describe('TimestampValue', () => {
 		expect(document.querySelector('.timestamp-value-relative')).toBeNull()
 	})
 
-	test('renders loading timestamps with an accessible spinner', async () => {
+	test('renders loading timestamps with a silent spinner so many loading values do not mount many live regions', async () => {
 		const renderedComponent = await renderIntoDocument(<TimestampValue loading timestamp={undefined} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const loadingStatus = document.body.querySelector('[role="status"].timestamp-value')
-		expect(loadingStatus?.textContent).toContain('Loading…')
-		expect(loadingStatus?.querySelector('.spinner')).not.toBeNull()
+		const loadingValue = document.body.querySelector('.timestamp-value.loading')
+		expect(loadingValue?.textContent).toContain('Loading…')
+		expect(loadingValue?.querySelector('.spinner')).not.toBeNull()
+		expect(loadingValue?.getAttribute('role')).toBeNull()
+		expect(loadingValue?.getAttribute('aria-live')).toBeNull()
+	})
+
+	test('keeps UTC visible and offers the viewer local time where it differs, instead of repeating the visible text', async () => {
+		const timestamp = 1_700_000_000n
+		const renderedComponent = await renderIntoDocument(<TimestampValue currentTimestamp={timestamp} timestamp={timestamp} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const time = document.querySelector('time')
+		expect(time?.textContent).toContain('2023-11-14 22:13:20 UTC')
+		const localTimestamp = formatLocalTimestamp(timestamp)
+		if (localTimestamp === undefined) {
+			expect(time?.getAttribute('title')).toBe('2023-11-14 22:13:20 UTC')
+			expect(time?.querySelector('.visually-hidden')).toBeNull()
+		} else {
+			expect(time?.getAttribute('title')).toBe(`Local time ${localTimestamp}`)
+			expect(time?.querySelector('.visually-hidden')?.textContent).toBe(`Local time ${localTimestamp}`)
+		}
 	})
 
 	test('renders an invalid timestamp without crashing', async () => {

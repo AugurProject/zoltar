@@ -193,11 +193,18 @@ describe('UniverseSwitcher', () => {
 
 	test('links directly to the browser for the active universe without a dropdown or child list', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes&simulate=1&universe=999' universe={createUniverse()} />)).cleanup
-		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes. Browse universes' })
+		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes, forked. Browse universes' })
 		expect(link.getAttribute('href')).toBe('#/zoltar?zoltarView=universes&simulate=1&universe=11')
+		expect(link.querySelector('.universe-switcher-badge')?.textContent).toBe('Forked')
 		expect(document.querySelector('details')).toBeNull()
 		expect(document.querySelector('.universe-switcher-popover')).toBeNull()
 		expect(within(document.body).queryByRole('link', { name: 'Alpha' })).toBeNull()
+	})
+
+	test('shows no fork badge for a universe that has not forked', async () => {
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={createUniverse({ hasForked: false, forkTime: 0n })} />)).cleanup
+		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes. Browse universes' })
+		expect(link.querySelector('.universe-switcher-badge')).toBeNull()
 	})
 
 	test('falls back to a short id while the active summary loads', async () => {

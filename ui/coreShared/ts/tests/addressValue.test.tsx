@@ -38,7 +38,7 @@ describe('AddressValue', () => {
 		expect(document.body.querySelector('button')).toBeNull()
 	})
 
-	test('copies the full address when clicked and shows copied state', async () => {
+	test('copies the full address when clicked and confirms it beside the unchanged button', async () => {
 		const address = '0x0000000000000000000000000000000000000001'
 		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -47,14 +47,23 @@ describe('AddressValue', () => {
 		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
 		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
 		expect(copyButton.getAttribute('aria-label')).toBe(`Copy address ${address}`)
+		expect(copyButton.querySelector('.copy-glyph[aria-hidden="true"]')).not.toBeNull()
+		// The live region is mounted before the copy so the confirmation is announced.
+		const status = document.querySelector('.copy-feedback')
+		if (status === null) throw new Error('Expected the copy confirmation region')
+		expect(status.getAttribute('aria-live')).toBe('polite')
+		expect(status.textContent).toBe('')
+		expect(copyButton.contains(status)).toBe(false)
 
 		await act(() => {
 			fireEvent.click(copyButton)
 		})
 		await waitFor(() => {
-			expect(copyButton.childNodes[0]?.textContent).toBe('Copied address')
+			expect(status.textContent).toBe('Copied address')
 		})
-		expect(documentQueries.getByRole('status').textContent).toBe('Copied address')
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(copyButton.getAttribute('aria-label')).toBe(`Copy address ${address}`)
+		expect(copyButton.getAttribute('data-copied')).toBe('true')
 	})
 
 	test.each([true, false])('measures available space and responds to resizing with copyable=%s', async copyable => {
@@ -134,8 +143,9 @@ describe('AddressValue', () => {
 			fireEvent.click(copyButton)
 		})
 		await waitFor(() => {
-			expect(copyButton.textContent).toBe('Copied address')
+			expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address')
 		})
+		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x123456…345678')
 		expect(copyButton.getAttribute('title')).toBe(address)
 	})
 
@@ -148,7 +158,8 @@ describe('AddressValue', () => {
 		expect(copyButton.querySelector('.address-value-text')?.getAttribute('data-abbreviated')).toBe('false')
 		expect(copyButton.getAttribute('title')).toBe(address)
 		await act(() => fireEvent.click(copyButton))
-		await waitFor(() => expect(copyButton.textContent).toBe('Copied address'))
+		await waitFor(() => expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address'))
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
 	})
 
 	test('uses a shorter visible hash while preserving the complete copy target', async () => {
@@ -159,7 +170,8 @@ describe('AddressValue', () => {
 		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')
 		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(hash)
 		await act(() => fireEvent.click(copyButton))
-		await waitFor(() => expect(copyButton.textContent).toBe('Copied address'))
+		await waitFor(() => expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address'))
+		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')
 	})
 
 	test('keeps the address visible and associates an announced clipboard error', async () => {

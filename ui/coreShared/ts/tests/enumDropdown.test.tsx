@@ -215,6 +215,83 @@ describe('EnumDropdown', () => {
 		expect(document.querySelector('.enum-dropdown-menu')).toBeNull()
 	})
 
+	test('dismisses only the menu on Escape so an enclosing dialog stays open', async () => {
+		const documentEscapes: string[] = []
+		const recordEscape = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') documentEscapes.push(event.key)
+		}
+		document.addEventListener('keydown', recordEscape)
+		try {
+			await renderDropdown({ ariaLabel: 'Outcome' })
+			const trigger = within(document.body).getByRole('button', { name: 'Outcome: Select outcome side' })
+			await act(() => {
+				fireEvent.click(trigger)
+			})
+			const firstOption = within(document.body).getAllByRole('option')[0]
+			if (firstOption === undefined) throw new Error('Expected an option')
+			await act(() => {
+				fireEvent.keyDown(firstOption, { key: 'Escape' })
+			})
+			expect(document.querySelector('.enum-dropdown-menu')).toBeNull()
+			expect(documentEscapes).toEqual([])
+
+			await act(() => {
+				fireEvent.click(trigger)
+			})
+			await act(() => {
+				fireEvent.keyDown(trigger, { key: 'Escape' })
+			})
+			expect(document.querySelector('.enum-dropdown-menu')).toBeNull()
+			expect(documentEscapes).toEqual([])
+
+			// With the menu closed, Escape belongs to the enclosing dialog again.
+			await act(() => {
+				fireEvent.keyDown(trigger, { key: 'Escape' })
+			})
+			expect(documentEscapes).toEqual(['Escape'])
+		} finally {
+			document.removeEventListener('keydown', recordEscape)
+		}
+	})
+
+	test('keeps options out of the Tab order, names the listbox from its label, and supports Home, End, and type-ahead', async () => {
+		await renderDropdown({
+			ariaLabel: 'Sort',
+			options: [
+				{ label: 'Closing soon', value: 'closing' },
+				{ label: 'Liquidity', value: 'liquidity' },
+				{ label: 'Recently added', value: 'recent' },
+			],
+			value: 'liquidity',
+		})
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Sort: Liquidity' }))
+		})
+		const listbox = within(document.body).getByRole('listbox', { name: 'Sort' })
+		const options = within(listbox).getAllByRole('option') as HTMLButtonElement[]
+		const [closing, liquidity, recent] = options
+		if (closing === undefined || liquidity === undefined || recent === undefined) throw new Error('Expected three options')
+		expect(options.map(option => option.tabIndex)).toEqual([-1, -1, -1])
+		expect(document.activeElement).toBe(liquidity)
+
+		await act(() => {
+			fireEvent.keyDown(liquidity, { key: 'End' })
+		})
+		expect(document.activeElement).toBe(recent)
+		await act(() => {
+			fireEvent.keyDown(recent, { key: 'Home' })
+		})
+		expect(document.activeElement).toBe(closing)
+		await act(() => {
+			fireEvent.keyDown(closing, { key: 'r' })
+		})
+		expect(document.activeElement).toBe(recent)
+		await act(() => {
+			fireEvent.keyDown(recent, { key: 'L' })
+		})
+		expect(document.activeElement).toBe(liquidity)
+	})
+
 	test('closes via Escape from the trigger', async () => {
 		let changedValue: string | undefined
 		await renderDropdown({

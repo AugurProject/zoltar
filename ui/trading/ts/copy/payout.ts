@@ -14,6 +14,11 @@ export function formatConditionalPayout(value: string, outcome: 'YES' | 'NO' | '
 	return `${value} if the question resolves ${outcomeLabel(outcome)}`
 }
 
+/** The short form for a headline that already names the full payout of the other outcome. */
+export function formatShortConditionalPayout(value: string, outcome: 'YES' | 'NO' | 'INVALID') {
+	return `${value} if ${outcomeLabel(outcome)}`
+}
+
 export function formatValidPayout(value: string) {
 	return `${value} if the question resolves Yes or No`
 }

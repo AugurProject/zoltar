@@ -5,6 +5,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
@@ -214,6 +215,9 @@ export function getLiquidationBlockers({
 	trimmedLiquidationReceiverVault: string
 	trimmedLiquidationTargetVault: string
 }): LiquidationBlocker[] {
+	// The field opens at 0, which cannot be sent, so zero reads as a missing amount; unparseable text keeps its own validity reason.
+	const parsedLiquidationAmount = tryParseEthAmountInput(liquidationDebtEthAmount)
+	const liquidationAmountMissing = liquidationDebtEthAmount.trim() === '' || (parsedLiquidationAmount !== undefined && parsedLiquidationAmount <= 0n)
 	return [
 		{ loading: true, reason: liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined },
 		{ loading: true, reason: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.selectedPoolDetailsLoading : undefined },
@@ -225,7 +229,7 @@ export function getLiquidationBlockers({
 		{ reason: delegatedReceiver ? liquidationReceiverVaultSummaryError : undefined },
 		{ reason: delegatedReceiver && !liquidationReceiverVaultSummaryResolved ? liquidationCopy.receiverVaultRequiredBeforeSubmission : undefined },
 		{ reason: sameVaultWarning },
-		{ reason: liquidationDebtEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined },
+		{ reason: liquidationAmountMissing ? liquidationCopy.liquidationAmountRequired : undefined },
 		{ reason: liquidationExecutionMode === 'queue' && (liquidationTimeoutSeconds === undefined || liquidationTimeoutSeconds > 300n) ? securityPoolCopy.executionWindowRangeError : undefined },
 		{ loading: true, reason: liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined },
 		{ reason: liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined },

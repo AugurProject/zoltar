@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Deployment status oracle</title>
+		<title>Deployment status oracle · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -94,13 +94,19 @@
 					<div class="tool-outcome-strip tool-outcome-strip-single">
 						<div data-primary-output><span>Decoded status</span><output data-deployment-mask-summary aria-live="polite">Loading the canonical mapping…</output></div>
 					</div>
-					<label for="deployment-mask-network">Network</label>
-					<select id="deployment-mask-network" data-tool-input="deploymentNetwork" data-deployment-mask-network aria-describedby="deployment-mask-guidance">
-						<option value="mainnet" selected>Ethereum mainnet</option>
-						<option value="sepolia">Sepolia</option>
-					</select>
-					<label for="deployment-mask-input">Mask value</label>
-					<input id="deployment-mask-input" data-tool-input="deploymentMask" inputmode="numeric" value="0x0" aria-describedby="deployment-mask-guidance" />
+					<div class="deployment-mask-fields">
+						<div class="deployment-mask-field">
+							<label for="deployment-mask-network">Network</label>
+							<select id="deployment-mask-network" data-tool-input="deploymentNetwork" data-deployment-mask-network aria-describedby="deployment-mask-guidance">
+								<option value="mainnet" selected>Ethereum mainnet</option>
+								<option value="sepolia">Sepolia</option>
+							</select>
+						</div>
+						<div class="deployment-mask-field">
+							<label for="deployment-mask-input">Mask value</label>
+							<input id="deployment-mask-input" data-tool-input="deploymentMask" inputmode="numeric" value="0x0" aria-describedby="deployment-mask-guidance" />
+						</div>
+					</div>
 					<div class="deployment-bit-grid" data-deployment-bit-grid aria-label="Tracked deployment bits"></div>
 					<p id="deployment-mask-guidance" data-deployment-mask-guidance>The decoder maps each set bit to the selected network's constructor address at the same index.</p>
 					<button type="button" data-deployment-mask-retry hidden>Retry loading the canonical mapping</button>

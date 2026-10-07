@@ -107,6 +107,11 @@
 	border: 0;
 }
 
+/* Date-time fields need room for the whole localized value, including a 12-hour clock's AM/PM segment, so the pair wraps to one column before either field would clip it. */
+.question-create-timing {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+
 .question-create-preview {
 	display: grid;
 	align-content: start;

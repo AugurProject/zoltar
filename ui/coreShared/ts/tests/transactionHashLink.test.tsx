@@ -36,6 +36,8 @@ describe('TransactionHashLink', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			expect(rendered.container.textContent).toBe(hash)
 			expect(rendered.container.querySelector('a')).toBeNull()
+			// The local hash is still copyable like every other identifier.
+			expect(rendered.container.querySelector('button')?.getAttribute('aria-label')).toBe(`Copy identifier ${hash}`)
 			expect(rendered.container.querySelector('.transaction-hash-link')?.getAttribute('title')).toBe(hash)
 		} finally {
 			restore()

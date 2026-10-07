@@ -91,7 +91,7 @@ test('closes after confirmation and permits a new request when reopened after st
 		})
 		await settle()
 		const dialogBeforeResult = queries.getByRole('dialog', { name: 'Request new price' })
-		const pendingStatus = queries.getByRole('status', { name: 'Transaction status' })
+		const pendingStatus = queries.getByRole('region', { name: 'Transaction status' })
 		expect(pendingStatus.textContent).toContain('Pending')
 		expect(within(pendingStatus).getByText(hash)).not.toBeNull()
 		expect(dialogBeforeResult.textContent).not.toContain(hash)
@@ -102,7 +102,7 @@ test('closes after confirmation and permits a new request when reopened after st
 		})
 		await settle()
 		expect(closed).toBe(true)
-		expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Price requested')
+		expect(queries.getByRole('region', { name: 'Transaction status' }).textContent).toContain('Price requested')
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
 		await act(() => {
 			activeReview.value = review
@@ -149,13 +149,15 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 		requestButton.focus()
 		await act(() => fireEvent.click(requestButton))
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
-		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
+		// The pending action stays focusable, so focus stays on it inside the dialog.
+		expect(dialog.contains(document.activeElement)).toBe(true)
+		expect(document.activeElement?.closest('.transaction-plan-action')).not.toBeNull()
 		await act(() => {
 			controller?.submitted(hash)
 			presentation.value = { tone: 'pending', title: 'Requesting new price…', hash, operationKey: 'price-request' }
 		})
-		expect(within(queries.getByRole('status', { name: 'Transaction status' })).getByText('Pending')).not.toBeNull()
-		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
+		expect(within(queries.getByRole('region', { name: 'Transaction status' })).getByText('Pending')).not.toBeNull()
+		expect(document.activeElement?.closest('.transaction-plan-action')).not.toBeNull()
 		expect(dialog.textContent).not.toContain(hash)
 		const priceInput = within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
 		priceInput.focus()
@@ -364,7 +366,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
-		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		const statusDialog = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(statusDialog).getByRole('alert').textContent).toContain('Uniswap quote unavailable.')
 		expect(within(queries.getByRole('dialog', { name: 'Request new price' })).queryByRole('alert') === null).toBe(true)
 		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
@@ -375,7 +377,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		expect(inputValue(priceInput)).toBe('2')
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
 		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		await settle()
 		expect(attempts).toBe(2)
 	} finally {
@@ -524,10 +526,10 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
 		await settle()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
-		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByText('Failed')).not.toBeNull()
-		expect(queries.getByRole('dialog', { name: 'Transaction status' }).querySelector('.global-transaction-notice-recovery')?.textContent).toBe('Transaction reverted; checking details…')
-		await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('button', { name: 'Dismiss' })))
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(within(queries.getByRole('region', { name: 'Transaction status' })).getByText('Failed')).not.toBeNull()
+		expect(queries.getByRole('region', { name: 'Transaction status' }).querySelector('.global-transaction-notice-recovery')?.textContent).toBe('Transaction reverted; checking details…')
+		await act(() => fireEvent.click(within(queries.getByRole('region', { name: 'Transaction status' })).getByRole('button', { name: 'Dismiss' })))
+		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		if (action !== 'dismiss') {
 			const availableAction = action === 'fetch' ? queries.getByRole('button', { name: 'Fetch from Uniswap' }) : within(queries.getByRole('dialog', { name: 'Request new price' })).getByRole('button', { name: 'Close' })
 			expect(availableAction.hasAttribute('disabled')).toBe(false)
@@ -538,7 +540,7 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 		expect(closed).toBe(action === 'close')
 		await act(async () => diagnostic.resolve())
 		await settle()
-		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		const statusDialog = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(statusDialog).getByText('Failed')).not.toBeNull()
 		expect(within(statusDialog).getByText(hash)).not.toBeNull()
 		expect(within(statusDialog).getByText('Attempted REP per ETH price').parentElement?.textContent).toContain('2')
@@ -650,7 +652,7 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		expect(submittedSignal?.aborted).toBe(false)
 		await act(async () => walletResponse.resolve(hash))
 		await settle()
-		const status = queries.getByRole('dialog', { name: 'Transaction status' })
+		const status = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(status).getByText('Failed')).not.toBeNull()
 		expect(within(status).getByText(hash)).not.toBeNull()
 		expect(within(status).getByText('Attempted REP per ETH price').parentElement?.textContent).toContain('2')
@@ -725,7 +727,7 @@ test('keeps submitted funding and pool details beside the original action after 
 		await settle()
 		expect(within(queries.getByRole('dialog', { name: 'Request new price' })).queryByRole('alert') === null).toBe(true)
 		expect(document.querySelector('.price-request-preview .global-transaction-notice')).toBeNull()
-		const statusDialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		const statusDialog = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(statusDialog).getByText('Failed')).not.toBeNull()
 		expect(within(statusDialog).getByRole('alert').textContent).toContain('nonce too low')
 		expect(within(statusDialog).getByText('Attempted REP per ETH price')).not.toBeNull()
@@ -740,7 +742,7 @@ test('keeps submitted funding and pool details beside the original action after 
 		expect(queries.queryByRole('button', { name: /^Review request/ })).toBeNull()
 		await act(() => fireEvent.click(within(statusDialog).getByRole('button', { name: 'Dismiss' })))
 		await settle()
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		expect(document.querySelector('.price-request-preview')?.textContent ?? '').not.toContain('nonce too low')
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
 		expect(queries.queryByRole('button', { name: /^Review request/ })).toBeNull()
@@ -800,7 +802,7 @@ test.each(['reverted', 'rejected'] as const)('keeps approvals in place after a %
 		await settle()
 		expect(transactionSteps.value).toBeUndefined()
 		expect(within(form).queryByRole('alert') === null).toBe(true)
-		expect(within(queries.getByRole('dialog', { name: 'Transaction status' })).getByRole('alert').textContent).toContain(outcome === 'reverted' ? 'Transaction reverted.' : 'User rejected the request.')
+		expect(within(queries.getByRole('region', { name: 'Transaction status' })).getByRole('alert').textContent).toContain(outcome === 'reverted' ? 'Transaction reverted.' : 'User rejected the request.')
 		for (const [index, row] of actionRows.entries()) expect(form.querySelectorAll('.transaction-plan-action')[index] === row).toBe(true)
 		for (const approval of approvals) {
 			expect(form.contains(approval)).toBe(true)
@@ -1150,7 +1152,8 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		await settle()
 		expect(transactionSteps.value?.activeIndex).toBe(-1)
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(2)
-		expect(queries.getByRole('button', { name: /Preparing funding and approvals/ }).hasAttribute('disabled')).toBe(true)
+		const preparing = queries.getByRole('button', { name: /Preparing funding and approvals/ })
+		expect(preparing.hasAttribute('disabled') || preparing.getAttribute('aria-disabled') === 'true').toBe(true)
 		// The busy button carries the preparing state; the prompt paragraph does not repeat it.
 		expect(rendered.container.querySelector('.price-request-estimate-prompt')?.textContent).toBe('')
 		expect(queries.queryByRole('button', { name: /Request new price/ })).toBeNull()
@@ -1329,9 +1332,9 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 		if (outcome === 'success') {
 			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
-			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+			expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		} else {
-			expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
+			expect(queries.getByRole('region', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
 			const form = queries.getByRole('dialog', { name: 'Request new price' })
 			expect(
 				within(form)
@@ -1532,7 +1535,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
 			expect(prices).toHaveLength(1)
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
-			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+			expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 			await act(() => {
 				presentation.value = { tone: 'success', title: 'Other action', hash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd' }
 			})
@@ -1540,7 +1543,7 @@ async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 're
 			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
 			expect(prices).toHaveLength(1)
 		} else {
-			expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
+			expect(queries.getByRole('region', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
 			expect(
 				within(queries.getByRole('dialog', { name: 'Request new price' }))
 					.getByRole('button', { name: /^Request new price/ })

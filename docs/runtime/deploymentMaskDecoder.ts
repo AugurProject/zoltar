@@ -161,12 +161,18 @@ function parseMask(source: string): bigint | undefined {
 	return mask < 1n << 256n ? mask : undefined
 }
 
+// Bit toggles cannot act on an invalid mask, so they are disabled until the value parses again.
 function markStatusesUnavailable(body: HTMLTableSectionElement): void {
 	for (const statusCell of statusCells(body)) {
 		statusCell.textContent = 'Unavailable · invalid mask'
 		delete statusCell.dataset['maskState']
 	}
-	for (const button of bitGrid.querySelectorAll('button')) button.removeAttribute('data-mask-state')
+	for (const button of bitGrid.querySelectorAll('button')) {
+		button.removeAttribute('data-mask-state')
+		// No bit is set while the mask does not parse; updateDecoder restores the pressed state once it does.
+		button.setAttribute('aria-pressed', 'false')
+		button.disabled = true
+	}
 }
 
 function updateDecoder(): void {
@@ -196,6 +202,7 @@ function updateDecoder(): void {
 		}
 		const button = bitGrid.querySelector<HTMLButtonElement>(`[data-deployment-bit-toggle="${bit}"]`)
 		if (button !== null) {
+			button.disabled = false
 			button.setAttribute('aria-pressed', String(isSet))
 			button.dataset['maskState'] = isSet ? 'set' : 'clear'
 		}

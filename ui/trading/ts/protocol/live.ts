@@ -14,14 +14,16 @@ import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMar
 import { latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
 import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from './authorization.js'
+import { largestMigratedShares, loadForkMigrationContext } from './forks.js'
 
 export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId, waitForActiveEnvironmentReady } from './runtimeClients.js'
 export { publicErrorMessage } from './publicError.js'
 export { settlementAvailability, settlementUnavailability, submitFreshSettlement, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from './settlement.js'
 export { submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
 import { publicErrorMessage } from './publicError.js'
+import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 
-export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
+export { forkMigrationSettled, liveBalancesForMarket, lockedMigratedBalance, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -409,7 +411,18 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.noTokenId] }),
 		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'balanceOf', args: [account] }),
 	])
-	return { scope, invalid, yes, no, lp }
+	if (market.universeForkTime === 0n) return { scope, invalid, yes, no, lp }
+	return { scope, invalid, yes, no, lp, migrated: await loadMigratedShareTotals(client, market, account) }
+}
+
+/** The migration record is extra context for a forked market's balances; a failed contract read leaves it unknown instead of failing the balances. */
+async function loadMigratedShareTotals(client: PublicClient, market: LiveMarket, account: Address) {
+	try {
+		return largestMigratedShares((await loadForkMigrationContext(client, market, account)).availableTargets)
+	} catch (error) {
+		if (!isRecoverableContractReadError(error)) throw error
+		return undefined
+	}
 }
 
 async function simulateEntryWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', amount: bigint, expiry: TransactionExpiry, slippageBps: bigint) {

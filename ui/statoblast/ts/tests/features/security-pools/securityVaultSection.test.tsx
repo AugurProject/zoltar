@@ -666,7 +666,7 @@ describe('SecurityVaultSection', () => {
 		const page = within(document.body)
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
-		const maximumValue = dialog.getByText('Maximum before liquidation').parentElement?.querySelector('.metric-field-value')?.textContent?.replaceAll('\u00a0', ' ')
+		const maximumValue = dialog.getByText('Maximum before liquidation').parentElement?.querySelector('.metric-field-value .currency-value')?.textContent?.replaceAll('\u00a0', ' ')
 		// 10 000 REP at 3 REP per ETH and a 2x multiplier allows 1 666.666… ETH; rounding up to 1 666.67 would show an unsafe figure.
 		expect(maximumValue).toBe('≈ 1 666.66 ETH')
 	})
@@ -2238,7 +2238,8 @@ test('ended vault REP redemption submits once without a confirmation and stays d
 		expect(calls).toBe(1)
 		expect(page.queryByRole('dialog')).toBeNull()
 		const pending = page.getByRole('button', { name: 'Redeeming REP…' })
-		expect(pending.hasAttribute('disabled')).toBe(true)
+		// A pending transaction button stays focusable and is aria-disabled.
+		expect(pending.getAttribute('aria-disabled')).toBe('true')
 		if (!(pending instanceof HTMLButtonElement)) throw new Error('Expected redemption button')
 		await act(() => pending.click())
 		expect(calls).toBe(1)

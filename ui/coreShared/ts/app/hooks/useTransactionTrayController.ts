@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionRequestPreview, TransactionSubmissionStatus } from '../../wallet/chainBackend.js'
 import {
@@ -14,11 +14,13 @@ import {
 	markTransactionPresented,
 	markTransactionRequested,
 	markTransactionSubmitted,
+	markTransactionTrackingStopped,
 	resolveTransactionTrayEntry,
 	type TransactionTrayState,
 } from '../../transactions/transactionTray.js'
 import { getTransactionLifecycleHash } from '../../transactions/transactionLifecycle.js'
 import { recordTransactionSettled, recordTransactionSubmitted, releaseTransactionActivityWatch } from '../../transactions/transactionActivityStore.js'
+import { subscribeTransactionTrackingStopped } from '../../transactions/transactionTrackingStop.js'
 import { humanizeTransactionAction } from '../../transactions/transactionPresentations.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../../types/components.js'
 import type { TransactionFailureDetails, TransactionRequestKey } from '../../types/app.js'
@@ -47,6 +49,14 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 	const transactionGenerationRef = useRef(0)
 	const transactionGeneration = transactionGenerationRef.current
 	const isCurrentGeneration = () => transactionGenerationRef.current === transactionGeneration
+	// A transaction the user stopped tracking leaves the tray, so its status no longer reads pending and its objects unlock.
+	useEffect(
+		() =>
+			subscribeTransactionTrackingStopped(hash => {
+				transactionState.value = markTransactionTrackingStopped(transactionState.value, hash)
+			}),
+		[],
+	)
 
 	return {
 		onTransactionCanceled: (requestKey?: TransactionRequestKey) => {
@@ -77,7 +87,7 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 				const hash = entry.lifecycle.hash
 				const outcome = entry.presentation
 				const succeeded = outcome?.hash === hash && (outcome.tone === 'success' || outcome.tone === 'warning')
-				if (succeeded) recordTransactionSettled(hash, { status: 'confirmed' })
+				if (succeeded) recordTransactionSettled(hash, { status: 'confirmed', ...(typeof outcome.title === 'string' ? { title: outcome.title } : {}) })
 				else releaseTransactionActivityWatch(hash)
 			}
 			transactionState.value = markTransactionFinished(previous, entry?.key)

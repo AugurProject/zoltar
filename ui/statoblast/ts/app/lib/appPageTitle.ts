@@ -22,7 +22,8 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 		if (activeSecurityPoolsView === 'operate') return glossaryCopy.securityPoolTerm
 		if (activeSecurityPoolsView === 'migrate') return appCopy.migrateRep
 		if (activeSecurityPoolsView === 'universes') return zoltarCopy.universesTitle
-		return commonCopy.securityPools
+		// Matches the browse view's visible heading, so the tab title and page announcement name what the user sees.
+		return commonCopy.browsePools
 	}
 	if (route === 'open-oracle') {
 		if (activeOpenOracleView === 'create') return statoblastAppCopy.createOracleReport

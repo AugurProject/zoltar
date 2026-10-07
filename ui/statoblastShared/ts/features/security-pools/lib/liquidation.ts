@@ -344,6 +344,55 @@ export function simulateLiquidation({
 	}
 }
 
+export type LiquidationEffectPreview = Readonly<{
+	/** Whether the receiver vault stays healthy at the price the preview uses. */
+	receiverHealthyAfter: boolean
+	simulation: LiquidationSimulation
+}>
+
+/**
+ * The effect of the entered liquidation for its confirmation preview, from the same simulation the submission guards use:
+ * backing moved and each vault's commitment and backing before and after. Undefined until every input it needs is known.
+ */
+export function getLiquidationEffectPreview({
+	callerVaultSummary,
+	minLiquidationPriceDistanceBps,
+	minimumVaultRepDepositAttoRep,
+	repPerEthPrice,
+	requestedDebtAttoEth,
+	settlementCollateralAttoEth,
+	statoblastSecurityMultiplierBps,
+	targetVaultSummary,
+	totalUnderwritingLimitAttoEth,
+}: {
+	callerVaultSummary: SecurityPoolVaultSummary | undefined
+	minLiquidationPriceDistanceBps?: bigint | undefined
+	minimumVaultRepDepositAttoRep: bigint | undefined
+	repPerEthPrice: bigint | undefined
+	requestedDebtAttoEth: bigint | undefined
+	settlementCollateralAttoEth: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
+	targetVaultSummary: SecurityPoolVaultSummary | undefined
+	totalUnderwritingLimitAttoEth: bigint | undefined
+}): LiquidationEffectPreview | undefined {
+	if (requestedDebtAttoEth === undefined || requestedDebtAttoEth <= 0n) return undefined
+	if (repPerEthPrice === undefined || repPerEthPrice <= 0n || statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
+	if (targetVaultSummary === undefined || minimumVaultRepDepositAttoRep === undefined || settlementCollateralAttoEth === undefined || totalUnderwritingLimitAttoEth === undefined) return undefined
+	const simulation = simulateLiquidation({ callerVaultSummary, minLiquidationPriceDistanceBps, minimumVaultRepDepositAttoRep, repPerEthPrice, requestedDebtAttoEth, settlementCollateralAttoEth, statoblastSecurityMultiplierBps, targetVaultSummary, totalUnderwritingLimitAttoEth })
+	if (simulation.underwritingLimitMovedAttoEth <= 0n) return undefined
+	return {
+		receiverHealthyAfter: isVaultHealthyAtFactor({
+			disputeStakedAttoRep: simulation.callerAfter.disputeStakedAttoRep,
+			healthFactorBps: LIQUIDATION_BPS_DENOMINATOR,
+			poolHeldVaultRepBackingAttoRep: simulation.callerAfter.vaultAttoRepBacking,
+			poolSecurityMultiplierBps: statoblastSecurityMultiplierBps,
+			repPerEthPrice,
+			underwritingLimitAttoEth: simulation.callerAfter.underwritingLimitAttoEth,
+		}),
+		simulation,
+	}
+}
+
 export function getDeterministicLiquidationFailureReason({
 	callerVaultSummary,
 	requestedDebtAttoEth,

@@ -6,6 +6,7 @@ import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { ZoltarView } from '../../types.js'
@@ -16,7 +17,7 @@ import { ZoltarForkRoute, ZoltarMigrateRoute, ZoltarUniversesRoute } from './Zol
 import { useZoltarWorkspace } from './ZoltarWorkspace.js'
 
 /** Explains why a universe-scoped view cannot render and offers the one action that recovers. */
-function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange }: { gate: Exclude<ZoltarRouteGate, 'ready'>; onRetryUniverse: () => void; onViewChange: (view: ZoltarView) => void }) {
+function ZoltarRouteGateState({ forkTime, gate, onRetryUniverse, onViewChange }: { forkTime: bigint | undefined; gate: Exclude<ZoltarRouteGate, 'ready'>; onRetryUniverse: () => void; onViewChange: (view: ZoltarView) => void }) {
 	switch (gate) {
 		case 'universe-unavailable':
 			return <RetryableNotice onRetry={onRetryUniverse} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: zoltarCopy.universeUnavailableDetail }} />
@@ -34,11 +35,20 @@ function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange }: { gate: E
 					}
 				/>
 			)
+		// The fork already happened, possibly from this page: report it as done and lead to the one next step.
 		case 'fork-unavailable':
 			return (
 				<EmptyState
 					title={zoltarCopy.forkUnavailableTitle}
-					detail={zoltarCopy.forkUnavailableDetail}
+					detail={
+						forkTime === undefined ? (
+							zoltarCopy.forkUnavailableDetail
+						) : (
+							<>
+								{zoltarCopy.forkCompletedOn} <TimestampValue timestamp={forkTime} />. {zoltarCopy.forkUnavailableDetail}
+							</>
+						)
+					}
 					actions={
 						<button className='primary' type='button' onClick={() => onViewChange('migrate')}>
 							{zoltarCopy.migrateRep}
@@ -64,7 +74,7 @@ export function ZoltarRoutes({ view }: { view: ZoltarView }) {
 		return (
 			<>
 				<RouteHeader title={titles[view]} />
-				<ZoltarRouteGateState gate={gate === 'ready' ? 'loading' : gate} onRetryUniverse={onRetryUniverse} onViewChange={onViewChange} />
+				<ZoltarRouteGateState forkTime={universe?.hasForked === true ? universe.forkTime : undefined} gate={gate === 'ready' ? 'loading' : gate} onRetryUniverse={onRetryUniverse} onViewChange={onViewChange} />
 			</>
 		)
 	}

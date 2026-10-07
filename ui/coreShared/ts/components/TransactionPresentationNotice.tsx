@@ -89,7 +89,7 @@ function TransactionDetailValue({ value }: { value: ComponentChildren }) {
 export function TransactionPresentationNotice({ className = '', collapseDetails = false, compact = false, contextWarning, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const title = transaction.title
-	const collapsedDetail = compact && transaction.tone !== 'error' ? transaction.detail : undefined
+	const showsRecovery = compact && transaction.tone === 'error'
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
@@ -149,17 +149,11 @@ export function TransactionPresentationNotice({ className = '', collapseDetails 
 					{title === undefined ? undefined : <strong>{title}</strong>}
 					{compact ? hashContent : undefined}
 				</div>
-				{compact && transaction.tone === 'error' ? <div className='global-transaction-notice-recovery'>{transaction.detail ?? transactionCopy.failureReasonUnavailable}</div> : undefined}
-				{!compact && transaction.detail !== undefined ? <div className='global-transaction-notice-detail'>{transaction.detail}</div> : undefined}
+				{showsRecovery ? <div className='global-transaction-notice-recovery'>{transaction.detail ?? transactionCopy.failureReasonUnavailable}</div> : undefined}
+				{/* The detail carries instructions such as "do not send it again" or "execute it manually", so it stays visible in the compact panel too. */}
+				{showsRecovery || transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
 				{compact ? undefined : hashContent}
-				{collapseDetails && (rows.length > 0 || technicalRows.length > 0 || collapsedDetail !== undefined) ? (
-					<ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>
-						{collapsedDetail === undefined ? undefined : <div className='global-transaction-notice-detail'>{collapsedDetail}</div>}
-						{detailRows}
-					</ReadOnlyDetailAccordion>
-				) : (
-					detailRows
-				)}
+				{collapseDetails && (rows.length > 0 || technicalRows.length > 0) ? <ReadOnlyDetailAccordion title={transactionCopy.transactionDetails}>{detailRows}</ReadOnlyDetailAccordion> : detailRows}
 			</div>
 		</div>
 	)

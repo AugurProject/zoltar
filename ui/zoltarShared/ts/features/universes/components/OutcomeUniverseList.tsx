@@ -8,8 +8,11 @@ import * as copy from '../../../copy/universeNavigation.js'
 
 type Outcome = { exists: boolean; label: string; universeId: bigint; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
 
-/** Outcome names and deployment status stay consistent while navigation and selection keep their own semantics. */
-export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage, className = '' }: { outcomes: readonly Outcome[]; selection?: boolean; emptyMessage?: ComponentChildren; className?: string }) {
+/**
+ * Outcome names and deployment status stay consistent while navigation and selection keep their own semantics.
+ * `notDeployedDetail` explains a not-yet-deployed child beside its badge, inside the row's description, so a disabled row says why.
+ */
+export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage, className = '', notDeployedDetail }: { outcomes: readonly Outcome[]; selection?: boolean; emptyMessage?: ComponentChildren; className?: string; notDeployedDetail?: ComponentChildren }) {
 	const statusId = useId()
 	return (
 		<OutcomeSelectionList
@@ -34,6 +37,7 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 					<>
 						<span id={`${statusId}-${outcome.universeId}`}>
 							<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
+							{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
 						</span>
 						{outcome.details}
 					</>

@@ -2,7 +2,7 @@ import { getReportingContributionFunding } from '../../../lib/reportingFunding.j
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
-import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { isHexAddressInput, normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import { resolveRequestedLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -119,6 +119,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const reportingLockedReason = getReportingLockedReason({ marketEndTime: marketDetails?.endTime, now: currentTimestamp, reportingReady, systemState: selectedPoolState })
 	const selectedPoolUniverseMismatch = selectedPool !== undefined && selectedPool.universeId !== activeUniverseId
 	const hasSelectedPoolAddress = securityPoolAddress.trim() !== ''
+	const hasValidSelectedPoolAddress = isHexAddressInput(securityPoolAddress.trim())
 	const showSelectedPoolWorkflowDetails = shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists: selectedPool !== undefined, selectedPoolUniverseMismatch })
 	const currentForkStage = getCurrentSelectedPoolForkStage({
 		forkAuctionDetails: currentForkAuctionDetails,
@@ -244,6 +245,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		forkWorkflowPrimary: isForkWorkflowPrimary(lifecycleStep, selectedPoolHasForkActivity),
 		hasLoadedCurrentVault,
 		hasSelectedPoolAddress,
+		hasValidSelectedPoolAddress,
 		isOnActiveAppChain,
 		legacyForkWorkflowSelectionStage: resolveForkWorkflowSelectionStage(selectedPoolView),
 		lifecycleStep,
@@ -282,7 +284,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		selectedPoolStateModel,
 		selectedPoolSummaryPool,
 		selectedPoolUniverseMismatch,
-		selectedPoolWorkflowLockedPresentation: showSelectedPoolWorkflowDetails || securityPoolOverviewError !== undefined ? undefined : getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }),
+		selectedPoolWorkflowLockedPresentation: showSelectedPoolWorkflowDetails || securityPoolOverviewError !== undefined ? undefined : getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, hasValidSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }),
 		selectedVaultDetails,
 		selectedVaultExistsOnchain: doesSecurityVaultExistOnchain(selectedVaultDetails),
 		selectedVaultIsOwnedByAccount,

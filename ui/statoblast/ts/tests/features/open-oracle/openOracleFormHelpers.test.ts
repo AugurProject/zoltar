@@ -15,6 +15,7 @@ import {
 	parseOpenOracleCreateFormSubmission,
 } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import { getCreatedOpenOracleReportId } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { getDecimalSeparatorError, getLocaleDecimalSeparator } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { describe, expect, test } from 'bun:test'
 
 const TOKEN1_ADDRESS = '0x2000000000000000000000000000000000000000'
@@ -71,6 +72,18 @@ describe('OpenOracle create form helpers', () => {
 		expect(getOpenOracleCreateValidation({ form, token1Decimals: 18, token2Decimals: 18 }).isValid).toBe(true)
 	})
 
+	test('reads amounts before token decimals load with the shared decimal parser', () => {
+		// The shared parser decides whether a comma is a decimal separator in this locale, so the early check never disagrees with it.
+		const separator = getLocaleDecimalSeparator()
+		const commaForm = createValidForm({ exactToken1Report: '1,5' })
+		if (separator === ',') expect(getOpenOracleCreateValidation({ form: commaForm }).fieldErrors.exactToken1Report).toBeUndefined()
+		else expect(getOpenOracleCreateValidation({ form: commaForm }).fieldErrors.exactToken1Report).toBe(getDecimalSeparatorError())
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '1.5' }) }).fieldErrors.exactToken1Report).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '0' }) }).fieldErrors.exactToken1Report).toBeUndefined()
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '0' }) }).isValid).toBe(false)
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ escalationHalt: '-1' }) }).fieldErrors.escalationHalt).toBe('Escalation halt must be non-negative.')
+	})
+
 	test('derives the implied initial price from the entered amounts', () => {
 		expect(getOpenOracleImpliedPrice({ token1Amount: '2', token2Amount: '3' })).toBe(15n * 10n ** 29n)
 		expect(getOpenOracleImpliedPrice({ token1Amount: '0', token2Amount: '3' })).toBeUndefined()
@@ -78,11 +91,11 @@ describe('OpenOracle create form helpers', () => {
 	})
 
 	test('explains typed seconds as a readable duration', () => {
-		expect(formatOpenOracleSecondsInputHint('86400')).toBe('86400 seconds = 1d 0h 0m')
-		expect(formatOpenOracleSecondsInputHint('90')).toBe('90 seconds = 1m')
+		expect(formatOpenOracleSecondsInputHint('86400')).toBe('86400 seconds = 1d')
+		expect(formatOpenOracleSecondsInputHint('90')).toBe('90 seconds = 1m 30s')
 		expect(formatOpenOracleSecondsInputHint('30')).toBe('30 seconds = 30 s')
 		expect(formatOpenOracleSecondsInputHint('soon')).toBeUndefined()
-		expect(formatOpenOracleTimingDuration(3600n, true)).toBe('1h 0m')
+		expect(formatOpenOracleTimingDuration(3600n, true)).toBe('1h')
 		expect(formatOpenOracleTimingDuration(12n, false)).toBe('12 blocks')
 	})
 })

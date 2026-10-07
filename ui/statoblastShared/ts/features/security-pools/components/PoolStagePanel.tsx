@@ -68,18 +68,16 @@ function PoolActionRow({ context, control, currentTimestamp, item }: { context?:
 	)
 }
 
-/** Next actions retain position, deadline, and exception context even when their tab is open. */
+/** Next actions retain position, deadline, and exception context even when their tab is open: every row stays, so the card never changes height between tabs. */
 export function PoolActionCard({ currentTimestamp, currentView, items, onChange }: { currentTimestamp: bigint | undefined; currentView: SelectedPoolView | undefined; items: readonly PoolActionItem[]; onChange: (view: SelectedPoolView) => void }) {
-	const visibleItems = items.filter(item => item.id !== 'manageVault' || item.tab !== currentView)
-	if (visibleItems.length === 0 && items.length > 0) return undefined
 	return (
 		<section className='pool-action-card' aria-labelledby='pool-action-card-heading'>
 			<h3 id='pool-action-card-heading'>{copy.nextActions}</h3>
-			{visibleItems.length === 0 ? (
+			{items.length === 0 ? (
 				<UserMessage className='detail' detail={copy.nothingToDoNow} />
 			) : (
 				<ul className='pool-action-list'>
-					{visibleItems.map(item => {
+					{items.map(item => {
 						const { tab } = item
 						let control: ComponentChildren = undefined
 						// A row for the open tab keeps its control slot, marked as already shown below, so rows do not jump when tabs change.

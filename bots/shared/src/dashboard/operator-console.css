@@ -105,6 +105,14 @@ fieldset {
 	-webkit-backdrop-filter: blur(10px);
 }
 
+/*
+ * Native constraint validation and focus scroll a field to the viewport edge. Keep page fields and the label above them
+ * below the sticky chrome, whose height settings-navigation.ts publishes; modal dialogs scroll on their own.
+ */
+main :is(input, select, textarea):not(dialog *) {
+	scroll-margin-top: calc(var(--operator-sticky-chrome-height, 0px) + 2.5rem);
+}
+
 .operator-health {
 	margin-block: 0.75rem 1rem;
 	border: 1px solid var(--operator-border, var(--border-default));

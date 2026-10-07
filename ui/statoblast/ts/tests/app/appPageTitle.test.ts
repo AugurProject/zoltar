@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatAppDocumentTitle, getPoolDocumentTitleDetail } from '../../app/lib/appPageTitle.js'
+import { formatAppDocumentTitle, getAppPageTitle, getPoolDocumentTitleDetail } from '../../app/lib/appPageTitle.js'
 
 const POOL_ADDRESS = '0xa83562266e1514927697d5118C8777828860aD73'
 
@@ -15,6 +15,10 @@ describe('statoblast document title', () => {
 	test('names the open pool by its short address while it loads or when another pool is still selected', () => {
 		expect(getPoolDocumentTitleDetail({ requestedPoolAddress: POOL_ADDRESS, selectedPool: undefined })).toBe('0xa83562…60aD73')
 		expect(getPoolDocumentTitleDetail({ requestedPoolAddress: POOL_ADDRESS, selectedPool: { marketDetails: { title: 'Other pool' }, securityPoolAddress: '0x0000000000000000000000000000000000000001' } })).toBe('0xa83562…60aD73')
+	})
+
+	test('titles the browse view with its visible heading', () => {
+		expect(getAppPageTitle({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'pools' })).toBe('Browse pools')
 	})
 
 	test('keeps the plain page title without a pool', () => {

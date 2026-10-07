@@ -1,3 +1,5 @@
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import * as commonCopy from '../copy/common.js'
 import { parseDecimalInput } from '../forms/decimal.js'
 import { ensureSentence, sanitizeErrorDetail } from '../lib/errors.js'
 import { formatAdditionalCeilingAmount, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
@@ -54,13 +56,14 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 		targetAmount: hasSufficientApproval ? undefined : requiredAmount,
 	}
 }
+/** Parses a custom approval amount; an allowance is an unsigned 256-bit value, so anything outside that range is rejected. */
 export function parseTokenApprovalAmountInput(value: string, label: string, units: number): ParsedTokenApprovalAmount {
 	const trimmed = value.trim()
 	if (trimmed === '') return { kind: 'default' }
-	return {
-		kind: 'custom',
-		amount: parseDecimalInput(trimmed, label, units),
-	}
+	const amount = parseDecimalInput(trimmed, label, units)
+	if (amount < 0n) throw new Error(commonCopy.nonNegativeAmountRequiredError)
+	if (amount > maxUint256) throw new Error(commonCopy.approvalAmountTooLargeError)
+	return { kind: 'custom', amount }
 }
 export function shouldDisplayMaxTokenApprovalAmount(amount: bigint | undefined) {
 	return amount !== undefined && amount > maxUint200

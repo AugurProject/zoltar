@@ -42,10 +42,11 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			reportingForm: createReportingForm({ reportAmount: '0.000000000000000001', securityPoolAddress: zeroAddress, selectedOutcome: 'no' }),
 		})
 
+	// The Price oracle tab's own launcher; the header row may show a second launcher for the same review.
+	const panelQueries = () => within(document.getElementById('selected-pool-workflow-panel') ?? document.body)
 	const openPriceRequestDialog = () => {
-		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Request new price…' }))
-		return documentQueries.getByRole('dialog', { name: 'Request new price' })
+		fireEvent.click(panelQueries().getByRole('button', { name: 'Request new price…' }))
+		return within(document.body).getByRole('dialog', { name: 'Request new price' })
 	}
 
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
@@ -207,12 +208,12 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		await renderLoadedPool({ poolOracleManagerDetails: createOracleManagerDetails(settledOracle), selectedPoolView: 'staged-operations' })
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('tab', { name: 'Staged operations' }).getAttribute('aria-selected')).toBe('true')
+		expect(documentQueries.getByRole('button', { name: 'More: Staged operations' }).classList.contains('active')).toBe(true)
 		expect(documentQueries.getByRole('heading', { name: 'Staged operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Staged operations List' })).toBeNull()
 		expect(documentQueries.getByText('No staged operations are currently queued for this pool.')).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Request new price' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Request new price…' })).toBeNull()
 	})
 
 	test('shows queued target changes in the existing staged operations table with ETH commitment units', async () => {
@@ -295,7 +296,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		await renderLoadedPool({ poolOracleManagerDetails: createOracleManagerDetails({ ...settledOracle, pendingReportId: 12n, requestPriceCostAttoEth: 114_800_101n }), selectedPoolView: 'price-oracle' })
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('tab', { name: 'Price oracle' }).getAttribute('aria-selected')).toBe('true')
+		expect(documentQueries.getByRole('button', { name: 'More: Price oracle' }).classList.contains('active')).toBe(true)
 		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Price oracle' }).closest('section')
 		if (!(priceOracleSection instanceof HTMLElement)) throw new Error('Expected the Price oracle section to render')
 		const sectionQueries = within(priceOracleSection)
@@ -304,7 +305,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(sectionQueries.getByText('≈ 0.00000000011 ETH').closest('[title]')?.getAttribute('title')).toBe('0.000000000114800101 ETH')
 		expect(sectionQueries.queryByText('Price Window')).toBeNull()
 		expect(sectionQueries.queryByText('Last Settlement')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Request new price…' })).not.toBeNull()
+		expect(sectionQueries.getByRole('button', { name: 'Request new price…' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
@@ -340,10 +341,10 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			const props = baseProps()
 			const { rerender } = await renderWorkflow(props)
 			const queries = within(document.body)
-			queries.getByRole('tab', { name: 'Price oracle' }).focus()
+			queries.getByRole('button', { name: 'More: Price oracle' }).focus()
 			expect(openPriceRequestDialog()).not.toBeNull()
 			await rerender({ ...props, poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 2n }) })
-			expect(queries.getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(true)
+			expect(panelQueries().getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(true)
 			expect(document.getElementById('selected-pool-workflow-panel')?.querySelector('.workflow-metric-grid button.link')?.textContent?.trim()).toBe('Report #2')
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
 			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
@@ -354,10 +355,10 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			const props = baseProps()
 			const { rerender } = await renderWorkflow(props)
 			const queries = within(document.body)
-			queries.getByRole('button', { name: 'Request new price…' }).focus()
+			panelQueries().getByRole('button', { name: 'Request new price…' }).focus()
 			expect(openPriceRequestDialog()).not.toBeNull()
 			await rerender({ ...props, poolOracleManagerDetails: undefined })
-			expect(queries.getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(true)
+			expect(panelQueries().getByRole('button', { name: 'Request new price…' }).hasAttribute('disabled')).toBe(true)
 			expect(queries.queryByRole('button', { name: /Report #/ })).toBeNull()
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Close' })))
 			expect(document.activeElement?.tagName).toBe('H3')
@@ -452,7 +453,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			{ chainTimestamp: 1000n },
 		)
 
-		const requestButton = within(document.body).getByRole('button', { name: 'Request new price…' })
+		const requestButton = panelQueries().getByRole('button', { name: 'Request new price…' })
 		if (!(requestButton instanceof HTMLButtonElement)) throw new Error('Expected Request New Price button')
 		expect(requestButton.disabled).toBe(false)
 		expect(requestButton.classList.contains('primary')).toBe(true)

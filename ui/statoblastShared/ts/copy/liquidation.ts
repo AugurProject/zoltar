@@ -74,6 +74,11 @@ export const retryQueueFunding = 'Retry funding preview'
 export const retryPriceStatus = 'Retry price status'
 
 export const vaultContextDetails = 'Vault and pricing details'
+export const liquidationPreview = 'Liquidation preview'
+export const repBackingMoved = 'REP backing moved'
+export const receiverHealthAfter = 'Receiver health after'
+export const valueChangesTo = 'changes to'
+export const liquidationPreviewEstimated = 'Estimated at the current REP price; a queued liquidation uses the oracle price at execution.'
 export const approvalUsageDetails = 'Approval usage'
 
 export const formatLiquidationDistanceTooLowReason = (percent: string) => `The price must move at least ${percent} past this vault’s liquidation threshold before it can be liquidated.`

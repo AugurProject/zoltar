@@ -290,6 +290,18 @@ button.tx-action-wallet-fix {
 	justify-content: center;
 }
 
+/* A transaction button that holds keyboard focus (for example while its transaction is pending) is aria-disabled instead of disabled; it keeps the shared disabled treatment. */
+button.tx-action-button[aria-disabled="true"],
+button.tx-action-button[aria-disabled="true"]:hover {
+	border-color: var(--disabled-control-border);
+	border-style: dashed;
+	background: var(--disabled-control-bg);
+	box-shadow: none;
+	color: var(--disabled-control-text);
+	font-weight: inherit;
+	cursor: not-allowed;
+}
+
 .overview-panel {
 	padding: var(--space-4) var(--space-5);
 	border: 1px solid var(--divider-strong);
@@ -1280,6 +1292,18 @@ button.tx-action-wallet-fix {
 	}
 }
 
+/*
+ * The tab rules above clear box-shadow with selectors more specific than the shared focus ring in
+ * visual-foundation.css, so keyboard focus redraws that inset ring on every navigation tab, More included, in the top
+ * bar, the bottom tab bar, and the section view rows. It follows those rules so it also replaces an active underline.
+ */
+.view-tabs[data-orientation]:is(.route, .subroute) .view-tab:focus-visible,
+.header-toolbar-navigation .view-tabs.route .view-tab:focus-visible,
+.tab-nav .tab-nav-more-trigger.view-tab:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 /* Phones: brand and tools above universe and account, with navigation at the bottom. */
 @media (max-width: 40rem) {
 	.header-toolbar {
@@ -1294,7 +1318,9 @@ button.tx-action-wallet-fix {
 		grid-area: 1 / 1;
 	}
 
+	/* The brand yields to the activity and settings buttons: its name truncates instead of running under them. */
 	.header-toolbar .application-brand {
+		min-width: 0;
 		font-size: var(--font-body);
 	}
 
@@ -1302,12 +1328,23 @@ button.tx-action-wallet-fix {
 		position: static;
 		width: auto;
 		height: auto;
+		min-width: 0;
 		margin: 0;
+		overflow: hidden;
 		clip: auto;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.header-toolbar-settings {
 		grid-area: 1 / 2;
+	}
+
+	/* The settings dialog scrolls inside the space between the top bar and the bottom tab bar instead of running off screen. */
+	.app-settings-menu {
+		max-height: calc(100dvh - var(--bottom-nav-height) - 7rem);
+		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 
 	.header-toolbar-controls {

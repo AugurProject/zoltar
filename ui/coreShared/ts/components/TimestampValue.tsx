@@ -1,7 +1,8 @@
 import type { ComponentChildren } from 'preact'
+import * as commonCopy from '../copy/common.js'
 import { LoadingText } from './LoadingText.js'
 import { useChainTimestamp } from '../wallet/chainTimestamp.js'
-import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime, getWallClockTimestamp } from '../lib/formatters.js'
+import { formatLocalTimestamp, formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime, getWallClockTimestamp } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 
 type TimestampValueProps = {
@@ -18,7 +19,8 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getWallClockTimestamp()
 
-	if (loading) return <LoadingText className={`timestamp-value loading ${className}`} />
+	// A section can hold many loading values, so each spinner stays silent instead of being its own live region.
+	if (loading) return <LoadingText announce={false} className={`timestamp-value loading ${className}`} />
 
 	if (timestamp === undefined) return <span className={`timestamp-value unavailable ${className}`}>{undefinedText}</span>
 
@@ -39,9 +41,12 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 		)
 
 	const relativeTimestamp = formatRelativeTimestamp(timestamp, resolvedCurrentTimestamp)
+	// UTC stays the visible canonical value; the viewer's own time, which creation forms use, is added where it differs.
+	const localTimestamp = formatLocalTimestamp(timestamp)
+	const localTimeLabel = localTimestamp === undefined ? undefined : commonCopy.formatLocalTimeLabel(localTimestamp)
 
 	return (
-		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={absoluteTimestamp}>
+		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
 			{absoluteTimestamp}
 			{relative ? (
 				<>
@@ -49,6 +54,12 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
 				</>
 			) : undefined}
+			{localTimeLabel === undefined ? undefined : (
+				<>
+					{' '}
+					<span className='visually-hidden'>{localTimeLabel}</span>
+				</>
+			)}
 		</time>
 	)
 }

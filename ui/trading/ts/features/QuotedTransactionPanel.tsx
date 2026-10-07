@@ -64,7 +64,8 @@ export function QuotedTransactionPanel({
 				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 				<ErrorNotice message={receiptWarning} />
 				<ErrorNotice message={error} />
-				<TransactionActionGroup loading={walletStep === undefined && availability.loading === true} message={groupMessage}>
+				{/* The spinner belongs to a blocked action that is waiting; once a transaction runs or confirms, its status line speaks instead. */}
+				<TransactionActionGroup loading={walletStep === undefined && (phase === 'idle' || phase === 'error') && availability.loading === true} message={groupMessage}>
 					{walletStep === undefined ? (
 						<TransactionActionButton availability={availability} idleLabel={actionLabel} pending={transactionInFlight(phase)} pendingLabel={transactionPendingLabel(phase)} onClick={onSubmit} />
 					) : (

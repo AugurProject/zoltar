@@ -5,6 +5,7 @@ import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { PoolStateFilter } from '../../../types/app.js'
 
 export type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit'
 export type VaultRepExitMode = 'redeem' | 'withdraw'
@@ -29,16 +30,25 @@ export function getVaultLauncherVaultOwnerReason(action: VaultLauncherAction, re
 	return assertNever(action)
 }
 
+/** The browse filter a lifecycle state belongs to; a forked pool shares the Fork migration badge, so it shares that filter. */
+export function getPoolStateFilter(lifecycleState: SecurityPoolLifecycleState): Exclude<PoolStateFilter, 'all'> {
+	return lifecycleState === 'poolForked' ? 'forkMigration' : lifecycleState
+}
+
+/** One name per pool state, shared by the browse filter and the pool status badge so both use the same words. */
+export function getPoolStateLabel(state: Exclude<PoolStateFilter, 'all'>) {
+	if (state === 'operational') return commonCopy.operational
+	if (state === 'ended') return securityPoolCopy.finalized
+	if (state === 'forkMigration') return securityPoolCopy.forkMigration
+	if (state === 'forkTruthAuction') return commonCopy.truthAuction
+	return assertNever(state)
+}
+
 export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutcome, lifecycleState }: { hasForkActivity: boolean; questionOutcome?: ReportingOutcomeKey | 'none'; lifecycleState: SecurityPoolLifecycleState | undefined }) {
 	if (lifecycleState === undefined) return 'Unknown'
-	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return securityPoolCopy.forkMigration
-	if (lifecycleState === 'forkTruthAuction') return commonCopy.truthAuction
-	if (lifecycleState === 'ended') {
-		if (questionOutcome === undefined || questionOutcome === 'none') return 'Finalized'
-		return `Finalized as ${getReportingOutcomeLabel(questionOutcome)}`
-	}
-	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork finalized' : commonCopy.operational
-	return assertNever(lifecycleState)
+	if (lifecycleState === 'ended' && questionOutcome !== undefined && questionOutcome !== 'none') return securityPoolCopy.formatFinalizedAs(getReportingOutcomeLabel(questionOutcome))
+	if (lifecycleState === 'operational' && hasForkActivity) return securityPoolCopy.forkFinalized
+	return getPoolStateLabel(getPoolStateFilter(lifecycleState))
 }
 
 export function getSecurityPoolStatusBadgeTone(lifecycleState: SecurityPoolLifecycleState | undefined): BadgeTone {

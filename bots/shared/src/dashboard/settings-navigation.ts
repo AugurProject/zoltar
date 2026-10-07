@@ -88,8 +88,11 @@ export function createSettingsNavigation() {
 	// The chip row sticks directly under the sticky operator header, whose height depends on the viewport.
 	const placeUnderHeader = () => {
 		nav.style.top = `${stickyShellHeight(document).toString()}px`
+		const chromeHeight = stickyChromeHeight()
+		// Native validation and focus scroll form fields to the viewport edge; operator-console.css offsets them by this height.
+		document.documentElement.style.setProperty('--operator-sticky-chrome-height', `${chromeHeight.toString()}px`)
 		// Anchored jumps must clear the sticky chrome, whose height depends on the viewport.
-		const margin = `${(stickyChromeHeight() + 16).toString()}px`
+		const margin = `${(chromeHeight + 16).toString()}px`
 		for (const section of sections()) section.style.scrollMarginTop = margin
 		if (jumpTarget === undefined) {
 			const sectionId = currentSectionId()

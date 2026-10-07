@@ -26,6 +26,8 @@ type NoticeTone = 'blocking' | 'warning' | 'pending' | 'success'
 
 export type NoticeItem = {
 	detail: ComponentChildren
+	/** Lets the user close a notice that reports a past failure rather than a state that still blocks them. */
+	dismiss?: { label: string; onDismiss(): void } | undefined
 	id: string
 	technicalDetails?: ComponentChildren
 	title?: ComponentChildren
@@ -233,7 +235,6 @@ export type TransactionActionButtonProps = {
 	disabledReasonElementId?: string | undefined
 	idleLabel: ComponentChildren
 	inlineHint?: string | undefined
-	inlineHintAriaLabel?: string | undefined
 	onClick: () => void
 	pending?: boolean
 	pendingLabel: ComponentChildren

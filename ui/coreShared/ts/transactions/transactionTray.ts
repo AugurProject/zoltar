@@ -199,6 +199,9 @@ export function markTransactionFailed(state: TransactionTrayState, failure: Tran
 			tone: 'error',
 		})
 	}
+	// Declining the wallet prompt sends nothing: the request ends quietly instead of reading as a failed transaction, and the
+	// initiating form keeps its own single message.
+	if (failure.kind === 'rejected') return dropPromptPresentation(next, entry.key)
 	return present(next, entry.key, { ...createTransactionFailurePresentation(entry.intent, failure.message, entry.key), operationKey: entry.key })
 }
 
@@ -231,6 +234,16 @@ export function markTransactionPresented(state: TransactionTrayState, active: Gl
 export function isTransactionActionLocked(state: TransactionTrayState, scope?: TransactionScope) {
 	if (isTransactionPromptOpen(state)) return true
 	return getLockedTransactionScopes(state).some(locked => transactionScopesOverlap(locked, scope))
+}
+
+/** The user stopped tracking a broadcast transaction: its request and every status presented for its hash leave the tray. */
+export function markTransactionTrackingStopped(state: TransactionTrayState, hash: Hash): TransactionTrayState {
+	const isStoppedHash = (candidate: Hash | undefined) => candidate !== undefined && candidate.toLowerCase() === hash.toLowerCase()
+	const records = state.presentations ?? []
+	const entries = state.entries.filter(entry => !isStoppedHash(getEntryHash(entry)))
+	const presentations = records.filter(record => !isStoppedHash(record.presentation.hash))
+	if (entries.length === state.entries.length && presentations.length === records.length) return state
+	return deriveActive({ ...state, entries, presentations })
 }
 
 export function markTransactionFinished(state: TransactionTrayState, key?: string): TransactionTrayState {

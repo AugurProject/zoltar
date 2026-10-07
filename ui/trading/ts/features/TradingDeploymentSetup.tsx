@@ -10,8 +10,6 @@ import { DeploymentStepList } from '@zoltar/ui-core-shared/components/Deployment
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { recordTransactionSettled, recordTransactionSubmitted, releaseTransactionActivityWatch } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
-import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -25,9 +23,14 @@ import { createTradingWalletClient, publicErrorMessage, validateRpcChainId, wait
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as appCopy from '../copy/app.js'
 import * as deploymentCopy from '../copy/deployment.js'
+import { deployContractsGuideHref } from '../lib/docsLinks.js'
+import { contractStatusPresentation, type DeploymentStatus, deploymentActionAvailability, deploymentProgress, inspectionPresentation, PlaceholderDeployAction, tradingDeploymentScope } from './tradingDeploymentPresentation.js'
+import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
+
+/** How often a blocked deploy page looks for the Statoblast factory again; roughly one mainnet block. */
+const BLOCKED_FACTORY_RECHECK_MILLISECONDS = 12_000
 
 export type TradingDeploymentSetupServices = Readonly<{
 	createPublicClient(rpcUrl: string): PublicClient
@@ -72,82 +75,6 @@ const defaultServices: TradingDeploymentSetupServices = {
 	loadCoreDeployments,
 }
 
-type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
-
-function deploymentProgress(status: DeploymentStatus | undefined) {
-	if (status === undefined) return commonCopy.metricUnavailablePlaceholder
-	return `${Number(status.factory) + Number(status.router)} / 2`
-}
-
-function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
-	if (registryLoading) return { label: deploymentCopy.loadingNetworks, tone: 'muted' as const }
-	if (registryError) return { label: deploymentCopy.networksUnavailable, tone: 'warning' as const }
-	if (inputError) return { label: appCopy.deploymentConfigurationInvalid, tone: 'warning' as const }
-	if (busy) return { label: coreAppCopy.deploymentInProgress, tone: 'muted' as const }
-	if (deploymentComplete) return { label: appCopy.deploymentComplete, tone: 'ok' as const }
-	if (state === 'loading') return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
-	if (state === 'ready') return undefined
-	if (state === 'blocked') return { label: appCopy.securityPoolFactoryNotDeployed, tone: 'warning' as const }
-	if (state === 'error') return { label: deploymentCopy.configurationUnavailable, tone: 'warning' as const }
-	if (plan) return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
-	return { label: appCopy.deploymentNotConfigured, tone: 'muted' as const }
-}
-
-// A deployment still pending after the setup route was left keeps the deploy action locked when the route returns.
-const tradingDeploymentScope = createTransactionScope('trading-deployment', 'factory')
-
-function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, plan: TradingDeploymentPlan | undefined, status: DeploymentStatus | undefined) {
-	if (busy) return deploymentCopy.formatDeployingStep(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
-	if (plan !== undefined && status !== undefined && isTradingDeploymentComplete(plan, status)) return appCopy.deploymentComplete
-	if (nextStep === undefined) return deploymentCopy.deployTradingContracts
-	return deploymentCopy.formatDeployStep(nextStep.label)
-}
-
-/** Why the deploy action is unavailable, so the disabled control explains itself instead of silently ignoring clicks. The order mirrors `inspectionPresentation`, so the badge and the action never disagree. */
-function deploymentActionAvailability({
-	inputError,
-	inspectionIsCurrent,
-	inspectionState,
-	nextStep,
-	registryError,
-	registryLoading,
-	selectedCoreChainName,
-	settingsIncomplete,
-	walletConnected,
-	walletReady,
-}: Readonly<{
-	inputError: boolean
-	inspectionIsCurrent: boolean
-	inspectionState: 'blocked' | 'idle' | 'loading' | 'ready' | 'error'
-	nextStep: boolean
-	registryError: boolean
-	registryLoading: boolean
-	selectedCoreChainName: string | undefined
-	settingsIncomplete: boolean
-	walletConnected: boolean
-	walletReady: boolean
-}>): ActionAvailability {
-	if (registryLoading) return { disabled: true, loading: true, reason: deploymentCopy.loadingNetworks }
-	if (registryError) return { disabled: true, reason: deploymentCopy.networksUnavailable }
-	if (inputError) return { disabled: true, reason: appCopy.deploymentConfigurationInvalid }
-	// Inspection parks in idle while the settings are incomplete; that is a settings problem, not a check in flight.
-	if (settingsIncomplete) return { disabled: true, reason: appCopy.deploymentNotConfigured }
-	if (!inspectionIsCurrent || inspectionState === 'loading' || inspectionState === 'idle') return { disabled: true, loading: true, reason: deploymentCopy.checkingNetwork }
-	if (inspectionState === 'blocked') return { disabled: true, reason: appCopy.securityPoolFactoryNotDeployed }
-	if (inspectionState === 'error') return { disabled: true, reason: deploymentCopy.configurationUnavailable }
-	if (!nextStep) return { disabled: true, reason: appCopy.deploymentComplete }
-	if (!walletConnected) return { disabled: true, reason: commonCopy.walletConnectionRequired }
-	if (!walletReady) return { disabled: true, reason: selectedCoreChainName === undefined ? deploymentCopy.configurationUnavailable : deploymentCopy.walletMustUseNetwork(selectedCoreChainName) }
-	return { disabled: false, reason: undefined }
-}
-
-function contractStatusPresentation(deployed: boolean | undefined, isNext: boolean) {
-	if (deployed === undefined) return { label: appCopy.checkingContract, tone: 'muted' as const }
-	if (deployed) return { label: commonCopy.deployed, tone: 'ok' as const }
-	if (isNext) return { label: deploymentCopy.nextToDeploy, tone: 'muted' as const }
-	return { label: commonCopy.notDeployed, tone: 'warning' as const }
-}
-
 export function TradingDeploymentSetup({
 	currentConfiguration,
 	onComplete,
@@ -181,7 +108,9 @@ export function TradingDeploymentSetup({
 	const [plan, setPlan] = useState<TradingDeploymentPlan>()
 	const [publicClient, setPublicClient] = useState<PublicClient>()
 	const [deploymentStatus, setDeploymentStatus] = useState<DeploymentStatus>()
-	const [busy, setBusy] = useState(false)
+	// The contract whose deployment transaction is running; each contract has its own action.
+	const [busyStepId, setBusyStepId] = useState<TradingDeploymentStep['id']>()
+	const busy = busyStepId !== undefined
 	const [actionMessage, setActionMessage] = useState<string>()
 	const [actionError, setActionError] = useState(false)
 	const [retryNonce, setRetryNonce] = useState(0)
@@ -339,6 +268,42 @@ export function TradingDeploymentSetup({
 		}
 	}, [chainId, effectiveRpcUrl, feeBps, inputError, onComplete, retryNonce, selectedCore, services])
 
+	// A missing Statoblast factory is looked up again on its own, so deploying Statoblast elsewhere continues this page without a
+	// manual retry: on an interval while the page is visible, and whenever it becomes visible or focused again. Finding it
+	// continues in place with the same plan and client, so the contract rows stay mounted and the registry is not fetched again.
+	// A failed lookup waits for the next check; an unexpected failure ends the rechecks with the inspection error and its retry.
+	useEffect(() => {
+		if (inspectionState !== 'blocked' || publicClient === undefined || plan === undefined) return
+		let active = true
+		const factory = plan.core.securityPoolFactory
+		const recheck = async () => {
+			if (document.hidden) return
+			try {
+				const code = await publicClient.getCode({ address: factory })
+				if (!active || code === undefined || code === '0x') return
+				const status = await loadTradingDeploymentStatus(publicClient, plan)
+				if (!active) return
+				setDeploymentStatus(status)
+				setInspectionState('ready')
+				if (isTradingDeploymentComplete(plan, status)) onComplete(deploymentConfigurationForPlan(plan, parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl }).rpcUrl))
+			} catch (error) {
+				if (!active || isRecoverableContractReadError(error)) return
+				setInspectionState('error')
+				setInspectionError(publicErrorMessage(error, deploymentCopy.inspectionFailed))
+			}
+		}
+		const recheckNow = () => void recheck()
+		const timer = setInterval(recheckNow, BLOCKED_FACTORY_RECHECK_MILLISECONDS)
+		document.addEventListener('visibilitychange', recheckNow)
+		window.addEventListener('focus', recheckNow)
+		return () => {
+			active = false
+			clearInterval(timer)
+			document.removeEventListener('visibilitychange', recheckNow)
+			window.removeEventListener('focus', recheckNow)
+		}
+	}, [chainId, effectiveRpcUrl, feeBps, inspectionState, onComplete, plan, publicClient])
+
 	function bindWalletProvider(provider: InjectedEthereum | undefined) {
 		boundWalletProvider.current = provider
 		walletContextSubscription.current?.bind(provider)
@@ -424,7 +389,6 @@ export function TradingDeploymentSetup({
 		if (walletAccount === undefined) void connectDeploymentWallet()
 		else disconnectDeploymentWallet()
 	}, [walletControlRequestNonce])
-	const nextStep = plan === undefined || deploymentStatus === undefined ? undefined : nextTradingDeploymentStep(plan, deploymentStatus)
 	const deploymentComplete = plan !== undefined && deploymentStatus !== undefined && isTradingDeploymentComplete(plan, deploymentStatus)
 	const deploymentSteps =
 		plan === undefined
@@ -432,32 +396,38 @@ export function TradingDeploymentSetup({
 			: [plan.factory, plan.router].map(step => {
 					const deployed = deploymentStatus?.[step.id]
 					const isNext = inspectionState === 'ready' && nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false })?.id === step.id && !deploymentComplete
-					return { step, presentation: contractStatusPresentation(deployed, isNext) }
+					return { step, presentation: contractStatusPresentation(deployed, isNext, inspectionState === 'error') }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
 	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
+	// Only a failed read needs a manual retry; a missing Statoblast factory is rechecked automatically.
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	const inspectionBadgeId = useId()
 	const networkNoticeId = useId()
-	const deployAvailability = deploymentActionAvailability({
-		inputError: inputError !== undefined,
-		inspectionIsCurrent,
-		inspectionState,
-		nextStep: nextStep !== undefined,
-		registryError: registryError !== undefined,
-		registryLoading,
-		selectedCoreChainName: selectedCore?.chainName,
-		settingsIncomplete: selectedCore === undefined || chainId === '' || effectiveRpcUrl === '',
-		walletConnected,
-		walletReady,
-	})
-	// The inspection badge or the network notice already states the blocked reason; the action references it instead of repeating it.
-	const reasonShownByInspectionBadge = inspection !== undefined && inspection.label === deployAvailability.reason
 	const wrongNetworkNotice = walletConnected && !walletReady && selectedCore !== undefined ? deploymentCopy.connectedWalletMustUseNetwork(selectedCore.chainName) : undefined
-	const reasonShownByNetworkNotice = wrongNetworkNotice !== undefined && deployAvailability.reason === deploymentCopy.walletMustUseNetwork(selectedCore?.chainName ?? '')
-	let externalReasonId: string | undefined
-	if (reasonShownByInspectionBadge) externalReasonId = inspectionBadgeId
-	else if (reasonShownByNetworkNotice) externalReasonId = networkNoticeId
+	/** `step` is undefined before a plan exists; the shared reasons (networks, settings, inspection) then explain the placeholder action. */
+	function stepAvailability(step: TradingDeploymentStep | undefined) {
+		const missingPrerequisite = plan === undefined || step === undefined ? undefined : step.dependencies.map(dependency => plan[dependency]).find(dependency => deploymentStatus?.[dependency.id] !== true)
+		const availability = deploymentActionAvailability({
+			busy,
+			inputError: inputError !== undefined,
+			inspectionIsCurrent,
+			inspectionState,
+			prerequisiteLabel: missingPrerequisite?.label,
+			registryError: registryError !== undefined,
+			registryLoading,
+			selectedCoreChainName: selectedCore?.chainName,
+			settingsIncomplete: selectedCore === undefined || chainId === '' || effectiveRpcUrl === '',
+			stepDeployed: step !== undefined && deploymentStatus?.[step.id] === true,
+			walletConnected,
+			walletReady,
+		})
+		// The inspection badge or the network notice already states a shared blocked reason; the action references it instead of repeating it.
+		let externalReasonId: string | undefined
+		if (inspection !== undefined && inspection.label === availability.reason) externalReasonId = inspectionBadgeId
+		else if (wrongNetworkNotice !== undefined && availability.reason === deploymentCopy.walletMustUseNetwork(selectedCore?.chainName ?? '')) externalReasonId = networkNoticeId
+		return { availability, externalReasonId }
+	}
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton = walletConnected ? (
@@ -481,9 +451,11 @@ export function TradingDeploymentSetup({
 				{deploymentCopy.retryChecks}
 			</button>
 		)
-	async function deployNext() {
-		if (busy || registryLoading || registryError !== undefined || inspectedRevision !== inputRevision.current || plan === undefined || publicClient === undefined || deploymentStatus === undefined || nextStep === undefined) return
-		setBusy(true)
+	async function deployStepNow(step: TradingDeploymentStep) {
+		if (busy || registryLoading || registryError !== undefined || inspectedRevision !== inputRevision.current || plan === undefined || publicClient === undefined || deploymentStatus === undefined) return
+		// Each button deploys only its own contract, and only once the contracts it depends on exist.
+		if (deploymentStatus[step.id] || step.dependencies.some(dependency => !deploymentStatus[dependency])) return
+		setBusyStepId(step.id)
 		onWorkflowLockChange(true)
 		setActionMessage(undefined)
 		setActionError(false)
@@ -491,9 +463,9 @@ export function TradingDeploymentSetup({
 		try {
 			const deployStep = services.deployStep ?? defaultServices.deployStep
 			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentUnavailable)
-			await deployStep(publicClient, plan, nextStep, hash => {
+			await deployStep(publicClient, plan, step, hash => {
 				// A replacement broadcast takes over the row of the transaction it replaced.
-				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: deploymentCopy.formatDeployStep(nextStep.label) })
+				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: deploymentCopy.formatDeployStep(step.label) })
 				broadcastHash = hash
 			})
 			if (broadcastHash !== undefined) recordTransactionSettled(broadcastHash, { status: 'confirmed' })
@@ -505,7 +477,7 @@ export function TradingDeploymentSetup({
 				onComplete(configuration)
 				return
 			}
-			setActionMessage(deploymentCopy.contractDeployedContinue(nextStep.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
+			setActionMessage(deploymentCopy.contractDeployedContinue(step.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
 		} catch (error) {
 			if (broadcastHash !== undefined) {
 				// A reverted receipt settles the entry; any other failure leaves the activity list watching the broadcast.
@@ -514,11 +486,11 @@ export function TradingDeploymentSetup({
 				else releaseTransactionActivityWatch(broadcastHash)
 			}
 			setActionError(true)
-			let detail = publicErrorMessage(error, deploymentCopy.deployFailed(nextStep.label))
+			let detail = publicErrorMessage(error, deploymentCopy.deployFailed(step.label))
 			try {
 				const status = await loadTradingDeploymentStatus(publicClient, plan)
 				setDeploymentStatus(status)
-				if (status[nextStep.id]) {
+				if (status[step.id]) {
 					if (isTradingDeploymentComplete(plan, status)) {
 						const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 						const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
@@ -526,7 +498,7 @@ export function TradingDeploymentSetup({
 						return
 					}
 					setActionError(false)
-					setActionMessage(deploymentCopy.contractAlreadyInstalledContinue(nextStep.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
+					setActionMessage(deploymentCopy.contractAlreadyInstalledContinue(step.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
 					return
 				}
 			} catch (recoveryError) {
@@ -534,7 +506,7 @@ export function TradingDeploymentSetup({
 			}
 			setActionMessage(broadcastHash === undefined ? detail : deploymentCopy.broadcastWithoutCompletion(broadcastHash, detail))
 		} finally {
-			setBusy(false)
+			setBusyStepId(undefined)
 			onWorkflowLockChange(false)
 		}
 	}
@@ -554,7 +526,32 @@ export function TradingDeploymentSetup({
 				)}
 				{fallbackNotice === undefined ? null : <UserMessage className='detail' tone='warning' detail={fallbackNotice} />}
 				{plan === undefined || deploymentComplete ? null : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(plan.factory.label, plan.router.label)} />}
-				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
+				{plan === undefined ? null : (
+					<DeploymentStepList
+						steps={deploymentSteps.map(({ step, presentation }) => {
+							const { availability, externalReasonId } = stepAvailability(step)
+							return {
+								// Every contract keeps its own deploy action in place; a deployed one stays, disabled, and says so.
+								action: (
+									<TransactionActionButton
+										scope={tradingDeploymentScope}
+										availability={availability}
+										disabledReasonElementId={externalReasonId}
+										idleLabel={deploymentCopy.formatDeployStep(step.label)}
+										pendingLabel={deploymentCopy.formatDeployingStep(step.label)}
+										pending={busyStepId === step.id}
+										onClick={() => void deployStepNow(step)}
+										showDisabledReason={externalReasonId === undefined}
+									/>
+								),
+								address: step.address,
+								badge: presentation,
+								key: step.id,
+								label: step.label,
+							}
+						})}
+					/>
+				)}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<DataGrid dense>
 						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus)}</MetricField>
@@ -565,6 +562,19 @@ export function TradingDeploymentSetup({
 						</Badge>
 					)}
 				</div>
+				{inspectionState === 'blocked' && selectedCore !== undefined ? (
+					<UserMessage
+						placement='section'
+						tone='warning'
+						className='deployment-setup__prerequisite'
+						detail={deploymentCopy.statoblastRequired(selectedCore.chainName)}
+						actions={
+							<a className='button-link secondary-link' href={deployContractsGuideHref} target='_blank' rel='noreferrer'>
+								{deploymentCopy.deploymentGuide}
+							</a>
+						}
+					/>
+				) : null}
 				<ErrorNotice id={networkNoticeId} message={wrongNetworkNotice} />
 				{wrongNetworkNotice === undefined || selectedCore === undefined ? null : (
 					<div className='actions'>
@@ -577,21 +587,13 @@ export function TradingDeploymentSetup({
 				<ErrorNotice message={inspectionError} />
 				{actionMessage === undefined || actionError ? null : <UserMessage className='detail' announcement='polite' detail={actionMessage} />}
 				<ErrorNotice message={actionError ? actionMessage : undefined} />
-				<div className='actions'>
-					{deploymentComplete ? null : (
-						<TransactionActionButton
-							scope={tradingDeploymentScope}
-							availability={deployAvailability}
-							disabledReasonElementId={externalReasonId}
-							idleLabel={deploymentActionLabel(false, nextStep, plan, deploymentStatus)}
-							pendingLabel={deploymentActionLabel(true, nextStep, plan, deploymentStatus)}
-							pending={busy}
-							onClick={() => void deployNext()}
-							showDisabledReason={externalReasonId === undefined}
-						/>
-					)}
-					{retryAction}
-				</div>
+				{plan === undefined || retryAction !== undefined ? (
+					<div className='actions'>
+						{/* Until the network is known there are no contract rows; one disabled action keeps the place and explains what is missing. */}
+						{plan === undefined ? <PlaceholderDeployAction {...stepAvailability(undefined)} /> : null}
+						{retryAction}
+					</div>
+				) : null}
 			</SectionBlock>
 		</div>
 	)

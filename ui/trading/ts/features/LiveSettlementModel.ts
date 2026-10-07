@@ -1,4 +1,5 @@
-import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeWithValue, type ShareValueRate } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeWithValue, type ShareValueRate } from '../lib/shareValue.js'
+import * as availabilityCopy from '../copy/availability.js'
 import type { ForkTarget } from '../protocol/forks.js'
 import { settlementUnavailability, type LiveBalances, type LiveMarket, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
@@ -31,8 +32,8 @@ export function settlementUnavailableReason(operation: SettlementOperation, mark
 export function settlementInputBlocker(operation: SettlementOperation, unavailableReason: string | undefined, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
 	if (unavailableReason !== undefined) return unavailableReason
 	if (operation === 'redeem-complete-set') {
-		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares === 0n) return settlementCopy.completeSetAmountRequired
-		if (parsedAmountAttoShares > completeSetsAttoShares) return settlementCopy.formatCompleteSetLimit(formatCollateralEth(completeSetsAttoShares, rate, 'down'))
+		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares <= 0n) return availabilityCopy.amountReason(parsedAmountAttoShares)
+		if (parsedAmountAttoShares > completeSetsAttoShares) return settlementCopy.formatCompleteSetLimit(formatCollateralEth(completeSetsAttoShares, rate, 'down'), formatCompleteSetQuantity(completeSetsAttoShares, 4, 'down'))
 		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n) return settlementCopy.completeSetAmountTooSmall
 	}
 	if (operation === 'migrate-shares') {
@@ -42,12 +43,12 @@ export function settlementInputBlocker(operation: SettlementOperation, unavailab
 	return undefined
 }
 
-export function forkMigrationBatchBlocker(targets: readonly ForkTarget[]) {
+export function forkMigrationBatchBlocker(targets: readonly Pick<ForkTarget, 'canonicalPool'>[]) {
 	if (targets.length <= 1 || targets.every(target => target.canonicalPool !== undefined)) return undefined
 	return settlementCopy.missingChildPoolBlocker
 }
 
-export function forkMigrationBatchWarning(targets: readonly ForkTarget[]) {
+export function forkMigrationBatchWarning(targets: readonly Pick<ForkTarget, 'canonicalPool'>[]) {
 	if (forkMigrationBatchBlocker(targets) === undefined) return undefined
 	return settlementCopy.missingChildPoolWarning
 }
@@ -58,10 +59,11 @@ export function settlementBalanceLabel(balanceState: BalanceState, balance: bigi
 	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeWithValue(balance, outcome, rate)
 }
 
-/** The standalone balance line: the amount when it is known, otherwise what the user is waiting for or has to do. */
-export function settlementBalanceStatus(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate, outcome?: ShareOutcome) {
+/** The standalone balance line: the amount when it is known, otherwise what the user is waiting for or has to do. `locked` marks a balance a migration has locked in this universe. */
+export function settlementBalanceStatus(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate, outcome?: ShareOutcome, locked = false) {
 	if (balanceState === 'loading') return settlementCopy.formatShareBalance(commonCopy.loadingWithEllipsis)
 	if (balanceState === 'error') return settlementCopy.formatShareBalance(commonCopy.unavailable)
 	const label = settlementBalanceLabel(balanceState, balance, rate, outcome)
-	return label === undefined ? settlementCopy.connectToSeeBalance : settlementCopy.formatShareBalance(label)
+	if (label === undefined) return settlementCopy.connectToSeeBalance
+	return locked ? settlementCopy.formatLockedShareBalance(label) : settlementCopy.formatShareBalance(label)
 }

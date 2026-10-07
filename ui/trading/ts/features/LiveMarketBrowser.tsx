@@ -16,6 +16,7 @@ import { marketsCopy } from '../copy/markets.js'
 import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
 import { DEFAULT_MARKET_LIST_OPTIONS, readMarketListParams, replaceRouteHashSearch, writeMarketListParams } from '../lib/routeState.js'
 import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
+import { findMarketGuideHref, findSecurityPoolGuideHref } from '../lib/docsLinks.js'
 import type { LiveMarket } from '../protocol/live.js'
 import { MarketCard } from './MarketCard.js'
 
@@ -32,9 +33,10 @@ const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
 	{ value: 'recent', label: favoritesCopy.recentlySaved },
 ]
 
+/** Lists hold only what this browser opened, so the empty state says so and points to where addresses come from. */
 function listPresentation(listKind: TradingListKind) {
-	if (listKind === 'security-pools') return { empty: liveCopy.noFavoritePools, emptyDetail: liveCopy.noFavoritePoolsDetail }
-	return { empty: liveCopy.noFavoriteMarkets, emptyDetail: liveCopy.noFavoriteMarketsDetail }
+	if (listKind === 'security-pools') return { empty: liveCopy.noFavoritePools, emptyDetail: liveCopy.noFavoritePoolsDetail, guide: { href: findSecurityPoolGuideHref, label: liveCopy.findSecurityPoolGuide } }
+	return { empty: liveCopy.noFavoriteMarkets, emptyDetail: liveCopy.noFavoriteMarketsDetail, guide: { href: findMarketGuideHref, label: liveCopy.findMarketGuide } }
 }
 
 /** A pasted security pool address opens that pool in the lookup route's workflow, whether or not it is among the downloaded markets. */
@@ -43,9 +45,14 @@ function searchedPoolAddress(query: string) {
 	return parsed === undefined || parsed === zeroAddress ? undefined : parsed
 }
 
-/** Search (which also opens a pasted pool address) and sort share the first row; the status filter leads the second. */
+/**
+ * Search (which also opens a pasted pool address) and sort share the first row; the status filter leads the second.
+ * The open action stays in place: submitting anything but a full pool address explains what the field needs.
+ */
 function MarketSearchRow({ options, arrangeable, lookupRoute, onChange }: { options: MarketListOptions; arrangeable: boolean; lookupRoute: TradingLookupRoute; onChange(next: MarketListOptions): void }) {
 	const address = searchedPoolAddress(options.query)
+	const [submittedInvalidQuery, setSubmittedInvalidQuery] = useState<string>()
+	const addressError = submittedInvalidQuery !== undefined && submittedInvalidQuery === options.query ? liveCopy.poolAddressRequired : undefined
 	return (
 		<div className='market-list-controls' role='group' aria-label={marketsCopy.listControls}>
 			<form
@@ -53,16 +60,19 @@ function MarketSearchRow({ options, arrangeable, lookupRoute, onChange }: { opti
 				role='search'
 				onSubmit={event => {
 					event.preventDefault()
-					if (address === undefined) return
+					if (address === undefined) {
+						setSubmittedInvalidQuery(options.query)
+						return
+					}
 					window.location.hash = getTradingRouteHref(`#/${lookupRoute}/${address}`)
 				}}
 			>
-				<FormInput type='search' aria-label={lookupRoute === 'create-market' ? marketsCopy.searchPoolsLabel : marketsCopy.searchLabel} placeholder={marketsCopy.searchPlaceholder} value={options.query} onInput={event => onChange({ ...options, query: event.currentTarget.value })} />
-				{address === undefined ? undefined : (
-					<button className='primary' type='submit'>
-						{liveCopy.openSecurityPool}
-					</button>
-				)}
+				<div className='market-list-search__field'>
+					<FormInput type='search' aria-label={lookupRoute === 'create-market' ? marketsCopy.searchPoolsLabel : marketsCopy.searchLabel} placeholder={marketsCopy.searchPlaceholder} value={options.query} error={addressError} liveError onInput={event => onChange({ ...options, query: event.currentTarget.value })} />
+				</div>
+				<button className='primary' type='submit'>
+					{liveCopy.openSecurityPool}
+				</button>
 			</form>
 			{arrangeable ? (
 				<div className='market-list-sort'>
@@ -124,7 +134,18 @@ export function LiveMarketBrowser({
 	const presentation = listPresentation(listKind)
 	const shownMarkets = arrangeMarkets(markets, listOptions, nowSeconds)
 	let list: ComponentChildren
-	if (markets.length === 0) list = <EmptyState title={presentation.empty} detail={presentation.emptyDetail} />
+	if (markets.length === 0)
+		list = (
+			<EmptyState
+				title={presentation.empty}
+				detail={presentation.emptyDetail}
+				actions={
+					<a className='button-link secondary-link' href={presentation.guide.href} target='_blank' rel='noreferrer'>
+						{presentation.guide.label}
+					</a>
+				}
+			/>
+		)
 	else if (shownMarkets.length === 0)
 		list = (
 			<EmptyState

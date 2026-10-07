@@ -14,6 +14,7 @@ import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
@@ -109,6 +110,28 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 					)}
 				</SecurityPoolSummaryMetrics>
 			</ReadOnlyDetailAccordion>
+		</div>
+	)
+}
+
+/** Holds the object header's shape while the pool first loads, so the loaded header replaces it in place instead of moving the page. */
+export function SecurityPoolObjectHeaderSkeleton() {
+	return (
+		<div className='selected-pool-object-header pool-overview-header pool-object-header-skeleton'>
+			<div className='pool-overview-title-row'>
+				<div className='pool-object-identity'>
+					<span className='skeleton-line skeleton-line-title' aria-hidden='true' />
+					<LoadingText>{securityPoolCopy.loadingPool}</LoadingText>
+				</div>
+			</div>
+			<div className='pool-status-strip' aria-hidden='true'>
+				{['capacity', 'oracle', 'stage'].map(slot => (
+					<div key={slot} className='pool-object-header-skeleton-slot'>
+						<span className='skeleton-line skeleton-line-detail' />
+						<span className='skeleton-line skeleton-line-title' />
+					</div>
+				))}
+			</div>
 		</div>
 	)
 }

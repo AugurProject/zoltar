@@ -9,11 +9,12 @@ import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
-import { ForkMigrationTargets } from './ForkMigrationTargets.js'
+import { ForkMigrationTargets, MigratedShareLinks } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
+import { largestMigratedShares, loadForkMigrationContext, migratedShareKey, targetMigrationComplete, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
 import { createTradingPublicClient, publicErrorMessage, settlementAvailability, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
+import * as forkCopy from '../copy/forkMigration.js'
 import * as settlementCopy from '../copy/settlement.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { resolvedShareOutcome } from '../protocol/settlement.js'
@@ -31,6 +32,8 @@ import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
 import { resolveSettlementAvailability } from './live/actionAvailability.js'
+
+const MAX_FILL_STEP_ATTO_ETH = 10n ** 12n
 
 export type LiveSettlementServices = Readonly<{
 	createPublicClient(configuration: DeploymentConfiguration): PublicClient
@@ -53,7 +56,8 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const [operation, setOperation] = useState<SettlementOperation>(initialOperation)
 	const [amount, setAmount] = useState('')
 	const [sourceOutcome, setSourceOutcome] = useState<ShareOutcome>('YES')
-	const [forkContext, setForkContext] = useState<ForkMigrationContext>()
+	// The loaded context stays in view while it reloads (after a confirmed migration, for example) so the picker does not collapse.
+	const [forkContext, setForkContext] = useState<Readonly<{ key: string; context: ForkMigrationContext }>>()
 	const [forkContextState, setForkContextState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
 	const [forkContextError, setForkContextError] = useState<string>()
 	const [forkContextNonce, setForkContextNonce] = useState(0)
@@ -68,15 +72,25 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
 	const unavailableReason = settlementUnavailableReason(operation, market, balances)
 	const operationAvailable = unavailableReason === undefined
-	let sourceBalance = balances?.no
-	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid
-	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
+	const shareBalance = (outcome: ShareOutcome) => {
+		if (outcome === 'INVALID') return balances?.invalid
+		return outcome === 'YES' ? balances?.yes : balances?.no
+	}
+	const sourceBalance = shareBalance(sourceOutcome)
+	const forkContextKey = `${market.pool}\u0000${market.shareToken}\u0000${market.universeId.toString()}\u0000${account ?? ''}`
+	const currentForkContext = forkContext?.key === forkContextKey ? forkContext.context : undefined
+	const forkContextLoading = forkContextState === 'loading' || forkContextState === 'idle'
+	// A child universe that already holds this share's whole balance would migrate nothing, and the contract reverts.
+	const alreadyMigratedTarget = selectedForkTargets.find(target => targetMigrationComplete(target, sourceOutcome, sourceBalance))
 	let inputBlocker = settlementInputBlocker(operation, unavailableReason, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
 	if (operation === 'migrate-shares' && operationAvailable) {
-		if (forkContextState === 'loading' || forkContextState === 'idle') inputBlocker = settlementCopy.loadingForkDetails
-		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailable
-		else inputBlocker ??= forkMigrationBatchBlocker(selectedForkTargets)
+		// The loading line above the picker names what is loading; the action only needs to say it is waiting.
+		if (forkContextLoading) inputBlocker = commonCopy.loadingWithEllipsis
+		else if (forkContextState === 'error' || currentForkContext === undefined) inputBlocker = forkContextError ?? settlementCopy.forkDetailsUnavailable
+		else inputBlocker ??= alreadyMigratedTarget === undefined ? forkMigrationBatchBlocker(selectedForkTargets) : settlementCopy.targetAlreadyMigrated(sourceOutcome, forkCopy.childUniverseName(alreadyMigratedTarget.label))
 	}
+	// A positive migrated amount means the contract locked this source balance in the parent universe.
+	const sourceLocked = currentForkContext !== undefined && largestMigratedShares(currentForkContext.availableTargets)[migratedShareKey(sourceOutcome)] > 0n
 	const workflowController = useSettlementWorkflowController({
 		...context,
 		operation,
@@ -85,7 +99,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		targetOutcomeIndexes,
 		inputBlocker,
 		onRedemptionConfirmed: () => setAmount(''),
-		onMigrationConfirmed: () => setForkContextNonce(current => current + 1),
+		onMigrationConfirmed: () => {
+			// The confirmed migration changes what each child universe holds; the next migration needs a new acknowledgment.
+			setMigrationAcknowledgedKey(undefined)
+			setForkContextNonce(current => current + 1)
+		},
 		services,
 	})
 	const { transaction, invalidateInputs: invalidateSettlementInputs } = workflowController
@@ -123,15 +141,14 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 			return
 		}
 		let active = true
-		setForkContext(undefined)
 		setForkContextState('loading')
 		setForkContextError(undefined)
 		setSelectedForkTargets([])
 		void services
-			.loadForkContext(forkClient, market)
+			.loadForkContext(forkClient, market, account)
 			.then(context => {
 				if (!active) return
-				setForkContext(context)
+				setForkContext({ key: forkContextKey, context })
 				setForkContextState('ready')
 			})
 			.catch(caught => {
@@ -142,9 +159,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		return () => {
 			active = false
 		}
-	}, [forkClient, forkContextNonce, market.pool, market.shareToken, market.universeForkTime, market.universeId, services, winningOutcome])
+	}, [account, forkClient, forkContextKey, forkContextNonce, market.pool, market.shareToken, market.universeForkTime, market.universeId, services, winningOutcome])
 
 	const amountId = useId()
+	let amountFieldError: string | undefined
+	if (amount.trim() !== '' && operationAvailable) amountFieldError = parsedAmountAttoEth === undefined ? settlementCopy.invalidEthAmount : inputBlocker
 	const selectOperation = (next: SettlementOperation) => {
 		invalidateSettlementInputs()
 		setOperation(next)
@@ -163,6 +182,8 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	// Shown before the action once there is a balance to move and a branch to move it to.
 	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market) : undefined
 	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
+	// Max fills a readable ETH amount: six decimals, rounded down so it never exceeds what the sets redeem for.
+	const maxRedeemAttoEth = redeemableAttoEth === undefined || redeemableAttoEth < MAX_FILL_STEP_ATTO_ETH ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % MAX_FILL_STEP_ATTO_ETH)
 	const completeSetHint = redeemableAttoEth === undefined ? undefined : settlementCopy.completeSetsHeld(formatCompleteSetQuantity(availability.completeSets, 4, 'down'), formatCollateralEth(availability.completeSets, market, 'down'))
 	return (
 		<div className='settlement-controls'>
@@ -191,14 +212,14 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 												disabled={workflowLocked}
 												onClick={() => {
 													invalidateSettlementInputs()
-													setAmount(formatCurrencyInputBalance(redeemableAttoEth, 18))
+													setAmount(formatCurrencyInputBalance(maxRedeemAttoEth ?? redeemableAttoEth, 18))
 												}}
 											>
 												{settlementCopy.max}
 											</button>
 										)
 									}
-									error={amount.trim() !== '' && operationAvailable ? inputBlocker : undefined}
+									error={amountFieldError}
 									onInput={event => {
 										invalidateSettlementInputs()
 										setAmount(event.currentTarget.value)
@@ -226,11 +247,13 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 								onChange={value => {
 									invalidateSettlementInputs()
 									setSourceOutcome(value)
+									// A child universe that already holds the new share's whole balance cannot take it again.
+									setSelectedForkTargets(current => current.filter(target => !targetMigrationComplete(target, value, shareBalance(value))))
 								}}
 							/>
 						</div>
-						<UserMessage className='detail' detail={<>{settlementBalanceStatus(balanceState, sourceBalance, market, sourceOutcome)}</>} />
-						{forkContextState === 'loading' || forkContextState === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : null}
+						<UserMessage className='detail' detail={<>{settlementBalanceStatus(balanceState, sourceBalance, market, sourceOutcome, sourceLocked)}</>} />
+						{forkContextLoading && currentForkContext === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : null}
 						{forkContextState === 'error' ? (
 							<>
 								<ErrorNotice message={forkContextError ?? settlementCopy.forkDetailsUnavailable} />
@@ -241,7 +264,12 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 								</div>
 							</>
 						) : null}
-						{forkContext === undefined ? null : <ForkMigrationTargets context={forkContext} selectedTargets={selectedForkTargets} disabled={workflowLocked} onChange={updateForkTargets} />}
+						{currentForkContext === undefined ? null : (
+							<div className='fork-migration-context' aria-busy={forkContextLoading}>
+								<ForkMigrationTargets context={currentForkContext} selectedTargets={selectedForkTargets} sourceOutcome={sourceOutcome} sourceBalance={sourceBalance} disabled={workflowLocked || forkContextLoading} onChange={updateForkTargets} />
+								<MigratedShareLinks context={currentForkContext} />
+							</div>
+						)}
 						{forkMigrationBatchWarning(selectedForkTargets) === undefined ? null : (
 							<WarningSurface role='status' surface='flat' variant='compact'>
 								<p>{forkMigrationBatchWarning(selectedForkTargets)}</p>

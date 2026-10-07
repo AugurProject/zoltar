@@ -155,6 +155,7 @@ export function LivePositionControls({
 		const actionButton = controlsRef.current?.querySelector<HTMLButtonElement>('.transaction-outcome .tx-action-button')
 		if (actionButton !== null && actionButton !== undefined && !actionButton.disabled) actionButton.click()
 	}
+	const amountFieldError = model.amountError ?? model.insufficientReason
 	return (
 		<div ref={controlsRef} className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
@@ -209,7 +210,7 @@ export function LivePositionControls({
 					inputMode='decimal'
 					autoComplete='off'
 					adornment={mode === 'entry' ? workflowCopy.eth : outcomeLabel(side)}
-					error={model.amountError ?? model.insufficientReason}
+					error={amountFieldError}
 					hint={amountHint(model, mode, side, holdings.balances, wallet.walletEthAttoEth, market)}
 					onInput={event => ticket.setAmount(event.currentTarget.value)}
 					onKeyDown={event => {

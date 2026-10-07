@@ -39,7 +39,7 @@ export function UniverseDirectory({ configuration, connectionMessage, loadUniver
 		)
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader title={appCopy.universe} actions={genesisAction} />
+			<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} actions={genesisAction} />
 			<ErrorNotice message={connectionMessage} />
 			{state.kind === 'loading' || state.kind === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} /> : undefined}
 			{state.kind === 'error' ? <RetryableNotice onRetry={retry} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: state.message }} /> : undefined}

@@ -286,6 +286,7 @@ void describe('selected pool workflow visibility', () => {
 		expect(
 			getSelectedPoolWorkflowLockedPresentation({
 				hasSelectedPoolAddress: false,
+				hasValidSelectedPoolAddress: false,
 				selectedPoolLookupState: 'unknown',
 				selectedPoolUniverseMismatch: false,
 			}),
@@ -299,6 +300,7 @@ void describe('selected pool workflow visibility', () => {
 		expect(
 			getSelectedPoolWorkflowLockedPresentation({
 				hasSelectedPoolAddress: true,
+				hasValidSelectedPoolAddress: true,
 				selectedPoolLookupState: 'unknown',
 				selectedPoolUniverseMismatch: false,
 			}),
@@ -311,6 +313,7 @@ void describe('selected pool workflow visibility', () => {
 		expect(
 			getSelectedPoolWorkflowLockedPresentation({
 				hasSelectedPoolAddress: true,
+				hasValidSelectedPoolAddress: true,
 				selectedPoolLookupState: 'loading',
 				selectedPoolUniverseMismatch: false,
 			}),
@@ -323,6 +326,7 @@ void describe('selected pool workflow visibility', () => {
 		expect(
 			getSelectedPoolWorkflowLockedPresentation({
 				hasSelectedPoolAddress: true,
+				hasValidSelectedPoolAddress: true,
 				selectedPoolLookupState: 'ready',
 				selectedPoolUniverseMismatch: true,
 			}),
@@ -331,6 +335,22 @@ void describe('selected pool workflow visibility', () => {
 			badgeTone: 'blocked',
 			detail: 'This pool does not exist.',
 			key: 'unavailable',
+		})
+	})
+
+	void test('resolves a malformed pool address at once instead of loading it forever', () => {
+		expect(
+			getSelectedPoolWorkflowLockedPresentation({
+				hasSelectedPoolAddress: true,
+				hasValidSelectedPoolAddress: false,
+				selectedPoolLookupState: 'unknown',
+				selectedPoolUniverseMismatch: false,
+			}),
+		).toEqual({
+			badgeLabel: 'Invalid',
+			badgeTone: 'blocked',
+			detail: 'Check the link or enter a valid pool address above.',
+			key: 'not_found',
 		})
 	})
 })

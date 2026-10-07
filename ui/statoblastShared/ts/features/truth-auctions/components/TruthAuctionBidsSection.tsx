@@ -113,7 +113,6 @@ function ViewerBidEstimate({ estimate }: { estimate: ViewerTruthAuctionBidRowVie
 export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTicks, error, hasLoadedData = true, hasMoreAggregatedAuctionBids, loadedTickCount, loadingAggregatedAuctionBids, onLoadNextAuctionBidPage, onRetry, renderPriceValue, retrying = false, rows }: TruthAuctionBidsSectionProps) {
 	return (
 		<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
-			{hasLoadedData && hasMoreAggregatedAuctionBids ? <p className='detail'>{forkAuctionCopy.formatShownBidCount(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</p> : undefined}
 			{loadingAggregatedAuctionBids ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingAuctionBids} /> : undefined}
 			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryCurrentBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : commonCopy.retry} />
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.auctionPriceLevelsEmpty} /> : undefined}
@@ -126,7 +125,16 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 				rows={rows}
 				tableLabel={forkAuctionCopy.currentBids}
 			/>
-			{error === undefined && hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} loading={loadingAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids} /> : undefined}
+			{/* Load more pages the bids instead of numbering them, so the shown count is the position the summary announces. */}
+			{error === undefined && hasMoreAggregatedAuctionBids ? (
+				<PaginationControls
+					hasNextPage={hasMoreAggregatedAuctionBids}
+					loading={loadingAggregatedAuctionBids}
+					onLoadMore={onLoadNextAuctionBidPage}
+					loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids}
+					summary={hasLoadedData ? forkAuctionCopy.formatShownBidCount(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString()) : undefined}
+				/>
+			) : undefined}
 		</SectionBlock>
 	)
 }

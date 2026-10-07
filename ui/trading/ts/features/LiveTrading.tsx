@@ -10,6 +10,7 @@ import * as appCopy from '../copy/app.js'
 import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { getTradingRouteHref, isTradingLookupRoute, tradingListKindFor, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -67,6 +68,8 @@ export function LiveTrading({
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
+	onMarketTitleChange,
+	universeForked = false,
 }: {
 	route: TradingRoute
 	configuration: DeploymentConfiguration | undefined
@@ -92,6 +95,10 @@ export function LiveTrading({
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
+	/** Names the addressed market's question once it loads, so the document title tells open markets apart. */
+	onMarketTitleChange?: ((title: string | undefined) => void) | undefined
+	/** True when the selected universe has forked; the list landings say so, since nothing there can trade any more. */
+	universeForked?: boolean
 }) {
 	const { wallet, balances, discovery, position, workflow } = useLiveTradingController({
 		route,
@@ -114,10 +121,24 @@ export function LiveTrading({
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'
 	const existingMarketPool = creatingMarket && routePool !== undefined && selected?.pool.toLowerCase() === routePool.toLowerCase() && selected.pair !== undefined && selected.loadError === undefined ? selected.pool : undefined
+	// The pool whose creating transaction this route just confirmed; a market another account created opens as any existing market.
+	const confirmedCreationPool = useRef<string>()
+	// The market this session just created; its liquidity view confirms the creation until another market opens.
+	const [createdMarketPool, setCreatedMarketPool] = useState<string>()
 	useEffect(() => {
+		if (!creatingMarket) confirmedCreationPool.current = undefined
 		if (existingMarketPool === undefined || marketWorkflowLocked) return
-		window.location.replace(getTradingRouteHref(`#/market/${existingMarketPool}`))
-	}, [existingMarketPool, marketWorkflowLocked])
+		const createdHere = confirmedCreationPool.current === existingMarketPool.toLowerCase()
+		confirmedCreationPool.current = undefined
+		if (!createdHere) {
+			window.location.replace(getTradingRouteHref(`#/market/${existingMarketPool}`))
+			return
+		}
+		// The creation deposited liquidity, so the user continues in the liquidity view with the LP tokens it minted in sight.
+		setCreatedMarketPool(existingMarketPool.toLowerCase())
+		window.location.replace(getTradingRouteHref(`#/liquidity/${existingMarketPool}`))
+	}, [creatingMarket, existingMarketPool, marketWorkflowLocked])
+	const showsMarketCreated = createdMarketPool !== undefined && workflowRoute === 'liquidity' && routePool?.toLowerCase() === createdMarketPool
 	// Trade and settlement share the `#/market/<address>` hash, so a closed market's chosen view lives in its `view` parameter; liquidity is its own hash.
 	const [closedMarketView, setClosedMarketView] = useState<'trade' | 'settlement'>('settlement')
 	useEffect(() => setClosedMarketView(readMarketViewParam(parseRouteHash(window.location.hash).search) ?? 'settlement'), [routePool])
@@ -158,6 +179,11 @@ export function LiveTrading({
 		if (routePool === undefined || workflowRoute !== 'market') return
 		replaceRouteHashSearch(search => writeTicketParam(search, { mode, side }))
 	}, [mode, side, routePool, workflowRoute])
+	const addressedMarketTitle = routePool !== undefined && selected !== undefined && selected.pool.toLowerCase() === routePool.toLowerCase() && selected.loadError === undefined ? selected.title : undefined
+	useEffect(() => {
+		onMarketTitleChange?.(addressedMarketTitle)
+		return () => onMarketTitleChange?.(undefined)
+	}, [addressedMarketTitle, onMarketTitleChange])
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
@@ -200,7 +226,7 @@ export function LiveTrading({
 		if (confirmedUniverseId === undefined || discoveryState === 'error')
 			return (
 				<div className='route-view-flow'>
-					<RouteHeader title={appCopy.universe} />
+					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
 					<ErrorNotice message={connectionMessage} />
 					{discoveryState === 'error' ? (
 						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={refreshLocked} />
@@ -216,11 +242,26 @@ export function LiveTrading({
 			)
 		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
 	}
+	// A forked universe no longer trades or takes liquidity anywhere; the list landings say so before anything is opened.
+	const universeForkedNotice = universeForked ? (
+		<UserMessage
+			placement='page'
+			tone='warning'
+			className='universe-forked-notice'
+			detail={liveCopy.universeForkedNotice}
+			actions={
+				<a className='button-link secondary-link' href={getTradingRouteHref('#/universe')}>
+					{liveCopy.viewChildUniverses}
+				</a>
+			}
+		/>
+	) : null
 	if (isTradingLookupRoute(route)) {
 		const routePresentation = liveLookupRoutePresentation(route)
 		return (
 			<div className='route-view-flow'>
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
+				{universeForkedNotice}
 				<ErrorNotice message={connectionMessage} />
 				<LiveMarketBrowser
 					key={listsMarkets ? 'markets' : 'security-pools'}
@@ -246,7 +287,7 @@ export function LiveTrading({
 				<RouteHeader title={appCopy.securityPool} description={appCopy.securityPoolRouteDescription} />
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} />
+					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute='create-market' address={routePool} />
 				</SectionBlock>
 			</div>
 		)
@@ -267,11 +308,22 @@ export function LiveTrading({
 						</>
 					}
 				/>
+				{universeForkedNotice}
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolDiscoveryFailed(discoveryError) : undefined} />
-					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={portfolioCopy.noFavoriteMarkets} detail={portfolioCopy.favoriteGuidance} /> : null}
+					{discoveryState === 'ready' && visibleMarkets.length === 0 ? (
+						<EmptyState
+							title={portfolioCopy.noFavoriteMarkets}
+							detail={portfolioCopy.favoriteGuidance}
+							actions={
+								<a className='button-link primary' href={getTradingRouteHref('#/market')}>
+									{portfolioCopy.browseMarkets}
+								</a>
+							}
+						/>
+					) : null}
 					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
 						<LivePortfolio
 							discoveryComplete={discoveryState === 'ready'}
@@ -321,10 +373,11 @@ export function LiveTrading({
 			{showsMarketPage ? <MarketPageHeader market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} actions={walletAction} /> : <RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />}
 			<ErrorNotice message={connectionMessage} />
 			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
+			{showsMarketCreated ? <UserMessage placement='section' tone='success' announcement='polite' className='market-created-notice' detail={liveCopy.marketCreated} /> : null}
 			<div className='market-stack'>
 				{selected === undefined ? (
 					<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} />
+						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} lookupRoute={creatingMarket ? 'create-market' : 'market'} address={routePool} />
 					</SectionBlock>
 				) : null}
 				{(() => {
@@ -368,7 +421,15 @@ export function LiveTrading({
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} />
+								<LiveLiquidityControls
+									{...workflowPanelProps}
+									walletEthAttoEth={walletEthAttoEth}
+									nowSeconds={nowSeconds}
+									services={liquidityServices}
+									onMarketCreated={pool => {
+										confirmedCreationPool.current = pool.toLowerCase()
+									}}
+								/>
 							</SectionBlock>
 						)
 					const ticket = (

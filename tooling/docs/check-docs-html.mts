@@ -3,6 +3,7 @@ import { access, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
+import { documentationSiteTitleSuffix } from './docs-html-page.mts'
 import { repositorySourceTarget } from './repository-source-links.mts'
 
 type ParsedHtmlDocument = {
@@ -127,6 +128,8 @@ function validateTextEnvelope(parsedDocument: ParsedHtmlDocument, failures: Vali
 	const title = parsedDocument.document.querySelector('head > title')?.textContent?.trim()
 	if (title === undefined || title.length === 0) {
 		addFailure(parsedDocument, 'is missing a non-empty <title>', failures)
+	} else if (path.relative(parsedDocument.docsDirectory, parsedDocument.filePath) !== 'documentation.html' && !title.endsWith(documentationSiteTitleSuffix)) {
+		addFailure(parsedDocument, `<title> must end with "${documentationSiteTitleSuffix}" so tabs and bookmarks name the site`, failures)
 	}
 }
 

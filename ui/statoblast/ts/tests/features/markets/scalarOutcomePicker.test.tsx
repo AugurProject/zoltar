@@ -113,7 +113,9 @@ describe('ScalarOutcomePicker', () => {
 		expect(scalarHelp?.getAttribute('data-message-placement')).toBe('field')
 		expect(scalarHelp?.tagName).toBe('SPAN')
 		expect(scalarValueInput.closest('strong')).toBeNull()
-		expect(documentQueries.getByText('Enter a value that matches the increment.')).not.toBeNull()
+		// The help names the step and range instead of an increment the picker never shows.
+		expect(documentQueries.getByText('Steps of 10 from 0 to 100.')).not.toBeNull()
+		expect(scalarValueInput.getAttribute('inputmode')).toBe('decimal')
 
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '70' } })
@@ -121,12 +123,35 @@ describe('ScalarOutcomePicker', () => {
 		expect(slider.value).toBe('7')
 		expect(scalarValueInput.value).toBe('70')
 
+		// A partly typed value is not an error yet and the slider keeps the last valid position instead of jumping to the minimum.
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '7' } })
+		})
+		expect(slider.value).toBe('7')
+		expect(scalarValueInput.getAttribute('aria-invalid')).toBeNull()
+		expect(documentQueries.queryByText('Enter a value from 0 to 100 in steps of 10.')).toBeNull()
+
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '75' } })
 		})
-		expect(slider.value).toBe('0')
-		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
-		expect(documentQueries.queryByText('Enter a value that matches the increment.')).toBeNull()
+		expect(slider.value).toBe('7')
+		expect(scalarValueInput.getAttribute('aria-invalid')).toBeNull()
+
+		await act(() => {
+			scalarValueInput.dispatchEvent(new Event('blur'))
+		})
+		const error = documentQueries.getByText('Enter a value from 0 to 100 in steps of 10.')
+		expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')
+		expect(scalarValueInput.getAttribute('aria-invalid')).toBe('true')
+		expect(scalarValueInput.getAttribute('aria-describedby')).toBe(error.id)
+		expect(documentQueries.queryByText('Steps of 10 from 0 to 100.')).toBeNull()
+
+		await act(() => {
+			fireEvent.input(scalarValueInput, { target: { value: '80' } })
+		})
+		expect(slider.value).toBe('8')
+		expect(scalarValueInput.getAttribute('aria-invalid')).toBeNull()
+		expect(documentQueries.queryByText('Enter a value from 0 to 100 in steps of 10.')).toBeNull()
 	})
 
 	test('restores the canonical scalar value after leaving invalid mode', async () => {
@@ -139,7 +164,10 @@ describe('ScalarOutcomePicker', () => {
 		await act(() => {
 			fireEvent.input(scalarValueInput, { target: { value: '75' } })
 		})
-		expect(documentQueries.getByText('Enter a value between the minimum and maximum that falls on an increment.')).not.toBeNull()
+		await act(() => {
+			scalarValueInput.dispatchEvent(new Event('blur'))
+		})
+		expect(documentQueries.getByText('Enter a value from 0 to 100 in steps of 10.')).not.toBeNull()
 
 		await act(() => {
 			fireEvent.click(invalidToggle)
@@ -151,7 +179,7 @@ describe('ScalarOutcomePicker', () => {
 		const restoredScalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		expect(restoredScalarValueInput.value).toBe('20')
 		expect(restoredScalarValueInput.getAttribute('aria-invalid')).not.toBe('true')
-		expect(documentQueries.queryByText('Enter a value between the minimum and maximum that falls on an increment.')).toBeNull()
+		expect(documentQueries.queryByText('Enter a value from 0 to 100 in steps of 10.')).toBeNull()
 	})
 
 	test('uses human values without exposing tick inputs or counts for enormous ranges', async () => {
@@ -168,6 +196,8 @@ describe('ScalarOutcomePicker', () => {
 		expect(scalarValueInput.value).toBe('25')
 		await act(() => fireEvent.input(scalarValueInput, { target: { value: '-' } }))
 		expect(scalarValueInput.value).toBe('-')
+		expect(scalarValueInput.getAttribute('aria-invalid')).toBeNull()
+		await act(() => scalarValueInput.dispatchEvent(new Event('blur')))
 		expect(scalarValueInput.getAttribute('aria-invalid')).toBe('true')
 		await act(() => fireEvent.input(scalarValueInput, { target: { value: '26' } }))
 		expect(scalarValueInput.value).toBe('26')
@@ -197,8 +227,12 @@ describe('ScalarOutcomePicker', () => {
 		await act(() => fireEvent.input(input, { target: { value: '-2.5' } }))
 		expect(input.value).toBe('-2.5')
 		expect(slider.value).toBe('25')
+		// The iOS decimal keypad has no minus key, so a range with negative values keeps the full keyboard.
+		expect(input.getAttribute('inputmode')).toBeNull()
 		await act(() => fireEvent.input(input, { target: { value: '-2.55' } }))
+		await act(() => input.dispatchEvent(new Event('blur')))
 		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(q.getByText('Enter a value from -5 to 5 in steps of 0.1.')).not.toBeNull()
 		await act(() => fireEvent.input(input, { target: { value: '5' } }))
 		expect(slider.value).toBe('100')
 		expect(input.getAttribute('aria-invalid')).not.toBe('true')

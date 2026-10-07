@@ -47,8 +47,11 @@ async function settle(milliseconds = 10) {
 	})
 }
 
-function actionFeedback() {
-	return document.querySelector('[role="tabpanel"] .tx-action-feedback')?.textContent ?? ''
+/** A blocker is explained at the action: visible beside the button and its accessible description, even when the field also shows it. */
+function expectBlockerExplained(actionLabel: string, text: string) {
+	const describedBy = buttonByLabel(actionLabel).getAttribute('aria-describedby')?.split(' ') ?? []
+	expect(describedBy.some(id => document.getElementById(id)?.textContent?.includes(text) === true)).toBeTrue()
+	expect(document.querySelector('[role="tabpanel"] .tx-action-feedback')?.textContent ?? '').toContain(text)
 }
 
 function walletHolding(label: string) {
@@ -523,12 +526,10 @@ describe('live market refresh', () => {
 		expect(document.querySelector('[role="tabpanel"] .notice.error')).toBeNull()
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
 		await typeAmount('0.0000000000000000001')
-		expect(actionFeedback()).toContain('Enter a share amount with at most 18 decimal places.')
-		expect(buttonByLabel('Sell Yes').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-feedback .tx-action-notice')?.id ?? null)
+		expectBlockerExplained('Sell Yes', 'Enter a share amount with at most 18 decimal places.')
 		expect(buttonByLabel('Sell Yes').disabled).toBeTrue()
 		await typeAmount('9')
-		expect(actionFeedback()).toContain('Insufficient Yes balance.')
-		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-feedback .tx-action-notice')).toHaveLength(1)
+		expectBlockerExplained('Sell Yes', 'Insufficient Yes balance.')
 		expect(buttonByLabel('Sell Yes').disabled).toBeTrue()
 
 		// Simulation failures stay beside the action instead of only at the top of the route.

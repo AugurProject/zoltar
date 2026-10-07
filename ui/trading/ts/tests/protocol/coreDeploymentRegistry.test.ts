@@ -3,6 +3,13 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { coreDeploymentFromManifest } from '../../../build/core-deployments.mts'
 import { defaultCoreDeploymentRpcUrls } from '../../protocol/coreDeploymentDefaults.ts'
 import { loadCoreDeploymentsFrom } from '../support/coreDeployments.ts'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { loadCoreDeployments } from '../../protocol/coreDeployments.ts'
+import { publicErrorMessage } from '../../protocol/publicError.ts'
+import * as appCopy from '../../copy/app.ts'
 
 describe('trading core deployment registry', () => {
 	test('copies the canonical deployment proxy and SecurityPoolFactory from a Zoltar manifest', () => {
@@ -44,5 +51,23 @@ describe('trading core deployment registry', () => {
 			expect(manifestDeployment.rpcUrl).toBe(rpcUrl)
 			expect(runtimeDeployment?.defaultRpcUrl).toBe(rpcUrl)
 		}
+	})
+
+	test('reports a failed registry download in user terms instead of an HTTP status', async () => {
+		const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			for (const respond of [async () => new Response('missing', { status: 404 }), async () => Promise.reject(new TypeError('Failed to fetch'))]) {
+				const restoreFetch = installFetchStub(respond)
+				try {
+					await expect(loadCoreDeployments()).rejects.toThrow(appCopy.deploymentRegistryUnavailable)
+				} finally {
+					restoreFetch()
+				}
+			}
+		} finally {
+			restoreEnvironment()
+		}
+		// The connection error compares the public message with this copy, so it must survive error cleanup unchanged.
+		expect(publicErrorMessage(new Error(appCopy.deploymentRegistryUnavailable), 'fallback')).toBe(appCopy.deploymentRegistryUnavailable)
 	})
 })

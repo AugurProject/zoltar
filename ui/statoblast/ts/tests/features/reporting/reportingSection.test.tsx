@@ -5,6 +5,7 @@ import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-sha
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getDecimalSeparatorError } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -291,7 +292,7 @@ describe('ReportingSection', () => {
 		const originalDateNow = Date.now
 		Date.now = () => 50_000
 		try {
-			expect(getReportingLockedUntilMessage(100n, undefined)).toContain('(in less than a minute)')
+			expect(getReportingLockedUntilMessage(100n, undefined)).toContain('(in 50s)')
 		} finally {
 			Date.now = originalDateNow
 		}
@@ -1655,7 +1656,8 @@ describe('ReportingSection', () => {
 		await act(() => {
 			amountInput.dispatchEvent(new Event('blur'))
 		})
-		const error = within(document.body).getByText('Enter a number, such as 1.5.', { selector: 'p.field-error' })
+		// 1.2.3 repeats the separator, so the message names the separator rule.
+		const error = within(document.body).getByText(getDecimalSeparatorError(), { selector: 'p.field-error' })
 		expect(amountInput.getAttribute('aria-invalid')).toBe('true')
 		expect(amountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe(error.id)
 		expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')

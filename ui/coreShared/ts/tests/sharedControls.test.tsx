@@ -90,3 +90,29 @@ test('retry notice leaves caller-owned data visible and respects disabled retrie
 	document.querySelector('button')?.click()
 	expect(calls).toBe(0)
 })
+
+test('retry notice gives a load_failed presentation the same announced error as a message', async () => {
+	let calls = 0
+	const rendered = await renderIntoDocument(
+		<RetryableNotice
+			presentation={{ key: 'load_failed', badgeLabel: 'Error', badgeTone: 'blocked', detail: 'Universe details could not be loaded.' }}
+			retryLabel='Retry'
+			onRetry={() => {
+				calls++
+			}}
+		/>,
+	)
+	cleanup = rendered.cleanup
+	const alert = document.querySelector('[role="alert"]')
+	expect(alert?.textContent).toContain('Universe details could not be loaded.')
+	expect(alert?.getAttribute('data-message-placement')).toBe('page')
+	document.querySelector('button')?.click()
+	expect(calls).toBe(1)
+})
+
+test('retry notice keeps other presentations as quiet state hints', async () => {
+	const rendered = await renderIntoDocument(<RetryableNotice presentation={{ key: 'unavailable', detail: 'Pool details are unavailable.' }} retryLabel='Retry' onRetry={() => undefined} />)
+	cleanup = rendered.cleanup
+	expect(document.querySelector('[role="alert"]')).toBeNull()
+	expect(document.querySelector('.state-hint')?.textContent).toContain('Pool details are unavailable.')
+})

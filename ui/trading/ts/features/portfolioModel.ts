@@ -1,7 +1,7 @@
 import { quoteExactOutput } from '@zoltar/trading-shared/trading/math'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import { attoSharesToCollateralAttoEth } from '../lib/shareValue.js'
-import { marketAcceptsNewRisk, settlementAvailability, type LiveBalances, type LiveMarket } from '../protocol/live.js'
+import { forkMigrationSettled, marketAcceptsNewRisk, settlementAvailability, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import type { PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 
 /** Open positions whose question ends within this window are listed as needing attention before trading closes. */
@@ -151,7 +151,8 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	const item = (kind: PortfolioActionKind, action: PortfolioAction, deadline: bigint | undefined = undefined): PortfolioActionItem => ({ kind, action, pool: market.pool, title: market.title, deadline, sellSide })
 	const actionItems: PortfolioActionItem[] = []
 	if (canRedeem) actionItems.push(item('redeem', 'redeem'))
-	if (state === 'settlement-required' && availability.canMigrateShares) actionItems.push(item('settle', 'settle'))
+	// A balance migrated into a child universe stays locked in the wallet; once every held share has a migration it no longer needs attention.
+	if (state === 'settlement-required' && availability.canMigrateShares && !forkMigrationSettled(balances)) actionItems.push(item('settle', 'settle'))
 	if (state !== 'open' && balances.lp > 0n) actionItems.push(item('withdraw-liquidity', 'withdraw-liquidity'))
 	const closesSoon = state === 'open' && market.endTime > nowSeconds && market.endTime - nowSeconds <= TRADING_CLOSES_SOON_SECONDS
 	if (closesSoon && canSell) actionItems.push(item('trading-closes', 'sell', market.endTime))

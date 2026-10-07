@@ -26,6 +26,7 @@ export function NoticeStack({ items }: NoticeStackProps) {
 						announcement={isBlocking ? 'assertive' : 'polite'}
 						title={item.title}
 						detail={item.detail}
+						dismiss={item.dismiss}
 						expandableDetail={item.technicalDetails === undefined ? undefined : { label: commonCopy.technicalDetails, content: item.technicalDetails }}
 					/>
 				)

@@ -233,6 +233,22 @@ describe('securityPools protocol client', () => {
 		await expect(loadSecurityPoolChildren(client, securityPoolAddress)).rejects.toThrow('changed during discovery')
 	})
 
+	test('resolves an address the registry does not list after one read unless a new deployment is expected', async () => {
+		let registryReads = 0
+		const client = createPoolLoaderClient({
+			deployments: [createDeployment(securityPoolAddress)],
+			read: {
+				securityPoolDeploymentCount: () => {
+					registryReads += 1
+					return 0n
+				},
+			},
+		})
+
+		expect(await loadSecurityPoolLineage(client, securityPoolAddress)).toEqual([])
+		expect(registryReads).toBe(1)
+	})
+
 	test.each(['all', 'new-pool-lineage'])('loads %s with the default root-pool fork outcome unset and inactive', async mode => {
 		let registryReads = 0
 		const client = createPoolLoaderClient({
@@ -247,7 +263,8 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		const pools = mode === 'all' ? await loadAllSecurityPools(client) : await loadSecurityPoolLineage(client, securityPoolAddress)
+		// A freshly created pool may be missing from the first registry read, so its first open waits for the registry to list it.
+		const pools = mode === 'all' ? await loadAllSecurityPools(client) : await loadSecurityPoolLineage(client, securityPoolAddress, undefined, undefined, { expectDeployment: true })
 		const [pool] = pools
 		if (pool === undefined) throw new Error('Expected one security pool')
 

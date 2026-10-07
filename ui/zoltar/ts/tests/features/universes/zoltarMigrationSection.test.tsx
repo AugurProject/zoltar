@@ -198,6 +198,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(q.getByRole('link', { name: 'Open 100 °C universe' }).getAttribute('href')).toBe(getUniverseLinkHref(child.universeId))
 		await act(() => fireEvent.input(q.getByRole('textbox', { name: 'Scalar value' }), { target: { value: '101' } }))
 		expect(q.queryByRole('button', { name: /^Deploy .* universe$/ })).toBeNull()
+		await act(() => q.getByRole('textbox', { name: 'Scalar value' }).dispatchEvent(new Event('blur')))
 		expect(document.body.textContent).toContain('Enter a value between the minimum and maximum that falls on an increment.')
 		await act(() => fireEvent.click(q.getByRole('checkbox', { name: 'Invalid' })))
 		q.getByRole('button', { name: 'Deploy Invalid universe' }).click()

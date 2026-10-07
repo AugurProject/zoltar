@@ -1,11 +1,12 @@
 import { formatLpPayout, formatLpQuantity, formatOutcomePayout, formatOutcomeQuantity, type ShareValueRounding } from '../lib/shareValue.js'
 import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
 
-export function OutcomeHolding({ amount, outcome, market }: { amount: bigint; outcome: ShareOutcome; market: LiveMarket }) {
+/** A held balance rounds down like every "You hold" hint, so the same holding reads the same everywhere and is never overstated. */
+export function OutcomeHolding({ amount, outcome, market, rounding = 'down' }: { amount: bigint; outcome: ShareOutcome; market: LiveMarket; rounding?: ShareValueRounding }) {
 	return (
 		<>
-			{formatOutcomeQuantity(amount, outcome)}
-			<small className='payout-caption'> ({formatOutcomePayout(amount, outcome, market)})</small>
+			{formatOutcomeQuantity(amount, outcome, 4, rounding)}
+			<small className='payout-caption'> ({formatOutcomePayout(amount, outcome, market, rounding)})</small>
 		</>
 	)
 }

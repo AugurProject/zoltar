@@ -105,6 +105,10 @@
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-4);
 }
+/* The create route has no ticket column, so its single-column liquidity form is capped like other forms. */
+.market-stack > .section-block .liquidity-controls {
+	max-width: var(--form-max);
+}
 /* The outcome block of every quoted-transaction panel: hash, failure, and the primary action. It takes focus
    programmatically on confirmation, so it has no outline of its own; the announcement comes from its live region. */
 .transaction-outcome {
@@ -263,15 +267,23 @@
 }
 .market-list-search {
 	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
 	flex: 1 1 16rem;
 	gap: var(--space-2);
 	min-width: 0;
 	margin: 0;
 }
-.market-list-search > .form-input-adorned,
-.market-list-search > input {
-	flex: 1 1 auto;
+/* The field and its validation message share a column; the open action keeps one line and drops below on narrow screens. */
+.market-list-search__field {
+	display: grid;
+	flex: 1 1 16rem;
+	gap: var(--space-1);
 	min-width: 0;
+}
+.market-list-search > button {
+	flex: none;
+	white-space: nowrap;
 }
 .market-list-subbar {
 	display: flex;
@@ -453,6 +465,10 @@ button.outcome-button--no:hover:not(:disabled) {
 .portfolio-holdings.market-holdings li {
 	font-size: 1.25rem;
 }
+/* LP tokens, once held, take their own row under the three outcome balances. */
+.portfolio-holdings.market-holdings li[data-outcome="lp"] {
+	grid-column: 1 / -1;
+}
 @media (max-width: 40rem) {
 	/* Phones stack the three balances so a long quantity never breaks inside its value. */
 	.portfolio-holdings.market-holdings {
@@ -477,13 +493,11 @@ button.outcome-button--no:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 	line-height: var(--line-height-body);
 }
-/* A ticket taller than the viewport scrolls inside its column so its primary action stays reachable while sticky. */
+/* The ticket follows the page while it fits beside a longer overview; it never scrolls on its own, so page scrolling always reaches its primary action. */
 .market-ticket {
 	grid-area: ticket;
 	position: sticky;
 	top: var(--space-4);
-	max-height: calc(100dvh - 2 * var(--space-4));
-	overflow-y: auto;
 	min-width: 0;
 }
 .market-ticket__panel {
@@ -512,8 +526,6 @@ button.outcome-button--no:hover:not(:disabled) {
 	}
 	.market-ticket {
 		position: static;
-		max-height: none;
-		overflow: visible;
 	}
 }
 
@@ -529,8 +541,43 @@ button.outcome-button--no:hover:not(:disabled) {
 .fork-question-summary strong {
 	overflow-wrap: anywhere;
 }
+.fork-migration-context {
+	display: grid;
+	gap: var(--space-4);
+	min-width: 0;
+}
+/* Where migrated shares went: one row per child universe, with its amounts and a link into that universe. */
+.fork-migrated-list {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.fork-migrated-list li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+	min-width: 0;
+}
+.fork-migrated-list__amount {
+	font-family: var(--font-family-mono);
+	overflow-wrap: anywhere;
+}
 
 /* Deployment setup. */
+/* Per-contract deploy buttons share the fixed action column of the Zoltar and Statoblast deploy panels. */
+.deployment-setup .contract-row {
+	grid-template-columns: minmax(0, 1fr) 19rem;
+}
+
+@media (max-width: 64rem) {
+	.deployment-setup .contract-row {
+		grid-template-columns: 1fr;
+	}
+}
+
 /* The progress metric's grid cell owns the divider above this row. */
 .deployment-setup__status {
 	display: flex;
@@ -539,19 +586,38 @@ button.outcome-button--no:hover:not(:disabled) {
 	flex-wrap: wrap;
 	gap: var(--space-4);
 }
+/* A long inspection status wraps inside the section instead of widening it on narrow screens. */
+.deployment-setup__status .badge {
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
 
-/* Help guide steps. */
+/* Help guide steps: list items keep their native numbers, and prose stays at a readable line length. */
 .guide-steps {
 	display: grid;
 	gap: var(--space-3);
+	max-width: var(--form-max);
 	margin: 0;
-	padding-left: 1.5rem;
+	padding-left: var(--space-5);
 }
 .guide-steps li {
+	display: list-item;
+}
+.guide-step {
 	display: grid;
 	gap: var(--space-1);
 }
 .guide-steps p {
+	margin: 0;
+}
+.help-guide .workflow-subsection p {
+	max-width: var(--form-max);
+}
+.help-guide-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-4);
 	margin: 0;
 }
 

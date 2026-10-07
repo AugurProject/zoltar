@@ -284,7 +284,8 @@ test("ignores another transaction's failure while its own multi-step review runs
 		expect(dialog.querySelector('.operation-modal-body')?.hasAttribute('inert')).toBe(false)
 		const retainedButtons = [...dialog.querySelectorAll('.operation-modal-steps .tx-action-button')]
 		expect(retainedButtons.length).toBe(2)
-		expect(retainedButtons.every(button => button.hasAttribute('disabled'))).toBe(true)
+		// The button that still holds keyboard focus stays focusable and is only aria-disabled.
+		expect(retainedButtons.every(button => button.hasAttribute('disabled') || button.getAttribute('aria-disabled') === 'true')).toBe(true)
 		expect(dialog.querySelector('.operation-modal-steps')?.textContent).not.toContain('Approving REP')
 	} finally {
 		transactionSteps.value?.cancel()

@@ -1,5 +1,4 @@
 import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
-import { getErrorMessage } from '../../lib/errors.js'
 import { formatTimestampWithRelative } from '../../lib/formatters.js'
 export type ChainClock = {
 	currentBlockNumber: bigint | undefined
@@ -32,39 +31,36 @@ export function getReadBackendStatus(backend: ChainBackend): ReadBackendStatus {
 	)
 }
 
+/** Throws the read error itself when the RPC cannot be reached, so the caller formats it once. */
 export async function validateConfiguredReadBackend(backend: ChainBackend): Promise<ReadBackendValidationResult> {
-	try {
-		const readClient = backend.createReadClient()
-		const readChainId = await readClient.getChainId()
-		if (readChainId !== getExpectedReadChainId(backend)) {
-			return {
-				readBackendIssue: 'chain-mismatch',
-				readBackendMessage: buildReadBackendMismatchMessage(backend, readChainId),
-				validated: true,
-			}
-		}
-		const block = await readClient.getBlock()
-		const blockNumber = typeof block.number === 'bigint' ? block.number : undefined
-		const blockTimestamp = typeof block.timestamp === 'bigint' ? block.timestamp : undefined
-		backend.setReadBackendBlock?.({
-			number: blockNumber,
-			timestamp: blockTimestamp,
-		})
-		const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000))
-		if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
-			return {
-				readBackendIssue: 'stale',
-				readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
-				validated: true,
-			}
-		}
+	const readClient = backend.createReadClient()
+	const readChainId = await readClient.getChainId()
+	if (readChainId !== getExpectedReadChainId(backend)) {
 		return {
-			readBackendIssue: undefined,
-			readBackendMessage: undefined,
+			readBackendIssue: 'chain-mismatch',
+			readBackendMessage: buildReadBackendMismatchMessage(backend, readChainId),
 			validated: true,
 		}
-	} catch (error) {
-		throw new Error(getErrorMessage(error, 'Failed to validate the configured read RPC'))
+	}
+	const block = await readClient.getBlock()
+	const blockNumber = typeof block.number === 'bigint' ? block.number : undefined
+	const blockTimestamp = typeof block.timestamp === 'bigint' ? block.timestamp : undefined
+	backend.setReadBackendBlock?.({
+		number: blockNumber,
+		timestamp: blockTimestamp,
+	})
+	const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000))
+	if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
+		return {
+			readBackendIssue: 'stale',
+			readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
+			validated: true,
+		}
+	}
+	return {
+		readBackendIssue: undefined,
+		readBackendMessage: undefined,
+		validated: true,
 	}
 }
 

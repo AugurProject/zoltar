@@ -300,7 +300,8 @@ describe('ForkAuctionSection child pool recovery', () => {
 			const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit bid' })
 			const submitBidButton = documentQueries.getByRole('button', { name: 'Loading truth auction…' })
 			if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected loading truth auction action to be a button')
-			expect(submitBidButton.disabled).toBe(true)
+			// A pending transaction button stays focusable and is aria-disabled.
+			expect(submitBidButton.getAttribute('aria-disabled')).toBe('true')
 			expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 			expect(currentBidsHeading.closest('section')?.textContent).toContain('Loading truth auction bids…')
 			const loadingMessages = Array.from(document.body.querySelectorAll('.loading-value'))
@@ -353,7 +354,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		await rerenderSection({ forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }) })
 		await waitFor(() => {
 			const submitBidButton = documentQueries.getByRole('button', { name: 'Loading truth auction…' })
-			expect(submitBidButton.hasAttribute('disabled')).toBe(true)
+			expect(submitBidButton.getAttribute('aria-disabled')).toBe('true')
 		})
 
 		await act(async () => {

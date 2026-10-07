@@ -12,6 +12,20 @@
 	color-scheme: light;
 }
 
+/* docsShell.js resolves the reader's theme choice (or the system preference) into data-docs-theme; print keeps the light palette. */
+@media screen {
+	:root[data-docs-theme="dark"] {
+		--docs-shell-bg: #101413;
+		--docs-shell-paper: #151a19;
+		--docs-shell-ink: #eef2ef;
+		--docs-shell-muted: #aab6b1;
+		--docs-shell-line: #313b38;
+		--docs-shell-accent: #72cba9;
+		--docs-shell-accent-soft: #183a30;
+		color-scheme: dark;
+	}
+}
+
 html {
 	scroll-padding-top: calc(var(--docs-shell-header-height) + 1rem);
 }
@@ -39,12 +53,23 @@ body.docs-shell-page:has(.docs-search[open]) {
 	padding: 0.65rem 0.9rem;
 	border-radius: 0.45rem;
 	background: var(--docs-shell-ink);
-	color: #fff;
 	transform: translateY(-160%);
+}
+
+/* Outranks the shared link colour, which would put accent text on the dark skip-link fill. */
+.docs-skip-link,
+body.docs-shell-page a.docs-skip-link,
+body.docs-shell-page a.docs-skip-link:hover {
+	color: var(--docs-shell-paper);
 }
 
 .docs-skip-link:focus {
 	transform: translateY(0);
+}
+
+/* The skip link moves focus to main programmatically; the whole column needs no focus ring. */
+body.docs-shell-page .docs-layout > main:focus {
+	outline: none;
 }
 
 .docs-topbar {
@@ -78,7 +103,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 	height: 1.8rem;
 	border-radius: 0.48rem;
 	background: var(--docs-shell-accent);
-	color: #fff;
+	color: var(--docs-shell-paper);
 	font-family: Georgia, serif;
 	place-items: center;
 }
@@ -149,6 +174,30 @@ body.docs-shell-page:has(.docs-search[open]) {
 	line-height: 1;
 }
 
+.docs-theme-control {
+	display: flex;
+	gap: 0.45rem;
+	align-items: center;
+	color: var(--docs-shell-muted);
+	font-size: 0.9rem;
+	font-weight: 680;
+}
+
+.docs-theme-select {
+	min-height: 2.75rem;
+	padding: 0 0.55rem;
+	border: 1px solid var(--docs-shell-line);
+	border-radius: 0.55rem;
+	background: var(--docs-shell-bg);
+	color: var(--docs-shell-ink);
+	font: inherit;
+	cursor: pointer;
+}
+
+.docs-theme-select:hover {
+	border-color: var(--docs-shell-accent);
+}
+
 .docs-layout {
 	display: grid;
 	grid-template-columns: var(--docs-shell-left-width) minmax(0, 1fr) var(--docs-shell-right-width);
@@ -156,6 +205,27 @@ body.docs-shell-page:has(.docs-search[open]) {
 	max-width: 96rem;
 	margin: 0 auto;
 	padding: 0 1.5rem;
+}
+
+.docs-section-index {
+	margin-top: 0.75rem;
+}
+
+.docs-section-index summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+/* Scoped to the index so page-level paragraph and list margins do not separate a topic label from its list. */
+.docs-section-index .docs-section-index-topic {
+	margin: 0.75rem 0 0.25rem;
+	color: var(--docs-shell-muted);
+	font-size: 0.875rem;
+}
+
+.docs-section-index .docs-section-index-list {
+	margin: 0;
+	padding-left: 1.25rem;
 }
 
 .docs-shell-page.docs-landing-page .docs-layout {
@@ -293,6 +363,17 @@ body.docs-shell-page:has(.docs-search[open]) {
 	color: var(--docs-shell-accent);
 }
 
+.docs-outline-list a[aria-disabled="true"] {
+	flex-wrap: wrap;
+	cursor: not-allowed;
+}
+
+.docs-outline-filter-note {
+	flex-basis: 100%;
+	font-size: 0.75rem;
+	font-style: italic;
+}
+
 .docs-outline-list .docs-outline-h3 a {
 	padding-left: 1.15rem;
 	font-size: 0.8rem;
@@ -303,6 +384,8 @@ body.docs-shell-page:has(.docs-search[open]) {
 	min-width: 0;
 	margin: 0 auto !important;
 	padding: 2.4rem 0 6rem !important;
+	/* Contract identifiers such as UniformPriceDualCapBatchAuctionStorage would otherwise widen phone pages. */
+	overflow-wrap: break-word;
 }
 
 .docs-page-context {
@@ -527,10 +610,23 @@ body.docs-shell-page:has(.docs-search[open]) {
 		padding: 0 0.75rem;
 	}
 
-	.docs-brand span:last-child,
 	.docs-search-button span,
 	.docs-search-button kbd {
 		display: none;
+	}
+
+	/* Hidden visually only, so the home link keeps its accessible name. */
+	.docs-brand-name,
+	.docs-theme-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	.docs-search-button .docs-search-icon {

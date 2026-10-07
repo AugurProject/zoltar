@@ -81,13 +81,19 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('RPC unavailable')
 	})
 
-	test('names the selected universe when no position is found and links to switching it', async () => {
+	test('names the selected universe when no position is found, leads to Markets, and links to switching universe', async () => {
 		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: { scope: shareBalanceScope(market), yes: 0n, no: 0n, invalid: 0n, lp: 0n }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} universeId={0n} />)
 		cleanupRendered = rendered.cleanup
 		const empty = rendered.container.querySelector('.empty-state')
-		expect(empty?.textContent).toContain('No positions in Genesis')
-		expect(empty?.querySelector('a')?.getAttribute('href')).toBe('#/universe')
-		expect(empty?.querySelector('a')?.textContent).toBe('Switch universe')
+		// The genesis universe is named without its raw identifier.
+		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('No positions in Genesis')
+		// The list only covers markets this browser opened, and the empty state says so.
+		expect(empty?.textContent).toContain('only covers markets opened in this browser')
+		const links = Array.from(empty?.querySelectorAll('a') ?? [])
+		expect(links.map(link => [link.textContent, link.getAttribute('href'), link.classList.contains('primary')])).toEqual([
+			['Browse markets', '#/market', true],
+			['Switch universe', '#/universe', false],
+		])
 	})
 
 	test('renders separate balance groups for each exact SecurityPool', async () => {
