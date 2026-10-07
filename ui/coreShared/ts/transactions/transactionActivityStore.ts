@@ -31,7 +31,7 @@ export const transactionActivity = signal<TransactionActivityState>({ chainId: u
 
 // Hashes whose receipt this page is already waiting for, either through the initiating action or the activity watcher.
 const watchedHashes = new Set<Hash>()
-// Bumped when an initiating action stops watching a pending hash, so the activity watcher takes it over.
+// Bumped when a watcher stops, so the current environment can take over any pending hash.
 const releasedWatches = signal(0)
 
 function persist(state: TransactionActivityState) {
@@ -94,7 +94,7 @@ export function recordTransactionSettled(hash: Hash, outcome: TransactionActivit
 	update(entries => settleTransactionActivity(entries, hash, outcome, Date.now()))
 }
 
-/** The initiating action stopped tracking a broadcast transaction; the activity watcher keeps waiting for its receipt. */
+/** A watcher stopped tracking a broadcast transaction; the current activity watcher can resume it. */
 export function releaseTransactionActivityWatch(hash: Hash) {
 	if (!watchedHashes.delete(hash)) return
 	releasedWatches.value += 1
@@ -147,7 +147,7 @@ export function useTransactionActivityReceiptWatcher() {
 				})
 				.catch(() => {
 					// The network changed or the entry stopped being tracked; the next owner's list resumes its own pending entries.
-					watchedHashes.delete(current)
+					releaseTransactionActivityWatch(current)
 				})
 		}
 	}, [entries, released])

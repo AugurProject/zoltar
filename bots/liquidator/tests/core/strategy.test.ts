@@ -77,6 +77,33 @@ describe('dynamic-capacity liquidation strategy', () => {
 		expect(candidate?.resultingHealthBps).toBe(12_500n)
 	})
 
+	test('reduces partial liquidations to leave the target minimum commitment', () => {
+		const target = vault(targetAddress, 300n * PRICE_PRECISION, (255n * PRICE_PRECISION) / 10n)
+		const candidate = evaluateCandidate(pool(), target, vault(callerAddress, 0n, 0n), strategy())
+		expect(candidate?.requestedDebtAttoEth).toBe((245n * PRICE_PRECISION) / 10n)
+		expect(candidate?.underwritingLimitToMoveAttoEth).toBe((245n * PRICE_PRECISION) / 10n)
+		expect(candidate?.topUpAttoRep).toBe((35525n * PRICE_PRECISION) / 100n)
+	})
+
+	test('keeps full closes and partial liquidations that leave exactly the minimum commitment', () => {
+		for (const debt of [25n * PRICE_PRECISION, 26n * PRICE_PRECISION]) {
+			const candidate = evaluateCandidate(pool(), vault(targetAddress, 300n * PRICE_PRECISION, debt), vault(callerAddress, 0n, 0n), strategy())
+			expect(candidate?.requestedDebtAttoEth).toBe(25n * PRICE_PRECISION)
+		}
+	})
+
+	test('rejects dust-safe liquidations below the operator minimum without exceeding its maximum', () => {
+		const settings = { ...strategy(), maximumLiquidationDebtAttoEth: PRICE_PRECISION }
+		const target = vault(targetAddress, 26n * PRICE_PRECISION, (15n * PRICE_PRECISION) / 10n)
+		expect(evaluateCandidate(pool(), target, vault(callerAddress, 0n, 0n), settings)).toBeUndefined()
+	})
+
+	test('rejects partial liquidation when the target is already below its minimum commitment', () => {
+		const settings = { ...strategy(), maximumLiquidationDebtAttoEth: PRICE_PRECISION / 4n, minimumLiquidationDebtAttoEth: 1n, minimumRewardValueAttoEth: 0n }
+		const target = vault(targetAddress, PRICE_PRECISION, PRICE_PRECISION / 2n)
+		expect(evaluateCandidate(pool(), target, vault(callerAddress, 100n * PRICE_PRECISION, PRICE_PRECISION), settings)).toBeUndefined()
+	})
+
 	test('rejects a receiver whose exact bad debt absorbs the moved ownership gross open interest', () => {
 		const receiver = vault(callerAddress, 100n * PRICE_PRECISION, 0n)
 		receiver.badDebtAttoEth = 30n * PRICE_PRECISION

@@ -85,6 +85,27 @@ describe('transaction activity list', () => {
 		expect(entries[0]?.hash).toBe(hashOf(MAX_TRANSACTION_ACTIVITY_ENTRIES + 5))
 	})
 
+	test('merges a confirmed replacement over a stale local pending transaction and releases its scope', () => {
+		const original = { ...entry(1, 'pending'), scope: ['market:0x1'] }
+		const replacement = replaceTransactionActivityHash([original], hashOf(1), hashOf(2), 2)
+		const stored = settleTransactionActivity(replacement, hashOf(2), { status: 'confirmed' }, 3)
+		const merged = mergeStoredTransactionActivity([original], stored)
+		expect(merged).toEqual(stored)
+		expect(countPendingTransactionActivity(merged)).toBe(0)
+		expect(getPendingTransactionActivityScopes(merged)).toEqual([])
+		expect(mergeStoredTransactionActivity(merged, [original])).toBe(merged)
+	})
+
+	test('keeps only the latest pending replacement across multiple speed-ups and tabs', () => {
+		const original = { ...entry(1, 'pending'), scope: ['market:0x1'] }
+		const firstReplacement = replaceTransactionActivityHash([original], hashOf(1), hashOf(2), 2)
+		const latestReplacement = replaceTransactionActivityHash(firstReplacement, hashOf(2), hashOf(3), 3)
+		const merged = mergeStoredTransactionActivity([original, ...firstReplacement], latestReplacement)
+		expect(merged).toEqual(latestReplacement)
+		expect(countPendingTransactionActivity(merged)).toBe(1)
+		expect(getPendingTransactionActivityScopes(merged)).toEqual([original.scope])
+	})
+
 	test('expires pending transactions past the tracking window and lets the user dismiss a row', () => {
 		const stale = { ...entry(1, 'pending'), scope: ['market:0x1'], submittedAt: 0 }
 		const fresh = { ...entry(2, 'pending'), submittedAt: MAX_PENDING_TRANSACTION_AGE_MILLISECONDS }

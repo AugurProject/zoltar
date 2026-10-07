@@ -2,15 +2,16 @@
 
 import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, custom, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { TransactionActivityMenu } from '../../app/components/TransactionActivityMenu.js'
 import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { serializeTransactionActivity } from '../../transactions/transactionActivity.js'
-import { setTransactionActivityOwner, transactionActivity, useTransactionActivityReceiptWatcher } from '../../transactions/transactionActivityStore.js'
-import { MAINNET_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { hasPendingTransactionActivity, setTransactionActivityOwner, transactionActivity, useTransactionActivityReceiptWatcher } from '../../transactions/transactionActivityStore.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { createDeferred } from '../testUtils/deferred.js'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '../testUtils/fakeBackend.js'
-import { fireEvent, within } from '../testUtils/queries.js'
+import { fireEvent, waitFor, within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 installDomTestLifecycle({
@@ -120,6 +121,74 @@ test('shows an empty list when this account has no transactions', async () => {
 	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
 	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this account yet.')
 	await rendered.cleanup()
+})
+
+test('resumes receipt tracking after switching away and back before the old request finishes', async () => {
+	const oldReceipt = createDeferred<TransactionReceipt>()
+	let oldCalls = 0
+	let currentCalls = 0
+	const baseClient = createPublicClient({ chain: MAINNET_NETWORK_PROFILE.chain, transport: custom({ request: async () => undefined }) })
+	const readClient = { ...baseClient, getTransaction: async () => originalTransaction }
+	const originalBackend = {
+		...createFakeBackend(),
+		createReadClient: () => ({
+			...readClient,
+			waitForTransactionReceipt: async () => {
+				oldCalls += 1
+				return await oldReceipt.promise
+			},
+		}),
+	}
+	const currentBackend = {
+		...createFakeBackend(),
+		createReadClient: () => ({
+			...readClient,
+			waitForTransactionReceipt: async () => {
+				currentCalls += 1
+				return includedReceipt(pendingHash)
+			},
+		}),
+	}
+	const restoreEnvironment = installActiveEnvironmentForTesting(originalBackend)
+	setTransactionActivityOwner(account)
+	const storageKey = transactionActivity.value.storageKey
+	if (storageKey === undefined) throw new Error('Expected persisted transaction activity')
+	window.localStorage.setItem(storageKey, serializeTransactionActivity([{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Trade' }]))
+	setTransactionActivityOwner(undefined)
+	setTransactionActivityOwner(account)
+	const rendered = await renderIntoDocument(<WatchedMenu />)
+	try {
+		expect(oldCalls).toBe(1)
+		await act(() => {
+			installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+			setTransactionActivityOwner(account)
+		})
+		expect(transactionActivity.value.entries).toEqual([])
+		await act(() => {
+			installActiveEnvironmentForTesting(currentBackend)
+			setTransactionActivityOwner(account)
+		})
+		expect(currentCalls).toBe(0)
+		expect(hasPendingTransactionActivity(['market:0x1'])).toBe(true)
+		await act(async () => {
+			// A receipt from the old environment must not settle the restored entry.
+			oldReceipt.resolve({ ...includedReceipt(pendingHash), status: 'reverted' })
+			await oldReceipt.promise
+		})
+		await waitFor(async () => {
+			await act(async () => undefined)
+			expect(transactionActivity.value.entries[0]?.status).toBe('confirmed')
+		})
+		expect(currentCalls).toBe(1)
+		expect(transactionActivity.value.entries[0]?.status).toBe('confirmed')
+		expect(hasPendingTransactionActivity(['market:0x1'])).toBe(false)
+		expect(window.localStorage.getItem(storageKey)).toContain('"confirmed"')
+		expect(within(document.body).getByRole('button', { name: 'Activity' })).not.toBeNull()
+	} finally {
+		oldReceipt.resolve(includedReceipt(pendingHash))
+		await rendered.cleanup()
+		restoreEnvironment()
+	}
 })
 
 test('resumes receipt watching for a pending transaction restored after a reload', async () => {
