@@ -84,7 +84,7 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 	const healthy = vaultRisk({
 		poolHeldBackingAttoRep: String(200),
 		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
+		underwritingLimitAttoEth: (10n ** 18n).toString(),
 		repPerEth1e18: '100',
 		securityMultiplierBps: '15000',
 		badDebtAttoEth: String(0),
@@ -96,7 +96,7 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 	const warning = vaultRisk({
 		poolHeldBackingAttoRep: String(179),
 		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
+		underwritingLimitAttoEth: (10n ** 18n).toString(),
 		repPerEth1e18: '100',
 		securityMultiplierBps: '15000',
 		badDebtAttoEth: String(0),
@@ -106,12 +106,36 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 	const liquidatable = vaultRisk({
 		poolHeldBackingAttoRep: String(149),
 		disputeStakedAttoRep: String(0),
-		openInterestAttoEth: (10n ** 18n).toString(),
+		underwritingLimitAttoEth: (10n ** 18n).toString(),
 		repPerEth1e18: '100',
 		securityMultiplierBps: '15000',
 		badDebtAttoEth: String(0),
 	})
 	expect(liquidatable).toMatchObject({ protocolState: 'liquidatable', scannerSeverity: 'critical' })
+})
+
+test('assesses the full underwriting commitment even when current open interest is lower or zero', () => {
+	const input = {
+		poolHeldBackingAttoRep: String(1200),
+		disputeStakedAttoRep: String(0),
+		underwritingLimitAttoEth: String(10n * 10n ** 18n),
+		openInterestAttoEth: String(10n ** 18n),
+		repPerEth1e18: '100',
+		securityMultiplierBps: '15000',
+		badDebtAttoEth: String(0),
+	}
+	for (const openInterestAttoEth of [input.openInterestAttoEth, '0']) {
+		const state = { ...input, openInterestAttoEth }
+		expect(vaultRisk(state)).toMatchObject({
+			protocolState: 'liquidatable',
+			scannerSeverity: 'critical',
+			healthFactorBps: '8000',
+			calculation: { baseRequiredRepAttoRep: String(1000) },
+		})
+	}
+	const invalidPrice = { ...input, openInterestAttoEth: String(0), repPerEth1e18: '0' }
+	expect(vaultRisk(invalidPrice)).toMatchObject({ protocolState: 'unavailable', scannerSeverity: 'unavailable' })
+	expect(vaultRisk({ ...invalidPrice, underwritingLimitAttoEth: String(0) })).toMatchObject({ protocolState: 'healthy', scannerSeverity: 'healthy', healthFactorBps: undefined })
 })
 
 test('derives exact pool capacity without treating over-utilization as negative availability', () => {

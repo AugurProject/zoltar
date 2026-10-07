@@ -7,6 +7,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -135,6 +136,7 @@ function createFinalizedTruthAuctionDetails(currentChildPool: ListedSecurityPool
 			timeRemaining: 0n,
 			totalAttoRepPurchased: 5n * 10n ** 18n,
 			underfunded: false,
+			finalizationPreview: { attoEthRaised: 5n * 10n ** 18n, attoRepSold: 5n * 10n ** 18n },
 			underfundedThreshold: undefined,
 			underfundedWinningAttoEth: 0n,
 		},
@@ -325,6 +327,7 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 0n,
 							totalAttoRepPurchased: 0n,
 							underfunded: false,
+							finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 							underfundedThreshold: undefined,
 							underfundedWinningAttoEth: 0n,
 						},
@@ -1104,6 +1107,7 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalAttoRepPurchased: 0n,
 							underfunded: false,
+							finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 							underfundedThreshold: undefined,
 							underfundedWinningAttoEth: 0n,
 						},
@@ -1343,6 +1347,7 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalAttoRepPurchased: 0n,
 							underfunded: false,
+							finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 							underfundedThreshold: undefined,
 							underfundedWinningAttoEth: 0n,
 						},
@@ -1415,6 +1420,7 @@ describe('ForkAuctionSection', () => {
 					timeRemaining: 604_796n,
 					totalAttoRepPurchased: 0n,
 					underfunded: false,
+					finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 					underfundedThreshold: undefined,
 					underfundedWinningAttoEth: 0n,
 				},
@@ -1487,6 +1493,7 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalAttoRepPurchased: 0n,
 							underfunded: false,
+							finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 							underfundedThreshold: undefined,
 							underfundedWinningAttoEth: 0n,
 						},
@@ -1548,6 +1555,7 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalAttoRepPurchased: 0n,
 							underfunded: false,
+							finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 							underfundedThreshold: undefined,
 							underfundedWinningAttoEth: 0n,
 						},
@@ -1607,6 +1615,7 @@ describe('ForkAuctionSection', () => {
 					timeRemaining: 604_796n,
 					totalAttoRepPurchased: 0n,
 					underfunded: false,
+					finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 					underfundedThreshold: 0n,
 					underfundedWinningAttoEth: 0n,
 				},
@@ -1722,6 +1731,7 @@ describe('ForkAuctionSection', () => {
 							timeRemaining: 604_796n,
 							totalAttoRepPurchased: 0n,
 							underfunded: false,
+							finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 							underfundedThreshold: 0n,
 							underfundedWinningAttoEth: 0n,
 						},
@@ -1998,6 +2008,7 @@ describe('ForkAuctionSection', () => {
 			timeRemaining: currentTimestamp >= 604_801n ? 0n : 604_801n - currentTimestamp,
 			totalAttoRepPurchased: 4n * 10n ** 18n,
 			underfunded: false,
+			finalizationPreview: { attoEthRaised: 5n * 10n ** 18n, attoRepSold: 4n * 10n ** 18n },
 			underfundedThreshold: undefined,
 			underfundedWinningAttoEth: 0n,
 		}
@@ -2043,6 +2054,46 @@ describe('ForkAuctionSection', () => {
 			truthAuctionReadClient,
 		})
 	}
+
+	test('keeps the ETH and REP summary constant when loading more price levels', async () => {
+		const unit = 10n ** 18n
+		const props = createLiveClearingAuctionProps({})
+		const auction = props.forkAuctionDetails?.truthAuction
+		if (auction === undefined || props.forkAuctionDetails === undefined) throw new Error('Expected live auction details')
+		const levels = Array.from({ length: 26 }, (_, index) => ({ active: true, currentTotalBidAttoEth: unit, price: getTruthAuctionPriceAtTick(BigInt(26 - index)), submissionCount: 0n, tick: BigInt(26 - index) }))
+		const truthAuctionReadClient = createMockReadClient(async request => {
+			if (request.functionName === 'activeTickCount') return 26n
+			if (request.functionName === 'getActiveTickPage') {
+				const offset = request.args?.[0]
+				const count = request.args?.[1]
+				if (typeof offset !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected pagination offset and count')
+				return levels.slice(Number(offset), Number(offset + count))
+			}
+			if (request.functionName === 'getBidderBidCount' || request.functionName === 'getBidCountAtTick') return 0n
+			if (request.functionName === 'getBidderBidPage' || request.functionName === 'getBidPageAtTick') return []
+			throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+		})
+		const rendered = await renderIntoDocument(
+			h(ForkAuctionSection, {
+				...props,
+				forkAuctionDetails: {
+					...props.forkAuctionDetails,
+					truthAuction: { ...auction, attoEthRaiseCap: 26n * unit, bidAtClearingTickAttoEth: 0n, clearingTick: 0n, clearingPrice: unit, finalizationPreview: { attoEthRaised: 26n * unit, attoRepSold: 26n * unit } },
+				},
+				truthAuctionReadClient,
+			}),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const assertSummary = () => {
+			const totals = Array.from(document.body.querySelectorAll('.truth-auction-progress-copy strong .currency-value'), node => node.getAttribute('title'))
+			expect(totals).toEqual([`${formatCurrencyBalance(26n * unit)} ETH`, `${formatCurrencyBalance(26n * unit)} ETH`, `${formatCurrencyBalance(26n * unit)} REP`, `${formatCurrencyBalance(100n * unit)} REP`])
+		}
+		await waitFor(() => expect(document.body.querySelectorAll('.truth-auction-ladder-row')).toHaveLength(25))
+		assertSummary()
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Show more price levels' })))
+		await waitFor(() => expect(document.body.querySelectorAll('.truth-auction-ladder-row')).toHaveLength(26))
+		assertSummary()
+	})
 
 	test('warns that a bid below the live clearing price loses and offers the lowest winning price', async () => {
 		const formChanges: Array<Partial<ForkAuctionFormState>> = []

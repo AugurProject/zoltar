@@ -17,5 +17,6 @@ server.on('listening', () => {
 	const address = server.address()
 	if (address === null) throw new Error('Server address unavailable after listen')
 	const resolvedPort = typeof address === 'string' ? port : address.port
+	process.send?.({ type: 'dev-server-ready', port: resolvedPort })
 	console.log(`Web Server listening at http://localhost:${resolvedPort} ...`)
 })

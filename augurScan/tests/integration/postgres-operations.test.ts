@@ -244,6 +244,30 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	expect(healthy).toMatchObject({ data: { protocol_state: 'healthy', scanner_severity: 'healthy', risk: { healthFactorBps: '13333' } } })
 
 	await database.sql`
+		UPDATE entity_state_snapshots SET read_result = read_result ||
+			jsonb_build_object('underwritingLimitAttoEth', ${String(10n * 10n ** 18n)}::text,
+				'openInterestAttoEth', ${String(10n ** 18n)}::text, 'poolHeldBackingAttoRep', ${String(1200)}::text)
+		WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+	`
+	for (const openInterestAttoEth of ['1000000000000000000', '0']) {
+		await database.sql`
+			UPDATE entity_state_snapshots SET read_result = jsonb_set(read_result, '{openInterestAttoEth}', to_jsonb(${openInterestAttoEth}::text), true)
+			WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
+		`
+		const committedResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
+		if (committedResponse === undefined) throw new Error('committed vault risk endpoint did not return a response')
+		expect(committedResponse.status).toBe(200)
+		expect(await committedResponse.json()).toMatchObject({
+			data: {
+				protocol_state: 'liquidatable',
+				scanner_severity: 'critical',
+				read_result: { underwritingLimitAttoEth: String(10n * 10n ** 18n), openInterestAttoEth },
+				risk: { healthFactorBps: '8000' },
+			},
+		})
+	}
+
+	await database.sql`
 				UPDATE entity_state_snapshots SET read_result =
 					CASE entity_type
 						WHEN 'pool' THEN jsonb_set(read_result, '{totalBadDebtAttoEth}', '"7"'::jsonb, true)

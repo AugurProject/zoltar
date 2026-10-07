@@ -126,6 +126,7 @@ export function createFinalizedTruthAuction(overrides: Partial<TruthAuctionMetri
 		timeRemaining: 0n,
 		totalAttoRepPurchased: 0n,
 		underfunded: false,
+		finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 		underfundedThreshold: undefined,
 		underfundedWinningAttoEth: 0n,
 		...overrides,

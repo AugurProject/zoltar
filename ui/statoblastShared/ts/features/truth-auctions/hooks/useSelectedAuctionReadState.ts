@@ -1,4 +1,5 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadSecurityPoolChildren } from '../../../protocol/securityPools.js'
@@ -53,6 +54,9 @@ export function useSelectedAuctionReadState({
 	const [selectedAuctionChildPoolRecoveryErrorKey, setSelectedAuctionChildPoolRecoveryErrorKey] = useState<string | undefined>(undefined)
 	const [selectedAuctionChildPoolRecoveryRetryNonce, setSelectedAuctionChildPoolRecoveryRetryNonce] = useState(0)
 	const lastHandledSelectedAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
+	const lastHandledForkAuctionResultHashRef = useRef(forkAuctionResultHash)
+	const [blockRefreshNonce, setBlockRefreshNonce] = useState(0)
+	const lastHandledBlockRefreshNonceRef = useRef(blockRefreshNonce)
 	const selectedAuctionRequestGenerationRef = useRef(0)
 	const [selectedOutcomeMigrationSeedStatusEntry, setSelectedOutcomeMigrationSeedStatusEntry] = useState<{ key: string; status: ForkOutcomeMigrationSeedStatus } | undefined>(undefined)
 	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
@@ -67,6 +71,7 @@ export function useSelectedAuctionReadState({
 		recoveredSelectedAuctionChildPool !== undefined && securityPoolAddress !== undefined && sameAddress(recoveredSelectedAuctionChildPool.parent, securityPoolAddress) && recoveredSelectedAuctionChildPool.questionOutcome === selectedOutcome ? recoveredSelectedAuctionChildPool : undefined
 	const selectedAuctionChildPool = selectedOutcomeMigrationChildPool ?? currentRecoveredSelectedAuctionChildPool ?? currentSelectedOutcomePool
 	const selectedAuctionPoolAddress = selectedAuctionChildPool?.securityPoolAddress
+	useBlockRefresh(() => setBlockRefreshNonce(currentNonce => currentNonce + 1), (selectedStage === 'auction' || selectedStage === 'settlement') && selectedAuctionPoolAddress !== undefined)
 	const scopedSelectedAuctionDetails = selectedAuctionPoolAddress !== undefined && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress) ? selectedAuctionDetails : undefined
 	const scopedSelectedAuctionError = selectedAuctionPoolAddress !== undefined && sameAddress(selectedAuctionErrorAddress, selectedAuctionPoolAddress) ? selectedAuctionError : undefined
 	const currentSelectedAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
@@ -147,13 +152,16 @@ export function useSelectedAuctionReadState({
 			setRetryingSelectedAuctionDetails(false)
 			return
 		}
-		const shouldReloadSelectedAuction = shouldReloadSelectedPoolDetails({
-			currentDetailsAvailable: currentSelectedAuctionDetails !== undefined,
-			lastHandledRefreshNonce: lastHandledSelectedAuctionRefreshNonceRef.current,
-			loadedDetailsAddress: selectedAuctionDetails?.securityPoolAddress,
-			refreshNonce: selectedPoolRefreshNonce,
-			selectedPoolAddress: selectedAuctionPoolAddress,
-		})
+		const shouldReloadSelectedAuction =
+			lastHandledBlockRefreshNonceRef.current !== blockRefreshNonce ||
+			lastHandledForkAuctionResultHashRef.current !== forkAuctionResultHash ||
+			shouldReloadSelectedPoolDetails({
+				currentDetailsAvailable: currentSelectedAuctionDetails !== undefined,
+				lastHandledRefreshNonce: lastHandledSelectedAuctionRefreshNonceRef.current,
+				loadedDetailsAddress: selectedAuctionDetails?.securityPoolAddress,
+				refreshNonce: selectedPoolRefreshNonce,
+				selectedPoolAddress: selectedAuctionPoolAddress,
+			})
 		if (!shouldReloadSelectedAuction && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress) && currentSelectedAuctionDetails !== undefined) {
 			return
 		}
@@ -164,6 +172,8 @@ export function useSelectedAuctionReadState({
 		setSelectedAuctionError(undefined)
 		setSelectedAuctionErrorAddress(undefined)
 		lastHandledSelectedAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
+		lastHandledForkAuctionResultHashRef.current = forkAuctionResultHash
+		lastHandledBlockRefreshNonceRef.current = blockRefreshNonce
 		void withReadTimeout(loadForkAuctionDetails(client, selectedAuctionPoolAddress))
 			.then(details => {
 				if (cancelled || requestGeneration !== selectedAuctionRequestGenerationRef.current) return
@@ -181,7 +191,7 @@ export function useSelectedAuctionReadState({
 		return () => {
 			cancelled = true
 		}
-	}, [currentSelectedAuctionDetails, fullTruthAuctionReadClient, scopedSelectedAuctionDetails?.systemState, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
+	}, [blockRefreshNonce, currentSelectedAuctionDetails, forkAuctionResultHash, fullTruthAuctionReadClient, scopedSelectedAuctionDetails?.systemState, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
 
 	useEffect(() => {
 		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined || selectedOutcomeMigrationSeedStatusKey === undefined) {

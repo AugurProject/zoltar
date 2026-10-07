@@ -4,6 +4,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionActionResult, TruthAuctionBidView } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useTruthAuctionBookData } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js'
@@ -102,6 +103,7 @@ function createBookProps(truthAuctionReadClient: Pick<ReadClient, 'readContract'
 		accountAddress: walletAddress,
 		enteredBidTick: undefined,
 		forkAuctionResultHash: undefined,
+		selectedPoolRefreshNonce: 0,
 		selectedStage: 'auction',
 		shouldShowTruthAuctionVisualization: true,
 		truthAuctionAddress,
@@ -208,6 +210,62 @@ describe('truth auction hooks', () => {
 		expect(hook.state().truthAuctionBookData.viewerBids).toEqual([])
 		expect(hook.state().aggregatedAuctionBids).toEqual([])
 		nextTickCount.resolve(0n)
+	})
+
+	test.each(['block', 'manual', 'invalidate'] as const)('refreshes levels, public bids, and wallet settlement status on %s without a clearing-tick change', async refresh => {
+		let refreshed = false
+		const nextRead = createDeferred<void>()
+		const waitForRefresh = async () => {
+			if (refreshed) await nextRead.promise
+			return refreshed
+		}
+		const bid = () => ({ ...createBid({ bidIndex: 0n, tick: 4n }), claimed: refreshed, refunded: refreshed })
+		const readClient = createBookReadClient({
+			activeTickCount: async () => {
+				await waitForRefresh()
+				return 1n
+			},
+			getActiveTickPage: () => [{ active: true, currentTotalBidAttoEth: refreshed ? 3n : 2n, price: 3n, submissionCount: 1n, tick: 4n }],
+			getBidderBidCount: async () => {
+				await waitForRefresh()
+				return 1n
+			},
+			getBidderBidPage: () => [bid()],
+			getBidCountAtTick: async () => {
+				await waitForRefresh()
+				return 1n
+			},
+			getBidPageAtTick: () => [bid()],
+		})
+		const initialProps = { ...createBookProps(readClient, { truthAuctionClearingTick: 4n }), selectedPoolRefreshNonce: 0 }
+		const hook = await renderHook(props => useTruthAuctionBookData(props), initialProps)
+		await waitFor(() => {
+			expect(hook.state().hasLoadedTruthAuctionBook).toBe(true)
+			expect(hook.state().hasLoadedViewerTruthAuctionBids).toBe(true)
+			expect(hook.state().hasLoadedAggregatedAuctionBids).toBe(true)
+		})
+		refreshed = true
+		await act(() => {
+			if (refresh === 'manual') hook.renderProps({ selectedPoolRefreshNonce: 1 })
+			else if (refresh === 'invalidate') appBlockWatcher.invalidate()
+			else {
+				const blockNumber = (appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n
+				appBlockWatcher.reportBlock(blockNumber)
+				appBlockWatcher.reportBlock(blockNumber + 1n)
+			}
+		})
+		expect(hook.state().truthAuctionBookData.tickSummaries[0]?.currentTotalBidAttoEth).toBe(2n)
+		expect(hook.state().truthAuctionBookData.viewerBids[0]?.claimed).toBe(false)
+		expect(hook.state().aggregatedAuctionBids[0]?.claimed).toBe(false)
+		expect(hook.state().selectedBookTick).toBe(4n)
+		await act(() => nextRead.resolve())
+		await waitFor(() => {
+			expect(hook.state().truthAuctionBookData.tickSummaries[0]?.currentTotalBidAttoEth).toBe(3n)
+			expect(hook.state().truthAuctionBookData.viewerBids[0]?.claimed).toBe(true)
+			expect(hook.state().truthAuctionBookData.viewerBids[0]?.refunded).toBe(true)
+			expect(hook.state().aggregatedAuctionBids[0]?.claimed).toBe(true)
+			expect(hook.state().aggregatedAuctionBids[0]?.refunded).toBe(true)
+		})
 	})
 
 	test('isolates wallet bid errors from public auction levels', async () => {

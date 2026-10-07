@@ -137,6 +137,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		accountAddress: context.accountState.address,
 		enteredBidTick,
 		forkAuctionResultHash: context.forkAuctionResult?.hash,
+		selectedPoolRefreshNonce: context.selectedPoolRefreshNonce,
 		selectedStage: context.selectedStage,
 		shouldShowTruthAuctionVisualization,
 		truthAuctionAddress: context.auctionTruthAuctionAddress,
@@ -174,7 +175,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	})()
 	const hasStartedSelectedTruthAuctionTimeline = hasStartedTruthAuction || truthAuctionStatus !== undefined || context.selectedStage === 'auction' || context.selectedStage === 'settlement' || context.currentWorkflowStage === 'auction' || context.currentWorkflowStage === 'settlement'
 	const activeTickSummaries = truthAuctionBookData.tickSummaries
-	const truthAuctionOverviewProgress = getTruthAuctionOverviewProgress(truthAuctionStatus, activeTickSummaries)
+	const truthAuctionOverviewProgress = getTruthAuctionOverviewProgress(truthAuctionStatus)
 	const displayedEthRaisedAttoEth = truthAuctionOverviewProgress?.attoEthRaised ?? truthAuctionStatus?.attoEthRaised ?? 0n
 	const displayedRepSoldAttoRep = truthAuctionOverviewProgress?.attoRepSold ?? truthAuctionStatus?.totalAttoRepPurchased ?? 0n
 	const ethRaisedProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedEthRaisedAttoEth, truthAuctionStatus.attoEthRaiseCap)

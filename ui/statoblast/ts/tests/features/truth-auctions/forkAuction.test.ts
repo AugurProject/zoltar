@@ -53,6 +53,7 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		timeRemaining: 10n * 10n ** 18n,
 		totalAttoRepPurchased: 0n,
 		underfunded: false,
+		finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 		underfundedThreshold: undefined,
 		underfundedWinningAttoEth: 0n,
 		...overrides,
@@ -405,102 +406,55 @@ void describe('fork auction helpers', () => {
 		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])
 	})
 
-	void test('derives provisional truth auction progress from loaded depth', () => {
+	void test('reads exact provisional totals without requiring loaded price levels', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
-				clearingTick: 10n,
-				bidAtClearingTickAttoEth: 4n * ethUnit,
-				attoEthRaiseCap: 10n * ethUnit,
-				hitCap: true,
+				attoEthRaiseCap: 30n * ethUnit,
+				finalizationPreview: { attoEthRaised: 26n * ethUnit, attoRepSold: 26n * ethUnit + 1n },
 				maxAttoRepBeingSold: 100n * ethUnit,
 			}),
-			[
-				createTickSummary({ active: true, currentTotalBidAttoEth: 8n * ethUnit, price: 2n * TRUTH_AUCTION_PRICE_PRECISION, tick: 12n }),
-				createTickSummary({ active: true, currentTotalBidAttoEth: 6n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 10n }),
-				createTickSummary({ active: true, currentTotalBidAttoEth: 5n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 8n }),
-			],
 		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 10n * ethUnit,
-			attoRepSold: 10n * ethUnit,
-		})
+		expect(progress).toEqual({ attoEthRaised: 26n * ethUnit, attoRepSold: 26n * ethUnit + 1n })
 	})
 
-	void test('does not count below-reserve bids as underfunded sales', () => {
-		const ethUnit = 10n ** 18n
+	void test('preserves zero provisional totals when submitted bids do not qualify for a winning prefix', () => {
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				attoEthRaiseCap: 100n * ethUnit,
-				hitCap: false,
-				maxAttoRepBeingSold: 4n * ethUnit,
+				accumulatedBidAttoEth: 11n * ONE_UNIT,
+				finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
+				maxAttoRepBeingSold: 10n * ONE_UNIT,
 			}),
-			[createTickSummary({ active: true, currentTotalBidAttoEth: 16n * ethUnit, price: 5n * 10n ** 18n, tick: 12n })],
 		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 0n,
-			attoRepSold: 0n,
-		})
-	})
-
-	void test('derives zero provisional progress when no underfunded winning prefix exists', () => {
-		const ethUnit = 10n ** 18n
-		const progress = getTruthAuctionOverviewProgress(
-			createTruthAuction({
-				attoEthRaiseCap: 100n * ethUnit,
-				hitCap: false,
-				maxAttoRepBeingSold: 10n * ethUnit,
-			}),
-			[createTickSummary({ active: true, currentTotalBidAttoEth: 11n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 0n })],
-		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 0n,
-			attoRepSold: 0n,
-		})
+		expect(progress).toEqual({ attoEthRaised: 0n, attoRepSold: 0n })
 	})
 
 	void test('uses retained winning ETH instead of submitted ETH for finalized underfunded progress', () => {
-		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				attoEthRaised: 10n * ethUnit,
+				attoEthRaised: 10n * ONE_UNIT,
 				finalized: true,
 				hitCap: false,
-				totalAttoRepPurchased: 4n * ethUnit,
+				totalAttoRepPurchased: 4n * ONE_UNIT,
 				underfunded: true,
-				underfundedWinningAttoEth: 4n * ethUnit,
+				underfundedWinningAttoEth: 4n * ONE_UNIT,
 			}),
-			[],
 		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 4n * ethUnit,
-			attoRepSold: 4n * ethUnit,
-		})
+		expect(progress).toEqual({ attoEthRaised: 4n * ONE_UNIT, attoRepSold: 4n * ONE_UNIT })
 	})
 
 	void test('shows zero finalized underfunded progress when no winning prefix exists even if bids were submitted', () => {
-		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
-				attoEthRaised: 10n * ethUnit,
+				attoEthRaised: 10n * ONE_UNIT,
 				finalized: true,
 				hitCap: false,
 				totalAttoRepPurchased: 0n,
 				underfunded: true,
 				underfundedWinningAttoEth: 0n,
 			}),
-			[],
 		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 0n,
-			attoRepSold: 0n,
-		})
+		expect(progress).toEqual({ attoEthRaised: 0n, attoRepSold: 0n })
 	})
 
 	void test('offers early refunds only below the clearing tick', () => {
@@ -653,6 +607,7 @@ void describe('fork auction helpers', () => {
 		const underfundedAuction = createTruthAuction({
 			finalized: true,
 			underfunded: true,
+			finalizationPreview: { attoEthRaised: 4n * ONE_UNIT, attoRepSold: 8n * ONE_UNIT },
 			underfundedThreshold: undefined,
 			underfundedWinningAttoEth: ONE_UNIT,
 		})

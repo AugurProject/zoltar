@@ -367,7 +367,7 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 				scanner_severity: 'critical',
 				scanner_reason: 'Vault has recorded bad debt',
 			}
-		if (BigInt(String(state['openInterestAttoEth'] ?? '0')) > 0n && price['protocolValid'] !== true)
+		if (BigInt(String(state['underwritingLimitAttoEth'] ?? '0')) > 0n && price['protocolValid'] !== true)
 			return {
 				...row,
 				read_result: state,
@@ -375,12 +375,12 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 				snapshot_evidence: snapshotEvidence,
 				protocol_state: 'unavailable',
 				scanner_severity: 'unavailable',
-				scanner_reason: 'Vault health is unavailable because its nonzero open interest depends on an invalid accounting price',
+				scanner_reason: 'Vault health is unavailable because its nonzero underwriting commitment depends on an invalid accounting price',
 			}
 		const risk = vaultRisk({
 			poolHeldBackingAttoRep: String(state['poolHeldBackingAttoRep']),
 			disputeStakedAttoRep: String(state['disputeStakedAttoRep']),
-			openInterestAttoEth: String(state['openInterestAttoEth']),
+			underwritingLimitAttoEth: String(state['underwritingLimitAttoEth']),
 			repPerEth1e18: String(price['repPerEth1e18'] ?? '0'),
 			securityMultiplierBps: String(state['securityMultiplierBps']),
 			badDebtAttoEth: String(state['badDebtAttoEth']),

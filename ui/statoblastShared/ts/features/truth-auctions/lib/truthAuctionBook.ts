@@ -62,12 +62,6 @@ function isBelowTruthAuctionReserve(price: bigint, auction: TruthAuctionMetrics)
 	return reserve !== undefined && price < reserve
 }
 
-function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], auction: TruthAuctionMetrics) {
-	const reserve = getTruthAuctionReservePrice(auction)
-	if (reserve === undefined) return 0n
-	return tickSummaries.reduce((total, tick) => total + (tick.price >= reserve ? tick.currentTotalBidAttoEth : 0n), 0n)
-}
-
 function assertValidUnderfundedTruthAuctionMetrics(truthAuction: TruthAuctionMetrics) {
 	if (truthAuction.finalized && truthAuction.underfunded && truthAuction.underfundedWinningAttoEth > 0n) {
 		if (truthAuction.underfundedThreshold === undefined) {
@@ -321,56 +315,12 @@ export function buildTruthAuctionDepthPoints({ enteredBidTick, selectedBookTick,
 		})
 }
 
-export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetrics | undefined, tickSummaries: TruthAuctionTickSummary[]) {
+export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetrics | undefined) {
 	if (truthAuction === undefined) return undefined
-	if (truthAuction.finalized) {
-		return {
-			attoEthRaised: truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised,
-			attoRepSold: truthAuction.totalAttoRepPurchased,
-		}
-	}
-
-	const activeTickSummaries = sortTruthAuctionTickSummariesDescending(tickSummaries).filter(tickSummary => tickSummary.currentTotalBidAttoEth > 0n)
-	if (activeTickSummaries.length === 0) {
-		return {
-			attoEthRaised: truthAuction.attoEthRaised,
-			attoRepSold: truthAuction.totalAttoRepPurchased,
-		}
-	}
-
-	let provisionalEthRaisedAttoEth = 0n
-	let provisionalRepSoldAttoRep = 0n
-
-	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
-		const underfundedWinningAttoEth = findUnderfundedWinningAttoEth(activeTickSummaries, truthAuction)
-		if (underfundedWinningAttoEth > 0n) {
-			provisionalEthRaisedAttoEth = underfundedWinningAttoEth
-			provisionalRepSoldAttoRep = truthAuction.maxAttoRepBeingSold
-		}
-	} else {
-		let remainingCap = truthAuction.attoEthRaiseCap
-		for (const tickSummary of activeTickSummaries) {
-			if (remainingCap <= 0n) break
-
-			let acceptedAttoEth = 0n
-			if (tickSummary.tick > truthAuction.clearingTick) acceptedAttoEth = tickSummary.currentTotalBidAttoEth
-			else if (tickSummary.tick === truthAuction.clearingTick) acceptedAttoEth = truthAuction.bidAtClearingTickAttoEth < tickSummary.currentTotalBidAttoEth ? truthAuction.bidAtClearingTickAttoEth : tickSummary.currentTotalBidAttoEth
-
-			if (acceptedAttoEth <= 0n) continue
-			if (acceptedAttoEth > remainingCap) acceptedAttoEth = remainingCap
-
-			provisionalEthRaisedAttoEth += acceptedAttoEth
-			provisionalRepSoldAttoRep += estimateRepPurchased(acceptedAttoEth, truthAuction.clearingPrice)
-			remainingCap -= acceptedAttoEth
-		}
-	}
-
-	const attoEthRaised = provisionalEthRaisedAttoEth > truthAuction.attoEthRaiseCap ? truthAuction.attoEthRaiseCap : provisionalEthRaisedAttoEth
-	const attoRepSold = provisionalRepSoldAttoRep > truthAuction.maxAttoRepBeingSold ? truthAuction.maxAttoRepBeingSold : provisionalRepSoldAttoRep
-
+	if (!truthAuction.finalized) return truthAuction.finalizationPreview
 	return {
-		attoEthRaised,
-		attoRepSold,
+		attoEthRaised: truthAuction.underfunded ? truthAuction.underfundedWinningAttoEth : truthAuction.attoEthRaised,
+		attoRepSold: truthAuction.totalAttoRepPurchased,
 	}
 }
 

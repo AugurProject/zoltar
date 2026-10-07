@@ -148,7 +148,7 @@ export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 	})
 	const selectedAuctionContext = (() => {
 		if (auctionDetailsOverride !== undefined) return auctionDetailsOverride
-		if (currentRootAuctionDetails !== undefined) return currentRootAuctionDetails
+		if (currentRootAuctionDetails !== undefined && (currentSelectedAuctionDetails === undefined || currentRootAuctionDetails.currentTime > currentSelectedAuctionDetails.currentTime)) return currentRootAuctionDetails
 		if (currentSelectedAuctionDetails !== undefined) return currentSelectedAuctionDetails
 
 		return undefined
