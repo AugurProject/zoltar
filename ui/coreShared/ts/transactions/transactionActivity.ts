@@ -66,16 +66,20 @@ export function settleTransactionActivity(entries: readonly TransactionActivityE
 /**
  * Adds entries another tab stored for the same account, newest first. A settled copy of a shared hash wins over a
  * pending one, so an outcome or a "stop tracking" recorded in either tab is never undone by the other.
+ * Replacement history from either tab removes superseded hashes from both lists.
  */
 export function mergeStoredTransactionActivity(entries: readonly TransactionActivityEntry[], stored: readonly TransactionActivityEntry[]) {
+	let changed = false
 	const replacedHashes = new Set([...entries, ...stored].flatMap(entry => entry.replacedHashes ?? []))
-	const retained = entries.filter(entry => !replacedHashes.has(entry.hash))
-	let changed = retained.length !== entries.length
-	const merged = retained.map(entry => {
+	const merged = entries.flatMap(entry => {
+		if (replacedHashes.has(entry.hash)) {
+			changed = true
+			return []
+		}
 		const other = stored.find(candidate => candidate.hash === entry.hash)
-		if (other === undefined || entry.status !== 'pending' || other.status === 'pending') return entry
+		if (other === undefined || entry.status !== 'pending' || other.status === 'pending') return [entry]
 		changed = true
-		return other
+		return [other]
 	})
 	const missing = stored.filter(candidate => !entries.some(entry => entry.hash === candidate.hash) && !replacedHashes.has(candidate.hash))
 	if (!changed && missing.length === 0) return entries

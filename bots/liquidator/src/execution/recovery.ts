@@ -98,12 +98,12 @@ export async function recoverPendingTransactions(
 			throw new Error(`Transaction ${intent.hash}: ${intent.reconciliationReason}`)
 		}
 		const nonce = await settledQuorumValue(
-			`pending signer nonce for ${intent.hash}`,
+			`canonical signer nonce for ${intent.hash}`,
 			clients.map(async ({ client, endpoint }) => ({
 				endpoint,
 				value: await client.getTransactionCount({
 					address: intent.sender,
-					blockTag: 'pending',
+					blockTag: 'latest',
 				}),
 			})),
 			settings.connectivity.rpcQuorum,

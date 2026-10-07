@@ -232,6 +232,18 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	expect(invalidPrice.data['scanner_reason']).toContain('invalid accounting price')
 
 	await database.sql`
+		UPDATE entity_state_snapshots SET read_result = CASE entity_type
+			WHEN 'pool' THEN jsonb_set(read_result, '{price,protocolValid}', 'true'::jsonb, true)
+			ELSE read_result - 'targetHealthFactorBps'
+		END WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
+	`
+	const healthyResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
+	if (healthyResponse === undefined) throw new Error('healthy vault risk endpoint did not return a response')
+	expect(healthyResponse.status).toBe(200)
+	const healthy = await healthyResponse.json()
+	expect(healthy).toMatchObject({ data: { protocol_state: 'healthy', scanner_severity: 'healthy', risk: { healthFactorBps: '13333' } } })
+
+	await database.sql`
 				UPDATE entity_state_snapshots SET read_result =
 					CASE entity_type
 						WHEN 'pool' THEN jsonb_set(read_result, '{totalBadDebtAttoEth}', '"7"'::jsonb, true)

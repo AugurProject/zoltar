@@ -20,6 +20,8 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function computeTimeSinceStartFromAttritionCostAttoRep(uint256 attritionCostAttoRep) public view returns (uint256) {
 		if (attritionCostAttoRep <= startBondAttoRep) return 0;
 		if (attritionCostAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;
+		// A zero-resolution logarithm leaves the forward curve flat until its terminal step.
+		if (lnRatioScaled == 0) return ESCALATION_TIME_LENGTH;
 
 		uint256 lnCostRatioScaled = proofVerifier.computeLnRatioScaled(startBondAttoRep, attritionCostAttoRep);
 		return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled;

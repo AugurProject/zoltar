@@ -1,5 +1,7 @@
+import { abiForKind } from './abi-catalog.ts'
 import { sampleClaimPositions } from './claim-snapshots.ts'
-import { type Abi, type AbiValue, type Address, getAddress, parseAbi } from './ethereum.ts'
+import { type Abi, type AbiValue, type Address, getAddress } from './ethereum.ts'
+import type { SystemContractKind } from './system-interfaces.ts'
 
 export type StateSnapshotTarget = {
 	readonly entityType: 'auction' | 'escalation' | 'pool' | 'vault'
@@ -19,57 +21,16 @@ export type EntityStateSnapshot = {
 	readonly readFailureReason?: string
 }
 
-const poolAbi = parseAbi([
-	'function settlementCollateralAttoEth() view returns (uint256)',
-	'function totalUnderwritingLimitAttoEth() view returns (uint256)',
-	'function totalRepBackingUnits() view returns (uint256)',
-	'function totalClaimableVaultFeesAttoEth() view returns (uint256)',
-	'function totalAccruedFeesAttoEth() view returns (uint256)',
-	'function getTotalPoolHeldAttoRep() view returns (uint256)',
-	'function getCurrentMintingCapacityAttoEth() view returns (uint256)',
-	'function totalBadDebtAttoEth() view returns (uint256)',
-	'function systemState() view returns (uint8)',
-	'function awaitingForkContinuation() view returns (bool)',
-	'function isEscalationResolved() view returns (bool)',
-	'function shareTokenSupplyAttoShares() view returns (uint256)',
-	'function currentRetentionRate() view returns (uint256)',
-	'function statoblastSecurityMultiplierBps() view returns (uint256)',
-	'function securityVaults(address vault) view returns (uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 claimableFeesAttoEth, uint256 feeIndex)',
-	'function vaultTargetHealthFactorBps(address vault) view returns (uint256)',
-	'function getVaultOpenInterestAttoEth(address vault) view returns (uint256)',
-	'function vaultBadDebtAttoEth(address vault) view returns (uint256)',
-	'function backingUnitsToAttoRep(uint256 repBackingUnits) view returns (uint256)',
-])
+const snapshotAbi = (kind: SystemContractKind): Abi => {
+	const abi = abiForKind(kind)
+	if (abi === undefined) throw new Error(`Missing snapshot ABI ${kind}`)
+	return abi
+}
 
-const coordinatorAbi = parseAbi(['function lastPrice() view returns (uint256)', 'function lastSettlementTimestamp() view returns (uint256)', 'function isPriceValid() view returns (bool)'])
-
-const escalationAbi = parseAbi([
-	'function activationTime() view returns (uint256)',
-	'function startBondAttoRep() view returns (uint256)',
-	'function nonDecisionThresholdAttoRep() view returns (uint256)',
-	'function nonDecisionTimestamp() view returns (uint256)',
-	'function totalDisputeStakedAttoRep() view returns (uint256)',
-	'function getEscalationGameEndDate() view returns (uint256)',
-	'function getQuestionResolution() view returns (uint8)',
-	'function getFinalQuestionResolution() view returns (uint8)',
-	'function getBindingCapitalAttoRep() view returns (uint256)',
-	'function getOutcomeBalancesAttoRep() view returns (uint256[3])',
-	'function disputeStakedRepByVaultAttoRep(address vault) view returns (uint256)',
-])
-
-const auctionAbi = parseAbi([
-	'function auctionStarted() view returns (uint256)',
-	'function maxAttoRepBeingSold() view returns (uint256)',
-	'function attoEthRaiseCap() view returns (uint256)',
-	'function minBidSizeAttoEth() view returns (uint256)',
-	'function finalized() view returns (bool)',
-	'function clearingTick() view returns (int256)',
-	'function ethFilledAtClearingAttoEth() view returns (uint256)',
-	'function attoEthRaised() view returns (uint256)',
-	'function totalAttoRepPurchased() view returns (uint256)',
-	'function activeTickCount() view returns (uint256)',
-	'function computeClearing() view returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedBidAttoEth, uint256 bidAtClearingTickAttoEth)',
-])
+const poolAbi = snapshotAbi('securityPool')
+const coordinatorAbi = snapshotAbi('priceCoordinator')
+const escalationAbi = snapshotAbi('escalationGame')
+const auctionAbi = snapshotAbi('truthAuction')
 
 export type StateRead = (address: Address, abi: Abi, functionName: string, args?: readonly AbiValue[]) => Promise<unknown>
 
@@ -144,7 +105,7 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 	if (target.poolAddress === undefined) throw new Error('Vault snapshot target is missing its pool')
 	const pool = target.poolAddress
 	const vault = target.address
-	const values = await Promise.all([read(pool, poolAbi, 'securityVaults', [vault]), read(pool, poolAbi, 'vaultTargetHealthFactorBps', [vault]), read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]), read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]), read(pool, poolAbi, 'statoblastSecurityMultiplierBps')])
+	const values = await Promise.all([read(pool, poolAbi, 'securityVaults', [vault]), read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]), read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]), read(pool, poolAbi, 'statoblastSecurityMultiplierBps')])
 	const state = tuple(values[0], 4, 'securityVaults')
 	const repBackingUnits = exact(state[0], 'securityVaults.repBackingUnits')
 	const backingAttoRep = await read(pool, poolAbi, 'backingUnitsToAttoRep', [BigInt(repBackingUnits)])
@@ -158,10 +119,9 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 		underwritingLimitAttoEth: exact(state[1], 'securityVaults.underwritingLimitAttoEth'),
 		claimableFeesAttoEth: exact(state[2], 'securityVaults.claimableFeesAttoEth'),
 		feeIndex: exact(state[3], 'securityVaults.feeIndex'),
-		targetHealthFactorBps: exact(values[1], 'vaultTargetHealthFactorBps'),
-		openInterestAttoEth: exact(values[2], 'getVaultOpenInterestAttoEth'),
-		badDebtAttoEth: exact(values[3], 'vaultBadDebtAttoEth'),
-		securityMultiplierBps: exact(values[4], 'statoblastSecurityMultiplierBps'),
+		openInterestAttoEth: exact(values[1], 'getVaultOpenInterestAttoEth'),
+		badDebtAttoEth: exact(values[2], 'vaultBadDebtAttoEth'),
+		securityMultiplierBps: exact(values[3], 'statoblastSecurityMultiplierBps'),
 		disputeStakedAttoRep,
 	}
 }

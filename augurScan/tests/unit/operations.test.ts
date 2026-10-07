@@ -87,7 +87,6 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 		openInterestAttoEth: (10n ** 18n).toString(),
 		repPerEth1e18: '100',
 		securityMultiplierBps: '15000',
-		targetHealthFactorBps: '12000',
 		badDebtAttoEth: String(0),
 	})
 	expect(healthy.protocolState).toBe('healthy')
@@ -100,7 +99,6 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 		openInterestAttoEth: (10n ** 18n).toString(),
 		repPerEth1e18: '100',
 		securityMultiplierBps: '15000',
-		targetHealthFactorBps: '12000',
 		badDebtAttoEth: String(0),
 	})
 	expect(warning).toMatchObject({ protocolState: 'healthy', scannerSeverity: 'warning', healthFactorBps: '11933' })
@@ -111,7 +109,6 @@ test('matches the Solidity vault health constraints and keeps scanner severity s
 		openInterestAttoEth: (10n ** 18n).toString(),
 		repPerEth1e18: '100',
 		securityMultiplierBps: '15000',
-		targetHealthFactorBps: '12000',
 		badDebtAttoEth: String(0),
 	})
 	expect(liquidatable).toMatchObject({ protocolState: 'liquidatable', scannerSeverity: 'critical' })

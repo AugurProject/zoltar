@@ -67,7 +67,8 @@ export function computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBon
 	if (attritionCostAttoRep <= startBondAttoRep) return 0n
 	if (attritionCostAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH
 	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep)
-	if (lnRatioScaled === 0n) return 0n
+	// A zero-resolution logarithm leaves the forward curve flat until its terminal step.
+	if (lnRatioScaled === 0n) return ESCALATION_TIME_LENGTH
 	const lnCostRatioScaled = computeLnRatioScaled(startBondAttoRep, attritionCostAttoRep)
 	return (lnCostRatioScaled * ESCALATION_TIME_LENGTH) / lnRatioScaled
 }
