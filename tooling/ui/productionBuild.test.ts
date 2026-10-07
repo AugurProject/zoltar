@@ -470,8 +470,11 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		}
 		throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
-	// The tool counts as selected only once its tab is the active one; a dropped click must not pass as a selection.
-	const isPoolToolSelected = async (label: 'Price oracle' | 'Fork & migration') => (await driver.evaluate(`[...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"][aria-selected="true"]')].some(tab => tab.textContent?.trim() === ${JSON.stringify(label)})`)) === true
+	// The tool counts as selected only once its tab, or the More trigger naming it, is the active one; a dropped click must not pass as a selection.
+	const isPoolToolSelected = async (label: 'Price oracle' | 'Fork & migration') =>
+		(await driver.evaluate(
+			`[...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"][aria-selected="true"]')].some(tab => tab.textContent?.trim() === ${JSON.stringify(label)}) || document.querySelector('.pool-tools-trigger.active')?.getAttribute('aria-label') === ${JSON.stringify(`More: ${label}`)}`,
+		)) === true
 	const selectPoolTool = async (label: 'Price oracle' | 'Fork & migration') => {
 		for (let attempt = 0; attempt < 600; attempt += 1) {
 			if (await isPoolToolSelected(label)) return
