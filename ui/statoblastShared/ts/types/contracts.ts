@@ -408,6 +408,7 @@ export type ReportingActionResult = ActionResult & {
 }
 
 export type TruthAuctionMetrics = {
+	finalizationPreview: { attoEthRaised: bigint; attoRepSold: bigint }
 	accumulatedBidAttoEth: bigint
 	auctionEndsAt: bigint | undefined
 	clearingPrice: bigint | undefined

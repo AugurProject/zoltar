@@ -32,7 +32,7 @@ function createForkMockWriteClient(onSendTransaction: (request: { data?: Hex | u
 const questionId = 1n
 const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 
-function createForkDetailsClient({ poolRead, computeClearing, ownForkMigrationStatus = [false, 0n, 0n, 0n, 0n] }: { poolRead: readonly unknown[]; computeClearing?: readonly unknown[]; ownForkMigrationStatus?: readonly unknown[] }) {
+function createForkDetailsClient({ poolRead, computeClearing, previewFinalization = [0n, 0n], ownForkMigrationStatus = [false, 0n, 0n, 0n, 0n] }: { poolRead: readonly unknown[]; computeClearing?: readonly unknown[]; previewFinalization?: readonly [bigint, bigint]; ownForkMigrationStatus?: readonly unknown[] }) {
 	return createMockLoaderClient({
 		getBlock: async () => createBlockWithTimestamp(5n),
 		multicall: async request => {
@@ -40,7 +40,7 @@ function createForkDetailsClient({ poolRead, computeClearing, ownForkMigrationSt
 			if (functionName === 'questionId') return poolRead
 			if (functionName === 'getForkTime') return [0n]
 			if (functionName === 'questions') return [questionTuple, 1n]
-			if (functionName === 'computeClearing' && computeClearing !== undefined) return computeClearing
+			if (functionName === 'computeClearing' && computeClearing !== undefined) return request.contracts.some(contract => getContractFunctionName(contract) === 'previewFinalization') ? [...computeClearing, previewFinalization] : computeClearing
 			throw new Error(`Unexpected multicall contract: ${functionName}`)
 		},
 		readContract: async request => {
@@ -220,6 +220,17 @@ describe('forks protocol client', () => {
 
 		expect(details.truthAuctionStartedAt).toBe(1n)
 		expect(details.migrationEndsAt).toBe(forkActivationTime + 4_838_400n)
+	})
+
+	test('loadForkAuctionDetails reads provisional ETH and REP totals directly from finalization preview', async () => {
+		const ethUnit = 10n ** 18n
+		const client = createForkDetailsClient({
+			poolRead: [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 1n],
+			computeClearing: [[false, 0n, 0n, 0n], 30n * ethUnit, 0n, false, 100n * ethUnit, 1n, 0n, false, 0n, 0n, 0n],
+			previewFinalization: [26n * ethUnit, 100n * ethUnit],
+		})
+		const details = await loadForkAuctionDetails(client, securityPoolAddress)
+		expect(details.truthAuction).toMatchObject({ finalizationPreview: { attoEthRaised: 26n * ethUnit, attoRepSold: 100n * ethUnit } })
 	})
 
 	describe('finalized underfunded truth auctions', () => {

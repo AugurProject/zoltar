@@ -174,7 +174,7 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 export type VaultRiskInput = {
 	readonly poolHeldBackingAttoRep: unknown
 	readonly disputeStakedAttoRep: unknown
-	readonly openInterestAttoEth: unknown
+	readonly underwritingLimitAttoEth: unknown
 	readonly repPerEth1e18: string
 	readonly securityMultiplierBps: string
 	readonly badDebtAttoEth: unknown
@@ -190,15 +190,15 @@ const vaultHealthAssessment = (badDebt: bigint, healthFactor: bigint) => {
 export const vaultRisk = (input: VaultRiskInput) => {
 	const backing = positiveInteger(input.poolHeldBackingAttoRep, 'poolHeldBackingAttoRep')
 	const dispute = positiveInteger(input.disputeStakedAttoRep, 'disputeStakedAttoRep')
-	const openInterest = positiveInteger(input.openInterestAttoEth, 'openInterestAttoEth')
+	const underwritingLimit = positiveInteger(input.underwritingLimitAttoEth, 'underwritingLimitAttoEth')
 	const price = positiveInteger(input.repPerEth1e18, 'repPerEth1e18')
 	const securityMultiplier = positiveInteger(input.securityMultiplierBps, 'securityMultiplierBps')
 	const badDebt = positiveInteger(input.badDebtAttoEth, 'badDebtAttoEth')
-	if (openInterest === 0n)
+	if (underwritingLimit === 0n)
 		return {
 			protocolState: badDebt > 0n ? ('bad-debt' as const) : ('healthy' as const),
 			scannerSeverity: badDebt > 0n ? ('critical' as const) : ('healthy' as const),
-			scannerReason: badDebt > 0n ? 'Vault has recorded bad debt' : 'Vault has no open-interest obligation',
+			scannerReason: badDebt > 0n ? 'Vault has recorded bad debt' : 'Vault has no underwriting commitment',
 			healthFactorBps: undefined,
 			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
 		}
@@ -210,7 +210,7 @@ export const vaultRisk = (input: VaultRiskInput) => {
 			healthFactorBps: undefined,
 			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
 		}
-	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
+	const baseRequired = ceilDiv(underwritingLimit * price, PRICE_PRECISION)
 	const associatedBeforeFactor = ceilDiv(baseRequired * securityMultiplier, BPS_DENOMINATOR)
 	const migrationMultiplier = getLiquidationMigrationSecurityMultiplierBps(securityMultiplier)
 	const freeBeforeFactor = ceilDiv(baseRequired * migrationMultiplier, BPS_DENOMINATOR)

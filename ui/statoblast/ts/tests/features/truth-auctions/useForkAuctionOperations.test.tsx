@@ -72,6 +72,7 @@ function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {})
 		timeRemaining: 150n,
 		totalAttoRepPurchased: 0n,
 		underfunded: false,
+		finalizationPreview: { attoEthRaised: 1n * 10n ** 18n, attoRepSold: 0n },
 		underfundedThreshold: undefined,
 		underfundedWinningAttoEth: 0n,
 		...overrides,

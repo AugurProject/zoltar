@@ -49,9 +49,9 @@ for (const [entityType, contractKind] of [
 
 test('samples vault accounting without a stored target health factor and feeds risk assessment', async () => {
 	const values: Readonly<Record<string, unknown>> = {
-		securityVaults: [200n, 100n, 5n, 7n],
+		securityVaults: [200n, 10n ** 18n, 5n, 7n],
 		backingUnitsToAttoRep: 200n,
-		getVaultOpenInterestAttoEth: 10n ** 18n,
+		getVaultOpenInterestAttoEth: 10n ** 17n,
 		vaultBadDebtAttoEth: 0n,
 		statoblastSecurityMultiplierBps: 15000n,
 		disputeStakedRepByVaultAttoRep: 0n,
@@ -68,10 +68,10 @@ test('samples vault accounting without a stored target health factor and feeds r
 		vaultAddress: vault,
 		repBackingUnits: '200',
 		poolHeldBackingAttoRep: '200',
-		underwritingLimitAttoEth: '100',
+		underwritingLimitAttoEth: String(10n ** 18n),
 		claimableFeesAttoEth: '5',
 		feeIndex: '7',
-		openInterestAttoEth: String(10n ** 18n),
+		openInterestAttoEth: String(10n ** 17n),
 		badDebtAttoEth: '0',
 		securityMultiplierBps: '15000',
 		disputeStakedAttoRep: '0',
@@ -79,7 +79,7 @@ test('samples vault accounting without a stored target health factor and feeds r
 	const state = snapshot.readResult
 	if (state === undefined) throw new Error('Missing vault snapshot')
 	expect(
-		vaultRisk({ poolHeldBackingAttoRep: state['poolHeldBackingAttoRep'], disputeStakedAttoRep: state['disputeStakedAttoRep'], openInterestAttoEth: state['openInterestAttoEth'], repPerEth1e18: '100', securityMultiplierBps: String(state['securityMultiplierBps']), badDebtAttoEth: state['badDebtAttoEth'] }),
+		vaultRisk({ poolHeldBackingAttoRep: state['poolHeldBackingAttoRep'], disputeStakedAttoRep: state['disputeStakedAttoRep'], underwritingLimitAttoEth: state['underwritingLimitAttoEth'], repPerEth1e18: '100', securityMultiplierBps: String(state['securityMultiplierBps']), badDebtAttoEth: state['badDebtAttoEth'] }),
 	).toMatchObject({ protocolState: 'healthy', healthFactorBps: '13333' })
 })
 

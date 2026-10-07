@@ -163,7 +163,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	const migrationEndsAt = getForkMigrationEndsAt(forkActivationTime)
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
-		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
+		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick, finalizationPreview] = await readRequiredMulticall(client, [
 			{
 				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'computeClearing',
@@ -230,6 +230,12 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 				address: truthAuctionAddress,
 				args: [],
 			},
+			{
+				abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'previewFinalization',
+				address: truthAuctionAddress,
+				args: [],
+			},
 		])
 		const computeClearingTuple: AuctionClearingTuple = computeClearingResult
 		const [hitCap, computedClearingTick, accumulatedBidAttoEth, bidAtClearingTickAttoEth] = computeClearingTuple
@@ -246,6 +252,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			})
 		}
 		truthAuction = {
+			finalizationPreview: { attoEthRaised: finalizationPreview[0], attoRepSold: finalizationPreview[1] },
 			accumulatedBidAttoEth,
 			auctionEndsAt: truthAuctionStartedAt + TRUTH_AUCTION_TIME_LENGTH,
 			clearingPrice,

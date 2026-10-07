@@ -1,4 +1,5 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../../../protocol/truthAuctions.js'
@@ -24,6 +25,7 @@ type UseTruthAuctionBookDataParams = {
 	accountAddress: Address | undefined
 	enteredBidTick: bigint | undefined
 	forkAuctionResultHash: string | undefined
+	selectedPoolRefreshNonce: number
 	selectedStage: ForkWorkflowSelectionStage
 	shouldShowTruthAuctionVisualization: boolean
 	truthAuctionAddress: Address | undefined
@@ -91,7 +93,7 @@ async function loadAggregatedTruthAuctionBidPages(client: Pick<ReadClient, 'read
 	}
 }
 
-export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAuctionResultHash, selectedStage, shouldShowTruthAuctionVisualization, truthAuctionAddress, truthAuctionClearingTick, truthAuctionReadClient }: UseTruthAuctionBookDataParams) {
+export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAuctionResultHash, selectedPoolRefreshNonce, selectedStage, shouldShowTruthAuctionVisualization, truthAuctionAddress, truthAuctionClearingTick, truthAuctionReadClient }: UseTruthAuctionBookDataParams) {
 	const enteredBidTickRef = useRef(enteredBidTick)
 	enteredBidTickRef.current = enteredBidTick
 	const [truthAuctionBookData, setTruthAuctionBookData] = useState<TruthAuctionBookData>({
@@ -122,9 +124,11 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 	const [levelRetryRequestNonce, setLevelRetryRequestNonce] = useState(0)
 	const [aggregateRetryRequestNonce, setAggregateRetryRequestNonce] = useState(0)
 	const [viewerRetryRequestNonce, setViewerRetryRequestNonce] = useState(0)
+	const [blockRefreshNonce, setBlockRefreshNonce] = useState(0)
 	const truthAuctionKey = truthAuctionAddress?.toLowerCase()
 	const viewerBookKey = truthAuctionKey === undefined ? undefined : `${truthAuctionKey}:${accountAddress?.toLowerCase() ?? 'no-account'}`
 	const isTruthAuctionBookVisible = shouldShowTruthAuctionVisualization && truthAuctionAddress !== undefined && truthAuctionAddress !== zeroAddress && (selectedStage === 'auction' || selectedStage === 'settlement')
+	useBlockRefresh(() => setBlockRefreshNonce(currentNonce => currentNonce + 1), isTruthAuctionBookVisible)
 	const scopedTruthAuctionBookData: TruthAuctionBookData = {
 		tickSummaries: tickDataKey === truthAuctionKey ? truthAuctionBookData.tickSummaries : [],
 		tickCount: tickDataKey === truthAuctionKey ? truthAuctionBookData.tickCount : 0n,
@@ -227,7 +231,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		return () => {
 			cancelled = true
 		}
-	}, [forkAuctionResultHash, isTruthAuctionBookVisible, levelRetryRequestNonce, loadedTickPageCount, truthAuctionAddress, truthAuctionClearingTick, truthAuctionKey, truthAuctionReadClient])
+	}, [blockRefreshNonce, forkAuctionResultHash, isTruthAuctionBookVisible, levelRetryRequestNonce, loadedTickPageCount, selectedPoolRefreshNonce, truthAuctionAddress, truthAuctionClearingTick, truthAuctionKey, truthAuctionReadClient])
 
 	useEffect(() => {
 		if (!isTruthAuctionBookVisible || truthAuctionAddress === undefined || truthAuctionAddress === zeroAddress) {
@@ -278,7 +282,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		return () => {
 			cancelled = true
 		}
-	}, [accountAddress, forkAuctionResultHash, isTruthAuctionBookVisible, loadedViewerBidPageCount, truthAuctionAddress, truthAuctionReadClient, viewerBookKey, viewerRetryRequestNonce])
+	}, [accountAddress, blockRefreshNonce, forkAuctionResultHash, isTruthAuctionBookVisible, loadedViewerBidPageCount, selectedPoolRefreshNonce, truthAuctionAddress, truthAuctionReadClient, viewerBookKey, viewerRetryRequestNonce])
 
 	useEffect(() => {
 		if (!isTruthAuctionBookVisible || truthAuctionAddress === undefined || truthAuctionAddress === zeroAddress || tickDataKey !== truthAuctionKey) {
@@ -315,7 +319,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		return () => {
 			cancelled = true
 		}
-	}, [aggregateRetryRequestNonce, isTruthAuctionBookVisible, loadedAuctionBidPageCount, tickDataKey, truthAuctionAddress, truthAuctionBookData.tickSummaries, truthAuctionKey, truthAuctionReadClient])
+	}, [aggregateRetryRequestNonce, blockRefreshNonce, forkAuctionResultHash, isTruthAuctionBookVisible, loadedAuctionBidPageCount, selectedPoolRefreshNonce, tickDataKey, truthAuctionAddress, truthAuctionBookData.tickSummaries, truthAuctionKey, truthAuctionReadClient])
 
 	return {
 		aggregatedAuctionBidCountForLoadedTicks: scopedAggregatedAuctionBidCountForLoadedTicks,

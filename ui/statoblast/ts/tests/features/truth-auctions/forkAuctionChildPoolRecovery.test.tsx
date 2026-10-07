@@ -7,6 +7,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -121,6 +123,7 @@ function createStartedChildAuctionDetails(securityPoolAddress: Address, truthAuc
 			timeRemaining: 604_800n,
 			totalAttoRepPurchased: 0n,
 			underfunded: false,
+			finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 			underfundedThreshold: undefined,
 			underfundedWinningAttoEth: 0n,
 		},
@@ -384,6 +387,48 @@ describe('ForkAuctionSection child pool recovery', () => {
 		await act(async () => {
 			noPoolRecovery.resolve([])
 			await noPoolRecovery.promise
+		})
+	})
+
+	test('refreshes selected child auction metrics on new blocks while keeping the current auction visible', async () => {
+		recoveredPools = [createAuctionChildPool()]
+		childAuctionDetailsFactory = securityPoolAddress => createStartedChildAuctionDetails(securityPoolAddress, YES_TRUTH_AUCTION_ADDRESS)
+		await renderSection(AUCTION_STAGE_PROPS)
+		await waitForFlushed(() => {
+			expect(loadForkAuctionDetailsCalls).toBe(1)
+			expect(document.body.querySelector('.truth-auction-summary-card')).not.toBeNull()
+		})
+		const refreshedDetails = createDeferred<ForkAuctionDetails>()
+		childAuctionDetailsFactory = () => refreshedDetails.promise
+		await act(() => {
+			const blockNumber = (appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n
+			appBlockWatcher.reportBlock(blockNumber)
+			appBlockWatcher.reportBlock(blockNumber + 1n)
+		})
+		await waitFor(() => expect(loadForkAuctionDetailsCalls).toBe(2))
+		expect(document.body.querySelector('.truth-auction-summary-card')).not.toBeNull()
+		const details = createStartedChildAuctionDetails(YES_CHILD_POOL_ADDRESS, YES_TRUTH_AUCTION_ADDRESS)
+		if (details.truthAuction === undefined) throw new Error('Expected refreshed auction metrics')
+		const truthAuction = { ...details.truthAuction, finalizationPreview: { attoEthRaised: 1n, attoRepSold: 1n } }
+		await act(() => refreshedDetails.resolve({ ...details, truthAuction }))
+		await waitForFlushed(() => {
+			const raised = document.body.querySelector('.truth-auction-progress-copy strong .currency-value')
+			expect(raised?.getAttribute('title')).toBe(`${formatCurrencyBalance(1n)} ETH`)
+		})
+	})
+
+	test.each([250n, 251n])('shows freshly read auction totals when direct-child route details were read at the same or an earlier timestamp (%s)', async currentTime => {
+		const childPool = createAuctionChildPool()
+		const rootDetails = createStartedChildAuctionDetails(YES_CHILD_POOL_ADDRESS, YES_TRUTH_AUCTION_ADDRESS)
+		childAuctionDetailsFactory = () => {
+			if (rootDetails.truthAuction === undefined) throw new Error('Expected root auction metrics')
+			return { ...rootDetails, currentTime, truthAuction: { ...rootDetails.truthAuction, finalizationPreview: { attoEthRaised: 26n * 10n ** 18n, attoRepSold: 26n * 10n ** 18n } } }
+		}
+		await renderSection({ ...AUCTION_STAGE_PROPS, forkAuctionDetails: rootDetails, previewPool: childPool, securityPools: [childPool] })
+		await waitForFlushed(() => {
+			expect(loadForkAuctionDetailsCalls).toBe(1)
+			const raised = document.body.querySelector('.truth-auction-progress-copy strong .currency-value')
+			expect(raised?.getAttribute('title')).toBe(`${formatCurrencyBalance(26n * 10n ** 18n)} ETH`)
 		})
 	})
 
