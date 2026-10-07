@@ -66,7 +66,7 @@ export const liveCopy = {
 	marketNotCreated: 'Market not created',
 	tradingOpen: 'Trading open',
 	tradingClosed: 'Trading closed',
-	universeForkedNotice: 'This universe has forked. Its markets no longer trade or take new liquidity; holders migrate their shares to a child universe from each market’s Settlement view.',
+	universeForkedNotice: 'This universe has forked. Its markets no longer trade or take new liquidity. In each market’s Settlement view, holders of an unresolved market migrate their shares to a child universe, and holders of a resolved market redeem their winning shares.',
 	viewChildUniverses: 'View child universes',
 	marketCreated: 'Market created and liquidity added. Your LP tokens are listed under Your position.',
 	noLiquidityYet: 'No liquidity yet',

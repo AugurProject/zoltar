@@ -289,7 +289,8 @@ test('resumes a pending receipt after returning to its network while ignoring th
 		})
 		await waitFor(() => expect(transactionActivity.value.entries.find(entry => entry.hash === pendingHash)?.status).toBe('confirmed'))
 		expect(hasPendingTransactionActivity(['market:0x1'])).toBeFalse()
-		expect(within(document.body).getByRole('button', { name: 'Activity' })).not.toBeNull()
+		// The resumed watcher settled the restored transaction, so the trigger announces its outcome.
+		expect(within(document.body).getByRole('button', { name: 'Activity, 1 new result' })).not.toBeNull()
 	} finally {
 		oldReceipt.resolve(includedReceipt(pendingHash))
 		currentReceipt.resolve(includedReceipt(pendingHash))

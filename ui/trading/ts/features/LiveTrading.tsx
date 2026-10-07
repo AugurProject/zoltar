@@ -121,19 +121,15 @@ export function LiveTrading({
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'
 	const existingMarketPool = creatingMarket && routePool !== undefined && selected?.pool.toLowerCase() === routePool.toLowerCase() && selected.pair !== undefined && selected.loadError === undefined ? selected.pool : undefined
-	// The pool the creation route is showing without a market: if it gains one while still open there, it was created here.
-	const poolAwaitingMarket = useRef<string>()
-	useEffect(() => {
-		const routedPool = routePool?.toLowerCase()
-		if (creatingMarket && selected !== undefined && selected.pool.toLowerCase() === routedPool && selected.pair === undefined && selected.loadError === undefined) poolAwaitingMarket.current = routedPool
-		else if (!creatingMarket || poolAwaitingMarket.current !== routedPool) poolAwaitingMarket.current = undefined
-	}, [creatingMarket, routePool, selected])
+	// The pool whose creating transaction this route just confirmed; a market another account created opens as any existing market.
+	const confirmedCreationPool = useRef<string>()
 	// The market this session just created; its liquidity view confirms the creation until another market opens.
 	const [createdMarketPool, setCreatedMarketPool] = useState<string>()
 	useEffect(() => {
+		if (!creatingMarket) confirmedCreationPool.current = undefined
 		if (existingMarketPool === undefined || marketWorkflowLocked) return
-		const createdHere = poolAwaitingMarket.current === existingMarketPool.toLowerCase()
-		poolAwaitingMarket.current = undefined
+		const createdHere = confirmedCreationPool.current === existingMarketPool.toLowerCase()
+		confirmedCreationPool.current = undefined
 		if (!createdHere) {
 			window.location.replace(getTradingRouteHref(`#/market/${existingMarketPool}`))
 			return
@@ -141,7 +137,7 @@ export function LiveTrading({
 		// The creation deposited liquidity, so the user continues in the liquidity view with the LP tokens it minted in sight.
 		setCreatedMarketPool(existingMarketPool.toLowerCase())
 		window.location.replace(getTradingRouteHref(`#/liquidity/${existingMarketPool}`))
-	}, [existingMarketPool, marketWorkflowLocked])
+	}, [creatingMarket, existingMarketPool, marketWorkflowLocked])
 	const showsMarketCreated = createdMarketPool !== undefined && workflowRoute === 'liquidity' && routePool?.toLowerCase() === createdMarketPool
 	// Trade and settlement share the `#/market/<address>` hash, so a closed market's chosen view lives in its `view` parameter; liquidity is its own hash.
 	const [closedMarketView, setClosedMarketView] = useState<'trade' | 'settlement'>('settlement')
@@ -425,7 +421,15 @@ export function LiveTrading({
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} />
+								<LiveLiquidityControls
+									{...workflowPanelProps}
+									walletEthAttoEth={walletEthAttoEth}
+									nowSeconds={nowSeconds}
+									services={liquidityServices}
+									onMarketCreated={pool => {
+										confirmedCreationPool.current = pool.toLowerCase()
+									}}
+								/>
 							</SectionBlock>
 						)
 					const ticket = (

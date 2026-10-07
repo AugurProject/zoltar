@@ -1,3 +1,4 @@
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { capSubmissionDeadline } from '../../protocol/submissionWindow.js'
 import * as workflowCopy from '../../copy/workflows.js'
 import { useEffect, useState } from 'preact/hooks'
@@ -40,11 +41,13 @@ export function useLiquidityWorkflowController({
 	executeWithCurrentWalletContext,
 	createGuardedWalletWrite,
 	onWorkflowLockChange,
+	onMarketCreated,
 	services,
 }: LiveWorkflowContext &
 	Readonly<{
 		nowSeconds: bigint
 		services: LiveLiquidityServices
+		onMarketCreated?: ((pool: Address) => void) | undefined
 	}>) {
 	const [operation, setOperation] = useState<LiquidityOperation>(() => defaultLiquidityOperation(market, nowSeconds))
 	const [amount, setAmount] = useState('')
@@ -120,8 +123,10 @@ export function useLiquidityWorkflowController({
 				return await services.submitFreshLiquidity(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},
 			afterSlippageRejected: async () => await refresh({ background: true }),
-			afterConfirmed: async () => {
+			afterConfirmed: async prepared => {
 				setAmount('')
+				// Initializing a pool without a pair deployed its market, so the caller knows this market was created here.
+				if (prepared.operation === 'initialize' && prepared.market.pair === undefined) onMarketCreated?.(prepared.market.pool)
 				await refresh()
 			},
 		})

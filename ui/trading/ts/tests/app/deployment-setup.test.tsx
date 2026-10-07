@@ -280,6 +280,37 @@ describe('trading deployment setup', () => {
 		expect(rowCounts.every(count => count === rowsBefore)).toBe(true)
 	})
 
+	test('an unexpected failure while rechecking a missing factory shows the inspection error instead of escaping the recheck', async () => {
+		let recheckFailure: Error | undefined
+		const inspection = inspectionClient({ retryCount: 0 })
+		const client = {
+			...inspection,
+			getCode: async (parameters: Parameters<typeof inspection.getCode>[0]) => {
+				if (recheckFailure !== undefined) throw recheckFailure
+				return await inspection.getCode(parameters)
+			},
+		}
+		const unhandledRejections: unknown[] = []
+		const recordUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
+		process.on('unhandledRejection', recordUnhandledRejection)
+		try {
+			const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
+			cleanupRendered = rendered.cleanup
+			await waitForText('Security pool factory is not deployed')
+			recheckFailure = new Error('boom')
+			await act(async () => {
+				document.dispatchEvent(new Event('visibilitychange'))
+			})
+			await waitForText('Retry checks')
+			expect(rendered.container.textContent).toContain('boom.')
+			expect(rendered.container.textContent).not.toContain('Security pool factory is not deployed')
+			await Bun.sleep(0)
+			expect(unhandledRejections).toEqual([])
+		} finally {
+			process.off('unhandledRejection', recordUnhandledRejection)
+		}
+	})
+
 	test('a failed network check shows its error without per-contract spinners that never finish', async () => {
 		const client = inspectionClient({
 			chainId: () => {

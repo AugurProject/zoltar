@@ -1,3 +1,4 @@
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as availabilityCopy from '../copy/availability.js'
@@ -44,15 +45,18 @@ export function LiveLiquidityControls({
 	nowSeconds,
 	retryBalances,
 	services = liveLiquidityServices,
+	onMarketCreated,
 	...context
 }: LiveWorkflowPanelProps &
 	Readonly<{
 		walletEthAttoEth: bigint | undefined
 		nowSeconds: bigint
 		services?: LiveLiquidityServices
+		/** Called with the pool once this panel's own transaction that created its market confirms. */
+		onMarketCreated?: ((pool: Address) => void) | undefined
 	}>) {
 	const { market, balanceState, account, walletClient, settings } = context
-	const controller = useLiquidityWorkflowController({ ...context, nowSeconds, services })
+	const controller = useLiquidityWorkflowController({ ...context, nowSeconds, services, onMarketCreated })
 	const { operation, amount, probability, parsed, conditionalBps, estimate, previewBlocker, transaction, selectOperation, updateAmount, updateProbability, submit } = controller
 	const { state, workflowLocked } = transaction
 	const closedForAdding = !liquidityOperationAvailable('add', market, nowSeconds)

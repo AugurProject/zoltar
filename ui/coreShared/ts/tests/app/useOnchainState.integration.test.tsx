@@ -1714,6 +1714,55 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('reports an unexpected block-driven balance failure as that balance error and keeps the last balance', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a8')
+		let balanceFailure: Error | undefined
+		const readClient = {
+			...createReadClient(),
+			getBalance: async () => {
+				if (balanceFailure !== undefined) throw balanceFailure
+				return 123n
+			},
+		} as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const dependencies = createOnchainStateDependencies({ getDeploymentSteps, loadErc20Balance: mock(async () => 5n) })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const unhandledRejections: unknown[] = []
+		const recordUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
+		process.on('unhandledRejection', recordUnhandledRejection)
+		try {
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+			await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n))
+
+			balanceFailure = new Error('boom')
+			await act(async () => {
+				appBlockWatcher.invalidate()
+				await Promise.resolve()
+			})
+			await waitFor(() => expect(requireHookState(hookState).errorMessages).toContain('Failed to refresh ETH balance. Reason: boom.'))
+			expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n)
+			expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(5n)
+
+			// The next successful read clears the error.
+			balanceFailure = undefined
+			await act(async () => {
+				appBlockWatcher.invalidate()
+				await Promise.resolve()
+			})
+			await waitFor(() => expect(requireHookState(hookState).errorMessages).toEqual([]))
+			await new Promise(resolve => setTimeout(resolve, 0))
+			expect(unhandledRejections).toEqual([])
+		} finally {
+			process.off('unhandledRejection', recordUnhandledRejection)
+			resetEnvironment()
+		}
+	})
+
 	test('preserves validated read readiness while a wallet-only refresh is pending', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a9')
 		const pendingAccounts = createDeferred<readonly Address[]>()

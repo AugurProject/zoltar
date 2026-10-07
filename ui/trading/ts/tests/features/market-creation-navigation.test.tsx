@@ -11,6 +11,7 @@ import { deploymentConfigurationFixture } from '../support/deploymentConfigurati
 import { etherScaleMarketFixture, fixtureAddress } from '../support/liveMarketFixture.js'
 import { connectedWalletServices, discoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 
 test('continues a newly created market in its liquidity view with a confirmation, and opens an existing market from the creation route', async () => {
 	const market = etherScaleMarketFixture({ endTime: BigInt(Math.floor(Date.now() / 1000)) + 86400n, pair: undefined, lpTotalSupply: 0n, yesReserve: 0n, noReserve: 0n })
@@ -78,6 +79,27 @@ test('continues a newly created market in its liquidity view with a confirmation
 	}
 })
 
+test('a market another account creates while the creation route is open opens as an existing market without a creation confirmation', async () => {
+	const market = etherScaleMarketFixture({ endTime: BigInt(Math.floor(Date.now() / 1000)) + 86400n, pair: undefined, lpTotalSupply: 0n, yesReserve: 0n, noReserve: 0n })
+	const initialized = etherScaleMarketFixture({ endTime: market.endTime })
+	const configuration = deploymentConfigurationFixture()
+	const dom = installDomEnvironment(`http://localhost/#/create-market/${market.pool}?simulate=1&simScenario=deployed&universe=1`)
+	let createdElsewhere = false
+	const services = { ...offlineControllerServices, discoverAddressedMarket: async () => discoveryPage([createdElsewhere ? initialized : market]) }
+	const rendered = await renderIntoDocument(<LiveTrading route={`create-market/${market.pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+	try {
+		await waitForDom(() => document.querySelector('input[name="amount"]') !== null, 'creation form')
+		createdElsewhere = true
+		await act(() => invalidateAppData())
+		await waitForDom(() => tradingRouting.resolve(window.location.hash) === `market/${market.pool}`, 'market navigation after external creation')
+		await act(() => render(<LiveTrading route={`liquidity/${market.pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
+		expect(rendered.container.querySelector('.market-created-notice')).toBeNull()
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('the list landings say when the selected universe has forked and link to its child universes', async () => {
 	const configuration = deploymentConfigurationFixture()
 	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=deployed&universe=1')
@@ -85,6 +107,8 @@ test('the list landings say when the selected universe has forked and link to it
 	try {
 		const notice = rendered.container.querySelector('.universe-forked-notice')
 		expect(notice?.textContent).toContain('This universe has forked.')
+		// A market whose question resolved before the fork keeps redeeming instead of migrating.
+		expect(notice?.textContent).toContain('holders of a resolved market redeem their winning shares')
 		expect(notice?.querySelector('a')?.getAttribute('href')).toContain('#/universe')
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={offlineControllerServices} />, rendered.container))
 		expect(rendered.container.querySelector('.universe-forked-notice')).toBeNull()

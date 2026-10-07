@@ -1,10 +1,10 @@
-import type { Signal } from '@preact/signals'
+import { batch, type Signal } from '@preact/signals'
 import { type MutableRef, useEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
 import { sameAddress } from '../../lib/address.js'
 import { appBlockWatcher } from '../../lib/dataRefresh.js'
-import { isRecoverableContractReadError } from '../../lib/errors.js'
+import { getErrorMessage, isRecoverableContractReadError } from '../../lib/errors.js'
 import type { LoadController } from '../../lib/loadState.js'
 import type { AccountState } from '../../types/app.js'
 import { sameChainId } from '../../wallet/chainId.js'
@@ -56,6 +56,12 @@ export function useReadBackendRecovery({ activeEnvironmentNonce, onProbeFailed, 
 	}, [activeEnvironmentNonce, unreachable])
 }
 
+/** A fresh read clears the balance's error; a failed read keeps the last balance, and only an unexpected failure is reported. */
+function balanceReadError(result: PromiseSettledResult<unknown>, currentError: string | undefined, fallbackMessage: string) {
+	if (result.status === 'fulfilled') return undefined
+	return isRecoverableContractReadError(result.reason) ? currentError : getErrorMessage(result.reason, fallbackMessage)
+}
+
 type WalletBalanceDependencies = {
 	getWethAddress?: () => Address
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
@@ -63,17 +69,20 @@ type WalletBalanceDependencies = {
 
 /**
  * Balances follow the chain: every new block re-reads the wallet's ETH and WETH in place. A read that started before a newer
- * full refresh (`balanceReadGeneration`) never overwrites it, and a failed contract read keeps the last balances until the next block.
+ * full refresh (`balanceReadGeneration`) never overwrites it. A failed read keeps the last balance until the next block, and an
+ * unexpected failure is reported as that balance's error instead of escaping the block subscription.
  */
 export function useWalletBalanceRefresh({
 	accountState,
 	activeEnvironmentNonce,
+	balanceErrors,
 	balanceReadGeneration,
 	dependencies,
 	walletStateLoad,
 }: {
 	accountState: Signal<AccountState>
 	activeEnvironmentNonce: number
+	balanceErrors: { eth: Signal<string | undefined>; weth: Signal<string | undefined> }
 	balanceReadGeneration: MutableRef<number>
 	dependencies: WalletBalanceDependencies
 	walletStateLoad: LoadController
@@ -88,14 +97,14 @@ export function useWalletBalanceRefresh({
 			const generation = balanceReadGeneration.current
 			const readClient = createConnectedReadClient()
 			const { getWethAddress, loadErc20Balance } = latestDependencies.current
-			try {
-				const [ethBalanceAttoEth, wethBalanceAttoEth] = await Promise.all([readClient.getBalance({ address }), getWethAddress === undefined ? undefined : loadErc20Balance(readClient, getWethAddress(), address)])
-				const current = accountState.peek()
-				if (generation !== balanceReadGeneration.current || getActiveBackend() !== backend || !sameAddress(current.address, address)) return
-				accountState.value = { ...current, ethBalanceAttoEth, ...(wethBalanceAttoEth === undefined ? {} : { wethBalanceAttoEth }) }
-			} catch (error) {
-				if (!isRecoverableContractReadError(error)) throw error
-			}
+			const [eth, weth] = await Promise.allSettled([readClient.getBalance({ address }), (async () => (getWethAddress === undefined ? undefined : await loadErc20Balance(readClient, getWethAddress(), address)))()])
+			const current = accountState.peek()
+			if (generation !== balanceReadGeneration.current || getActiveBackend() !== backend || !sameAddress(current.address, address)) return
+			batch(() => {
+				accountState.value = { ...current, ...(eth.status === 'fulfilled' ? { ethBalanceAttoEth: eth.value } : {}), ...(weth.status === 'fulfilled' && weth.value !== undefined ? { wethBalanceAttoEth: weth.value } : {}) }
+				balanceErrors.eth.value = balanceReadError(eth, balanceErrors.eth.peek(), 'Failed to refresh ETH balance')
+				if (getWethAddress !== undefined) balanceErrors.weth.value = balanceReadError(weth, balanceErrors.weth.peek(), 'Failed to refresh WETH balance')
+			})
 		}
 		return appBlockWatcher.subscribe(() => void refreshWalletBalances())
 	}, [activeEnvironmentNonce])

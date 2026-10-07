@@ -271,6 +271,7 @@ export function TradingDeploymentSetup({
 	// A missing Statoblast factory is looked up again on its own, so deploying Statoblast elsewhere continues this page without a
 	// manual retry: on an interval while the page is visible, and whenever it becomes visible or focused again. Finding it
 	// continues in place with the same plan and client, so the contract rows stay mounted and the registry is not fetched again.
+	// A failed lookup waits for the next check; an unexpected failure ends the rechecks with the inspection error and its retry.
 	useEffect(() => {
 		if (inspectionState !== 'blocked' || publicClient === undefined || plan === undefined) return
 		let active = true
@@ -286,7 +287,9 @@ export function TradingDeploymentSetup({
 				setInspectionState('ready')
 				if (isTradingDeploymentComplete(plan, status)) onComplete(deploymentConfigurationForPlan(plan, parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl }).rpcUrl))
 			} catch (error) {
-				if (!isRecoverableContractReadError(error)) throw error
+				if (!active || isRecoverableContractReadError(error)) return
+				setInspectionState('error')
+				setInspectionError(publicErrorMessage(error, deploymentCopy.inspectionFailed))
 			}
 		}
 		const recheckNow = () => void recheck()

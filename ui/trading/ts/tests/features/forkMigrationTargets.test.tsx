@@ -183,6 +183,18 @@ describe('fork migration target selection', () => {
 		expect(rendered.container.querySelector('.fork-migrated-list')?.textContent).not.toContain('Blue universe')
 	})
 
+	test('marks a scalar candidate as migrated when its deployed child universe already holds the share', async () => {
+		const context = scalarContext()
+		const migratedTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}`, migrated: { invalid: 0n, yes: 10n, no: 0n } }
+		const rendered = await renderIntoDocument(<Harness context={{ ...context, availableTargets: [migratedTarget] }} />)
+		cleanup = rendered.cleanup
+
+		await input(inputByLabel(rendered.container, 'Select scalar target'), '25')
+		expect(buttonByText(rendered.container, 'Add target').disabled).toBe(true)
+		expect(rendered.container.textContent).toContain('This share is already migrated to this child universe.')
+		expect(rendered.container.textContent).not.toContain('Child security pool missing')
+	})
+
 	test('treats a balance that grew after migrating as not yet migrated there', async () => {
 		const targets: readonly ForkTarget[] = [{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: { invalid: 0n, yes: 10n, no: 0n } }]
 		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }

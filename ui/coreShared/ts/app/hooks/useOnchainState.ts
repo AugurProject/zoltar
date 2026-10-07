@@ -548,7 +548,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		)
 	}, [activeEnvironmentNonce, enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
-	useWalletBalanceRefresh({ accountState, activeEnvironmentNonce, balanceReadGeneration: balanceReadGenerationRef, dependencies, walletStateLoad })
+	useWalletBalanceRefresh({ accountState, activeEnvironmentNonce, balanceErrors: { eth: ethBalanceAttoEthError, weth: wethBalanceAttoEthError }, balanceReadGeneration: balanceReadGenerationRef, dependencies, walletStateLoad })
 	useReadBackendRecovery({
 		activeEnvironmentNonce,
 		onProbeFailed: error => {
