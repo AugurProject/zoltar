@@ -130,7 +130,11 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 	if (pool.price === 0n || !isUnsafeVault(target.vaultAttoRepBacking, target.underwritingLimitAttoEth, pool.multiplierBps, pool.price, target.disputeStakedAttoRep)) return undefined
 	const priceDistanceBps = liquidationPriceDistanceBps(target.vaultAttoRepBacking, target.underwritingLimitAttoEth, pool.multiplierBps, pool.price, target.disputeStakedAttoRep)
 	if (priceDistanceBps < pool.minLiquidationPriceDistanceBps) return undefined
-	const requestedDebtAttoEth = strategy.maximumLiquidationDebtAttoEth < target.underwritingLimitAttoEth ? strategy.maximumLiquidationDebtAttoEth : target.underwritingLimitAttoEth
+	let requestedDebtAttoEth = strategy.maximumLiquidationDebtAttoEth < target.underwritingLimitAttoEth ? strategy.maximumLiquidationDebtAttoEth : target.underwritingLimitAttoEth
+	const remainingLimitAttoEth = target.underwritingLimitAttoEth - requestedDebtAttoEth
+	// A partial liquidation must leave the target's minimum commitment without exceeding the operator's maximum.
+	if (remainingLimitAttoEth > 0n && remainingLimitAttoEth < pool.minimumSecurityBondDebtAttoEth) requestedDebtAttoEth = target.underwritingLimitAttoEth - pool.minimumSecurityBondDebtAttoEth
+	if (requestedDebtAttoEth <= 0n || requestedDebtAttoEth < strategy.minimumLiquidationDebtAttoEth) return undefined
 	const transfer = calculateLiquidationTransfer({
 		currentPoolHeldAttoRepBalance: pool.totalAttoRep,
 		currentTargetBackingUnits: target.backingUnits,
