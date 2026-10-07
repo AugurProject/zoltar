@@ -19,18 +19,21 @@ import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SecurityPoolIdentityFields } from './LiveMarketIdentity.js'
+import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
 import { questionOutcomeLabel, systemStateLabel } from '../lib/marketLabels.js'
 
 export function PairInitializationAction({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
 	const blocker = marketNewRiskBlocker(market, nowSeconds)
+	// The blocked action keeps the label it has when available: creating the market, or adding the first liquidity to one.
+	const initializationLabel = market.pair === undefined ? appCopy.createMarket : liveCopy.addFirstLiquidity
 	if (blocker !== undefined)
 		return (
 			<div className='pair-initialization'>
 				<UserMessage className='detail' detail={liveCopy.neverInitializedDetail} />
 				<div className='actions'>
-					<ActionLauncherButton idleLabel={liveCopy.addFirstLiquidity} pendingLabel={liveCopy.addFirstLiquidity} availability={{ disabled: true, reason: liveCopy.formatInitializationUnavailable(blocker) }} onClick={() => undefined} />
+					<ActionLauncherButton idleLabel={initializationLabel} pendingLabel={initializationLabel} availability={{ disabled: true, reason: liveCopy.formatInitializationUnavailable(blocker) }} onClick={() => undefined} />
 				</div>
 			</div>
 		)
@@ -148,20 +151,52 @@ export function LiveSecurityPoolDetails({
 	)
 }
 
-export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, workflowLocked, retry }: { discoveryState: 'loading' | 'ready' | 'error' | 'not-found'; discoveryError: string | undefined; workflowLocked: boolean; retry(): void }) {
-	if (discoveryState === 'not-found')
+/** The list a missing pool's route returns to, so a mistyped address is fixed where it was entered. */
+function lookupReturn(lookupRoute: 'market' | 'create-market') {
+	return lookupRoute === 'market' ? { href: '#/market', label: marketsCopy.allMarkets } : { href: '#/create-market', label: liveCopy.backToCreateMarket }
+}
+
+export function SecurityPoolRouteEmptyState({
+	discoveryState,
+	discoveryError,
+	workflowLocked,
+	retry,
+	lookupRoute = 'create-market',
+	address,
+}: {
+	discoveryState: 'loading' | 'ready' | 'error' | 'not-found'
+	discoveryError: string | undefined
+	workflowLocked: boolean
+	retry(): void
+	/** The landing whose search opened this address. */
+	lookupRoute?: 'market' | 'create-market'
+	/** The address that was opened, shown so a typo is visible. */
+	address?: string | undefined
+}) {
+	if (discoveryState === 'not-found') {
+		const back = lookupReturn(lookupRoute)
 		return (
 			<EmptyState
 				live
 				title={liveCopy.securityPoolDoesNotExist}
-				detail={discoveryError}
+				detail={
+					<>
+						{address === undefined ? undefined : (
+							<>
+								<ReadOnlyAddressValue address={address} />{' '}
+							</>
+						)}
+						{discoveryError}
+					</>
+				}
 				actions={
-					<a className='button-link' href={getTradingRouteHref('#/create-market')}>
-						{liveCopy.backToCreateMarket}
+					<a className='button-link primary' href={getTradingRouteHref(back.href)}>
+						{back.label}
 					</a>
 				}
 			/>
 		)
+	}
 	if (discoveryState === 'loading') return <EmptyState live title={liveCopy.loadingSecurityPoolDetails} />
 	if (discoveryState === 'error') return <RetryableNotice disabled={workflowLocked} message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} onRetry={retry} retryLabel={liveCopy.retryDiscovery} />
 	// Discovery finished without the addressed pool: it belongs to another universe (or none), so offer both ways out.

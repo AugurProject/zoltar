@@ -79,11 +79,12 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 			busy={loading}
 		>
 			<div className='form-grid'>
-				{page?.title === undefined ? undefined : <p className='detail'>{page.title}</p>}
+				{page?.title === undefined || page.title === '' ? undefined : <p className='detail'>{copy.formatForkQuestion(page.title)}</p>}
 				{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChildUniverses, detailIsLoading: true }} /> : undefined}
 				{page?.scalarQuestion === undefined ? (
 					<OutcomeUniverseList
 						emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
+						notDeployedDetail={copy.childNotDeployedDetail}
 						outcomes={(page?.choices ?? []).map(candidate => ({
 							...candidate,
 							disabled: loading || !candidate.exists,
@@ -98,6 +99,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 
 				<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />
 				<PaginationControls
+					summary={start === 0n && page?.hasNextPage !== true ? undefined : copy.formatOutcomePage(Number(start / UNIVERSE_OUTCOME_PAGE_SIZE) + 1)}
 					loading={loading}
 					hasPreviousPage={start > 0n}
 					hasNextPage={current?.error === undefined && (page?.hasNextPage ?? false)}

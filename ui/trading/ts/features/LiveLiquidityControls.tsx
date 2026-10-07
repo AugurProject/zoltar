@@ -65,6 +65,7 @@ export function LiveLiquidityControls({
 		operation,
 		submissionBlocker: submissionWindowBlocker(market, operation, nowSeconds),
 		marketClosed: closedForAdding,
+		newRiskBlocker,
 		requestedAmount: parsed,
 		walletEthAttoEth,
 		lpBalance: balances?.lp,
@@ -85,9 +86,13 @@ export function LiveLiquidityControls({
 	const amountError = (() => {
 		if (amount.trim() === '') return undefined
 		if (parsed === undefined) return operation === 'remove' ? liquidityCopy.invalidLpAmount : liquidityCopy.invalidEthAmount
+		// A zero is marked invalid, so it also says why.
+		if (parsed <= 0n) return availabilityCopy.amountPositiveReason
 		if (availableAmount !== undefined && parsed > availableAmount) return operation === 'remove' ? availabilityCopy.insufficientLpReason : availabilityCopy.insufficientEthReason
 		return undefined
 	})()
+	// Creating or adding to a closed market cannot happen, so its inputs rest disabled beside the action's reason.
+	const inputsDisabled = workflowLocked || (operation !== 'remove' && closedForAdding)
 	let amountHint: string | undefined
 	if (operation === 'remove' && balances !== undefined) amountHint = workflowCopy.formatHolding(formatLpWithValue(balances.lp, market, 4, 'down'))
 	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = workflowCopy.formatWalletBalance(formatEthAmount(formatTrimmedUnits(walletEthAttoEth)))
@@ -98,6 +103,7 @@ export function LiveLiquidityControls({
 		operationOption('add', liquidityCopy.addAction, !initialized || closedForAdding || workflowLocked, addOptionReason(initialized, newRiskBlocker)),
 		operationOption('remove', liquidityCopy.removeAction, !initialized || workflowLocked, initialized ? undefined : liquidityCopy.noLiquidityToRemoveReason),
 	]
+	const probabilityError = probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined
 	return (
 		<div className='liquidity-controls'>
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={appCopy.formatWalletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
@@ -109,18 +115,17 @@ export function LiveLiquidityControls({
 					value={amount}
 					placeholder={workflowCopy.zeroDecimalPlaceholder}
 					autoComplete='off'
-					disabled={workflowLocked}
+					disabled={inputsDisabled}
 					inputMode='decimal'
 					adornment={operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth}
 					hint={amountHint}
 					error={amountError}
-					invalid={amount.trim() !== '' && (parsed ?? 0n) <= 0n}
 					onInput={event => updateAmount(event.currentTarget.value)}
 				/>
 			</FormField>
 			{operation === 'initialize' ? (
 				<FormField id={probabilityId} label={liquidityCopy.conditionalYesPrice}>
-					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
+					<FormInput id={probabilityId} name='probability' value={probability} disabled={inputsDisabled} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityError} onInput={event => updateProbability(event.currentTarget.value)} />
 				</FormField>
 			) : null}
 			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market)) : liquidityCopy.additionGuidance} />
@@ -161,7 +166,12 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 					) : (
 						<>
 							<strong className='decision-amount'>
-								<LpHolding amount={preview.liquidity} market={{ ...market, yesReserve: market.yesReserve + preview.yesUsed, noReserve: market.noReserve + preview.noUsed, lpTotalSupply: preview.operation === 'initialize' ? preview.liquidity + MINIMUM_LIQUIDITY : market.lpTotalSupply + preview.liquidity }} />
+								{/* Rounded down like the Portfolio holding it becomes, so the preview never promises more LP than arrives. */}
+								<LpHolding
+									rounding='down'
+									amount={preview.liquidity}
+									market={{ ...market, yesReserve: market.yesReserve + preview.yesUsed, noReserve: market.noReserve + preview.noUsed, lpTotalSupply: preview.operation === 'initialize' ? preview.liquidity + MINIMUM_LIQUIDITY : market.lpTotalSupply + preview.liquidity }}
+								/>
 							</strong>
 							<ul className='portfolio-holdings'>
 								<li>{formatOutcomeWithValue(preview.invalidReturned, shareOutcome.invalid, market)}</li>

@@ -3,7 +3,7 @@
 import * as pricingCopy from '../copy/pricing.js'
 import { describe, expect, test } from 'bun:test'
 import { RpcError } from '@zoltar/core-shared/evm/ethereum'
-import { ensureSentence, formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage, isCloseableErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
+import { createUserFacingError, ensureSentence, formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage, isCloseableErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 
 void describe('error helpers', () => {
 	void test('closes a message as a sentence without doubling its ending', () => {
@@ -15,7 +15,20 @@ void describe('error helpers', () => {
 		const tevmRevert = new Error('revert Docs: https://tevm.sh/reference/tevm/errors/classes/reverterror/ Details: {"error":"revert","errorType":"EVMError"} Version: 1.0.0-next.148')
 		expect(formatWriteErrorMessage(tevmRevert, 'Failed to deposit REP')).toBe('Transaction failed while attempting to deposit REP.')
 		const nonceError = new Error('Transaction creation failed. Details: the tx doesn’t have the correct nonce. account has nonce of: 24 tx has nonce of: 25 Version: 1.0.0-next.148')
-		expect(formatWriteErrorMessage(nonceError, 'Failed to deposit REP')).toBe('Transaction failed while attempting to deposit REP. Reason: Transaction creation failed.')
+		expect(formatWriteErrorMessage(nonceError, 'Failed to deposit REP')).toBe('Another transaction from this wallet used the same nonce. Wait for pending wallet transactions to finish, then try again.')
+	})
+
+	void test('rewrites common node failures into the step that fixes them', () => {
+		const insufficientFunds = new Error('insufficient funds for gas * price + value: address 0x71C7656EC7ab88b098defB751B7401B5f6d8976F have 1000000000000000 want 2100000000000000')
+		expect(formatWriteErrorMessage(insufficientFunds, 'Failed to create question')).toBe('Not enough ETH for this transaction and its network fee. Add ETH to the wallet and try again.')
+		expect(formatWriteErrorMessage(new Error('nonce too low: next nonce 12, tx nonce 11'), 'Failed to create question')).toBe('Another transaction from this wallet used the same nonce. Wait for pending wallet transactions to finish, then try again.')
+		expect(formatWriteErrorMessage(new Error('Internal JSON-RPC error.'), 'Failed to create question')).toBe('Transaction failed while attempting to create question. Reason: The wallet RPC returned an internal error. Try again; if it repeats, check the network in the wallet.')
+	})
+
+	void test('shows an application check that stopped an action before sending as written', () => {
+		const guard = createUserFacingError('Wallet network changed. Switch to Sepolia and try again.')
+		expect(formatWriteErrorMessage(guard, 'Failed to create question')).toBe('Wallet network changed. Switch to Sepolia and try again.')
+		expect(formatWriteErrorMessage(new Error('Could not create question.', { cause: guard }), 'Failed to create question')).toBe('Wallet network changed. Switch to Sepolia and try again.')
 	})
 
 	void test('marks user-rejected wallet errors as closeable', () => {
@@ -66,7 +79,7 @@ void describe('error helpers', () => {
 	})
 
 	void test('formats write failures with transaction-oriented wording', () => {
-		expect(formatWriteErrorMessage(new Error('execution reverted: insufficient funds for gas * price + value'), 'Failed to report on outcome')).toBe('Transaction failed while attempting to report on outcome. Reason: insufficient funds for gas * price + value.')
+		expect(formatWriteErrorMessage(new Error('execution reverted: ERC20: transfer amount exceeds balance'), 'Failed to report on outcome')).toBe('Transaction failed while attempting to report on outcome. Reason: ERC20: transfer amount exceeds balance.')
 		expect(formatWriteErrorMessage(new Error('No market found for that ID'), 'Failed to create security pool')).toBe('No market found for that ID.')
 	})
 

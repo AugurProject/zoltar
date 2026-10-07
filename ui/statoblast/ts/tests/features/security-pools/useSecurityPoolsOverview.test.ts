@@ -73,8 +73,21 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			await state().loadSecurityPools(selectedAddress)
 		})
 
-		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress, expect.objectContaining({ read: expect.any(Function) }))
+		// An address this session did not just create resolves from one registry read instead of waiting for it to appear.
+		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress, expect.objectContaining({ read: expect.any(Function) }), { expectDeployment: false })
 		expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
+	})
+
+	void test('waits for the registry to list only the pool this session just created', async () => {
+		const createdAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const otherAddress = getAddress('0x0000000000000000000000000000000000000002')
+		const loadSecurityPoolLineage = mock(async (_address: Address, _account?: Address, _operation?: unknown, _options?: { expectDeployment: boolean }): Promise<ListedSecurityPool[]> => [])
+		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolLineage }), { expectedSecurityPoolAddress: createdAddress.toLowerCase() })
+
+		await act(async () => await state().loadSecurityPools(createdAddress))
+		await act(async () => await state().loadSecurityPools(otherAddress))
+
+		expect(loadSecurityPoolLineage.mock.calls.map(call => call[3])).toEqual([{ expectDeployment: true }, { expectDeployment: false }])
 	})
 
 	void test('applies a confirmed vault pool total before the lineage refresh completes', async () => {

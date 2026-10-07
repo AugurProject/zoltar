@@ -221,18 +221,21 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Manage Pool' })).toBeNull()
-		expect(documentQueries.getByText('Loading…')).not.toBeNull()
+		// The loading pool keeps the loaded layout: a placeholder header carries the loading text.
+		expect(documentQueries.getByText('Loading pool…')).not.toBeNull()
+		expect(document.querySelector('.pool-object-header-skeleton')).not.toBeNull()
 		expect(document.body.textContent).not.toContain('not found')
 		expect(document.body.textContent).not.toContain('does not exist')
 		expect(documentQueries.queryByText('Refresh this address after the pool is deployed.')).toBeNull()
 
 		await rerender({ ...props, loadingSecurityPools: true })
-		expect(documentQueries.getByText('Loading…')).not.toBeNull()
+		expect(documentQueries.getByText('Loading pool…')).not.toBeNull()
 		expect(document.body.textContent).not.toContain('not found')
 
 		await rerender(createLoadedPoolProps({ securityPoolAddress: unresolvedAddress, checkedSecurityPoolAddress: unresolvedAddress, securityPools: [createSelectedPool({ securityPoolAddress: getAddress(unresolvedAddress) })] }))
 		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
-		expect(documentQueries.queryByText('Loading…')).toBeNull()
+		expect(documentQueries.queryByText('Loading pool…')).toBeNull()
+		expect(document.querySelector('.pool-object-header-skeleton')).toBeNull()
 		expect(document.body.textContent).not.toContain('not found')
 	})
 

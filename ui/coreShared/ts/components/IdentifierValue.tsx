@@ -2,6 +2,7 @@ import { abbreviateAddress } from '../lib/address.js'
 import * as commonCopy from '../copy/common.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
+import { CopyGlyph, CopyStatus } from './CopyStatus.js'
 
 type IdentifierValueProps = {
 	className?: string
@@ -16,9 +17,11 @@ export function IdentifierValue({ className = '', value, abbreviated = false }: 
 
 	return (
 		<span className='copy-value-wrap'>
-			<button className={classes} type='button' title={value} aria-label={commonCopy.formatCopyIdentifierValue(value)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(value)}>
-				{copied.value ? commonCopy.copied : displayValue}
+			<button className={classes} type='button' data-copied={copied.value} title={value} aria-label={commonCopy.formatCopyIdentifierValue(value)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(value)}>
+				{displayValue}
+				<CopyGlyph />
 			</button>
+			<CopyStatus copied={copied.value} message={commonCopy.copied} />
 			<CopyErrorMessage id={copyErrorId} manualValue={value} message={copyError.value} />
 		</span>
 	)

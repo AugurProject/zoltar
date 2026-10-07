@@ -9,6 +9,32 @@ function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', val
 	})
 }
 
+// A reflowable table only overflows while it is laid out as a table; as cards it fits its column.
+function setTableScrollWidth(container: Element, tableWidth: number, cardWidth: number) {
+	Object.defineProperty(container, 'scrollWidth', {
+		configurable: true,
+		get: () => (container.querySelector('table')?.classList.contains('docs-table-cards') === true ? cardWidth : tableWidth),
+	})
+}
+
+function mockMatchMedia(matchingQuery: string | undefined) {
+	Object.defineProperty(window, 'matchMedia', {
+		configurable: true,
+		value: (query: string) => ({
+			matches: query === matchingQuery,
+			media: query,
+			onchange: undefined,
+			addEventListener() {},
+			removeEventListener() {},
+			addListener() {},
+			removeListener() {},
+			dispatchEvent() {
+				return true
+			},
+		}),
+	})
+}
+
 test('full-screen diagrams isolate background siblings without inerting their ancestor path', () => {
 	const environment = installDomEnvironment('http://localhost/docs/reference/deployment-status.html')
 	try {
@@ -131,21 +157,7 @@ test('responsive docs compact equations and label unavoidable equation and table
 		setWidth(wideCommand, 'scrollWidth', 760)
 		setWidth(shortCommand, 'clientWidth', 320)
 		setWidth(shortCommand, 'scrollWidth', 320)
-		Object.defineProperty(window, 'matchMedia', {
-			configurable: true,
-			value: (query: string) => ({
-				matches: query === '(max-width: 640px)',
-				media: query,
-				onchange: undefined,
-				addEventListener() {},
-				removeEventListener() {},
-				addListener() {},
-				removeListener() {},
-				dispatchEvent() {
-					return true
-				},
-			}),
-		})
+		mockMatchMedia('(max-width: 640px)')
 
 		const runtime = await Bun.file('docs/assets/js/responsiveDocs.js').text()
 		Function(runtime)()
@@ -157,7 +169,7 @@ test('responsive docs compact equations and label unavoidable equation and table
 		const complexTable = document.querySelector('[data-complex-table]')
 		if (responsiveTable === null || complexTable === null) throw new Error('Responsive table fixtures are incomplete')
 		setWidth(bareTableContainer, 'clientWidth', 320)
-		setWidth(bareTableContainer, 'scrollWidth', 640)
+		setTableScrollWidth(bareTableContainer, 640, 320)
 		window.dispatchEvent(new Event('resize'))
 		await Bun.sleep(20)
 
@@ -192,9 +204,12 @@ test('responsive docs compact equations and label unavoidable equation and table
 		expect(tableWrap.querySelector('.docs-overflow-cue')?.textContent).toContain('full table')
 		expect(wideCommand.querySelector('.docs-overflow-cue')?.textContent).toContain('full command')
 		expect(shortCommand.querySelector('.docs-overflow-cue')).toBeNull()
-		expect(bareTableContainer.getAttribute('role')).toBe('region')
-		expect(bareTableContainer.getAttribute('aria-label')).toBe('Deployment mapping')
 		expect(responsiveTable.classList.contains('docs-responsive-table')).toBeTrue()
+		expect(responsiveTable.classList.contains('docs-table-cards')).toBeTrue()
+		expect(bareTableContainer.hasAttribute('role')).toBeFalse()
+		expect(bareTableContainer.hasAttribute('aria-label')).toBeFalse()
+		expect(tableWrap.getAttribute('role')).toBe('region')
+		expect(tableWrap.getAttribute('tabindex')).toBe('0')
 		expect(responsiveTable.classList.contains('wide-table')).toBeTrue()
 		expect(responsiveTable.classList.contains('invalid-table')).toBeTrue()
 		expect(responsiveTable.querySelector('tbody td')?.getAttribute('data-docs-label')).toBe('Contract')
@@ -202,6 +217,73 @@ test('responsive docs compact equations and label unavoidable equation and table
 		expect(bareTableContainer.hasAttribute('tabindex')).toBeFalse()
 		expect(bareTableContainer.querySelector('.docs-overflow-cue')).toBeNull()
 		expect(complexTable.classList.contains('docs-table-scroll-only')).toBeTrue()
+	} finally {
+		environment.cleanup()
+	}
+})
+
+test('wide desktop tables reflow into cards, and only a table that still scrolls becomes a named region', async () => {
+	const environment = installDomEnvironment('http://localhost/docs/reference/contracts/securitypool.html')
+	try {
+		document.write(`
+			<h2>State-changing interactions</h2>
+			<table data-wide-table>
+				<thead><tr><th>Transaction</th><th>Caller</th><th>Effect</th></tr></thead>
+				<tbody><tr><td><code>depositRep(amount)</code></td><td>Vault owner</td><td>Moves REP into the pool</td></tr></tbody>
+			</table>
+			<h2>Fitting reference</h2>
+			<table data-fitting-table>
+				<thead><tr><th>Name</th><th>Meaning</th></tr></thead>
+				<tbody><tr><td>Safety</td><td>A forbidden transition cannot succeed.</td></tr></tbody>
+			</table>
+			<h2>Complex layout</h2>
+			<table data-complex-table>
+				<thead><tr><th colspan="2">Merged heading</th></tr></thead>
+				<tbody><tr><td>One</td><td>Two</td></tr></tbody>
+			</table>
+		`)
+		mockMatchMedia(undefined)
+		Function(await Bun.file('docs/assets/js/responsiveDocs.js').text())()
+		document.dispatchEvent(new Event('DOMContentLoaded'))
+
+		const container = (selector: string) => {
+			const table = document.querySelector(selector)
+			const wrapper = table?.parentElement
+			if (table === null || !(wrapper instanceof HTMLElement) || !wrapper.classList.contains('docs-auto-table-scroll')) throw new Error(`${selector} was not wrapped in a responsive container`)
+			return { table, wrapper }
+		}
+		const wide = container('[data-wide-table]')
+		const fitting = container('[data-fitting-table]')
+		const complex = container('[data-complex-table]')
+		for (const { wrapper } of [wide, fitting, complex]) setWidth(wrapper, 'clientWidth', 700)
+		setTableScrollWidth(wide.wrapper, 1400, 700)
+		setTableScrollWidth(fitting.wrapper, 700, 700)
+		setTableScrollWidth(complex.wrapper, 1100, 1100)
+		window.dispatchEvent(new Event('resize'))
+		await Bun.sleep(20)
+
+		expect(wide.table.classList.contains('docs-table-cards')).toBeTrue()
+		expect(wide.wrapper.hasAttribute('role')).toBeFalse()
+		expect(wide.wrapper.hasAttribute('tabindex')).toBeFalse()
+		expect(wide.wrapper.querySelector('.docs-overflow-cue')).toBeNull()
+
+		expect(fitting.table.classList.contains('docs-table-cards')).toBeFalse()
+		expect(fitting.wrapper.hasAttribute('role')).toBeFalse()
+		expect(fitting.wrapper.hasAttribute('tabindex')).toBeFalse()
+
+		expect(complex.table.classList.contains('docs-table-cards')).toBeFalse()
+		expect(complex.wrapper.getAttribute('role')).toBe('region')
+		expect(complex.wrapper.getAttribute('aria-label')).toBe('Complex layout table')
+		expect(complex.wrapper.getAttribute('tabindex')).toBe('0')
+		expect(complex.wrapper.firstElementChild?.classList.contains('docs-overflow-cue')).toBeTrue()
+
+		setTableScrollWidth(complex.wrapper, 700, 700)
+		window.dispatchEvent(new Event('resize'))
+		await Bun.sleep(20)
+		expect(complex.wrapper.hasAttribute('role')).toBeFalse()
+		expect(complex.wrapper.hasAttribute('aria-label')).toBeFalse()
+		expect(complex.wrapper.hasAttribute('tabindex')).toBeFalse()
+		expect(complex.wrapper.querySelector('.docs-overflow-cue')).toBeNull()
 	} finally {
 		environment.cleanup()
 	}

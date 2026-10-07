@@ -9,5 +9,6 @@ type LoadableValueProps = {
 }
 
 export function LoadableValue({ children, loading, placeholder = commonCopy.loadingWithEllipsis }: LoadableValueProps) {
-	return loading ? <LoadingText>{placeholder}</LoadingText> : <>{children}</>
+	// A value placeholder stays silent; the surrounding section owns any loading announcement.
+	return loading ? <LoadingText announce={false}>{placeholder}</LoadingText> : <>{children}</>
 }

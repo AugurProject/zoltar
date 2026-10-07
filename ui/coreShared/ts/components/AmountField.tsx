@@ -4,6 +4,7 @@ import * as commonCopy from '../copy/common.js'
 import { AMOUNT_INPUT_PATTERN, formatAmountForDisplay, getAmountInputErrorMessage, getAmountPreset, validateAmountInput } from '../forms/amountInput.js'
 import { formatCurrencyInputBalance } from '../lib/formatters.js'
 import { FormInput } from './FormInput.js'
+import { UserMessage } from './UserMessage.js'
 
 type AmountFieldProps = {
 	label: ComponentChildren
@@ -17,8 +18,12 @@ type AmountFieldProps = {
 	minimum?: bigint | undefined
 	/** Largest accepted amount; larger inputs show an above-maximum error. */
 	maximum?: bigint | undefined
-	/** Shows a Max button that fills `amount`; it is disabled, with `unavailableReason` as its tooltip, while the amount is unknown or not positive. */
-	fillMax?: { amount: bigint | undefined; unavailableReason?: string | undefined } | undefined
+	/**
+	 * Shows a Max button that fills `amount`; while the amount is unknown or not positive it is disabled and `unavailableReason`
+	 * is shown below the field and describes the button. Set `showUnavailableReason: false` where the surrounding form already
+	 * presents that reason; the button then keeps it only as its tooltip.
+	 */
+	fillMax?: { amount: bigint | undefined; unavailableReason?: string | undefined; showUnavailableReason?: boolean | undefined } | undefined
 	/** Integer percentages of the Max amount offered as quick fills, such as `[25, 50]`. */
 	percentPresets?: readonly number[] | undefined
 	/** Balance the amount is drawn from. Shown as a hint and checked as an upper bound. */
@@ -41,6 +46,8 @@ type AmountFieldProps = {
 /** Amount input with a unit, decimal keypad, balance hint, Max button, and errors that appear after blur instead of while typing. */
 export function AmountField({ allowZero = false, balance, balanceLabel = commonCopy.balance, decimals = 18, disabled = false, error, errorId, errorRevealed, hint, id, fillMax, label, maximum, minimum, onChange, onErrorRevealedChange, percentPresets = [], placeholder, unit, value }: AmountFieldProps) {
 	const generatedId = useId()
+	const maxReasonId = useId()
+	const hintId = useId()
 	const inputId = id ?? generatedId
 	const [internalErrorRevealed, setInternalErrorRevealed] = useState(false)
 	const revealed = errorRevealed ?? internalErrorRevealed
@@ -58,15 +65,25 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 		onChange(formatCurrencyInputBalance(amount, decimals))
 		setRevealed(true)
 	}
+	const balanceHint = balance === undefined || showsBalanceError ? undefined : commonCopy.formatLabelValue(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
 	const fillMaxAmount = fillMax?.amount
 	const fillUnavailable = disabled || fillMaxAmount === undefined || fillMaxAmount <= 0n
+	// A disabled button cannot be focused and touch devices never show a title, so the reason is visible text that describes the
+	// button. A reason the field hint already states is referenced instead of repeated, and a field disabled as a whole, or a
+	// form that presents the reason itself, keeps it only as the tooltip.
+	const fieldHint = hint ?? balanceHint
+	const maxUnavailableReason = fillUnavailable ? fillMax?.unavailableReason : undefined
+	const maxReasonIsHint = maxUnavailableReason !== undefined && maxUnavailableReason === fieldHint
+	const showsMaxReason = !disabled && maxUnavailableReason !== undefined && fillMax?.showUnavailableReason !== false && !maxReasonIsHint
+	let maxReasonDescriptionId: string | undefined
+	if (maxReasonIsHint) maxReasonDescriptionId = hintId
+	else if (showsMaxReason) maxReasonDescriptionId = maxReasonId
 	const maxButton =
 		fillMax === undefined ? undefined : (
-			<button className='quiet field-inline-action' type='button' disabled={fillUnavailable} title={fillUnavailable ? fillMax.unavailableReason : undefined} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(fillMaxAmount))}>
+			<button className='quiet field-inline-action' type='button' disabled={fillUnavailable} aria-describedby={maxReasonDescriptionId} title={maxReasonDescriptionId === undefined ? maxUnavailableReason : undefined} onClick={() => (fillMaxAmount === undefined ? undefined : fillAmount(fillMaxAmount))}>
 				{commonCopy.max}
 			</button>
 		)
-	const balanceHint = balance === undefined || showsBalanceError ? undefined : commonCopy.formatLabelValue(balanceLabel, formatAmountForDisplay(balance, decimals, unit))
 	// A lone symbol such as × reads as a speck at label size, so it renders at body size.
 	const adornment = unit !== undefined && [...unit].length === 1 ? <span className='form-input-adornment-symbol'>{unit}</span> : unit
 	return (
@@ -80,9 +97,9 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 				autoComplete='off'
 				disabled={disabled}
 				error={visibleError}
-				invalid={revealed && validation.status === 'invalid'}
 				errorId={errorId}
-				hint={hint ?? balanceHint}
+				hint={fieldHint}
+				hintId={hintId}
 				id={inputId}
 				inputMode='decimal'
 				liveError
@@ -96,6 +113,7 @@ export function AmountField({ allowZero = false, balance, balanceLabel = commonC
 				spellcheck={false}
 				value={value}
 			/>
+			{showsMaxReason ? <UserMessage placement='field' id={maxReasonId} detail={maxUnavailableReason} /> : undefined}
 			{percentPresets.length === 0 ? undefined : (
 				<div className='amount-field-presets'>
 					{percentPresets.map(percent => (

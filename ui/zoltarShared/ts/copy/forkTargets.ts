@@ -6,6 +6,7 @@ export const scalarValuePrompt = 'Enter a value'
 export const deployedScalarChildren = 'Deployed child universes'
 export const noTargetsSelected = 'No target child universes selected.'
 export const noTargetsAvailable = 'No target child universes available.'
+export const formatTargetUnavailable = (target: string, reason: string) => `${target}: ${reason}`
 
 export function formatSelectedTargetCount(count: number) {
 	return count === 1 ? '1 target selected' : `${count.toString()} targets selected`

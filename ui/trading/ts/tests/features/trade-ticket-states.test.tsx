@@ -108,6 +108,14 @@ describe('trade ticket states', () => {
 		expect(describedBy.map(id => container.ownerDocument.getElementById(id)?.textContent)).toContain('Insufficient ETH balance.')
 	})
 
+	test('a blocking field error stays visible beside the disabled action', async () => {
+		const describedTexts = (container: HTMLElement) => (container.querySelector('.transaction-outcome .tx-action-button')?.getAttribute('aria-describedby')?.split(' ') ?? []).map(id => container.ownerDocument.getElementById(id)?.textContent ?? '')
+		const besideAction = (container: HTMLElement) => container.querySelector('.transaction-outcome .tx-action-feedback')?.textContent ?? ''
+		const overBalance = await renderTicket(positionTicket({ amount: '2' }))
+		expect(besideAction(overBalance)).toContain('Insufficient ETH balance.')
+		expect(describedTexts(overBalance).some(text => text.includes('Insufficient ETH balance.'))).toBeTrue()
+	})
+
 	test('Enter in the amount field submits only when the trade is ready', async () => {
 		let submitted = 0
 		const submit = async () => void (submitted += 1)
@@ -138,7 +146,12 @@ describe('trade ticket states', () => {
 		expect(visible).toMatch(/Profit if the question resolves Yes\+[\d.]+ ETH \(\+[\d.]+%\)/)
 		expect(visible).not.toContain('Price impact')
 		const details = container.querySelector('.trade-estimate details')?.textContent
-		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'Invalid insurance', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)
+		for (const phrase of ['Price impact', 'Trading fee', '0.3% · ≈ 0.00', 'you keep their Invalid shares', 'Holding fees reduce ETH payouts']) expect(details).toContain(phrase)
+		// The headline states what each resolution pays: the bought outcome, the Invalid shares the buy keeps, and nothing on the other outcome.
+		const headline = container.querySelector('.transaction-review-primary')?.textContent
+		for (const phrase of ['You receive ≈', 'if the question resolves Yes', 'Invalid insurance', 'Invalid (', 'if the question resolves Invalid', '0 ETH if No']) expect(headline).toContain(phrase)
+		expect(headline).not.toContain('0 ETH otherwise')
+		expect(details).not.toContain('Invalid insurance')
 		// The odds preview sits in the estimate, below the amount, so typing never moves the field.
 		expect(container.querySelector('.trade-estimate .probability')).not.toBeNull()
 		expect(container.querySelector('.position-controls > .probability')).toBeNull()

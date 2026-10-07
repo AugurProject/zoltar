@@ -6,7 +6,7 @@ export const maximumInsuredNoExit = 'Maximum insured No exit'
 export const disconnectedTitle = 'Connect a wallet to see your positions'
 export const portfolioBalancesUnavailable = 'Portfolio balances could not be loaded.'
 export const noPositions = 'No positions'
-export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in your favorite markets.'
+export const noPortfolioBalances = 'No Yes, No, Invalid, or LP balance was found in your favorite markets. Portfolio only covers markets opened in this browser.'
 
 export function noPositionsInUniverse(universe: string) {
 	return `No positions in ${universe}`
@@ -59,6 +59,8 @@ export function actionFor(action: string, marketTitle: string) {
 }
 
 export const noFavoriteMarkets = 'No favorite markets in this universe'
-export const favoriteGuidance = 'Open a security pool by address in Markets to add it here.'
+/** Portfolio reads balances only for markets this browser opened; holdings elsewhere are not discovered. */
+export const favoriteGuidance = 'Portfolio only covers markets opened in this browser. Open a security pool by address in Markets to add it here.'
+export const browseMarkets = 'Browse markets'
 
 export const refreshPortfolio = 'Refresh portfolio'

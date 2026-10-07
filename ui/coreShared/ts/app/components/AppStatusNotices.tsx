@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'preact/hooks'
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
 import { NoticeStack } from '../../components/NoticeStack.js'
@@ -9,6 +10,8 @@ type AppStatusNoticesProps = {
 	errorMessages?: readonly string[]
 	loadingZoltarUniverse?: boolean
 	onRetryZoltarUniverse?: (() => void) | undefined
+	/** Validates an unreachable read RPC again now; without it the notice relies on the automatic retries. */
+	onRetryReadBackend?: (() => void) | undefined
 	readBackendMessage: string | undefined
 	readBackendStatus?: ReadBackendStatus | undefined
 	simulationBootstrapError: string | undefined
@@ -29,7 +32,26 @@ function getConfiguredRpcLabel(readBackendStatus: ReadBackendStatus) {
 	return readBackendStatus.transportMode === 'provider' ? appCopy.configuredFallbackReadRpc : appCopy.activeReadRpc
 }
 
-function buildReadBackendNotice(readBackendMessage: string, readBackendStatus: ReadBackendStatus | undefined): NoticeItem {
+function buildReadBackendNotice(readBackendMessage: string, readBackendStatus: ReadBackendStatus | undefined, onRetry: (() => void) | undefined): NoticeItem {
+	if (readBackendStatus?.issue === 'unreachable')
+		return {
+			// The route content is withheld until the read RPC responds, so the notice says so and offers a retry.
+			detail: (
+				<>
+					<p>{`${readBackendMessage} ${appCopy.unavailableReadBackendDetail}`}</p>
+					{onRetry === undefined ? undefined : (
+						<div className='actions'>
+							<button type='button' className='secondary' onClick={onRetry}>
+								{commonCopy.retry}
+							</button>
+						</div>
+					)}
+				</>
+			),
+			id: 'read-backend-unreachable',
+			tone: 'blocking',
+			title: appCopy.readRpcUnavailable,
+		}
 	const stale = readBackendStatus?.issue === 'stale'
 	return {
 		detail: `${readBackendMessage} ${stale ? appCopy.staleReadBackendDetail : appCopy.readWriteNetworkMismatchDetail}`,
@@ -73,12 +95,23 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUniverse = false, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZoltarUniverse = false, onRetryReadBackend, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
+	const distinctErrorMessages = [...new Set([errorMessage, ...errorMessages].filter((message): message is string => message !== undefined))]
+	// Error reports (a failed wallet request, a refresh that did not load) can be closed; one reappears only after it clears and recurs.
+	const [dismissedErrorMessages, setDismissedErrorMessages] = useState<readonly string[]>([])
+	const distinctErrorKey = distinctErrorMessages.join('\n')
+	useEffect(() => {
+		const reported = distinctErrorKey.split('\n')
+		setDismissedErrorMessages(current => {
+			const stillReported = current.filter(message => reported.includes(message))
+			return stillReported.length === current.length ? current : stillReported
+		})
+	}, [distinctErrorKey])
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
 	if (showApplicationDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
-	if (readBackendMessage !== undefined) items.push(buildReadBackendNotice(readBackendMessage, readBackendStatus))
+	if (readBackendMessage !== undefined) items.push(buildReadBackendNotice(readBackendMessage, readBackendStatus, onRetryReadBackend))
 	if (zoltarUniverseError !== undefined)
 		items.push({
 			detail: (
@@ -97,8 +130,16 @@ export function AppStatusNotices({ errorMessage, errorMessages = [], loadingZolt
 			tone: 'blocking',
 			title: commonCopy.error,
 		})
-	const distinctErrorMessages = [...new Set([errorMessage, ...errorMessages].filter((message): message is string => message !== undefined))]
-	for (const [index, message] of distinctErrorMessages.entries()) items.push({ detail: message, id: `app-error-${index.toString()}`, tone: 'blocking', title: commonCopy.error })
+	for (const [index, message] of distinctErrorMessages.entries()) {
+		if (dismissedErrorMessages.includes(message)) continue
+		items.push({
+			detail: message,
+			dismiss: { label: appCopy.dismissNotice, onDismiss: () => setDismissedErrorMessages(current => [...current, message]) },
+			id: `app-error-${index.toString()}`,
+			tone: 'blocking',
+			title: commonCopy.error,
+		})
+	}
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)
 
 	return <NoticeStack items={items} />

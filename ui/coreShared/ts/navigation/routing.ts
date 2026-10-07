@@ -1,3 +1,5 @@
+import { replaceHistoryUrl } from './historyEntries.js'
+
 export type AppRoute = string
 
 type RouteDefinitionBase = {
@@ -140,9 +142,14 @@ export function createRouting<TRoute extends AppRoute>(config: RoutingConfig<TRo
 	}
 }
 
+/** Gives a hashless landing URL the default route's hash in place, so Back leaves the application instead of reopening the same page. */
 export function ensureRouteHash() {
 	const routing = requireRouting()
-	if (window.location.hash === '') window.location.hash = routing.hashByRoute[routing.config.defaultRoute] ?? ''
+	const defaultHash = routing.hashByRoute[routing.config.defaultRoute]
+	if (window.location.hash !== '' || defaultHash === undefined) return
+	replaceHistoryUrl(defaultHash)
+	// History writes do not fire hashchange; route and search state still have to observe the canonical hash.
+	window.dispatchEvent(new Event('hashchange'))
 }
 
 export function getCurrentRoute(): AppRoute | 'not-found' {

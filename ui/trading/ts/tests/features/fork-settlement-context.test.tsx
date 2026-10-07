@@ -31,7 +31,7 @@ const forkContext: ForkMigrationContext = {
 	parentUniverseId: market.universeId,
 	questionId: 99n,
 	title: 'Which branch wins?',
-	availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool }],
+	availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, migrated: { invalid: 0n, yes: 0n, no: 0n } }],
 }
 
 async function settleEffects() {
@@ -214,5 +214,86 @@ describe('live fork settlement context', () => {
 		await act(() => render(settlementView(nextAccount, nextWalletClient, { ...balances, yes: 2n }), rendered.container))
 		await settleEffects()
 		expect(document.body.textContent).not.toContain('confirmed.')
+	})
+	test('shows a confirmed migration as done: the child universe is marked and linked, the balance reads as locked, and the same migration is blocked', async () => {
+		const migratedContext: ForkMigrationContext = { ...forkContext, availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool, migrated: { invalid: 0n, yes: 10n ** 18n, no: 0n } }] }
+		let migrated = false
+		const loadedAccounts: (string | undefined)[] = []
+		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })
+		const walletClient = createWalletClient({
+			account,
+			transport: custom({
+				request: async ({ method }) => {
+					if (method === 'eth_getTransactionByHash') return null
+					if (method !== 'eth_getTransactionReceipt') throw new Error(`Unexpected RPC method: ${method}`)
+					return { blockHash, blockNumber: '0xc', cumulativeGasUsed: '0x5208', from: account, gasUsed: '0x5208', logs: [], status: '0x1', to: shareToken, transactionHash, transactionIndex: '0x0', type: '0x2' }
+				},
+			}),
+		})
+		const rendered = await renderIntoDocument(
+			<LiveSettlementControls
+				nowSeconds={100n}
+				configuration={configuration}
+				market={market}
+				balances={{ scope: shareBalanceScope(market), invalid: 0n, yes: 10n ** 18n, no: 0n, lp: 0n }}
+				balanceState='ready'
+				balanceError={undefined}
+				account={account}
+				walletClient={walletClient}
+				networkMismatchReason={undefined}
+				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
+				settings={DEFAULT_TRADE_SETTINGS}
+				externallyLocked={false}
+				refresh={async () => undefined}
+				onKnownReceipt={() => undefined}
+				executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
+				createGuardedWalletWrite={() => async write => await write()}
+				retryBalances={async () => undefined}
+				onWorkflowLockChange={() => undefined}
+				services={{
+					createPublicClient: () => publicClient,
+					loadForkContext: async (_client, _market, loadedAccount) => {
+						loadedAccounts.push(loadedAccount)
+						return migrated ? migratedContext : forkContext
+					},
+					submit: async () => {
+						migrated = true
+						return transactionHash
+					},
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await settleEffects()
+		// The migration record is read for the connected account.
+		expect(loadedAccounts).toEqual([account])
+		expect(document.body.textContent).toContain('Balance: 1 Yes')
+		expect(document.body.textContent).not.toContain('locked after migration')
+		const redTarget = () => {
+			const target = Array.from(document.querySelectorAll('.migration-outcome-select')).find(candidate => candidate.textContent?.includes('Red') === true)
+			if (!(target instanceof HTMLButtonElement)) throw new Error('Missing categorical fork target')
+			return target
+		}
+		await act(() => redTarget().click())
+		const acknowledgment = () => document.querySelector<HTMLInputElement>('.trade-impact-acknowledge input[type="checkbox"]')
+		await act(() => acknowledgment()?.click())
+		await act(() => buttonByLabel('Migrate to 1 child universe').click())
+		await settleEffects()
+		expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.')
+		expect(loadedAccounts).toHaveLength(2)
+
+		// The child universe that received the balance is marked migrated, and the balance left behind is locked.
+		expect(redTarget().textContent).toContain('Migrated')
+		expect(document.body.textContent).toMatch(/Balance: 1 Yes \([^)]*\) · locked after migration/)
+		// The migrated shares are reachable in the child universe's security pool.
+		const childLink = Array.from(document.querySelectorAll('.fork-migrated-list a')).find(link => link.textContent === 'Open in Red universe')
+		expect(childLink?.getAttribute('href')).toContain(`#/market/${canonicalPool}`)
+		expect(childLink?.getAttribute('href')).toContain('universe=101')
+		// Selecting it again would migrate nothing, so the migrated target cannot be selected and says why.
+		expect(redTarget().disabled).toBe(true)
+		expect(redTarget().closest('.migration-outcome-row')?.textContent).toContain('This share is already migrated to this child universe.')
+		await act(() => redTarget().click())
+		expect(redTarget().getAttribute('aria-pressed') === 'true' || redTarget().getAttribute('aria-checked') === 'true').toBe(false)
+		expect(acknowledgment()?.checked ?? false).toBe(false)
 	})
 })

@@ -4,10 +4,11 @@ import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, normalizeAccount } from '../../wallet/clients.js'
 import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
-import { getErrorMessage } from '../../lib/errors.js'
+import { getErrorMessage, isWalletRejection } from '../../lib/errors.js'
+import { sameAddress } from '../../lib/address.js'
 import { getActiveBackend, getActiveSimulationController } from '../../lib/activeEnvironment.js'
 import { appBlockWatcher, blockPollIntervalMilliseconds } from '../../lib/dataRefresh.js'
-import { getNetworkSwitchTarget, getPublicNetworkProfileForChainId } from '../../wallet/networkProfile.js'
+import { getPublicNetworkProfileForChainId } from '../../wallet/networkProfile.js'
 import { useRequestGuard } from '../../lib/requestGuard.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
 import type { DeploymentStatus, DeploymentStep, ReadClient } from '../../types/contracts.js'
@@ -15,6 +16,8 @@ import { useLoadController } from '../../hooks/useLoadController.js'
 import { sameChainId } from '../../wallet/chainId.js'
 import { type ChainClock, getReadBackendStatus, validateConfiguredReadBackend, loadBackendChainClock } from './readBackendValidation.js'
 import { loadWalletState } from './loadWalletState.js'
+import { useReadBackendRecovery, useWalletBalanceRefresh } from './onchainStateRecovery.js'
+import { beginWalletAction, createWalletManagementActions } from './walletManagementActions.js'
 
 export type UseOnchainStateOptions = {
 	activeEnvironmentNonce?: number
@@ -58,6 +61,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const isConnectingWallet = useSignal(false)
 	const isManagingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
+	// Bumped by every full refresh, so a background balance read that started earlier never overwrites newer balances.
+	const balanceReadGenerationRef = useRef(0)
 	const nextChainClockRefresh = useRequestGuard()
 	const chainClockRefreshRef = useRef<{ activeEnvironmentNonce: number; backend: ChainBackend; promise: Promise<void> } | undefined>(undefined)
 	const renderedBackend = getActiveBackend()
@@ -202,6 +207,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		const backend = getActiveBackend()
 		updateReadBackendStatus(backend)
 		const isCurrent = nextRefresh()
+		balanceReadGenerationRef.current += 1
 		if (shouldLoadWalletState) walletStateLoad.invalidate()
 		if (shouldLoadDeploymentState) deploymentStatusLoad.invalidate()
 		let connectedAddress: Address | undefined
@@ -292,11 +298,13 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			} catch (error) {
 				if (!isCurrent()) return
 				invalidateDeploymentState()
+				// An unreachable read RPC blocks content like any other untrusted read RPC: the notice explains it and the hook retries.
 				batch(() => {
 					deploymentStatusError.value = 'Deployment status could not be refreshed because read RPC validation failed.'
 					readBackendValidated.value = false
-					errorMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
+					readBackendMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
 				})
+				updateReadBackendStatus(backend, undefined, 'unreachable')
 			}
 		} else {
 			batch(() => {
@@ -343,11 +351,14 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		await walletStateLoad.track(async () => {
 			try {
 				batch(() => {
+					// The same account on the same network keeps its last balances while they reload, so balance-based reasons do not flip to loading.
+					const previous = accountState.value
+					const keepBalances = connectedAddress !== undefined && walletOnExpectedChain && sameAddress(previous.address, connectedAddress) && sameChainId(previous.chainId, connectedChainId)
 					accountState.value = {
 						address: connectedAddress,
-						chainId: accountState.value.chainId,
-						ethBalanceAttoEth: undefined,
-						wethBalanceAttoEth: undefined,
+						chainId: previous.chainId,
+						ethBalanceAttoEth: keepBalances ? previous.ethBalanceAttoEth : undefined,
+						wethBalanceAttoEth: keepBalances ? previous.wethBalanceAttoEth : undefined,
 					}
 
 					walletBootstrapComplete.value = true
@@ -401,14 +412,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			return
 		}
 		if (isConnectingWallet.value) return
-		connectWalletGenerationRef.current += 1
-		const requestGeneration = connectWalletGenerationRef.current
-		const requestContext = { activeEnvironmentNonce, backend }
-		const isCurrentAction = () => {
-			const currentContext = walletActionContextRef.current
-			return requestGeneration === connectWalletGenerationRef.current && requestContext.activeEnvironmentNonce === currentContext.activeEnvironmentNonce && requestContext.backend === currentContext.backend
-		}
-
+		const isCurrentAction = beginWalletAction(connectWalletGenerationRef, walletActionContextRef, activeEnvironmentNonce, backend)
 		try {
 			batch(() => {
 				isConnectingWallet.value = true
@@ -419,6 +423,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			await refreshState()
 		} catch (error) {
 			if (!isCurrentAction()) return
+			// Declining the wallet prompt is the user's choice, not an application error.
+			if (isWalletRejection(error)) return
 			errorMessage.value = getErrorMessage(error, 'Wallet connection failed')
 		} finally {
 			if (isCurrentAction()) isConnectingWallet.value = false
@@ -427,13 +433,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const runWalletManagementAction = async (action: (backend: ChainBackend) => Promise<void>, fallbackMessage: string) => {
 		if (isManagingWallet.value) return
 		const backend = getActiveBackend()
-		manageWalletGenerationRef.current += 1
-		const requestGeneration = manageWalletGenerationRef.current
-		const requestContext = { activeEnvironmentNonce, backend }
-		const isCurrentAction = () => {
-			const currentContext = walletActionContextRef.current
-			return requestGeneration === manageWalletGenerationRef.current && requestContext.activeEnvironmentNonce === currentContext.activeEnvironmentNonce && requestContext.backend === currentContext.backend
-		}
+		const isCurrentAction = beginWalletAction(manageWalletGenerationRef, walletActionContextRef, activeEnvironmentNonce, backend)
 		try {
 			batch(() => {
 				isManagingWallet.value = true
@@ -444,26 +444,13 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			await refreshState()
 		} catch (error) {
 			if (!isCurrentAction()) return
+			if (isWalletRejection(error)) return
 			errorMessage.value = getErrorMessage(error, fallbackMessage)
 		} finally {
 			if (isCurrentAction()) isManagingWallet.value = false
 		}
 	}
-	const changeWallet = async () =>
-		await runWalletManagementAction(async backend => {
-			if (backend.requestAccountSelection === undefined) throw new Error('This wallet does not support account switching from the application. Open the wallet and choose another account.')
-			await backend.requestAccountSelection()
-		}, 'Wallet account change failed')
-	const disconnectWallet = async () =>
-		await runWalletManagementAction(async backend => {
-			if (backend.disconnectWallet === undefined) throw new Error('This wallet does not support disconnecting from the application. Disconnect this site in the wallet.')
-			await backend.disconnectWallet()
-		}, 'Wallet disconnect failed')
-	const switchNetwork = async () =>
-		await runWalletManagementAction(async backend => {
-			if (backend.switchNetwork === undefined) throw new Error(`This wallet does not support switching networks from the application. Switch to ${getNetworkSwitchTarget(backend.profile)} in the wallet.`)
-			await backend.switchNetwork()
-		}, 'Network switch failed')
+	const { changeWallet, disconnectWallet, switchNetwork } = createWalletManagementActions(runWalletManagementAction)
 
 	useEffect(() => {
 		void refreshState()
@@ -568,6 +555,16 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		)
 	}, [activeEnvironmentNonce, enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
+	useWalletBalanceRefresh({ accountState, activeEnvironmentNonce, balanceReadGeneration: balanceReadGenerationRef, dependencies, walletStateLoad })
+	useReadBackendRecovery({
+		activeEnvironmentNonce,
+		onProbeFailed: error => {
+			readBackendMessage.value = getErrorMessage(error, 'Failed to validate the configured read RPC')
+		},
+		refreshState: () => refreshState(),
+		unreachable: readBackendStatus.value.issue === 'unreachable',
+	})
+
 	const isBootstrappingEnvironment = useComputed(() => environmentReadyLoad.isLoading.value || getActiveBackend().isBootstrapping === true)
 	// Signals stay inside the hook; consumers receive the values read during this render.
 	return {
@@ -598,6 +595,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		changeWallet,
 		connectWallet,
 		refreshState,
+		/** Validates the read RPC again now, for a notice's retry action. */
+		retryReadBackend: () => refreshState(),
 		setDeploymentStatuses,
 		disconnectWallet,
 		switchNetwork,

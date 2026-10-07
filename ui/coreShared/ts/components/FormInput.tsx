@@ -10,6 +10,8 @@ type FormInputProps = JSX.IntrinsicElements['input'] & {
 	/** Fixed id for the error message so another control, such as a disabled submit button, can reference it. */
 	errorId?: string | undefined
 	hint?: ComponentChildren
+	/** Fixed id for the hint so another control, such as a disabled Max button, can reference it. */
+	hintId?: string | undefined
 	invalid?: boolean
 	/** Keeps a polite live region mounted so an error that appears after blur or submit is announced without interrupting typing. */
 	liveError?: boolean
@@ -20,14 +22,14 @@ function joinIds(...ids: Array<string | undefined>) {
 	return joined === '' ? undefined : joined
 }
 
-export function FormInput({ action, adornment, 'aria-describedby': ariaDescribedBy, className = '', error, errorId: fixedErrorId, hint, invalid = false, liveError = false, ...props }: FormInputProps) {
+export function FormInput({ action, adornment, 'aria-describedby': ariaDescribedBy, className = '', error, errorId: fixedErrorId, hint, hintId: fixedHintId, invalid = false, liveError = false, ...props }: FormInputProps) {
 	const generatedErrorId = useId()
 	const generatedHintId = useId()
 	const generatedAdornmentId = useId()
 	const hasError = error !== undefined
 	const isInvalid = invalid || hasError
 	const errorId = hasError ? (fixedErrorId ?? generatedErrorId) : undefined
-	const hintId = hint === undefined ? undefined : generatedHintId
+	const hintId = hint === undefined ? undefined : (fixedHintId ?? generatedHintId)
 	const adornmentId = adornment === undefined ? undefined : generatedAdornmentId
 	const describedBy = joinIds(typeof ariaDescribedBy === 'string' ? ariaDescribedBy : undefined, errorId, hintId, adornmentId)
 	const nextClassName = ['form-input', isInvalid ? 'is-invalid' : '', className].filter(Boolean).join(' ')

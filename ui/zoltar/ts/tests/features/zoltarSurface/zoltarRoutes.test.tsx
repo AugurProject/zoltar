@@ -230,9 +230,11 @@ describe('ZoltarRoutes', () => {
 		expect(screen.queries.queryByText(message)).toBeNull()
 	})
 
-	test('redirects a Fork route on a forked universe to migration', async () => {
+	test('reports a forked universe as done on the Fork route and leads to migration', async () => {
 		const { queries, viewChanges } = await renderRoute('fork', createUniverse())
-		expect(queries.getByText('Already forked')).toBeTruthy()
+		expect(queries.getByText('Universe forked')).toBeTruthy()
+		expect(document.querySelector('.empty-state-detail')?.textContent).toMatch(/^Forked .+\. A universe forks only once\. Migrate REP into the child universes you back\.$/)
+		expect(document.body.textContent).not.toContain('cannot fork again')
 		fireEvent.click(queries.getByRole('button', { name: 'Migrate REP' }))
 		expect(viewChanges).toEqual(['migrate'])
 	})

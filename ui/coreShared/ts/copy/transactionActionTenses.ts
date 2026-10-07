@@ -30,3 +30,10 @@ export function formatActionTense(title: string, tense: 'pending' | 'completed')
 	if (action === undefined) return tense === 'completed' ? `${title} – done` : title
 	return `${action[tense]}${title.slice(action.verb.length)}`
 }
+
+/** Rewrites an in-progress title such as `Creating question` into its base or completed tense; other titles stay unchanged. */
+export function retenseInProgressTitle(title: string, tense: 'base' | 'completed') {
+	const action = actionTenses.find(action => title === action.pending || title.startsWith(`${action.pending} `))
+	if (action === undefined) return title
+	return `${tense === 'base' ? action.verb : action.completed}${title.slice(action.pending.length)}`
+}

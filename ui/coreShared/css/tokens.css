@@ -62,9 +62,9 @@
 	--surface-critical: light-dark(rgba(255, 228, 234, 0.9), rgba(61, 14, 25, 0.72));
 
 	/* status */
-	--success: light-dark(rgba(8, 118, 90, 1), rgba(66, 232, 194, 1));
-	--success-soft: light-dark(rgba(8, 118, 90, 0.1), rgba(66, 232, 194, 0.12));
-	--success-border: light-dark(rgba(8, 118, 90, 0.3), rgba(66, 232, 194, 0.24));
+	--success: light-dark(rgba(7, 107, 82, 1), rgba(66, 232, 194, 1));
+	--success-soft: light-dark(rgba(7, 107, 82, 0.1), rgba(66, 232, 194, 0.12));
+	--success-border: light-dark(rgba(7, 107, 82, 0.3), rgba(66, 232, 194, 0.24));
 	--success-surface-gradient: linear-gradient(180deg, light-dark(rgba(222, 245, 237, 0.96), rgba(11, 51, 43, 0.92)) 0%, light-dark(rgba(233, 249, 243, 0.96), rgba(8, 34, 29, 0.92)) 100%);
 	--warning: light-dark(rgba(135, 88, 0, 1), rgba(245, 200, 106, 1));
 	--warning-soft: light-dark(rgba(196, 136, 0, 0.12), rgba(245, 200, 106, 0.12));
@@ -83,8 +83,8 @@
 	--status-loading: light-dark(rgba(78, 96, 120, 1), rgba(145, 170, 199, 1));
 	--status-loading-soft: light-dark(rgba(78, 96, 120, 0.1), rgba(145, 170, 199, 0.12));
 	--status-loading-border: light-dark(rgba(78, 96, 120, 0.3), rgba(145, 170, 199, 0.28));
-	--outcome-yes: light-dark(rgba(10, 118, 80, 1), rgba(91, 214, 168, 1));
-	--outcome-no: light-dark(rgba(180, 40, 74, 1), rgba(241, 130, 151, 1));
+	--outcome-yes: light-dark(rgba(8, 99, 67, 1), rgba(91, 214, 168, 1));
+	--outcome-no: light-dark(rgba(158, 35, 65, 1), rgba(241, 130, 151, 1));
 	--outcome-invalid: light-dark(rgba(104, 70, 196, 1), rgba(191, 159, 255, 1));
 
 	/* controls */

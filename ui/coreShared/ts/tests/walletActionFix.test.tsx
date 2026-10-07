@@ -18,6 +18,12 @@ import { createWalletActions } from './testUtils/walletActions.js'
 const disconnectedAvailability: ActionAvailability = { disabled: true, reason: 'Connect a wallet before creating a question.', walletBlocker: { kind: 'wallet-disconnected' } }
 const wrongNetworkAvailability: ActionAvailability = { disabled: true, reason: 'Switch to Sepolia.', walletBlocker: { kind: 'wrong-network', targetChainName: 'Sepolia' } }
 
+/** The text a button's aria-describedby references, as assistive technology reads its description. */
+function getDescriptionText(button: HTMLElement) {
+	const ids = (button.getAttribute('aria-describedby') ?? '').split(' ').filter(id => id !== '')
+	return ids.map(id => document.getElementById(id)?.textContent ?? '').join(' ')
+}
+
 describe('wallet action fix', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -116,8 +122,8 @@ describe('wallet action fix', () => {
 		const page = within(document.body)
 		expect(page.queryByRole('button', { name: 'Connect wallet' })).toBeNull()
 		expect(page.queryByRole('button', { name: 'Switch to Sepolia' })).toBeNull()
-		expect(page.getByRole('note', { name: 'Without provider details' }).textContent).toContain('Connect a wallet before creating a question.')
-		expect(page.getByRole('note', { name: 'Untyped reason details' }).textContent).toContain('Switch to Sepolia.')
+		expect(getDescriptionText(page.getByRole('button', { name: 'Without provider' }))).toContain('Connect a wallet before creating a question.')
+		expect(getDescriptionText(page.getByRole('button', { name: 'Untyped reason' }))).toContain('Switch to Sepolia.')
 	})
 
 	test('returns focus to the unblocked action after the wallet connects', async () => {
@@ -197,7 +203,9 @@ describe('wallet action fix', () => {
 		)
 		const page = within(document.body)
 		expect(page.getAllByRole('button', { name: 'Connect wallet' })).toHaveLength(1)
-		expect(page.getByRole('note', { name: 'Mint details' }).textContent).toContain('Select a pool.')
+		const unblockedLauncher = page.getAllByRole('button', { name: 'Mint' })[1]
+		if (unblockedLauncher === undefined) throw new Error('Expected the second launcher')
+		expect(getDescriptionText(unblockedLauncher)).toContain('Select a pool.')
 	})
 
 	for (const promptOpen of [false, true])

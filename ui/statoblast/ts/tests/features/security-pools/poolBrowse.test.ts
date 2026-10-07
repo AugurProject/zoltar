@@ -92,6 +92,12 @@ void describe('pool browse rows', () => {
 		expect(filterPoolBrowseRows(rows, { activeUniverseId: 1n, normalizedSearchText: '0x000000000000000000000000000000000000000e', stateFilter: 'all' }).map(row => row.pool.marketDetails.title)).toEqual(['Pool 14'])
 	})
 
+	void test('filters with the badge vocabulary, so every pool badged Fork migration matches that filter', () => {
+		const rows = toRows([createPool(1, { systemState: 'poolForked' }), createPool(2, { systemState: 'forkMigration' }), createPool(3)])
+		expect(rows.map(row => row.lifecycleState)).toEqual(['poolForked', 'forkMigration', 'operational'])
+		expect(filterPoolBrowseRows(rows, { activeUniverseId: 1n, normalizedSearchText: '', stateFilter: 'forkMigration' }).map(row => row.pool.marketDetails.title)).toEqual(['Pool 1', 'Pool 2'])
+	})
+
 	void test('sorts by remaining capacity, largest first, with pools that cannot mint at zero', () => {
 		const rows = toRows([
 			createPool(1, { settlementCollateralAttoEth: 4n * 10n ** 18n }),

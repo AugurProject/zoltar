@@ -89,6 +89,13 @@ const landingWindow = new Window({ url: 'https://docs.statoblast.test/documentat
 landingWindow.document.write(landingSource)
 landingWindow.document.close()
 
+// Breadcrumbs link to documentation.html#<section id>, so every manifest section needs its landing section with the manifest's title and description.
+for (const section of manifest.sections) {
+	const landingSection = landingWindow.document.getElementById(section.id)
+	assert(landingSection !== null && landingSection.tagName === 'SECTION', `documentation.html must have a section#${section.id} for the manifest section ${section.title}`)
+	assert.equal(landingSection.querySelector('h2')?.textContent?.trim(), section.title, `documentation.html section#${section.id} heading must match docs/manifest.json`)
+	assert.equal(landingSection.querySelector('h2 + p')?.textContent?.trim(), section.description, `documentation.html section#${section.id} description must match docs/manifest.json`)
+}
 for (const link of Array.from(landingWindow.document.querySelectorAll('a[href]'))) {
 	const route = link.getAttribute('href')?.replace(/^\.\//, '')
 	if (route === undefined || !route.endsWith('.html')) continue

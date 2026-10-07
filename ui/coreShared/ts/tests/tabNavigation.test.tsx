@@ -8,6 +8,7 @@ import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { installTestRouting } from './testUtils/testRouting.js'
+import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 
 const DEFAULT_TABS: readonly RouteTabDefinition[] = [
 	{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
@@ -67,8 +68,10 @@ describe('TabNavigation', () => {
 		trackRendered(rendered)
 
 		const documentQueries = within(document.body)
-		const moreButton = documentQueries.getByRole('button', { name: 'More' })
+		// The closed menu hides the current section's link, so the trigger names it and carries the current marker.
+		const moreButton = documentQueries.getByRole('button', { name: 'More: Help' })
 		expect(moreButton.getAttribute('aria-expanded')).toBe('false')
+		expect(moreButton.getAttribute('aria-current')).toBe('true')
 		expect(moreButton.classList.contains('active')).toBe(true)
 		expect(documentQueries.queryByRole('link', { name: 'Help' })).toBeNull()
 
@@ -89,11 +92,25 @@ describe('TabNavigation', () => {
 		await waitFor(() => expect(documentQueries.queryByRole('link', { name: 'Liquidity' })).toBeNull())
 	})
 
-	test('keeps the first tab current when the route is unknown', async () => {
-		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
+	test('marks no section current when the route is unknown', async () => {
+		const moreTabs: RouteTabDefinition[] = [{ hash: '#/help', label: 'Help', route: 'help' }]
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ moreTabs, route: 'not-found' })))
 		trackRendered(rendered)
 
-		expect(within(document.body).getByRole('link', { name: 'Deploy' }).getAttribute('aria-current')).toBe('page')
+		const navigation = within(document.body).getByRole('navigation', { name: 'Application sections' })
+		expect(navigation.querySelectorAll('[aria-current]').length).toBe(0)
+		expect(navigation.querySelectorAll('.active').length).toBe(0)
+		expect(within(navigation).getByRole('button', { name: 'More' }).getAttribute('aria-current')).toBeNull()
+	})
+
+	test('names every section a shared reason disables when other sections stay available', async () => {
+		const disabledReason = 'Deploy the required contracts first'
+		const tabs = DEFAULT_TABS.map(tab => (tab.route === 'deploy' ? tab : { ...tab, disabled: true, disabledReason }))
+		const rendered = await renderIntoDocument(h(TabNavigationUnavailableReasons, { tabs }))
+		trackRendered(rendered)
+
+		const reasons = document.body.querySelectorAll('.tab-nav-unavailable .disabled-reason')
+		expect(Array.from(reasons, reason => reason.textContent)).toEqual([`Zoltar, Security pools, and OpenOracle: ${disabledReason}`])
 	})
 
 	test('uses the disabled reason copy for disabled application sections', async () => {
@@ -174,5 +191,22 @@ describe('TabNavigation', () => {
 		expect(routeChanges).toEqual([])
 		expect(window.location.href).toBe(locationBeforeClicks)
 		document.body.removeEventListener('click', preventNativeNavigation)
+	})
+
+	test('draws the keyboard focus ring after every navigation tab rule that clears it', () => {
+		const cssSource = readCoreSharedCssSource()
+		const focusSelector = '.header-toolbar-navigation .view-tabs.route .view-tab:focus-visible,'
+		const focusRuleIndex = cssSource.indexOf(focusSelector)
+		expect(focusRuleIndex).toBeGreaterThanOrEqual(0)
+		expect(cssSource.indexOf('box-shadow: inset 0 0 0 2px var(--accent);', focusRuleIndex)).toBeLessThan(cssSource.indexOf('}', focusRuleIndex))
+		// Inactive and active top-bar, bottom-bar, More, and section view tabs all reset box-shadow; the ring must come later to win ties.
+		for (const resetSelector of [
+			'.header-toolbar-navigation .view-tabs.route .view-tab,',
+			'.header-toolbar-navigation .view-tabs.route .view-tab.active,',
+			'.header-toolbar-navigation .tab-nav-more-trigger.view-tab.active {',
+			'.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab {',
+			'.route-subtab-nav.view-tabs.subroute .view-tab {',
+		])
+			expect(cssSource.lastIndexOf(resetSelector)).toBeLessThan(focusRuleIndex)
 	})
 })

@@ -11,6 +11,7 @@ import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimest
 import { ForkZoltarSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkZoltarSection.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 const ATTO_REP = 10n ** 18n
@@ -78,6 +79,13 @@ function findApproveButton(container: HTMLElement) {
 }
 
 const isForkButtonDisabled = () => within(document.body).getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')
+const FORK_CONFIRMATION = /^I understand forking permanently burns .*REP and cannot be undone\.$/
+const confirmFork = () => fireEvent.click(within(document.body).getByRole('checkbox', { name: FORK_CONFIRMATION }))
+function isForkConfirmed() {
+	const confirmation = within(document.body).getByRole('checkbox', { name: FORK_CONFIRMATION })
+	if (!(confirmation instanceof HTMLInputElement)) throw new Error('Expected the fork acknowledgment checkbox')
+	return confirmation.checked
+}
 
 describe('ForkZoltarSection', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -132,6 +140,8 @@ describe('ForkZoltarSection', () => {
 				).toBe(false)
 				expect(isForkButtonDisabled()).toBe(true)
 				render(<ForkZoltarSection {...props} zoltarForkRepBalanceAttoRep={100n} />, rendered.container)
+				expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Confirm that forking is permanent to continue.')
+				confirmFork()
 				expect(isForkButtonDisabled()).toBe(false)
 			}
 		})
@@ -204,6 +214,7 @@ describe('ForkZoltarSection', () => {
 			if (!(questionInput instanceof HTMLInputElement)) throw new Error('Expected the question ID field')
 			expect(questionInput.value).toBe(questionId)
 			expect(document.querySelector('.question-summary .identifier-value')).toBeNull()
+			confirmFork()
 			const forkButton = within(document.body).getByRole('button', { name: 'Fork universe' })
 			expect(forkButton.hasAttribute('disabled')).toBe(false)
 			fireEvent.click(forkButton)
@@ -219,10 +230,11 @@ describe('ForkZoltarSection', () => {
 			}),
 		)
 		expect(within(document.body).queryByRole('button', { name: /Approve/ })).toBeNull()
+		confirmFork()
 		expect(isForkButtonDisabled()).toBe(false)
 	})
 
-	test('keeps direct fork submission available when the selected fork question changes', async () => {
+	test('asks again for the burn acknowledgment when the selected fork question changes', async () => {
 		const questionProps = (zoltarForkQuestionId: string) =>
 			createProps({
 				zoltarForkQuestionId,
@@ -237,12 +249,15 @@ describe('ForkZoltarSection', () => {
 			})
 		const renderedComponent = await renderSection(questionProps('0x01'))
 		const componentQueries = within(renderedComponent.container)
-		const forkButton = componentQueries.getByRole('button', { name: 'Fork universe' })
-
-		expect(forkButton.hasAttribute('disabled')).toBe(false)
+		confirmFork()
+		expect(componentQueries.getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(false)
 
 		render(h(ForkZoltarSection, questionProps('0x02')), renderedComponent.container)
 
+		// The acknowledgment named the previous question, so the new one is unconfirmed until it is checked again.
+		expect(isForkConfirmed()).toBe(false)
+		expect(componentQueries.getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(true)
+		confirmFork()
 		expect(componentQueries.getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(false)
 	})
 
@@ -288,6 +303,7 @@ describe('ForkZoltarSection', () => {
 		)
 		const renderedComponent = await renderIntoDocument(atChainTime(undefined))
 		cleanupRenderedComponent = renderedComponent.cleanup
+		confirmFork()
 
 		expect(isForkButtonDisabled()).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Loading chain time…')
@@ -305,5 +321,54 @@ describe('ForkZoltarSection', () => {
 		expect(forkButton.hasAttribute('disabled')).toBe(false)
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).toHaveBeenCalledTimes(1)
+	})
+
+	test('blocks approving REP for a fork whose question has not ended, with the same reason as the fork', async () => {
+		const onApproveZoltarForkRep = mock(() => undefined)
+		await renderSection(createProps({ currentTimestamp: 1n, onApproveZoltarForkRep, zoltarForkApproval: { error: undefined, loading: false, value: 0n } }))
+
+		const activeReason = `The selected question must end before the universe can fork. It ends ${formatTimestamp(2n)} (${formatRelativeTimestamp(2n, 1n)}).`
+		const approveButton = findApproveButton(document.body)
+		expect(approveButton.hasAttribute('disabled')).toBe(true)
+		fireEvent.click(approveButton)
+		expect(onApproveZoltarForkRep).not.toHaveBeenCalled()
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe(activeReason)
+		// The group names the real blocker instead of asking for an approval that cannot be used yet.
+		expect(document.querySelector('.tx-action-group .tx-action-notice')?.textContent).toBe(activeReason)
+		expect(document.body.textContent).not.toContain('more REP approved')
+	})
+
+	test('keeps the question-timing blocker when the approval amount is also invalid', async () => {
+		await renderSection(createProps({ currentTimestamp: 1n, zoltarForkApproval: { error: undefined, loading: false, value: 0n } }))
+		const amountInput = document.querySelector<HTMLInputElement>('.approval-amount-field input')
+		if (amountInput === null) throw new Error('Approval amount field is missing')
+		await act(() => {
+			amountInput.value = '-1'
+			fireEvent.input(amountInput)
+		})
+
+		const notice = document.querySelector('.tx-action-group .tx-action-notice')?.textContent ?? ''
+		expect(notice).toContain('The selected question must end before the universe can fork.')
+		expect(notice).toContain('Enter a valid non-negative amount.')
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toContain('The selected question must end before the universe can fork.')
+	})
+
+	test('sends the irreversible fork only after its permanent burn is acknowledged', async () => {
+		const onForkZoltar = mock(() => undefined)
+		await renderSection(createProps({ onForkZoltar }))
+
+		const confirmation = within(document.body).getByRole('checkbox', { name: /^I understand forking permanently burns 20\.00\sREP and cannot be undone\.$/ })
+		expect(isForkButtonDisabled()).toBe(true)
+		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Confirm that forking is permanent to continue.')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Fork universe' }))
+		expect(onForkZoltar).not.toHaveBeenCalled()
+
+		fireEvent.click(confirmation)
+		expect(isForkButtonDisabled()).toBe(false)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Fork universe' }))
+		expect(onForkZoltar).toHaveBeenCalledTimes(1)
+
+		fireEvent.click(confirmation)
+		expect(isForkButtonDisabled()).toBe(true)
 	})
 })

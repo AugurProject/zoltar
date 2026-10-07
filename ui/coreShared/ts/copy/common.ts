@@ -55,7 +55,6 @@ export const reputationToken = 'Reputation token'
 export const underwritingLimitAttoEth = 'Commitment limit'
 export const initialReportPriorityFee = 'Initial report priority fee'
 export const securityPoolAddress = 'Security pool address'
-export const securityPools = 'Security pools'
 export const selected = 'Selected'
 export const settled = 'Settled'
 export const settlement = 'Settlement'
@@ -100,6 +99,7 @@ export const availableNow = 'Available now'
 export const blocked = 'Blocked'
 export const formatCopyAddressValue = (address: CopyTemplateValue) => `Copy address ${address}`
 export const formatCopyIdentifierValue = (identifier: CopyTemplateValue) => `Copy identifier ${identifier}`
+export const formatExactValueLabel = (exactValue: CopyTemplateValue) => `(exact ${exactValue})`
 export const metricUnavailablePlaceholder = '—'
 export const loadMore = 'Show more'
 export const nextPage = 'Next page'
@@ -108,6 +108,10 @@ export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) 
 export const nonNegativeAmountRequiredError = 'Enter a valid non-negative amount.'
 export const formatDecimalPrecisionError = (units: number) => `Use no more than ${units} decimal places.`
 export const amountInvalidError = 'Enter a number, such as 1.5.'
+export const amountPositiveRequiredError = 'Enter an amount greater than 0.'
+export const decimalSeparatorPeriodError = 'Use a period as the decimal separator, without thousands separators.'
+export const decimalSeparatorPeriodOrCommaError = 'Use a period or comma as the decimal separator, without thousands separators.'
+export const formatDecimalSeparatorRequiredError = (fieldLabel: CopyTemplateValue, rule: CopyTemplateValue) => `${fieldLabel} must be a decimal number. ${rule}`
 export const balance = 'Balance'
 export const formatAmountBelowMinimumError = (amount: CopyTemplateValue) => `Enter at least ${amount}.`
 export const formatAmountAboveMaximumError = (amount: CopyTemplateValue) => `Enter at most ${amount}.`
@@ -128,8 +132,10 @@ export const requiredTotalPlaceholder = 'Required'
 export const leaveBlankForRequiredTotal = 'Leave blank for required total'
 export const emptyStateDetail = 'Nothing to show.'
 export const unlimitedApproval = 'Unlimited approval'
-export const moreInfo = 'More info'
-export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${actionLabel} details`
+export const approvalAmountTooLargeError = 'Approval amount is too large.'
+export const formatApproveUnlimitedValue = (tokenLabel: CopyTemplateValue) => `${approve} unlimited ${tokenLabel}`
+export const formatApprovalNotIncreasedReason = (approvedAmount: CopyTemplateValue) => `Already approved ${approvedAmount}. Enter a higher amount, or leave blank for the required total.`
+export const formatApprovalAlreadyUnlimitedReason = (tokenLabel: CopyTemplateValue) => `${tokenLabel} approval is already unlimited.`
 export const noneSelected = 'None selected'
 export const notDeployed = 'Not deployed'
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`
@@ -157,6 +163,8 @@ export const selectedOutcome = 'Selected outcome'
 export const scalarValue = 'Scalar value'
 export const scalarValueHelpText = 'Enter a value that matches the increment.'
 export const scalarValueInvalid = 'Enter a value between the minimum and maximum that falls on an increment.'
+export const formatScalarValueStepHelpText = (step: CopyTemplateValue, minimum: CopyTemplateValue, maximum: CopyTemplateValue) => `Steps of ${step} from ${minimum} to ${maximum}.`
+export const formatScalarValueStepError = (step: CopyTemplateValue, minimum: CopyTemplateValue, maximum: CopyTemplateValue) => `Enter a value from ${minimum} to ${maximum} in steps of ${step}.`
 export const ticks = 'Ticks'
 export const untitledQuestion = 'Untitled question'
 export const oracleManager = 'Oracle manager'
@@ -169,3 +177,7 @@ export const formatUpdatedSecondsAgo = (seconds: number) => `Updated ${seconds}s
 export const formatUpdatedMinutesAgo = (minutes: number) => `Updated ${minutes}m ago`
 export const formatUpdatedHoursAgo = (hours: number) => `Updated ${hours}h ago`
 export const formatUpdatedAtTitle = (time: string) => `Last read at ${time}. Refreshes on each new block.`
+export const formatUpdatedDaysAgo = (days: number) => `Updated ${days}d ago`
+export const formatStaleUpdatedLabel = (updatedLabel: CopyTemplateValue) => `${updatedLabel} (stale)`
+export const formatLastReadAtTitle = (time: string) => `Last read at ${time}.`
+export const formatLocalTimeLabel = (localTimestamp: CopyTemplateValue) => `Local time ${localTimestamp}`

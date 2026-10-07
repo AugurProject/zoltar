@@ -13,7 +13,9 @@
  * | Percentage      | `formatScaledPercentage`                 | Fixed-point value with trailing zeros trimmed and no space: `0.3%`.     |
  * | Multiplier      | `formatMultiplier`                       | Fixed-point value with trailing zeros trimmed and `×`: `2.5×`, `125×`.  |
  * | Date and time   | `formatTimestamp`                        | `2026-01-01 00:00:21 UTC`; `formatTimestampWithRelative` appends        |
- * |                 |                                          | `(in 3d 2h 1m)` / `(5m ago)`; durations use `formatDuration` (`1d 2h 3m`). |
+ * |                 |                                          | `(in 3d 2h)` / `(5m ago)`; durations use `formatDuration`, which shows  |
+ * |                 |                                          | the two largest units at a precision suited to the length (`1m 5s`,     |
+ * |                 |                                          | `2h 5m`, `3d 2h`, `90d`, `2y 151d`).                                    |
  *
  * Digit groups are separated by a no-break space so a number never wraps across lines; `toPlainGrouping` restores ordinary spaces for copied values.
  * Units follow the amount after a space (`formatUnitSuffix`, or a non-breaking space in plain strings via `formatValueWithUnit`); `%` and `×` attach directly.
@@ -25,6 +27,11 @@ const MAX_DATE_TIMESTAMP_SECONDS = 8_640_000_000_000n
 const SECONDS_PER_MINUTE = 60n
 const SECONDS_PER_HOUR = 60n * SECONDS_PER_MINUTE
 const SECONDS_PER_DAY = 24n * SECONDS_PER_HOUR
+const SECONDS_PER_YEAR = 365n * SECONDS_PER_DAY
+/** Below two minutes a countdown keeps its seconds. */
+const SECONDS_PRECISION_LIMIT = 2n * SECONDS_PER_MINUTE
+/** From about two months a duration drops hours, since they no longer change a decision. */
+const DAYS_ONLY_THRESHOLD = 60n * SECONDS_PER_DAY
 const SI_SUFFIXES = ['k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'] as const
 const COMPACT_NOTATION_THRESHOLD_UNITS = 1000n
 const COMPACT_NOTATION_DECIMALS = 1
@@ -106,6 +113,21 @@ function formatUtcTimestamp(timestamp: bigint) {
 	return `${date.getUTCFullYear()}-${formatTimestampPart(date.getUTCMonth() + 1)}-${formatTimestampPart(date.getUTCDate())} ${formatTimestampPart(date.getUTCHours())}:${formatTimestampPart(date.getUTCMinutes())}:${formatTimestampPart(date.getUTCSeconds())} UTC`
 }
 
+/**
+ * The timestamp in the viewer's time zone, or `timeZone`, in the same layout as the UTC form, such as
+ * `2023-11-14 17:13:20 EST`. Undefined when that zone shows the same wall-clock time as UTC, so callers add nothing.
+ */
+export function formatLocalTimestamp(timestamp: bigint, timeZone?: string) {
+	const utcTimestamp = formatUtcTimestamp(timestamp)
+	if (utcTimestamp === undefined) return undefined
+	const date = new Date(bigintToSafeNumber(timestamp * BigInt(MILLISECONDS_PER_SECOND), 'Timestamp'))
+	const parts = new Intl.DateTimeFormat('en-US', { day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', second: '2-digit', timeZone, timeZoneName: 'short', year: 'numeric' }).formatToParts(date)
+	const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(candidate => candidate.type === type)?.value ?? ''
+	const wallClock = `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}:${part('second')}`
+	if (`${wallClock} UTC` === utcTimestamp) return undefined
+	return `${wallClock} ${part('timeZoneName')}`
+}
+
 export function formatTimestampDateTime(timestamp: bigint) {
 	if (timestamp < -MAX_DATE_TIMESTAMP_SECONDS || timestamp > MAX_DATE_TIMESTAMP_SECONDS) return undefined
 	const date = new Date(bigintToSafeNumber(timestamp * BigInt(MILLISECONDS_PER_SECOND), 'Timestamp'))
@@ -119,7 +141,8 @@ function getEffectiveRoundedDecimals(absoluteValue: bigint, units: number, decim
 	if (absoluteValue >= base) return decimals
 
 	const leadingFractionalZeroCount = units - absoluteValue.toString().length
-	return Math.max(decimals, leadingFractionalZeroCount + 2)
+	// Two significant digits never need more decimals than the token has, so one attounit reads exactly instead of with a padded zero.
+	return Math.max(decimals, Math.min(leadingFractionalZeroCount + 2, units))
 }
 
 export function formatCurrencyBalance(value: bigint | undefined, units: number = 18) {
@@ -314,15 +337,18 @@ export function formatTimestampWithRelative(timestamp: bigint, currentTimestamp 
 	return `${formatTimestamp(timestamp)} (${formatRelativeTimestamp(timestamp, currentTimestamp)})`
 }
 
+function formatDurationUnits(largest: bigint, largestUnit: string, next: bigint, nextUnit: string) {
+	return next === 0n ? `${largest}${largestUnit}` : `${largest}${largestUnit} ${next}${nextUnit}`
+}
+
+/** Shows at most the two largest non-zero units, with seconds only below two minutes and no hours from about two months. */
 export function formatDuration(seconds: bigint) {
-	if (seconds <= 0n) return '0m'
-	if (seconds < SECONDS_PER_MINUTE) return 'less than a minute'
-
-	const days = seconds / SECONDS_PER_DAY
-	const hours = (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
-	const minutes = (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
-
-	if (days > 0n) return `${days}d ${hours}h ${minutes}m`
-	if (hours > 0n) return `${hours}h ${minutes}m`
-	return `${minutes}m`
+	if (seconds <= 0n) return '0s'
+	if (seconds < SECONDS_PER_MINUTE) return `${seconds}s`
+	if (seconds < SECONDS_PRECISION_LIMIT) return formatDurationUnits(seconds / SECONDS_PER_MINUTE, 'm', seconds % SECONDS_PER_MINUTE, 's')
+	if (seconds < SECONDS_PER_HOUR) return `${seconds / SECONDS_PER_MINUTE}m`
+	if (seconds < SECONDS_PER_DAY) return formatDurationUnits(seconds / SECONDS_PER_HOUR, 'h', (seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE, 'm')
+	if (seconds < DAYS_ONLY_THRESHOLD) return formatDurationUnits(seconds / SECONDS_PER_DAY, 'd', (seconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR, 'h')
+	if (seconds < SECONDS_PER_YEAR) return `${seconds / SECONDS_PER_DAY}d`
+	return formatDurationUnits(seconds / SECONDS_PER_YEAR, 'y', (seconds % SECONDS_PER_YEAR) / SECONDS_PER_DAY, 'd')
 }

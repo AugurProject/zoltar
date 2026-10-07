@@ -28,16 +28,17 @@ export function createCoordinatorFundingRequirement(overrides: Partial<Coordinat
 	}
 }
 
-type OverviewHarnessProps = { accountAddress?: Address; environmentRefreshKey?: number }
+type OverviewHarnessProps = { accountAddress?: Address; environmentRefreshKey?: number; expectedSecurityPoolAddress?: string }
 
 // Mounts useSecurityPoolsOverview with inert transaction callbacks and exposes its latest state.
 export async function renderSecurityPoolsOverviewHook(dependencies: Dependencies, { accountAddress: defaultAccountAddress = zeroAddress, onTransactionPresented = () => undefined, ...initialProps }: OverviewHarnessProps & { onTransactionPresented?: (presentation: GlobalTransactionPresentation) => void } = {}) {
 	let hookState: ReturnType<typeof useSecurityPoolsOverview> | undefined
-	function SecurityPoolsOverviewHarness({ accountAddress = defaultAccountAddress, environmentRefreshKey = 0 }: OverviewHarnessProps) {
+	function SecurityPoolsOverviewHarness({ accountAddress = defaultAccountAddress, environmentRefreshKey = 0, expectedSecurityPoolAddress }: OverviewHarnessProps) {
 		hookState = useSecurityPoolsOverview(
 			{
 				accountAddress,
 				environmentRefreshKey,
+				expectedSecurityPoolAddress,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented,
 				onTransactionRequested: () => undefined,

@@ -67,6 +67,8 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 		const nextTab = document.getElementById(nextTabId)
 		if (nextTab instanceof HTMLElement) nextTab.focus()
 	}
+	// When the selected view lives outside this tab set (for example a "More" popover), the first enabled tab keeps the roving tab stop so the set stays reachable by keyboard.
+	const rovingTabValue = options.some(option => option.value === value) ? value : options.find(option => option.disabled !== true)?.value
 	const renderOption = (option: ViewTabOption<TValue>, index: number) => {
 		const active = option.value === value
 		const tabId = option.id ?? `${ariaLabel.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}-${String(option.value).toLowerCase()}-tab`
@@ -88,7 +90,7 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 		} as const
 		const semanticProps = (() => {
 			if (resolvedSemantics === 'navigation') return { 'aria-current': active ? ('page' as const) : undefined }
-			if (resolvedSemantics === 'tabs') return { 'aria-controls': option.panelId, 'aria-selected': active, role: 'tab' as const, tabIndex: active ? 0 : -1 }
+			if (resolvedSemantics === 'tabs') return { 'aria-controls': option.panelId, 'aria-selected': active, role: 'tab' as const, tabIndex: option.value === rovingTabValue ? 0 : -1 }
 			return { 'aria-pressed': active }
 		})()
 		const commonProps = { ...sharedProps, ...semanticProps }

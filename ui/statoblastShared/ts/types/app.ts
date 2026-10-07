@@ -86,7 +86,8 @@ export type ReportingFormState = {
 export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
 export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
-export type PoolStateFilter = 'all' | SecurityPoolLifecycleState
+/** Browse filters use the pool badge vocabulary: a forked pool's badge reads Fork migration, so it filters with fork migration instead of on its own. */
+export type PoolStateFilter = 'all' | Exclude<SecurityPoolLifecycleState, 'poolForked'>
 export type PoolBrowseState = {
 	searchText: string
 	sortKey: PoolSortKey

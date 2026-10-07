@@ -254,3 +254,24 @@ export const contractInteractionEdges: ContractInteractionEdge[] = [
 	{ action: 'migrate state', id: 'forker-pool-migration', phase: 'Fork migration', receiver: 'Security Pool', source: 'Pool Forker' },
 	{ action: 'repair backing', id: 'forker-truth-auction', phase: 'Backing repair', receiver: 'Truth Auction', source: 'Pool Forker' },
 ]
+
+/** Truth-auction bid statuses get a dot shape as well as a colour, so the chart and its key read without colour. */
+export const AUCTION_STATUS_SYMBOLS = {
+	domain: ['Accepted', 'Partially filled', 'Rejected'],
+	range: ['circle', 'triangle', 'diamond'],
+}
+
+/** The truth-auction chart key: each label repeats its status's dot shape; narrow charts use shorter words. */
+export function auctionStatusKey(compact: boolean, maxRep: number) {
+	return compact
+		? [
+				{ label: '● won', status: 'Accepted', x: maxRep * 0.12 },
+				{ label: '▲ partial', status: 'Partially filled', x: maxRep * 0.5 },
+				{ label: '◆ refund', status: 'Rejected', x: maxRep * 0.86 },
+			]
+		: [
+				{ label: '● accepted', status: 'Accepted', x: maxRep * 0.12 },
+				{ label: '▲ partially filled', status: 'Partially filled', x: maxRep * 0.42 },
+				{ label: '◆ rejected', status: 'Rejected', x: maxRep * 0.74 },
+			]
+}

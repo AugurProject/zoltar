@@ -28,7 +28,7 @@ import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from '.
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
-import { getStatoblastOverviewUniverse } from './lib/overviewUniverse.js'
+import { getStatoblastOverviewUniverse, getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
 
@@ -55,6 +55,7 @@ export function App() {
 		overviewWalletProps,
 		readBackendMessage,
 		readBackendStatus,
+		retryReadBackend,
 		refreshActiveEnvironment,
 		refreshSimulationView,
 		routeContentBlocked,
@@ -123,7 +124,7 @@ export function App() {
 			repUsdcSourceUrl,
 		},
 		universeControl: <UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools'))} universe={zoltarUniverse} />,
-		universePresentation: undefined,
+		universePresentation: getStatoblastUniversePresentation({ canReadOnchainData, ...marketCreation }),
 		showWethBalance: true,
 	}
 	const invalidRouteState = getInvalidStatoblastRouteState({
@@ -135,8 +136,9 @@ export function App() {
 	})
 	const activeRoute = isInvalidStatoblastRouteState(invalidRouteState) ? 'not-found' : resolvedRoute
 	const tabNavigationProps = {
-		route,
-		tabs: getStatoblastRouteTabs({ route, showDeployTab }),
+		// A page that does not exist belongs to no section, so no tab is marked current.
+		route: activeRoute,
+		tabs: getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }),
 		onRouteChange: navigate,
 	}
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
@@ -185,7 +187,17 @@ export function App() {
 					/>
 				}
 				heading={<AppPageHeading formatDocumentTitle={formatDocumentTitle} pageTitle={pageTitle} />}
-				notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={applicationDeploymentMissing} zoltarUniverseError={zoltarUniverseError} />}
+				notices={
+					<AppStatusNotices
+						errorMessages={errorMessages}
+						onRetryReadBackend={() => void retryReadBackend()}
+						readBackendMessage={readBackendMessage}
+						readBackendStatus={readBackendStatus}
+						simulationBootstrapError={environmentBootstrapError}
+						showApplicationDeploymentWarning={applicationDeploymentMissing}
+						zoltarUniverseError={zoltarUniverseError}
+					/>
+				}
 				routeContentDisabled={routeContentBlocked}
 				transactionRouteKey={transactionRouteKey}
 				transactionState={transactionState.value}

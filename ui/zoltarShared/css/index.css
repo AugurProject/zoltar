@@ -62,3 +62,24 @@
 	padding-left: 1.25rem;
 	color: var(--text-secondary);
 }
+
+/* Fork acknowledgment: the whole label is the click target, and the checkbox shrinks to one label line so it sits on the first line instead of centring below it. */
+/* The acknowledgment takes its own row in the action group, above the approval and fork buttons. */
+.tx-action-group > .actions > .fork-confirmation {
+	flex: 1 1 100%;
+}
+
+.fork-confirmation-control {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: start;
+	gap: var(--space-3);
+}
+
+.fork-confirmation-control input {
+	min-height: 0;
+	height: 1lh;
+	margin: 0;
+	font-size: inherit;
+	line-height: inherit;
+}

@@ -2,10 +2,10 @@ import { endSentence } from '../lib/format.js'
 
 export const loadingNetworks = 'Loading networks…'
 export const networksUnavailable = 'Networks unavailable'
+export const walletNetworkUnavailableReason = 'Available once the deployment network list loads.'
 export const checkingNetwork = 'Checking network…'
 export const configurationUnavailable = 'Configuration unavailable'
 export const deployTradingContracts = 'Deploy trading contracts'
-export const contractFallbackLabel = 'contract'
 export const nextContractFallbackLabel = 'the next contract'
 export const nextToDeploy = 'Next to deploy'
 export const walletChanged = 'Your wallet account or network changed. Reconnect before deploying.'
@@ -25,6 +25,18 @@ export const supportedNetworksUnavailable = 'Unable to load the supported networ
 export const inspectionFailed = 'Unable to check the selected deployment.'
 export const deploymentConfigurationInvalid = 'Deployment configuration is invalid.'
 export const statusCheckFailed = 'The status check failed.'
+export const contractStatusUnavailable = 'Status unavailable'
+export const deploymentGuide = 'Deployment guide'
+
+/** The blocked state's next step: Trading's contracts derive from Statoblast's, which another app deploys first. */
+export function statoblastRequired(networkName: string) {
+	return `Trading needs the Statoblast contracts on ${networkName}. Deploy Statoblast there first; this page continues once it finds them.`
+}
+
+/** A contract that depends on another waits for it, such as the router for the factory. */
+export function deployPrerequisiteFirst(label: string) {
+	return `Deploy the ${inSentence(label)} first.`
+}
 
 /** Step labels are capitalized for lists; inside a button or sentence they continue in lower case. */
 function inSentence(label: string) {

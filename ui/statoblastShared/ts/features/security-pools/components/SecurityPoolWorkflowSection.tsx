@@ -19,7 +19,7 @@ import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../..
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { POOLS_ROUTE_HASH, parsePoolsRouteHash, writePoolsLocationSearch } from '../../../lib/statoblastLocation.js'
-import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
+import { SecurityPoolObjectHeader, SecurityPoolObjectHeaderSkeleton, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
 import { PoolSelectionControl } from './PoolSelectionControl.js'
 import { PoolOracleStatusRow, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
 import { PoolActionCard, PoolLifecycleStepper } from './PoolStagePanel.js'
@@ -31,6 +31,7 @@ import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
 import { SelectedPoolLiquidationModal } from './SelectedPoolLiquidationModal.js'
 
 const SELECTED_POOL_WORKFLOW_PANEL_ID = 'selected-pool-workflow-panel'
+const MY_VAULT_REASON_ID = 'selected-pool-my-vault-reason'
 
 type SecurityPoolWorkflowSectionProps = SecurityPoolWorkflowRouteContentProps & {
 	initialVaultView?: SelectedVaultView
@@ -122,7 +123,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 	})
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: workspaceCopy.allVaults, value: 'browse-vaults' },
-		{ label: workspaceCopy.myVault, value: 'selected-vault', disabled: accountState.address === undefined },
+		{ label: workspaceCopy.myVault, value: 'selected-vault', disabled: accountState.address === undefined, ...(accountState.address === undefined ? { describedById: MY_VAULT_REASON_ID, reason: workspaceCopy.myVaultWalletRequired } : {}) },
 		{ label: workspaceCopy.byAddress, value: 'vault-by-address' },
 	]
 	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
@@ -180,8 +181,13 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		if (loadedSelectedPool !== undefined && model.requestPriceTransactionValueAttoEth !== undefined) setRequestPriceReview(createRequestPriceReview(loadedSelectedPool, model.requestPriceTransactionValueAttoEth))
 	}
 	let emptyWorkflowTitle: string | undefined
-	if (model.selectedPoolLookupState === 'missing') emptyWorkflowTitle = securityPoolCopy.poolNotFound
+	if (model.hasSelectedPoolAddress && !model.hasValidSelectedPoolAddress) emptyWorkflowTitle = securityPoolCopy.invalidPoolAddressTitle
+	else if (model.selectedPoolLookupState === 'missing') emptyWorkflowTitle = securityPoolCopy.poolNotFound
 	else if (showHeader) emptyWorkflowTitle = securityPoolCopy.selectedPool
+	// The first load shows the loaded layout with placeholders, so only content changes when the pool arrives.
+	const poolFirstLoading = model.hasSelectedPoolAddress && !showSelectedPoolWorkflowDetails && model.selectedPoolWorkflowLockedPresentation?.key === 'loading'
+	// The address field opens only when the address needs fixing; a loading or loaded pool keeps it collapsed.
+	const poolSwitcherOpen = selectedPool === undefined && !poolFirstLoading && (model.selectedPoolWorkflowLockedPresentation !== undefined || securityPoolOverviewError !== undefined)
 	const objectHeaderProps =
 		model.selectedPoolSummaryPool === undefined || marketDetails === undefined
 			? undefined
@@ -248,7 +254,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 						<span aria-hidden='true'>←</span>
 						{workspaceCopy.allPools}
 					</a>
-					<details className='pool-switcher' open={selectedPool === undefined}>
+					<details className='pool-switcher' open={poolSwitcherOpen}>
 						<summary>{workspaceCopy.poolAddressAndRefresh}</summary>
 						<PoolSelectionControl address={securityPoolAddress} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} poolLoaded={selectedPool !== undefined} />
 					</details>
@@ -256,6 +262,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				{objectHeaderProps === undefined ? (
 					// Without a loaded summary there is no header to host them, so the oracle row, stage, and actions stand alone.
 					<>
+						{poolFirstLoading ? <SecurityPoolObjectHeaderSkeleton /> : undefined}
 						<ErrorNotice message={securityPoolOverviewError} />
 						{poolOracleStatus}
 						{poolLifecycle}
@@ -279,7 +286,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					onBrowsePools={onBrowsePools}
 					onCreatePool={onCreatePool}
 					selectedPoolUniverseMismatch={model.selectedPoolUniverseMismatch}
-					selectedPoolWorkflowLockedPresentation={model.selectedPoolWorkflowLockedPresentation}
+					selectedPoolWorkflowLockedPresentation={poolFirstLoading ? undefined : model.selectedPoolWorkflowLockedPresentation}
 				/>
 			) : (
 				<section className='selected-pool-workspace'>

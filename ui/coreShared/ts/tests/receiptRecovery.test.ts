@@ -1,5 +1,11 @@
-import { expect, mock, test } from 'bun:test'
+import { afterEach, expect, mock, test } from 'bun:test'
+import { transactionErrorMessages } from '../lib/errors.js'
 import { createRecoveringReceiptWaiter } from '../transactions/receiptRecovery.js'
+import { announceTransactionTrackingStopped, resetTransactionTrackingStopsForTesting } from '../transactions/transactionTrackingStop.js'
+
+afterEach(() => {
+	resetTransactionTrackingStopsForTesting()
+})
 
 const hash = '0x0000000000000000000000000000000000000000000000000000000000000001'
 
@@ -44,4 +50,26 @@ test('preserves the bounded wait for callers that manage their own uncertain tra
 	await expect(wait({ hash, timeout: 1 })).rejects.toBe(readError)
 	expect(waitForTransactionReceipt).toHaveBeenCalledTimes(1)
 	expect(waitForTransactionReceipt).toHaveBeenCalledWith({ hash, timeout: 1 })
+})
+
+test('releases a receipt wait as soon as the user stops tracking its transaction', async () => {
+	const neverMined = new Promise<never>(() => undefined)
+	const waitForTransactionReceipt = mock(async () => await neverMined)
+	const onTransactionSubmitted = mock(() => undefined)
+	const wait = createRecoveringReceiptWaiter(
+		{
+			getTransaction: mock(async () => {
+				throw new Error('Unexpected transaction lookup')
+			}),
+			waitForTransactionReceipt,
+		},
+		{ isCurrentEnvironment: () => true, onTransactionSubmitted },
+	)
+	const waiting = wait({ hash, pollingInterval: 1 })
+	announceTransactionTrackingStopped(hash)
+	await expect(waiting).rejects.toThrow(transactionErrorMessages.trackingStopped)
+	expect(onTransactionSubmitted).not.toHaveBeenCalled()
+	// A later wait for the released hash, such as the activity watcher resuming, ends immediately too.
+	await expect(wait({ hash, pollingInterval: 1 })).rejects.toThrow(transactionErrorMessages.trackingStopped)
+	expect(waitForTransactionReceipt).toHaveBeenCalledTimes(1)
 })

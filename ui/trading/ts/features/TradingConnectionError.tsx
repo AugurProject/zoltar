@@ -17,7 +17,7 @@ export function TradingConnectionError({ message, onRetry, route }: { message: s
 				announcement='assertive'
 				className='trading-connection-error'
 				title={appCopy.tradingContractsUnreachable}
-				presentation={{ key: 'load_failed', badgeTone: 'danger', detail: message ?? appCopy.tradingContractsUnreachableFallback, actionHint: appCopy.tradingContractsUnreachableHint }}
+				presentation={{ key: 'load_failed', badgeTone: 'danger', detail: message ?? appCopy.tradingContractsUnreachableFallback, ...(message === appCopy.deploymentRegistryUnavailable ? {} : { actionHint: appCopy.tradingContractsUnreachableHint }) }}
 				actions={
 					<button className='primary' type='button' onClick={onRetry}>
 						{appCopy.retry}

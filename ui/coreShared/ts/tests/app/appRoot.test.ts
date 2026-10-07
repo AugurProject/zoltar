@@ -76,6 +76,32 @@ test('renders the same recoverable notice if constructing the root fails', async
 	}
 })
 
+test('replaces a tree that fails to render with a recoverable notice instead of freezing it', async () => {
+	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+	const state = { failing: true }
+	function Screen() {
+		if (state.failing) throw new RangeError('Approval amount must be non-negative')
+		return createElement('p', {}, 'Screen ready')
+	}
+	try {
+		await act(async () => {
+			await mountApp({ initialize: async () => undefined, root: () => createElement(Screen, {}) })
+		})
+		const notice = within(document.body).getByRole('alert')
+		expect(notice.textContent).toContain('Application error')
+		expect(notice.textContent).toContain('Approval amount must be non-negative')
+		expect(within(document.body).getByRole('button', { name: 'Reload application' })).not.toBeNull()
+		state.failing = false
+		await act(async () => {
+			within(document.body).getByRole('button', { name: 'Retry' }).click()
+			await Promise.resolve()
+		})
+		expect(document.body.textContent).toBe('Screen ready')
+	} finally {
+		errorLog.mockRestore()
+	}
+})
+
 test('rejects a missing root before running initialization', async () => {
 	const initialize = mock(async () => undefined)
 	await expect(mountApp({ initialize })).rejects.toThrow('mountApp requires a root component factory')

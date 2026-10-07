@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { formatUpdatedAgo, updatedAgoTickMilliseconds } from '../lib/freshness.js'
+import { formatUpdatedAgo, isUpdatedAgoStale, updatedAgoTickMilliseconds } from '../lib/freshness.js'
 import { UpdatedAgo } from '../components/UpdatedAgo.js'
 import { SkeletonList } from '../components/Skeleton.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
@@ -17,6 +17,13 @@ describe('freshness label', () => {
 		expect(formatUpdatedAgo(updatedAt, updatedAt + 60_000)).toBe('Updated 1m ago')
 		expect(formatUpdatedAgo(updatedAt, updatedAt + 3_599_000)).toBe('Updated 59m ago')
 		expect(formatUpdatedAgo(updatedAt, updatedAt + 7_200_000)).toBe('Updated 2h ago')
+		expect(formatUpdatedAgo(updatedAt, updatedAt + 86_399_000)).toBe('Updated 23h ago')
+		expect(formatUpdatedAgo(updatedAt, updatedAt + 49 * 3_600_000)).toBe('Updated 2d ago')
+	})
+
+	test('treats data as stale once it has missed several block refreshes', () => {
+		expect(isUpdatedAgoStale(0, 119_999)).toBe(false)
+		expect(isUpdatedAgoStale(0, 120_000)).toBe(true)
 	})
 
 	test('never counts a future read as negative age', () => {
@@ -52,6 +59,24 @@ describe('freshness and skeleton components', () => {
 		expect(indicator?.textContent).toContain('Updated 20s ago')
 		expect(indicator?.textContent).toContain('Refreshing…')
 		expect(indicator?.getAttribute('role')).toBeNull()
+	})
+
+	test('marks old data as stale in words and state, not only with the dot colour', async () => {
+		const rendered = await renderIntoDocument(<UpdatedAgo updatedAt={Date.now() - 180_000} />)
+		cleanup = rendered.cleanup
+		const indicator = rendered.container.querySelector('.freshness-indicator')
+		expect(indicator?.getAttribute('data-state')).toBe('stale')
+		expect(indicator?.textContent).toBe('Updated 3m ago (stale)')
+		expect(indicator?.getAttribute('title')).not.toContain('Refreshes on each new block')
+	})
+
+	test('keeps recent data in the idle state', async () => {
+		const rendered = await renderIntoDocument(<UpdatedAgo updatedAt={Date.now() - 20_000} />)
+		cleanup = rendered.cleanup
+		const indicator = rendered.container.querySelector('.freshness-indicator')
+		expect(indicator?.getAttribute('data-state')).toBe('idle')
+		expect(indicator?.textContent).toBe('Updated 20s ago')
+		expect(indicator?.getAttribute('title')).toContain('Refreshes on each new block')
 	})
 
 	test('skeleton rows are hidden from assistive technology behind one loading label', async () => {

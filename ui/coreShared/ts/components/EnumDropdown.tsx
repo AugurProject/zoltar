@@ -29,14 +29,30 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 		triggerRef.current?.focus()
 	}
 
+	const getMenuOptions = () => (rootRef.current === null ? [] : Array.from(rootRef.current.querySelectorAll<HTMLButtonElement>('.enum-dropdown-option')))
+
 	const focusMenuOptionAt = (currentTarget: HTMLButtonElement | null, direction: -1 | 1) => {
-		if (rootRef.current === null || currentTarget === null) return
-		const menuOptions = Array.from(rootRef.current.querySelectorAll<HTMLButtonElement>('.enum-dropdown-option'))
+		if (currentTarget === null) return
+		const menuOptions = getMenuOptions()
 		if (menuOptions.length === 0) return
 		const currentIndex = menuOptions.indexOf(currentTarget)
 		if (currentIndex === -1) return
 		const nextIndex = (currentIndex + direction + menuOptions.length) % menuOptions.length
 		menuOptions[nextIndex]?.focus()
+	}
+
+	/** Moves to the next option after the focused one whose label starts with the typed character, wrapping around. */
+	const focusMenuOptionStartingWith = (currentTarget: HTMLButtonElement, character: string) => {
+		const menuOptions = getMenuOptions()
+		const currentIndex = menuOptions.indexOf(currentTarget)
+		const normalizedCharacter = character.toLocaleLowerCase()
+		for (let offset = 1; offset <= menuOptions.length; offset += 1) {
+			const candidate = menuOptions[(currentIndex + offset) % menuOptions.length]
+			if (candidate?.textContent?.trim().toLocaleLowerCase().startsWith(normalizedCharacter) === true) {
+				candidate.focus()
+				return
+			}
+		}
 	}
 
 	useEffect(() => {
@@ -98,6 +114,8 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 				aria-expanded={open}
 				onKeyDown={event => {
 					if (event.key === 'Escape') {
+						// Escape on an open menu dismisses only the menu, not an enclosing dialog.
+						if (open) event.stopPropagation()
 						setOpen(false)
 						return
 					}
@@ -117,7 +135,7 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
 			{open && !disabled ? (
-				<div className='enum-dropdown-menu' role='listbox' aria-label={commonCopy.dropdownOptions}>
+				<div className='enum-dropdown-menu' role='listbox' aria-label={ariaLabel ?? commonCopy.dropdownOptions}>
 					{options.map(option => (
 						<button
 							key={option.value}
@@ -125,19 +143,32 @@ export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, dis
 							type='button'
 							role='option'
 							aria-selected={option.value === value}
+							// Arrow keys move between options, so the listbox is one stop in the Tab order.
+							tabIndex={-1}
 							onKeyDown={event => {
 								if (event.key === 'Escape') {
+									// Escape dismisses only the menu, not an enclosing dialog.
+									event.stopPropagation()
 									closeAndFocusTrigger()
 									return
 								}
 								if (event.key === 'ArrowDown') {
 									event.preventDefault()
 									focusMenuOptionAt(event.currentTarget, 1)
+									return
 								}
 								if (event.key === 'ArrowUp') {
 									event.preventDefault()
 									focusMenuOptionAt(event.currentTarget, -1)
+									return
 								}
+								if (event.key === 'Home' || event.key === 'End') {
+									event.preventDefault()
+									const menuOptions = getMenuOptions()
+									;(event.key === 'Home' ? menuOptions[0] : menuOptions.at(-1))?.focus()
+									return
+								}
+								if (event.key.length === 1 && event.key !== ' ' && !event.altKey && !event.ctrlKey && !event.metaKey) focusMenuOptionStartingWith(event.currentTarget, event.key)
 							}}
 							onClick={() => {
 								if (disabled) return

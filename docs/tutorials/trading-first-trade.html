@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="Buy Yes shares in a Trading market, read the estimate, and sell part of them back for ETH." />
-		<title>Your first trade</title>
+		<title>Your first trade · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -40,14 +40,15 @@
 				<h2>Buy Yes</h2>
 				<ol>
 					<li>In the market's <strong>Trade</strong> tab, select <strong>Buy</strong> and <strong>Yes</strong>.</li>
-					<li>Enter <code>0.001</code> in <strong>You pay</strong>. The estimate appears below the field: <strong>You receive ≈</strong> with its payout if the question resolves Yes, <strong>Average price</strong>, <strong>Profit if the question resolves Yes</strong>, and <strong>Minimum received</strong>. <strong>Trade details</strong> lists the <strong>Trading fee</strong> and your <strong>Invalid insurance</strong>. Above 2% the ticket adds <strong>Price impact</strong> to the estimate, above 5% it asks you to confirm the impact, and above 15% it refuses the trade.</li>
+					<li>Enter <code>0.001</code> in <strong>You pay</strong>. The estimate appears below the field: <strong>You receive ≈</strong> shows the Yes and its payout if the question resolves Yes (0 ETH if it resolves No), with your <strong>Invalid insurance</strong> beside it. Below them are <strong>Average price</strong>, <strong>Profit if the question resolves Yes</strong>, and <strong>Minimum received</strong>, and <strong>Trade details</strong> lists the <strong>Trading fee</strong>.</li>
+					<li>Check the <strong>Price impact</strong>: it reads 4.52%, with a note that smaller trades get a better average price. Larger impacts need a confirmation or are refused; the <a href="../reference/trading/configuration.html#client">Trading configuration</a> lists the thresholds.</li>
 					<li>Select <strong>Buy Yes</strong> and confirm the single <code>enterPosition</code> transaction in your wallet. The client checks the price again before the wallet opens.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-buy" aria-labelledby="fig-trading-buy-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/buy-ticket.png"><img width="480" height="1280" src="../assets/screenshots/trading/buy-ticket.png" alt="The Trade tab with Buy and Yes selected and 0.001 ETH entered. The estimate shows about 0.0019 Yes received with its payout if the question resolves Yes, a 52.44% average price, the profit if the question resolves Yes, a minimum received, and a 4.52% price impact, above an enabled Buy Yes button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/buy-ticket.png"><img width="480" height="1280" src="../assets/screenshots/trading/buy-ticket.png" alt="The Trade tab with Buy and Yes selected and 0.001 ETH entered. The estimate shows about 0.0019 Yes received with its payout if the question resolves Yes and 0 ETH if it resolves No, beside 0.001 Invalid insurance, then a 52.44% average price, the profit if the question resolves Yes, a minimum received, and a 4.52% price impact, above an enabled Buy Yes button." loading="lazy" /></a>
 					<figcaption id="fig-trading-buy-caption"><span class="figure-label">A Yes purchase.</span> The bar at the top of the estimate shows how far the purchase moves the conditional price.</figcaption>
 				</figure>
-				<p>When the transaction confirms, the <strong>Wallet Yes</strong> and <strong>Wallet Invalid</strong> balances under <strong>Your position</strong> on the market page go up. The ETH became complete sets; the <a href="../reference/glossary.html#trading-router">router</a> sold their No for more Yes and sent you all the Yes plus the Invalid. Your <a href="../explanation/trading/invalid-insurance.html">Invalid insurance</a> equals the number of complete sets, not the larger Yes total, and you hold no new No.</p>
+				<p>When the transaction confirms, the Yes and Invalid balances under <strong>Your position</strong> on the market page go up. The ETH became complete sets; the <a href="../reference/glossary.html#trading-router">router</a> sold their No for more Yes and sent you all the Yes plus the Invalid. Your <a href="../explanation/trading/invalid-insurance.html">Invalid insurance</a> equals the number of complete sets, not the larger Yes total, and you hold no new No.</p>
 			</section>
 			<section id="sell">
 				<h2>Sell Yes</h2>

@@ -308,6 +308,25 @@ describe('vault operations lifecycle', () => {
 		await waitFor(() => expect(claim.disabled).toBe(fees === 0n))
 		if (fees === 0n) expect(rendered.container.textContent).toContain('No fees are available to claim')
 	})
+	test('panel explains an unavailable deposit Max once the wallet balance has loaded', async () => {
+		const rendered = await mountPanel(dependencies({ loadBalance: mock(async () => 0n) }))
+		const queries = within(rendered.container)
+		await waitFor(() => expect(rendered.container.textContent).toContain('No wallet REP is left to deposit after the oracle REP funding.'))
+		expect(rendered.container.textContent).not.toContain('Checking vault and oracle…')
+		const deposit = queries.getByLabelText('REP deposit amount (optional)')
+		const max = deposit.closest('.amount-field')?.querySelector('.field-inline-action')
+		if (!(max instanceof HTMLButtonElement)) throw new Error('Expected the deposit Max button')
+		expect(max.disabled).toBe(true)
+	})
+
+	test('panel previews entered amounts in standard notation', async () => {
+		const rendered = await mountPanel(dependencies())
+		const queries = within(rendered.container)
+		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		await act(() => fireEvent.input(queries.getByLabelText('REP deposit amount (optional)'), { target: { value: '1234.5' } }))
+		await waitFor(() => expect(rendered.container.querySelector('.vault-operations-summary')?.textContent).toMatch(/Deposit1\s234\.50\sREP/))
+	})
+
 	test('panel presents confirmation in the submission area', async () => {
 		const rendered = await mountPanel(dependencies())
 		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))

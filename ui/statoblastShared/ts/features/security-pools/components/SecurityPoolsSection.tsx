@@ -2,7 +2,6 @@ import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
-import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../../types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -37,11 +36,12 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 export function SecurityPoolsSection({ activeView, migration, createPool, onActiveViewChange, onOpenSecurityPool, overview, selectedPoolRepPrice, workflow, zoltarUniverse, universeMissing, universeError, onRetryUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
-	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
+	// A pool page keeps one layout from the first load on: the pool header (or its placeholder and state) titles it, not the route header.
+	const showsPoolPage = view === 'operate' && workflow.securityPoolAddress.trim() !== ''
 
 	return (
 		<div className='route-view-flow'>
-			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
+			{showsPoolPage ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
 			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'browse' ? <SecurityPoolsOverviewSection {...overview} onSelectSecurityPool={onOpenSecurityPool} /> : undefined}
 

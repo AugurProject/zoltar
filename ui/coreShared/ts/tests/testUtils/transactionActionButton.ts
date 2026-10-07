@@ -21,9 +21,11 @@ export function getTransactionButtonState(scope: HTMLElement, label: string): Bu
 	if (button === undefined) throw new Error(`Expected button ${label}`)
 	if (!(button instanceof HTMLButtonElement)) throw new Error(`Expected button ${label}`)
 
+	// A focused or pending transaction button stays focusable and is only aria-disabled.
+	const disabled = button.disabled || button.getAttribute('aria-disabled') === 'true'
 	return {
-		disabled: button.disabled,
-		reason: button.disabled ? getDescribedByText(button) : undefined,
+		disabled,
+		reason: disabled ? getDescribedByText(button) : undefined,
 	}
 }
 

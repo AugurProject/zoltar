@@ -1,6 +1,7 @@
 import { getAddress, isAddress } from '@zoltar/core-shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from './coreDeploymentDefaults.js'
 import type { CoreDeployment } from './deployment.js'
+import { deploymentRegistryUnavailable } from '../copy/app.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 
@@ -60,8 +61,14 @@ export async function loadCoreDeployments() {
 			},
 		] satisfies readonly CoreDeployment[]
 	}
-	const response = await fetch('./core-deployments.json', { cache: 'no-store', signal: AbortSignal.timeout(30_000) })
-	if (!response.ok) throw new Error(`Core deployment registry failed with HTTP ${response.status.toString()}`)
+	// A failed download is a connection problem, not a chain or RPC one, so it says that in user terms.
+	let response: Response
+	try {
+		response = await fetch('./core-deployments.json', { cache: 'no-store', signal: AbortSignal.timeout(30_000) })
+	} catch (error) {
+		throw new Error(deploymentRegistryUnavailable, { cause: error })
+	}
+	if (!response.ok) throw new Error(deploymentRegistryUnavailable)
 	const candidate: unknown = await response.json()
 	return parseCoreDeployments(candidate)
 }

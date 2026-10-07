@@ -475,6 +475,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(within(document.body).queryByText('Selected tick')).toBeNull()
 		const valueInput = within(document.body).getByRole('textbox', { name: 'Scalar value' })
 		await act(() => fireEvent.input(valueInput, { target: { value: '1.55' } }))
+		await act(() => valueInput.dispatchEvent(new Event('blur')))
 		expect(valueInput.getAttribute('aria-invalid')).toBe('true')
 		await act(() => fireEvent.input(valueInput, { target: { value: '2.5' } }))
 		expect(valueInput.getAttribute('aria-invalid')).not.toBe('true')

@@ -11,12 +11,13 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
+import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
-import type { LiveBalances, LiveMarket } from '../protocol/live.js'
+import { lockedMigratedBalance, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { liveCopy } from '../copy/live.js'
@@ -28,22 +29,30 @@ import { marketsCopy } from '../copy/markets.js'
 import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
 import { PortfolioActionItems, PortfolioRowActions, PortfolioRowValue, PortfolioSummary } from './PortfolioOverview.js'
 
+/** A balance a fork migration locked stays listed, marked as locked, so the holder sees it was migrated. */
+function LockedCaption({ balances, outcome }: { balances: LiveBalances; outcome: ShareOutcome }) {
+	return lockedMigratedBalance(balances, outcome) === 0n ? null : <small className='payout-caption holding-locked'>{marketsCopy.lockedAfterMigration}</small>
+}
+
 function PortfolioHoldings({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
 	return (
 		<ul className='portfolio-holdings'>
 			{balances.yes === 0n ? undefined : (
 				<li className='portfolio-holding-yes'>
 					<OutcomeHolding amount={balances.yes} outcome={shareOutcome.yes} market={market} />
+					<LockedCaption balances={balances} outcome={shareOutcome.yes} />
 				</li>
 			)}
 			{balances.no === 0n ? undefined : (
 				<li className='portfolio-holding-no'>
 					<OutcomeHolding amount={balances.no} outcome={shareOutcome.no} market={market} />
+					<LockedCaption balances={balances} outcome={shareOutcome.no} />
 				</li>
 			)}
 			{balances.invalid === 0n ? undefined : (
 				<li>
 					<OutcomeHolding amount={balances.invalid} outcome={shareOutcome.invalid} market={market} />
+					<LockedCaption balances={balances} outcome={shareOutcome.invalid} />
 				</li>
 			)}
 			{balances.lp === 0n ? undefined : <li>{<LpHolding amount={balances.lp} market={market} rounding='down' />}</li>}
@@ -155,14 +164,19 @@ export function LivePortfolio({
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? (
 				<EmptyState
-					title={universeId === undefined ? portfolioCopy.noPositions : portfolioCopy.noPositionsInUniverse(formatUniverseDisplayLabel(universeId))}
+					title={universeId === undefined ? portfolioCopy.noPositions : portfolioCopy.noPositionsInUniverse(universeId === 0n ? universeCopy.genesis : formatUniverseDisplayLabel(universeId))}
 					detail={portfolioCopy.noPortfolioBalances}
 					actions={
-						universeId === undefined ? undefined : (
-							<a className='button-link secondary-link' href={getTradingRouteHref('#/universe')}>
-								{marketsCopy.switchUniverse}
+						<>
+							<a className='button-link primary' href={getTradingRouteHref('#/market')}>
+								{portfolioCopy.browseMarkets}
 							</a>
-						)
+							{universeId === undefined ? undefined : (
+								<a className='button-link secondary-link' href={getTradingRouteHref('#/universe')}>
+									{marketsCopy.switchUniverse}
+								</a>
+							)}
+						</>
 					}
 				/>
 			) : null}

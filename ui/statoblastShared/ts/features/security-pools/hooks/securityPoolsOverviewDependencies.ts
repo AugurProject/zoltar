@@ -21,7 +21,8 @@ type SecurityPoolLiquidationQueueResult = Awaited<ReturnType<typeof queueSecurit
 export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOverviewProductionWriteClient> = {
 	createConnectedReadClient: () => SecurityPoolsOverviewReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
-	loadSecurityPoolLineage: (securityPoolAddress: Address, accountAddress?: Address, operation?: ReadOperation) => Promise<ListedSecurityPool[]>
+	/** `expectDeployment` re-reads a missing registry entry for a pool this session just created. */
+	loadSecurityPoolLineage: (securityPoolAddress: Address, accountAddress?: Address, operation?: ReadOperation, options?: { expectDeployment: boolean }) => Promise<ListedSecurityPool[]>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadLiquidationApproval: (managerAddress: Address, approvalId: Hash) => Promise<LiquidationApprovalDetails>
 	loadSecurityPoolVaultSummary: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityPoolVaultSummary>
@@ -54,7 +55,7 @@ function createOperationClient(operation: ReadOperation | undefined) {
 export const defaultUseSecurityPoolsOverviewDependencies: UseSecurityPoolsOverviewDependencies = {
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
-	loadSecurityPoolLineage: async (securityPoolAddress, accountAddress, operation) => await loadSecurityPoolLineage(createOperationClient(operation), securityPoolAddress, accountAddress, getRegistryIndex()),
+	loadSecurityPoolLineage: async (securityPoolAddress, accountAddress, operation, options) => await loadSecurityPoolLineage(createOperationClient(operation), securityPoolAddress, accountAddress, getRegistryIndex(), options),
 	loadCoordinatorInitialReportFundingRequirement,
 	loadLiquidationApproval: async (managerAddress, approvalId) => await loadProtocolLiquidationApproval(createConnectedReadClient(), managerAddress, approvalId),
 	loadSecurityPoolVaultSummary: async (securityPoolAddress, vaultAddress) => await loadProtocolSecurityPoolVaultSummary(createConnectedReadClient(), securityPoolAddress, vaultAddress),

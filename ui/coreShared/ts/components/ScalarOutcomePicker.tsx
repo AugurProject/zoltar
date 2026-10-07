@@ -15,6 +15,16 @@ function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)
 }
 
+/** States the accepted values; the step is named only when every tick is the same distance apart. */
+function getScalarValueCopy({ displayValueMax, displayValueMin, numTicks }: { displayValueMax: bigint; displayValueMin: bigint; numTicks: bigint }) {
+	const range = displayValueMax - displayValueMin
+	if (numTicks <= 0n || range <= 0n || range % numTicks !== 0n) return { help: commonCopy.scalarValueHelpText, invalid: commonCopy.scalarValueInvalid }
+	const step = formatScalarDisplayValue(range / numTicks)
+	const minimum = formatScalarDisplayValue(displayValueMin)
+	const maximum = formatScalarDisplayValue(displayValueMax)
+	return { help: commonCopy.formatScalarValueStepHelpText(step, minimum, maximum), invalid: commonCopy.formatScalarValueStepError(step, minimum, maximum) }
+}
+
 export function ScalarOutcomePicker({ action, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, showMinMax = true }: ScalarOutcomePickerProps) {
 	const sliderLabelId = useId()
 	const scalarValueErrorId = useId()
@@ -24,6 +34,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 	const selectedTickValue = clampScalarTickIndex(rawSelectedTickValue, details.numTicks)
 	const canUseNativeSlider = details.numTicks <= MAX_PRECISE_SCALAR_TICK_COUNT
 	const resolvedSelectedTick = selectedTickValue.toString()
+	const scalarValueCopy = getScalarValueCopy(details)
 	const scalarQuestionDetails = { answerUnit: details.answerUnit ?? '', displayValueMax: details.displayValueMax, displayValueMin: details.displayValueMin, numTicks: details.numTicks }
 	const selectedScalarValue = selectedTickIsInRange ? getScalarDisplayValue(scalarQuestionDetails, selectedTickValue) : undefined
 	const resolvedScalarValueInput = selectedScalarValue === undefined ? undefined : formatScalarDisplayValue(selectedScalarValue)
@@ -38,23 +49,16 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 		setScalarValueInput(resolvedScalarValueInput)
 		setScalarValueError(undefined)
 	}, [details.displayValueMax, details.displayValueMin, details.numTicks, isInvalid, resolvedScalarValueInput])
+	// A partly typed value such as `7` on the way to `75` clears the selection so nothing stale can be submitted, but its
+	// error waits for blur, as in AmountField, and the slider keeps the last valid position instead of jumping to the minimum.
 	const updateScalarValue = (value: string) => {
 		setScalarValueInput(value)
-		const parsedValue = tryParseDecimalInput(value)
-		if (parsedValue === undefined) {
-			setScalarValueError(commonCopy.scalarValueInvalid)
-			onSelectedTickChange('')
-			return
-		}
-		const tickIndex = getScalarTickIndexForDisplayValue(scalarQuestionDetails, parsedValue)
-		if (tickIndex === undefined) {
-			setScalarValueError(commonCopy.scalarValueInvalid)
-			onSelectedTickChange('')
-			return
-		}
 		setScalarValueError(undefined)
-		onSelectedTickChange(tickIndex.toString())
+		const parsedValue = tryParseDecimalInput(value)
+		const tickIndex = parsedValue === undefined ? undefined : getScalarTickIndexForDisplayValue(scalarQuestionDetails, parsedValue)
+		onSelectedTickChange(tickIndex === undefined ? '' : tickIndex.toString())
 	}
+	const sliderTickValue = selectedTickIsInRange ? selectedTickValue : clampScalarTickIndex(BigInt(lastValidTick.current), details.numTicks)
 
 	return (
 		<div className='market-scalar-deploy workflow-subsection'>
@@ -65,7 +69,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 						<div className={`scalar-slider-rail ${isInvalid ? 'is-disabled' : ''}`}>
 							<div className='scalar-slider-track' />
 							<div className='scalar-slider-input-wrapper'>
-								<div className='scalar-slider-fill' style={{ '--slider-fill': isInvalid ? '0%' : getScalarSliderFillWidth(selectedTickValue, details.numTicks) }} />
+								<div className='scalar-slider-fill' style={{ '--slider-fill': isInvalid ? '0%' : getScalarSliderFillWidth(sliderTickValue, details.numTicks) }} />
 								<input
 									aria-labelledby={sliderLabelId}
 									disabled={disabled || isInvalid}
@@ -73,7 +77,7 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 									min='0'
 									max={details.numTicks.toString()}
 									step='1'
-									value={resolvedSelectedTick}
+									value={sliderTickValue.toString()}
 									aria-valuetext={typeof selectedOutcomeLabel === 'string' ? selectedOutcomeLabel : undefined}
 									onInput={event => onSelectedTickChange(event.currentTarget.value)}
 								/>
@@ -107,10 +111,14 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 									aria-label={commonCopy.scalarValue}
 									aria-describedby={scalarValueError === undefined ? scalarValueHelpId : scalarValueErrorId}
 									disabled={disabled || isInvalid}
-									inputMode='decimal'
+									// The iOS decimal keypad has no minus key, so a range with negative values keeps the full keyboard.
+									inputMode={details.displayValueMin < 0n ? undefined : 'decimal'}
 									invalid={scalarValueError !== undefined}
 									onBlur={() => {
-										if (resolvedScalarValueInput === undefined) return
+										if (resolvedScalarValueInput === undefined) {
+											if (scalarValueInput.trim() !== '') setScalarValueError(scalarValueCopy.invalid)
+											return
+										}
 										setScalarValueInput(resolvedScalarValueInput)
 										setScalarValueError(undefined)
 									}}
@@ -119,8 +127,11 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 								/>
 								{details.answerUnit === undefined || details.answerUnit === '' ? undefined : <span className='scalar-value-unit'>{details.answerUnit}</span>}
 							</span>
-							{scalarValueError === undefined ? <UserMessage placement='field' as='span' id={scalarValueHelpId} detail={commonCopy.scalarValueHelpText} /> : undefined}
-							{scalarValueError === undefined ? undefined : <UserMessage placement='field' as='span' tone='error' id={scalarValueErrorId} detail={scalarValueError} />}
+							{scalarValueError === undefined ? <UserMessage placement='field' as='span' id={scalarValueHelpId} detail={scalarValueCopy.help} /> : undefined}
+							{/* Always mounted so an error revealed on blur is announced without interrupting typing. */}
+							<span aria-live='polite' className='field-error-live-region'>
+								{scalarValueError === undefined ? undefined : <UserMessage placement='field' as='span' tone='error' id={scalarValueErrorId} detail={scalarValueError} />}
+							</span>
 						</span>
 					)}
 				</MetricField>

@@ -50,6 +50,9 @@ function getRole(element: Element): string | null {
 			return 'option'
 		case 'output':
 			return 'status'
+		case 'section':
+			// A section is a region landmark only when it is named.
+			return element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby') ? 'region' : null
 		default:
 			return null
 	}

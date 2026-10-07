@@ -11,7 +11,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { formatCurrencyBalance, formatCeilingAmount, formatCeilingAmountDisplay, formatUnitSuffix, withApproximateMarker } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatCeilingAmount, formatCeilingAmountDisplay, formatUnitSuffix, withApproximateMarker } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
@@ -58,8 +58,11 @@ function resolveApprovalButtonLabel({
 	tokenUnits: number
 }) {
 	if (pending) return <LoadingText>{pendingLabel}</LoadingText>
-	if (guardMessage !== undefined || nextApprovalAmount === undefined) return commonCopy.formatApproveValue(tokenSymbol)
+	// Parsing rejects negative amounts; the label still never formats one, so a render can never throw.
+	if (guardMessage !== undefined || nextApprovalAmount === undefined || nextApprovalAmount < 0n) return commonCopy.formatApproveValue(tokenSymbol)
 	if (requirementSatisfied && !isCustomAmount) return commonCopy.approvalSatisfied
+	// An effectively unlimited allowance is named as such before signing instead of dropping the amount from the label.
+	if (shouldDisplayMaxTokenApprovalAmount(nextApprovalAmount)) return commonCopy.formatApproveUnlimitedValue(tokenSymbol)
 	const amount = formatCeilingAmount(nextApprovalAmount, tokenUnits)
 	const amountLabel = amount === undefined ? undefined : withApproximateMarker(amount)
 	return (
@@ -141,6 +144,12 @@ export function TokenApprovalControl({
 	})()
 	const hasNonIncreasingCustomApproval = parsedAmount.kind === 'custom' && approvedAmount !== undefined && parsedAmount.amount <= approvedAmount
 	const amountValidationMessage = parsedAmount.kind === 'invalid' ? parsedAmount.error : undefined
+	// A custom amount that does not raise the allowance cannot be sent; say so instead of disabling the button without a reason.
+	const nonIncreasingApprovalMessage = (() => {
+		if (!hasNonIncreasingCustomApproval || approvedAmount === undefined || guardMessage !== undefined) return undefined
+		if (shouldDisplayMaxTokenApprovalAmount(approvedAmount)) return commonCopy.formatApprovalAlreadyUnlimitedReason(tokenSymbol)
+		return commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(approvedAmount, tokenSymbol, tokenUnits))
+	})()
 	const statusMessage = resolveTokenApprovalStatusMessage({
 		actionLabel,
 		amountValidationMessage,
@@ -199,7 +208,7 @@ export function TokenApprovalControl({
 			onClick={() => onApprove(nextApprovalAmount)}
 			pending={pending}
 			tone='secondary'
-			availability={{ disabled: !canApprove, reason: completedLabel ?? allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
+			availability={{ disabled: !canApprove, reason: completedLabel ?? allowanceMessage ?? nonIncreasingApprovalMessage ?? visibleStatusMessage ?? guardMessage }}
 			disabledReasonElementId={disabledReasonElementId}
 			showDisabledReason={completedLabel === undefined && allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
 		/>
@@ -242,7 +251,7 @@ export function TokenApprovalControl({
 			)}
 			{renderActions !== undefined || amountValidationMessage === undefined ? undefined : <UserMessage placement='field' tone='error' announcement='assertive' id={amountValidationMessageId} detail={amountValidationMessage} />}
 
-			{renderActions === undefined ? <div className='actions'>{approvalButton}</div> : renderActions({ button: approvalButton, notice: allowanceMessage ?? amountValidationMessage ?? visibleStatusMessage ?? guardMessage, noticeId: amountValidationMessageId })}
+			{renderActions === undefined ? <div className='actions'>{approvalButton}</div> : renderActions({ button: approvalButton, notice: allowanceMessage ?? amountValidationMessage ?? nonIncreasingApprovalMessage ?? visibleStatusMessage ?? guardMessage, noticeId: amountValidationMessageId })}
 
 			{renderActions !== undefined || allowanceMessage === undefined ? undefined : <ErrorNotice id={allowanceMessageId} message={allowanceMessage} />}
 		</div>

@@ -12,7 +12,7 @@ import { expectTransactionButtonDisabled, getTransactionButtonState } from '@zol
 import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { LiquidationModal } from '@zoltar/ui-statoblast-shared/features/security-pools/components/LiquidationModal.js'
-import { isVaultHealthyAtFactor, simulateLiquidation } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
+import { getLiquidationEffectPreview, isVaultHealthyAtFactor, simulateLiquidation } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -1306,6 +1306,49 @@ describe('LiquidationModal', () => {
 		expect(maxButton.disabled).toBe(false)
 	})
 
+	// The enabled direct liquidation above, reused to check what the modal shows before sending it.
+	const executableLiquidation = (liquidationDebtEthAmount: string) =>
+		renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 500n * 10n ** 18n, underwritingLimitAttoEth: 0n, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 100n * 10n ** 18n }),
+			liquidationDebtEthAmount,
+			selectedPool: createSelectedPool({ minimumSecurityBondDebtAttoEth: 0n, minimumVaultRepDepositAttoRep: 0n, statoblastSecurityMultiplierBps: 20_000n }),
+			targetVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * 10n ** 18n, underwritingLimitAttoEth: 2n * 10n ** 18n }),
+		})
+
+	test('previews the backing moved and both vaults after the liquidation before it is sent', async () => {
+		cleanupRenderedComponent = (await executableLiquidation('2')).cleanup
+
+		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: false, reason: undefined })
+		const preview = document.querySelector('.liquidation-effect-preview')
+		if (!(preview instanceof HTMLElement)) throw new Error('Expected the liquidation preview')
+		const valueOf = (label: string) => Array.from(preview.querySelectorAll('.metric-label')).find(element => element.textContent === label)?.nextElementSibling?.textContent ?? ''
+		expect(preview.textContent).toContain('Liquidation preview')
+		expect(valueOf('REP backing moved')).toMatch(/REP$/)
+		// Each vault figure reads before and after, with the change spoken for assistive technology.
+		expect(valueOf('Target commitment')).toMatch(/^2\.00 ETH.*changes to.*0\.00 ETH$/)
+		expect(valueOf('Receiver commitment')).toMatch(/^0\.00 ETH.*changes to.*2\.00 ETH$/)
+		expect(valueOf('Receiver health after')).toBe('Healthy')
+	})
+
+	test('asks for an amount instead of disabling the send without a reason while the commitment is 0', async () => {
+		cleanupRenderedComponent = (await executableLiquidation('0')).cleanup
+
+		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: true, reason: 'Enter a commitment to transfer.' })
+		expect(document.querySelector('.liquidation-effect-preview')).toBeNull()
+	})
+
+	test('links the queued execution window help to its input', async () => {
+		cleanupRenderedComponent = (await renderLiquidationModal({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }) })).cleanup
+
+		const input = within(document.body).getByRole('textbox', { name: 'Execution window (minutes)' })
+		const description = (input.getAttribute('aria-describedby') ?? '')
+			.split(' ')
+			.map(id => document.getElementById(id)?.textContent)
+			.join(' ')
+		expect(description).toContain('Queued operations expire 5m after oracle settlement.')
+	})
+
 	test('shows target-safe before post-liquidation REP floor warnings for a safe near-floor target vault', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({
@@ -2578,4 +2621,17 @@ test('liquidation estimates value the receiver complete backing-unit position af
 	expect(quote.callerAfter.vaultAttoRepBacking).toBe(2n)
 	expect(quote.targetAfter.vaultAttoRepBacking).toBe(0n)
 	expect(quote.callerAfter.underwritingLimitAttoEth).toBe(1n)
+})
+
+test('previews only a liquidation that moves commitment, from the guards simulation', () => {
+	const targetVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, underwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH })
+	const callerVaultSummary = createTargetVaultSummary({ vaultAttoRepBacking: 500n * ATTO_ETH_PER_ETH, underwritingLimitAttoEth: 0n })
+	const input = { callerVaultSummary, minimumVaultRepDepositAttoRep: 0n, repPerEthPrice: 100n * ATTO_ETH_PER_ETH, settlementCollateralAttoEth: 4n * ATTO_ETH_PER_ETH, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary, totalUnderwritingLimitAttoEth: 4n * ATTO_ETH_PER_ETH }
+	expect(getLiquidationEffectPreview({ ...input, requestedDebtAttoEth: 0n })).toBeUndefined()
+	expect(getLiquidationEffectPreview({ ...input, requestedDebtAttoEth: 2n * ATTO_ETH_PER_ETH, repPerEthPrice: undefined })).toBeUndefined()
+	const preview = getLiquidationEffectPreview({ ...input, requestedDebtAttoEth: 2n * ATTO_ETH_PER_ETH })
+	expect(preview?.simulation).toEqual(simulateLiquidation({ ...input, requestedDebtAttoEth: 2n * ATTO_ETH_PER_ETH }))
+	expect(preview?.simulation.targetAfter.underwritingLimitAttoEth).toBe(0n)
+	expect(preview?.simulation.callerAfter.underwritingLimitAttoEth).toBe(2n * ATTO_ETH_PER_ETH)
+	expect(preview?.receiverHealthyAfter).toBe(true)
 })

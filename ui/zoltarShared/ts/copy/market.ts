@@ -33,7 +33,7 @@ export const draftPreview = 'Draft preview'
 export const endTimeRequired = 'Choose an end time'
 export const immediatelyAfterCreation = 'Immediately after creation'
 export const addOutcome = 'Add outcome'
-export const minimumOutcomeCountReason = 'A categorical question needs at least 2 outcomes.'
+export const minimumOutcomeCountReason = 'Remove is unavailable: keep at least 2 outcomes.'
 export const remove = 'Remove'
 export const formatRemoveOutcomeLabel = (outcomeNumber: number) => `Remove outcome ${outcomeNumber}`
 export const categoricalOutcomeLabelsHelpText = 'Use concise, mutually exclusive labels. Users should be able to tell at a glance which outcome would win.'

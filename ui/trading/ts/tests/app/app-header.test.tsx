@@ -26,8 +26,8 @@ function emptyDiscoveryPage(universeIds: bigint[], selectedUniverseId: bigint) {
 }
 
 function moreMenuButton(container: HTMLElement) {
-	const moreButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
-	if (moreButton === undefined) throw new Error('The More menu is missing')
+	const moreButton = container.querySelector<HTMLButtonElement>('.tab-nav .tab-nav-more-trigger')
+	if (moreButton === null) throw new Error('The More menu is missing')
 	return moreButton
 }
 
@@ -75,6 +75,9 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
 		const moreButton = moreMenuButton(rendered.container)
 		expect(moreButton.classList.contains('active')).toBe(true)
+		// The trigger names the open More section and marks it current.
+		expect(moreButton.textContent).toBe('More: Universe')
+		expect(moreButton.getAttribute('aria-current')).toBe('true')
 		await act(() => moreButton.click())
 		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Universe')
 		expect(universeTab?.getAttribute('href')).toBe('#/universe?universe=2')
@@ -549,6 +552,25 @@ describe('trading header', () => {
 			await Bun.sleep(0)
 		})
 		await waitFor(() => expect(attempts).toBe(2))
+		// An RPC failure points to the RPC setting.
+		expect(rendered.container.querySelector('.trading-connection-error')?.textContent).toContain(appCopy.tradingContractsUnreachableHint)
+	})
+
+	test('explains a failed deployment-list download as a connection problem without pointing to the RPC setting', async () => {
+		window.history.replaceState(undefined, '', '/#/portfolio')
+		const rendered = await renderIntoDocument(
+			<App
+				loadLiveDeployment={async () => {
+					throw new Error(appCopy.deploymentRegistryUnavailable)
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitFor(() => expect(rendered.container.querySelector('.trading-connection-error')).not.toBeNull())
+		const notice = rendered.container.querySelector('.trading-connection-error')?.textContent
+		expect(notice).toContain(appCopy.deploymentRegistryUnavailable)
+		expect(notice).not.toContain(appCopy.tradingContractsUnreachableHint)
+		expect(notice).not.toContain('HTTP')
 	})
 
 	test('retries a failed environment switch instead of rechecking the previous environment', async () => {

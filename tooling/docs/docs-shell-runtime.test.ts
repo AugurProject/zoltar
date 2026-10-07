@@ -5,7 +5,27 @@ const globalKeys = ['HTMLScriptElement', 'HTMLAnchorElement', 'HTMLDialogElement
 
 type DocsManifest = { sections: Array<Record<string, unknown>>; pages: Array<Record<string, unknown>> }
 
-async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.html', viewportWidth = 1280, transformManifest?: (data: DocsManifest) => DocsManifest) {
+type LayoutBox = { bottom: number; height: number; top: number }
+
+// happy-dom has no layout, so a test describes where elements sit before the shell measures them.
+function mockLayout(layout: (element: HTMLElement) => LayoutBox | undefined) {
+	const prototype = HTMLElement.prototype
+	Object.defineProperty(prototype, 'getBoundingClientRect', {
+		configurable: true,
+		value(this: HTMLElement) {
+			const box = layout(this) ?? { bottom: 0, height: 0, top: 0 }
+			return { ...box, left: 0, right: 0, width: 0, x: 0, y: box.top }
+		},
+	})
+	Object.defineProperty(prototype, 'getClientRects', {
+		configurable: true,
+		value(this: HTMLElement) {
+			return layout(this) === undefined ? [] : [this.getBoundingClientRect()]
+		},
+	})
+}
+
+async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.html', viewportWidth = 1280, transformManifest?: (data: DocsManifest) => DocsManifest, beforeRuntime?: () => void) {
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 	for (const key of globalKeys) previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
 	const environment = installDomEnvironment(url)
@@ -27,6 +47,7 @@ async function loadShell(url = 'http://localhost/docs/explanation/open-oracle.ht
 	const runtimeScript = document.createElement('script')
 	runtimeScript.src = 'http://localhost/docs/assets/js/docsShell.js'
 	Object.defineProperty(document, 'currentScript', { configurable: true, value: runtimeScript })
+	beforeRuntime?.()
 	Function(await Bun.file('docs/assets/js/docsShell.js').text())()
 	return {
 		cleanup: () => {
@@ -48,6 +69,26 @@ async function finishSearchLoad(source?: string) {
 	searchScript.dispatchEvent(new Event('load'))
 	await Promise.resolve()
 }
+
+test('documentation landing lists every page of each section and opens the section a link targets', async () => {
+	const shell = await loadShell('http://localhost/docs/documentation.html#how-to')
+	try {
+		const data: unknown = Reflect.get(shell.window, 'statoblastDocs')
+		const pages: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'pages') : undefined
+		const sections: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'sections') : undefined
+		if (!Array.isArray(pages) || !Array.isArray(sections)) throw new Error('docsData.js must define the documentation manifest')
+		for (const section of sections) {
+			const sectionId = String(Reflect.get(section, 'id'))
+			const expected = pages.filter(page => Reflect.get(page, 'section') === sectionId).map(page => `http://localhost/docs/${String(Reflect.get(page, 'path'))}`)
+			const index = document.getElementById(sectionId)?.querySelector<HTMLDetailsElement>('.docs-section-index')
+			const listed = Array.from(index?.querySelectorAll<HTMLAnchorElement>('a') ?? []).map(link => link.href)
+			expect(listed.toSorted()).toEqual(expected.toSorted())
+			expect(index?.open).toBe(sectionId === 'how-to')
+		}
+	} finally {
+		shell.cleanup()
+	}
+})
 
 test('documentation landing keeps global navigation compact and omits a redundant page outline', async () => {
 	const shell = await loadShell('http://localhost/docs/documentation.html')
@@ -130,7 +171,7 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Why Statoblast uses OpenOracle')
 		expect(document.querySelector<HTMLAnchorElement>('.docs-search-results a')?.href).toBe('http://localhost/docs/explanation/open-oracle.html')
 		expect(document.querySelector('.docs-search-result-snippet')?.textContent).toBe('Why a contestable REP/ETH price guards solvency-sensitive operations, and where it stops.')
-		expect(document.querySelector('.docs-search-status')?.textContent).toBe('2 results')
+		expect(document.querySelector('.docs-search-status')?.textContent).toMatch(/^\d+ results$/)
 
 		const searchData: unknown = Reflect.get(shell.window, 'statoblastDocsSearch')
 		if (!Array.isArray(searchData) || typeof searchData[0] !== 'object' || searchData[0] === null) throw new Error('Search fixture is missing')
@@ -204,5 +245,226 @@ test('documentation search failure stays actionable and retries the lazy request
 		expect(status?.textContent).toMatch(/^\d+ results$/)
 	} finally {
 		shell.cleanup()
+	}
+})
+
+async function openLoadedSearch(query: string, source?: string) {
+	document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
+	await finishSearchLoad(source)
+	const input = document.querySelector<HTMLInputElement>('.docs-search-input')
+	if (input === null) throw new Error('Search input is missing')
+	input.value = query
+	input.dispatchEvent(new Event('input'))
+	return input
+}
+
+function searchResultTitles(): string[] {
+	return Array.from(document.querySelectorAll('.docs-search-results strong')).map(title => title.textContent ?? '')
+}
+
+// A fixture index keeps the ranking test independent of page titles and wording in the live corpus.
+const searchFixture = `window.statoblastDocsSearch = ${JSON.stringify([
+	{ fragment: '', heading: '', keywords: [], path: 'explanation/fixture-overview.html', sectionTitle: 'Explanations', summary: 'How the fixture protocol works.', text: 'How the fixture protocol keeps vaults solvent, and how liquidations restore coverage.', title: 'Fixture overview', topic: 'Fixture', weight: 1 },
+	{
+		fragment: '',
+		heading: '',
+		keywords: ['liquidation'],
+		path: 'how-to/fixture-liquidation.html',
+		sectionTitle: 'How-to guides',
+		summary: 'Liquidate an undercollateralized fixture vault.',
+		text: 'Liquidate a vault whose backing no longer covers its commitment.',
+		title: 'Fixture liquidation',
+		topic: 'Fixture',
+		weight: 1,
+	},
+	{ fragment: '', heading: '', keywords: [], path: 'reference/fixture-glossary.html', sectionTitle: 'Reference', summary: 'Fixture terms.', text: 'Reporting and escalation terms.', title: 'Fixture glossary', topic: 'Fixture', weight: 1 },
+])}`
+
+test('documentation search ignores question filler words and matches other word forms', async () => {
+	const shell = await loadShell()
+	try {
+		await openLoadedSearch('how do I liquidate a vault', searchFixture)
+		expect(searchResultTitles()[0]).toBe('Fixture liquidation')
+		const input = await openLoadedSearch('liquidations', searchFixture)
+		const pluralResults = searchResultTitles()
+		input.value = 'liquidate'
+		input.dispatchEvent(new Event('input'))
+		expect(searchResultTitles()).toEqual(pluralResults)
+		expect(pluralResults).toContain('Fixture liquidation')
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('documentation search opens the first result on Enter and moves through results with the arrow keys', async () => {
+	const shell = await loadShell()
+	try {
+		const input = await openLoadedSearch('auction')
+		const dialog = document.querySelector<HTMLDialogElement>('.docs-search')
+		const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-search-results a'))
+		const [first, second] = links
+		if (dialog === null || first === undefined || second === undefined) throw new Error('Search results are missing')
+		const openedResults: string[] = []
+		for (const link of links)
+			link.addEventListener('click', event => {
+				event.preventDefault()
+				openedResults.push(link.href)
+			})
+
+		input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }))
+		expect(document.activeElement).toBe(first)
+		first.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }))
+		expect(document.activeElement).toBe(second)
+		second.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowUp' }))
+		expect(document.activeElement).toBe(first)
+		first.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowUp' }))
+		expect(document.activeElement).toBe(input)
+
+		document.querySelector('.docs-search-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		expect(openedResults).toEqual([first.href])
+		expect(dialog.open).toBeFalse()
+	} finally {
+		shell.cleanup()
+	}
+})
+
+type ReadingOrderPage = { path: string; section: string; title: string }
+
+// The reading order the sidebar shows: manifest sections in order, each section's pages grouped by topic in first-appearance order.
+function manifestReadingOrder(window: unknown): { order: ReadingOrderPage[]; sectionTitles: Map<string, string> } {
+	const data: unknown = Reflect.get(window as object, 'statoblastDocs')
+	const pages: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'pages') : undefined
+	const sections: unknown = typeof data === 'object' && data !== null ? Reflect.get(data, 'sections') : undefined
+	if (!Array.isArray(pages) || !Array.isArray(sections)) throw new Error('docsData.js must define the documentation manifest')
+	const order: ReadingOrderPage[] = []
+	const sectionTitles = new Map<string, string>()
+	for (const section of sections) {
+		const sectionId = String(Reflect.get(section, 'id'))
+		sectionTitles.set(sectionId, String(Reflect.get(section, 'title')))
+		const topics = new Map<string, ReadingOrderPage[]>()
+		for (const page of pages) {
+			if (Reflect.get(page, 'section') !== sectionId) continue
+			const topic = String(Reflect.get(page, 'topic'))
+			topics.set(topic, [...(topics.get(topic) ?? []), { path: String(Reflect.get(page, 'path')), section: sectionId, title: String(Reflect.get(page, 'title')) }])
+		}
+		order.push(...Array.from(topics.values()).flat())
+	}
+	return { order, sectionTitles }
+}
+
+test('previous and next follow the sidebar order and continue into the next section', async () => {
+	const overview = await loadShell('http://localhost/docs/explanation/system-overview.html')
+	let readingOrder: ReturnType<typeof manifestReadingOrder> | undefined
+	try {
+		readingOrder = manifestReadingOrder(overview.window)
+		const { order, sectionTitles } = readingOrder
+		const sidebarPaths = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).map(link => link.href.replace('http://localhost/docs/', ''))
+		expect(sidebarPaths).toEqual(order.map(page => page.path))
+		const index = order.findIndex(page => page.path === 'explanation/system-overview.html')
+		const current = order[index]
+		const following = order[index + 1]
+		if (current === undefined || following === undefined) throw new Error('The overview page needs a following page')
+		const nextLabel = following.section === current.section ? 'Next' : `Next · ${sectionTitles.get(following.section) ?? ''}`
+		expect(document.querySelector('.docs-page-pager a:last-child')?.textContent).toBe(`${nextLabel}${following.title}`)
+		const sectionCrumb = document.querySelector<HTMLAnchorElement>('.docs-breadcrumbs a:last-child')
+		expect(sectionCrumb?.textContent).toBe(sectionTitles.get(current.section))
+		expect(sectionCrumb?.href).toBe(`http://localhost/docs/documentation.html#${current.section}`)
+	} finally {
+		overview.cleanup()
+	}
+	if (readingOrder === undefined) throw new Error('The manifest reading order is missing')
+	const { order, sectionTitles } = readingOrder
+	const boundary = order.findIndex((page, index) => order[index + 1] !== undefined && order[index + 1]?.section !== page.section)
+	const lastInSection = order[boundary]
+	const firstInNextSection = order[boundary + 1]
+	if (lastInSection === undefined || firstInNextSection === undefined) throw new Error('The manifest needs two non-empty sections')
+	const crossing = await loadShell(`http://localhost/docs/${lastInSection.path}`)
+	try {
+		expect(document.querySelector('.docs-page-pager a:last-child span')?.textContent).toBe(`Next · ${sectionTitles.get(firstInNextSection.section) ?? ''}`)
+		expect(document.querySelector<HTMLAnchorElement>('.docs-page-pager a:last-child')?.href).toBe(`http://localhost/docs/${firstInNextSection.path}`)
+	} finally {
+		crossing.cleanup()
+	}
+})
+
+test('contract page titles get word-break points and the navigation column reveals the current page', async () => {
+	const shell = await loadShell('http://localhost/docs/reference/contracts/uniformpricedualcapbatchauction.html', 1280, undefined, () =>
+		mockLayout(element => {
+			if (element.classList.contains('docs-left')) return { bottom: 900, height: 836, top: 64 }
+			if (element.getAttribute('aria-current') === 'page') return { bottom: 1045, height: 44, top: 1001 }
+			return undefined
+		}),
+	)
+	try {
+		const heading = document.querySelector('main h1')
+		expect(heading?.textContent).toBe('UniformPriceDualCapBatchAuction')
+		expect(heading?.querySelectorAll('wbr')).toHaveLength(5)
+		expect(document.querySelector('.docs-brand-name')?.textContent).toBe('Augur documentation')
+		expect(document.querySelector<HTMLElement>('.docs-left')?.scrollTop).toBeGreaterThan(0)
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('the page outline marks the section under the header, and nothing above the first section', async () => {
+	const headingTops = new Map<string, number>()
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html', 1280, undefined, () =>
+		mockLayout(element => {
+			if (element.classList.contains('docs-topbar')) return { bottom: 64, height: 64, top: 0 }
+			const top = headingTops.get(element.id)
+			return top === undefined ? undefined : { bottom: top + 40, height: 40, top }
+		}),
+	)
+	try {
+		const outlineLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-right .docs-outline-list a'))
+		const [firstLink, secondLink, thirdLink] = outlineLinks
+		if (firstLink === undefined || secondLink === undefined || thirdLink === undefined) throw new Error('The page outline needs at least three sections')
+		const ids = [firstLink, secondLink, thirdLink].map(link => decodeURIComponent(link.hash.slice(1)))
+		const current = () => Array.from(document.querySelectorAll('.docs-outline-list a[aria-current="location"]')).map(link => link.getAttribute('href'))
+		ids.forEach((id, index) => headingTops.set(id, 500 + index * 600))
+		window.dispatchEvent(new Event('scroll'))
+		await Bun.sleep(30)
+		expect(current()).toEqual([])
+
+		headingTops.set(ids[0] ?? '', -400)
+		headingTops.set(ids[1] ?? '', 70)
+		headingTops.set(ids[2] ?? '', 700)
+		window.dispatchEvent(new Event('scroll'))
+		await Bun.sleep(30)
+		// The desktop outline and its collapsed mobile copy agree.
+		expect(current()).toEqual([secondLink.getAttribute('href'), secondLink.getAttribute('href')])
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('the theme control follows the system preference until the reader picks a theme, and remembers the choice', async () => {
+	const first = await loadShell()
+	try {
+		const select = document.querySelector<HTMLSelectElement>('#docs-theme-select')
+		if (select === null) throw new Error('Theme control is missing')
+		expect(document.querySelector('label[for="docs-theme-select"]')?.textContent).toBe('Theme')
+		expect(select.value).toBe('system')
+		expect(document.documentElement.dataset['docsTheme']).toBe('light')
+		select.value = 'dark'
+		select.dispatchEvent(new Event('change'))
+		expect(document.documentElement.dataset['docsTheme']).toBe('dark')
+		expect(window.localStorage.getItem('augur-docs.theme')).toBe('dark')
+	} finally {
+		first.cleanup()
+	}
+	// A stored choice applies on the next page load before the reader touches the control.
+	const second = await loadShell(undefined, undefined, undefined, () => window.localStorage.setItem('augur-docs.theme', 'dark'))
+	try {
+		const select = document.querySelector<HTMLSelectElement>('#docs-theme-select')
+		if (select === null) throw new Error('Theme control is missing')
+		expect(select.value).toBe('dark')
+		expect(document.documentElement.dataset['docsTheme']).toBe('dark')
+		select.value = 'system'
+		select.dispatchEvent(new Event('change'))
+		expect(window.localStorage.getItem('augur-docs.theme')).toBeNull()
+		expect(document.documentElement.dataset['docsTheme']).toBe('light')
+	} finally {
+		second.cleanup()
 	}
 })

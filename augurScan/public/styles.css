@@ -184,6 +184,17 @@ select {
 		text-align: center;
 	}
 }
+@media (max-width: 400px) {
+	/* The brand leaves too little room beside it for the network name, so the selector takes its own row. */
+	.global-network {
+		grid-column: 1 / -1;
+		grid-row: auto;
+		justify-self: stretch;
+	}
+	.global-network select {
+		max-width: none;
+	}
+}
 @media (max-width: 360px) {
 	.product-nav {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1067,6 +1078,7 @@ figure.time-chart > svg {
 	margin-top: 0.55rem;
 	color: var(--muted);
 	font-size: 0.8125rem;
+	overflow-wrap: anywhere;
 }
 
 .history-range {
@@ -2397,7 +2409,7 @@ dialog::backdrop {
 		margin-right: 0;
 	}
 	.filters {
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 	.filters label {
 		grid-column: 1 / -1;
@@ -2486,7 +2498,7 @@ dialog::backdrop {
 		grid-template-columns: 1fr 1fr;
 	}
 	.static-grid {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 	}
 	.event-detail-content .detail-grid {
 		grid-template-columns: 1fr;
@@ -2997,6 +3009,21 @@ dialog,
 .operations-list > figure.time-chart > svg {
 	min-width: 0;
 	height: auto;
+}
+
+@media (max-width: 400px) {
+	/* Two snapshot actions do not fit beside each other, so they stack under the block input. */
+	.filters.operations-as-of-filter {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.state-tabs,
+	.entity-detail-tabs {
+		flex-wrap: wrap;
+	}
+	.state-tabs button,
+	.entity-detail-tabs a {
+		padding-inline: 0.5rem;
+	}
 }
 
 @media print {

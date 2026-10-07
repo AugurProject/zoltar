@@ -14,7 +14,9 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/TransactionStatusCard.js'
-import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
+import { getLiquidationExecutionFailureDetail, type LiquidationEffectPreview } from '../lib/liquidation.js'
 import { formatHealthFactorBps, getApprovalStatus, type QueuedLiquidationOperationView, type QueuedLiquidationStatus } from '../lib/liquidationModalGuards.js'
 import { getUiRepPriceSourceCopy, renderUiRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
 import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
@@ -178,6 +180,49 @@ export function LiquidationContextSummary({
 					</MetricField>
 				</DataGrid>
 			</ReadOnlyDetailAccordion>
+		</div>
+	)
+}
+
+/** One figure before and after the liquidation; the arrow is visual, so assistive technology hears the change in words. */
+function BeforeAfterValue({ after, before, suffix }: { after: bigint; before: bigint; suffix: string }) {
+	return (
+		<>
+			<CurrencyValue value={before} suffix={suffix} />
+			<span aria-hidden='true'> → </span>
+			<span className='visually-hidden'> {liquidationCopy.valueChangesTo} </span>
+			<CurrencyValue value={after} suffix={suffix} />
+		</>
+	)
+}
+
+/** What the entered amount does before it is sent: the REP backing that moves and each vault's commitment and backing after it, with the receiver's resulting health. */
+export function LiquidationEffectPreviewSection({ estimated, preview }: { estimated: boolean; preview: LiquidationEffectPreview }) {
+	const { receiverHealthyAfter, simulation } = preview
+	return (
+		<div className='decision-summary liquidation-effect-preview'>
+			<p className='detail'>{liquidationCopy.liquidationPreview}</p>
+			<MetricGrid>
+				<MetricField label={liquidationCopy.repBackingMoved}>
+					<CurrencyValue value={simulation.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} />
+				</MetricField>
+				<MetricField label={liquidationCopy.targetUnderwritingLimitAttoEth}>
+					<BeforeAfterValue before={simulation.targetBefore.underwritingLimitAttoEth} after={simulation.targetAfter.underwritingLimitAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
+				<MetricField label={liquidationCopy.targetVaultRepBackingAttoRep}>
+					<BeforeAfterValue before={simulation.targetBefore.vaultAttoRepBacking} after={simulation.targetAfter.vaultAttoRepBacking} suffix={commonCopy.rep} />
+				</MetricField>
+				<MetricField label={liquidationCopy.callerUnderwritingLimitAttoEth}>
+					<BeforeAfterValue before={simulation.callerBefore.underwritingLimitAttoEth} after={simulation.callerAfter.underwritingLimitAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
+				<MetricField label={liquidationCopy.callerVaultRepBackingAttoRep}>
+					<BeforeAfterValue before={simulation.callerBefore.vaultAttoRepBacking} after={simulation.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} />
+				</MetricField>
+				<MetricField label={liquidationCopy.receiverHealthAfter} valueClassName={receiverHealthyAfter ? 'metric-value-success' : 'metric-value-danger'}>
+					{receiverHealthyAfter ? securityPoolCopy.vaultHealthHealthy : securityPoolCopy.vaultHealthUnderwater}
+				</MetricField>
+			</MetricGrid>
+			{estimated ? <UserMessage placement='field' detail={liquidationCopy.liquidationPreviewEstimated} /> : undefined}
 		</div>
 	)
 }

@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
+import { ForkMigrationTargets, MigratedShareLinks, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 let cleanup: (() => Promise<void>) | undefined
@@ -30,9 +30,11 @@ function scalarContext(): Extract<ForkMigrationContext, { kind: 'scalar' }> {
 	}
 }
 
-function Harness({ context }: { context: ForkMigrationContext }) {
+const noMigratedShares = { invalid: 0n, yes: 0n, no: 0n }
+
+function Harness({ context, sourceBalance = 10n }: { context: ForkMigrationContext; sourceBalance?: bigint }) {
 	const [selectedTargets, setSelectedTargets] = useState<readonly ForkTarget[]>([])
-	return <ForkMigrationTargets context={context} selectedTargets={selectedTargets} disabled={false} onChange={setSelectedTargets} />
+	return <ForkMigrationTargets context={context} selectedTargets={selectedTargets} sourceOutcome='YES' sourceBalance={sourceBalance} disabled={false} onChange={setSelectedTargets} />
 }
 
 function inputByLabel(container: HTMLElement, labelText: string) {
@@ -98,8 +100,8 @@ describe('fork migration target selection', () => {
 		await input(valueInput, '51')
 		expect(valueInput.value).toBe('51')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()
-		expect(rendered.container.textContent).toContain('Enter a value between the minimum and maximum that falls on an increment.')
 		await act(() => valueInput.dispatchEvent(new Event('blur', { bubbles: true })))
+		expect(rendered.container.textContent).toContain('Enter a value between the minimum and maximum that falls on an increment.')
 		expect(valueInput.value).toBe('51')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBeTrue()
 		await input(valueInput, '50')
@@ -108,8 +110,8 @@ describe('fork migration target selection', () => {
 
 	test('exposes selected child shortcuts without redundant candidate status copy', async () => {
 		const context = scalarContext()
-		const readyTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}` }
-		const rendered = await renderIntoDocument(<ForkMigrationTargets context={{ ...context, availableTargets: [readyTarget] }} selectedTargets={[readyTarget]} disabled={false} onChange={() => undefined} />)
+		const readyTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: `0x${'11'.repeat(20)}`, migrated: noMigratedShares }
+		const rendered = await renderIntoDocument(<ForkMigrationTargets context={{ ...context, availableTargets: [readyTarget] }} selectedTargets={[readyTarget]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
 		expect(rendered.container.textContent).not.toContain('Branch to add')
@@ -120,8 +122,8 @@ describe('fork migration target selection', () => {
 
 	test('describes an undeployed target as missing without promising an invalid batch will create it', async () => {
 		const context = scalarContext()
-		const missingTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: undefined }
-		const rendered = await renderIntoDocument(<ForkMigrationTargets context={context} selectedTargets={[missingTarget]} disabled={false} onChange={() => undefined} />)
+		const missingTarget: ForkTarget = { outcomeIndex: getScalarOutcomeIndex(context, 25n), universeId: 11n, label: '-25 °C', canonicalPool: undefined, migrated: noMigratedShares }
+		const rendered = await renderIntoDocument(<ForkMigrationTargets context={context} selectedTargets={[missingTarget]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Child security pool missing')
@@ -132,9 +134,9 @@ describe('fork migration target selection', () => {
 
 	test('selects labeled categorical targets independently from source INVALID, YES, and NO shares', async () => {
 		const targets: readonly ForkTarget[] = [
-			{ outcomeIndex: 0n, universeId: 10n, label: 'Invalid', canonicalPool: undefined },
-			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}` },
-			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}` },
+			{ outcomeIndex: 0n, universeId: 10n, label: 'Invalid', canonicalPool: undefined, migrated: noMigratedShares },
+			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: noMigratedShares },
+			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, migrated: noMigratedShares },
 		]
 		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }
 		const rendered = await renderIntoDocument(<Harness context={context} />)
@@ -148,6 +150,45 @@ describe('fork migration target selection', () => {
 		expect(buttonByText(rendered.container, 'Red').getAttribute('aria-pressed')).toBe('true')
 		expect(buttonByText(rendered.container, 'Blue').getAttribute('aria-pressed')).toBe('true')
 		expect(rendered.container.textContent).toContain('2 targets selected')
+	})
+
+	test('marks a child universe that already holds the share as migrated and links to its pool in that universe', async () => {
+		const childPool = `0x${'11'.repeat(20)}` as const
+		const targets: readonly ForkTarget[] = [
+			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: childPool, migrated: { invalid: 0n, yes: 10n, no: 0n } },
+			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, migrated: noMigratedShares },
+		]
+		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }
+		const rendered = await renderIntoDocument(
+			<>
+				<Harness context={context} />
+				<MigratedShareLinks context={context} />
+			</>,
+		)
+		cleanup = rendered.cleanup
+
+		const redButton = buttonByText(rendered.container, 'Red')
+		const redRow = redButton.closest('.migration-outcome-row')
+		expect(redRow?.textContent).toContain('Migrated')
+		expect(redButton.disabled).toBe(true)
+		expect(redRow?.textContent).toContain('This share is already migrated to this child universe.')
+		const blueButton = buttonByText(rendered.container, 'Blue')
+		expect(blueButton.disabled).toBe(false)
+		expect(blueButton.closest('.migration-outcome-row')?.textContent).toContain('Child security pool ready')
+		const link = Array.from(rendered.container.querySelectorAll('.fork-migrated-list a')).find(anchor => anchor.textContent === 'Open in Red universe')
+		if (link === undefined) throw new Error('Missing child universe link')
+		expect(link.getAttribute('href')).toContain(`#/market/${childPool}`)
+		expect(link.getAttribute('href')).toContain('universe=11')
+		expect(rendered.container.querySelector('.fork-migrated-list')?.textContent).toContain('Red universe')
+		expect(rendered.container.querySelector('.fork-migrated-list')?.textContent).not.toContain('Blue universe')
+	})
+
+	test('treats a balance that grew after migrating as not yet migrated there', async () => {
+		const targets: readonly ForkTarget[] = [{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: { invalid: 0n, yes: 10n, no: 0n } }]
+		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }
+		const rendered = await renderIntoDocument(<Harness context={context} sourceBalance={15n} />)
+		cleanup = rendered.cleanup
+		expect(buttonByText(rendered.container, 'Red').closest('.migration-outcome-row')?.textContent).not.toContain('Migrated')
 	})
 
 	test('uses the shared scalar outcome picker while keeping fork target conversion local', async () => {

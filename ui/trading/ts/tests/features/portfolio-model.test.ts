@@ -151,6 +151,22 @@ describe('portfolio rows', () => {
 		expect(inactive.actionItems).toEqual([])
 	})
 
+	test('stops asking for fork migration once every held share is migrated, and keeps asking while any is not', () => {
+		const forked = { universeForkTime: NOW - 10n, systemState: 1 }
+		const migratedEntry = (migrated: LiveBalances['migrated'], amounts: Amounts = { yes: SET, invalid: SET }) => {
+			const base = entry(forked, amounts)
+			if (base.balances === undefined) throw new Error('Fixture balances missing')
+			return { ...base, balances: { ...base.balances, migrated } }
+		}
+		// ShareToken.migrate locks the source balance instead of burning it, so the balance stays; the record says it moved.
+		expect(row(migratedEntry({ invalid: SET, yes: SET, no: 0n })).actionItems).toEqual([])
+		// A held share that was never migrated, or that grew after its migration, still needs attention.
+		expect(row(migratedEntry({ invalid: 0n, yes: SET, no: 0n })).actionItems.map(item => item.kind)).toEqual(['settle'])
+		expect(row(migratedEntry({ invalid: SET, yes: SET, no: 0n }, { yes: 2n * SET, invalid: SET })).actionItems.map(item => item.kind)).toEqual(['settle'])
+		// An unknown migration record keeps the prompt rather than hiding a pending migration.
+		expect(row(migratedEntry(undefined)).actionItems.map(item => item.kind)).toEqual(['settle'])
+	})
+
 	test('marks unreadable balances and markets unavailable without actions', () => {
 		const failedBalance = row({ market, balances: undefined, error: 'RPC unavailable' })
 		expect(failedBalance.state).toBe('unavailable')

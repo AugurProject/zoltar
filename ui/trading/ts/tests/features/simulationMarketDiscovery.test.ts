@@ -173,14 +173,22 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			const dom = installDomEnvironment()
 			const restore = installActiveEnvironmentForTesting(backend, backend)
 			try {
-				for (const route of [`security-pool/${missingPool}`, `market/${missingPool}`, `liquidity/${missingPool}`, `create-market/${missingPool}`] as const) {
+				// Each route returns to the landing whose search opened the address, and shows the address that was not found.
+				const returns = [
+					[`security-pool/${missingPool}`, 'Back to create market', '#/create-market'],
+					[`market/${missingPool}`, 'All markets', '#/market'],
+					[`liquidity/${missingPool}`, 'All markets', '#/market'],
+					[`create-market/${missingPool}`, 'Back to create market', '#/create-market'],
+				] as const
+				for (const [route, backLabel, backHref] of returns) {
 					const rendered = await renderIntoDocument(h(LiveTrading, { route, configuration, configurationError: undefined, selectedUniverseId: '0', controllerServices: liveTradingControllerServices, onWorkflowLockChange: () => undefined }))
 					try {
 						await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'))
 						expect(rendered.container.textContent).not.toContain('discovery failed')
 						expect(rendered.container.textContent).not.toContain('Retry')
-						const back = Array.from(rendered.container.querySelectorAll('a')).find(link => link.textContent === 'Back to create market')
-						expect(back?.getAttribute('href')).toContain('#/create-market')
+						expect(rendered.container.querySelector('.empty-state')?.textContent).toContain(missingPool)
+						const back = Array.from(rendered.container.querySelectorAll('.empty-state a')).find(link => link.textContent === backLabel)
+						expect(back?.getAttribute('href')).toContain(backHref)
 					} finally {
 						rendered.cleanup()
 					}

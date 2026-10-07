@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Statoblast and Zoltar invariants</title>
+		<title>Statoblast and Zoltar invariants · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -14,13 +14,13 @@
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
 				<p>The catalog separates local contract guards, automated release-tooling guards, cross-contract properties, and economic assumptions. Each entry names the strongest enforcement and evidence currently present; a documented implementation choice is not automatically a safe invariant.</p>
 				<p>See the <a href="./security-model.html">Statoblast security model</a> for assumptions A01–A28. Funded and underfunded clearing are explained in the <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a>.</p>
-				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
+				<figure class="diagram diagram-wide" id="fig-invariant-layers">
 					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="786" role="img" aria-label="Protocol invariant layers"><span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Invariant Dependency</span>Correct callers are necessary but insufficient. Their actions must conserve assets, every mandatory state transition must remain reachable, and the named participation and inclusion assumptions must hold where the protocol deliberately relies on economic incentives.</p>
 				</figure>
 			</header>
 
-			<section class="invariant-explorer" id="invariant-explorer" aria-label="Invariant explorer">
+			<section class="invariant-explorer" id="invariant-explorer" aria-label="Invariant explorer" data-docs-sticky>
 				<div class="tool-outcome-strip tool-outcome-strip-single">
 					<div data-primary-output><span>Matches</span><output class="invariant-result-count" data-invariant-count aria-live="polite">All invariants listed below</output></div>
 				</div>
@@ -56,8 +56,8 @@
 			<section id="standing">
 				<h2>Classification and scope</h2>
 				<p>Each entry separates the kind of property from its current enforcement status. A status describes the strongest claim supported by the local implementation and tests; it is not a formal proof.</p>
-				<div class="table-scroll" role="region" aria-label="Invariant property types" tabindex="0">
-					<table>
+				<div class="table-scroll">
+					<table aria-label="Invariant property types">
 						<thead>
 							<tr>
 								<th>Type</th>
@@ -80,8 +80,8 @@
 						</tbody>
 					</table>
 				</div>
-				<div class="table-scroll" role="region" aria-label="Invariant enforcement status definitions" tabindex="0">
-					<table>
+				<div class="table-scroll">
+					<table aria-label="Invariant enforcement status definitions">
 						<thead>
 							<tr>
 								<th>Enforcement status</th>

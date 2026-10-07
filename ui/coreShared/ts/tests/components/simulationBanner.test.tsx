@@ -1100,7 +1100,7 @@ describe('SimulationBanner', () => {
 			const customAdvancedControls = openAdvancedControls(customRendered.container)
 			expect(within(builtInAdvancedControls).queryByRole('button', { name: 'Delete saved state' })).toBeNull()
 			expect(within(customAdvancedControls).getByRole('button', { name: 'Delete saved state' })).toBeTruthy()
-			expect(customRendered.container.textContent).toContain('Saved 2026-06-02 12:34:56 UTC (2d 0h 0m ago).')
+			expect(customRendered.container.textContent).toContain('Saved 2026-06-02 12:34:56 UTC (2d ago).')
 		} finally {
 			Date.now = originalDateNow
 			await builtInRendered.cleanup()

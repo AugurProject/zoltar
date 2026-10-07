@@ -4,7 +4,7 @@ import type { UserMessagePresentation } from '../lib/userCopy.js'
 
 type StateHintProps = {
 	actions?: ComponentChildren
-	announcement?: 'assertive' | 'polite'
+	announcement?: 'assertive' | 'polite' | undefined
 	className?: string
 	id?: string | undefined
 	presentation: UserMessagePresentation

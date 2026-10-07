@@ -102,7 +102,7 @@
     equation.classList.toggle("equation-compact-active", compactActive);
     return compactActive;
   }
-  function overflowCue(element, isOverflowing, label) {
+  function overflowCue(element, isOverflowing, label, cueBeforeContent = false) {
     let cue = element.querySelector(":scope > .docs-overflow-cue");
     if (!isOverflowing) {
       cue?.remove();
@@ -121,7 +121,10 @@
     if (cue === null) {
       cue = document.createElement("span");
       cue.className = "docs-overflow-cue";
-      element.append(cue);
+      if (cueBeforeContent)
+        element.prepend(cue);
+      else
+        element.append(cue);
     }
     cue.textContent = label;
   }
@@ -157,10 +160,45 @@
       return "Horizontal scrolling reveals the full command.";
     return "Horizontal scrolling reveals the full content.";
   }
+  function overflows(container) {
+    return container.scrollWidth > container.clientWidth + overflowThreshold;
+  }
+  function normalizedText(value) {
+    return (value ?? "").replace(/\s+/g, " ").trim();
+  }
+  function tableRegionLabel(container) {
+    const table = container.querySelector("table");
+    const ownLabel = normalizedText(table?.getAttribute("aria-label") ?? table?.querySelector("caption")?.textContent);
+    if (ownLabel.length > 0)
+      return ownLabel;
+    const precedingHeadings = Array.from(document.querySelectorAll("h1, h2, h3, h4")).filter((heading) => (heading.compareDocumentPosition(container) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
+    const heading = normalizedText(precedingHeadings.at(-1)?.textContent);
+    return heading.length > 0 ? `${heading} table` : "Table";
+  }
+  function markTableRegion(container, isOverflowing) {
+    if (isOverflowing && !container.hasAttribute("role")) {
+      container.setAttribute("role", "region");
+      container.setAttribute("aria-label", tableRegionLabel(container));
+      container.dataset["docsAddedRegion"] = "true";
+    } else if (!isOverflowing && container.dataset["docsAddedRegion"] === "true") {
+      container.removeAttribute("role");
+      container.removeAttribute("aria-label");
+      delete container.dataset["docsAddedRegion"];
+    }
+  }
   function markScrollableContent(container) {
     const label = scrollableContentLabel(container);
-    const responsiveTableReflows = window.matchMedia(compactEquationQuery).matches && container.querySelector(":scope > .docs-responsive-table") !== null;
-    overflowCue(container, !responsiveTableReflows && container.scrollWidth > container.clientWidth + overflowThreshold, label);
+    const isTableContainer = container.matches(".table-wrap, .table-scroll, .docs-auto-table-scroll");
+    const responsiveTable = container.querySelector(":scope > .docs-responsive-table");
+    if (responsiveTable !== null) {
+      responsiveTable.classList.remove("docs-table-cards");
+      const showCards = window.matchMedia(compactEquationQuery).matches || overflows(container);
+      responsiveTable.classList.toggle("docs-table-cards", showCards);
+    }
+    const isOverflowing = overflows(container);
+    overflowCue(container, isOverflowing, label, isTableContainer);
+    if (isTableContainer)
+      markTableRegion(container, isOverflowing);
   }
   function prepareTableContainers() {
     for (const table of document.querySelectorAll("table")) {
@@ -168,9 +206,6 @@
         continue;
       const container = document.createElement("div");
       container.className = "docs-auto-table-scroll";
-      container.setAttribute("role", "region");
-      const caption = table.querySelector("caption")?.textContent?.replace(/\s+/g, " ").trim();
-      container.setAttribute("aria-label", table.getAttribute("aria-label") ?? caption ?? "Scrollable table");
       table.before(container);
       container.append(table);
     }

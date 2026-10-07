@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
+import { marketStatusTone } from '../../features/marketStatus.js'
 import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress, listingMarketFixture as liveMarketFixture } from '../support/liveMarketFixture.js'
 
 function renderBrowser(lookupRoute: 'market' | 'liquidity') {
@@ -141,9 +142,42 @@ test('an empty favorite pool list shows address lookup and no scan or pagination
 		expect(rendered.container.querySelector('.market-list')).toBeNull()
 		expect(rendered.container.querySelector('form.market-list-search')).not.toBeNull()
 		expect(rendered.container.querySelector('.discovery-control')).toBeNull()
-		expect(rendered.container.querySelector('.empty-state')?.textContent).toContain('No favorite security pools yet')
+		const empty = rendered.container.querySelector('.empty-state')
+		expect(empty?.textContent).toContain('No favorite security pools yet')
+		// The list only covers this browser, so the empty state says so and points to where pool addresses come from.
+		expect(empty?.textContent).toContain('only shows security pools opened in this browser')
+		const guide = empty?.querySelector('a')
+		expect(guide?.textContent).toBe('How to find a security pool')
+		expect(guide?.getAttribute('href')).toContain('tutorials/trading-first-market.html#find-pool')
+		expect(guide?.getAttribute('target')).toBe('_blank')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
 	}
+})
+
+test('a pool card states a status that rules out creating its market and stops promoting creation', async () => {
+	const dom = installDomEnvironment('http://localhost/#/create-market')
+	const open = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Open pool', pair: undefined, endTime: FIXTURE_NOW + FIXTURE_DAY })
+	const ended = liveMarketFixture({ pool: fixtureAddress('02'), title: 'Ended pool', pair: undefined, endTime: FIXTURE_NOW - FIXTURE_DAY })
+	const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='create-market' markets={[open, ended]} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={FIXTURE_NOW} retry={() => undefined} />)
+	try {
+		const card = (title: string) => Array.from(rendered.container.querySelectorAll('.market-record')).find(candidate => candidate.textContent?.includes(title) === true)
+		// Every listed pool lacks a market, so only the ended pool carries a status, in the warning tone.
+		expect(card('Open pool')?.textContent).not.toContain('Market not created')
+		expect(card('Ended pool')?.textContent).toContain('Question ended')
+		expect(card('Open pool')?.querySelector('.button-link.primary')?.textContent).toBe('Create market')
+		expect(card('Ended pool')?.querySelector('.button-link.primary')).toBeNull()
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('only a market that can trade reads as healthy; a pool without a market or liquidity is neutral', () => {
+	const market = liveMarketFixture({ pool: fixtureAddress('01'), endTime: FIXTURE_NOW + FIXTURE_DAY, yesReserve: 10n ** 18n, noReserve: 10n ** 18n, lpTotalSupply: 10n ** 18n })
+	expect(marketStatusTone(market, FIXTURE_NOW)).toBe('ok')
+	expect(marketStatusTone({ ...market, pair: undefined }, FIXTURE_NOW)).toBe('muted')
+	expect(marketStatusTone({ ...market, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, FIXTURE_NOW)).toBe('muted')
+	expect(marketStatusTone({ ...market, endTime: FIXTURE_NOW - 1n }, FIXTURE_NOW)).toBe('warning')
 })

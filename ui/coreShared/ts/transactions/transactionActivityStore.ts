@@ -3,6 +3,7 @@ import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { useEffect } from 'preact/hooks'
 import { createActiveEnvironmentGuard, getActiveBackend, getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
+import { invalidateAppData } from '../lib/dataRefresh.js'
 import { createConnectedReadClient } from '../wallet/clients.js'
 import { createRecoveringReceiptWaiter } from './receiptRecovery.js'
 import {
@@ -18,6 +19,7 @@ import {
 	type TransactionActivityOutcome,
 } from './transactionActivity.js'
 import { transactionScopesOverlap, type TransactionScope } from './transactionScope.js'
+import { announceTransactionTrackingStopped, resetTransactionTrackingStopsForTesting } from './transactionTrackingStop.js'
 
 type TransactionActivityState = Readonly<{
 	chainId: number | undefined
@@ -28,6 +30,12 @@ type TransactionActivityState = Readonly<{
 
 /** Recent transactions of the connected account on the active network, newest first. */
 export const transactionActivity = signal<TransactionActivityState>({ chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined })
+
+/**
+ * Outcomes the activity watcher recorded for transactions no status panel presented (for example ones restored after a
+ * reload), until the user opens the activity list. The header announces and marks them so they do not settle silently.
+ */
+export const unseenTransactionActivityOutcomes = signal<readonly Hash[]>([])
 
 // Hashes whose receipt this page is already waiting for, either through the initiating action or the activity watcher.
 const watchedHashes = new Set<Hash>()
@@ -62,7 +70,14 @@ function update(change: (entries: readonly TransactionActivityEntry[]) => readon
 /** Test isolation: the list and its watch bookkeeping are module state shared by every rendered app. */
 export function resetTransactionActivityForTesting() {
 	watchedHashes.clear()
+	resetTransactionTrackingStopsForTesting()
+	unseenTransactionActivityOutcomes.value = []
 	transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+}
+
+/** The user opened the activity list and saw every recorded outcome. */
+export function markTransactionActivityOutcomesSeen() {
+	if (unseenTransactionActivityOutcomes.peek().length > 0) unseenTransactionActivityOutcomes.value = []
 }
 
 /**
@@ -74,6 +89,7 @@ export function setTransactionActivityOwner(account: Address | undefined) {
 	const storageKey = account === undefined || backendId === 'simulation' ? undefined : getTransactionActivityStorageKey({ account, backendId, chainId })
 	const ownerKey = `${backendId}:${chainId}:${account?.toLowerCase() ?? ''}`
 	if (transactionActivity.peek().ownerKey === ownerKey) return
+	markTransactionActivityOutcomesSeen()
 	const stored = readStored(storageKey)
 	const entries = expireStaleTransactionActivity(stored, Date.now())
 	transactionActivity.value = { chainId, entries, ownerKey, storageKey }
@@ -100,9 +116,22 @@ export function releaseTransactionActivityWatch(hash: Hash) {
 	releasedWatches.value += 1
 }
 
-/** Stops tracking a pending transaction the user knows will never confirm; it stops locking its objects. */
+/**
+ * Stops tracking a pending transaction the user knows will never confirm: it stops locking its objects, and the action,
+ * status panel and receipt waits that still follow the same hash release it too. The transaction itself can still confirm.
+ */
 export function stopTrackingTransactionActivity(hash: Hash) {
 	recordTransactionSettled(hash, { status: 'failed', failureKind: 'dropped' })
+	announceTransactionTrackingStopped(hash)
+}
+
+function recordWatchedOutcome(hash: Hash, outcome: TransactionActivityOutcome) {
+	const settles = isPendingInActivity(hash)
+	recordTransactionSettled(hash, outcome)
+	if (!settles) return
+	unseenTransactionActivityOutcomes.value = [...unseenTransactionActivityOutcomes.peek().filter(candidate => candidate !== hash), hash]
+	// The settled transaction changed the chain, so displayed data and wallet balances reload in place.
+	invalidateAppData()
 }
 
 function isPendingInActivity(hash: Hash) {
@@ -142,8 +171,8 @@ export function useTransactionActivityReceiptWatcher() {
 				},
 			})
 				.then(receipt => {
-					if (replacedOutsideApp) recordTransactionSettled(current, { status: 'failed', failureKind: 'replaced' })
-					else recordTransactionSettled(current, receipt.status === 'success' ? { status: 'confirmed' } : { status: 'failed', failureKind: 'reverted' })
+					if (replacedOutsideApp) recordWatchedOutcome(current, { status: 'failed', failureKind: 'replaced' })
+					else recordWatchedOutcome(current, receipt.status === 'success' ? { status: 'confirmed' } : { status: 'failed', failureKind: 'reverted' })
 				})
 				.catch(() => {
 					// The network changed or the entry stopped being tracked; the next owner's list resumes its own pending entries.

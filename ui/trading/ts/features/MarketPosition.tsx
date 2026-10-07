@@ -1,7 +1,7 @@
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { OutcomeHolding } from './OutcomeHolding.js'
-import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
+import { LpHolding, OutcomeHolding } from './OutcomeHolding.js'
+import { lockedMigratedBalance, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { marketsCopy } from '../copy/markets.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -20,15 +20,18 @@ function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, ba
 }
 
 /**
- * The wallet's Yes, No, and Invalid shares in this market, shown in the reading column so every ticket view keeps them in sight.
- * `ownsBalanceError` is false while the open ticket view (liquidity or settlement) already reports a failed balance read with its retry.
+ * The wallet's Yes, No, and Invalid shares in this market, and its LP tokens once it holds some, shown in the reading
+ * column so every ticket view keeps them in sight. Each quantity names its outcome, so no caption repeats it; a balance a
+ * fork migration locked says so. `ownsBalanceError` is false while the open ticket view (liquidity or settlement)
+ * already reports a failed balance read with its retry.
  */
 export function MarketPosition({ market, holdings, wallet, disabled, ownsBalanceError }: { market: LiveMarket; holdings: TicketBalances; wallet: Pick<TicketWallet, 'networkMismatchReason'>; disabled: boolean; ownsBalanceError: boolean }) {
 	const outcomes = [
-		{ outcome: 'yes', className: 'portfolio-holding-yes', value: holdings.balances?.yes, quantityOutcome: 'YES', caption: workflowCopy.walletYes },
-		{ outcome: 'no', className: 'portfolio-holding-no', value: holdings.balances?.no, quantityOutcome: 'NO', caption: workflowCopy.walletNo },
-		{ outcome: 'invalid', className: undefined, value: holdings.balances?.invalid, quantityOutcome: 'INVALID' as const, caption: workflowCopy.walletInvalid },
+		{ outcome: 'yes', className: 'portfolio-holding-yes', value: holdings.balances?.yes, quantityOutcome: 'YES' },
+		{ outcome: 'no', className: 'portfolio-holding-no', value: holdings.balances?.no, quantityOutcome: 'NO' },
+		{ outcome: 'invalid', className: undefined, value: holdings.balances?.invalid, quantityOutcome: 'INVALID' as const },
 	] as const
+	const lp = holdings.balances?.lp ?? 0n
 	return (
 		<section className='market-position' aria-labelledby='market-position-heading' aria-busy={holdings.balanceState === 'loading'}>
 			<h3 id='market-position-heading'>{marketsCopy.yourPosition}</h3>
@@ -40,9 +43,16 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 					{outcomes.map(item => (
 						<li key={item.outcome} className={item.className} data-outcome={item.outcome}>
 							<span className='holding-quantity'>{walletBalanceLabel(item.value, item.quantityOutcome, holdings.balanceState, market)}</span>
-							<small className='payout-caption'>{item.caption}</small>
+							{holdings.balances === undefined || lockedMigratedBalance(holdings.balances, item.quantityOutcome) === 0n ? undefined : <small className='payout-caption holding-locked'>{marketsCopy.lockedAfterMigration}</small>}
 						</li>
 					))}
+					{lp === 0n ? undefined : (
+						<li data-outcome='lp'>
+							<span className='holding-quantity'>
+								<LpHolding amount={lp} market={market} rounding='down' />
+							</span>
+						</li>
+					)}
 				</ul>
 			)}
 			{holdings.balanceState === 'loading' ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}

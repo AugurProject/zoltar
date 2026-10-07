@@ -1,7 +1,7 @@
 import { assertNetworkEnabled } from './networkAvailability.js'
 import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, requestWalletRpc, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
-import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
+import { getInjectedEthereum, isUnsupportedWalletMethodError, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, requestWalletRpc, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
+import { createUserFacingError, hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, getDefaultNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
@@ -10,6 +10,13 @@ import { createRetryEmptyReadProvider } from './retryEmptyReadProvider.js'
 import { createConfirmedReadTransport } from './confirmedReadTransport.js'
 
 export type TransactionSubmissionStatus = 'pending' | 'uncertain'
+
+/** What to do instead when the wallet cannot perform a session action for the application. */
+export const unsupportedWalletActionMessages = {
+	accountSelection: 'This wallet does not support account switching from the application. Open the wallet and choose another account.',
+	disconnect: 'This wallet does not support disconnecting from the application. Disconnect this site in the wallet.',
+	formatNetworkSwitch: (networkName: string) => `This wallet does not support switching networks from the application. Switch to ${networkName} in the wallet.`,
+}
 
 export type ReadClient = ReturnType<typeof createPublicClient>
 export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Account> &
@@ -71,8 +78,8 @@ export type TransactionRequestPreview = {
 
 type ReadTransportMode = 'provider' | 'rpc'
 
-/** Why the configured read RPC cannot be trusted: it serves another chain, or its latest block is too old. */
-export type ReadBackendIssue = 'chain-mismatch' | 'stale'
+/** Why the configured read RPC cannot be trusted: it serves another chain, its latest block is too old, or it does not respond. */
+export type ReadBackendIssue = 'chain-mismatch' | 'stale' | 'unreachable'
 
 export type ReadBackendStatus = {
 	blockNumber: bigint | undefined
@@ -223,17 +230,22 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 				assertNetworkEnabled(profile.chainIdHex)
 				const currentAccounts = await readProviderAccounts(ethereum)
 				const currentAccount = currentAccounts[0]
-				if (currentAccount === undefined) throw new Error('Wallet account is no longer connected. Reconnect your wallet and try again.')
-				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw new Error('Wallet account changed. Review the action with the connected account and try again.')
+				if (currentAccount === undefined) throw createUserFacingError('Wallet account is no longer connected. Reconnect your wallet and try again.')
+				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw createUserFacingError('Wallet account changed. Review the action with the connected account and try again.')
 				const currentChainId = await readProviderChainId(ethereum)
 				assertNetworkEnabled(currentChainId)
-				if (!sameChainId(currentChainId, profile.chainIdHex)) throw new Error(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)
+				if (!sameChainId(currentChainId, profile.chainIdHex)) throw createUserFacingError(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)
 			})
 		},
 		disconnectWallet: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No browser wallet was found.')
-			await ethereum.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] })
+			try {
+				await ethereum.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] })
+			} catch (error) {
+				if (isUnsupportedWalletMethodError(error)) throw new Error(unsupportedWalletActionMessages.disconnect, { cause: error })
+				throw error
+			}
 		},
 		getAccounts: async () => await readProviderAccounts(getProvider()),
 		getChainId: async () => {
@@ -259,7 +271,12 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 		requestAccountSelection: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
-			await ethereum.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] })
+			try {
+				await ethereum.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] })
+			} catch (error) {
+				if (isUnsupportedWalletMethodError(error)) throw new Error(unsupportedWalletActionMessages.accountSelection, { cause: error })
+				throw error
+			}
 			return await readProviderAccounts(ethereum)
 		},
 		setReadTransportMode: mode => {
@@ -287,7 +304,12 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 		switchNetwork: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No browser wallet was found.')
-			await switchInjectedChain(ethereum, profile.chainIdHex)
+			try {
+				await switchInjectedChain(ethereum, profile.chainIdHex, profile.chain)
+			} catch (error) {
+				if (isUnsupportedWalletMethodError(error)) throw new Error(unsupportedWalletActionMessages.formatNetworkSwitch(getNetworkSwitchTarget(profile)), { cause: error })
+				throw error
+			}
 		},
 	}
 }

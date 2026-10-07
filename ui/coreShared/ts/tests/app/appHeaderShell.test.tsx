@@ -3,6 +3,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
+import { ProtocolAppFrame } from '../../app/components/ProtocolAppFrame.js'
 import type { SimulationController } from '../../simulation/controller.js'
 
 import { fireEvent, waitFor, within } from '../testUtils/queries'
@@ -213,6 +214,30 @@ describe('AppHeaderShell', () => {
 			fireEvent.keyDown(document, { key: 'Escape' })
 			await waitFor(() => expect(within(rendered.container).queryByRole('dialog')).toBeNull())
 			expect(document.activeElement).toBe(settingsButton)
+		} finally {
+			await rendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+})
+
+describe('ProtocolAppFrame', () => {
+	test('keeps the header first, notices below it, and the page heading at the start of the content', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
+		const rendered = await renderIntoDocument(
+			<ProtocolAppFrame accountAddress={undefined} currentBlockNumber={undefined} currentTimestamp={undefined} header={<header id='frame-header'>Header</header>} heading={<h1 id='frame-heading'>Page</h1>} notices={<div id='frame-notices'>Notices</div>} routeContentDisabled={false} transactionRouteKey='zoltar'>
+				<p id='frame-content'>Content</p>
+			</ProtocolAppFrame>,
+		)
+		try {
+			const main = rendered.container.querySelector('main')
+			if (main === null) throw new Error('Expected the main landmark')
+			// A notice appearing or clearing must not move the header's controls, so notices follow the header.
+			expect(Array.from(main.children, child => child.id)).toEqual(['frame-header', 'frame-notices', 'app-content'])
+			// Focus moved to the heading on a page change continues into the content with the next Tab.
+			const appContent = document.getElementById('app-content')
+			expect(appContent?.firstElementChild?.id).toBe('frame-heading')
+			expect(appContent?.querySelector('#frame-content')).not.toBeNull()
 		} finally {
 			await rendered.cleanup()
 			domEnvironment.cleanup()

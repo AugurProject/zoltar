@@ -21,7 +21,8 @@ export type TransactionActivityEntry = Readonly<{
 	title: string
 }>
 
-export type TransactionActivityOutcome = Readonly<{ status: 'confirmed' }> | Readonly<{ status: 'failed'; failureKind: TransactionActivityFailureKind }>
+/** A confirmed outcome may carry the result title the status panel showed, so the settled row reads the same. */
+export type TransactionActivityOutcome = Readonly<{ status: 'confirmed'; title?: string | undefined }> | Readonly<{ status: 'failed'; failureKind: TransactionActivityFailureKind }>
 
 export const MAX_TRANSACTION_ACTIVITY_ENTRIES = 20
 
@@ -60,7 +61,11 @@ export function replaceTransactionActivityHash(entries: readonly TransactionActi
 export function settleTransactionActivity(entries: readonly TransactionActivityEntry[], hash: Hash, outcome: TransactionActivityOutcome, settledAt: number) {
 	const target = entries.find(entry => entry.hash === hash)
 	if (target === undefined || target.status !== 'pending') return entries
-	return capActivity(entries.map(entry => (entry.hash === hash ? { ...entry, ...outcome, settledAt } : entry)))
+	const settle = (entry: TransactionActivityEntry): TransactionActivityEntry => {
+		if (outcome.status === 'failed') return { ...entry, failureKind: outcome.failureKind, settledAt, status: 'failed' }
+		return { ...entry, settledAt, status: 'confirmed', ...(outcome.title === undefined ? {} : { title: outcome.title }) }
+	}
+	return capActivity(entries.map(entry => (entry.hash === hash ? settle(entry) : entry)))
 }
 
 /**

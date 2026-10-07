@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="How a child pool sells REP to repair an ETH collateral shortfall after a fork, and what happens when demand is weak." />
-		<title>Truth Auctions</title>
+		<title>Truth Auctions · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -111,7 +111,7 @@
 						<div class="tool-workspace-view">
 							<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 								<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the underfunded threshold and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
-								<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing price or underfunded threshold, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates as the auction controls change.</p>
+								<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing price or underfunded threshold, and each bid point's shape and colour, named in the chart key, shows whether the bid wins in full, fills partly at the boundary, or is refunded. The chart updates as the auction controls change.</p>
 							</figure>
 							<div class="example-output-grid tool-detail-grid auction-allocation-grid">
 								<div><span>Binding condition</span><output data-example-output="bindingCondition">both caps</output></div>

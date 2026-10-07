@@ -1126,7 +1126,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('1970-01-01 00:00:01 UTC')).not.toBeNull()
 		expect(documentQueries.getByText('Ends')).not.toBeNull()
 		expect(documentQueries.getByText('1970-01-08 00:00:01 UTC')).not.toBeNull()
-		expect(documentQueries.getByText('(in 6d 23h 59m)')).not.toBeNull()
+		expect(documentQueries.getByText('(in 6d 23h)')).not.toBeNull()
 		const truthAuctionHeading = documentQueries.getByRole('heading', { name: 'Truth auction' })
 		const truthAuctionCard = truthAuctionHeading.closest('.section-block')
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
@@ -1301,7 +1301,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await waitFor(() => {
 			const pendingButton = within(document.body).getByRole('button', { name: 'Withdrawing refund…' })
-			expect(pendingButton.hasAttribute('disabled')).toBe(true)
+			// A pending transaction button stays focusable and is aria-disabled.
+			expect(pendingButton.getAttribute('aria-disabled')).toBe('true')
 			expect(pendingButton.getAttribute('aria-busy')).toBe('true')
 			expect(pendingButton.textContent).toContain('Withdrawing refund…')
 		})
@@ -1649,7 +1650,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		// The hint rounds like other amounts, rounding the balance down, and keeps exact values in the titles.
-		expect(document.body.textContent).toContain('Available: ≈ 999\u00a0999\u00a0989\u00a0980.99 ETH · Min bid 0.0000000000000000010 ETH · Max keeps 0.010 ETH for gas')
+		// The rounded balance also carries its exact value as text for assistive technology.
+		expect(document.body.textContent).toContain('Available: ≈ 999\u00a0999\u00a0989\u00a0980.99 ETH(exact 999\u00a0999\u00a0989\u00a0980.99999999867693724 ETH) · Min bid 0.000000000000000001 ETH · Max keeps 0.010 ETH for gas')
 		expect(document.body.querySelector(`[title="${formatCurrencyBalance(balanceAttoEth)} ETH"]`)).not.toBeNull()
 		// An exact tick price needs no rounding notice.
 		expect(document.body.textContent).not.toContain('Will be submitted at')
@@ -1822,7 +1824,7 @@ describe('ForkAuctionSection', () => {
 		const migrationStartedMetric = migrationStartedLabel.closest('div')
 		if (!(migrationStartedMetric instanceof HTMLElement)) throw new Error('Expected migration started metric')
 		expect(within(migrationStartedMetric).getByText('1970-01-01 00:00:02 UTC')).not.toBeNull()
-		expect(within(migrationStartedMetric).getByText('(less than a minute ago)')).not.toBeNull()
+		expect(within(migrationStartedMetric).getByText('(8s ago)')).not.toBeNull()
 		const migrationHeading = documentQueries.getByRole('heading', { name: 'Migration status' })
 		const migrationCard = migrationHeading.closest('.section-block')
 		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')

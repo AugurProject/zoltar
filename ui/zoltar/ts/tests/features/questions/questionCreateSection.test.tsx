@@ -109,11 +109,11 @@ describe('QuestionCreateSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const queries = within(document.body)
-		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		const dialog = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(dialog).getByText('Rejected in wallet.')).not.toBeNull()
 		expect(document.querySelector('form')?.textContent).not.toContain('Rejected in wallet.')
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		expect(document.querySelector('form')?.textContent).not.toContain('Rejected in wallet.')
 	})
 
@@ -203,8 +203,20 @@ describe('QuestionCreateSection', () => {
 		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Yes', 'No'] }) })
 
 		const reason = document.getElementById('minimum-outcomes-reason')
-		expect(reason?.textContent).toBe('A categorical question needs at least 2 outcomes.')
+		expect(reason?.textContent).toBe('Remove is unavailable: keep at least 2 outcomes.')
+		expect(reason?.classList.contains('field-hint')).toBe(true)
 		expect(within(document.body).getByRole('button', { name: 'Remove outcome 1' }).getAttribute('aria-describedby')).toBe('minimum-outcomes-reason')
+	})
+
+	test('keeps the remove reason after a real outcome error so it never reads as the error', async () => {
+		await renderSection({ questionForm: createQuestionForm({ marketType: 'categorical', categoricalOutcomes: ['Yes', 'Yes'] }) })
+
+		await act(() => within(document.body).getByPlaceholderText('Outcome 1').dispatchEvent(new Event('blur')))
+		const error = document.getElementById('market-create-outcomes-error')
+		const reason = document.getElementById('minimum-outcomes-reason')
+		if (error === null || reason === null) throw new Error('Expected the outcome error and the remove reason')
+		expect(error.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(reason.classList.contains('field-error')).toBe(false)
 	})
 
 	test('labels time inputs with the browser time zone and previews each time locally and in UTC', async () => {

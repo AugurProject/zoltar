@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { loadForkMigrationContext } from '../../protocol/forks.js'
+import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, isHex, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { largestMigratedShares, loadForkMigrationContext, targetMigrationComplete } from '../../protocol/forks.js'
 
 const pool = getAddress(`0x${'11'.repeat(20)}`)
 const shareToken = getAddress(`0x${'22'.repeat(20)}`)
@@ -43,27 +44,29 @@ const selectors = {
 	outcomeLabels: selector('getOutcomeLabels(uint256,uint256,uint256)'),
 	answerOptionName: selector('getAnswerOptionName(uint256,uint256)'),
 	canonicalPool: selector('canonicalPoolByUniverse(uint248)'),
+	migratedShares: selector('getMigratedShareAmountAttoShares(uint256,uint248,address)'),
 }
 
 function selector(signature: string) {
 	return keccak256(signature).slice(0, 10)
 }
 
-function requestSelector(params: unknown) {
+function requestData(params: unknown): Hex {
 	if (!Array.isArray(params)) throw new Error('RPC parameters must be an array')
 	const transaction: unknown = params[0]
 	if (typeof transaction !== 'object' || transaction === null) throw new Error('RPC transaction must be an object')
 	const data: unknown = Reflect.get(transaction, 'data')
-	if (typeof data !== 'string' || !data.startsWith('0x')) throw new Error('RPC transaction data must be hex')
-	return data.slice(0, 10)
+	if (typeof data !== 'string' || !isHex(data)) throw new Error('RPC transaction data must be hex')
+	return data
 }
 
-function publicClient(handler: (callSelector: string) => Promise<string> | string) {
+function publicClient(handler: (callSelector: string, data: Hex) => Promise<string> | string) {
 	return createPublicClient({
 		transport: custom({
 			request: async ({ method, params }) => {
 				if (method !== 'eth_call') throw new Error(`Unexpected RPC method: ${method}`)
-				return await handler(requestSelector(params))
+				const data = requestData(params)
+				return await handler(data.slice(0, 10), data)
 			},
 		}),
 	})
@@ -156,6 +159,50 @@ describe('fork protocol helpers', () => {
 		expect(context.availableTargets[1]).toMatchObject({ outcomeIndex: 2n, label: 'On-chain scalar 2', canonicalPool })
 		expect(context.availableTargets.at(-1)).toMatchObject({ outcomeIndex: 75n, label: 'On-chain scalar 31', canonicalPool: undefined })
 		expect(childPage).toBe(2)
+	})
+
+	test('reads what an account already migrated into each child universe that has a security pool', async () => {
+		const account = getAddress(`0x${'66'.repeat(20)}`)
+		const yesUniverse = getChildUniverseId(market.universeId, 1n)
+		const migratedReads: { fromId: bigint; universeId: bigint; account: Address }[] = []
+		const client = publicClient((callSelector, data) => {
+			const common = commonResponse(callSelector, encodedQuestion('Categorical fork', 0n))
+			if (common !== undefined) return common
+			if (callSelector === selectors.outcomeLabels) return encodeAbiParameters([{ type: 'string[]' }], [['Yes', 'No']])
+			if (callSelector === selectors.canonicalPool) {
+				const decoded = decodeFunctionData({ abi: statoblast_tokens_ShareToken_ShareToken.abi, data })
+				return encodedAddress(decoded.args[0] === yesUniverse ? canonicalPool : zeroAddress)
+			}
+			if (callSelector === selectors.migratedShares) {
+				const decoded = decodeFunctionData({ abi: statoblast_tokens_ShareToken_ShareToken.abi, data })
+				const [fromId, universeId, reader] = decoded.args
+				if (typeof fromId !== 'bigint' || typeof universeId !== 'bigint' || typeof reader !== 'string') throw new Error('Malformed migrated-share read')
+				migratedReads.push({ fromId, universeId, account: getAddress(reader) })
+				// The account migrated its Yes shares (source token universe << 8 | 1) into the Yes universe.
+				return encodeAbiParameters([{ type: 'uint256' }], [fromId === ((market.universeId << 8n) | 1n) ? 5n : 0n])
+			}
+			throw new Error(`Unexpected function selector: ${callSelector}`)
+		})
+
+		const anonymous = await loadForkMigrationContext(client, market)
+		expect(migratedReads).toHaveLength(0)
+		expect(anonymous.availableTargets.every(target => target.migrated.yes === 0n && target.migrated.no === 0n && target.migrated.invalid === 0n)).toBe(true)
+
+		const context = await loadForkMigrationContext(client, market, account)
+		// Only the child universe with a pool can hold migrated shares, so only it is read: once per source outcome, for this account.
+		expect(migratedReads.map(read => [read.fromId & 0xffn, read.universeId, read.account])).toEqual([
+			[0n, yesUniverse, account],
+			[1n, yesUniverse, account],
+			[2n, yesUniverse, account],
+		])
+		const yesTarget = context.availableTargets.find(target => target.outcomeIndex === 1n)
+		if (yesTarget === undefined) throw new Error('Missing Yes child universe')
+		expect(yesTarget.migrated).toEqual({ invalid: 0n, yes: 5n, no: 0n })
+		expect(largestMigratedShares(context.availableTargets)).toEqual({ invalid: 0n, yes: 5n, no: 0n })
+		// Migrating the same Yes balance there again would move nothing; a larger balance has new shares to migrate.
+		expect(targetMigrationComplete(yesTarget, 'YES', 5n)).toBe(true)
+		expect(targetMigrationComplete(yesTarget, 'YES', 6n)).toBe(false)
+		expect(targetMigrationComplete(yesTarget, 'NO', 5n)).toBe(false)
 	})
 
 	test('rejects malformed scalar child pages and surfaces RPC failures', async () => {

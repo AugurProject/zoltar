@@ -5,6 +5,7 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { abbreviateAddress } from '../lib/address.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
+import { CopyGlyph, CopyStatus } from './CopyStatus.js'
 
 export type AddressWidthConstraint = {
 	/** A stable allocation that does not shrink when the displayed address shortens. */
@@ -81,15 +82,11 @@ export function AddressValue({ address, className = '', compactAbbreviation = fa
 
 	return (
 		<span className='copy-value-wrap'>
-			<button type='button' className={`address-value copyable ${className}`} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
-				{copied.value ? (
-					<span className='copy-feedback' role='status'>
-						{commonCopy.copiedAddress}
-					</span>
-				) : (
-					<AddressText address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
-				)}
+			<button type='button' className={`address-value copyable ${className}`} data-copied={copied.value} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
+				<AddressText address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
+				<CopyGlyph />
 			</button>
+			<CopyStatus copied={copied.value} message={commonCopy.copiedAddress} />
 			<CopyErrorMessage id={copyErrorId} manualValue={address} message={copyError.value} />
 		</span>
 	)

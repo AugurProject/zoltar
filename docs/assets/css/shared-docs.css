@@ -62,6 +62,11 @@
 	stroke-width: 2;
 }
 
+/* Red and gold nodes can look alike to colour-blind readers, so red ones also carry a dashed outline. */
+.plot-chart :is(.svg-red, .svg-rose) {
+	stroke-dasharray: 7 4;
+}
+
 .plot-figure-diagram:not(.plot-figure-fit) > .plot-chart {
 	width: max-content;
 	max-width: none;
@@ -86,12 +91,15 @@
 	position: relative;
 }
 
+/* The full-screen control sits above the diagram, with its reason in view, instead of covering the diagram's corner. */
 .plot-chart-toolbar {
-	position: absolute;
-	z-index: 3;
-	top: 0.65rem;
-	right: 0.65rem;
-	margin: 0;
+	display: flex;
+	flex-direction: row-reverse;
+	flex-wrap: wrap;
+	gap: 0.35rem 0.65rem;
+	align-items: center;
+	justify-content: flex-start;
+	margin: 0 0 0.6rem;
 }
 
 .plot-chart-toolbar[hidden] {
@@ -123,15 +131,9 @@
 }
 
 .plot-chart-pan-cue {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	margin: -1px;
-	padding: 0;
-	border: 0;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	white-space: nowrap;
+	color: var(--muted, #5f6d75);
+	font-size: 0.8rem;
+	line-height: 1.35;
 }
 
 body.docs-diagram-expanded {
@@ -142,8 +144,8 @@ body.docs-diagram-expanded {
 	position: fixed !important;
 	z-index: 1000;
 	inset: 0.75rem;
-	display: grid;
-	grid-template-rows: minmax(0, 1fr) auto;
+	display: flex;
+	flex-direction: column;
 	width: auto !important;
 	max-width: none !important;
 	height: auto;
@@ -156,12 +158,12 @@ body.docs-diagram-expanded {
 	overflow: hidden !important;
 }
 
-.plot-figure-expanded > .plot-chart-toolbar {
-	top: 0.75rem;
-	right: 0.75rem;
+.plot-figure-expanded > * {
+	flex: none;
 }
 
 .plot-figure-expanded > .plot-chart {
+	flex: 1 1 auto;
 	display: flex;
 	min-height: 0;
 	align-items: flex-start;
@@ -714,7 +716,6 @@ body.doc-openoracle .equation:focus-visible {
 	outline-offset: 0.2rem;
 }
 body.doc-openoracle .table-scroll table {
-	min-width: 54rem;
 	margin-top: 0;
 }
 body.doc-openoracle th,
@@ -3459,8 +3460,9 @@ body.paper-zoltar .footer-note {
 		--green-soft: #dcece5;
 		--blue: #245f9f;
 		--blue-soft: #dceaf8;
-		--gold: #9b4f2d;
-		--gold-soft: #f2dfd4;
+		/* Gold stays a yellow-brown so it never reads as the red that marks failures. */
+		--gold: #8a5d18;
+		--gold-soft: #f3e4c6;
 		--teal: #0b7285;
 		--teal-soft: #d8eef1;
 		--red: #98483b;
@@ -3483,6 +3485,40 @@ body.paper-zoltar .footer-note {
 		font-family: var(--docs-font-sans);
 		font-size: 1rem;
 		line-height: 1.62;
+	}
+
+	/* docsShell.js resolves the reader's theme choice (or the system preference) into data-docs-theme. */
+	:root[data-docs-theme="dark"] body.docs-shell-page {
+		color-scheme: dark;
+		--bg: #101413;
+		--paper: #151a19;
+		--ink: #eef2ef;
+		--muted: #aab6b1;
+		--line: #3b4744;
+		--soft: #222a28;
+		--soft-line: #2b3331;
+		--card-bg: #1b2120;
+		--section-bg: #1a201e;
+		--code-bg: #27231c;
+		--table-head: #232b29;
+		--green: #72cba9;
+		--green-soft: #14372c;
+		--blue: #8bb9f0;
+		--blue-soft: #15283f;
+		--gold: #e6b65d;
+		--gold-soft: #3a2d15;
+		--teal: #65c7d4;
+		--teal-soft: #12363c;
+		--red: #ef9185;
+		--red-soft: #3d211d;
+		--accent: #72cba9;
+		--accent-soft: #14372c;
+		--accent-2: #e8a27c;
+		--accent-2-soft: #3b2619;
+		--accent-rgb: 114 203 169;
+		--accent-2-rgb: 232 162 124;
+		--diagram-line: #aeb9b5;
+		--focus: #72cba9;
 	}
 
 	body.docs-shell-page::before {
@@ -3511,6 +3547,13 @@ body.paper-zoltar .footer-note {
 		max-width: 19ch;
 		font-size: clamp(2.25rem, 5.5vw, 3.7rem);
 		line-height: 1.03;
+		overflow-wrap: anywhere;
+	}
+
+	/* Contract names are single camel-case words; docsShell.js adds word-break points and this size keeps them inside the card. */
+	body.reference-page.docs-shell-page h1 {
+		max-width: none;
+		font-size: clamp(1.75rem, 4.2vw, 2.6rem);
 	}
 
 	body.doc-openoracle.docs-shell-page h2,
@@ -3549,6 +3592,48 @@ body.paper-zoltar .footer-note {
 	body.docs-shell-page a.button:focus-visible {
 		outline: 3px solid var(--ink);
 		outline-offset: 3px;
+	}
+
+	body.docs-shell-page .card-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+		gap: 0.65rem;
+		margin: 0.85rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	body.docs-shell-page .card-grid > li {
+		display: flex;
+		min-width: 0;
+	}
+
+	body.docs-shell-page .card-grid a {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		min-height: 2.75rem;
+		line-height: 1.35;
+	}
+
+	body.docs-shell-page .card-grid a:not(.button) {
+		padding: 0.65rem 0.9rem;
+		border: 1px solid var(--line);
+		border-radius: 0.45rem;
+		background: var(--card-bg);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	body.docs-shell-page .card-grid a:not(.button):hover {
+		border-color: var(--accent);
+		background: var(--accent-soft);
+		color: var(--ink);
+	}
+
+	body.docs-home.docs-shell-page main > section h2 {
+		margin-bottom: 0.35rem;
+		font-size: 1.4rem;
 	}
 
 	body.docs-shell-page :is(a, button, input, select, [tabindex]):focus-visible {
@@ -4061,9 +4146,24 @@ body.paper-zoltar .footer-note {
 		opacity: 0.52;
 	}
 
-	body.docs-shell-page #deployment-mask-input {
+	body.docs-shell-page .deployment-mask-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+		gap: 0.65rem;
+		margin: 0.6rem 0 0;
+	}
+
+	body.docs-shell-page .deployment-mask-field {
+		display: grid;
+		min-width: 0;
+		gap: 0.3rem;
+		align-content: start;
+		font-weight: 700;
+	}
+
+	body.docs-shell-page :is(#deployment-mask-input, #deployment-mask-network) {
 		box-sizing: border-box;
-		width: min(100%, 28rem);
+		width: 100%;
 		min-height: 2.75rem;
 		padding: 0.62rem 0.75rem;
 		border: 1px solid var(--line);
@@ -4071,7 +4171,18 @@ body.paper-zoltar .footer-note {
 		background: var(--paper);
 		color: var(--ink);
 		font: inherit;
+		font-weight: 400;
 		font-variant-numeric: tabular-nums;
+	}
+
+	body.docs-shell-page #deployment-mask-input[aria-invalid="true"] {
+		border-color: var(--red);
+		box-shadow: inset 0 0 0 1px var(--red);
+	}
+
+	body.docs-shell-page .deployment-bit-grid button:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
 	}
 
 	body.docs-shell-page .example-value {
@@ -4212,7 +4323,57 @@ body.paper-zoltar .footer-note {
 	}
 
 	body.doc-openoracle .invariant-explorer-controls {
-		grid-template-columns: minmax(14rem, 1.6fr) repeat(3, minmax(8rem, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		align-items: end;
+	}
+}
+
+/* While the explorer sticks above the catalog, keep it to two rows: the controls, then the match count beside the actions. */
+@media screen and (min-width: 641px) {
+	body.doc-openoracle.docs-shell-page .invariant-explorer {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.6rem 0.75rem;
+		align-items: center;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer > :is(.invariant-explorer-controls, [data-invariant-empty]) {
+		grid-column: 1 / -1;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer > .invariant-explorer-controls {
+		grid-row: 1;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer .tool-outcome-strip {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer .tool-outcome-strip > div {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.2rem 0.5rem;
+		align-items: baseline;
+		padding: 0;
+		border: 0;
+		background: none;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer .tool-outcome-strip .invariant-result-count {
+		margin: 0;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer-actions {
+		margin: 0;
+		justify-content: end;
+	}
+
+	body.doc-openoracle.docs-shell-page .invariant-explorer [data-invariant-empty] {
+		margin: 0;
 	}
 }
 
@@ -4352,89 +4513,6 @@ body.paper-zoltar .footer-note {
 		font-size: clamp(0.78rem, 3.4vw, 0.92rem);
 	}
 
-	:is(.table-wrap, .table-scroll, .docs-auto-table-scroll) > .docs-responsive-table {
-		display: block;
-		width: 100%;
-		min-width: 0;
-		background: transparent;
-	}
-
-	body.paper-statoblast :is(.table-wrap, .table-scroll, .docs-auto-table-scroll) > table.docs-responsive-table,
-	body.paper-zoltar :is(.table-wrap, .table-scroll, .docs-auto-table-scroll) > table.docs-responsive-table {
-		min-width: 0;
-	}
-
-	body.paper-statoblast table.docs-responsive-table :is(th, td),
-	body.paper-zoltar table.docs-responsive-table :is(th, td) {
-		width: auto;
-		white-space: normal;
-	}
-
-	body.paper-statoblast table.invalid-table.docs-responsive-table :is(th, td):first-child,
-	body.paper-zoltar table.invalid-table.docs-responsive-table :is(th, td):first-child {
-		width: auto;
-		white-space: normal;
-	}
-
-	.docs-responsive-table > thead {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		margin: -1px;
-		padding: 0;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-		clip-path: inset(50%);
-		white-space: nowrap;
-	}
-
-	.docs-responsive-table > tbody {
-		display: grid;
-		gap: 0.7rem;
-		padding: 0.7rem;
-	}
-
-	.docs-responsive-table > tbody > tr {
-		display: block;
-		overflow: hidden;
-		border: 1px solid var(--line, rgba(0, 0, 0, 0.16));
-		border-radius: 0.55rem;
-		background: var(--paper, #fff);
-	}
-
-	.docs-responsive-table > tbody > tr > td {
-		display: grid;
-		grid-template-columns: minmax(7rem, 36%) minmax(0, 1fr);
-		gap: 0.7rem;
-		padding: 0.65rem 0.75rem;
-		border: 0;
-		border-bottom: 1px solid var(--soft-line, var(--line, rgba(0, 0, 0, 0.12)));
-		overflow-wrap: anywhere;
-		white-space: normal;
-	}
-
-	.docs-responsive-table > tbody > tr > td::before {
-		content: attr(data-docs-label);
-		color: var(--accent, var(--blue, #176653));
-		font-size: 0.72rem;
-		font-weight: 850;
-		letter-spacing: 0.045em;
-		line-height: 1.35;
-		text-transform: uppercase;
-	}
-
-	.docs-responsive-table > tbody > tr > td:last-child {
-		border-bottom: 0;
-	}
-
-	.docs-responsive-table + .docs-overflow-cue {
-		display: none;
-	}
-
-	.plot-figure-expanded {
-		grid-template-rows: minmax(0, 1fr) auto;
-	}
-
 	.plot-figure-expanded > .plot-chart {
 		align-items: flex-start;
 	}
@@ -4494,20 +4572,108 @@ body.paper-zoltar .footer-note {
 	}
 }
 
-@media screen and (max-width: 640px) {
-	.docs-responsive-table > tbody > tr > td {
+/* responsiveDocs.js marks a regular table as cards on phones and wherever it cannot fit its column without sideways scrolling. */
+@media screen {
+	:is(.table-wrap, .table-scroll, .docs-auto-table-scroll) > table.docs-table-cards {
 		display: block;
+		width: 100%;
+		min-width: 0;
+		background: transparent;
 	}
 
-	.docs-responsive-table > tbody > tr > td::before {
-		display: block;
-		margin-bottom: 0.2rem;
+	body.paper-statoblast :is(.table-wrap, .table-scroll, .docs-auto-table-scroll) > table.docs-table-cards,
+	body.paper-zoltar :is(.table-wrap, .table-scroll, .docs-auto-table-scroll) > table.docs-table-cards {
+		min-width: 0;
 	}
 
-	body.doc-openoracle .docs-responsive-table td > code:only-child {
+	body.paper-statoblast table.docs-table-cards :is(th, td),
+	body.paper-zoltar table.docs-table-cards :is(th, td) {
+		width: auto;
+		white-space: normal;
+	}
+
+	body.paper-statoblast table.invalid-table.docs-table-cards :is(th, td):first-child,
+	body.paper-zoltar table.invalid-table.docs-table-cards :is(th, td):first-child {
+		width: auto;
+		white-space: normal;
+	}
+
+	.docs-table-cards > thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	.docs-table-cards > tbody {
+		display: grid;
+		gap: 0.7rem;
+		padding: 0.7rem;
+	}
+
+	.docs-table-cards > tbody > tr {
+		display: block;
+		overflow: hidden;
+		border: 1px solid var(--line, rgba(0, 0, 0, 0.16));
+		border-radius: 0.55rem;
+		background: var(--paper, #fff);
+	}
+
+	/* A one-row table puts the label beside the cell's own inline content, which a grid would split into separate items. */
+	.docs-table-cards > tbody > tr > td {
+		display: table;
+		width: 100%;
+		padding: 0.65rem 0.75rem;
+		border: 0;
+		border-bottom: 1px solid var(--soft-line, var(--line, rgba(0, 0, 0, 0.12)));
+		border-collapse: separate;
+		table-layout: fixed;
+		overflow-wrap: anywhere;
+		white-space: normal;
+	}
+
+	.docs-table-cards > tbody > tr > td::before {
+		display: table-cell;
+		width: 10rem;
+		padding-right: 0.7rem;
+		color: var(--accent, var(--blue, #176653));
+		content: attr(data-docs-label);
+		font-size: 0.72rem;
+		font-weight: 850;
+		letter-spacing: 0.045em;
+		line-height: 1.35;
+		text-transform: uppercase;
+		vertical-align: baseline;
+	}
+
+	.docs-table-cards > tbody > tr > td:last-child {
+		border-bottom: 0;
+	}
+
+	body.doc-openoracle .docs-table-cards td > code:only-child {
 		max-width: 100%;
 		white-space: normal;
 		overflow-wrap: anywhere;
+	}
+
+	.docs-overflow-cue:has(+ .docs-table-cards) {
+		display: none;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	.docs-table-cards > tbody > tr > td {
+		display: block;
+	}
+
+	.docs-table-cards > tbody > tr > td::before {
+		display: block;
+		margin-bottom: 0.2rem;
 	}
 }
 
@@ -4523,6 +4689,10 @@ body.paper-zoltar .footer-note {
 	color: var(--muted, #52606d);
 	font-size: 0.76rem;
 	font-weight: 700;
+}
+
+.docs-overflow-cue:first-child {
+	margin: 0 0 0.45rem;
 }
 
 .docs-content-overflows {
@@ -4606,8 +4776,7 @@ body.paper-zoltar .footer-note {
 
 .docs-auto-table-scroll > table {
 	display: table;
-	width: max-content;
-	min-width: 100%;
+	width: 100%;
 	overflow: visible;
 	white-space: normal;
 }

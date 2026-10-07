@@ -12,6 +12,7 @@ export const liquidationHint = 'Selected targets transfer commitment and REP int
 export const noTargets = 'No other vaults with commitments are listed.'
 export const noWallet = 'Connect a wallet to prepare vault operations.'
 export const loading = 'Checking vault and oracle…'
+export const noDepositBalance = 'No wallet REP is left to deposit after the oracle REP funding.'
 export const checking = 'Checking funding…'
 export const initialPrice = 'Initial report price'
 export const initialPriceHint = 'REP per ETH proposed to OpenOracle; settlement may use a different price.'

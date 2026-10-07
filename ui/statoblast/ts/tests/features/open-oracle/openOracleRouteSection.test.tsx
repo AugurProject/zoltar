@@ -585,9 +585,9 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & swap' })
-		const fixedAmountValue = within(dialog).getByText('New REPv2 amount').parentElement?.querySelector('.field-read-only-value')
+		const fixedAmountValue = within(dialog).getByText('New REPv2 amount').parentElement?.querySelector('.field-read-only-value .currency-value')
 		expect(fixedAmountValue?.textContent).toBe('≈ 6.67 REPv2')
-		expect(fixedAmountValue?.querySelector('[title]')?.getAttribute('title')).toBe('6.666666666666666666 REPv2')
+		expect(fixedAmountValue?.getAttribute('title')).toBe('6.666666666666666666 REPv2')
 	})
 
 	test('hides a revealed dispute amount error when another report is selected', async () => {
@@ -1063,9 +1063,9 @@ describe('OpenOracleSection route create view', () => {
 		expect(quoteTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(feePercentageInput.hasAttribute('aria-describedby')).toBe(false)
 		// Seconds inputs explain the typed duration in human units.
-		expect(getDescriptionTexts(settlementTimeInput)).toEqual(['86400 seconds = 1d 0h 0m'])
+		expect(getDescriptionTexts(settlementTimeInput)).toEqual(['86400 seconds = 1d'])
 		expect(getDescriptionTexts(escalationHaltInput)).toEqual([openOracleCopy.disputeEscalationStopAmountHelpText])
-		expect(getDescriptionTexts(disputeDelayInput)).toEqual(['3600 seconds = 1h 0m'])
+		expect(getDescriptionTexts(disputeDelayInput)).toEqual(['3600 seconds = 1h'])
 		expect(protocolFeeInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(exactToken1ReportInput.getAttribute('inputmode')).toBe('decimal')
 		expect(initialToken2AmountInput.getAttribute('inputmode')).toBe('decimal')

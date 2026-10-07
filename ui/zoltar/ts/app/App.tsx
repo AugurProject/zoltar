@@ -52,6 +52,7 @@ export function App() {
 		overviewWalletProps,
 		readBackendMessage,
 		readBackendStatus,
+		retryReadBackend,
 		refreshActiveEnvironment,
 		refreshSimulationView,
 		routeContentBlocked,
@@ -98,10 +99,11 @@ export function App() {
 		universeState: zoltarUniverseState,
 	}
 	const deploymentTab: RouteTabDefinition = { hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }
+	const sectionTabs = withDeploymentTab({ deploymentMissing: applicationDeploymentMissing, deploymentTab, deploymentIncomplete: showDeployTab, route, tabs: [{ hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }] })
 	const tabNavigationProps = {
-		// The not-found page keeps the Zoltar navigation so the user can recover without the browser's back button.
-		route: activeRoute === 'not-found' ? 'zoltar' : route,
-		tabs: withDeploymentTab({ deploymentTab, deploymentIncomplete: showDeployTab, route, tabs: [{ hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }] }),
+		// The not-found page marks no section current. When Zoltar is the only section, its views fill the top bar and stay there so the user can recover without the browser's back button.
+		route: activeRoute === 'not-found' && sectionTabs.length === 1 ? 'zoltar' : activeRoute,
+		tabs: sectionTabs,
 		onRouteChange: navigate,
 	}
 	const zoltarViewNavigation = createSecondaryNavigation<ZoltarTabView>({
@@ -126,6 +128,7 @@ export function App() {
 						errorMessages={errorMessages}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
+						onRetryReadBackend={() => void retryReadBackend()}
 						readBackendMessage={readBackendMessage}
 						readBackendStatus={readBackendStatus}
 						simulationBootstrapError={environmentBootstrapError}

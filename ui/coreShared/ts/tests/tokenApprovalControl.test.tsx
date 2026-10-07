@@ -200,6 +200,51 @@ describe('TokenApprovalControl', () => {
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve 25 WETH' }) as HTMLButtonElement
 		expect(approveButton.disabled).toBe(true)
 		expect(documentQueries.queryByText(/must be greater than the current approved/i)).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Approve 25 WETH', 'Already approved 25\u00a0WETH. Enter a higher amount, or leave blank for the required total.')
+	})
+
+	test.each([
+		['-1', 'Enter a valid non-negative amount.'],
+		[(2n ** 256n).toString(), 'Approval amount is too large.'],
+	])('rejects the out-of-range approval amount %s with a field error instead of crashing the render', async (value, error) => {
+		const approvals: (bigint | undefined)[] = []
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='forking the universe'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={amount => approvals.push(amount)}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={450_000n * 10n ** 18n}
+				resetKey='rep-approval-range'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Leave blank for required total'), { target: { value } }))
+		expect(documentQueries.getByText(error).id).not.toBe('')
+		const approveButton = documentQueries.getByRole('button', { name: 'Approve REP' }) as HTMLButtonElement
+		expect(approveButton.disabled).toBe(true)
+		await act(() => fireEvent.click(approveButton))
+		expect(approvals).toEqual([])
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Leave blank for required total'), { target: { value: '' } }))
+		expect(documentQueries.queryByText(error)).toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Approve 450k REP' }) as HTMLButtonElement).disabled).toBe(false)
+	})
+
+	test('names an effectively unlimited custom approval on the button', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl actionLabel='depositing REP' allowanceError={undefined} allowanceLoading={false} approvedAmount={0n} guardMessage={undefined} onApprove={() => undefined} pending={false} pendingLabel='Approving REP…' requiredAmount={10n} resetKey='rep-approval-unlimited' tokenSymbol='REP' tokenUnits={0} />,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Leave blank for required total'), { target: { value: (2n ** 256n - 1n).toString() } }))
+		expect((documentQueries.getByRole('button', { name: 'Approve unlimited REP' }) as HTMLButtonElement).disabled).toBe(false)
 	})
 
 	test.each([true, false])('preserves guard messages with showRequirementNotice=%s', async showRequirementNotice => {
@@ -286,7 +331,8 @@ describe('TokenApprovalControl', () => {
 		const documentQueries = within(document.body)
 		const approveButton = documentQueries.getByRole('button', { name: 'Approving WETH…' }) as HTMLButtonElement
 
-		expect(approveButton.disabled).toBe(true)
+		// The pending button stays focusable so keyboard focus is not dropped while the wallet works.
+		expect(approveButton.getAttribute('aria-disabled')).toBe('true')
 		fireEvent.click(approveButton)
 		expect(approveCalls).toBe(0)
 	})

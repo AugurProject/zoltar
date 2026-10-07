@@ -4,12 +4,14 @@ import * as securityPoolCopy from './securityPool.js'
 export const poolDetails = 'Pool details'
 export const moreTools = 'More tools'
 export const moreToolsShort = 'More'
-export const poolAddressAndRefresh = 'Switch or refresh pool'
+export const formatMoreToolsActive = (view: string) => `More: ${view}`
+export const poolAddressAndRefresh = 'Pool address'
 export const capacityLabel = 'Open interest / commitment'
 export const capacityUnavailable = 'The pool commitment is unavailable.'
 export const stagedOperationCount = (count: bigint) => `${count.toString()} staged ${count === 1n ? 'operation' : 'operations'}`
 export const vaults = (count: bigint) => `${count.toString()} ${count === 1n ? 'vault' : 'vaults'}`
 export const myVault = 'My vault'
+export const myVaultWalletRequired = 'Connect a wallet to open your vault.'
 export const vaultDetails = 'Vault details'
 export const byAddress = 'By address'
 export const backingDetails = 'Backing details'

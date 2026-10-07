@@ -5,6 +5,7 @@ import { decodeStoredValue, readStoredMarketDetails } from '@zoltar/ui-core-shar
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { getPoolMintingCapacityAttoEth, getRemainingMintCapacity } from '../../markets/lib/trading.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from './securityPoolState.js'
+import { getPoolStateFilter } from './securityPoolLabels.js'
 
 import type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
 export type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
@@ -101,9 +102,9 @@ function poolMatchesSearch(pool: ListedSecurityPool, normalizedSearchText: strin
 	return matchesLocalSearch(normalizedSearchText, [pool.securityPoolAddress, pool.questionId, pool.marketDetails.title, pool.marketDetails.description])
 }
 
-/** Universe, state, and text filters run over every downloaded pool before anything is displayed. */
+/** Universe, state, and text filters run over every downloaded pool before anything is displayed; the state filter matches the pool's badge. */
 export function filterPoolBrowseRows(rows: readonly PoolBrowseRow[], { activeUniverseId, normalizedSearchText, stateFilter }: { activeUniverseId: bigint; normalizedSearchText: string; stateFilter: PoolStateFilter }) {
-	return rows.filter(row => row.pool.universeId === activeUniverseId && (stateFilter === 'all' || row.lifecycleState === stateFilter) && poolMatchesSearch(row.pool, normalizedSearchText))
+	return rows.filter(row => row.pool.universeId === activeUniverseId && (stateFilter === 'all' || (row.lifecycleState !== undefined && getPoolStateFilter(row.lifecycleState) === stateFilter)) && poolMatchesSearch(row.pool, normalizedSearchText))
 }
 
 function compareBigintDescending(left: bigint | undefined, right: bigint | undefined) {

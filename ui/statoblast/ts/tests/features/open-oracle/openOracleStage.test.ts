@@ -51,7 +51,7 @@ describe('open oracle stage presentation', () => {
 		).toEqual({
 			availableActions: [],
 			blockedActions: [],
-			detail: 'Disputes open in less than a minute.',
+			detail: 'Disputes open in 40s.',
 			key: 'dispute-pending',
 			label: 'Waiting for dispute window',
 			tone: 'warning',

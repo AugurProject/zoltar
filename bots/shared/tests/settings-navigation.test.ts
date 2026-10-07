@@ -83,3 +83,16 @@ test('modified and non-primary clicks preserve browser link behavior', () => {
 		expect(openSections()).toEqual(['connect', 'policy'])
 	}
 })
+
+test('publishes the sticky chrome height that form fields clear when validation scrolls them into view', () => {
+	const current = setup(1440)
+	const root = current.document.documentElement
+	expect(root.style.getPropertyValue('--operator-sticky-chrome-height')).toBe('0px')
+	const shell = current.document.createElement('header')
+	shell.className = 'operator-shell'
+	shell.style.position = 'sticky'
+	shell.getBoundingClientRect = () => new current.DOMRect(0, 0, 1440, 120)
+	current.document.body.prepend(shell)
+	current.dispatchEvent(new current.Event('resize'))
+	expect(root.style.getPropertyValue('--operator-sticky-chrome-height')).toBe('120px')
+})

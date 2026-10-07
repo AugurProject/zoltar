@@ -66,7 +66,7 @@ describe('describeRepPriceStatus', () => {
 
 	test('marks an expired price as stale with how long ago it expired', () => {
 		const now = validUntil + 2n * 60n * 60n
-		expect(describeRepPriceStatus(resolve('open-oracle', { now }), now)).toEqual({ detail: 'OpenOracle price expired 2h 0m ago', state: 'stale', title: 'Stale' })
+		expect(describeRepPriceStatus(resolve('open-oracle', { now }), now)).toEqual({ detail: 'OpenOracle price expired 2h ago', state: 'stale', title: 'Stale' })
 		expect(describeRepPriceStatus(resolve('open-oracle', { oracleManager: { isPriceValid: false, price: 20n, settlementTimestamp } }), freshNow)).toEqual({ detail: 'OpenOracle price not valid', state: 'stale', title: 'Stale' })
 	})
 

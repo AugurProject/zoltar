@@ -416,15 +416,20 @@ describe('standalone trading UI model', () => {
 		expect(forkMigrationBatchBlocker([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 		expect(forkMigrationBatchBlocker([missing])).toBeUndefined()
 		expect(forkMigrationBatchBlocker([ready, missing])).toContain('Migrate into each such child universe separately.')
-		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).toContain('do not select that child universe again for this share')
+		// The picker marks a child universe that already holds the share as migrated, so the warning no longer asks the holder to remember it.
+		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).toContain('in a separate transaction')
+		expect(forkMigrationBatchWarning([missing, { ...missing, outcomeIndex: 3n }])).not.toContain('do not select that child universe again')
 		expect(forkMigrationBatchWarning([ready, missing])).toContain('Another share can migrate into those child universes together once their security pools are ready')
 		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 	})
 
 	test('explains every settlement input that keeps simulation disabled', () => {
 		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
-		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a complete-set value greater than zero.')
-		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
+		// A missing or zero amount uses the same neutral reasons as the trade and liquidity tickets.
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter an amount.')
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, 0n, [], 'YES', 1n, unit)).toBe('Enter an amount greater than 0.')
+		// The limit is stated in the field's unit, ETH, with the complete sets it corresponds to.
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toBe('Enter no more than 5 ETH (your 5 complete sets).')
 		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any ETH.')
 		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child universe')
 		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('Your Yes balance is zero.')

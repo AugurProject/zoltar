@@ -10,6 +10,9 @@ export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relat
 export const forkEconomicsUnavailableReason = 'Fork burn terms could not be loaded.'
 export const forkRepInsufficientReason = 'Insufficient REP to meet the fork threshold.'
 export const forkRepApprovalRequiredReason = 'Approve enough REP to continue.'
+export const formatForkConfirmation = (permanentBurn: CopyTemplateValue) => `I understand forking permanently burns ${permanentBurn} REP and cannot be undone.`
+export const forkConfirmationUnknownBurn = 'I understand forking permanently burns REP and cannot be undone.'
+export const forkConfirmationRequired = 'Confirm that forking is permanent to continue.'
 export const forkingActionLabel = 'forking the universe'
 export const forkQuestionId = 'Fork question ID'
 export const forkSubmissionPending = 'Forking universe…'
@@ -88,8 +91,9 @@ export const universesDescription = 'Browse the universe tree and open a univers
 export const forkRouteDescription = 'Fork this universe with an ended question. A universe forks only once.'
 export const migrateRouteDescription = 'Migrate your REP into the child universes of a fork.'
 export const universeUnavailableDetail = 'Universe details could not be loaded.'
-export const forkUnavailableTitle = 'Already forked'
-export const forkUnavailableDetail = 'This universe has forked and cannot fork again. Migrate REP instead.'
+export const forkUnavailableTitle = 'Universe forked'
+export const forkCompletedOn = 'Forked'
+export const forkUnavailableDetail = 'A universe forks only once. Migrate REP into the child universes you back.'
 export const previewMigration = 'Preview REP migration'
 
 export const migrationWalletBalancesReason = 'Connect a wallet to read migration balances.'

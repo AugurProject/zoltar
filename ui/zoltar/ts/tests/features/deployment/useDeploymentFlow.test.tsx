@@ -102,7 +102,8 @@ describe('useDeploymentFlow', () => {
 					getChainId: async () => '0x5',
 				}),
 			expectedRuntimeCodeHash: undefined,
-			errorMessage: 'Transaction failed while attempting to deploy Zoltar. Reason: Wallet network changed. Switch to Ethereum mainnet and try again.',
+			// Nothing was sent, so the wallet check's own instruction is shown.
+			errorMessage: 'Wallet network changed. Switch to Ethereum mainnet and try again.',
 		},
 	])('does not request a deployment transaction when $name', async ({ arrange, expectedRuntimeCodeHash, errorMessage }) => {
 		arrange()

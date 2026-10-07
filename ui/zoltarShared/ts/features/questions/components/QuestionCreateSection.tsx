@@ -250,7 +250,7 @@ export function QuestionCreateSection({
 								<UserMessage placement='field' detail={marketCopy.resolutionSourceHelpText} />
 							</div>
 
-							<div className='field-row'>
+							<div className='field-row question-create-timing'>
 								<FormField id='market-create-startTime' label={marketCopy.startTime}>
 									<FormInput
 										id='market-create-startTime'
@@ -314,8 +314,9 @@ export function QuestionCreateSection({
 											</div>
 										))}
 									</div>
-									{questionForm.categoricalOutcomes.length <= 2 ? <UserMessage className='detail' id='minimum-outcomes-reason' detail={marketCopy.minimumOutcomeCountReason} /> : undefined}
 									{getVisibleFieldError('categoricalOutcomes') === undefined ? undefined : <UserMessage placement='field' tone='error' id='market-create-outcomes-error' detail={getVisibleFieldError('categoricalOutcomes')} />}
+									{/* Explains the disabled Remove buttons only; it follows any field error so it never reads as one. */}
+									{questionForm.categoricalOutcomes.length <= 2 ? <UserMessage placement='field' id='minimum-outcomes-reason' detail={marketCopy.minimumOutcomeCountReason} /> : undefined}
 									<UserMessage placement='field' detail={marketCopy.categoricalOutcomeLabelsHelpText} />
 									<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
 										{marketCopy.addOutcome}

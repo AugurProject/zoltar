@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
+import { createInjectedBackend, normalizeAccount, unsupportedWalletActionMessages } from '../wallet/chainBackend.js'
 import { createWalletWriteClient } from '../wallet/clients.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { runWriteAction } from '../transactions/writeAction.js'
@@ -245,6 +245,34 @@ describe('injected backend read transport', () => {
 		await backend.disconnectWallet?.()
 
 		expect(calls).toEqual(['wallet_requestPermissions', 'eth_accounts', 'wallet_switchEthereumChain', 'wallet_revokePermissions'])
+	})
+
+	test('replaces raw unsupported-method errors with the step to take in the wallet', async () => {
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			if (method === 'wallet_revokePermissions') throw Object.assign(new Error('The method "wallet_revokePermissions" does not exist / is not available.'), { code: -32601 })
+			if (method === 'wallet_requestPermissions') throw Object.assign(new Error('Unsupported method'), { code: 4200 })
+			if (method === 'wallet_switchEthereumChain') throw Object.assign(new Error('Unsupported method'), { code: -32601 })
+			return []
+		})
+		const backend = createInjectedBackend()
+		await expect(backend.disconnectWallet?.()).rejects.toThrow(unsupportedWalletActionMessages.disconnect)
+		await expect(backend.requestAccountSelection?.()).rejects.toThrow(unsupportedWalletActionMessages.accountSelection)
+		await expect(backend.switchNetwork?.()).rejects.toThrow('This wallet does not support switching networks from the application.')
+	})
+
+	test('adds the network to a wallet that does not know it yet, then switches', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		let known = false
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method, params }) => {
+			calls.push({ method, params })
+			if (method === 'wallet_switchEthereumChain' && !known) throw Object.assign(new Error('Unrecognized chain ID "0xaa36a7". Try adding the chain using wallet_addEthereumChain first.'), { code: 4902 })
+			if (method === 'wallet_addEthereumChain') known = true
+			return null
+		})
+		const backend = createInjectedBackend()
+		await backend.switchNetwork?.()
+		expect(calls.map(call => call.method)).toEqual(['wallet_switchEthereumChain', 'wallet_addEthereumChain', 'wallet_switchEthereumChain'])
+		expect(calls[1]?.params).toEqual([expect.objectContaining({ chainId: backend.profile.chainIdHex, chainName: backend.profile.chain.name, nativeCurrency: backend.profile.chain.nativeCurrency, rpcUrls: [...backend.profile.chain.rpcUrls.default.http] })])
 	})
 
 	test('invokes injected transaction callbacks for write methods', async () => {
