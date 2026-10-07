@@ -29,10 +29,16 @@ type TransactionActivityState = Readonly<{
 /** Recent transactions of the connected account on the active network, newest first. */
 export const transactionActivity = signal<TransactionActivityState>({ chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined })
 
-// Hashes whose receipt this page is already waiting for, either through the initiating action or the activity watcher.
-const watchedHashes = new Set<Hash>()
+// A watch belongs to the account and environment that started it; stale watches cannot claim a restored hash.
+const watchedHashes = new Map<Hash, ReturnType<typeof createActivityWatch>>()
 // Bumped when an initiating action stops watching a pending hash, so the activity watcher takes it over.
 const releasedWatches = signal(0)
+
+function createActivityWatch() {
+	const ownerKey = transactionActivity.peek().ownerKey
+	const environment = createActiveEnvironmentGuard()
+	return { isCurrent: () => environment.isCurrent() && transactionActivity.peek().ownerKey === ownerKey }
+}
 
 function persist(state: TransactionActivityState) {
 	if (state.storageKey === undefined) return
@@ -81,7 +87,7 @@ export function setTransactionActivityOwner(account: Address | undefined) {
 }
 
 export function recordTransactionSubmitted({ hash, previousHash, scope, title }: { hash: Hash; previousHash?: Hash | undefined; scope: TransactionScope | undefined; title: string }) {
-	watchedHashes.add(hash)
+	watchedHashes.set(hash, createActivityWatch())
 	const chainId = transactionActivity.peek().chainId ?? getActiveNetworkProfile().chain.id
 	update(entries => {
 		if (previousHash !== undefined && entries.some(entry => entry.hash === previousHash)) return replaceTransactionActivityHash(entries, previousHash, hash, Date.now())
@@ -119,21 +125,25 @@ export function useTransactionActivityReceiptWatcher() {
 	const released = releasedWatches.value
 	useEffect(() => {
 		for (const entry of entries) {
-			if (entry.status !== 'pending' || watchedHashes.has(entry.hash)) continue
-			watchedHashes.add(entry.hash)
+			if (entry.status !== 'pending' || watchedHashes.get(entry.hash)?.isCurrent()) continue
+			const watch = createActivityWatch()
+			watchedHashes.set(entry.hash, watch)
 			let current = entry.hash
 			let replacedOutsideApp = false
-			const environment = createActiveEnvironmentGuard()
 			// Stop polling once the network changes or the entry is settled, dismissed, or expired elsewhere.
-			const stillTracked = () => environment.isCurrent() && isPendingInActivity(current)
+			const stillTracked = () => watchedHashes.get(current) === watch && watch.isCurrent() && isPendingInActivity(current)
+			const releaseWatch = () => {
+				if (watchedHashes.get(current) === watch) releaseTransactionActivityWatch(current)
+			}
 			const waitForReceipt = createRecoveringReceiptWaiter(createConnectedReadClient(), { isCurrentEnvironment: stillTracked, onTransactionSubmitted: () => undefined })
 			void waitForReceipt({
 				hash: entry.hash,
 				onReplaced: replacement => {
+					if (!stillTracked()) return
 					if (replacement.reason === 'repriced') {
 						// A sped-up transaction keeps its row under the new hash.
 						watchedHashes.delete(current)
-						watchedHashes.add(replacement.transaction.hash)
+						if (watchedHashes.get(replacement.transaction.hash)?.isCurrent() !== true) watchedHashes.set(replacement.transaction.hash, watch)
 						update(entries => replaceTransactionActivityHash(entries, current, replacement.transaction.hash, Date.now()))
 						current = replacement.transaction.hash
 						return
@@ -142,12 +152,16 @@ export function useTransactionActivityReceiptWatcher() {
 				},
 			})
 				.then(receipt => {
+					if (!stillTracked()) {
+						releaseWatch()
+						return
+					}
 					if (replacedOutsideApp) recordTransactionSettled(current, { status: 'failed', failureKind: 'replaced' })
 					else recordTransactionSettled(current, receipt.status === 'success' ? { status: 'confirmed' } : { status: 'failed', failureKind: 'reverted' })
 				})
 				.catch(() => {
 					// The network changed or the entry stopped being tracked; the next owner's list resumes its own pending entries.
-					watchedHashes.delete(current)
+					releaseWatch()
 				})
 		}
 	}, [entries, released])

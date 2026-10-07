@@ -118,9 +118,11 @@ function calculateLiquidationTransfer(parameters: { currentPoolHeldAttoRepBalanc
 	return { backingUnitsToTransfer, underwritingLimitToMoveAttoEth, debtToMoveAttoEth, vaultAttoRepBackingToTransfer }
 }
 
-export function conservativeLiquidationRep(candidate: Pick<LiquidationCandidate, 'debtToMoveAttoEth' | 'target'>, price: bigint) {
-	const nominalAttoRep = getLiquidationVaultRepBackingToTransfer(candidate.debtToMoveAttoEth, price)
-	return candidate.target.vaultAttoRepBacking < nominalAttoRep ? candidate.target.vaultAttoRepBacking : nominalAttoRep
+export function maximumLiquidationRep(candidate: { pool: Pick<PoolRiskContext, 'denominator' | 'totalAttoRep'>; target: Pick<VaultPosition, 'backingUnits'> }) {
+	// The execution price can change before inclusion or while the operation awaits an oracle report.
+	// Combining backing units can increase the receiver's rounded balance by more than the target's rounded balance.
+	if (candidate.pool.denominator === 0n) return 0n
+	return mulDivUp(candidate.target.backingUnits, candidate.pool.totalAttoRep, candidate.pool.denominator)
 }
 
 export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, caller: VaultPosition, strategy: StrategySettings): LiquidationCandidate | undefined {
