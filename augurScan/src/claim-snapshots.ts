@@ -2,11 +2,11 @@ import { allocatedWinningPayout } from './claim-payout.ts'
 import { bagCarryPeaks, compareBigintAscending, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { abiForKind } from './abi-catalog.ts'
-import { type Abi, type AbiValue, type Address, type Hex, getAddress, parseAbi, zeroAddress } from './ethereum.ts'
+import { type AbiValue, type Address, type Hex, getAddress, zeroAddress } from './ethereum.ts'
 import type { StateRead } from './snapshots.ts'
+import type { SystemContractKind } from './system-interfaces.ts'
 
 const ZERO: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
-const allocationAbi = parseAbi(['function getInheritedClaimAllocation(uint8 outcomeIndex,uint256 amountAttoRep,uint256 cumulativeAmountAttoRep,uint256 leafIndex) view returns (uint256 sourceAmountAttoRep,uint256 retainedAmountAttoRep,uint256 rewardAmountAttoRep,uint256 retainedCumulativeAttoRep)'])
 const object = (value: unknown): Record<string, unknown> => {
 	if (!isObjectRecord(value)) throw new Error('Invalid claim state object')
 	return value
@@ -41,13 +41,13 @@ type Game = { pool: Address; parentPool: Address; source: Address; forker: Addre
 export const sampleClaimPositions = async (gameAddress: Address, read: StateRead, state: Readonly<Record<string, unknown>>) => {
 	const cache = new Map<string, Promise<unknown>>()
 	let reads = 0
-	const call = (target: Address, kind: string | Abi, name: string, args: readonly AbiValue[] = []) => {
+	const call = (target: Address, kind: SystemContractKind, name: string, args: readonly AbiValue[] = []) => {
 		const key = `${target.toLowerCase()}:${name}:${args.map(String).join(':')}`
 		const cached = cache.get(key)
 		if (cached !== undefined) return cached
 		if (++reads > 1024) throw new Error('Claim reconstruction exceeds the 1024-read budget')
-		const abi = typeof kind === 'string' ? abiForKind(kind) : kind
-		if (abi === undefined) throw new Error(`Missing claim ABI ${String(kind)}`)
+		const abi = abiForKind(kind)
+		if (abi === undefined) throw new Error(`Missing claim ABI ${kind}`)
 		const pending = read(target, abi, name, args)
 		cache.set(key, pending)
 		return pending
@@ -179,7 +179,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			let rewardAmount = leaf.amountAttoRep
 			let rewardCumulative = leaf.cumulativeAmountAttoRep
 			if (isInherited && !directlyClaimed) {
-				const allocation = array(await call(gameAddress, allocationAbi, 'getInheritedClaimAllocation', [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]))
+				const allocation = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getInheritedClaimAllocation', [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]))
 				sourcePrincipal = uint(allocation[0])
 				principal = uint(allocation[1])
 				rewardAmount = uint(allocation[2])

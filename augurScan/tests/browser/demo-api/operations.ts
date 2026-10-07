@@ -118,7 +118,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 				protocol_state: 'healthy',
 				scanner_severity: 'warning',
 				scanner_reason: 'Health factor is below the scanner warning threshold',
-				risk: { healthFactorBps: '11350', targetHealthFactorBps: '12000', liquidationBoundaryBps: '10000' },
+				risk: { healthFactorBps: '11350', liquidationBoundaryBps: '10000' },
 			},
 		],
 		recentLiquidations: [],
