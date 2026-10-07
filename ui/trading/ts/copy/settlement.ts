@@ -17,6 +17,7 @@ export const universeForkedReason = 'The universe forked. Migrate your shares to
 export const poolNotOperationalReason = 'The security pool is not operational, so it cannot pay out ETH.'
 export const noCompleteSetsReason = 'You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.'
 export const questionNotResolvedReason = 'The question has not resolved yet.'
+export const questionResolvedReason = 'The question resolved. Redeem your winning shares instead.'
 export const acknowledgeMigrationReason = 'Confirm that you understand the migration.'
 export const shareToMigrate = 'Share to migrate'
 export const connectToSeeBalance = 'Connect a wallet to see your balance.'

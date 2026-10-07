@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
-import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForUnderwritingLimit, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
+import { BPS_DENOMINATOR, PRICE_PRECISION, maximumLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForUnderwritingLimit, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
@@ -75,6 +75,33 @@ describe('dynamic-capacity liquidation strategy', () => {
 		expect(candidate?.vaultAttoRepBackingToTransfer).toBe(262_500000000000000000n)
 		expect(candidate?.topUpAttoRep).toBe(362_500000000000000000n)
 		expect(candidate?.resultingHealthBps).toBe(12_500n)
+	})
+
+	test('reduces partial liquidations to leave the target minimum commitment', () => {
+		const target = vault(targetAddress, 300n * PRICE_PRECISION, (255n * PRICE_PRECISION) / 10n)
+		const candidate = evaluateCandidate(pool(), target, vault(callerAddress, 0n, 0n), strategy())
+		expect(candidate?.requestedDebtAttoEth).toBe((245n * PRICE_PRECISION) / 10n)
+		expect(candidate?.underwritingLimitToMoveAttoEth).toBe((245n * PRICE_PRECISION) / 10n)
+		expect(candidate?.topUpAttoRep).toBe((35525n * PRICE_PRECISION) / 100n)
+	})
+
+	test('keeps full closes and partial liquidations that leave exactly the minimum commitment', () => {
+		for (const debt of [25n * PRICE_PRECISION, 26n * PRICE_PRECISION]) {
+			const candidate = evaluateCandidate(pool(), vault(targetAddress, 300n * PRICE_PRECISION, debt), vault(callerAddress, 0n, 0n), strategy())
+			expect(candidate?.requestedDebtAttoEth).toBe(25n * PRICE_PRECISION)
+		}
+	})
+
+	test('rejects dust-safe liquidations below the operator minimum without exceeding its maximum', () => {
+		const settings = { ...strategy(), maximumLiquidationDebtAttoEth: PRICE_PRECISION }
+		const target = vault(targetAddress, 26n * PRICE_PRECISION, (15n * PRICE_PRECISION) / 10n)
+		expect(evaluateCandidate(pool(), target, vault(callerAddress, 0n, 0n), settings)).toBeUndefined()
+	})
+
+	test('rejects partial liquidation when the target is already below its minimum commitment', () => {
+		const settings = { ...strategy(), maximumLiquidationDebtAttoEth: PRICE_PRECISION / 4n, minimumLiquidationDebtAttoEth: 1n, minimumRewardValueAttoEth: 0n }
+		const target = vault(targetAddress, PRICE_PRECISION, PRICE_PRECISION / 2n)
+		expect(evaluateCandidate(pool(), target, vault(callerAddress, 100n * PRICE_PRECISION, PRICE_PRECISION), settings)).toBeUndefined()
 	})
 
 	test('rejects a receiver whose exact bad debt absorbs the moved ownership gross open interest', () => {
@@ -171,9 +198,9 @@ describe('dynamic-capacity liquidation strategy', () => {
 		expect(selectAllowedCandidate([lower, higher], 'largest-bonus', candidate => candidate.target.address === lower.target.address)).toBe(lower)
 	})
 
-	test('uses actual estimated debt moved for the REP acquisition ceiling', () => {
-		const candidate = { debtToMoveAttoEth: 25n * PRICE_PRECISION, target: vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION) }
-		expect(conservativeLiquidationRep(candidate, 10n * PRICE_PRECISION)).toBe(262_500000000000000000n)
+	test('reserves all target backing because the execution price can change after screening', () => {
+		const candidate = { pool: pool(), target: vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION) }
+		expect(maximumLiquidationRep(candidate)).toBe(1_000n * PRICE_PRECISION)
 	})
 
 	test('rejects a receiver whose resulting debt is below the pool minimum', () => {

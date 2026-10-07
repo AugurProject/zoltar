@@ -76,6 +76,25 @@ describe('transaction activity list', () => {
 		expect(mergeStoredTransactionActivity(replaced, [entry(1, 'pending')])).toBe(replaced)
 	})
 
+	test("merges confirmed replacements without retaining either tab's stale pending hashes", () => {
+		const original = { ...entry(1, 'pending'), scope: ['market:0x1'] }
+		const repriced = replaceTransactionActivityHash([original], hashOf(1), hashOf(2), 5)
+		const confirmed = settleTransactionActivity(repriced, hashOf(2), { status: 'confirmed' }, 6)
+
+		for (const merged of [mergeStoredTransactionActivity([original], confirmed), mergeStoredTransactionActivity(confirmed, [original])]) {
+			expect(merged).toEqual(confirmed)
+			expect(getPendingTransactionActivityScopes(merged)).toEqual([])
+		}
+
+		const repricedAgain = replaceTransactionActivityHash(repriced, hashOf(2), hashOf(3), 7)
+		const final = settleTransactionActivity(repricedAgain, hashOf(3), { status: 'confirmed' }, 8)
+		for (const merged of [mergeStoredTransactionActivity([original, ...repriced], final), mergeStoredTransactionActivity(final, [original, ...repriced])]) {
+			expect(merged).toEqual(final)
+			expect(merged[0]?.replacedHashes).toEqual([hashOf(1), hashOf(2)])
+			expect(getPendingTransactionActivityScopes(merged)).toEqual([])
+		}
+	})
+
 	test('caps settled history but never evicts pending transactions', () => {
 		let entries: readonly TransactionActivityEntry[] = [entry(0, 'pending')]
 		for (let index = 1; index <= MAX_TRANSACTION_ACTIVITY_ENTRIES + 5; index += 1) entries = recordSubmittedTransactionActivity(entries, entry(index))
@@ -171,6 +190,31 @@ describe('transaction activity store', () => {
 		stopTrackingTransactionActivity(hashOf(2))
 		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: hashOf(2), status: 'failed', failureKind: 'dropped' })
 		expect(hasPendingTransactionActivity(['trading-deployment:factory'])).toBeFalse()
+	})
+
+	test("persists another tab's confirmed replacement without restoring its original pending lock", () => {
+		installActiveEnvironmentForTesting(createFakeBackend())
+		const account = '0x00000000000000000000000000000000000000a1'
+		setTransactionActivityOwner(account)
+		recordTransactionSubmitted({ hash: hashOf(1), scope: ['market:0x1'], title: 'Trade' })
+		const staleTab = transactionActivity.value
+		const storageKey = staleTab.storageKey
+		if (storageKey === undefined) throw new Error('Expected persisted activity for a connected account')
+
+		// The other tab confirms a wallet speed-up while this tab still remembers its original hash.
+		recordTransactionSubmitted({ hash: hashOf(2), previousHash: hashOf(1), scope: ['market:0x1'], title: 'Trade' })
+		recordTransactionSettled(hashOf(2), { status: 'confirmed' })
+		transactionActivity.value = staleTab
+		recordTransactionSubmitted({ hash: hashOf(3), scope: [], title: 'Unrelated transaction' })
+		recordTransactionSettled(hashOf(3), { status: 'confirmed' })
+
+		expect(hasPendingTransactionActivity(['market:0x1'])).toBeFalse()
+		expect(parseStoredTransactionActivity(window.localStorage.getItem(storageKey)).map(item => item.hash)).not.toContain(hashOf(1))
+		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+		setTransactionActivityOwner(account)
+		expect(transactionActivity.value.entries.find(item => item.hash === hashOf(2))).toMatchObject({ status: 'confirmed', replacedHashes: [hashOf(1)] })
+		expect(hasPendingTransactionActivity(['market:0x1'])).toBeFalse()
+		expect(countPendingTransactionActivity(transactionActivity.value.entries)).toBe(0)
 	})
 
 	test('settles stale pending transactions when the stored list is loaded', () => {

@@ -9,6 +9,7 @@ const serializedAtomicStringAllowlist = new Set([
 	'augurScan/tests/browser/demo-api/operations-detail.ts',
 	'augurScan/tests/integration/postgres-operations-boundary.test.ts',
 	'augurScan/tests/integration/semantic-state.test.ts',
+	'augurScan/tests/unit/snapshots.test.ts',
 	'bots/liquidator/scripts/serve-dashboard-fixture.mts',
 	'bots/liquidator/tests/config/settings.test.ts',
 	'docs/mainnet-deployment-addresses.json',

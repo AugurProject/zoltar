@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, getAddress, isHex, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, parseAbi, getAddress, isHex, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -104,6 +104,19 @@ describe('LiquidationApprovalRegistry', () => {
 	}
 	const reserveFor = (approval: ApprovalParams, operationId: bigint, requestedDebtAttoEth: bigint, reservedDebtAttoEth: bigint) =>
 		operator.writeContract({ ...coordinatorContract(), functionName: 'reserve', args: [operationId, approvalId(approval), approval.receiverVault, targetVault, approval.operator, requestedDebtAttoEth, reservedDebtAttoEth, 9_000_000_000n] })
+
+	test('initialization emits the configured coordinator and rejects reinitialization', async () => {
+		const logs = await receiver.getLogs({ address: registry, fromBlock: 0n, toBlock: await receiver.getBlockNumber() })
+		expect(logs).toHaveLength(1)
+		const log = logs[0]
+		if (log === undefined) throw new Error('Registry initialization event missing')
+		const event = decodeEventLog({ abi: parseAbi(['event RegistryInitialized(address indexed coordinator)']), data: log.data, topics: log.topics })
+		expect(event.eventName).toBe('RegistryInitialized')
+		expect(event.args).toEqual({ coordinator: getAddress(coordinator) })
+		expect(await receiver.readContract({ ...registryContract(), functionName: 'coordinator' })).toBe(getAddress(coordinator))
+		await expect(receiver.writeContract({ ...registryContract(), functionName: 'initialize', args: [operator.account.address] })).rejects.toThrow(/Registry already initialized/)
+		expect(await receiver.getLogs({ address: registry, fromBlock: 0n, toBlock: await receiver.getBlockNumber() })).toHaveLength(1)
+	})
 
 	test('direct approval reserves at queue time, consumes actual debt, and releases the remainder', async () => {
 		const approval = params()

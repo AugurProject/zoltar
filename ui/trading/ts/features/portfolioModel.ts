@@ -115,8 +115,9 @@ function winningAttoShares(market: Pick<LiveMarket, 'questionOutcome' | 'yesRese
 function rowState(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRowState {
 	const { market } = entry
 	if (entry.error !== undefined || entry.balances === undefined || market.loadError !== undefined) return 'unavailable'
-	if (market.universeForkTime !== 0n || market.systemState !== 0) return 'settlement-required'
+	if (market.systemState !== 0) return 'settlement-required'
 	if (market.questionOutcome !== 3) return 'resolved'
+	if (market.universeForkTime !== 0n) return 'settlement-required'
 	return marketAcceptsNewRisk(market, nowSeconds) ? 'open' : 'closed'
 }
 

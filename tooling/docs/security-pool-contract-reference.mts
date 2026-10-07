@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: '08e3c1adfd5e6f2dd4f476f8f462bc7c2ca0e29ceeceb97c0009cd46bbb976d0',
+	compiledAbiFingerprint: '55af283fc44f7e5f092698af7fd25a7a60e03670fc57067245b645b25d3e4beb',
 	name: 'SecurityPool',
 	interactionNotes: 'Rows marked "through `fallback()`" are not in the compiled ABI: the pool forwards exactly those four selectors to `SecurityPoolOperationsDelegate` by `delegatecall` and rejects every other unknown selector with `Unsupported pool operation`.',
 	purpose: 'Holds ETH [settlement collateral](./glossary.html#settlement-collateral) and REP underwriting, accounts for [vaults](./glossary.html#vault) and fees, mints [outcome shares](./glossary.html#outcome-share), and routes local escalation.',
@@ -386,7 +386,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than settlement collateral or fees.',
 			declarations: [{ kind: 'receive', name: 'receive' }],
 			preconditions: 'Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.',
-			signals: 'No dedicated receive event; the calling protocol step emits its own event',
+			signals: '`EthReceived` identifies the authorized sender and amount received; forced ETH bypasses `receive()` and emits no such event',
 		},
 	],
 }

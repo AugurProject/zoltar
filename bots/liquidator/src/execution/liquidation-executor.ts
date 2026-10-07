@@ -2,11 +2,11 @@ import { createPublicClient, createWalletClient, encodeFunctionData, type Accoun
 import { prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 import { openOraclePriceCoordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
-import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
-import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { PRICE_PRECISION, maximumLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
@@ -252,8 +252,8 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 }
 
 function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, depositAmountAttoRep: bigint, acquiredAmountAttoRep = 0n) {
-	const poolReservedAttoRep = reservedLiquidationRep(pool, settings)
-	const totalDeployedAttoRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultAttoRepBacking + reservedLiquidationRep(observedPool, settings), 0n)
+	const poolReservedAttoRep = reservedLiquidationRep(pool)
+	const totalDeployedAttoRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultAttoRepBacking + reservedLiquidationRep(observedPool), 0n)
 	assertRepLimits({
 		acquiredAmountAttoRep,
 		currentPoolAttoRep: pool.botVault.vaultAttoRepBacking + poolReservedAttoRep,
@@ -264,19 +264,15 @@ function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState
 	})
 }
 
-function reservedLiquidationRep(pool: PoolObservation, settings: OperatorSettings) {
-	const referencePrice = pool.lastPrice > 0n ? pool.lastPrice : settings.strategy.fallbackRepPerEthPrice
-	const bufferedPrice = (referencePrice * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
+function reservedLiquidationRep(pool: PoolObservation) {
 	return pool.stagedOperations.reduce((total, operation) => {
 		if (operation.operation !== 0n || operation.receiverVault.toLowerCase() !== pool.botVault.address.toLowerCase()) return total
-		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldAttoRep) / operation.snapshotTotalRepBackingUnits
-		const estimatedAttoRep = getLiquidationVaultRepBackingToTransfer(operation.operationValue, bufferedPrice)
-		if (operation.isPendingSettlement || operation.operationValue === operation.snapshotTargetUnderwritingLimitAttoEth) return total + (estimatedAttoRep > snapshotVaultRepBackingAttoRep ? estimatedAttoRep : snapshotVaultRepBackingAttoRep)
-		return total + (estimatedAttoRep < snapshotVaultRepBackingAttoRep ? estimatedAttoRep : snapshotVaultRepBackingAttoRep)
+		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? ceilDiv(operation.snapshotTargetBackingUnits, PRICE_PRECISION) : ceilDiv(operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldAttoRep, operation.snapshotTotalRepBackingUnits)
+		return total + snapshotVaultRepBackingAttoRep
 	}, 0n)
 }
 
-async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, rpcPool: RpcPool, pool: PoolObservation, amountAttoRep: bigint, priceStillAllowed?: (() => boolean | Promise<boolean>) | undefined, targetHealthFactorBps = settings.strategy.vaultTargetHealthBps) {
+async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, rpcPool: RpcPool, pool: PoolObservation, amountAttoRep: bigint, priceStillAllowed?: (() => boolean | Promise<boolean>) | undefined, targetHealthFactorBps = pool.multiplierBps) {
 	if (amountAttoRep === 0n) return
 	assertRepExposureLimits(settings, state, pool, amountAttoRep)
 	if (!settings.strategy.allowAutomaticDeposits) {
@@ -380,8 +376,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 				safetyBps: settings.strategy.stalePriceFundingBufferBps,
 				targetHealthBps: settings.strategy.vaultTargetHealthBps,
 			})
-	const acquisitionPrice = pool.isPriceValid ? candidate.pool.price : (candidate.pool.price * settings.strategy.stalePriceFundingBufferBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
-	const acquiredRepCeiling = conservativeLiquidationRep(candidate, acquisitionPrice)
+	const acquiredRepCeiling = maximumLiquidationRep(candidate)
 	assertRepExposureLimits(settings, state, pool, topUpAttoRep, acquiredRepCeiling)
 	const executionStep = liquidationExecutionStep(topUpAttoRep)
 	if (executionStep.kind === 'deposit-and-rescreen') {

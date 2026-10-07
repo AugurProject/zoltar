@@ -1,8 +1,87 @@
 import { expect, test } from 'bun:test'
-import { getAddress } from '../../src/ethereum.ts'
+import { abiForKind } from '../../src/abi-catalog.ts'
+import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, getAddress, toFunctionSelector } from '../../src/ethereum.ts'
+import { vaultRisk } from '../../src/operations.ts'
 import { normalizeSnapshotTarget, type StateRead, sampleEntityStateWithRead } from '../../src/snapshots.ts'
 
 const pool = getAddress('0x1111111111111111111111111111111111111111')
+const vault = getAddress('0x2222222222222222222222222222222222222222')
+const coordinator = getAddress('0x3333333333333333333333333333333333333333')
+
+for (const [entityType, contractKind] of [
+	['pool', 'securityPool'],
+	['vault', 'securityPool'],
+	['auction', 'truthAuction'],
+	['escalation', 'escalationGame'],
+] as const) {
+	test(`${entityType} snapshot reads match the compiled contract interfaces`, async () => {
+		const mismatches: string[] = []
+		const outputValues: Readonly<Record<string, readonly unknown[]>> = {
+			securityVaults: [200n, 100n, 5n, 7n],
+			getOutcomeBalancesAttoRep: [[1n, 2n, 3n]],
+			computeClearing: [true, -2n, 400n, 4n],
+			awaitingForkContinuation: [false],
+			isEscalationResolved: [false],
+			isPriceValid: [false],
+			finalized: [false],
+		}
+		const read: StateRead = async (address, abi, functionName, args = []) => {
+			const kind = address === coordinator ? 'priceCoordinator' : contractKind
+			const compiled = abiForKind(kind)
+			if (compiled === undefined) throw new Error(`Missing compiled ABI ${kind}`)
+			for (const item of abi) {
+				if (item.type !== 'function') continue
+				const canonical = compiled.find(candidate => candidate.type === 'function' && toFunctionSelector(candidate) === toFunctionSelector(item))
+				if (canonical?.type !== 'function' || JSON.stringify((canonical.outputs ?? []).map(output => output.type)) !== JSON.stringify((item.outputs ?? []).map(output => output.type))) mismatches.push(`${kind}.${item.name}`)
+			}
+			const input = encodeFunctionData({ abi: compiled, functionName, args })
+			const method = compiled.find(item => item.type === 'function' && toFunctionSelector(item) === input.slice(0, 10))
+			if (method?.type !== 'function' || method.outputs === undefined) throw new Error(`Missing compiled function outputs ${kind}.${functionName}`)
+			if (functionName === 'securityPool') throw new Error('Claim fixture unavailable')
+			const values = outputValues[functionName] ?? [1n]
+			return decodeFunctionResult({ abi, functionName, data: encodeAbiParameters(method.outputs, values) })
+		}
+		const snapshot = await sampleEntityStateWithRead({ entityType, entityIdentity: vault, address: vault, poolAddress: pool, coordinatorAddress: coordinator }, read)
+		expect(mismatches).toEqual([])
+		expect(snapshot.readStatus).toBe('success')
+	})
+}
+
+test('samples vault accounting without a stored target health factor and feeds risk assessment', async () => {
+	const values: Readonly<Record<string, unknown>> = {
+		securityVaults: [200n, 100n, 5n, 7n],
+		backingUnitsToAttoRep: 200n,
+		getVaultOpenInterestAttoEth: 10n ** 18n,
+		vaultBadDebtAttoEth: 0n,
+		statoblastSecurityMultiplierBps: 15000n,
+		disputeStakedRepByVaultAttoRep: 0n,
+	}
+	const read: StateRead = async (_address, _abi, name) => {
+		const value = values[name]
+		if (value === undefined) throw new Error(`Unsupported pool operation: ${name}`)
+		return value
+	}
+	const snapshot = await sampleEntityStateWithRead({ entityType: 'vault', entityIdentity: vault, address: vault, poolAddress: pool, escalationAddress: coordinator }, read)
+	expect(snapshot.readStatus).toBe('success')
+	expect(snapshot.readResult).toEqual({
+		poolAddress: pool,
+		vaultAddress: vault,
+		repBackingUnits: '200',
+		poolHeldBackingAttoRep: '200',
+		underwritingLimitAttoEth: '100',
+		claimableFeesAttoEth: '5',
+		feeIndex: '7',
+		openInterestAttoEth: String(10n ** 18n),
+		badDebtAttoEth: '0',
+		securityMultiplierBps: '15000',
+		disputeStakedAttoRep: '0',
+	})
+	const state = snapshot.readResult
+	if (state === undefined) throw new Error('Missing vault snapshot')
+	expect(
+		vaultRisk({ poolHeldBackingAttoRep: state['poolHeldBackingAttoRep'], disputeStakedAttoRep: state['disputeStakedAttoRep'], openInterestAttoEth: state['openInterestAttoEth'], repPerEth1e18: '100', securityMultiplierBps: String(state['securityMultiplierBps']), badDebtAttoEth: state['badDebtAttoEth'] }),
+	).toMatchObject({ protocolState: 'healthy', healthFactorBps: '13333' })
+})
 
 test('normalizes chain snapshot targets and rejects unsupported entity types', () => {
 	expect(

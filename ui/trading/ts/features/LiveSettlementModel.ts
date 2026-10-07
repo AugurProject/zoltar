@@ -16,6 +16,7 @@ const settlementUnavailableCopy = {
 	'pool-not-operational': settlementCopy.poolNotOperationalReason,
 	'no-complete-sets': settlementCopy.noCompleteSetsReason,
 	'question-not-resolved': settlementCopy.questionNotResolvedReason,
+	'question-resolved': settlementCopy.questionResolvedReason,
 } satisfies Record<Exclude<SettlementUnavailableReason['code'], 'no-winning-shares'>, string>
 
 function settlementUnavailableReasonCopy(reason: SettlementUnavailableReason) {

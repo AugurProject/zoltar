@@ -157,6 +157,36 @@ describe('settlement panel', () => {
 		}
 	})
 
+	for (const originUniverseId of [undefined, 0n])
+		test(`selects winning redemption and disables migration after a resolved ${originUniverseId === undefined ? 'ordinary' : 'inherited'} pool's universe forks`, async () => {
+			let forkContextLoads = 0
+			const market = { ...closedMarket, originUniverseId, questionOutcome: 1, universeForkTime: 9n, tradingStatus: 4 }
+			const rendered = await renderPanel(market, { invalid: 0n, yes: 10n ** 18n, no: 0n }, 100n, DEFAULT_TRADE_SETTINGS, {
+				services: {
+					...services,
+					loadForkContext: async () => {
+						forkContextLoads++
+						throw new Error('Resolved shares cannot migrate')
+					},
+				},
+			})
+			try {
+				expect(operationButton('Redeem Yes').getAttribute('aria-pressed')).toBe('true')
+				const redemption = rendered.container.querySelector('.transaction-outcome button')
+				if (!(redemption instanceof HTMLButtonElement)) throw new Error('Missing winning-redemption action')
+				expect(redemption.textContent?.trim()).toBe('Redeem Yes')
+				expect(redemption.disabled).toBe(false)
+				expect(operationButton('Migrate').disabled).toBe(true)
+				expect(describedText(operationButton('Migrate'))).toBe('Redeem sets, Migrate unavailable: The question resolved. Redeem your winning shares instead.')
+				expect(describedText(operationButton('Redeem sets'))).toBe('Redeem sets, Migrate unavailable: The question resolved. Redeem your winning shares instead.')
+				await act(async () => await Bun.sleep(10))
+				expect(forkContextLoads).toBe(0)
+				expect(document.body.textContent).not.toContain('Loading fork question')
+			} finally {
+				await rendered.cleanup()
+			}
+		})
+
 	test('names why a settlement action is unavailable and disables migration before a fork', async () => {
 		const rendered = await renderPanel(closedMarket, { invalid: 0n, yes: 10n ** 18n, no: 10n ** 18n })
 		try {

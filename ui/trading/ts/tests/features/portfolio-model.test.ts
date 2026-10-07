@@ -119,6 +119,21 @@ describe('portfolio rows', () => {
 		expect(lost.actionItems).toEqual([])
 	})
 
+	for (const originUniverseId of [undefined, 0n])
+		test(`keeps a resolved ${originUniverseId === undefined ? 'ordinary' : 'inherited'} position valued and redeemable after a later fork`, () => {
+			const resolved = row(entry({ questionOutcome: 1, universeForkTime: NOW - 10n, originUniverseId }, { yes: 3n * SET, invalid: SET, lp: SET }))
+			expect(resolved.state).toBe('resolved')
+			expect(resolved.valuation).toEqual({ kind: 'redemption', attoEth: 4n * ATTO_ETH_PER_ETH })
+			expect(resolved.canSell).toBe(false)
+			expect(resolved.canRedeem).toBe(true)
+			expect(resolved.actionItems.map(item => item.kind)).toEqual(['redeem', 'withdraw-liquidity'])
+			const inactive = row(entry({ questionOutcome: 1, universeForkTime: NOW - 10n, systemState: 1, originUniverseId }, { yes: SET }))
+			expect(inactive.state).toBe('settlement-required')
+			expect(inactive.valuation.kind).toBe('unavailable')
+			expect(inactive.canRedeem).toBe(false)
+			expect(inactive.actionItems).toEqual([])
+		})
+
 	test('redeems complete sets once an unresolved market has closed', () => {
 		const closed = row(entry({ endTime: NOW - 1n }, { yes: SET, no: SET, invalid: SET }))
 		expect(closed.state).toBe('closed')

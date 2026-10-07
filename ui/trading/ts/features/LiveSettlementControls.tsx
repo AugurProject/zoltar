@@ -49,9 +49,10 @@ export const liveSettlementServices: LiveSettlementServices = {
 
 export function LiveSettlementControls({ balances, balanceError, networkMismatchReason, wallet, retryBalances, services = liveSettlementServices, ...context }: LiveWorkflowPanelProps & Readonly<{ services?: LiveSettlementServices }>) {
 	const { configuration, market, balanceState, account, walletClient, settings } = context
+	const winningOutcome = resolvedShareOutcome(market.questionOutcome)
 	let initialOperation: SettlementOperation = 'redeem-complete-set'
-	if (market.universeForkTime !== 0n) initialOperation = 'migrate-shares'
-	else if (market.questionOutcome !== 3) initialOperation = 'redeem-winning-shares'
+	if (winningOutcome !== undefined) initialOperation = 'redeem-winning-shares'
+	else if (market.universeForkTime !== 0n) initialOperation = 'migrate-shares'
 	const [operation, setOperation] = useState<SettlementOperation>(initialOperation)
 	const [amount, setAmount] = useState('')
 	const [sourceOutcome, setSourceOutcome] = useState<ShareOutcome>('YES')
@@ -65,7 +66,6 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const [migrationAcknowledgedKey, setMigrationAcknowledgedKey] = useState<string>()
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
-	const winningOutcome = resolvedShareOutcome(market.questionOutcome)
 	const parsedAmountAttoEth = tryParseNonNegativeDecimalInput(amount)
 	const parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
@@ -133,7 +133,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	}
 
 	useEffect(() => {
-		if (market.universeForkTime === 0n) {
+		if (market.universeForkTime === 0n || winningOutcome !== undefined) {
 			setForkContext(undefined)
 			setForkContextState('idle')
 			setForkContextError(undefined)
@@ -159,7 +159,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		return () => {
 			active = false
 		}
-	}, [account, forkClient, forkContextKey, forkContextNonce, market.pool, market.shareToken, market.universeForkTime, market.universeId, services])
+	}, [account, forkClient, forkContextKey, forkContextNonce, market.pool, market.shareToken, market.universeForkTime, market.universeId, services, winningOutcome])
 
 	const amountId = useId()
 	let amountFieldError: string | undefined
@@ -173,10 +173,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		await workflowController.submitCurrent()
 	}
 	const forked = market.universeForkTime !== 0n
+	const forkedResolvedReason = forked && winningOutcome !== undefined ? settlementCopy.questionResolvedReason : undefined
 	const operationOptions = [
-		operationOption('redeem-complete-set', settlementCopy.completeSetAction, workflowLocked || forked, forked ? settlementCopy.universeForkedReason : undefined),
+		operationOption('redeem-complete-set', settlementCopy.completeSetAction, workflowLocked || forked, forkedResolvedReason ?? (forked ? settlementCopy.universeForkedReason : undefined)),
 		...(winningOutcome === undefined ? [] : [operationOption('redeem-winning-shares', settlementCopy.redeemOutcomeAction(winningOutcome), workflowLocked, undefined)]),
-		operationOption('migrate-shares', settlementCopy.forkMigrationAction, workflowLocked || !forked, forked ? undefined : settlementCopy.universeNotForkedReason),
+		operationOption('migrate-shares', settlementCopy.forkMigrationAction, workflowLocked || !forked || winningOutcome !== undefined, forkedResolvedReason ?? (forked ? undefined : settlementCopy.universeNotForkedReason)),
 	]
 	// Shown before the action once there is a balance to move and a branch to move it to.
 	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market) : undefined

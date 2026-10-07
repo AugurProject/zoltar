@@ -19,7 +19,8 @@ test('failed proof reads produce explicit unavailable evidence rather than claim
 })
 
 import { bagCarryPeaks, buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
-import { type Hex, getAddress } from '../../src/ethereum.ts'
+import { abiForKind } from '../../src/abi-catalog.ts'
+import { encodeFunctionData, type Hex, getAddress } from '../../src/ethereum.ts'
 import type { StateRead } from '../../src/snapshots.ts'
 
 const root = getAddress('0x1111111111111111111111111111111111111111')
@@ -31,6 +32,14 @@ const forker = getAddress('0x6666666666666666666666666666666666666666')
 const zoltar = getAddress('0x7777777777777777777777777777777777777777')
 const zero: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const state = { finalQuestionResolution: '1', endTimestamp: '100', bindingCapitalAttoRep: String(100n), nonDecisionThresholdAttoRep: String(1000n) }
+const fixtureKinds = new Map([
+	[root, 'escalationGame'],
+	[child, 'escalationGame'],
+	[rootPool, 'securityPool'],
+	[childPool, 'securityPool'],
+	[forker, 'securityPoolForker'],
+	[zoltar, 'zoltar'],
+])
 const leaves = [0n, 1n, 2n].map(index => ({ depositor: owner, amountAttoRep: 50n, parentDepositIndex: index, cumulativeAmountAttoRep: (index + 1n) * 50n, sourceNodeId: index + 1n }))
 const hashes = leaves.map(leaf => hashCarryLeaf(leaf, 1))
 const first = hashes[0]
@@ -44,6 +53,11 @@ peaks[1] = bagCarryPeaks([first, second])
 const fixtureRead =
 	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
+		const kind = name === 'getInheritedClaimAllocation' ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
+		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
+		const abi = abiForKind(kind)
+		if (abi === undefined) throw new Error(`Missing compiled claim ABI ${kind}`)
+		encodeFunctionData({ abi, functionName: name, args })
 		const outcome = Number(args[0] ?? 0)
 		switch (name) {
 			case 'securityPool':

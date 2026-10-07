@@ -917,7 +917,9 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	const walletRepBeforeRedemption = await readWalletRepAttoRep()
 
 	// With a commitment above 0, the ended pool blocks redemption and explains the exit path.
-	const blockedBody = await driver.waitForBodyText('Set your commitment limit to 0 ETH before redeeming REP.')
+	await driver.waitForBodyText('Set your commitment limit to 0 ETH before redeeming REP.')
+	const blockedBody = await driver.waitForBodyText('Commitment limit\n80.00 ETH')
+	expect(blockedBody).toContain('Set your commitment limit to 0 ETH before redeeming REP.')
 	expect(blockedBody).toContain('Commitment limit\n80.00 ETH')
 	expect(blockedBody).toContain('Vault REP backing\n10\u00a0000.00 REP')
 	expect(JSON.parse(String(await readButtonDisabledReason(driver, 'Redeem REP')))).toEqual({ disabled: true, reason: 'Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.' })

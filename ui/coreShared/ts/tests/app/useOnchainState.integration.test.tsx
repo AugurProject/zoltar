@@ -1450,7 +1450,110 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('supports state refresh without wallet state loading', async () => {
+	test('deployment-only retry revalidates the wallet provider when the fallback RPC is unavailable', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a4')
+		const getAccounts = mock(async () => [account])
+		const providerReadClient = createReadClient({ ethBalanceAttoEth: 123n })
+		const fallbackChainId = mock(async () => {
+			throw new Error('fallback RPC unavailable')
+		})
+		const fallbackReadClient = { ...createReadClient(), getChainId: fallbackChainId }
+		const { backend, subscriptionState } = createBackend({ accountAddress: account, getAccounts, readClient: providerReadClient })
+		backend.createReadClient = () => (subscriptionState.readTransportModes.at(-1) === 'rpc' ? fallbackReadClient : providerReadClient)
+		let snapshotLoads = 0
+		const loadDeploymentStatusOracleSnapshot = mock(async (readClient: ReadClient) => {
+			snapshotLoads += 1
+			if (snapshotLoads === 1) throw new Error('temporary provider deployment read failure')
+			await readClient.getBlock()
+			return { applicationDeploymentComplete: true, deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })) }
+		})
+		const loadErc20Balance = mock(async () => 555n)
+		const dependencies = createOnchainStateDependencies({ loadDeploymentStatusOracleSnapshot, loadErc20Balance })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => {
+			expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(555n)
+			expect(requireHookState(hookState).deploymentStatusError).toContain('temporary provider deployment read failure')
+		})
+		const walletState = requireHookState(hookState).accountState
+
+		await act(async () => {
+			await requireHookState(hookState).refreshState({ loadChainClock: false, loadWalletState: false })
+		})
+
+		expect(requireHookState(hookState).readBackendValidated).toBe(true)
+		expect(requireHookState(hookState).deploymentStatusError).toBeUndefined()
+		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+		expect(requireHookState(hookState).applicationDeploymentComplete).toBe(true)
+		expect(requireHookState(hookState).accountState).toBe(walletState)
+		expect(getAccounts).toHaveBeenCalledTimes(2)
+		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
+		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(2)
+		expect(fallbackChainId).not.toHaveBeenCalled()
+		expect(subscriptionState.readTransportModes).toEqual(['provider', 'provider'])
+		resetEnvironment()
+	})
+
+	for (const change of ['disconnect', 'network', 'account', 'accounts-unavailable', 'chain-unavailable'] as const)
+		test(`deployment-only refresh rechecks a live wallet ${change} without changing wallet state`, async () => {
+			const account = getAddress('0x00000000000000000000000000000000000000a4')
+			const replacementAccount = getAddress('0x00000000000000000000000000000000000000b4')
+			let walletChanged = false
+			const getAccounts = mock(async () => {
+				if (walletChanged && change === 'accounts-unavailable') throw new Error('account discovery unavailable')
+				if (walletChanged && change === 'disconnect') return []
+				return [walletChanged && change === 'account' ? replacementAccount : account]
+			})
+			const getChainId = mock(async () => {
+				if (walletChanged && change === 'chain-unavailable') throw new Error('chain discovery unavailable')
+				return walletChanged && change === 'network' ? '0x2' : '0x1'
+			})
+			const fallbackChainId = mock(async () => 1)
+			const fallbackReadClient = { ...createReadClient(), getChainId: fallbackChainId }
+			const providerReadClient = createReadClient({ ethBalanceAttoEth: 123n })
+			const { backend, subscriptionState } = createBackend({ getAccounts, getChainId, readClient: providerReadClient })
+			backend.createReadClient = () => (subscriptionState.readTransportModes.at(-1) === 'rpc' ? fallbackReadClient : providerReadClient)
+			const loadDeploymentStatusOracleSnapshot = mock(async () => ({ applicationDeploymentComplete: true, deploymentStatuses: deploymentStatuses.map(step => ({ ...step, deployed: true })) }))
+			const loadErc20Balance = mock(async () => 555n)
+			const dependencies = createOnchainStateDependencies({ loadDeploymentStatusOracleSnapshot, loadErc20Balance })
+			const resetEnvironment = installActiveEnvironmentForTesting(backend)
+			let hookState: UseOnchainStateState | undefined
+			const Harness = createHarness(
+				dependencies,
+				state => {
+					hookState = state
+				},
+				{ enableChainClock: false },
+			)
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+			await waitFor(() => expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(555n))
+			const walletState = requireHookState(hookState).accountState
+			walletChanged = true
+
+			await act(async () => {
+				await requireHookState(hookState).refreshState({ loadChainClock: false, loadWalletState: false })
+			})
+
+			expect(requireHookState(hookState).readBackendValidated).toBe(true)
+			expect(requireHookState(hookState).deploymentStatusError).toBeUndefined()
+			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+			expect(requireHookState(hookState).accountState).toBe(walletState)
+			expect(getAccounts).toHaveBeenCalledTimes(2)
+			expect(getChainId).toHaveBeenCalledTimes(change === 'disconnect' || change === 'accounts-unavailable' ? 1 : 2)
+			expect(loadErc20Balance).toHaveBeenCalledTimes(1)
+			expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(2)
+			expect(fallbackChainId).toHaveBeenCalledTimes(change === 'account' ? 0 : 1)
+			expect(subscriptionState.readTransportModes).toEqual(['provider', change === 'account' ? 'provider' : 'rpc'])
+			resetEnvironment()
+		})
+
+	test('revalidates wallet context without reloading wallet state', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a4')
 		const getAccounts = mock(async () => [account])
 		const { backend } = createBackend({
@@ -1479,6 +1582,7 @@ describe('useOnchainState (integration)', () => {
 		const noWalletButton = within(document.body).getByRole('button', { name: 'Refresh state without wallet' })
 
 		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
+		const walletState = requireHookState(hookState).accountState
 		getAccounts.mockClear()
 		loadErc20Balance.mockClear()
 
@@ -1486,8 +1590,9 @@ describe('useOnchainState (integration)', () => {
 			fireEvent.click(noWalletButton)
 		})
 
-		expect(getAccounts).toHaveBeenCalledTimes(0)
+		expect(getAccounts).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(0)
+		expect(requireHookState(hookState).accountState).toBe(walletState)
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
 		expect(requireHookState(hookState).isRefreshing).toBe(false)
 		expect(requireHookState(hookState).walletBootstrapComplete).toBe(true)

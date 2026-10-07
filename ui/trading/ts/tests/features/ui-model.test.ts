@@ -410,6 +410,20 @@ describe('standalone trading UI model', () => {
 		expect(settlementAvailability({ ...open, universeForkTime: 1n, systemState: 1 }, balances)).toEqual({ completeSets: 5n, winningBalance: 0n, canRedeemCompleteSets: false, canRedeemWinningShares: false, canMigrateShares: true })
 	})
 
+	for (const questionOutcome of [0, 1, 2])
+		test(`keeps resolved outcome ${questionOutcome.toString()} redeemable after a later universe fork`, () => {
+			const market = { systemState: 0, universeForkTime: 9n, questionOutcome }
+			const balances = { invalid: 5n, yes: 7n, no: 6n }
+			const winningBalances = [balances.invalid, balances.yes, balances.no]
+			expect(marketSettlementPath(market)).toBe('redeem-winning-shares')
+			expect(settlementAvailability(market, balances)).toEqual({ completeSets: 5n, winningBalance: winningBalances[questionOutcome], canRedeemCompleteSets: false, canRedeemWinningShares: true, canMigrateShares: false })
+			expect(settlementUnavailableReason('migrate-shares', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
+			expect(settlementUnavailableReason('redeem-complete-set', market, balances)).toBe('The question resolved. Redeem your winning shares instead.')
+			expect(marketSettlementPath({ ...market, systemState: 1 })).toBe('unavailable')
+			expect(settlementAvailability({ ...market, systemState: 1 }, balances).canMigrateShares).toBe(false)
+			expect(settlementUnavailableReason('redeem-winning-shares', { ...market, systemState: 1 }, balances)).toBe('The security pool is not operational, so it cannot pay out ETH.')
+		})
+
 	test('allows many ready fork children while requiring missing children to be created singly', () => {
 		const ready = { outcomeIndex: 1n, universeId: 11n, label: 'Ready', canonicalPool: `0x${'11'.repeat(20)}` as const }
 		const missing = { outcomeIndex: 2n, universeId: 12n, label: 'Missing', canonicalPool: undefined }
@@ -440,7 +454,8 @@ describe('standalone trading UI model', () => {
 		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
 		expect(marketSettlementPath(open)).toBe('redeem-complete-sets')
 		expect(marketSettlementPath({ ...open, questionOutcome: 1 })).toBe('redeem-winning-shares')
-		expect(marketSettlementPath({ ...open, questionOutcome: 1, universeForkTime: 9n })).toBe('migrate-shares')
+		expect(marketSettlementPath({ ...open, questionOutcome: 1, universeForkTime: 9n })).toBe('redeem-winning-shares')
+		expect(marketSettlementPath({ ...open, universeForkTime: 9n, systemState: 1 })).toBe('migrate-shares')
 		expect(marketSettlementPath({ ...open, systemState: 3 })).toBe('unavailable')
 		expect(marketSettlementPath({ ...open, loadError: 'RPC failed.' })).toBe('unavailable')
 		expect(ticketCopy.formatTradingEndedDetail('redeem-winning-shares')).toBe('Trading has ended for this market. Use Settlement to redeem.')

@@ -177,7 +177,6 @@ export type VaultRiskInput = {
 	readonly openInterestAttoEth: unknown
 	readonly repPerEth1e18: string
 	readonly securityMultiplierBps: string
-	readonly targetHealthFactorBps: string
 	readonly badDebtAttoEth: unknown
 }
 
@@ -194,7 +193,6 @@ export const vaultRisk = (input: VaultRiskInput) => {
 	const openInterest = positiveInteger(input.openInterestAttoEth, 'openInterestAttoEth')
 	const price = positiveInteger(input.repPerEth1e18, 'repPerEth1e18')
 	const securityMultiplier = positiveInteger(input.securityMultiplierBps, 'securityMultiplierBps')
-	const target = positiveInteger(input.targetHealthFactorBps, 'targetHealthFactorBps')
 	const badDebt = positiveInteger(input.badDebtAttoEth, 'badDebtAttoEth')
 	if (openInterest === 0n)
 		return {
@@ -202,7 +200,6 @@ export const vaultRisk = (input: VaultRiskInput) => {
 			scannerSeverity: badDebt > 0n ? ('critical' as const) : ('healthy' as const),
 			scannerReason: badDebt > 0n ? 'Vault has recorded bad debt' : 'Vault has no open-interest obligation',
 			healthFactorBps: undefined,
-			targetHealthFactorBps: target.toString(),
 			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
 		}
 	if (price === 0n)
@@ -211,7 +208,6 @@ export const vaultRisk = (input: VaultRiskInput) => {
 			scannerSeverity: 'unavailable' as const,
 			scannerReason: 'The accounting REP/ETH price is zero or unavailable',
 			healthFactorBps: undefined,
-			targetHealthFactorBps: target.toString(),
 			liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
 		}
 	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
@@ -225,7 +221,6 @@ export const vaultRisk = (input: VaultRiskInput) => {
 	return {
 		...assessment,
 		healthFactorBps: healthFactor.toString(),
-		targetHealthFactorBps: target.toString(),
 		liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
 		calculation: {
 			baseRequiredRepAttoRep: baseRequired.toString(),
