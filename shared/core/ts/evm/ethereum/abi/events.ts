@@ -18,7 +18,7 @@ function getNamedEventAbi(abi: readonly unknown[], eventName: string) {
 
 function normalizeEventTopicArgs(eventAbi: AbiParameter, args: readonly unknown[] | Record<string, unknown> | undefined) {
 	const inputs = eventAbi.inputs ?? []
-	const hasNames = inputs.every((input: AbiParameter) => input.name !== undefined)
+	const hasNames = inputs.every((input: AbiParameter) => input.name !== undefined && input.name !== '')
 	const normalizeTopicValue = (input: AbiParameter, value: unknown) => {
 		if (value === null || value === undefined) return null
 		if (input.type === 'bytes' && typeof value === 'string' && isHex(value, { strict: true })) return hexToBytes(value)
@@ -35,7 +35,9 @@ function normalizeEventTopicArgs(eventAbi: AbiParameter, args: readonly unknown[
 		const usesFullInputArray = Array.isArray(args) && args.length === inputs.length
 		return inputs.map((input, inputIndex) => {
 			if (input.indexed !== true) return null
-			const value = Array.isArray(args) ? args[usesFullInputArray ? inputIndex : indexedInputIndex] : undefined
+			let value: unknown
+			if (Array.isArray(args)) value = args[usesFullInputArray ? inputIndex : indexedInputIndex]
+			else if (input.name !== undefined && input.name !== '') value = Reflect.get(args, input.name)
 			indexedInputIndex += 1
 			return normalizeTopicValue(input, value)
 		})
@@ -180,18 +182,28 @@ export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknow
 		const argumentIndex = usesFullInputArray ? inputIndex : indexedPosition
 		let value: unknown
 		if (Array.isArray(parameters.args)) value = parameters.args[argumentIndex]
-		else if (parameters.args !== undefined && input.name !== undefined) value = Reflect.get(parameters.args, input.name)
+		else if (parameters.args !== undefined && input.name !== undefined && input.name !== '') value = Reflect.get(parameters.args, input.name)
 		return Array.isArray(value) ? [{ input, inputIndex, selectionIndex: Array.isArray(parameters.args) ? argumentIndex : inputIndex, values: value }] : []
 	})
 	if (alternatives.length === 0) return encodeNormalizedTopics(normalizedArgs)
-	const withAlternatives = (selected: ReadonlyMap<number, unknown>) =>
-		normalizeEventTopicArgs(
-			eventAbi,
-			Array.isArray(parameters.args)
-				? parameters.args.map((value, argumentIndex) => selected.get(argumentIndex) ?? value)
-				: Object.fromEntries(inputs.map((input, inputIndex) => [input.name as string, selected.get(inputIndex) ?? (parameters.args === undefined ? undefined : Reflect.get(parameters.args, input.name as string))])),
+	const withAlternatives = (selected: ReadonlyMap<number, unknown>) => {
+		if (Array.isArray(parameters.args))
+			return normalizeEventTopicArgs(
+				eventAbi,
+				parameters.args.map((value, argumentIndex) => (selected.has(argumentIndex) ? selected.get(argumentIndex) : value)),
+			)
+		const args = parameters.args
+		const values = Object.fromEntries(
+			inputs.flatMap((input, inputIndex) => {
+				if (input.name === undefined || input.name === '') return []
+				if (selected.has(inputIndex)) return [[input.name, selected.get(inputIndex)]]
+				return [[input.name, args === undefined ? undefined : Reflect.get(args, input.name)]]
+			}),
 		)
-	const defaults = new Map(alternatives.map(({ selectionIndex, values }) => [selectionIndex, values[0]]))
+		return normalizeEventTopicArgs(eventAbi, values)
+	}
+	// An empty JSON-RPC topic set is a wildcard; use a placeholder while encoding its neighboring slots.
+	const defaults = new Map(alternatives.map(({ selectionIndex, values }) => [selectionIndex, values.length === 0 ? null : values[0]]))
 	const topics: Array<Hex | readonly Hex[] | null> = encodeNormalizedTopics(withAlternatives(defaults))
 	for (const { input, inputIndex, selectionIndex, values } of alternatives) {
 		const topicIndex = topicPosition(inputIndex)
