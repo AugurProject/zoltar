@@ -89,6 +89,19 @@ describe('portfolio overview', () => {
 		expect(rendered.container.querySelector('.portfolio-action-items a')?.getAttribute('href')).toBe(`#/market/${openPool}?ticket=sell-no`)
 	})
 
+	test('shows finalized shares as resolved and valued after their universe forks later', async () => {
+		const market = { ...resolvedMarket, universeForkTime: 1n }
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: { scope: scope(resolvedPool), yes: 2n * SET, no: 0n, invalid: 0n, lp: 0n }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).toContain('Total value2 ETH')
+		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).not.toContain('without a price')
+		const position = rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)
+		expect(position?.querySelector('.badge')?.textContent).toBe('Resolved')
+		expect(position?.textContent).toContain('Position value2 ETH')
+		expect(position?.querySelector('a[aria-label="Redeem: Resolved market"]')?.getAttribute('href')).toBe(`#/market/${resolvedPool}`)
+		expect(rendered.container.querySelector('.portfolio-action-items')?.textContent).not.toContain('Settle')
+	})
+
 	test('says when shares are left out of the total until resolution', async () => {
 		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market: openMarket, balances: { scope: scope(openPool), yes: 0n, no: 0n, invalid: 0n, lp: SET }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
 		cleanupRendered = rendered.cleanup

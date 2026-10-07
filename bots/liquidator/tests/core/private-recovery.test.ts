@@ -27,7 +27,7 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 			? encodeFunctionData({ abi: securityPoolAbi, functionName: 'redeemFees', args: [account.address] })
 			: encodeFunctionData({ abi: securityPoolFactoryAbi, functionName: 'deployOriginSecurityPool', args: [desired.universeId, desired.questionId, desired.statoblastSecurityMultiplierBps, desired.initialReportPriorityFeeAttoEthPerGas] })
 	const signed = await prepareSignedTransaction({ baseFeePerGas: 1n, blockNumber: 100n, chainId: settings.network.chainId, data, from: account.address, gasEstimate: 250_000n, nonce: 0n, signTransaction: account.signTransaction, to: target })
-	const control = { head: 140n, nonce: 0n, fail: false, simulationFails: false, baseFee: 1n, receipt: false, advanceDuringSimulation: 0n, claimableFees: 10n ** 18n, systemState: 0n, universeId: 0n }
+	const control = { head: 140n, nonce: 0n, pendingNonce: 0n, fail: false, simulationFails: false, baseFee: 1n, receipt: false, advanceDuringSimulation: 0n, claimableFees: 10n ** 18n, systemState: 0n, universeId: 0n }
 	const broadcasts: unknown[] = []
 	const persistedWindows: string[] = []
 	const server = Bun.serve({
@@ -42,8 +42,11 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 				result = control.receipt
 					? { blockHash: `0x${'11'.repeat(32)}`, blockNumber: '0x64', contractAddress: null, cumulativeGasUsed: '0x5208', effectiveGasPrice: '0x1', from: account.address, gasUsed: '0x5208', logs: [], status: '0x1', to: target, transactionHash: signed.hash, transactionIndex: '0x0', type: '0x2' }
 					: null
-			else if (method === 'eth_getTransactionCount') result = `0x${control.nonce.toString(16)}`
-			else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
+			else if (method === 'eth_getTransactionCount') {
+				const pendingNonce = control.pendingNonce > control.nonce ? control.pendingNonce : control.nonce
+				const nonce = Reflect.get(payload, 'params')?.[1] === 'pending' ? pendingNonce : control.nonce
+				result = `0x${nonce.toString(16)}`
+			} else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
 			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0] === 'latest' ? `0x${control.head.toString(16)}` : Reflect.get(payload, 'params')?.[0], hash: `0x${'11'.repeat(32)}`, baseFeePerGas: `0x${control.baseFee.toString(16)}`, timestamp: '0x1', transactions: [] }
 			else if (method === 'eth_call') {
 				const data = Reflect.get(payload, 'params')?.[0]?.data
@@ -59,6 +62,9 @@ async function fixture(kind: 'fees' | 'deployment' = 'fees') {
 				persistedWindows.push(disk.pendingTransactions[0].maxBlockNumber)
 				if (control.fail) return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'relay unavailable' } })
 				result = signed.hash
+			} else if (method === 'eth_sendRawTransaction') {
+				broadcasts.push(Reflect.get(payload, 'params'))
+				return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: 'already known' } })
 			} else throw new Error(`Unexpected RPC ${String(method)}`)
 			return Response.json({ id, jsonrpc: '2.0', result })
 		},
@@ -113,6 +119,35 @@ for (const head of [110n, 140n])
 			await f.close()
 		}
 	})
+
+for (const kind of ['fees', 'deployment'] as const)
+	for (const mode of ['public', 'private'] as const)
+		test(`recovers its own unmined ${mode} ${kind} transaction after restart without treating its pending nonce as consumed`, async () => {
+			const f = await fixture(kind)
+			try {
+				f.control.pendingNonce = 1n
+				const intent = f.state.pendingTransactions[0]
+				if (intent === undefined) throw new Error('Missing test intent')
+				intent.mode = mode
+				f.settings.submission.mode = mode
+				f.settings.connectivity.publicRpcUrls = [f.settings.connectivity.readRpcUrl]
+				await saveDurableState(f.settings.runtime.stateFile, f.state)
+				const restarted = initialRuntimeState(false, f.wallet.account.address, f.settings.network.chainId)
+				restarted.pendingTransactions = (await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions
+				expect(await recoverPendingTransactions(f.settings, f.wallet, restarted)).toBe(true)
+				expect(f.broadcasts).toEqual(mode === 'public' ? [[f.signed.serializedTransaction]] : [[{ maxBlockNumber: `0x${(f.control.head + 25n).toString(16)}`, tx: f.signed.serializedTransaction }]])
+				expect(restarted.pendingTransactions[0]?.hash).toBe(f.signed.hash)
+				expect(restarted.pendingTransactions[0]?.reconciliationReason).toBeUndefined()
+				expect((await loadDurableState(f.settings.runtime.stateFile, f.settings.network.chainId)).pendingTransactions[0]?.reconciliationReason).toBeUndefined()
+				f.control.receipt = true
+				f.control.nonce = 1n
+				expect(await recoverPendingTransactions(f.settings, f.wallet, restarted)).toBe(false)
+				expect(restarted.pendingTransactions).toHaveLength(0)
+				expect(f.broadcasts).toHaveLength(1)
+			} finally {
+				await f.close()
+			}
+		})
 
 test('persists renewal through broadcast failure and restart, preserving privacy and calldata validity', async () => {
 	const f = await fixture()

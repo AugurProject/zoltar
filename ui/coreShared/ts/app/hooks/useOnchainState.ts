@@ -239,27 +239,18 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			}
 			clearChainClock()
 		}
-		if (shouldLoadWalletState) {
-			try {
-				const accounts = await backend.getAccounts()
-				if (!isCurrent()) return
-				connectedAddress = normalizeAccount(accounts[0])
-			} catch (error) {
-				if (!isCurrent()) return
-				invalidateWalletDiscoveryState()
-				batch(() => {
-					walletBootstrapComplete.value = true
-					errorMessage.value = getErrorMessage(error, 'Failed to refresh wallet state')
-				})
-				return
-			}
-		}
-		if (connectedAddress !== undefined) {
-			try {
+		// Provider reads need a current wallet network even when the refresh skips wallet balances and displayed state.
+		try {
+			const accounts = await backend.getAccounts()
+			if (!isCurrent()) return
+			connectedAddress = normalizeAccount(accounts[0])
+			if (connectedAddress !== undefined) {
 				connectedChainId = await backend.getChainId()
 				if (!isCurrent()) return
-			} catch (error) {
-				if (!isCurrent()) return
+			}
+		} catch (error) {
+			if (!isCurrent()) return
+			if (shouldLoadWalletState) {
 				invalidateWalletDiscoveryState()
 				batch(() => {
 					walletBootstrapComplete.value = true
@@ -267,6 +258,8 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				})
 				return
 			}
+			connectedAddress = undefined
+			connectedChainId = undefined
 		}
 		if (connectedChainId !== undefined && supportedNetworkChangeRef.current !== undefined && getPublicNetworkProfileForChainId(connectedChainId) !== undefined && !sameChainId(connectedChainId, backend.profile.chainIdHex)) {
 			supportedNetworkChangeRef.current(connectedChainId)
