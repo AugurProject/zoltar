@@ -544,16 +544,15 @@ async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegi
 	})
 }
 
-export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address, registryIndex?: RegistryIndex<SecurityPoolDeploymentTuple>) {
-	const { anchor, deployments } = await readWithRpcStateRetries(
-		async () => {
-			const anchor = await loadDeploymentRegistryAnchor(client)
-			const deployments = await loadDeploymentRegistry(client, anchor, registryIndex)
-			await requireDeploymentRegistryAnchor(client, anchor)
-			return { anchor, deployments }
-		},
-		({ deployments }) => deployments.some(deployment => sameAddress(deployment.securityPool, securityPoolAddress)),
-	)
+/** Loads a pool's registry lineage. Only a pool this session just created (`expectDeployment`) is re-read while RPC caches catch up; any other unknown address is not found after one read. */
+export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address, registryIndex?: RegistryIndex<SecurityPoolDeploymentTuple>, { expectDeployment = false }: { expectDeployment?: boolean } = {}) {
+	const readRegistry = async () => {
+		const anchor = await loadDeploymentRegistryAnchor(client)
+		const deployments = await loadDeploymentRegistry(client, anchor, registryIndex)
+		await requireDeploymentRegistryAnchor(client, anchor)
+		return { anchor, deployments }
+	}
+	const { anchor, deployments } = expectDeployment ? await readWithRpcStateRetries(readRegistry, ({ deployments }) => deployments.some(deployment => sameAddress(deployment.securityPool, securityPoolAddress))) : await readRegistry()
 	const selected = deployments.filter(deployment => sameAddress(deployment.securityPool, securityPoolAddress))
 	const selectedDeployment = selected[0]
 	if (selectedDeployment === undefined) {

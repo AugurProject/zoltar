@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { useState } from 'preact/hooks'
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
@@ -12,10 +13,11 @@ import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmountDisplay, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { resolveLoadableValueState, type LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -77,6 +79,7 @@ export function ForkZoltarSection({
 	zoltarUniverseState,
 }: ForkZoltarSectionProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
+	const [confirmedForkKey, setConfirmedForkKey] = useState<string | undefined>(undefined)
 	const effectiveCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
@@ -111,14 +114,23 @@ export function ForkZoltarSection({
 	let selectedQuestionDescriptionId: string | undefined
 	if (selectedQuestionError !== undefined) selectedQuestionDescriptionId = FORK_QUESTION_ERROR_ID
 	else if (selectedQuestionLookupState === 'missing') selectedQuestionDescriptionId = FORK_QUESTION_STATE_ID
-	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics
+	// The acknowledgment covers one universe and one question; changing either asks again.
+	const forkConfirmationKey = rootUniverse === undefined || normalizedSelectedQuestionId === undefined ? undefined : `${rootUniverse.universeId.toString()}:${normalizedSelectedQuestionId}`
+	const forkConfirmed = forkConfirmationKey !== undefined && confirmedForkKey === forkConfirmationKey
+	const canFork = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && forkConfirmed
+	// An unended question blocks the fork itself, so it also blocks approving REP for that fork.
+	const questionTimingReason = (() => {
+		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
+		if (effectiveCurrentTimestamp === undefined) return zoltarCopy.forkQuestionTimeLoadingReason
+		if (!selectedQuestionHasEnded) return zoltarCopy.formatForkQuestionActiveReason(formatTimestamp(selectedQuestion.endTime), formatRelativeTimestamp(selectedQuestion.endTime, effectiveCurrentTimestamp))
+		return undefined
+	})()
 	const approvalGuardMessage = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
 		if (hasForked) return zoltarCopy.alreadyForkedReason
-		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
-		return undefined
+		return questionTimingReason
 	})()
 	const forkGuardMessage = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress, isOnActiveAppChain })
@@ -126,26 +138,43 @@ export function ForkZoltarSection({
 		if (rootUniverse === undefined) return getUniversePresentation(zoltarUniverseState)?.detail
 
 		if (hasForked) return zoltarCopy.alreadyForkedReason
-		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
-		if (effectiveCurrentTimestamp === undefined) return zoltarCopy.forkQuestionTimeLoadingReason
-		if (!selectedQuestionHasEnded) return zoltarCopy.formatForkQuestionActiveReason(formatTimestamp(selectedQuestion.endTime), formatRelativeTimestamp(selectedQuestion.endTime, effectiveCurrentTimestamp))
+		if (questionTimingReason !== undefined) return questionTimingReason
 		if (!hasForkEconomics) return zoltarCopy.forkEconomicsUnavailableReason
 
 		if (zoltarForkRepBalanceAttoRep === undefined) return forkRepBalanceFailed ? zoltarCopy.forkRepBalanceUnavailableShortReason : zoltarCopy.forkRepBalanceLoadingReason
 		if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
 		if (!hasEnoughApproval) return zoltarCopy.forkRepApprovalRequiredReason
+		if (!forkConfirmed) return zoltarCopy.forkConfirmationRequired
 
 		return undefined
 	})()
 
+	// The irreversible burn is acknowledged on its own row directly above the buttons, after any approval message; the checkbox gates only the fork, not the approval.
+	const forkConfirmation = (
+		<WarningSurface className='fork-confirmation' surface='flat' variant='compact'>
+			<label className='fork-confirmation-control'>
+				<input type='checkbox' checked={forkConfirmed} disabled={forkConfirmationKey === undefined || zoltarForkPending} onChange={event => setConfirmedForkKey(event.currentTarget.checked ? forkConfirmationKey : undefined)} />
+				<span>{permanentRepBurn === undefined ? zoltarCopy.forkConfirmationUnknownBurn : zoltarCopy.formatForkConfirmation(formatAmountDisplay(permanentRepBurn))}</span>
+			</label>
+		</WarningSurface>
+	)
+
+	// An approval problem (such as an invalid amount) is reported, but never instead of the question-timing blocker that also stops the fork.
+	const forkActionsMessage = (approvalNotice: string | undefined) => {
+		if (approvalNotice === undefined) return forkGuardMessage
+		if (selectedQuestionHasEnded !== false || forkGuardMessage === undefined || approvalNotice === forkGuardMessage) return approvalNotice
+		return `${forkGuardMessage} ${approvalNotice}`
+	}
+
 	const renderForkActions = (approvalButton?: ComponentChildren, approvalNotice?: string, noticeId?: string) => (
-		<TransactionActionGroup id={noticeId} message={approvalNotice ?? forkGuardMessage}>
+		<TransactionActionGroup id={noticeId} message={forkActionsMessage(approvalNotice)}>
+			{forkConfirmation}
 			{approvalButton}
 			<TransactionActionButton
 				idleLabel={zoltarCopy.forkZoltar}
 				pendingLabel={zoltarCopy.forkSubmissionPending}
 				onClick={() => {
-					if (selectedQuestionId === '') return
+					if (selectedQuestionId === '' || !forkConfirmed) return
 					onForkZoltar()
 				}}
 				pending={zoltarForkActiveAction === 'fork'}

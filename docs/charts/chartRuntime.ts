@@ -1,5 +1,7 @@
 import { areaY, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
 import {
+	AUCTION_STATUS_SYMBOLS,
+	auctionStatusKey,
 	calculateAnnualizedRetentionFeePercent,
 	computeCanonicalEscalationBindingCapital,
 	computeCanonicalEscalationDeadlineDays,
@@ -580,17 +582,7 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 	const yMax = Math.max(5.8, clearingPrice * 1.16, ...rawBids.map(bid => bid.price * 1.16))
 	const priceDescription = model.mode === 'uniform' ? `uniform clearing at ${clearingPrice.toFixed(2)} ETH per REP` : `underfunded allocation at an effective ${model.effectivePrice.toFixed(2)} ETH per REP, with a ${model.qualificationPrice.toFixed(2)} ETH per REP qualification boundary`
 	const priceLabel = compact ? `${model.mode === 'uniform' ? 'clear' : 'qualify'} ${clearingPrice.toFixed(2)}` : `${model.mode === 'uniform' ? 'clearing' : 'qualification'} ${clearingPrice.toFixed(2)} ETH/REP`
-	const legendItems = compact
-		? [
-				{ label: '● won', status: 'Accepted', x: maxRep * 0.12 },
-				{ label: '● partial', status: 'Partially filled', x: maxRep * 0.5 },
-				{ label: '● refund', status: 'Rejected', x: maxRep * 0.86 },
-			]
-		: [
-				{ label: '● accepted', status: 'Accepted', x: maxRep * 0.12 },
-				{ label: '● partially filled', status: 'Partially filled', x: maxRep * 0.42 },
-				{ label: '● rejected', status: 'Rejected', x: maxRep * 0.74 },
-			]
+	const legendItems = auctionStatusKey(compact, maxRep)
 
 	const chart = plot({
 		ariaDescription: `${spec.ariaDescription} The current result is ${priceDescription}, with ${model.ethRaised.toFixed(2)} ETH retained for ${repInventory.toFixed(2)} REP of inventory.`,
@@ -600,6 +592,7 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 			range: ['var(--green, #1d735d)', 'var(--gold, #8a5d18)', 'var(--red, #99453f)'],
 			type: 'ordinal',
 		},
+		symbol: AUCTION_STATUS_SYMBOLS,
 		height: spec.height,
 		marginBottom: 50,
 		marginLeft: 66,
@@ -633,6 +626,7 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 			dot(bids, {
 				fill: 'status',
 				r: 6,
+				symbol: 'status',
 				x: 'cumulativeRep',
 				y: 'price',
 			}),
@@ -903,11 +897,11 @@ function renderMount(mount: HTMLElement): void {
 	if (!chart.hasAttribute('viewBox')) {
 		chart.setAttribute('viewBox', `0 0 ${renderSpec.width} ${renderSpec.height}`)
 	}
-	overflowEnvelope.tabIndex = 0
+	// Charts and diagrams are scaled to fit their column, so the figure is not a scroll stop; full screen makes its own scroll surface focusable.
 	overflowEnvelope.classList.toggle('plot-figure-quantitative', isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-diagram', !isQuantitative)
 	overflowEnvelope.classList.toggle('plot-figure-fit', !isQuantitative)
-	overflowEnvelope.setAttribute('aria-label', isQuantitative ? `Responsive chart: ${spec.ariaLabel}` : `Responsive diagram: ${spec.ariaLabel}`)
+	overflowEnvelope.setAttribute('aria-label', spec.ariaLabel)
 	mount.removeAttribute('aria-label')
 	mount.removeAttribute('role')
 	mount.replaceChildren(chart)

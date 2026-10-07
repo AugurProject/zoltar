@@ -99,9 +99,14 @@ export function TradeEstimatePanel({
 }) {
 	const { side, quote } = estimate
 	const opposite = side === 'YES' ? 'NO' : 'YES'
+	// A buy also keeps Invalid shares, which pay if the question resolves Invalid, so the headline states what each resolution pays.
+	const entryInvalid = estimate.kind === 'entry' ? estimate.quote.invalidInsurance : 0n
 	const primary =
 		estimate.kind === 'entry'
-			? [{ label: ticketCopy.youReceiveEstimate, value: `${formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS)} · ${payoutCopy.otherwiseZero}` }]
+			? [
+					{ label: ticketCopy.youReceiveEstimate, value: `${formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS)} · ${entryInvalid === 0n ? payoutCopy.otherwiseZero : payoutCopy.formatShortConditionalPayout(formatEthAmount('0'), opposite)}` },
+					...(entryInvalid === 0n ? [] : [{ label: ticketCopy.invalidInsurance, value: formatOutcomeWithValue(entryInvalid, shareOutcome.invalid, market) }]),
+				]
 			: [
 					{ label: ticketCopy.youSellEstimate, value: formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS) },
 					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth) },
@@ -114,7 +119,6 @@ export function TradeEstimatePanel({
 		// A low price impact needs no attention, so it waits here until it reaches the caution tier.
 		...(impactTier === 'low' ? [impactRow] : []),
 		{ label: ticketCopy.tradingFee, value: ticketCopy.formatTradingFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market))) },
-		...(estimate.kind === 'entry' ? [{ label: ticketCopy.invalidInsurance, value: formatOutcomeWithValue(estimate.quote.invalidInsurance, shareOutcome.invalid, market) }] : []),
 		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(quote.completeSetShares, market) },
 		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeWithValue(estimate.quote.oppositeSharesSwapped, opposite, market) } : { label: ticketCopy.swapped(side), value: formatOutcomeWithValue(estimate.quote.longSharesSwapped, side, market) },
 	]

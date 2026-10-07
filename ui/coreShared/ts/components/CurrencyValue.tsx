@@ -5,6 +5,7 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { formatAmount, formatCurrencyBalance, formatUnitSuffix, toPlainGrouping, withApproximateMarker, type AmountNotation, type AmountRounding } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
+import { CopyGlyph, CopyStatus } from './CopyStatus.js'
 
 type CurrencyValueProps = {
 	/** Unit named in the title and copy button when a surrounding label shows it instead of `suffix`. */
@@ -26,10 +27,11 @@ type CurrencyValueProps = {
 }
 
 function getDisplayNumber({ decimals, exactWhenRoundedToZero, notation, precision, rounding, units, value }: { decimals: number; exactWhenRoundedToZero: boolean; notation: AmountNotation; precision: 'exact' | 'rounded'; rounding: AmountRounding; units: number; value: bigint }) {
-	if (precision === 'exact') return formatCurrencyBalance(value, units)
+	if (precision === 'exact') return { approximate: false, text: formatCurrencyBalance(value, units) }
 	const absoluteValue = value < 0n ? -value : value
-	if (exactWhenRoundedToZero && absoluteValue < 10n ** BigInt(Math.max(units - decimals, 0))) return formatCurrencyBalance(value, units)
-	return withApproximateMarker(formatAmount(value, { decimals, notation, rounding, units }))
+	if (exactWhenRoundedToZero && absoluteValue < 10n ** BigInt(Math.max(units - decimals, 0))) return { approximate: false, text: formatCurrencyBalance(value, units) }
+	const formatted = formatAmount(value, { decimals, notation, rounding, units })
+	return { approximate: formatted.approximate, text: withApproximateMarker(formatted) }
 }
 
 export function CurrencyValue({ accessibleUnit, className = '', copyable = false, decimals = 2, exactWhenRoundedToZero = false, loading = false, notation = 'standard', precision = 'rounded', rounding = 'nearest', suffix = '', units = 18, value }: CurrencyValueProps) {
@@ -38,14 +40,21 @@ export function CurrencyValue({ accessibleUnit, className = '', copyable = false
 	const copyValue = exactValue === undefined ? undefined : toPlainGrouping(exactValue)
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(copyValue)
 
-	if (loading) return <LoadingText className={`currency-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</LoadingText>
+	// A section can hold many loading values, so each spinner stays silent instead of being its own live region.
+	if (loading)
+		return (
+			<LoadingText announce={false} className={`currency-value loading ${className}`}>
+				{commonCopy.loadingWithEllipsis}
+			</LoadingText>
+		)
 
 	if (value === undefined || exactValue === undefined || copyValue === undefined) return <span className={`currency-value unavailable ${className}`}>{getMetricPlaceholderPresentation(value)?.placeholder}</span>
 
 	const exactSuffix = formatUnitSuffix(suffix)
+	const displayNumber = getDisplayNumber({ decimals, exactWhenRoundedToZero, notation, precision, rounding, units, value })
 	const renderedValue = (
 		<span className='currency-value-number-unit'>
-			{getDisplayNumber({ decimals, exactWhenRoundedToZero, notation, precision, rounding, units, value })}
+			{displayNumber.text}
 			{exactSuffix}
 		</span>
 	)
@@ -58,14 +67,18 @@ export function CurrencyValue({ accessibleUnit, className = '', copyable = false
 				<span className={`currency-value ${className}`} title={exactTitle}>
 					{renderedValue}
 				</span>
+				{/* The title only reaches mouse users, so screen readers also get the exact value of a rounded amount. */}
+				{displayNumber.approximate ? <span className='visually-hidden'>{commonCopy.formatExactValueLabel(exactTitle)}</span> : undefined}
 			</span>
 		)
 
 	return (
 		<span className='currency-value-wrap'>
-			<button type='button' className={`currency-value copyable ${className}`} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactTitle)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(copyValue)}>
-				{copied.value ? <span className='copy-feedback'>{commonCopy.copied}</span> : renderedValue}
+			<button type='button' className={`currency-value copyable ${className}`} data-copied={copied.value} title={exactTitle} aria-label={pricingCopy.formatCopyExactCurrencyValue(exactTitle)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(copyValue)}>
+				{renderedValue}
+				<CopyGlyph />
 			</button>
+			<CopyStatus copied={copied.value} message={commonCopy.copied} />
 			<CopyErrorMessage id={copyErrorId} manualValue={copyValue} message={copyError.value} />
 		</span>
 	)

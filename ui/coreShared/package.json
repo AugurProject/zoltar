@@ -94,6 +94,10 @@
 			"bun": "./ts/components/CopyErrorMessage.tsx",
 			"default": "./js/components/CopyErrorMessage.js"
 		},
+		"./components/CopyStatus.js": {
+			"bun": "./ts/components/CopyStatus.tsx",
+			"default": "./js/components/CopyStatus.js"
+		},
 		"./components/InlineHint.js": {
 			"bun": "./ts/components/InlineHint.tsx",
 			"default": "./js/components/InlineHint.js"
@@ -153,6 +157,10 @@
 		"./tests/app/transactionActivityMenu.test.js": {
 			"bun": "./ts/tests/app/transactionActivityMenu.test.tsx",
 			"default": "./js/tests/app/transactionActivityMenu.test.js"
+		},
+		"./tests/app/globalTransactionDialog.test.js": {
+			"bun": "./ts/tests/app/globalTransactionDialog.test.tsx",
+			"default": "./js/tests/app/globalTransactionDialog.test.js"
 		},
 		"./tests/app/mainnetDisabledNotice.test.js": {
 			"bun": "./ts/tests/app/mainnetDisabledNotice.test.tsx",
@@ -249,6 +257,14 @@
 		"./tests/operationModal.test.js": {
 			"bun": "./ts/tests/operationModal.test.tsx",
 			"default": "./js/tests/operationModal.test.js"
+		},
+		"./tests/paginationControls.test.js": {
+			"bun": "./ts/tests/paginationControls.test.tsx",
+			"default": "./js/tests/paginationControls.test.js"
+		},
+		"./tests/walletConnectionControl.test.js": {
+			"bun": "./ts/tests/walletConnectionControl.test.tsx",
+			"default": "./js/tests/walletConnectionControl.test.js"
 		},
 		"./tests/requestGuard.test.js": {
 			"bun": "./ts/tests/requestGuard.test.tsx",

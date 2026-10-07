@@ -440,7 +440,7 @@ export function ReportingSection({
 								disabled={reportControlsLocked}
 								id='reporting-contribution-amount'
 								label={reportingCopy.reportAmountFieldLabel}
-								fillMax={{ amount: maxContributionAmount.amountAttoRep, unavailableReason: reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason }}
+								fillMax={{ amount: maxContributionAmount.amountAttoRep, unavailableReason: reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason, showUnavailableReason: false }}
 								onChange={reportAmount => onReportingFormChange({ reportAmount })}
 								placeholder={reportingCopy.reportAmountPlaceholder}
 								unit={commonCopy.rep}

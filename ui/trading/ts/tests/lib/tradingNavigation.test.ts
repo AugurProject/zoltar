@@ -24,4 +24,18 @@ describe('trading navigation', () => {
 		expect(tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'deploy', liveDeploymentStatus: 'missing' }).tabs.map(tab => tab.route)).toEqual(['deploy', 'market', 'portfolio', 'create-market'])
 		expect(tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'deploy', liveDeploymentStatus: 'verified' }).tabs[0]?.route).toBe('deploy')
 	})
+
+	test('disables every section that needs the trading contracts, with one reason, while they are missing', () => {
+		const missing = tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'deploy', liveDeploymentStatus: 'missing' })
+		const disabled = [...missing.tabs, ...missing.moreTabs].filter(tab => tab.disabled === true)
+		expect(disabled.map(tab => tab.route)).toEqual(['market', 'portfolio', 'create-market', 'universe'])
+		expect(new Set(disabled.map(tab => tab.disabledReason)).size).toBe(1)
+		expect(disabled[0]?.disabledReason).toBeTruthy()
+		// The deployment route and Help stay reachable.
+		expect([...missing.tabs, ...missing.moreTabs].filter(tab => tab.disabled !== true).map(tab => tab.route)).toEqual(['deploy', 'help'])
+		for (const liveDeploymentStatus of ['loading', 'verified', 'unreachable'] as const) {
+			const navigation = tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'market', liveDeploymentStatus })
+			expect([...navigation.tabs, ...navigation.moreTabs].some(tab => tab.disabled === true)).toBe(false)
+		}
+	})
 })

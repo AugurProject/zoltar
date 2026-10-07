@@ -1,5 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect, useRef } from 'preact/hooks'
+import { pushHistoryUrl, replaceHistoryUrl, subscribeToLocationChanges } from '../../navigation/historyEntries.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch, parseRouteHash } from '../../navigation/routing.js'
 
 export type UrlHistoryMode = 'push' | 'replace'
@@ -38,18 +39,14 @@ export function useUrlSearchState<TState>(readState: (search: string, routeHash:
 	useEffect(() => {
 		const syncUrlState = () => {
 			const legacyHash = mapLegacyHashRef.current?.(window.location.hash)
-			if (legacyHash !== undefined) window.history.replaceState(window.history.state, '', legacyHash)
+			if (legacyHash !== undefined) replaceHistoryUrl(legacyHash)
 			const ownedSearch = getOwnedSearch()
-			if (ownedSearch !== getRouteHashSearch()) window.history.replaceState({}, '', buildRouteHref(getCurrentRouteHash(), ownedSearch))
+			if (ownedSearch !== getRouteHashSearch()) replaceHistoryUrl(buildRouteHref(getCurrentRouteHash(), ownedSearch))
 			urlState.value = readStateRef.current(ownedSearch, getCurrentRouteHash())
 		}
 		syncUrlState()
-		window.addEventListener('hashchange', syncUrlState)
-		window.addEventListener('popstate', syncUrlState)
-		return () => {
-			window.removeEventListener('hashchange', syncUrlState)
-			window.removeEventListener('popstate', syncUrlState)
-		}
+		// The route follows the same notifications, so a change of both path and search renders once.
+		return subscribeToLocationChanges(syncUrlState)
 	}, [getOwnedSearch, urlState])
 
 	const navigate = useCallback(
@@ -57,8 +54,8 @@ export function useUrlSearchState<TState>(readState: (search: string, routeHash:
 			const currentRouteHash = getCurrentRouteHash()
 			if (nextRouteHash !== currentRouteHash || nextSearch !== getRouteHashSearch()) {
 				const nextHref = buildRouteHref(nextRouteHash, nextSearch)
-				if (historyMode === 'replace') window.history.replaceState({}, '', nextHref)
-				else window.history.pushState({}, '', nextHref)
+				if (historyMode === 'replace') replaceHistoryUrl(nextHref)
+				else pushHistoryUrl(nextHref)
 				// History writes do not fire hashchange; the route signal still has to observe a path change.
 				if (nextRouteHash !== currentRouteHash) window.dispatchEvent(new Event('hashchange'))
 			}

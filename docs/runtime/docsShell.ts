@@ -1,3 +1,5 @@
+import { appendLandingSectionIndexes, docsSectionPages, docsTopicGroups } from './docsSectionIndex'
+
 ;(() => {
 	const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 	const isString = (value: unknown): value is string => typeof value === 'string'
@@ -18,6 +20,43 @@
 		isString(value['topic']) &&
 		typeof value['weight'] === 'number'
 	const isSearchIndex = (value: unknown): value is StatoblastDocumentationSearchEntry[] => Array.isArray(value) && value.every(isSearchEntry)
+
+	type ThemePreference = 'system' | 'light' | 'dark'
+	const themeStorageKey = 'augur-docs.theme'
+	const themeOptions: ReadonlyArray<{ label: string; value: ThemePreference }> = [
+		{ label: 'System', value: 'system' },
+		{ label: 'Light', value: 'light' },
+		{ label: 'Dark', value: 'dark' },
+	]
+	const darkSchemeQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : undefined
+	function parseThemePreference(value: unknown): ThemePreference {
+		return themeOptions.find(option => option.value === value)?.value ?? 'system'
+	}
+	function readThemePreference(): ThemePreference {
+		try {
+			return parseThemePreference(window.localStorage.getItem(themeStorageKey))
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+			return 'system'
+		}
+	}
+	// The system preference clears the stored value so the operating system decides again.
+	function saveThemePreference(preference: ThemePreference): void {
+		try {
+			if (preference === 'system') window.localStorage.removeItem(themeStorageKey)
+			else window.localStorage.setItem(themeStorageKey, preference)
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+		}
+	}
+	// The stylesheets key the dark palette to the resolved theme, so the system preference is resolved here rather than in a media query.
+	function applyThemePreference(preference: ThemePreference): void {
+		const dark = preference === 'dark' || (preference === 'system' && darkSchemeQuery?.matches === true)
+		document.documentElement.dataset['docsTheme'] = dark ? 'dark' : 'light'
+	}
+	let themePreference = readThemePreference()
+	applyThemePreference(themePreference)
+	darkSchemeQuery?.addEventListener('change', () => applyThemePreference(themePreference))
 
 	const rawData = window.statoblastDocs
 	if (!isDocumentationData(rawData)) return
@@ -56,16 +95,21 @@
 	}
 
 	// Contract names such as UniformPriceDualCapBatchAuction have no spaces; break them between words instead of at an arbitrary character.
-	function appendBreakableTitle(link: HTMLAnchorElement, title: string): void {
+	function appendBreakableTitle(target: HTMLElement, title: string): void {
 		const parts = title.split(/(?<=[a-z0-9])(?=[A-Z])/)
 		parts.forEach((part, index) => {
-			if (index > 0) link.append(document.createElement('wbr'))
-			link.append(document.createTextNode(part))
+			if (index > 0) target.append(document.createElement('wbr'))
+			target.append(document.createTextNode(part))
 		})
 	}
 
-	function sectionPages(sectionId: string): StatoblastDocumentationPage[] {
-		return data.pages.filter(page => page.section === sectionId)
+	if (currentPage === undefined) appendLandingSectionIndexes(data, path => docsUrl(path))
+
+	const pageHeading = main.querySelector('h1')
+	const pageHeadingText = pageHeading?.textContent?.trim() ?? ''
+	if (pageHeading !== null && pageHeading.childElementCount === 0 && /^[A-Za-z0-9]+$/.test(pageHeadingText)) {
+		pageHeading.replaceChildren()
+		appendBreakableTitle(pageHeading, pageHeadingText)
 	}
 
 	const skipLink = element('a', 'docs-skip-link', 'Skip to documentation')
@@ -76,7 +120,7 @@
 	brand.href = docsUrl('documentation.html')
 	const brandMark = element('span', 'docs-brand-mark', 'A')
 	brandMark.setAttribute('aria-hidden', 'true')
-	brand.append(brandMark, element('span', '', 'Augur documentation'))
+	brand.append(brandMark, element('span', 'docs-brand-name', 'Augur documentation'))
 
 	const actions = element('div', 'docs-top-actions')
 	const menuButton = element('button', 'docs-icon-button', '☰')
@@ -87,26 +131,38 @@
 	searchButton.type = 'button'
 	searchButton.setAttribute('aria-label', 'Search documentation')
 	searchButton.append(element('span', '', 'Search'), element('span', 'docs-search-icon', '⌕'), element('kbd', '', 'Ctrl/⌘ K'))
-	actions.append(menuButton, searchButton)
+	const themeControl = element('div', 'docs-theme-control')
+	const themeLabel = element('label', 'docs-theme-label', 'Theme')
+	themeLabel.htmlFor = 'docs-theme-select'
+	const themeSelect = element('select', 'docs-theme-select')
+	themeSelect.id = 'docs-theme-select'
+	for (const option of themeOptions) {
+		const optionElement = element('option', '', option.label)
+		optionElement.value = option.value
+		themeSelect.append(optionElement)
+	}
+	themeSelect.value = themePreference
+	themeSelect.addEventListener('change', () => {
+		themePreference = parseThemePreference(themeSelect.value)
+		saveThemePreference(themePreference)
+		applyThemePreference(themePreference)
+	})
+	themeControl.append(themeLabel, themeSelect)
+	actions.append(menuButton, searchButton, themeControl)
 	topbar.append(brand, actions)
 
 	const left = element('aside', 'docs-left')
 	left.setAttribute('aria-label', 'Documentation navigation')
 	left.append(element('p', 'docs-navigation-title', 'Documentation'))
 	const navigation = element('nav', 'docs-navigation')
+	let currentNavigationLink: HTMLAnchorElement | undefined
 	for (const section of data.sections) {
 		// A reading-path section without pages yet has nothing to navigate to.
-		if (sectionPages(section.id).length === 0) continue
+		if (docsSectionPages(data, section.id).length === 0) continue
 		const sectionDetails = element('details', 'docs-navigation-section')
 		sectionDetails.open = currentPage?.section === section.id
 		sectionDetails.append(element('summary', '', section.title))
-		const topics = new Map<string, StatoblastDocumentationPage[]>()
-		for (const page of sectionPages(section.id)) {
-			const pages = topics.get(page.topic) ?? []
-			pages.push(page)
-			topics.set(page.topic, pages)
-		}
-		for (const [topic, pages] of topics) {
+		for (const [topic, pages] of docsTopicGroups(data, section.id)) {
 			const topicDetails = element('details', 'docs-navigation-topic')
 			topicDetails.open = pages.some(page => page.path === currentPage?.path)
 			topicDetails.append(element('summary', '', topic))
@@ -116,7 +172,10 @@
 				const link = element('a', '')
 				appendBreakableTitle(link, page.title)
 				link.href = docsUrl(page.path)
-				if (page.path === currentPage?.path) link.setAttribute('aria-current', 'page')
+				if (page.path === currentPage?.path) {
+					link.setAttribute('aria-current', 'page')
+					currentNavigationLink = link
+				}
 				item.append(link)
 				list.append(item)
 			}
@@ -153,18 +212,20 @@
 		breadcrumbs.setAttribute('aria-label', 'Breadcrumb')
 		const home = element('a', '', 'Docs')
 		home.href = docsUrl('documentation.html')
-		breadcrumbs.append(home, document.createTextNode('/'), element('span', '', currentSection.title))
+		const sectionCrumb = element('a', '', currentSection.title)
+		sectionCrumb.href = docsUrl('documentation.html', currentSection.id)
+		breadcrumbs.append(home, document.createTextNode('/'), sectionCrumb)
 		context.append(breadcrumbs, element('span', 'docs-type-badge', currentSection.title), element('p', 'docs-page-summary', currentPage.summary))
 		main.prepend(context)
 		if (!right.hidden) context.after(mobileOutline)
 
-		const peers = sectionPages(currentPage.section)
-		const index = peers.findIndex(page => page.path === currentPage.path)
+		const readingOrder = data.sections.flatMap(section => Array.from(docsTopicGroups(data, section.id).values()).flat())
+		const index = readingOrder.findIndex(page => page.path === currentPage.path)
 		const pager = element('nav', 'docs-page-pager')
 		pager.setAttribute('aria-label', 'Adjacent documentation')
 		const adjacentPages: Array<[string, StatoblastDocumentationPage | undefined]> = [
-			['Previous', peers[index - 1]],
-			['Next', peers[index + 1]],
+			['Previous', readingOrder[index - 1]],
+			['Next', readingOrder[index + 1]],
 		]
 		for (const [label, page] of adjacentPages) {
 			if (page === undefined) {
@@ -173,7 +234,9 @@
 			}
 			const link = element('a', '')
 			link.href = docsUrl(page.path)
-			link.append(element('span', '', label), document.createTextNode(page.title))
+			// Name the section when the reading path crosses into another one.
+			const targetSection = page.section === currentPage.section ? undefined : data.sections.find(section => section.id === page.section)
+			link.append(element('span', '', targetSection === undefined ? label : `${label} · ${targetSection.title}`), document.createTextNode(page.title))
 			pager.append(link)
 		}
 		main.append(pager)
@@ -205,7 +268,7 @@
 		const mobile = isMobileNavigation()
 		const open = mobile && document.body.dataset['docsNavigationOpen'] === 'true'
 		left.inert = mobile && !open
-		for (const node of [brand, searchButton, requiredMain, right]) node.inert = open
+		for (const node of [brand, searchButton, themeControl, requiredMain, right]) node.inert = open
 		backdrop.inert = !open
 		if (!mobile && document.body.dataset['docsNavigationOpen'] === 'true') {
 			document.body.dataset['docsNavigationOpen'] = 'false'
@@ -213,13 +276,24 @@
 			menuButton.setAttribute('aria-label', 'Open documentation menu')
 		}
 	}
+	// The navigation column scrolls independently, so bring the current page into its view instead of leaving it below the fold.
+	function revealCurrentNavigationLink(): void {
+		if (currentNavigationLink === undefined) return
+		const columnBox = left.getBoundingClientRect()
+		const linkBox = currentNavigationLink.getBoundingClientRect()
+		if (linkBox.top >= columnBox.top && linkBox.bottom <= columnBox.bottom) return
+		left.scrollTop = Math.max(0, left.scrollTop + linkBox.top - columnBox.top - (left.clientHeight - linkBox.height) / 2)
+	}
 	function setNavigationOpen(open: boolean, restoreFocus = !open): void {
 		document.body.dataset['docsNavigationOpen'] = String(open)
 		menuButton.setAttribute('aria-expanded', String(open))
 		menuButton.setAttribute('aria-label', open ? 'Close documentation menu' : 'Open documentation menu')
 		syncNavigationIsolation()
-		if (open && isMobileNavigation()) navigationFocusables()[1]?.focus()
-		else if (restoreFocus) menuButton.focus()
+		if (open && isMobileNavigation()) {
+			const focusTarget = currentNavigationLink ?? navigationFocusables()[1]
+			focusTarget?.focus({ preventScroll: true })
+			revealCurrentNavigationLink()
+		} else if (restoreFocus) menuButton.focus()
 	}
 	menuButton.addEventListener('click', () => setNavigationOpen(document.body.dataset['docsNavigationOpen'] !== 'true'))
 	backdrop.addEventListener('click', () => setNavigationOpen(false))
@@ -228,6 +302,7 @@
 	})
 	window.addEventListener('resize', syncNavigationIsolation)
 	syncNavigationIsolation()
+	revealCurrentNavigationLink()
 
 	const dialog = element('dialog', 'docs-search')
 	dialog.setAttribute('aria-label', 'Search documentation')
@@ -300,7 +375,35 @@
 	searchButton.addEventListener('click', openSearch)
 	closeSearch.addEventListener('click', closeSearchDialog)
 	retrySearch.addEventListener('click', beginSearchLoad)
-	searchForm.addEventListener('submit', event => event.preventDefault())
+	function searchResultLinks(): HTMLAnchorElement[] {
+		return Array.from(searchResults.querySelectorAll<HTMLAnchorElement>('a[href]'))
+	}
+	// Enter (or Go on a phone keyboard) opens the best match.
+	searchForm.addEventListener('submit', event => {
+		event.preventDefault()
+		searchResultLinks()[0]?.click()
+	})
+	searchInput.addEventListener('keydown', event => {
+		if (event.key !== 'ArrowDown') return
+		const firstResult = searchResultLinks()[0]
+		if (firstResult === undefined) return
+		event.preventDefault()
+		firstResult.focus()
+	})
+	searchResults.addEventListener('keydown', event => {
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+		const links = searchResultLinks()
+		const index = links.findIndex(link => link === document.activeElement)
+		if (index < 0) return
+		event.preventDefault()
+		if (event.key === 'ArrowDown') links[Math.min(index + 1, links.length - 1)]?.focus()
+		else if (index === 0) searchInput.focus()
+		else links[index - 1]?.focus()
+	})
+	// A result on the current page only changes the fragment, so close the dialog to reveal the target.
+	searchResults.addEventListener('click', event => {
+		if (event.target instanceof Element && event.target.closest('a[href]') !== null) dialog.close()
+	})
 	dialog.addEventListener('click', event => {
 		if (event.target === dialog) closeSearchDialog()
 	})
@@ -337,6 +440,29 @@
 			.replace(/[^\p{L}\p{N}]+/gu, ' ')
 			.trim()
 	}
+	// Filler words in a natural question ("how do I liquidate a vault") must not have to appear in the page.
+	const searchStopWords = new Set(['a', 'an', 'and', 'are', 'by', 'can', 'do', 'does', 'for', 'from', 'how', 'i', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'which', 'who', 'why', 'with'])
+	const searchSuffixes = ['ions', 'ion', 'ings', 'ing', 'ers', 'er', 'ed', 'es', 'e', 's']
+	// A light stem lets singular, plural, and verb forms meet: liquidate, liquidates, and liquidations all search for "liquidat".
+	function searchStem(term: string): string {
+		if (/\d/.test(term)) return term
+		for (const suffix of searchSuffixes) {
+			if (term.endsWith(suffix) && term.length - suffix.length >= 4) return term.slice(0, -suffix.length)
+		}
+		return term
+	}
+	function searchTerms(query: string): string[] {
+		const words = query.split(/\s+/).filter(word => word.length > 0)
+		const meaningful = words.filter(word => !searchStopWords.has(word))
+		return (meaningful.length > 0 ? meaningful : words).map(searchStem)
+	}
+	// Tutorials and how-to guides answer task questions directly, so they lead when scores tie.
+	const searchSectionRank = ['tutorials', 'how-to', 'start-here', 'explanation', 'reference']
+	function sectionRankForTitle(sectionTitle: string): number {
+		const sectionId = data.sections.find(section => section.title === sectionTitle)?.id ?? ''
+		const rank = searchSectionRank.indexOf(sectionId)
+		return rank < 0 ? searchSectionRank.length : rank
+	}
 	function searchTermScore(entry: StatoblastDocumentationSearchEntry, normalizedTitle: string, term: string): number {
 		if (normalizedTitle.startsWith(term)) return 8
 		if (normalizedTitle.includes(term)) return 5
@@ -344,6 +470,7 @@
 		if (heading.startsWith(term)) return 6
 		if (heading.includes(term)) return 4
 		if (entry.keywords.some(keyword => normalized(keyword).includes(term))) return 3
+		if (normalized(entry.summary).includes(term)) return 2
 		return 1
 	}
 	function updateSearch(): void {
@@ -359,18 +486,18 @@
 			searchStatus.textContent = 'Enter at least two characters.'
 			return
 		}
-		const terms = query.split(/\s+/)
+		const terms = searchTerms(query)
 		const matchesByPath = new Map<string, { entry: StatoblastDocumentationSearchEntry; score: number }>()
 		for (const entry of searchIndex) {
 			const title = normalized(entry.title)
-			const haystack = normalized(`${entry.title} ${entry.sectionTitle} ${entry.topic} ${entry.keywords.join(' ')} ${entry.heading} ${entry.text}`)
+			const haystack = normalized(`${entry.title} ${entry.sectionTitle} ${entry.topic} ${entry.keywords.join(' ')} ${entry.summary} ${entry.heading} ${entry.text}`)
 			if (!terms.every(term => haystack.includes(term))) continue
 			const score = terms.reduce((total, term) => total + searchTermScore(entry, title, term), entry.weight)
 			const previous = matchesByPath.get(entry.path)
 			if (previous === undefined || score > previous.score) matchesByPath.set(entry.path, { entry, score })
 		}
 		const matches = Array.from(matchesByPath.values())
-			.sort((left, right) => right.score - left.score || left.entry.title.localeCompare(right.entry.title))
+			.sort((left, right) => right.score - left.score || sectionRankForTitle(left.entry.sectionTitle) - sectionRankForTitle(right.entry.sectionTitle) || left.entry.title.localeCompare(right.entry.title))
 			.slice(0, 20)
 		searchStatus.textContent = matches.length === 0 ? 'No matching documentation.' : `${matches.length} result${matches.length === 1 ? '' : 's'}`
 		for (const { entry } of matches) {
@@ -385,19 +512,59 @@
 	}
 	searchInput.addEventListener('input', updateSearch)
 
-	if ('IntersectionObserver' in window && outlineLinks.size > 0) {
-		const observer = new IntersectionObserver(
-			entries => {
-				const visible = entries.filter(entry => entry.isIntersecting).sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0]
-				if (visible === undefined) return
-				for (const link of outlineLinks.values()) link.removeAttribute('aria-current')
-				outlineLinks.get(visible.target.id)?.setAttribute('aria-current', 'location')
-			},
-			{ rootMargin: '-20% 0px -70% 0px' },
-		)
-		for (const id of outlineLinks.keys()) {
-			const target = document.getElementById(id)
-			if (target !== null) observer.observe(target)
+	// The current outline entry is the last section whose heading has scrolled under the header; above the first section nothing is current.
+	const outlineTargets = Array.from(outlineLinks.keys()).flatMap(id => {
+		const target = document.getElementById(id)
+		return target === null ? [] : [{ id, target }]
+	})
+	const mobileOutlineLinks = Array.from(mobileOutline.querySelectorAll<HTMLAnchorElement>('a[href]'))
+	// A page panel marked data-docs-sticky (the invariant explorer) also covers the top of the viewport while it is stuck.
+	const stickyPanels = Array.from(main.querySelectorAll<HTMLElement>('[data-docs-sticky]'))
+	function coveredViewportTop(): number {
+		const headerBottom = topbar.getBoundingClientRect().bottom
+		return stickyPanels.reduce((bottom, panel) => {
+			const box = panel.getBoundingClientRect()
+			return box.top <= headerBottom + 24 && box.bottom > bottom ? box.bottom : bottom
+		}, headerBottom)
+	}
+	function currentOutlineId(): string | undefined {
+		const visibleTargets = outlineTargets.filter(({ target }) => target.getClientRects().length > 0)
+		const threshold = coveredViewportTop() + 24
+		let currentId: string | undefined
+		for (const { id, target } of visibleTargets) {
+			if (target.getBoundingClientRect().top <= threshold) currentId = id
 		}
+		// At the end of the page the last sections may never reach the header, so the lowest heading in view wins.
+		const atPageEnd = window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
+		if (atPageEnd) {
+			for (const { id, target } of visibleTargets) {
+				if (target.getBoundingClientRect().top < window.innerHeight) currentId = id
+			}
+		}
+		return currentId
+	}
+	function updateOutlineHighlight(): void {
+		const currentId = currentOutlineId()
+		const currentHref = currentId === undefined ? undefined : `#${encodeURIComponent(currentId)}`
+		for (const link of [...outlineLinks.values(), ...mobileOutlineLinks]) {
+			if (link.getAttribute('href') === currentHref) link.setAttribute('aria-current', 'location')
+			else link.removeAttribute('aria-current')
+		}
+	}
+	if (outlineTargets.length > 0) {
+		let outlineUpdateScheduled = false
+		const scheduleOutlineUpdate = (): void => {
+			if (outlineUpdateScheduled) return
+			outlineUpdateScheduled = true
+			requestAnimationFrame(() => {
+				outlineUpdateScheduled = false
+				updateOutlineHighlight()
+			})
+		}
+		window.addEventListener('scroll', scheduleOutlineUpdate, { passive: true })
+		window.addEventListener('resize', scheduleOutlineUpdate)
+		window.addEventListener('hashchange', scheduleOutlineUpdate)
+		window.addEventListener('load', scheduleOutlineUpdate, { once: true })
+		updateOutlineHighlight()
 	}
 })()

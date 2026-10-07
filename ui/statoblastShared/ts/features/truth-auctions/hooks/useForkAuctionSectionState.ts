@@ -325,7 +325,8 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	if (context.accountState.address === undefined) maxBidUnavailableReason = forkAuctionCopy.forkActionWalletRequired
 	else if (maxBidAmountAttoEth === undefined) maxBidUnavailableReason = forkAuctionCopy.loadingWalletEthBalance
 	else if (maxBidAmountAttoEth === 0n) maxBidUnavailableReason = forkAuctionCopy.walletEthBelowGasReserve
-	const bidAmountMax = { amount: maxBidAmountAttoEth, unavailableReason: maxBidUnavailableReason }
+	// The submit action already names the missing wallet with its fix, so the amount field keeps that reason as Max's tooltip only.
+	const bidAmountMax = { amount: maxBidAmountAttoEth, unavailableReason: maxBidUnavailableReason, showUnavailableReason: context.accountState.address !== undefined }
 	const startTruthAuctionAvailabilityMessage = (() => {
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage

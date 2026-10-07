@@ -10,6 +10,8 @@ export function marketStatusLabel(market: LiveMarket, nowSeconds: bigint) {
 	return livePairInitialized(market) ? liveCopy.tradingOpen : liveCopy.noLiquidityYet
 }
 
-export function marketStatusTone(market: LiveMarket, nowSeconds: bigint) {
-	return market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) ? ('ok' as const) : ('warning' as const)
+/** Only an open market that can trade reads as healthy; a pool without a market or without liquidity is neutral, and a closed or broken one warns. */
+export function marketStatusTone(market: LiveMarket, nowSeconds: bigint): 'ok' | 'muted' | 'warning' {
+	if (market.loadError !== undefined || !marketAcceptsNewRisk(market, nowSeconds)) return 'warning'
+	return market.pair !== undefined && livePairInitialized(market) ? 'ok' : 'muted'
 }

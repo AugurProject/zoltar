@@ -80,7 +80,30 @@ export function marketAcceptsNewRisk(market: MarketLifecycle, nowSeconds: bigint
 
 type ShareBalanceScope = Readonly<{ pool: Address; shareToken: Address; invalidTokenId: bigint; yesTokenId: bigint; noTokenId: bigint }>
 
-export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint }>
+/**
+ * `migrated` is the largest amount of each outcome the account migrated into any one child universe after a fork.
+ * ShareToken.migrate locks the source balance instead of burning it, so a positive amount marks that balance as locked.
+ * It is undefined while the universe has not forked or when the migration record could not be read.
+ */
+export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint; migrated?: Readonly<{ invalid: bigint; yes: bigint; no: bigint }> | undefined }>
+
+/** Shares of `outcome` the wallet holds whose transfers are locked after a migration; zero when unknown or never migrated. */
+export function lockedMigratedBalance(balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no' | 'migrated'>, outcome: 'INVALID' | 'YES' | 'NO') {
+	let key: 'invalid' | 'yes' | 'no' = 'no'
+	if (outcome === 'INVALID') key = 'invalid'
+	else if (outcome === 'YES') key = 'yes'
+	return balances.migrated === undefined || balances.migrated[key] === 0n ? 0n : balances[key]
+}
+
+/**
+ * True when every held Yes, No, and Invalid balance has been migrated into at least one child universe, so nothing is
+ * waiting for a first migration. Unknown migration records count as pending.
+ */
+export function forkMigrationSettled(balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no' | 'migrated'>) {
+	const migrated = balances.migrated
+	if (migrated === undefined) return false
+	return (['invalid', 'yes', 'no'] as const).every(key => balances[key] === 0n || migrated[key] >= balances[key])
+}
 
 export function shareBalanceScope(market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'>) {
 	const invalidTokenId = market.universeId << 8n

@@ -74,14 +74,16 @@ export function MarketCard({ listKind, lookupRoute, market, nowSeconds, fetchedA
 			title={<a href={getTradingRouteHref(actions.primary.href)}>{market.title}</a>}
 			badge={
 				<>
-					{listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
+					{/* Every listed pool lacks a market, so a pool card only shows its status when that status rules out creating one. */}
+					{listKind === 'markets' || !open ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
 					{loaded ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind={listKind === 'markets' ? 'market' : 'pool'} /> : undefined}
 				</>
 			}
 			actions={
 				<>
+					{/* A pool whose question has ended can no longer get a market, so its creation link is not promoted. */}
 					{outcomeButtons ? undefined : (
-						<a className='button-link primary' href={getTradingRouteHref(actions.primary.href)}>
+						<a className={listKind === 'security-pools' && !open ? 'button-link' : 'button-link primary'} href={getTradingRouteHref(actions.primary.href)}>
 							{actions.primary.label}
 						</a>
 					)}

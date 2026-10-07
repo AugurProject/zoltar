@@ -40,7 +40,10 @@ describe('essential trading copy', () => {
 		const buy = ticketEstimateFor(market, 'entry', '1')
 		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n * 10n ** 18n, no: 0n, invalid: 10n * 10n ** 18n, lp: 0n })
 		const entry = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
-		for (const phrase of ['You receive ≈', 'Average price', 'Minimum received', 'Price impact', 'Trading fee', '1.25%', 'Invalid insurance', 'ETH if the question resolves Yes', 'Profit if the question resolves Yes', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
+		for (const phrase of ['You receive ≈', 'Average price', 'Minimum received', 'Price impact', 'Trading fee', '1.25%', 'Invalid insurance', 'ETH if the question resolves Yes', 'Profit if the question resolves Yes', 'ETH if the question resolves Invalid', '0 ETH if No', 'Slippage 0.5%'])
+			expect(entry.container.textContent).toContain(phrase)
+		// The buy keeps Invalid shares that pay on Invalid, so the headline never says the trade pays nothing otherwise.
+		expect(entry.container.textContent).not.toContain('0 ETH otherwise')
 		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
 		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()

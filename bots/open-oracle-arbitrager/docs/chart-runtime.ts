@@ -34,7 +34,6 @@ function renderDiagram(mount: HTMLElement, spec: DiagramSpec) {
 	svg.setAttribute('role', 'img')
 	svg.setAttribute('viewBox', `0 0 ${spec.width.toString()} ${spec.height.toString()}`)
 	svg.setAttribute('width', '100%')
-	svg.setAttribute('height', 'auto')
 	const description = document.createElementNS(svgNamespace, 'desc')
 	description.textContent = spec.ariaDescription
 	svg.append(description)

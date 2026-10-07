@@ -182,6 +182,23 @@ describe('trade ticket inputs', () => {
 		expect(buyShortcuts(undefined)).toEqual([])
 	})
 
+	test('caps the buy shortcuts where the price impact would be refused, so none fills a blocked trade', () => {
+		const shortcuts = tradeTicketModel({ ...ready, amount: '', walletEthAttoEth: 10_000n * eth }).shortcuts
+		expect(shortcuts.map(shortcut => shortcut.label)).toEqual([ticketCopy.quarter, ticketCopy.half, ticketCopy.max])
+		const maximum = shortcuts[2]?.value
+		if (maximum === undefined) throw new Error('Missing Max shortcut')
+		// The wallet could pay far more, but this pool absorbs much less before the 15% limit.
+		expect(maximum).toBeLessThan(100n * eth)
+		for (const shortcut of shortcuts) expect(ticketModelFor(market, 'entry', formatCurrencyInputBalance(shortcut.value, 18)).impactTier).not.toBe('blocked')
+		expect(ticketModelFor(market, 'entry', formatCurrencyInputBalance(maximum + eth / 10n, 18)).impactTier).toBe('blocked')
+	})
+
+	test('names an empty or zero amount as the reason the action is disabled', () => {
+		expect(tradeTicketModel({ ...ready, amount: '' }).availability).toEqual({ disabled: true, reason: 'Enter an amount.' })
+		expect(tradeTicketModel({ ...ready, amount: '0' }).availability).toEqual({ disabled: true, reason: availabilityCopy.amountPositiveReason })
+		expect(tradeTicketModel({ ...ready, mode: 'exit', amount: '' }).availability.reason).toBe('Enter an amount.')
+	})
+
 	test('clears the amount when its unit changes and never carries an accepted price impact to another trade', () => {
 		const buyYes: TicketInputs = { mode: 'entry', side: 'YES', amount: '0.5', acknowledgedImpactBps: 800n, requoteNotice: undefined }
 		// ETH buys either outcome, so the amount survives a side change on a buy; the acknowledgment named the other trade.

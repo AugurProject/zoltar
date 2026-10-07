@@ -9,6 +9,7 @@ import { TransactionActivityMenu } from '../../app/components/TransactionActivit
 import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { serializeTransactionActivity } from '../../transactions/transactionActivity.js'
 import { hasPendingTransactionActivity, recordTransactionSettled, recordTransactionSubmitted, setTransactionActivityOwner, transactionActivity, useTransactionActivityReceiptWatcher } from '../../transactions/transactionActivityStore.js'
+import { subscribeTransactionTrackingStopped } from '../../transactions/transactionTrackingStop.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
 import { createDeferred } from '../testUtils/deferred.js'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
@@ -76,15 +77,52 @@ test('lists recent transactions with their status and a pending count', async ()
 	await rendered.cleanup()
 })
 
-test('lets the user stop tracking a pending transaction that will never confirm', async () => {
+test('lets the user stop tracking a pending transaction after stating that it can still confirm', async () => {
 	transactionActivity.value = { chainId: 1, entries: [{ chainId: 1, hash: pendingHash, scope: ['market:0x1'], status: 'pending', submittedAt: Date.now(), title: 'Depositing REP' }], ownerKey: 'test', storageKey: undefined }
+	const stopped: Hash[] = []
+	const unsubscribe = subscribeTransactionTrackingStopped(hash => stopped.push(hash))
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	const queries = within(document.body)
-	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity, 1 pending' })))
-	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' })))
-	expect(transactionActivity.value.entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
-	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No longer tracked')
-	expect(queries.getByRole('button', { name: 'Activity' })).not.toBeNull()
+	try {
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity, 1 pending' })))
+		// The first click only asks: the transaction can still confirm, so nothing is released yet.
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' })))
+		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
+		const confirmation = queries.getByRole('group', { name: 'Stop tracking Depositing REP' })
+		expect(confirmation.textContent).toContain('This transaction can still confirm. Stop tracking lets you send the action again.')
+		const confirm = within(confirmation).getByRole('button', { name: 'Stop tracking' })
+		expect(document.activeElement).toBe(confirm)
+		await act(() => fireEvent.click(within(confirmation).getByRole('button', { name: 'Keep tracking' })))
+		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
+		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Stop tracking Depositing REP' }))
+
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking Depositing REP' })))
+		await act(() => fireEvent.click(within(queries.getByRole('group', { name: 'Stop tracking Depositing REP' })).getByRole('button', { name: 'Stop tracking' })))
+		expect(transactionActivity.value.entries[0]).toMatchObject({ status: 'failed', failureKind: 'dropped' })
+		// The same hash is released everywhere else that still follows it: the status tray, its action, and receipt waits.
+		expect(stopped).toEqual([pendingHash])
+		const panel = queries.getByRole('dialog', { name: 'Recent transactions' })
+		expect(panel.textContent).toContain('No longer tracked')
+		expect(panel.textContent).toContain('Deposit REP')
+		expect(document.activeElement).toBe(panel)
+		expect(queries.getByRole('button', { name: 'Activity' })).not.toBeNull()
+	} finally {
+		unsubscribe()
+		await rendered.cleanup()
+	}
+})
+
+test('closes the list when keyboard focus leaves it', async () => {
+	transactionActivity.value = { chainId: 1, entries: [], ownerKey: `injected:1:${account}`, storageKey: undefined }
+	const outside = document.createElement('button')
+	document.body.appendChild(outside)
+	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
+	const queries = within(document.body)
+	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
+	expect(queries.getByRole('dialog', { name: 'Recent transactions' })).not.toBeNull()
+	await act(() => outside.focus())
+	expect(queries.queryByRole('dialog', { name: 'Recent transactions' })).toBeNull()
+	outside.remove()
 	await rendered.cleanup()
 })
 
@@ -124,10 +162,22 @@ test('follows a transaction replaced outside the app after a reload and settles 
 })
 
 test('shows an empty list when this account has no transactions', async () => {
+	transactionActivity.value = { chainId: 1, entries: [], ownerKey: `injected:1:${account}`, storageKey: undefined }
 	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
 	const queries = within(document.body)
 	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
 	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this account yet.')
+	await rendered.cleanup()
+})
+
+test('asks for a wallet instead of describing an account when none is connected', async () => {
+	transactionActivity.value = { chainId: 1, entries: [], ownerKey: 'injected:1:', storageKey: undefined }
+	const rendered = await renderIntoDocument(<TransactionActivityMenu />)
+	const queries = within(document.body)
+	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Activity' })))
+	const panel = queries.getByRole('dialog', { name: 'Recent transactions' })
+	expect(panel.textContent).toContain('Connect a wallet to see its recent transactions.')
+	expect(panel.textContent).not.toContain('from this account')
 	await rendered.cleanup()
 })
 
@@ -169,7 +219,12 @@ test('resumes receipt watching for a pending transaction restored after a reload
 	expect(receiptReads.length).toBeGreaterThan(0)
 	expect(transactionActivity.value.entries[0]?.status).toBe('confirmed')
 	expect(window.localStorage.getItem(storageKey)).toContain('"confirmed"')
-	expect(within(document.body).getByRole('button', { name: 'Activity' })).not.toBeNull()
+	// No status panel presented the restored transaction, so its outcome is announced and marked until the list opens.
+	const trigger = within(document.body).getByRole('button', { name: 'Activity, 1 new result' })
+	expect(document.body.textContent).toContain('Trade · Will this resolve?: Confirmed')
+	expect(trigger.querySelector('.transaction-activity-result.ok')).not.toBeNull()
+	await act(() => fireEvent.click(trigger))
+	expect(within(document.body).getByRole('button', { name: 'Activity' }).querySelector('.transaction-activity-result')).toBeNull()
 	await rendered.cleanup()
 })
 
@@ -234,7 +289,8 @@ test('resumes a pending receipt after returning to its network while ignoring th
 		})
 		await waitFor(() => expect(transactionActivity.value.entries.find(entry => entry.hash === pendingHash)?.status).toBe('confirmed'))
 		expect(hasPendingTransactionActivity(['market:0x1'])).toBeFalse()
-		expect(within(document.body).getByRole('button', { name: 'Activity' })).not.toBeNull()
+		// The resumed watcher settled the restored transaction, so the trigger announces its outcome.
+		expect(within(document.body).getByRole('button', { name: 'Activity, 1 new result' })).not.toBeNull()
 	} finally {
 		oldReceipt.resolve(includedReceipt(pendingHash))
 		currentReceipt.resolve(includedReceipt(pendingHash))

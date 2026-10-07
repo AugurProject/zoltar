@@ -169,6 +169,12 @@ a.secondary-action,
 	opacity: 0.7;
 }
 
+/* Data that missed several refreshes; the label also says stale, so colour is not the only cue. */
+.freshness-indicator[data-state="stale"] .freshness-indicator-dot {
+	background: var(--warning);
+	opacity: 1;
+}
+
 .freshness-indicator[data-state="refreshing"] .freshness-indicator-dot {
 	background: var(--status-pending);
 	animation: freshness-pulse var(--motion-pulse) infinite;

@@ -41,6 +41,22 @@ describe('CurrencyValue', () => {
 		const value = container.querySelector('.currency-value')
 		expect(value?.textContent).toBe('≈ 1\u00a0234.57 ETH')
 		expect(value?.getAttribute('title')).toBe('1\u00a0234.567 ETH')
+		// The title reaches only mouse users, so assistive technology also reads the exact value of a rounded amount.
+		expect(container.querySelector('.currency-value-wrap .visually-hidden')?.textContent).toBe('(exact 1\u00a0234.567 ETH)')
+	})
+
+	test('adds no exact-value text when the visible amount is already exact', async () => {
+		const { container } = await renderCurrencyValue({ value: 2n * 10n ** 18n })
+		expect(container.querySelector('.currency-value')?.textContent).toBe('2.00 ETH')
+		expect(container.querySelector('.visually-hidden')).toBeNull()
+	})
+
+	test('keeps a loading value silent so a section with many values does not mount many live regions', async () => {
+		const { container } = await renderCurrencyValue({ loading: true })
+		const loadingValue = container.querySelector('.currency-value.loading')
+		expect(loadingValue?.textContent).toBe('Loading…')
+		expect(loadingValue?.getAttribute('role')).toBeNull()
+		expect(loadingValue?.getAttribute('aria-live')).toBeNull()
 	})
 
 	test('omits the approximation marker when rounding keeps every digit, including zero', async () => {
@@ -84,8 +100,9 @@ describe('CurrencyValue', () => {
 			fireEvent.click(copyButton)
 		})
 		await waitFor(() => {
-			expect(copyButton.textContent).toBe('Copied')
+			expect(document.querySelector('.copy-feedback[aria-live="polite"]')?.textContent).toBe('Copied')
 		})
+		expect(copyButton.textContent).toBe('≈ 1T ETH')
 	})
 
 	test('uses the accessible unit when a surrounding label shows the unit instead of a suffix', async () => {
@@ -106,13 +123,14 @@ describe('CurrencyValue', () => {
 			fireEvent.click(copyButton)
 		})
 		await waitFor(() => {
-			expect(copyButton.textContent).toBe('Copied')
+			expect(document.querySelector('.copy-feedback[aria-live="polite"]')?.textContent).toBe('Copied')
 		})
 
 		await act(() => {
 			render(<CurrencyValue copyable value={2n * 10n ** 18n} />, renderedComponent.container)
 		})
 		expect(documentQueries.getByRole('button', { name: 'Copy exact value 2' }).textContent).toBe('2.00')
+		expect(document.querySelector('.copy-feedback')?.textContent).toBe('')
 	})
 
 	test('keeps an exact-precision value fully visible without an approximation marker', async () => {

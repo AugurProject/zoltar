@@ -5,7 +5,6 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { getOracleOperationTimingReason, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -17,13 +16,14 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { formatCurrencyBalanceWithUnit, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount } from '../lib/liquidation.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getDeterministicLiquidationFailureReason, getLiquidationEffectPreview, getLiquidationFailureReason, getMaxLiquidationAmount } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import type { UiRepPriceSource } from '../lib/repPriceSource.js'
-import { getStagedOperationTimeoutFieldError, getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
+import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
+import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
 import {
 	ZERO_LIQUIDATION_APPROVAL_ID,
 	getApprovalClampedLiquidationAmount,
@@ -44,7 +44,7 @@ import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
-import { LiquidationApprovalSummary, LiquidationContextSummary, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
+import { LiquidationApprovalSummary, LiquidationContextSummary, LiquidationEffectPreviewSection, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -154,7 +154,6 @@ export function LiquidationModal({
 		const parsed = parseOracleInitialPrice(value)
 		if (liquidationManagerAddress !== undefined && parsed.error === undefined) onLoadLiquidationFundingPreview(liquidationManagerAddress, parsed.proposedRepPerEthPrice)
 	}
-	const timeoutErrorId = useId()
 	const showLiquidationModal = liquidationModalOpen
 
 	useEffect(() => {
@@ -192,8 +191,6 @@ export function LiquidationModal({
 	const trimmedLiquidationReceiverVault = liquidationReceiverVault.trim()
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
-	const liquidationTimeoutError = getStagedOperationTimeoutFieldError(liquidationTimeoutDisplayValue)
-	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined || liquidationTimeoutError !== undefined ? securityPoolCopy.executionWindowHelpText : securityPoolCopy.formatExecutionWindowResolvedDetail(formatDuration(liquidationTimeoutSeconds))
 	const sameVaultWarning = trimmedLiquidationReceiverVault === '' || trimmedLiquidationTargetVault === '' || !sameAddress(trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
 	const approvalRouteMismatch = isLiquidationApprovalRouteMismatch({ accountAddress, liquidationApprovalDetails, liquidationSecurityPoolAddress, trimmedLiquidationReceiverVault, trimmedLiquidationTargetVault })
 	const approvalLatestExecutionTimestamp = currentTimestamp === undefined || liquidationTimeoutSeconds === undefined || currentPoolOracleManagerDetails?.settlementTime === undefined ? undefined : currentTimestamp + currentPoolOracleManagerDetails.settlementTime + liquidationTimeoutSeconds
@@ -265,6 +262,21 @@ export function LiquidationModal({
 			targetVaultSummary,
 		})
 	})()
+	// The preview reuses the guards' simulation once the amount passes them; a queued liquidation can only estimate it at the UI price.
+	const liquidationEffectPreview =
+		deterministicLiquidationReason !== undefined || directLiquidationReason !== undefined || sameVaultWarning !== undefined || receiverVaultAddressError !== undefined || (delegatedReceiver && !liquidationReceiverVaultSummaryResolved)
+			? undefined
+			: getLiquidationEffectPreview({
+					callerVaultSummary: receiverVaultSummary,
+					minLiquidationPriceDistanceBps,
+					minimumVaultRepDepositAttoRep: selectedPool?.minimumVaultRepDepositAttoRep,
+					repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : uiCalculationPrice,
+					requestedDebtAttoEth: simulatedLiquidationAmount,
+					settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
+					statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
+					targetVaultSummary,
+					totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
+				})
 	const queueLiquidationEthGuardMessage =
 		liquidationExecutionMode !== 'queue'
 			? undefined
@@ -411,33 +423,15 @@ export function LiquidationModal({
 						unit={commonCopy.eth}
 						value={liquidationDebtEthAmount}
 					/>
-					{liquidationExecutionMode === 'execute' ? null : (
-						<label className='field'>
-							<span>{securityPoolCopy.executionWindow}</span>
-							<div className='field-inline'>
-								<FormInput
-									aria-describedby={liquidationTimeoutError === undefined ? undefined : timeoutErrorId}
-									className='field-inline-input'
-									inputMode='numeric'
-									invalid={liquidationTimeoutError !== undefined}
-									max={MAX_STAGED_OPERATION_TIMEOUT_MINUTES.toString()}
-									min={MIN_STAGED_OPERATION_TIMEOUT_MINUTES.toString()}
-									pattern='[0-9]*'
-									step='1'
-									value={liquidationTimeoutDisplayValue}
-									onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)}
-								/>
-							</div>
-							{liquidationTimeoutError === undefined ? undefined : <UserMessage placement='field' tone='error' id={timeoutErrorId} detail={liquidationTimeoutError} />}
-						</label>
-					)}
+					{/* The shared field links its range help and any error to the input, as in the vault operation forms. */}
+					{liquidationExecutionMode === 'execute' ? null : <VaultOperationTimeoutField value={liquidationTimeoutDisplayValue} disabled={fieldsLocked} onChange={onLiquidationTimeoutMinutesChange} />}
 				</div>
 				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
 				{approvalClampedNotice === undefined ? null : <UserMessage tone='warning' announcement='polite' detail={approvalClampedNotice} />}
-				{liquidationExecutionMode === 'execute' ? null : <UserMessage className='detail' detail={liquidationTimeoutHelpText} />}
 				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={fieldsLocked} fieldId={initialPriceFieldId} /> : undefined}
+				{liquidationEffectPreview === undefined ? null : <LiquidationEffectPreviewSection estimated={!hasUsableOraclePrice} preview={liquidationEffectPreview} />}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={() => (liquidationManagerAddress === undefined ? undefined : onLoadLiquidationFundingPreview(liquidationManagerAddress, proposedRepPerEthPrice))} disabled={loadingLiquidationFundingPreview}>

@@ -30,6 +30,18 @@ const readySettlement: SettlementAvailabilityInputs = {
 }
 
 describe('liquidity action availability', () => {
+	test('names a missing or zero amount instead of disabling the action silently', () => {
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, requestedAmount: undefined })).toEqual({ disabled: true, reason: 'Enter an amount.' })
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, requestedAmount: 0n })).toEqual({ disabled: true, reason: copy.amountPositiveReason })
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: undefined }).reason).toBe('Enter an amount.')
+	})
+
+	test('says a closed market can no longer be created, while adding to one explains that removal still works', () => {
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'initialize', marketClosed: true, newRiskBlocker: 'Question ended' }).reason).toBe('Question ended. This market can no longer be created.')
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'add', marketClosed: true, newRiskBlocker: 'Question ended' }).reason).toBe(copy.liquidityClosedReason)
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', marketClosed: true, newRiskBlocker: 'Question ended' }).disabled).toBeFalse()
+	})
+
 	test('compares additions against ETH and removals against LP tokens', () => {
 		expect(resolveLiquidityAvailability(readyLiquidity).disabled).toBeFalse()
 		expect(resolveLiquidityAvailability({ ...readyLiquidity, requestedAmount: 6n * eth }).reason).toBe(copy.insufficientEthReason)

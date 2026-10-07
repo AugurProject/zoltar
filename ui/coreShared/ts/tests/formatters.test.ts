@@ -9,6 +9,7 @@ import {
 	formatCurrencyBalanceWithUnit,
 	formatCurrencyInputBalance,
 	formatDuration,
+	formatLocalTimestamp,
 	formatMultiplier,
 	formatMultiplierText,
 	formatRelativeTimestamp,
@@ -139,7 +140,10 @@ void describe('formatting helpers', () => {
 		void test('keeps two significant digits for tiny values and marks only lossy ones', () => {
 			expect(formatAmountDisplay(137_760_122n)).toBe('≈ 0.00000000014')
 			expect(formatAmountDisplay(410_000_000_000_000n)).toBe('0.00041')
-			expect(formatAmountDisplay(1n)).toBe('0.0000000000000000010')
+			// Two significant digits never need more decimals than the token has, so one attounit reads exactly.
+			expect(formatAmountDisplay(1n)).toBe('0.000000000000000001')
+			expect(formatAmountDisplay(12n)).toBe('0.000000000000000012')
+			expect(formatAmountDisplay(5n, { units: 6 })).toBe('0.000005')
 		})
 
 		void test('marks negative values symmetrically', () => {
@@ -184,6 +188,14 @@ void describe('formatting helpers', () => {
 			expect(formatTimestamp(1_700_000_000n)).toBe('2023-11-14 22:13:20 UTC')
 		})
 
+		void test('formatLocalTimestamp renders the viewer zone in the UTC layout and nothing when it matches UTC', () => {
+			expect(formatLocalTimestamp(1_700_000_000n, 'America/New_York')).toBe('2023-11-14 17:13:20 EST')
+			expect(formatLocalTimestamp(1_700_000_000n, 'Asia/Kolkata')).toBe('2023-11-15 03:43:20 GMT+5:30')
+			expect(formatLocalTimestamp(1_700_000_000n, 'UTC')).toBeUndefined()
+			expect(formatLocalTimestamp(1_700_000_000n, 'Europe/London')).toBeUndefined()
+			expect(formatLocalTimestamp(10n ** 30n, 'America/New_York')).toBeUndefined()
+		})
+
 		void test('formatTimestamp preserves the immediate sentinel', () => {
 			expect(formatTimestamp(0n)).toBe('Immediate')
 		})
@@ -192,20 +204,32 @@ void describe('formatting helpers', () => {
 			expect(formatRelativeTimestamp(1_000n, 1_000n)).toBe('now')
 		})
 
-		void test('formatRelativeTimestamp renders sub-minute future values as less than a minute', () => {
-			expect(formatRelativeTimestamp(1_001n, 1_000n)).toBe('in less than a minute')
+		void test('formatRelativeTimestamp counts down the final seconds', () => {
+			expect(formatRelativeTimestamp(1_001n, 1_000n)).toBe('in 1s')
+			expect(formatRelativeTimestamp(997n, 1_000n)).toBe('3s ago')
 		})
 
-		void test('formatRelativeTimestamp renders sub-minute past values as less than a minute ago', () => {
-			expect(formatRelativeTimestamp(997n, 1_000n)).toBe('less than a minute ago')
+		void test('formatRelativeTimestamp keeps the two largest units of longer durations', () => {
+			expect(formatRelativeTimestamp(90_061n, 0n)).toBe('in 1d 1h')
 		})
 
-		void test('formatRelativeTimestamp omits seconds for longer durations', () => {
-			expect(formatRelativeTimestamp(90_061n, 0n)).toBe('in 1d 1h 1m')
-		})
-
-		void test('formatDuration renders sub-minute values as less than a minute', () => {
-			expect(formatDuration(59n)).toBe('less than a minute')
+		void test('formatDuration shows the two largest non-zero units at a precision suited to the length', () => {
+			const minute = 60n
+			const hour = 60n * minute
+			const day = 24n * hour
+			expect(formatDuration(0n)).toBe('0s')
+			expect(formatDuration(59n)).toBe('59s')
+			expect(formatDuration(minute)).toBe('1m')
+			expect(formatDuration(minute + 1n)).toBe('1m 1s')
+			expect(formatDuration(2n * minute + 59n)).toBe('2m')
+			expect(formatDuration(hour - 1n)).toBe('59m')
+			expect(formatDuration(hour)).toBe('1h')
+			expect(formatDuration(2n * hour + 5n * minute + 30n)).toBe('2h 5m')
+			expect(formatDuration(day)).toBe('1d')
+			expect(formatDuration(6n * day + 23n * hour + 59n * minute)).toBe('6d 23h')
+			expect(formatDuration(60n * day + 5n * hour)).toBe('60d')
+			expect(formatDuration(881n * day + 23n * hour + 59n * minute)).toBe('2y 151d')
+			expect(formatDuration(3650n * day)).toBe('10y')
 		})
 	})
 

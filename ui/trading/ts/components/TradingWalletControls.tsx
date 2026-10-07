@@ -7,6 +7,8 @@ import { AccountMenu, AccountMenuNetworkFact } from '@zoltar/ui-core-shared/app/
 import type { ComponentChildren } from 'preact'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as appCopy from '../copy/app.js'
+import * as availabilityCopy from '../copy/availability.js'
+import * as deploymentCopy from '../copy/deployment.js'
 
 /** The subset of the deployment wallet session the toolbar button presents. */
 type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
@@ -45,6 +47,13 @@ export function hasTradingWalletControls({ deploymentSetupActive, liveDeployment
 	return deploymentSetupActive || (routeOwnsLiveWallet && (liveDeploymentStatus === 'loading' || liveDeploymentStatus === 'verified'))
 }
 
+/** Why the deploy route's wallet button is unavailable: an action in flight, or no network to connect to yet. */
+function deploymentWalletDisabledReason({ ready, workflowLocked }: { ready: boolean; workflowLocked: boolean }) {
+	if (workflowLocked) return availabilityCopy.transactionInProgressReason
+	if (!ready) return deploymentCopy.walletNetworkUnavailableReason
+	return undefined
+}
+
 /** Toolbar wallet slot: the deployment wallet button, a reserved slot while the deployment is checked, or the live account chip and its actions. */
 export function TradingWalletControls({
 	account,
@@ -77,6 +86,7 @@ export function TradingWalletControls({
 					pendingLabel={appCopy.connectingWallet}
 					pending={deploymentWalletState.connecting}
 					disabled={workflowLocked || !deploymentWalletState.ready}
+					disabledReason={deploymentWalletDisabledReason({ ready: deploymentWalletState.ready, workflowLocked })}
 					ariaLabel={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWalletLabel(deploymentWalletState.account)}
 					title={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWallet}
 					onClick={onDeploymentWalletRequest}

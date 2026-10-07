@@ -162,8 +162,11 @@ function markStatusesUnavailable(body) {
     statusCell.textContent = "Unavailable · invalid mask";
     delete statusCell.dataset["maskState"];
   }
-  for (const button of bitGrid.querySelectorAll("button"))
+  for (const button of bitGrid.querySelectorAll("button")) {
     button.removeAttribute("data-mask-state");
+    button.setAttribute("aria-pressed", "false");
+    button.disabled = true;
+  }
 }
 function updateDecoder() {
   const network = networks[selectedNetworkId()];
@@ -193,6 +196,7 @@ function updateDecoder() {
     }
     const button = bitGrid.querySelector(`[data-deployment-bit-toggle="${bit}"]`);
     if (button !== null) {
+      button.disabled = false;
       button.setAttribute("aria-pressed", String(isSet));
       button.dataset["maskState"] = isSet ? "set" : "clear";
     }

@@ -2,7 +2,7 @@
 
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup, TransactionScopeProvider } from '../components/TransactionActionButton.js'
@@ -75,8 +75,10 @@ describe('TransactionActionButton', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Submit' })).not.toBeNull()
-		const notice = documentQueries.getByRole('note', { name: 'Submit details' })
+		const notice = documentQueries.getByRole('note')
 		expect(notice.textContent).toContain('Connect a wallet before submitting.')
+		// A labelled note would replace its text in the button's accessible description.
+		expect(notice.hasAttribute('aria-label')).toBe(false)
 		const button = documentQueries.getByRole('button', { name: 'Submit' })
 		const descriptionId = button.getAttribute('aria-describedby')
 		expect(descriptionId).not.toBeNull()
@@ -95,7 +97,8 @@ describe('TransactionActionButton', () => {
 
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Deploy' })
-		const notice = documentQueries.getByRole('note', { name: 'Deploy details' })
+		const notice = documentQueries.getByRole('note')
+		expect(notice.hasAttribute('aria-label')).toBe(false)
 		expect(button.getAttribute('aria-describedby')?.split(' ')).toEqual(['external-reason', notice.id])
 	})
 
@@ -138,7 +141,9 @@ describe('TransactionActionButton', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const button = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes' })
-		const notice = within(document.body).getByRole('note', { name: 'Deploy Scalar Outcomes details' })
+		const notice = within(document.body).getByRole('note')
+		expect(notice.hasAttribute('aria-label')).toBe(false)
+		expect(button.getAttribute('aria-describedby')).toBe(notice.id)
 		expect(button.textContent).toBe('Deploy')
 		expect(notice.textContent).toContain('Confirm the scalar deployment inputs before continuing.')
 	})
@@ -183,7 +188,9 @@ describe('TransactionActionButton', () => {
 		const queries = within(document.body)
 		const locked = queries.getByRole('button', { name: 'Deposit REP' })
 		expect(locked.hasAttribute('disabled')).toBe(true)
-		expect(locked.getAttribute('aria-describedby')).toBeNull()
+		// A locked action names the pending transaction as its reason instead of resting disabled without one.
+		const lockReasonId = locked.getAttribute('aria-describedby')
+		expect(lockReasonId === null ? undefined : document.getElementById(lockReasonId)?.textContent).toBe('Waiting for a pending transaction on this item.')
 		expect(queries.queryByText('Transaction pending.')).toBeNull()
 		expect(queries.getByRole('button', { name: 'Explicit scope' }).hasAttribute('disabled')).toBe(true)
 		// The initiating action keeps its own pending state instead of the lock reason.
@@ -193,6 +200,37 @@ describe('TransactionActionButton', () => {
 			fireEvent.click(queries.getByRole('button', { name: 'Create pool' }))
 		})
 		expect(unrelatedClicks).toBe(2)
+	})
+
+	test('keeps keyboard focus on the initiating button while its transaction is pending and after it settles', async () => {
+		let callCount = 0
+		function Harness({ pending, completed }: { pending: boolean; completed: boolean }) {
+			return (
+				<form onSubmit={event => event.preventDefault()}>
+					<TransactionActionButton availability={{ disabled: completed, reason: completed ? 'Already submitted.' : undefined }} idleLabel='Submit' onClick={() => callCount++} pending={pending} pendingLabel='Submitting…' />
+				</form>
+			)
+		}
+		const renderedComponent = await renderIntoDocument(<Harness pending={false} completed={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const button = within(document.body).getByRole('button', { name: 'Submit' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected a button')
+		await act(() => button.focus())
+		await act(() => render(<Harness pending completed={false} />, renderedComponent.container))
+		expect(button.disabled).toBe(false)
+		expect(button.getAttribute('aria-disabled')).toBe('true')
+		expect(document.activeElement).toBe(button)
+		await act(() => fireEvent.click(button))
+		expect(callCount).toBe(0)
+		await act(() => render(<Harness pending={false} completed />, renderedComponent.container))
+		expect(document.activeElement).toBe(button)
+		expect(button.getAttribute('aria-disabled')).toBe('true')
+		await act(() => fireEvent.click(button))
+		expect(callCount).toBe(0)
+		// Once focus moves on, the unavailable button leaves the tab order again.
+		await act(() => button.blur())
+		expect(button.disabled).toBe(true)
+		expect(button.hasAttribute('aria-disabled')).toBe(false)
 	})
 
 	test('keeps a local pending announcement when the global tray only shows a terminal transaction', async () => {

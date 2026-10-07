@@ -127,6 +127,38 @@ function matchesEntry(entry: HTMLDetailsElement, tokens: readonly string[]): boo
 	return matchesText && matchesType && matchesStatus && matchesSubsystem
 }
 
+// The page outline still lists sections a filter hides; mark those links so they do not read as working jumps.
+function syncOutlineLinks(): void {
+	for (const link of document.querySelectorAll<HTMLAnchorElement>('.docs-outline-list a[href^="#"]')) {
+		let targetId = link.hash.slice(1)
+		try {
+			targetId = decodeURIComponent(targetId)
+		} catch (error) {
+			if (!(error instanceof URIError)) throw error
+		}
+		const target = document.getElementById(targetId)
+		const hiddenByFilter = target !== null && target.closest('[hidden]') !== null
+		let note = link.querySelector('.docs-outline-filter-note')
+		if (hiddenByFilter) {
+			link.setAttribute('aria-disabled', 'true')
+			if (note === null) {
+				note = document.createElement('span')
+				note.className = 'docs-outline-filter-note'
+				note.textContent = ' (hidden by filter)'
+				link.append(note)
+			}
+		} else {
+			link.removeAttribute('aria-disabled')
+			note?.remove()
+		}
+	}
+}
+
+document.addEventListener('click', event => {
+	if (!(event.target instanceof Element)) return
+	if (event.target.closest('.docs-outline-list a[aria-disabled="true"]') !== null) event.preventDefault()
+})
+
 function applyFilters(): void {
 	const tokens = keywordTokens()
 	const hasActiveFilter = tokens.length > 0 || typeSelect.value.length > 0 || statusSelect.value.length > 0 || subsystemSelect.value.length > 0
@@ -142,6 +174,7 @@ function applyFilters(): void {
 	for (const section of catalogContextSections) section.hidden = hasActiveFilter
 	count.textContent = `${visibleCount} of ${entries.length} invariants`
 	empty.hidden = visibleCount > 0
+	syncOutlineLinks()
 }
 
 keywordInput.addEventListener('input', applyFilters)

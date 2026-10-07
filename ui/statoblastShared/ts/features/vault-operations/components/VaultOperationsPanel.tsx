@@ -36,6 +36,8 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 	const operationalFieldsDisabled = fieldsDisabled || model.resolved === true
 	const priceActions = model.input === undefined ? 0 : countVaultPriceActions(model.input)
 	const fresh = model.quote?.validPrice ?? model.manager?.isPriceValid ?? false
+	// Wallet REP left after the oracle REP funding; unknown only until the wallet balance loads.
+	const depositMaximum = model.balance === undefined ? undefined : model.balance - (model.quote?.funding?.requiredRepAttoRep ?? 0n)
 	let actionHint: string | undefined = copy.limits
 	if (model.resolved) actionHint = (model.owned?.underwritingLimitAttoEth ?? 0n) > 0n ? copy.resolvedHint : undefined
 	let disabledReason: string | undefined
@@ -110,7 +112,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 								disabled={operationalFieldsDisabled}
 								unit={commonCopy.rep}
 								hint={model.owned?.minimumVaultRepDepositAttoRep === undefined ? undefined : copy.formatMinimumBacking(formatCurrencyBalance(model.owned.minimumVaultRepDepositAttoRep))}
-								fillMax={{ amount: model.balance === undefined ? undefined : model.balance - (model.quote?.funding?.requiredRepAttoRep ?? 0n), unavailableReason: copy.loading }}
+								fillMax={{ amount: depositMaximum, unavailableReason: depositMaximum === undefined ? copy.loading : copy.noDepositBalance }}
 								onChange={deposit => model.setDraft({ deposit })}
 							/>
 							<label className='field'>
@@ -144,7 +146,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 													unit={commonCopy.eth}
 													disabled={operationalFieldsDisabled}
 													value={selected.amount}
-													fillMax={{ amount: availability.maximum, unavailableReason: availability.reason }}
+													fillMax={{ amount: availability.maximum, unavailableReason: availability.reason, showUnavailableReason: false }}
 													onChange={amount => model.setDraft({ liquidations: model.draft.liquidations.map(item => (item === selected ? { ...item, amount } : item)) })}
 												/>
 											)}
@@ -257,7 +259,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 						<div>
 							<dt>{copy.previewDeposit}</dt>
 							<dd>
-								<CurrencyValue value={model.input?.depositAttoRep ?? 0n} notation='compact' suffix={commonCopy.rep} />
+								<CurrencyValue value={model.input?.depositAttoRep ?? 0n} suffix={commonCopy.rep} />
 							</dd>
 						</div>
 						<div>
@@ -267,16 +269,16 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 						<div>
 							<dt>{copy.withdrawal}</dt>
 							<dd>
-								<CurrencyValue value={model.input?.withdrawAttoRep ?? 0n} notation='compact' suffix={commonCopy.rep} />
+								<CurrencyValue value={model.input?.withdrawAttoRep ?? 0n} suffix={commonCopy.rep} />
 							</dd>
 						</div>
 						<div>
 							<dt>{copy.finalCommitment}</dt>
-							<dd>{model.preview === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.preview.commitment} notation='compact' suffix={commonCopy.eth} />}</dd>
+							<dd>{model.preview === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.preview.commitment} suffix={commonCopy.eth} />}</dd>
 						</div>
 						<div>
 							<dt>{copy.resultingBacking}</dt>
-							<dd>{model.preview === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.preview.backing} notation='compact' suffix={commonCopy.rep} />}</dd>
+							<dd>{model.preview === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.preview.backing} suffix={commonCopy.rep} />}</dd>
 						</div>
 						<div>
 							<dt>{copy.oracleFunding}</dt>

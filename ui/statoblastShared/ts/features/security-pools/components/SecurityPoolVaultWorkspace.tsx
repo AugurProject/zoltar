@@ -1,4 +1,5 @@
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type { ComponentChildren, ComponentProps } from 'preact'
@@ -86,6 +87,8 @@ export function SecurityPoolVaultWorkspace({
 	const getLiquidationLauncherBlocker = ({ notLiquidatableReason, vaultExistsOnchain, vaultLoaded }: { notLiquidatableReason: string | undefined; vaultExistsOnchain: boolean; vaultLoaded: boolean }) =>
 		getVaultLiquidationLauncherBlocker({ hasWallet: walletAddress !== undefined, isOnActiveAppChain, liquidationEnabled, notLiquidatableReason, vaultExistsOnchain, vaultLoaded, wrongNetworkReason: getWrongNetworkReason() })
 
+	// A disabled view states its reason beside the switcher, readable without hovering; the option references it.
+	const blockedVaultView = selectedVaultViewOptions.find(option => option.disabled === true && option.describedById !== undefined)
 	const showVaultDetails = vaultView === 'selected-vault' || (vaultView === 'vault-by-address' && selectedVaultOwner !== '' && sameCaseInsensitiveText(lookupOwner.trim(), selectedVaultOwner))
 	return (
 		<div className='workflow-stack vault-workspace'>
@@ -123,6 +126,7 @@ export function SecurityPoolVaultWorkspace({
 					}}
 					options={selectedVaultViewOptions}
 				/>
+				{blockedVaultView?.reason === undefined ? undefined : <InlineHint id={blockedVaultView.describedById} message={blockedVaultView.reason} />}
 			</div>
 			{vaultView === 'vault-by-address' ? (
 				<div className='vault-address-lookup'>

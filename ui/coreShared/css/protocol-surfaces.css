@@ -350,6 +350,7 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 
 .transaction-review-row {
 	display: grid;
+	align-content: start;
 	gap: 0.25rem;
 	min-width: 0;
 	padding: 0.8rem;
@@ -540,9 +541,16 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 	gap: var(--space-2);
 }
 
+/* Facts share the row in columns at least as wide as an abbreviated address, so an address never clips and no fact strands alone. */
 .sticky-object-context.context-strip .sticky-object-context-items {
-	grid-template-columns: minmax(7rem, 0.45fr) minmax(12rem, 1fr);
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
 	gap: var(--space-2);
+}
+
+/* The pool link is the strip's only control; it keeps the minimum target height. */
+.sticky-object-context.context-strip .security-pool-link {
+	min-height: 1.5rem;
+	align-items: center;
 }
 
 .sticky-object-context.context-strip .sticky-object-context-item {
@@ -652,7 +660,19 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 }
 
 main:has(.global-transaction-dialog-nonblocking) #app-content {
-	padding-bottom: min(13rem, 30dvh);
+	padding-bottom: var(--transaction-status-inset, min(13rem, 30dvh));
+}
+
+/* Focus moves and scroll-into-view stop above the status panel, so the control in use is never left underneath it. */
+html:has(.global-transaction-dialog-nonblocking) {
+	scroll-padding-bottom: var(--transaction-status-inset, 0px);
+}
+
+/* Below the medium breakpoint the primary navigation is a fixed bottom bar; the status panel docks above it instead of covering it. */
+@media (max-width: 64rem) {
+	body:has(.header-toolbar-navigation) .global-transaction-dialog-backdrop {
+		padding-bottom: calc(var(--bottom-nav-height) + var(--space-2));
+	}
 }
 
 .global-transaction-hash {
@@ -810,6 +830,15 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		max-height: 55dvh;
 		grid-template-columns: minmax(0, 1fr);
 		padding: 0.75rem;
+	}
+
+	/* A pending, awaiting, or confirmed status stays compact: its close control sits beside the title instead of on a row of its own. */
+	.global-transaction-dialog-compact:not(.global-transaction-dialog-error) {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.global-transaction-dialog-compact:not(.global-transaction-dialog-error) .global-transaction-actions {
+		padding-top: 0;
 	}
 
 	.global-transaction-dialog .global-transaction-notice-rows {
@@ -1346,10 +1375,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.sticky-object-context.context-strip .sticky-object-context-items {
-		grid-template-columns: minmax(6rem, 0.42fr) minmax(0, 1fr);
-	}
-
 	.sticky-object-context.context-strip .sticky-object-context-item {
 		padding-top: var(--space-1);
 	}
@@ -1720,7 +1745,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .enum-dropdown-trigger:disabled {
-	opacity: 0.75;
 	cursor: not-allowed;
 }
 
@@ -1753,9 +1777,16 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	border-radius: var(--radius-control);
 	background: var(--surface-dropdown);
 	box-shadow: var(--shadow-overlay);
+	max-height: min(20rem, 60vh);
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .enum-dropdown-option {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
 	border: 0;
 	padding: 0.7rem 0.85rem;
 	background: transparent;
@@ -1767,6 +1798,18 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .enum-dropdown-option:hover,
 .enum-dropdown-option.selected {
 	background: var(--accent-soft);
+}
+
+/* A check mark, not only the tint shared with hover, marks the selected option. */
+.enum-dropdown-option.selected::after {
+	content: "";
+	flex: 0 0 auto;
+	width: 0.35rem;
+	height: 0.7rem;
+	margin-inline-end: var(--space-1);
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	transform: translateY(-0.1rem) rotate(45deg);
 }
 
 .field input,
@@ -2441,4 +2484,8 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.universe-switcher-badge {
+	flex: none;
 }

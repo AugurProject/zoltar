@@ -1,4 +1,4 @@
-import { formatSecurityPoolPageSummary } from '../lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, getPoolStateLabel } from '../lib/securityPoolLabels.js'
 import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
@@ -13,16 +13,11 @@ import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { derivePoolBrowseRows, filterPoolBrowseRows, securityPoolDownloadStore, sortPoolBrowseRows, type PoolSortKey, type PoolStateFilter } from '../lib/poolBrowse.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 
-const STATE_FILTER_OPTIONS: readonly PoolStateFilter[] = ['all', 'operational', 'ended', 'poolForked', 'forkMigration', 'forkTruthAuction']
+const STATE_FILTER_OPTIONS: readonly PoolStateFilter[] = ['all', 'operational', 'ended', 'forkMigration', 'forkTruthAuction']
 const SORT_OPTIONS: readonly PoolSortKey[] = ['recent', 'remainingCapacity', 'endTime', 'state']
 
 function getStateFilterLabel(filter: PoolStateFilter) {
-	if (filter === 'all') return securityPoolCopy.allStates
-	if (filter === 'operational') return commonCopy.operational
-	if (filter === 'ended') return securityPoolCopy.ended
-	if (filter === 'poolForked') return securityPoolCopy.poolForked
-	if (filter === 'forkMigration') return securityPoolCopy.forkMigration
-	return commonCopy.truthAuction
+	return filter === 'all' ? securityPoolCopy.allStates : getPoolStateLabel(filter)
 }
 
 function getSortLabel(sortKey: PoolSortKey) {

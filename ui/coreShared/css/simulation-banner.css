@@ -456,3 +456,25 @@
 	color: var(--simulation-text);
 	border-color: var(--simulation-border-hover);
 }
+
+/*
+ * The banner keeps its amber surface in both themes, so shared content inside the strip and its details (headings,
+ * addresses, relative times, and status badges) takes the banner's text colors instead of page colors tuned for the
+ * page surface. Dialogs opened from the banner render outside the details and keep the page palette.
+ */
+.simulation-banner-details {
+	color: var(--simulation-text);
+}
+
+.simulation-banner-details .timestamp-value-relative {
+	color: var(--simulation-text-secondary);
+}
+
+.simulation-banner .simulation-banner-details .badge {
+	border-color: var(--simulation-border-hover);
+	color: var(--simulation-text);
+}
+
+.simulation-banner .simulation-banner-details .badge:is(.blocked, .danger, .error) {
+	background: color-mix(in srgb, var(--danger) 40%, var(--simulation-control-bg-opaque));
+}

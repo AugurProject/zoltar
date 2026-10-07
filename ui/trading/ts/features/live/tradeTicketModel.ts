@@ -4,7 +4,6 @@ import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/de
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
 import type { TradeSettings } from '../../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
@@ -147,14 +146,38 @@ function sellShortcuts(market: LiveMarket, side: Side, balances: LiveBalances | 
 	].filter(shortcut => shortcut.value > 0n)
 }
 
-/** The 25%, 50%, and Max shortcuts for a buy: shares of the wallet's ETH less the gas reserve, trimmed to eight decimals like the sell shortcuts. */
-function buyShortcuts(walletEthAttoEth: bigint | undefined) {
+/**
+ * The largest ETH amount up to `ceiling` whose buy stays at or below the refused price-impact tier. Impact only grows with
+ * the amount, so a binary search finds it; amounts too small to quote count as within the limit.
+ */
+function largestTradableBuy(market: LiveMarket, side: Side, ceiling: bigint, slippageBps: bigint) {
+	const withinLimit = (payAttoEth: bigint) => {
+		const { estimate } = estimateBuy(market, side, payAttoEth, slippageBps)
+		return estimate === undefined || estimate.impactBps <= PRICE_IMPACT_BLOCKED_BPS
+	}
+	if (withinLimit(ceiling)) return ceiling
+	let low = 0n
+	let high = ceiling
+	while (high - low > 1n) {
+		const middle = (low + high) / 2n
+		if (withinLimit(middle)) low = middle
+		else high = middle
+	}
+	return low
+}
+
+/**
+ * The 25%, 50%, and Max shortcuts for a buy, trimmed to eight decimals like the sell shortcuts. They divide what can be
+ * bought now: the wallet's ETH less the gas reserve, capped where the price impact would pass the refused tier, so no
+ * shortcut fills an amount the ticket would then refuse.
+ */
+function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
 	if (walletEthAttoEth === undefined) return []
-	const spendable = getSpendableEthBalance(walletEthAttoEth)
+	const buyable = largestTradableBuy(market, side, getSpendableEthBalance(walletEthAttoEth), slippageBps)
 	return [
-		{ label: ticketCopy.quarter, value: roundDownShortcut(spendable / 4n) },
-		{ label: ticketCopy.half, value: roundDownShortcut(spendable / 2n) },
-		{ label: ticketCopy.max, value: roundDownShortcut(spendable) },
+		{ label: ticketCopy.quarter, value: roundDownShortcut(buyable / 4n) },
+		{ label: ticketCopy.half, value: roundDownShortcut(buyable / 2n) },
+		{ label: ticketCopy.max, value: roundDownShortcut(buyable) },
 	].filter(shortcut => shortcut.value > 0n)
 }
 
@@ -267,7 +290,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		inputs.marketClosed ? ticketCopy.tradingEndedReason : undefined,
 		submissionWindowBlocker(market, mode, inputs.nowSeconds),
 		balanceReason,
-		parsed.error,
+		parsed.error ?? availabilityCopy.amountReason(parsed.value),
 		inputs.amountSettling ? ticketCopy.updatingEstimate : undefined,
 		problem,
 		insufficient,
@@ -277,7 +300,6 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,
 	)
-	const availability: ActionAvailability = { ...actionAvailability, disabled: actionAvailability.disabled || parsed.value === undefined || parsed.value <= 0n }
 	let primaryStep: 'connect' | 'switch-network' | 'submit' = 'submit'
 	if (inputs.networkMismatchReason !== undefined) primaryStep = 'switch-network'
 	else if (!inputs.walletConnected) primaryStep = 'connect'
@@ -294,10 +316,10 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		impactAcknowledged,
 		shortfall,
 		sellable: mode === 'exit' ? sellableShares(market, side, balances) : undefined,
-		shortcuts: mode === 'exit' ? sellShortcuts(market, side, balances) : buyShortcuts(inputs.walletEthAttoEth),
+		shortcuts: mode === 'exit' ? sellShortcuts(market, side, balances) : buyShortcuts(market, side, inputs.walletEthAttoEth, settings.slippageBps),
 		// Connecting comes first: without a wallet the ticket still prices the trade, and the button offers to connect.
 		primaryStep,
-		availability: availability.reason !== undefined && loadingReasons.includes(availability.reason) ? { ...availability, loading: true } : availability,
+		availability: actionAvailability.reason !== undefined && loadingReasons.includes(actionAvailability.reason) ? { ...actionAvailability, loading: true } : actionAvailability,
 		actionLabel: mode === 'entry' ? ticketCopy.buyOutcome(side) : ticketCopy.sellOutcome(side),
 	}
 }

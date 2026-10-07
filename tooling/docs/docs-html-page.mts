@@ -8,6 +8,13 @@ function docsAssetPrefix(outputPath: string): string {
 	return '../'.repeat(depth)
 }
 
+// Tabs, history, and bookmarks show only the title, so every page names the site after its own title.
+export const documentationSiteTitleSuffix = ' · Augur documentation'
+
+function documentationPageTitle(title: string): string {
+	return `${title}${documentationSiteTitleSuffix}`
+}
+
 export async function renderReferencePage(title: string, content: string, outputPath: string): Promise<string> {
 	const assetPrefix = docsAssetPrefix(outputPath)
 	const source = `<!doctype html>
@@ -15,7 +22,7 @@ export async function renderReferencePage(title: string, content: string, output
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>${title}</title>
+		<title>${documentationPageTitle(title)}</title>
 		<link rel="stylesheet" href="${assetPrefix}assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="${assetPrefix}assets/css/docsShell.css" />
 	</head>

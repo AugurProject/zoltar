@@ -286,7 +286,8 @@ describe('runWriteAction', () => {
 	test.each([
 		{ name: 'the active wallet account changed', backend: { accounts: [nextWalletAddress] }, expectedError: 'Wallet account changed. Review the action with the connected account and try again.' },
 		{ name: 'the wallet disconnects', backend: { accounts: [] }, expectedError: 'Wallet account is no longer connected. Reconnect your wallet and try again.' },
-		{ name: 'the wallet network changes', backend: { chainId: '0x5' }, expectedError: 'Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum mainnet and try again.' },
+		// Nothing was sent, so the check's own instruction is shown instead of a failed-transaction frame.
+		{ name: 'the wallet network changes', backend: { chainId: '0x5' }, expectedError: 'Wallet network changed. Switch to Ethereum mainnet and try again.' },
 	])('fails before requesting a transaction when $name', async ({ backend, expectedError }) => {
 		let errorMessage: string | undefined
 		let transactionRequested = false
@@ -523,6 +524,48 @@ describe('runWriteAction', () => {
 		expect(inlineErrorMessage).toBeUndefined()
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.entries[0]?.intent).toBeUndefined()
+		expect(getInFlightTransactionCount(transactionState)).toBe(0)
+	})
+
+	test('releases the initiating action without an error when the user stops tracking its transaction', async () => {
+		let transactionState = createInitialTransactionTrayState()
+		let writeCanceled = false
+		let failureMessage: string | undefined
+		let inlineErrorMessage: string | undefined
+
+		await runWriteAction(
+			{
+				accountAddress: walletAddress,
+				missingWalletMessage: 'Connect wallet',
+				onTransactionCanceled: requestKey => {
+					transactionState = markTransactionCanceled(transactionState, requestKey)
+				},
+				onTransactionFailed: message => {
+					failureMessage = message
+				},
+				onTransactionFinished: requestKey => {
+					transactionState = markTransactionFinished(transactionState, requestKey)
+				},
+				onTransactionRequested: () => {
+					transactionState = markTransactionRequested(transactionState, { action: 'deposit', source: 'statoblast', submittedTitle: 'Depositing REP' })
+				},
+				onWriteCanceled: () => {
+					writeCanceled = true
+				},
+				refreshState: async () => undefined,
+				setErrorMessage: message => {
+					inlineErrorMessage = message
+				},
+			},
+			async () => {
+				throw new Error(transactionErrorMessages.trackingStopped)
+			},
+			'Failed to deposit REP',
+		)
+
+		expect(writeCanceled).toBe(true)
+		expect(failureMessage).toBeUndefined()
+		expect(inlineErrorMessage).toBeUndefined()
 		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 	})
 

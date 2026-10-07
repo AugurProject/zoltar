@@ -41,6 +41,11 @@ export function getTradingRouteHref(routeHash: string) {
 	return buildRouteHref(routeHash, withoutRouteStateParams(getRouteHashSearch()))
 }
 
+/** Link to a route in another universe, such as a child universe after a fork: the environment carries over and the universe parameter is replaced. */
+export function getTradingRouteHrefInUniverse(routeHash: string, universeId: bigint) {
+	return buildRouteHref(routeHash, writeUniverseQueryParam(withoutRouteStateParams(getRouteHashSearch()), universeId))
+}
+
 /**
  * The parts of the location that select the environment; the universe parameter changes what the routes show, and the
  * route view state (ticket, workspace view, list options) only restores a view, so neither changes which chain the routes read.

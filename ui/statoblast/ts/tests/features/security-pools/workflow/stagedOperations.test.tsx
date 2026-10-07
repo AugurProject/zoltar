@@ -169,7 +169,8 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 		expect(executed).toEqual([2n])
 		expect(queries.getAllByRole('button', { name: 'Executing staged operation…' })).toHaveLength(1)
 		expect(blocked.disabled).toBe(true)
-		expect(execute.disabled).toBe(true)
+		// The pending action stays focusable and is aria-disabled.
+		expect(execute.getAttribute('aria-disabled')).toBe('true')
 	})
 
 	describe('queueing and execution feedback', () => {

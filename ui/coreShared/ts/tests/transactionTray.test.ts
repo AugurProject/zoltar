@@ -15,6 +15,7 @@ import {
 	markTransactionPresented,
 	markTransactionRequested,
 	markTransactionSubmitted,
+	markTransactionTrackingStopped,
 } from '../transactions/transactionTray.js'
 import { securityPoolTransactionScope } from '../transactions/transactionScope.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
@@ -24,6 +25,19 @@ const transactionHash = '0x12340000000000000000000000000000000000000000000000000
 describe('transactionTray', () => {
 	afterEach(() => {
 		resetActiveEnvironmentForTesting()
+	})
+
+	test('drops a transaction the user stopped tracking, so its status no longer reads pending and its scope unlocks', () => {
+		const scope = securityPoolTransactionScope('0x0000000000000000000000000000000000000001')
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), { action: 'deposit', scope, source: 'statoblast', submittedTitle: 'Depositing REP' })
+		const submitted = markTransactionSubmitted(markTransactionPrepared(requested, { account: undefined, args: [], chainName: 'Sepolia', functionName: 'deposit', value: undefined }), transactionHash)
+		expect(submitted.active?.tone).toBe('pending')
+		expect(isTransactionActionLocked(submitted, scope)).toBe(true)
+		const stopped = markTransactionTrackingStopped(submitted, transactionHash)
+		expect(stopped.active).toBeUndefined()
+		expect(getInFlightTransactionCount(stopped)).toBe(0)
+		expect(isTransactionActionLocked(stopped, scope)).toBe(false)
+		expect(markTransactionTrackingStopped(stopped, transactionHash)).toBe(stopped)
 	})
 
 	test('keeps inline transaction statuses recorded without requesting a floating notice', () => {
@@ -193,7 +207,7 @@ describe('transactionTray', () => {
 		expect(getInFlightTransactionCount(uncertain)).toBe(1)
 		expect(uncertain.active?.hash).toBe(transactionHash)
 		expect(uncertain.active?.tone).toBe('pending')
-		expect(uncertain.active?.detail).toBe('Confirmation unavailable. Checking automatically; do not resubmit.')
+		expect(uncertain.active?.detail).toBe('Not confirmed yet; still checking. Speed it up or cancel it in your wallet instead of sending it again.')
 		expect(uncertain.active?.operationKey).toBe(submitted.active?.operationKey)
 		const recovered = markTransactionSubmitted(uncertain, transactionHash, 'pending')
 		expect(recovered.active?.detail).toBe('Question creation transaction submitted.')
@@ -426,14 +440,24 @@ describe('transactionTray', () => {
 			submittedTitle: 'Creating question',
 			failedTitle: 'Question creation',
 		})
-		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Rejected in wallet.' })
+		const failed = markTransactionFailed(requested, { kind: 'error', message: 'Wallet network changed. Switch to Sepolia and try again.' })
 
 		expect(failed.active?.tone).toBe('error')
 		expect(failed.active?.title).toBe('Question creation')
-		expect(failed.active?.detail).toBe('Rejected in wallet.')
+		expect(failed.active?.detail).toBe('Wallet network changed. Switch to Sepolia and try again.')
 		expect(failed.active?.hash).toBeUndefined()
 		expect(failed.active?.dismissKey).toBe('transaction-request-1')
+		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'error', message: 'Wallet network changed. Switch to Sepolia and try again.' }, hash: undefined })
+	})
+
+	test('ends a request quietly when the user declines the wallet prompt', () => {
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question', failedTitle: 'Question creation' })
+		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Rejected in wallet.' })
+
+		// No red failed panel for a deliberate cancel; nothing was sent.
+		expect(failed.active).toBeUndefined()
 		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Rejected in wallet.' }, hash: undefined })
+		expect(markTransactionFinished(failed, 'transaction-request-1').entries).toEqual([])
 	})
 
 	test('clears requested transaction state when a write is canceled before submission', () => {

@@ -1003,7 +1003,7 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('surfaces wallet authorization rejections during connectWallet', async () => {
+	test('treats a declined connect prompt as a choice instead of an application error', async () => {
 		const { backend } = createBackend({
 			requestAccounts: async () => {
 				throw new Error('User denied account authorization')
@@ -1032,8 +1032,9 @@ describe('useOnchainState (integration)', () => {
 			fireEvent.click(connectButton)
 		})
 
-		await waitFor(() => expect(requireHookState(hookState).errorMessage).toBe('Rejected in wallet.'))
-		expect(requireHookState(hookState).isConnectingWallet).toBe(false)
+		await waitFor(() => expect(requireHookState(hookState).isConnectingWallet).toBe(false))
+		expect(requireHookState(hookState).errorMessage).toBeUndefined()
+		expect(requireHookState(hookState).errorMessages).toEqual([])
 		resetEnvironment()
 	})
 
@@ -1429,10 +1430,23 @@ describe('useOnchainState (integration)', () => {
 		})
 
 		expect(requireHookState(hookState).readBackendValidated).toBe(false)
+		// The unreachable RPC blocks content through the read-backend notice, with the reason stated once.
+		expect(requireHookState(hookState).readBackendMessage).toBe('Failed to validate the configured read RPC. Reason: read RPC unavailable.')
+		expect(requireHookState(hookState).readBackendStatus.issue).toBe('unreachable')
+		expect(requireHookState(hookState).errorMessage).toBeUndefined()
 		expect(requireHookState(hookState).deploymentStatusError).toBe('Deployment status could not be refreshed because read RPC validation failed.')
 		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(false)
 		expect(requireHookState(hookState).deploymentStatuses.every(step => !step.deployed)).toBe(true)
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
+
+		// Once the RPC responds again, a retry restores the content without a reload.
+		validationFails = false
+		await act(async () => {
+			await requireHookState(hookState).retryReadBackend()
+		})
+		expect(requireHookState(hookState).readBackendMessage).toBeUndefined()
+		expect(requireHookState(hookState).readBackendStatus.issue).toBeUndefined()
+		await waitFor(() => expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true))
 		resetEnvironment()
 	})
 
@@ -1657,6 +1671,96 @@ describe('useOnchainState (integration)', () => {
 		expect(loadErc20Balance).toHaveBeenCalledTimes(2)
 		expect(getBlockCalls).toBe(initialGetBlockCalls)
 		resetEnvironment()
+	})
+
+	test('keeps wallet balances while they reload and re-reads them when the chain moves', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a7')
+		let ethBalanceAttoEth = 123n
+		let pendingBalance: Promise<bigint> | undefined
+		const readClient = { ...createReadClient(), getBalance: async () => await (pendingBalance ?? Promise.resolve(ethBalanceAttoEth)) } as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const dependencies = createOnchainStateDependencies({ getDeploymentSteps, loadErc20Balance: mock(async () => 5n) })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n))
+
+		const balance = createDeferred<bigint>()
+		pendingBalance = balance.promise
+		let refresh: Promise<void> | undefined
+		await act(async () => {
+			refresh = requireHookState(hookState).refreshState({ loadChainClock: false, loadDeploymentState: false })
+			await Promise.resolve()
+		})
+		// The reload does not blank the balance, so reasons computed from it never flip to loading.
+		expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n)
+		await act(async () => {
+			balance.resolve(456n)
+			await refresh
+		})
+		await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(456n))
+
+		pendingBalance = undefined
+		ethBalanceAttoEth = 789n
+		await act(async () => {
+			appBlockWatcher.invalidate()
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(789n))
+		resetEnvironment()
+	})
+
+	test('reports an unexpected block-driven balance failure as that balance error and keeps the last balance', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a8')
+		let balanceFailure: Error | undefined
+		const readClient = {
+			...createReadClient(),
+			getBalance: async () => {
+				if (balanceFailure !== undefined) throw balanceFailure
+				return 123n
+			},
+		} as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const dependencies = createOnchainStateDependencies({ getDeploymentSteps, loadErc20Balance: mock(async () => 5n) })
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const unhandledRejections: unknown[] = []
+		const recordUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
+		process.on('unhandledRejection', recordUnhandledRejection)
+		try {
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+			await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n))
+
+			balanceFailure = new Error('boom')
+			await act(async () => {
+				appBlockWatcher.invalidate()
+				await Promise.resolve()
+			})
+			await waitFor(() => expect(requireHookState(hookState).errorMessages).toContain('Failed to refresh ETH balance. Reason: boom.'))
+			expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n)
+			expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(5n)
+
+			// The next successful read clears the error.
+			balanceFailure = undefined
+			await act(async () => {
+				appBlockWatcher.invalidate()
+				await Promise.resolve()
+			})
+			await waitFor(() => expect(requireHookState(hookState).errorMessages).toEqual([]))
+			await new Promise(resolve => setTimeout(resolve, 0))
+			expect(unhandledRejections).toEqual([])
+		} finally {
+			process.off('unhandledRejection', recordUnhandledRejection)
+			resetEnvironment()
+		}
 	})
 
 	test('preserves validated read readiness while a wallet-only refresh is pending', async () => {

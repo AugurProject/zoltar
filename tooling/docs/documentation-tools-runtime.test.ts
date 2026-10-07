@@ -287,6 +287,34 @@ test('invariant explorer filters, expands, resets, and opens a fragment target',
 	}
 })
 
+test('invariant filters mark page-outline links whose sections they hide', async () => {
+	const cleanup = await loadDocument('docs/reference/invariants.html', 'http://localhost/docs/reference/invariants.html')
+	try {
+		const outline = document.createElement('ol')
+		outline.className = 'docs-outline-list'
+		outline.innerHTML = '<li><a href="#standing">Classification and scope</a></li>'
+		document.body.append(outline)
+		await runGeneratedRuntime('invariantExplorer')
+		const keyword = document.querySelector<HTMLInputElement>('[data-invariant-filter]')
+		const standingLink = outline.querySelector('a')
+		if (keyword === null || standingLink === null) throw new Error('Invariant outline fixture is incomplete')
+		expect(standingLink.hasAttribute('aria-disabled')).toBeFalse()
+		keyword.value = 'auction'
+		keyword.dispatchEvent(new Event('input'))
+		expect(standingLink.getAttribute('aria-disabled')).toBe('true')
+		expect(standingLink.textContent).toBe('Classification and scope (hidden by filter)')
+		const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+		standingLink.dispatchEvent(click)
+		expect(click.defaultPrevented).toBeTrue()
+		keyword.value = ''
+		keyword.dispatchEvent(new Event('input'))
+		expect(standingLink.hasAttribute('aria-disabled')).toBeFalse()
+		expect(standingLink.textContent).toBe('Classification and scope')
+	} finally {
+		cleanup()
+	}
+})
+
 test('invariant fragment navigation clears sticky explorer controls', async () => {
 	const cleanup = await loadDocument('docs/reference/invariants.html', 'http://localhost/docs/reference/invariants.html#bal-03')
 	try {
@@ -498,6 +526,19 @@ test('deployment decoder decodes a mask against the selected network mapping', a
 		expect(sepoliaStatus.dataset['maskState']).toBe('set')
 		expect(mainnetStatus.dataset['maskState']).toBeUndefined()
 		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(15)
+
+		const bitToggles = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-deployment-bit-toggle]'))
+		expect(bitToggles().some(button => button.getAttribute('aria-pressed') === 'true')).toBeTrue()
+		input.value = 'xyz'
+		input.dispatchEvent(new Event('input'))
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(bitToggles().every(button => button.disabled)).toBeTrue()
+		expect(bitToggles().some(button => button.getAttribute('aria-pressed') === 'true')).toBeFalse()
+		input.value = '0x2'
+		input.dispatchEvent(new Event('input'))
+		expect(input.hasAttribute('aria-invalid')).toBeFalse()
+		expect(bitToggles().every(button => !button.disabled)).toBeTrue()
+		expect(bitToggles().some(button => button.getAttribute('aria-pressed') === 'true')).toBeTrue()
 	} finally {
 		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
 		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)

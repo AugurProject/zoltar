@@ -101,7 +101,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		} catch (error) {
 			if (!environmentGuard.isCurrent()) return
 			if (isTransactionReviewCancellation(error)) {
-				// Closing the review dialog cancels the remaining steps; nothing failed.
+				// Closing the review dialog cancels the remaining steps, and stopping tracking releases a broadcast transaction; nothing failed.
 				parameters.onWriteCanceled?.()
 				if (ownsTransaction) parameters.onTransactionCanceled?.(requestKey)
 				return

@@ -180,6 +180,19 @@ describe('ViewTabs', () => {
 		expect(disabledLink.getAttribute('tabindex')).toBe('0')
 	})
 
+	test('keeps the first enabled tab reachable when the selected view is outside the tab set', async () => {
+		const options = [
+			{ disabled: true, label: 'Vaults', panelId: 'vaults-panel', value: 'vaults' },
+			{ label: 'Shares', panelId: 'shares-panel', value: 'shares' },
+			{ label: 'Reporting', panelId: 'reporting-panel', value: 'reporting' },
+		]
+		const rendered = await renderIntoDocument(<ViewTabs ariaLabel='Pool Tabs' semantics='tabs' value='price-oracle' onChange={() => undefined} options={options} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const tabs = within(document.body).getAllByRole('tab')
+		expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['false', 'false', 'false'])
+		expect(tabs.map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '0', '-1'])
+	})
+
 	test('uses rendered grouped options for keyboard navigation', async () => {
 		let selectedValue = 'overview'
 		const renderedComponent = await renderIntoDocument(

@@ -6,7 +6,8 @@ export const completeSetAction = 'Redeem sets'
 export const forkMigrationAction = 'Migrate'
 export const completeSetRedemptionGuidance = 'Burn equal amounts of your Yes, No, and Invalid shares for ETH at the security pool’s current collateral rate.'
 export { max } from '@zoltar/ui-core-shared/copy/common.js'
-export const completeSetValueToRedeem = 'Complete-set value to redeem'
+/** The field takes ETH; the hint below it converts that to complete sets. */
+export const completeSetValueToRedeem = 'ETH to redeem'
 export const winningRedemptionUnavailable = 'Winning-outcome redemption becomes available after the question resolves.'
 export const migrationGuidance = 'Pick one share type (Yes, No, or Invalid) and the child universes to migrate it into. Migrating moves your whole balance of that share and permanently locks its transfers in this universe. You can migrate the same share into more child universes later.'
 export const marketDataUnavailableReason = 'Market data is unavailable. Refresh the market.'
@@ -23,11 +24,10 @@ export const connectToSeeBalance = 'Connect a wallet to see your balance.'
 export const loadingForkDetails = 'Loading fork question and child universes…'
 export const forkDetailsUnavailable = 'Fork question details are unavailable.'
 export const retryForkDetails = 'Retry fork details'
-export const completeSetAmountRequired = 'Enter a complete-set value greater than zero.'
 export const completeSetAmountTooSmall = 'Amount too small to redeem any ETH.'
 export const childUniverseRequired = 'Select at least one child universe.'
 export const missingChildPoolBlocker = 'This selection includes a child universe without a security pool. Migrate into each such child universe separately.'
-export const missingChildPoolWarning = 'For this share, migrate into each child universe that has no security pool in a separate transaction. After it confirms, do not select that child universe again for this share. Another share can migrate into those child universes together once their security pools are ready.'
+export const missingChildPoolWarning = 'For this share, migrate into each child universe that has no security pool in a separate transaction. Another share can migrate into those child universes together once their security pools are ready.'
 
 export function redeemOutcomeAction(outcome: 'INVALID' | 'YES' | 'NO') {
 	return `Redeem ${outcomeLabel(outcome)}`
@@ -41,8 +41,9 @@ export function completeSetsHeld(completeSets: string, value: string) {
 	return `You hold ${completeSets}, worth ${value}`
 }
 
-export function formatCompleteSetLimit(available: string) {
-	return `Enter no more than your complete-set balance of ${available}.`
+/** `available` is the ETH the held complete sets redeem for; `completeSets` is how many sets that is. */
+export function formatCompleteSetLimit(available: string, completeSets: string) {
+	return `Enter no more than ${available} (your ${completeSets}).`
 }
 
 export function formatZeroShareBalance(outcome: 'INVALID' | 'YES' | 'NO') {
@@ -51,6 +52,16 @@ export function formatZeroShareBalance(outcome: 'INVALID' | 'YES' | 'NO') {
 
 export function formatShareBalance(balance: string) {
 	return `Balance: ${balance}`
+}
+
+/** A migrated source balance stays in the wallet but can no longer be transferred in this universe. */
+export function formatLockedShareBalance(balance: string) {
+	return `Balance: ${balance} · locked after migration`
+}
+
+/** The selection includes a child universe that already holds this share's whole balance. */
+export function targetAlreadyMigrated(outcome: 'INVALID' | 'YES' | 'NO', childUniverse: string) {
+	return `Your ${outcomeLabel(outcome)} balance is already migrated to ${childUniverse}. Deselect it.`
 }
 
 export function migrationAmount(balance: string) {
@@ -68,7 +79,7 @@ export function formatWinningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO
 export const settlementTransaction = 'Settlement transaction'
 export const transactionFailed = 'Settlement transaction failed.'
 export const estimateHeading = 'Redemption estimate'
-export { minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
+export { invalidEthAmount, minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const redeemCompleteSetsAction = 'Redeem complete sets'
 
 export function migrationAction(count: number) {

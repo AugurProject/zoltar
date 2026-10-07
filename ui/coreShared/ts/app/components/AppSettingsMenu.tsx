@@ -10,11 +10,12 @@ import type { ComponentChildren } from 'preact'
 import { ThemeSetting } from './ThemeSetting.js'
 
 export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren }) {
-	const { containerRef, open, toggle, triggerRef } = useDisclosurePopover({ closeOnFocusOutside: false })
 	const [selectedNetwork, setSelectedNetwork] = useState<RpcNetworkId>(getActiveNetworkProfile().id)
 	const [rpcUrls, setRpcUrls] = useState(() => readNetworkRpcUrls())
 	const [error, setError] = useState<string | undefined>(undefined)
 	const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+	// The dialog closes when focus leaves it, except while an RPC save runs, so its result stays in view.
+	const { containerRef, open, toggle, triggerRef } = useDisclosurePopover({ closeOnFocusOutside: saveState !== 'saving' })
 	const firstControlRef = useRef<HTMLSelectElement>(null)
 	const defaults: Record<RpcNetworkId, string> = {
 		mainnet: MAINNET_NETWORK_PROFILE.chain.rpcUrls.default.http[0] ?? '',

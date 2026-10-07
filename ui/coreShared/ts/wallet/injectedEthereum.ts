@@ -1,6 +1,7 @@
 import { withReadTimeout } from '../lib/promise.js'
 import { assertNetworkEnabled } from './networkAvailability.js'
-import { bigintToSafeNumber, type Address, type EIP1193Provider } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, type Address, type Chain, type EIP1193Provider } from '@zoltar/core-shared/evm/ethereum'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { tryParseAddressInput } from '../forms/inputs.js'
 
 type EthereumEventHandler = (...args: unknown[]) => void
@@ -80,11 +81,44 @@ export function formatChainIdHex(chainId: number) {
 	return `0x${chainId.toString(16)}`
 }
 
-export async function switchInjectedChain(provider: InjectedEthereum, chainId: string | number) {
+/** Wallet RPC codes, including the copy MetaMask Mobile nests under `data.originalError`. */
+function readWalletErrorCodes(error: unknown) {
+	if (!isObjectRecord(error)) return []
+	const data = error['data']
+	const originalError = isObjectRecord(data) ? data['originalError'] : undefined
+	return [error, error['cause'], originalError].flatMap(candidate => (isObjectRecord(candidate) && (typeof candidate['code'] === 'number' || typeof candidate['code'] === 'string') ? [Number(candidate['code'])] : []))
+}
+
+/** The wallet does not implement the requested method (JSON-RPC -32601, EIP-1193 4200). */
+export function isUnsupportedWalletMethodError(error: unknown) {
+	return readWalletErrorCodes(error).some(code => code === -32601 || code === 4200)
+}
+
+/** The wallet does not know the requested chain yet (EIP-3326 4902). */
+function isUnrecognizedChainError(error: unknown) {
+	return readWalletErrorCodes(error).includes(4902)
+}
+
+/**
+ * Switches the wallet to the chain. A wallet that does not know the chain yet is asked to add it first when the chain's
+ * details are given, so the user is not left with the wallet's own instructions.
+ */
+export async function switchInjectedChain(provider: InjectedEthereum, chainId: string | number, chain?: Chain) {
 	const chainIdHex = typeof chainId === 'number' ? formatChainIdHex(chainId) : chainId
 	if (!/^0x[0-9a-fA-F]+$/.test(chainIdHex)) throw new Error('Requested wallet chain ID is invalid')
 	assertNetworkEnabled(chainIdHex)
-	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] })
+	try {
+		await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] })
+	} catch (error) {
+		if (chain === undefined || !isUnrecognizedChainError(error)) throw error
+		const explorerUrl = chain.blockExplorers?.default.url
+		await provider.request({
+			method: 'wallet_addEthereumChain',
+			params: [{ ...(explorerUrl === undefined ? {} : { blockExplorerUrls: [explorerUrl] }), chainId: chainIdHex, chainName: chain.name, nativeCurrency: chain.nativeCurrency, rpcUrls: [...chain.rpcUrls.default.http] }],
+		})
+		// Most wallets switch after adding; switching again is harmless and covers the ones that do not.
+		await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] })
+	}
 }
 
 export function subscribeToWalletContextChanges(eventSource: InjectedEthereumEventSource, onChange: (eventName: WalletContextChangeEvent) => void) {

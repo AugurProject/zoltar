@@ -44,8 +44,12 @@ describe('IdentifierValue', () => {
 		})
 		await waitFor(() => {
 			expect(clipboardWriteText).toHaveBeenCalledWith(value)
-			expect(copyButton.textContent).toBe('Copied')
+			expect(document.querySelector('.copy-feedback[aria-live="polite"]')?.textContent).toBe('Copied')
 		})
+		// The value, width, and accessible name stay stable while the confirmation shows beside the button.
+		expect(copyButton.textContent).toBe(value)
+		expect(copyButton.getAttribute('aria-label')).toBe(`Copy identifier ${value}`)
+		expect(copyButton.getAttribute('data-copied')).toBe('true')
 	})
 
 	test('abbreviates long identifiers while preserving the full hover and copy value', async () => {
@@ -149,13 +153,15 @@ describe('IdentifierValue', () => {
 		await act(() => {
 			fireEvent.click(copyButton)
 		})
-		await waitFor(() => expect(copyButton.textContent).toBe('Copied'))
+		const status = document.querySelector('.copy-feedback')
+		if (status === null) throw new Error('Expected the copy confirmation region')
+		await waitFor(() => expect(status.textContent).toBe('Copied'))
 		await act(async () => {
 			rejectFirstCopy(new DOMException('older clipboard failure', 'NotAllowedError'))
 			await Promise.resolve()
 		})
 
-		expect(copyButton.textContent).toBe('Copied')
+		expect(status.textContent).toBe('Copied')
 		expect(documentQueries.queryByRole('alert')).toBeNull()
 		expect(copyButton.hasAttribute('aria-describedby')).toBe(false)
 	})

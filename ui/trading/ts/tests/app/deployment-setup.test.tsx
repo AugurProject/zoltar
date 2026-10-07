@@ -1,4 +1,5 @@
 import { installTradingRouting } from '../../lib/routing.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -192,6 +193,136 @@ describe('trading deployment setup', () => {
 		expect(completionCount).toBe(0)
 		expect(rendered.container.textContent).toContain('1 / 2')
 		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deploy trading router')).toBe(true)
+	})
+
+	test('gives each contract its own persistent deploy action: a deployed one stays disabled, and the router waits for the factory', async () => {
+		const plan = getTradingDeploymentPlan(core, 30)
+		const actionsByRow = (container: HTMLElement) =>
+			Array.from(container.querySelectorAll('.contract-row')).map(row => {
+				const action = row.querySelector<HTMLButtonElement>('.tx-action-button')
+				const describedBy = action?.getAttribute('aria-describedby')
+				return { label: action?.textContent?.trim(), disabled: action?.disabled, reason: describedBy === null || describedBy === undefined ? undefined : container.querySelector(`[id="${describedBy}"]`)?.textContent }
+			})
+
+		const fresh = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [core] }} />)
+		cleanupRendered = fresh.cleanup
+		await waitForText('Deploy trading factory')
+		// One button per transaction type, in the rows of the contracts they deploy; nothing relabels a shared button.
+		expect(actionsByRow(fresh.container)).toEqual([
+			{ label: 'Deploy trading factory', disabled: true, reason: commonCopy.walletConnectionRequired },
+			{ label: 'Deploy trading router', disabled: true, reason: 'Deploy the trading factory first.' },
+		])
+		await fresh.cleanup()
+
+		let contractReadCount = 0
+		const partialClient = inspectionClient({
+			hasCode: address => [core.securityPoolFactory, plan.factory.address].some(expected => sameAddress(expected, address)),
+			readContract: () => {
+				contractReadCount += 1
+				if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+				if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+				return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+			},
+		})
+		const partial = await renderIntoDocument(<TradingDeploymentSetup currentConfiguration={deploymentConfigurationForPlan(plan, core.defaultRpcUrl)} onComplete={() => undefined} services={{ createPublicClient: () => partialClient, loadCoreDeployments: async () => [core] }} />)
+		cleanupRendered = partial.cleanup
+		await waitForText('1 / 2')
+		// The deployed factory keeps its button in place, disabled and saying why.
+		const [factory, router] = actionsByRow(partial.container)
+		expect(factory).toEqual({ label: 'Deploy trading factory', disabled: true, reason: 'Deployed' })
+		expect(router?.label).toBe('Deploy trading router')
+		expect(router?.reason).toBe(commonCopy.walletConnectionRequired)
+	})
+
+	test('explains that a missing security pool factory is fixed in Statoblast and continues on its own once it appears', async () => {
+		let factoryDeployed = false
+		let registryLoads = 0
+		const client = inspectionClient({ hasCode: address => factoryDeployed && sameAddress(address, core.securityPoolFactory), retryCount: 0 })
+		const rendered = await renderIntoDocument(
+			<TradingDeploymentSetup
+				onComplete={() => undefined}
+				services={{
+					createPublicClient: () => client,
+					loadCoreDeployments: async () => {
+						registryLoads += 1
+						return [core]
+					},
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Security pool factory is not deployed')
+		const prerequisite = rendered.container.querySelector('.deployment-setup__prerequisite')
+		expect(prerequisite?.textContent).toContain(`Trading needs the Statoblast contracts on ${core.chainName}. Deploy Statoblast there first; this page continues once it finds them.`)
+		expect(prerequisite?.querySelector('a')?.getAttribute('href')).toContain('how-to/trading-deploy-contracts.html')
+		// A successful read that found no factory is not an error, so no manual retry is offered.
+		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Retry checks')).toBe(false)
+		// Statoblast is deployed elsewhere; returning to the page finds the factory without a click, and the contract rows stay put.
+		const rowCount = () => rendered.container.querySelectorAll('.contract-row').length
+		const rowsBefore = rowCount()
+		expect(rowsBefore).toBeGreaterThan(0)
+		const rowCounts: number[] = []
+		const observer = new MutationObserver(() => rowCounts.push(rowCount()))
+		observer.observe(rendered.container, { childList: true, subtree: true })
+		factoryDeployed = true
+		await act(async () => {
+			document.dispatchEvent(new Event('visibilitychange'))
+		})
+		for (let attempt = 0; attempt < 300 && rendered.container.textContent?.includes('Security pool factory is not deployed') === true; attempt++) {
+			await act(async () => {
+				await Bun.sleep(10)
+			})
+		}
+		observer.disconnect()
+		expect(rendered.container.textContent).not.toContain('Security pool factory is not deployed')
+		expect(rendered.container.querySelector('.deployment-setup__prerequisite')).toBeNull()
+		expect(registryLoads).toBe(1)
+		expect(rowCounts.every(count => count === rowsBefore)).toBe(true)
+	})
+
+	test('an unexpected failure while rechecking a missing factory shows the inspection error instead of escaping the recheck', async () => {
+		let recheckFailure: Error | undefined
+		const inspection = inspectionClient({ retryCount: 0 })
+		const client = {
+			...inspection,
+			getCode: async (parameters: Parameters<typeof inspection.getCode>[0]) => {
+				if (recheckFailure !== undefined) throw recheckFailure
+				return await inspection.getCode(parameters)
+			},
+		}
+		const unhandledRejections: unknown[] = []
+		const recordUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
+		process.on('unhandledRejection', recordUnhandledRejection)
+		try {
+			const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
+			cleanupRendered = rendered.cleanup
+			await waitForText('Security pool factory is not deployed')
+			recheckFailure = new Error('boom')
+			await act(async () => {
+				document.dispatchEvent(new Event('visibilitychange'))
+			})
+			await waitForText('Retry checks')
+			expect(rendered.container.textContent).toContain('boom.')
+			expect(rendered.container.textContent).not.toContain('Security pool factory is not deployed')
+			await Bun.sleep(0)
+			expect(unhandledRejections).toEqual([])
+		} finally {
+			process.off('unhandledRejection', recordUnhandledRejection)
+		}
+	})
+
+	test('a failed network check shows its error without per-contract spinners that never finish', async () => {
+		const client = inspectionClient({
+			chainId: () => {
+				throw new Error('RPC unreachable')
+			},
+			retryCount: 0,
+		})
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Retry checks')
+		expect(rendered.container.textContent).not.toContain('Checking network')
+		expect(Array.from(rendered.container.querySelectorAll('.contract-row .badge')).map(status => status.textContent?.trim())).toEqual(['Status unavailable', 'Status unavailable'])
 	})
 
 	test('presents an undeployed SecurityPoolFactory as an expected prerequisite and keeps trading addresses visible', async () => {
@@ -513,7 +644,7 @@ describe('trading deployment setup', () => {
 		})
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
-		expect(Array.from(rendered.container.querySelectorAll('.contract-row .badge')).map(status => status.textContent?.trim())).toEqual(['Checking…', 'Checking…'])
+		expect(Array.from(rendered.container.querySelectorAll('.contract-row .badge')).map(status => status.textContent?.trim())).toEqual(['Status unavailable', 'Status unavailable'])
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
 		rpcAvailable = true
@@ -749,7 +880,8 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('Deployment in progress')
 		const pendingAction = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploying trading factory') === true)
 		if (!(pendingAction instanceof HTMLButtonElement)) throw new Error('Pending factory deployment action is unavailable')
-		expect(pendingAction.disabled).toBe(true)
+		// A pending action keeps focus, so it is marked unavailable with aria-disabled rather than the disabled attribute.
+		expect(pendingAction.disabled || pendingAction.getAttribute('aria-disabled') === 'true').toBe(true)
 		await act(async () => {
 			pendingAction.click()
 		})

@@ -106,7 +106,7 @@
 		return compactActive
 	}
 
-	function overflowCue(element: HTMLElement, isOverflowing: boolean, label: string): void {
+	function overflowCue(element: HTMLElement, isOverflowing: boolean, label: string, cueBeforeContent = false): void {
 		let cue = element.querySelector(':scope > .docs-overflow-cue')
 		if (!isOverflowing) {
 			cue?.remove()
@@ -126,7 +126,9 @@
 		if (cue === null) {
 			cue = document.createElement('span')
 			cue.className = 'docs-overflow-cue'
-			element.append(cue)
+			// A tall table would otherwise hide its cue far below the first rows.
+			if (cueBeforeContent) element.prepend(cue)
+			else element.append(cue)
 		}
 		cue.textContent = label
 	}
@@ -163,10 +165,50 @@
 		return 'Horizontal scrolling reveals the full content.'
 	}
 
+	function overflows(container: HTMLElement): boolean {
+		return container.scrollWidth > container.clientWidth + overflowThreshold
+	}
+
+	function normalizedText(value: string | null | undefined): string {
+		return (value ?? '').replace(/\s+/g, ' ').trim()
+	}
+
+	// Name a scrollable table after its own label, its caption, or the heading it sits under.
+	function tableRegionLabel(container: HTMLElement): string {
+		const table = container.querySelector('table')
+		const ownLabel = normalizedText(table?.getAttribute('aria-label') ?? table?.querySelector('caption')?.textContent)
+		if (ownLabel.length > 0) return ownLabel
+		const precedingHeadings = Array.from(document.querySelectorAll('h1, h2, h3, h4')).filter(heading => (heading.compareDocumentPosition(container) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0)
+		const heading = normalizedText(precedingHeadings.at(-1)?.textContent)
+		return heading.length > 0 ? `${heading} table` : 'Table'
+	}
+
+	// Only a container that actually scrolls is a keyboard stop and a named region; a table that fits stays plain content.
+	function markTableRegion(container: HTMLElement, isOverflowing: boolean): void {
+		if (isOverflowing && !container.hasAttribute('role')) {
+			container.setAttribute('role', 'region')
+			container.setAttribute('aria-label', tableRegionLabel(container))
+			container.dataset['docsAddedRegion'] = 'true'
+		} else if (!isOverflowing && container.dataset['docsAddedRegion'] === 'true') {
+			container.removeAttribute('role')
+			container.removeAttribute('aria-label')
+			delete container.dataset['docsAddedRegion']
+		}
+	}
+
 	function markScrollableContent(container: HTMLElement): void {
 		const label = scrollableContentLabel(container)
-		const responsiveTableReflows = window.matchMedia(compactEquationQuery).matches && container.querySelector(':scope > .docs-responsive-table') !== null
-		overflowCue(container, !responsiveTableReflows && container.scrollWidth > container.clientWidth + overflowThreshold, label)
+		const isTableContainer = container.matches('.table-wrap, .table-scroll, .docs-auto-table-scroll')
+		const responsiveTable = container.querySelector<HTMLTableElement>(':scope > .docs-responsive-table')
+		if (responsiveTable !== null) {
+			// Reflow into labelled cards on phones, and wherever the table cannot fit its column without sideways scrolling.
+			responsiveTable.classList.remove('docs-table-cards')
+			const showCards = window.matchMedia(compactEquationQuery).matches || overflows(container)
+			responsiveTable.classList.toggle('docs-table-cards', showCards)
+		}
+		const isOverflowing = overflows(container)
+		overflowCue(container, isOverflowing, label, isTableContainer)
+		if (isTableContainer) markTableRegion(container, isOverflowing)
 	}
 
 	function prepareTableContainers(): void {
@@ -174,9 +216,6 @@
 			if (table.closest('.table-wrap, .table-scroll, .docs-auto-table-scroll') !== null) continue
 			const container = document.createElement('div')
 			container.className = 'docs-auto-table-scroll'
-			container.setAttribute('role', 'region')
-			const caption = table.querySelector('caption')?.textContent?.replace(/\s+/g, ' ').trim()
-			container.setAttribute('aria-label', table.getAttribute('aria-label') ?? caption ?? 'Scrollable table')
 			table.before(container)
 			container.append(table)
 		}

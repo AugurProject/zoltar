@@ -79,8 +79,11 @@ describe('routing', () => {
 
 	test('ensureRouteHash seeds default hash when blank', () => {
 		window.location.hash = ''
+		const lengthBefore = window.history.length
 		ensureRouteHash()
 		expect(window.location.hash).toBe(ZOLTAR_ROUTE)
+		// The canonical hash replaces the landing entry, so Back does not reopen the same page.
+		expect(window.history.length).toBe(lengthBefore)
 	})
 
 	test('resolves known and non-query route hash helpers', () => {

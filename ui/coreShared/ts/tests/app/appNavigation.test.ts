@@ -16,6 +16,18 @@ describe('app navigation', () => {
 		expect(withDeploymentTab({ deploymentTab, deploymentIncomplete: false, route: 'deploy', tabs: primaryTabs }).map(tab => tab.route)).toEqual(['deploy', 'security-pools', 'open-oracle'])
 	})
 
+	test('disables every other section with the deployment reason while required contracts are missing', () => {
+		const lockedTab = { disabled: true, disabledReason: 'Transaction in progress', hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }
+		const tabs = withDeploymentTab({ deploymentMissing: true, deploymentTab, deploymentIncomplete: false, route: 'deploy', tabs: [...primaryTabs, lockedTab] })
+		expect(tabs.map(tab => [tab.route, tab.disabled === true, tab.disabledReason])).toEqual([
+			['deploy', false, undefined],
+			['security-pools', true, 'Deploy the required contracts first'],
+			['open-oracle', true, 'Deploy the required contracts first'],
+			['zoltar', true, 'Transaction in progress'],
+		])
+		expect(withDeploymentTab({ deploymentTab, deploymentIncomplete: true, route: 'deploy', tabs: primaryTabs }).some(tab => tab.disabled === true)).toBe(false)
+	})
+
 	test('resolves secondary views only for the route that owns them', () => {
 		const securityPoolViews = createSecondaryNavigation({ ariaLabel: 'Security pools views', onChange: () => undefined, options: [{ label: 'Browse pools', value: 'browse' }], value: 'browse' })
 		const secondaryByRoute = { 'security-pools': securityPoolViews }

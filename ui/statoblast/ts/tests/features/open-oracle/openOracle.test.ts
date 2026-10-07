@@ -930,7 +930,7 @@ describe('OpenOracle helpers', () => {
 		})
 		expect(getOpenOracleSettleAvailability(beforeDisputeDelay)).toEqual({
 			canAct: false,
-			message: 'This report can be settled in less than a minute if no disputes occur.',
+			message: 'This report can be settled in 51s if no disputes occur.',
 		})
 
 		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 159n, settlementTime: 120n })
@@ -940,7 +940,7 @@ describe('OpenOracle helpers', () => {
 		})
 		expect(getOpenOracleSettleAvailability(insideDisputeWindow)).toEqual({
 			canAct: false,
-			message: 'This report can be settled in 1m if no disputes occur.',
+			message: 'This report can be settled in 1m 1s if no disputes occur.',
 		})
 
 		const exactSettlementBoundary = createOpenOracleLifecycleReport({ currentTime: 160n })

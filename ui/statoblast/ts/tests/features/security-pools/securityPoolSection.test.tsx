@@ -139,11 +139,11 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const queries = within(document.body)
-		const dialog = queries.getByRole('dialog', { name: 'Transaction status' })
+		const dialog = queries.getByRole('region', { name: 'Transaction status' })
 		expect(within(dialog).getByText('Rejected in wallet.')).not.toBeNull()
 		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Rejected in wallet.')
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
-		expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Rejected in wallet.')
 		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 	})

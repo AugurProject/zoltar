@@ -7,7 +7,23 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { pushHistoryUrl } from '@zoltar/ui-core-shared/navigation/historyEntries.js'
 import { formatAppDocumentTitle, getAppPageTitle, type AppPageTitleInput } from '../../app/lib/appPageTitle.js'
+
+/** Records the top offset of every window scroll the heading requests. */
+function mockWindowScroll() {
+	const originalScrollTo = window.scrollTo
+	const calls: number[] = []
+	window.scrollTo = (options?: ScrollToOptions | number) => {
+		calls.push(typeof options === 'object' ? (options.top ?? Number.NaN) : Number.NaN)
+	}
+	return {
+		calls,
+		restore: () => {
+			window.scrollTo = originalScrollTo
+		},
+	}
+}
 
 const baseInput: AppPageTitleInput = {
 	activeZoltarView: 'questions',
@@ -51,28 +67,23 @@ describe('app page titles', () => {
 		expect(heading.classList.contains('visually-hidden')).toBe(true)
 	})
 
-	test('moves focus and resets the content scroll position after a forward route transition', async () => {
-		const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
-		let scrollIntoViewCalls = 0
-		HTMLElement.prototype.scrollIntoView = () => {
-			scrollIntoViewCalls += 1
-		}
-
+	test('moves focus to the heading at the start of the content and opens a new page at the top', async () => {
+		const scrollCalls = mockWindowScroll()
 		try {
 			const renderedComponent = await renderIntoDocument(
-				<>
+				<div id='app-content'>
 					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />
-					<div id='app-content'>Question content</div>
-				</>,
+					<p>Question content</p>
+				</div>,
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
 
 			await act(() => {
 				render(
-					<>
+					<div id='app-content'>
 						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Create question' />
-						<div id='app-content'>Create question content</div>
-					</>,
+						<p>Create question content</p>
+					</div>,
 					renderedComponent.container,
 				)
 			})
@@ -80,57 +91,62 @@ describe('app page titles', () => {
 			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Create question' })
 			expect(document.activeElement).toBe(heading)
 			expect(heading.getAttribute('tabindex')).toBe('-1')
-			expect(scrollIntoViewCalls).toBe(1)
+			expect(document.title).toBe('Create question | Zoltar')
+			expect(scrollCalls.calls).toEqual([0])
 		} finally {
-			HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+			scrollCalls.restore()
 		}
 	})
 
-	test('does not let same-title history navigation suppress a later forward route scroll', async () => {
-		const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
-		let scrollIntoViewCalls = 0
-		HTMLElement.prototype.scrollIntoView = () => {
-			scrollIntoViewCalls += 1
-		}
-
+	test('keeps the restored scroll position when Back reaches a page, and resets it for the next new page', async () => {
+		const scrollCalls = mockWindowScroll()
 		try {
-			window.history.replaceState({}, '', '#/zoltar?view=questions')
-			const renderedComponent = await renderIntoDocument(
-				<>
-					<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />
-					<div id='app-content'>Question content</div>
-				</>,
-			)
+			window.history.replaceState(null, '', '#/zoltar?zoltarView=questions')
+			const renderedComponent = await renderIntoDocument(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Browse questions' />)
 			cleanupRenderedComponent = renderedComponent.cleanup
 
-			window.history.pushState({}, '', '#/zoltar?view=create')
+			pushHistoryUrl('#/zoltar?zoltarView=create')
+			await act(() => {
+				render(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Create question' />, renderedComponent.container)
+			})
+			expect(scrollCalls.calls).toEqual([0])
+
+			const popped = new Promise<void>(resolve => window.addEventListener('popstate', () => resolve(), { once: true }))
+			window.history.back()
+			await popped
+			await act(() => {
+				render(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Browse questions' />, renderedComponent.container)
+			})
+			expect(document.activeElement).toBe(within(document.body).getByRole('heading', { level: 1, name: 'Browse questions' }))
+			expect(scrollCalls.calls).toEqual([0])
+
+			pushHistoryUrl('#/zoltar?zoltarView=migrate')
+			await act(() => {
+				render(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Migrate REP' />, renderedComponent.container)
+			})
+			expect(scrollCalls.calls).toEqual([0, 0])
+		} finally {
+			scrollCalls.restore()
+		}
+	})
+
+	test('treats a link or hash navigation that fires popstate as a new page, not as Back', async () => {
+		const scrollCalls = mockWindowScroll()
+		try {
+			window.history.replaceState(null, '', '#/zoltar?zoltarView=questions')
+			const renderedComponent = await renderIntoDocument(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Browse questions' />)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			// Assigning location.hash or following a link opens an entry without state and fires popstate before hashchange.
+			window.history.pushState(null, '', '#/zoltar?zoltarView=create')
 			window.dispatchEvent(new Event('popstate'))
 			await act(() => {
-				render(
-					<>
-						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Questions' />
-						<div id='app-content'>Create content</div>
-					</>,
-					renderedComponent.container,
-				)
+				render(<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Create question' />, renderedComponent.container)
 			})
 
-			window.history.pushState({}, '', '#/zoltar?view=migrate')
-			await act(() => {
-				render(
-					<>
-						<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle='Migrate REP' />
-						<div id='app-content'>Migration content</div>
-					</>,
-					renderedComponent.container,
-				)
-			})
-
-			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Migrate REP' })
-			expect(document.activeElement).toBe(heading)
-			expect(scrollIntoViewCalls).toBe(1)
+			expect(scrollCalls.calls).toEqual([0])
 		} finally {
-			HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+			scrollCalls.restore()
 		}
 	})
 })

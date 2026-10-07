@@ -34,6 +34,8 @@ test('shows a loaded pool address read-only and keeps typed entry for an address
 		return (
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
+					// The first address was looked up and not found, so the address field opens for a correction.
+					checkedSecurityPoolAddress: '0x1111111111111111111111111111111111111111',
 					securityPoolAddress: address,
 					securityPools: [pool],
 					onSecurityPoolAddressChange: nextAddress => {
@@ -86,7 +88,15 @@ test('shows the refresh busy label only while a shown pool reloads', async () =>
 test('keeps a directly opened advanced view visible and returns to the primary tabs', async () => {
 	setCleanup((await renderIntoDocument(<NavigationHarness />)).cleanup)
 	const page = within(document.body)
-	expect(page.getByRole('tab', { name: 'Staged operations' }).getAttribute('aria-selected')).toBe('true')
+	// A tool view never adds a tab: the tools trigger becomes the selected tab and names the open tool.
+	expect(page.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
+	expect(page.getAllByRole('tab').some(tab => tab.getAttribute('aria-selected') === 'true')).toBe(false)
+	const activeTrigger = page.getByRole('button', { name: 'More: Staged operations' })
+	expect(activeTrigger.classList.contains('active')).toBe(true)
+	expect(document.querySelector('.selected-pool-workflow-content')?.getAttribute('aria-labelledby')).toBe(activeTrigger.id)
+	await act(() => fireEvent.click(activeTrigger))
+	expect(page.getByRole('button', { name: 'Staged operations' }).getAttribute('aria-current')).toBe('true')
+	await act(() => fireEvent.click(activeTrigger))
 	await act(() => fireEvent.click(page.getByRole('tab', { name: 'Vaults' })))
 	expect(page.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
 	// Secondary tools stay out of the layout until the More tools popover opens.
@@ -95,7 +105,8 @@ test('keeps a directly opened advanced view visible and returns to the primary t
 	await act(() => fireEvent.click(moreTools))
 	expect(moreTools.getAttribute('aria-expanded')).toBe('true')
 	await act(() => fireEvent.click(page.getByRole('button', { name: 'Price oracle' })))
-	expect(page.getByRole('tab', { name: 'Price oracle' }).getAttribute('aria-selected')).toBe('true')
+	expect(page.queryByRole('tab', { name: 'Price oracle' })).toBeNull()
+	expect(page.getByRole('button', { name: 'More: Price oracle' }).classList.contains('active')).toBe(true)
 	expect(page.queryByRole('button', { name: 'Staged operations' })).toBeNull()
 })
 
@@ -122,7 +133,7 @@ test('shows one oracle price row that counts down a pending report instead of an
 	expect(rows[0]?.textContent).toContain('OpenOracle price')
 	expect(rows[0]?.textContent).toContain('Available in')
 	expect(document.body.textContent).not.toContain('Oracle price unavailable')
-	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
+	expect(within(document.body).queryByRole('button', { name: 'Request new price…' })).toBeNull()
 })
 
 test('keeps the pool oracle request visible but disabled with its reason when no wallet is connected', async () => {
@@ -136,7 +147,7 @@ test('keeps the pool oracle request visible but disabled with its reason when no
 		},
 	})
 	const row = document.body.querySelector('.pool-oracle-status.warning')
-	const button = within(document.body).getByRole('button', { name: 'Request new price' })
+	const button = within(document.body).getByRole('button', { name: 'Request new price…' })
 	expect(button.hasAttribute('disabled')).toBe(true)
 	expect(row?.querySelector('.tx-action-feedback')?.textContent).toContain('Connect a wallet')
 	await act(() => fireEvent.click(button))
@@ -166,7 +177,8 @@ for (const [accountState, fixLabel] of [
 ] as const)
 	test(`offers the ${fixLabel} fix on the pool price requests the wallet blocks`, async () => {
 		const { calls } = await renderLoadedPoolWithWalletActions({ accountState, poolOracleManagerDetails: expiredPriceManager(), selectedPoolView: 'price-oracle' })
-		expectWalletFixDescribesAction(document.body, 'Request new price', fixLabel)
+		// The header launcher and the Price oracle launcher open the same review, so both carry the launch ellipsis.
+		expect(within(document.body).getAllByRole('button', { name: 'Request new price…' })).toHaveLength(2)
 		const fix = expectWalletFixDescribesAction(document.body, 'Request new price…', fixLabel)
 		await act(() => fireEvent.click(fix))
 		expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
@@ -175,7 +187,7 @@ for (const [accountState, fixLabel] of [
 test('keeps the load-oracle reason as text on the price row while the wallet is disconnected', async () => {
 	await renderLoadedPoolWithWalletActions({ accountState: createAccountState({ address: undefined }), poolOracleManagerDetails: undefined, poolOracleManagerError: 'Oracle unavailable.', poolOracleManagerErrorAddress: zeroAddress })
 	expect(within(document.body).queryByRole('button', { name: 'Connect wallet' })).toBeNull()
-	expect(getTransactionButtonState(document.body, 'Request new price')).toEqual({ disabled: true, reason: 'Loading price oracle details…' })
+	expect(getTransactionButtonState(document.body, 'Request new price…')).toEqual({ disabled: true, reason: 'Loading price oracle details…' })
 })
 
 test('requests a new price straight from the pool oracle row', async () => {
@@ -190,7 +202,7 @@ test('requests a new price straight from the pool oracle row', async () => {
 	})
 	const row = document.body.querySelector('.pool-oracle-status')
 	expect(row?.classList.contains('warning')).toBe(true)
-	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price' })))
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price…' })))
 	expect(opened.length > 0).toBe(true)
 })
 
@@ -210,14 +222,16 @@ test('shows the stage, marks the open tab row, and offers controls that leave it
 	expect(views).toEqual(['trading'])
 })
 
-test('omits the open vault navigation hint while retaining reporting deadlines on the open reporting tab', async () => {
+test('keeps every next-action row, marking the open tab, so the card keeps its height between tabs', async () => {
 	const items = [
 		{ id: 'manageVault', tab: 'vaults', tone: 'action' },
 		{ id: 'reportOrEscalate', tab: 'reporting', tone: 'attention', deadline: 1_060n },
 	] as const
 	const firstRender = await renderIntoDocument(<PoolActionCard currentTimestamp={1_000n} currentView='vaults' items={items} onChange={() => undefined} />)
 	setCleanup(firstRender.cleanup)
-	expect(document.body.textContent).not.toContain('Manage your vault')
+	expect(document.body.textContent).toContain('Manage your vault')
+	expect(document.querySelector('.pool-action-current')?.textContent).toBe('Shown below')
+	expect(document.querySelectorAll('.pool-action-item')).toHaveLength(2)
 	expect(document.body.textContent).toContain('Report or escalate an outcome')
 	expect(document.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:17:40.000Z')
 	await firstRender.cleanup()
@@ -247,7 +261,7 @@ test('keeps the pending report reachable while the pool universe differs', async
 	await renderLoadedPool({ activeUniverseId: 2n, poolOracleManagerDetails: createOracleManagerDetails({ pendingReportId: 7n }), onViewPendingReport: id => reports.push(id) })
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'View report' })))
 	expect(reports).toEqual([7n])
-	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
+	expect(within(document.body).queryByRole('button', { name: 'Request new price…' })).toBeNull()
 })
 
 test('uses the refreshed manager price for the single capacity summary', async () => {
@@ -354,7 +368,7 @@ test('hides the oracle price row in an ended pool, where a new price has no use'
 	})
 	// Reporting details are not loaded on the vault view, so the pool lifecycle alone must retire the expired-price warning.
 	expect(document.body.querySelector('.pool-oracle-status')).toBeNull()
-	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
+	expect(within(document.body).queryByRole('button', { name: 'Request new price…' })).toBeNull()
 	// The expired price does not move into Pool details either.
 	const details = document.body.querySelector('.pool-reference-details')
 	expect(details).not.toBeNull()
@@ -365,5 +379,40 @@ test('keeps a pending report reachable from the price row in an ended pool', asy
 	const endedPool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n, questionOutcome: 'yes' })
 	await renderPoolPage(endedPool, { poolOracleManagerDetails: pendingReportManager(10n ** 12n) })
 	expect(document.body.querySelector('.pool-oracle-status')).not.toBeNull()
-	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
+	expect(within(document.body).queryByRole('button', { name: 'Request new price…' })).toBeNull()
+})
+
+test('keeps the card mounted when its only row belongs to the open tab', async () => {
+	const rendered = await renderIntoDocument(<PoolActionCard currentTimestamp={1_000n} currentView='vaults' items={[{ id: 'manageVault', tab: 'vaults', tone: 'action' }]} onChange={() => undefined} />)
+	setCleanup(rendered.cleanup)
+	expect(within(document.body).getByRole('heading', { name: 'Next actions' })).not.toBeNull()
+	expect(document.body.textContent).toContain('Manage your vault')
+})
+
+test('resolves a malformed pool address at once with the address error, an open field, and a refresh reason', async () => {
+	await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: '0x123', securityPools: [] }), { showHeader: false })
+	const page = within(document.body)
+	expect(document.querySelector<HTMLDetailsElement>('details.pool-switcher')?.open).toBe(true)
+	expect(page.queryByText('Loading…')).toBeNull()
+	expect(page.getByRole('heading', { name: 'Invalid pool address' })).not.toBeNull()
+	const input = page.getByRole('textbox', { name: 'Security pool address' })
+	expect(input.getAttribute('aria-invalid')).toBe('true')
+	expect(getTransactionButtonState(document.body, 'Refresh pool')).toEqual({ disabled: true, reason: 'Enter a valid 0x pool address.' })
+})
+
+test('holds the loaded pool layout while a pool first loads', async () => {
+	await renderWorkflow(createSecurityPoolWorkflowProps({ loadingSecurityPools: true, securityPoolAddress: '0x1111111111111111111111111111111111111111', securityPools: [] }), { showHeader: false })
+	// The address field stays collapsed and a placeholder header holds the loaded header's place, so only content changes on arrival.
+	expect(document.querySelector<HTMLDetailsElement>('details.pool-switcher')?.open).toBe(false)
+	expect(document.querySelector('.pool-object-header-skeleton .pool-status-strip')).not.toBeNull()
+	expect(within(document.body).getByText('Loading pool…')).not.toBeNull()
+	expect(document.querySelector('.state-hint')).toBeNull()
+})
+
+test('says why My vault is unavailable without a wallet, visibly and on the control', async () => {
+	await renderLoadedPool({ accountState: createAccountState({ address: undefined }), selectedPoolView: 'vaults' })
+	const myVault = within(document.body).getByRole('button', { name: 'My vault' })
+	expect(myVault.hasAttribute('disabled')).toBe(true)
+	const reasonId = myVault.getAttribute('aria-describedby')
+	expect(reasonId === null ? undefined : document.getElementById(reasonId)?.textContent).toBe('Connect a wallet to open your vault.')
 })

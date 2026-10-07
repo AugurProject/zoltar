@@ -26,9 +26,10 @@ export function getPoolsViewHref(view: PoolsListView) {
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 
-/** One primary row: pool entry and the standalone OpenOracle tool; Deploy joins while deployment is incomplete. */
-export function getStatoblastRouteTabs({ route, showDeployTab }: { route: string; showDeployTab: boolean }): RouteTabDefinition[] {
+/** One primary row: pool entry and the standalone OpenOracle tool; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
+export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }: { applicationDeploymentMissing: boolean; route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
+		deploymentMissing: applicationDeploymentMissing,
 		deploymentTab: { hash: statoblastRouting.getHash('deploy'), label: commonCopy.deploy, route: 'deploy' },
 		deploymentIncomplete: showDeployTab,
 		route,

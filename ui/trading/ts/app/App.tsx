@@ -48,7 +48,7 @@ function currentRoute(): ResolvedTradingRoute {
 function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = appCopy.notFound
-	if (route === 'help') label = appCopy.marketGuide
+	if (route === 'help') label = appCopy.help
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
 	if (route === 'market') label = appCopy.markets
 	if (route.startsWith('market/')) label = appCopy.market
@@ -138,6 +138,9 @@ export function App({
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, networkName: undefined, ready: false })
 	const [tradeSettings, setTradeSettings] = useState<TradeSettings>(loadTradeSettings)
+	// The addressed market's question, which names its page in the document title once it loads.
+	const [marketTitle, setMarketTitle] = useState<string>()
+	const formatDocumentTitle = useCallback((pageTitle: string) => appCopy.documentTitle(marketTitle === undefined ? pageTitle : appCopy.marketPageTitle(marketTitle, pageTitle)), [marketTitle])
 	const updateTradeSettings = useCallback((next: TradeSettings) => {
 		setTradeSettings(next)
 		saveTradeSettings(next)
@@ -164,9 +167,14 @@ export function App({
 	const liveDeploymentUsable = liveDeploymentStatus === 'loading' || liveDeploymentStatus === 'verified'
 	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentUsable
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
-	const headerUniverse = useUniverseSummary(showUniverseField ? liveConfiguration : undefined, confirmedUniverseId === undefined ? undefined : BigInt(confirmedUniverseId), loadUniverseSummary)
+	// An address with no security pool says nothing about the universe, so the header keeps the last universe discovery confirmed.
+	const lastConfirmedUniverseId = useRef<string>()
+	if (confirmedUniverseId !== undefined) lastConfirmedUniverseId.current = confirmedUniverseId
+	const headerUniverseId = confirmedUniverseId ?? (discoveryState === 'not-found' ? lastConfirmedUniverseId.current : undefined)
+	const headerUniverse = useUniverseSummary(showUniverseField ? liveConfiguration : undefined, headerUniverseId === undefined ? undefined : BigInt(headerUniverseId), loadUniverseSummary)
+	const universeForked = headerUniverse.state.kind === 'ready' && headerUniverse.state.universe?.hasForked === true
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
-	if (confirmedUniverseId !== undefined) universeValue = <UniverseSwitcher activeUniverseId={BigInt(confirmedUniverseId)} browseHref={getTradingRouteHref('#/universe')} universe={headerUniverse.state.kind === 'ready' ? headerUniverse.state.universe : undefined} />
+	if (headerUniverseId !== undefined) universeValue = <UniverseSwitcher activeUniverseId={BigInt(headerUniverseId)} browseHref={getTradingRouteHref('#/universe')} universe={headerUniverse.state.kind === 'ready' ? headerUniverse.state.universe : undefined} />
 	else if (discoveryState === 'error' || discoveryState === 'not-found') universeValue = <span>{appCopy.unavailable}</span>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
@@ -280,6 +288,8 @@ export function App({
 				walletConnectRequestNonce={walletConnectRequestNonce}
 				tradeSettings={tradeSettings}
 				onTradeSettingsChange={updateTradeSettings}
+				onMarketTitleChange={setMarketTitle}
+				universeForked={universeForked}
 			/>
 		)
 	const simulationController = getActiveSimulationController()
@@ -292,7 +302,7 @@ export function App({
 			actionsLocked={deploymentWorkflowLocked}
 			currentBlockNumber={undefined}
 			currentTimestamp={undefined}
-			heading={<AppPageHeading formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(deploymentSetupActive ? 'deploy' : route)} />}
+			heading={<AppPageHeading formatDocumentTitle={formatDocumentTitle} pageTitle={tradingPageTitle(deploymentSetupActive ? 'deploy' : route)} />}
 			notices={undefined}
 			header={
 				<AppHeaderShell

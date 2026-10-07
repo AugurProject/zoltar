@@ -284,13 +284,31 @@ export function applySelectedPoolWorkflowState(
 		...(systemState === undefined ? {} : { systemState }),
 	}
 }
-export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
+export function getSelectedPoolWorkflowLockedPresentation({
+	hasSelectedPoolAddress,
+	hasValidSelectedPoolAddress,
+	selectedPoolLookupState,
+	selectedPoolUniverseMismatch,
+}: {
+	hasSelectedPoolAddress: boolean
+	/** A malformed address is never looked up, so it resolves to this state at once instead of loading forever. */
+	hasValidSelectedPoolAddress: boolean
+	selectedPoolLookupState: LoadableValueState
+	selectedPoolUniverseMismatch: boolean
+}): UserMessagePresentation {
 	if (selectedPoolUniverseMismatch)
 		return {
 			badgeLabel: commonCopy.unavailable,
 			badgeTone: 'blocked',
 			detail: securityPoolCopy.selectedPoolUnavailableDetail,
 			key: 'unavailable',
+		}
+	if (hasSelectedPoolAddress && !hasValidSelectedPoolAddress)
+		return {
+			badgeLabel: commonCopy.invalid,
+			badgeTone: 'blocked',
+			detail: securityPoolCopy.invalidPoolAddressDetail,
+			key: 'not_found',
 		}
 	if (selectedPoolLookupState === 'loading' || (hasSelectedPoolAddress && selectedPoolLookupState === 'unknown'))
 		return {

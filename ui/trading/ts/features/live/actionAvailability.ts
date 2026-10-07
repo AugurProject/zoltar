@@ -39,6 +39,12 @@ function insufficientReason(requested: bigint | undefined, available: bigint | u
 	return requested > available ? reason : undefined
 }
 
+/** Adding liquidity to a closed market can still be undone by removing it; creating a closed market cannot happen at all. */
+function closedLiquidityReason({ operation, marketClosed, newRiskBlocker }: Pick<LiquidityAvailabilityInputs, 'operation' | 'marketClosed' | 'newRiskBlocker'>) {
+	if (operation === 'remove' || !marketClosed) return undefined
+	return operation === 'initialize' ? copy.formatInitializationClosedReason(newRiskBlocker) : copy.liquidityClosedReason
+}
+
 function workflowReason({ workflowLocked }: WorkflowInputs) {
 	return workflowLocked ? copy.transactionInProgressReason : undefined
 }
@@ -56,6 +62,8 @@ export type LiquidityAvailabilityInputs = WalletInputs &
 	Readonly<{
 		operation: LiquidityOperation
 		marketClosed: boolean
+		/** The market status that closed it, such as `Question ended`; creating a market names it instead of the add-liquidity reason. */
+		newRiskBlocker?: string | undefined
 		submissionBlocker?: string | undefined
 		/** Initialize and add: ETH to deposit. Remove: LP tokens to burn. */
 		requestedAmount: bigint | undefined
@@ -66,20 +74,20 @@ export type LiquidityAvailabilityInputs = WalletInputs &
 
 export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs): ActionAvailability {
 	const insufficient = inputs.operation === 'remove' ? insufficientReason(inputs.requestedAmount, inputs.lpBalance, copy.insufficientLpReason) : insufficientReason(inputs.requestedAmount, inputs.walletEthAttoEth, copy.insufficientEthReason)
-	const availability = withLoading(
+	return withLoading(
 		createActionAvailability(
 			walletReason(inputs),
-			inputs.operation !== 'remove' && inputs.marketClosed ? copy.liquidityClosedReason : undefined,
+			closedLiquidityReason(inputs),
 			inputs.submissionBlocker,
 			balanceReason(inputs),
 			insufficient,
+			copy.amountReason(inputs.requestedAmount),
 			inputs.operation === 'initialize' && !inputs.initializePriceValid ? copy.initializePriceInvalidReason : undefined,
 			workflowReason(inputs),
 			inputs.previewBlocker,
 		),
 		[copy.balancesLoadingReason],
 	)
-	return { ...availability, disabled: availability.disabled || inputs.requestedAmount === undefined || inputs.requestedAmount <= 0n }
 }
 
 export type SettlementAvailabilityInputs = WalletInputs &

@@ -6,13 +6,49 @@ export const transactionErrorMessages = {
 	canceledOrReplaced: 'Transaction canceled or replaced.',
 	confirmationUnavailable: 'Could not confirm the transaction. Check its status before retrying.',
 	insufficientApproval: 'Approval confirmed, but it is below the required amount. Review funding again to approve the required total before continuing.',
+	insufficientFundsForGas: 'Not enough ETH for this transaction and its network fee. Add ETH to the wallet and try again.',
+	nonceConflict: 'Another transaction from this wallet used the same nonce. Wait for pending wallet transactions to finish, then try again.',
 	reviewCanceled: 'Remaining transactions canceled. Transactions already sent are unchanged.',
+	trackingStopped: 'Stopped tracking the transaction. It can still confirm.',
 	walletRejected: 'Rejected in wallet.',
+	walletRpcInternalError: 'The wallet RPC returned an internal error. Try again; if it repeats, check the network in the wallet.',
 }
 
-/** True when the user closed or backed out of a transaction review, which is a cancellation rather than a failure. */
+/** Node errors users meet often, rewritten to the step that fixes them instead of the node's own text in attoETH. */
+const classifiedTransactionErrors = [
+	{ message: transactionErrorMessages.insufficientFundsForGas, pattern: /insufficient funds/i },
+	{ message: transactionErrorMessages.nonceConflict, pattern: /nonce too low|correct nonce|replacement transaction underpriced|already known|transaction already imported/i },
+]
+
+type UserFacingErrorMarker = Readonly<{ userFacingMessage: true }>
+
+function isUserFacingErrorMarker(value: unknown): value is UserFacingErrorMarker {
+	return isObjectRecord(value) && value['userFacingMessage'] === true
+}
+
+/** An application check that blocked an action before anything was sent; its message is shown as written. */
+export function createUserFacingError(message: string) {
+	const marker: UserFacingErrorMarker = { userFacingMessage: true }
+	return new Error(message, { cause: marker })
+}
+
+function findUserFacingMessage(error: unknown) {
+	const seen = new Set<unknown>()
+	let current: unknown = error
+	while (current instanceof Error && !seen.has(current)) {
+		seen.add(current)
+		if (isUserFacingErrorMarker(current.cause)) return current.message
+		current = current.cause
+	}
+	return undefined
+}
+
+/**
+ * True when the user closed or backed out of a transaction review, or stopped tracking a broadcast transaction; both are
+ * cancellations rather than failures.
+ */
 export function isTransactionReviewCancellation(error: unknown) {
-	return collectErrorDetails(error).some(detail => detail === transactionErrorMessages.reviewCanceled)
+	return collectErrorDetails(error).some(detail => detail === transactionErrorMessages.reviewCanceled || detail === transactionErrorMessages.trackingStopped)
 }
 
 function isTransactionErrorMessage(message: string | undefined) {
@@ -168,6 +204,8 @@ function getKnownTransactionErrorDetail(details: string[]) {
 	}
 	for (const detail of details) {
 		if (detail.toLowerCase().includes('stale price')) return pricingCopy.poolOraclePriceExpiredError
+		const classified = classifiedTransactionErrors.find(({ pattern }) => pattern.test(detail))
+		if (classified !== undefined) return classified.message
 	}
 	return undefined
 }
@@ -248,10 +286,15 @@ function rewriteWriteFallbackMessage(fallbackMessage: string) {
 
 export function formatWriteErrorMessage(error: unknown, fallbackMessage: string) {
 	if (isWalletRejection(error)) return transactionErrorMessages.walletRejected
+	// Nothing was sent: an application check stopped the action, so it is not framed as a failed transaction.
+	const userFacingMessage = findUserFacingMessage(error)
+	if (userFacingMessage !== undefined) return ensureSentence(userFacingMessage)
 
 	const detail = getErrorDetail(error, fallbackMessage)
 	if (detail !== undefined && (isTransactionErrorMessage(detail) || shouldUseStandaloneWriteMessage(detail))) return ensureSentence(detail)
 	const rewrittenFallback = rewriteWriteFallbackMessage(fallbackMessage)
+	// A bare internal JSON-RPC error carries no reason of its own; say where it came from instead of showing nothing.
+	if (detail === undefined && collectErrorDetails(error).some(value => /internal json-rpc error/i.test(value))) return appendReason(rewrittenFallback, transactionErrorMessages.walletRpcInternalError)
 	return appendReason(rewrittenFallback, detail)
 }
 

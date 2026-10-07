@@ -2,7 +2,8 @@
 
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { AppStatusNotices } from '../../app/components/AppStatusNotices.js'
 import { fireEvent, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
@@ -217,6 +218,40 @@ describe('AppStatusNotices', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Deployment failed')).not.toBeNull()
 		expect(documentQueries.getByText('Wallet refresh failed')).not.toBeNull()
+	})
+
+	test('lets the user dismiss a reported error until it clears and recurs', async () => {
+		const renderNotices = (errorMessages: string[]) => h(AppStatusNotices, { errorMessages, readBackendMessage: undefined, showApplicationDeploymentWarning: false, simulationBootstrapError: undefined })
+		const renderedComponent = await renderIntoDocument(renderNotices(['Network switch failed.']))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Dismiss notice' })))
+		expect(documentQueries.queryByText('Network switch failed.')).toBeNull()
+		await act(() => render(renderNotices([]), renderedComponent.container))
+		await act(() => render(renderNotices(['Network switch failed.']), renderedComponent.container))
+		expect(documentQueries.getByText('Network switch failed.')).not.toBeNull()
+	})
+
+	test('explains that content waits for an unreachable read RPC and offers a retry', async () => {
+		let retryCalls = 0
+		const renderedComponent = await renderIntoDocument(
+			h(AppStatusNotices, {
+				onRetryReadBackend: () => {
+					retryCalls += 1
+				},
+				readBackendMessage: 'Failed to validate the configured read RPC. Reason: Failed to fetch.',
+				readBackendStatus: { blockNumber: undefined, blockTimestamp: undefined, issue: 'unreachable', rpcSource: 'default', rpcUrl: 'https://rpc.example', transportMode: 'rpc' },
+				showApplicationDeploymentWarning: false,
+				simulationBootstrapError: undefined,
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const notice = within(document.body).getByRole('alert')
+		expect(notice.textContent).toContain('Read RPC unavailable')
+		expect(notice.textContent).toContain('Failed to validate the configured read RPC. Reason: Failed to fetch. Content stays unavailable until the read RPC responds. Retrying automatically.')
+		expect(within(notice).queryByRole('button', { name: 'Dismiss notice' })).toBeNull()
+		fireEvent.click(within(notice).getByRole('button', { name: 'Retry' }))
+		expect(retryCalls).toBe(1)
 	})
 
 	test('offers a retry for Zoltar universe load failures', async () => {
