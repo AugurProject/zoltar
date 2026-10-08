@@ -79,10 +79,11 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		return { noDepositor, pool, game, universe, deadline, proof, secondQuestionId: getQuestionId(secondQuestion, outcomes) }
 	}
 
-	for (const { offset, name } of [
-		{ offset: -DAY, name: 'a pre-deadline fork preserves the original NO claim through delayed migration and a winner reversal' },
-		{ offset: 0n, name: 'a fork exactly at the deadline preserves every outcome through delayed migration' },
-		{ offset: 1n, name: 'a fork after the deadline preserves genuine settlement and retires losing inherited principal' },
+	for (const { offset, finalizedBeforeFork, name } of [
+		{ offset: -DAY, finalizedBeforeFork: false, name: 'a pre-deadline fork preserves the original NO claim through delayed migration and a winner reversal' },
+		{ offset: 0n, finalizedBeforeFork: false, name: 'a fork exactly at the deadline preserves every outcome through delayed migration' },
+		{ offset: 1n, finalizedBeforeFork: false, name: 'a fork in the deadline rounding gap preserves every inherited outcome through delayed migration' },
+		{ offset: DAY, finalizedBeforeFork: true, name: 'a fork after genuine finality preserves settlement and retires losing inherited principal' },
 	]) {
 		test(name, async () => {
 			const { client, mockWindow, questionId, statoblastSecurityMultiplierBps } = fixture
@@ -90,9 +91,13 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const beforeFork = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			// The fixture includes each transaction at latest block time + 1.
 			await mockWindow.setTime(deadline + offset - 1n)
+			if (finalizedBeforeFork) {
+				assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.Yes), 'the positive control must finalize before the universe forks')
+			}
 			await forkUniverse(noDepositor, universe, secondQuestionId)
 			assert.equal(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] }), deadline + offset)
-			await mockWindow.setTime(deadline + DAY)
+			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' }), BigInt(finalizedBeforeFork ? QuestionOutcome.Yes : QuestionOutcome.None), 'the fork-time outcome must match the scenario')
+			await mockWindow.setTime(deadline + offset + 2n * DAY)
 			const delayedSnapshot = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			const delayedFinality = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' })
 			const poolOutcome = await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'getQuestionOutcome', args: [pool.securityPool] })
@@ -100,7 +105,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			assert.deepStrictEqual(delayedSnapshot[1], beforeFork[1], 'delay must preserve leaf counts')
 			assert.deepStrictEqual(delayedSnapshot[3], beforeFork[3], 'delay must not consume claims')
 
-			if (offset > 0n) {
+			if (finalizedBeforeFork) {
 				assert.equal(delayedFinality, BigInt(QuestionOutcome.Yes), 'a dispute finalized before the fork stays settled')
 				assert.equal(poolOutcome, BigInt(QuestionOutcome.Yes))
 				assert.equal(delayedSnapshot[2][QuestionOutcome.No], 0n, 'genuinely losing inherited principal must retire')
@@ -148,7 +153,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 				assert.equal(inheritedNo.balanceAttoRep, 80n * ATTO_REP_PER_REP)
 				assert.equal(migratedBacking, 180n * ATTO_REP_PER_REP, 'both inherited outcomes must remain backed')
 			}
-			if (offset === 0n) {
+			if (offset >= 0n) {
 				assertPreservedCarry()
 				return
 			}

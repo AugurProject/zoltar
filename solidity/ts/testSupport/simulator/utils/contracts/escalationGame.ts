@@ -1,9 +1,14 @@
-import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier } from '../../../../types/contractArtifact'
+import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import {
+	ReputationToken_ReputationToken,
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
+} from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { CONTRACT_PAGE_SIZE } from './pagination'
-import { getRepTokenAddress } from './zoltar'
+import { getRepTokenAddress, getZoltarAddress } from './zoltar'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { requireAddress, requireArray, requireBigInt } from '../utilities'
 
@@ -130,6 +135,15 @@ export const getEscalationGameOutcomeState = async (client: ReadClient, escalati
 	})
 
 export const deployEscalationGame = async (writeClient: WriteClient, startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint) => {
+	const poolDeploymentHash = await writeClient.sendTransaction({
+		data: encodeDeployData({
+			abi: escalationGameProofTestPoolArtifact.abi,
+			bytecode: `0x${escalationGameProofTestPoolArtifact.evm.bytecode.object}`,
+			args: [getZoltarAddress(), 0n, zeroAddress],
+		}),
+	})
+	const poolDeploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: poolDeploymentHash })
+	const securityPoolAddress = requireContractAddress(poolDeploymentReceipt.contractAddress, 'escalation game test pool deployment address')
 	const verifierDeploymentHash = await writeClient.sendTransaction({
 		data: encodeDeployData({
 			abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
@@ -142,11 +156,19 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBondAt
 		data: encodeDeployData({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+			args: [securityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
 		}),
 	})
 	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })
 	const escalationGameAddress = requireContractAddress(deploymentReceipt.contractAddress, 'Escalation game deployment address')
+	await writeContractAndWait(writeClient, () =>
+		writeClient.writeContract({
+			abi: escalationGameProofTestPoolArtifact.abi,
+			functionName: 'setEscalationGame',
+			address: securityPoolAddress,
+			args: [escalationGameAddress],
+		}),
+	)
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -216,6 +238,14 @@ export const depositOnOutcome = async (writeClient: WriteClient, escalationGame:
 	)
 	const acceptedAmount = requireBigInt(preview[0], 'Accepted escalation deposit amount')
 	const resultingCumulativeAmount = requireBigInt(preview[1], 'Resulting escalation cumulative amount')
+	const securityPoolAddress = requireAddress(
+		await writeClient.readContract({
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			functionName: 'securityPool',
+			address: escalationGame,
+		}),
+		'Escalation game test pool',
+	)
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
 			abi: ReputationToken_ReputationToken.abi,
@@ -226,9 +256,9 @@ export const depositOnOutcome = async (writeClient: WriteClient, escalationGame:
 	)
 	await writeContractAndWait(writeClient, () =>
 		writeClient.writeContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			functionName: 'recordDepositFromSecurityPool',
-			address: escalationGame,
+			abi: escalationGameProofTestPoolArtifact.abi,
+			functionName: 'recordDeposit',
+			address: securityPoolAddress,
 			args: [depositor, outcome, acceptedAmount, resultingCumulativeAmount],
 		}),
 	)
