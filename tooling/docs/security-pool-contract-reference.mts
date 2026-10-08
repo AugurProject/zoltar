@@ -286,7 +286,7 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`resumeForkedEscalationGame()`',
 			caller: 'Anyone',
 			declarations: [{ name: 'resumeForkedEscalationGame' }],
-			effect: "Checks aggregate REP funding of the carry commitment installed during child initialization, clears the pool wait flag, records the resume timestamp, and starts the continuation's remaining escalation clock in one bounded call.",
+			effect: 'Checks aggregate REP funding of the carry commitment installed during child initialization, clears the pool wait flag, and records the resume timestamp in one bounded call. The remaining escalation clock advances only while the universe is unforked.',
 			preconditions: 'Pool is operational, awaiting a configured fork continuation, and the game has not resumed.',
 			signals: '`ForkContinuationResumed` and `AwaitingForkContinuationSet(false)`',
 		},
