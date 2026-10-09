@@ -44,7 +44,9 @@ test('builds scanner metadata from source with verified compiler caches and vend
 			'solidity/.contract-hash.json',
 			'solidity/artifacts/Contracts.json',
 			'docs/mainnet-deployment-addresses.json',
+			'docs/mainnet-no-deployment-addresses.json',
 			'docs/sepolia-deployment-addresses.json',
+			'docs/sepolia-no-deployment-addresses.json',
 			'shared/core/ts',
 		]) {
 			const destination = path.join(workspace, relative)

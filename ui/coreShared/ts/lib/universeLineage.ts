@@ -1,5 +1,11 @@
 import * as universeCopy from '../copy/universes.js'
 import { formatShortUniverseId } from './universeLabels.js'
+import { readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
+
+function genesisUniverseName() {
+	const outcome = typeof window === 'undefined' ? undefined : readGenesisOutcomeFromLocation()
+	return outcome === undefined ? universeCopy.genesis : universeCopy.formatGenesisUniverse(outcome)
+}
 
 /** One generation of a universe's ancestry: the universe and the fork outcome that created it (genesis has none). */
 export type UniverseLineageStep = Readonly<{
@@ -19,7 +25,7 @@ const LINEAGE_SEPARATOR = ' › '
 
 /** Names one lineage generation: Genesis, the fork outcome, or the short universe ID when the outcome is unknown. */
 export function formatUniverseStepName(step: UniverseLineageStep) {
-	if (step.universeId === 0n) return universeCopy.genesis
+	if (step.universeId === 0n) return genesisUniverseName()
 	const outcomeLabel = step.outcomeLabel?.trim()
 	return outcomeLabel === undefined || outcomeLabel === '' ? formatShortUniverseId(step.universeId) : outcomeLabel
 }
@@ -35,7 +41,7 @@ function isCompleteLineage(lineage: readonly UniverseLineageStep[], universeId: 
  * Without a complete lineage it falls back to `Genesis` or a short hex ID so the label never lies about ancestry.
  */
 export function formatUniverseLineageLabel(lineage: readonly UniverseLineageStep[] | undefined, universeId: bigint) {
-	if (universeId === 0n) return universeCopy.genesis
+	if (universeId === 0n) return genesisUniverseName()
 	if (lineage === undefined || !isCompleteLineage(lineage, universeId)) return universeCopy.formatUnknownLineageUniverse(formatShortUniverseId(universeId))
 	return lineage.map(formatUniverseStepName).join(LINEAGE_SEPARATOR)
 }
@@ -56,7 +62,7 @@ export function extendUniverseLineage(lineage: readonly UniverseLineageStep[] | 
 
 /** Lineage names for every universe the source knows about: its ancestors, itself, and its children, keyed by decimal universe ID. */
 export function buildUniverseLineageLabels(source: UniverseLineageSource | undefined, includeRelatedUniverses = true): ReadonlyMap<string, string> {
-	const labels = new Map<string, string>([['0', universeCopy.genesis]])
+	const labels = new Map<string, string>([['0', genesisUniverseName()]])
 	if (source === undefined) return labels
 	if (!includeRelatedUniverses) {
 		labels.set(source.universeId.toString(), formatUniverseViewLabel(source, source.universeId, false))

@@ -2,10 +2,49 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildAddressExplorerUrl, buildTransactionExplorerUrl, createSimulationProfile, getDefaultNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
-import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import {
+	MAINNET_NETWORK_PROFILE,
+	MAINNET_WETH_ADDRESS,
+	SEPOLIA_NETWORK_PROFILE,
+	buildAddressExplorerUrl,
+	buildTransactionExplorerUrl,
+	createSimulationProfile,
+	getDefaultNetworkProfile,
+	getGenesisNetworkProfile,
+	getPublicNetworkProfile,
+	getPublicNetworkProfileForChainId,
+	getRuntimeNetworkProfile,
+} from '../wallet/networkProfile.js'
+import { getSepoliaGenesisRepDeployment, SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { GENESIS_OUTCOMES, MAINNET_GENESIS_UNIVERSES, parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 describe('network profile helpers', () => {
+	test('limits canonical mainnet genesis roots to the Augur Yes and No child tokens', () => {
+		expect(GENESIS_OUTCOMES).toEqual(['yes', 'no'])
+		for (const outcome of GENESIS_OUTCOMES) {
+			const profile = getGenesisNetworkProfile(MAINNET_NETWORK_PROFILE, outcome)
+			expect(profile.genesisOutcome).toBe(outcome)
+			expect(profile.genesisRepTokenAddress).toBe(MAINNET_GENESIS_UNIVERSES[outcome].reputationTokenAddress)
+			expect(profile.chain).toBe(MAINNET_NETWORK_PROFILE.chain)
+			expect(profile.wethAddress).toBe(MAINNET_NETWORK_PROFILE.wethAddress)
+		}
+		expect(getGenesisNetworkProfile(MAINNET_NETWORK_PROFILE, 'no').genesisRepTokenAddress).toBe(getAddress('0x2F4005456c2F098358213f01DbE34abDAa2989A4'))
+		for (const invalid of [undefined, '', 'invalid', 'YES', '0', '0x221657776846890989a759ba2973e427dff5c9bb']) expect(parseGenesisOutcome(invalid)).toBeUndefined()
+		expect(parseGenesisOutcome('yes')).toBe('yes')
+		expect(parseGenesisOutcome('no')).toBe('no')
+	})
+
+	test('deploys separate Sepolia tokens through the zero-salt proxy', () => {
+		const yes = getSepoliaGenesisRepDeployment('yes')
+		const no = getSepoliaGenesisRepDeployment('no')
+		expect(yes.address).toBe(SEPOLIA_GENESIS_REP_ADDRESS)
+		expect(yes.address).not.toBe(no.address)
+		expect(yes.initCode).not.toBe(no.initCode)
+		expect(yes.salt).toBe(no.salt)
+		expect(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no').genesisRepTokenAddress).toBe(no.address)
+		expect(getGenesisNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no'), 'yes')).toEqual(SEPOLIA_NETWORK_PROFILE)
+	})
+
 	test('defaults to Sepolia and excludes mainnet from wallet network discovery', () => {
 		expect(getDefaultNetworkProfile()).toBe(SEPOLIA_NETWORK_PROFILE)
 		expect(getPublicNetworkProfile(undefined)).toBe(SEPOLIA_NETWORK_PROFILE)
@@ -18,6 +57,7 @@ describe('network profile helpers', () => {
 	})
 
 	test('exports expected defaults for Ethereum mainnet', () => {
+		expect(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress).toBe(getAddress('0xCf6A0A7826fa124B7705d6f3c675eAD76f1e540D'))
 		expect(MAINNET_NETWORK_PROFILE.id).toBe('mainnet')
 		expect(MAINNET_NETWORK_PROFILE.chainIdHex).toBe('0x1')
 		expect(MAINNET_NETWORK_PROFILE.displayName).toBe('Ethereum mainnet')

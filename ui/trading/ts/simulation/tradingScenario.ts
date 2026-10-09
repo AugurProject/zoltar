@@ -20,6 +20,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 	const addresses = getInfraContractAddresses(parameters.profile)
 	const plan = getTradingDeploymentPlan(
 		{
+			genesisOutcome: parameters.profile.genesisOutcome ?? 'yes',
 			chainId: parameters.profile.chain.id,
 			chainName: parameters.profile.displayName,
 			defaultRpcUrl: 'http://127.0.0.1/',

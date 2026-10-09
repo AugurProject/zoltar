@@ -73,6 +73,20 @@ function createReadyState(): SimulationWorkerState {
 }
 
 describe('simulation worker lifecycle', () => {
+	test('passes the genesis choice to the worker and gives No a distinct REP token', async () => {
+		const tokens = []
+		for (const genesisOutcome of ['yes', 'no'] as const) {
+			const worker = createWorkerHarness()
+			const pending = createSimulationBackend({ genesisOutcome }, { createWorkerConnection: () => worker.connection })
+			worker.emitMessage({ state: createReadyState(), type: 'ready' })
+			const backend = await pending
+			expect(backend.profile.genesisOutcome).toBe(genesisOutcome)
+			expect(worker.postMessage.mock.calls[0]?.[0]).toMatchObject({ genesisOutcome, type: 'init' })
+			tokens.push(backend.profile.genesisRepTokenAddress)
+			await backend.dispose()
+		}
+		expect(tokens[0]).not.toBe(tokens[1])
+	})
 	test('answers wallet discovery requests without forwarding them to the worker RPC', async () => {
 		const worker = createWorkerHarness()
 		const backendPromise = createSimulationBackend({}, { createWorkerConnection: () => worker.connection })

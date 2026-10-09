@@ -65,6 +65,23 @@ describe('UniverseBrowser', () => {
 		expect(queries.getAllByRole('link', { name: 'Open' })).toHaveLength(1)
 	})
 
+	test('keeps normal fork ancestry and offers both canonical genesis universes in the outcome controls', async () => {
+		window.history.replaceState({}, '', '?genesis=no#/zoltar?universe=11')
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<UniverseNamesProvider universe={createUniverse()}>
+					<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />
+				</UniverseNamesProvider>,
+			)
+		).cleanup
+		const queries = within(document.body)
+		expect(queries.getByRole('link', { name: 'Genesis › No' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Open Genesis › No' }).getAttribute('aria-pressed')).toBe('true')
+		expect(queries.getByRole('button', { name: 'Open Genesis › No' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.getByRole('button', { name: 'Open Genesis › Yes' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('universe=21')
+	})
+
 	test('shows universe and child details without disclosure controls', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
 		const field = within(document.body).getByText('REP supply').parentElement

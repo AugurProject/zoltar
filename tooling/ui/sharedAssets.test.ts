@@ -29,6 +29,7 @@ const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/core-shared/evm/logScan': '../shared/core/js/evm/logScan.js',
 	'@zoltar/zoltar-shared/questions/scalarOutcome': '../shared/zoltar/js/questions/scalarOutcome.js',
 	'@zoltar/zoltar-shared/deployment/sepoliaRepAllocations': '../shared/zoltar/js/deployment/sepoliaRepAllocations.js',
+	'@zoltar/zoltar-shared/deployment/genesisUniverses': '../shared/zoltar/js/deployment/genesisUniverses.js',
 	'@zoltar/core-shared/serialization/sortStringArrayByKeccak': '../shared/core/js/serialization/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',

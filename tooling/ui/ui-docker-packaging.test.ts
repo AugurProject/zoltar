@@ -181,7 +181,14 @@ describe('UI Docker packaging', () => {
 
 	test('copies every deployment manifest required by the production build', async () => {
 		const common = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'common-builder')
-		expect(dockerInstructions(common, 'COPY')).toEqual(expect.arrayContaining(['./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json', './docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json']))
+		expect(dockerInstructions(common, 'COPY')).toEqual(
+			expect.arrayContaining([
+				'./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json',
+				'./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json',
+				'./docs/mainnet-no-deployment-addresses.json /source/docs/mainnet-no-deployment-addresses.json',
+				'./docs/sepolia-no-deployment-addresses.json /source/docs/sepolia-no-deployment-addresses.json',
+			]),
+		)
 	})
 
 	test('excludes every split-package generated tree from the Docker source context', async () => {

@@ -1,6 +1,7 @@
 import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationInitialization, SimulationSource } from './savedStates.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 export type SimulationWorkerState = {
 	bootstrapError: string | undefined
@@ -48,6 +49,7 @@ type SimulationWorkerJsonValue = string | number | boolean | bigint | null | { [
 export type SimulationWorkerResultValue = SimulationWorkerCallResult | SimulationWorkerJsonValue
 
 type SimulationWorkerInitMessage = {
+	genesisOutcome: GenesisOutcome
 	initialization: SimulationInitialization
 	type: 'init'
 }

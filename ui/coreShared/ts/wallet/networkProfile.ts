@@ -1,6 +1,7 @@
 import { defineChain, getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { mainnet, sepolia, type Chain } from '@zoltar/core-shared/evm/ethereum'
-import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { getSepoliaGenesisRepDeployment, SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { MAINNET_GENESIS_UNIVERSES, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { getUniswapNetworkDeployment, MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { DEFAULT_NETWORK, MAINNET_ENABLED } from './networkAvailability.js'
 import { sameChainId } from './chainId.js'
@@ -11,6 +12,7 @@ export type NetworkProfile = {
 	chainIdHex: string
 	displayName: string
 	genesisRepTokenAddress: Address
+	genesisOutcome?: GenesisOutcome
 	id: 'mainnet' | 'sepolia' | 'simulation'
 	isSupportedAppChain: boolean
 	repPricingMode: 'unavailable' | 'uniswap' | 'mock'
@@ -49,7 +51,8 @@ export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	chain: mainnet,
 	chainIdHex: '0x1',
 	displayName: appCopy.ethereumMainnet,
-	genesisRepTokenAddress: '0x221657776846890989a759ba2973e427dff5c9bb',
+	genesisRepTokenAddress: MAINNET_GENESIS_UNIVERSES.yes.reputationTokenAddress,
+	genesisOutcome: 'yes',
 	id: 'mainnet',
 	isSupportedAppChain: true,
 	repPricingMode: 'uniswap',
@@ -67,6 +70,7 @@ export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 	chainIdHex: '0xaa36a7',
 	displayName: appCopy.sepolia,
 	genesisRepTokenAddress: SEPOLIA_GENESIS_REP_ADDRESS,
+	genesisOutcome: 'yes',
 	id: 'sepolia',
 	isSupportedAppChain: true,
 	repPricingMode: 'uniswap',
@@ -77,6 +81,14 @@ export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 	uniswapV4QuoterAddress: SEPOLIA_UNISWAP.uniswapV4QuoterAddress,
 	usdcAddress: SEPOLIA_USDC_ADDRESS,
 	wethAddress: SEPOLIA_UNISWAP.wethAddress,
+}
+
+export function getGenesisNetworkProfile(profile: NetworkProfile, outcome: GenesisOutcome): NetworkProfile {
+	let genesisRepTokenAddress = profile.genesisRepTokenAddress
+	if (profile.id === 'mainnet') genesisRepTokenAddress = MAINNET_GENESIS_UNIVERSES[outcome].reputationTokenAddress
+	if (profile.id === 'sepolia') genesisRepTokenAddress = getSepoliaGenesisRepDeployment(outcome).address
+	if (profile.genesisOutcome === outcome && profile.genesisRepTokenAddress === genesisRepTokenAddress) return profile
+	return { ...profile, genesisOutcome: outcome, genesisRepTokenAddress }
 }
 
 export function getPublicNetworkProfile(network: string | undefined): NetworkProfile {

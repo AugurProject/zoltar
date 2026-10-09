@@ -4,8 +4,10 @@ import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 export type CoreDeployment = Readonly<{
+	genesisOutcome: GenesisOutcome
 	chainId: number
 	chainName: string
 	defaultRpcUrl: string

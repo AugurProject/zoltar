@@ -7,6 +7,7 @@ import { tradingContracts } from '../../generated/contractArtifact.js'
 function examplePlan() {
 	return getTradingDeploymentPlan(
 		{
+			genesisOutcome: 'yes',
 			chainId: 11_155_111,
 			chainName: 'Sepolia',
 			defaultRpcUrl: 'https://rpc.example',

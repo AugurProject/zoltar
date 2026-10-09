@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from '../ts/protocol/coreDeploymentDefaults.ts'
+import { parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
@@ -27,10 +28,13 @@ function deploymentStepAddress(steps: unknown, id: string) {
 export function coreDeploymentFromManifest(candidate: unknown) {
 	if (!isRecord(candidate) || !isRecord(candidate.network)) throw new Error('Core deployment manifest network is required')
 	const chainId = requiredChainId(candidate.network.chainId)
+	const genesisOutcome = parseGenesisOutcome(typeof candidate.network.genesisOutcome === 'string' ? candidate.network.genesisOutcome : undefined)
+	if (genesisOutcome === undefined) throw new Error('network.genesisOutcome must be yes or no')
 	const rpcUrl = defaultCoreDeploymentRpcUrls[chainId]
 	if (rpcUrl === undefined) throw new Error(`Core deployment manifest chain ${chainId.toString()} has no default RPC URL`)
 	return {
 		chainId,
+		genesisOutcome,
 		chainName: requiredString(candidate.network.name, 'network.name'),
 		rpcUrl,
 		id: requiredString(candidate.network.id, 'network.id'),
@@ -42,7 +46,7 @@ export function coreDeploymentFromManifest(candidate: unknown) {
 
 export async function writeCoreDeploymentRegistry(output: string) {
 	const repositoryRoot = path.resolve(import.meta.dir, '../../..')
-	const manifestPaths = [path.join(repositoryRoot, 'docs/mainnet-deployment-addresses.json'), path.join(repositoryRoot, 'docs/sepolia-deployment-addresses.json')]
+	const manifestPaths = ['mainnet', 'mainnet-no', 'sepolia', 'sepolia-no'].map(network => path.join(repositoryRoot, `docs/${network}-deployment-addresses.json`))
 	const deployments = await Promise.all(
 		manifestPaths.map(async manifestPath => {
 			const candidate: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'))

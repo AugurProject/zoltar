@@ -23,7 +23,14 @@ describe('standalone Docker Compose packaging', () => {
 		const common = requireDockerStage(stages, 'common-builder')
 		const tradingBuilder = requireDockerStage(stages, 'trading-builder')
 		const runtime = requireDockerStage(stages, 'local-runtime-trading')
-		expect(dockerInstructions(common, 'COPY')).toEqual(expect.arrayContaining(['./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json', './docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json']))
+		expect(dockerInstructions(common, 'COPY')).toEqual(
+			expect.arrayContaining([
+				'./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json',
+				'./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json',
+				'./docs/mainnet-no-deployment-addresses.json /source/docs/mainnet-no-deployment-addresses.json',
+				'./docs/sepolia-no-deployment-addresses.json /source/docs/sepolia-no-deployment-addresses.json',
+			]),
+		)
 		expect(dockerInstructions(tradingBuilder, 'RUN').flatMap(shellCommandSegments)).toContain('bun ../../tooling/ui/production.mts trading')
 		expect(dockerInstructions(runtime, 'COPY').some(copy => copy.endsWith('/source/ui/trading/dist/ /app/ui/trading/'))).toBe(true)
 	})

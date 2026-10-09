@@ -8,7 +8,7 @@ import { waitForSubmittedTransactionReceipt } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { SEPOLIA_GENESIS_REP_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -25,6 +25,11 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
 	zoltar: '0xc3a6a5ef53f2dab10b6e50a1d139ee59c74a01480b53aeda78fd488c600c60be',
 	zoltarQuestionData: '0xf0ecbeb457c59c6393a5b382c99a2bbbc8229b88c165b5f953ed126e22aedcc7',
+}
+
+const EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	...EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	zoltar: '0x11045d6afa2355b1d944974d8f848cba581bfe039c6c84cb1e4dfb52e8c11c49',
 }
 
 const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
@@ -56,8 +61,13 @@ const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<D
 	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
-	zoltar: '0xdc05b50c685138a42e27dfe9c6d7de9e6320fc9a23cc6be6201aa6fd033363d6',
+	zoltar: '0x1aef97f283fe70336e045edd950d6fd7365010f03a4ffdf10e747424b13cb539',
 	zoltarQuestionData: '0xf0ecbeb457c59c6393a5b382c99a2bbbc8229b88c165b5f953ed126e22aedcc7',
+}
+
+const EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	...EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	zoltar: '0x796d74a448e70d580410ccc52031c5118fba02694a77b51a4725d3c99e26ac66',
 }
 const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [
 	{
@@ -379,6 +389,7 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: RpcStateRetryWait): DeploymentStep[] {
 	const addresses = getZoltarContractAddresses(profile)
+	const genesisToken = getSepoliaGenesisRepDeployment(profile.genesisOutcome ?? 'yes')
 	const testTokenSteps =
 		profile.id === 'sepolia'
 			? ([
@@ -387,7 +398,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 						label: 'GenesisReputationToken',
 						address: profile.genesisRepTokenAddress,
 						dependencies: ['proxyDeployer'],
-						deploy: async client => await deployViaProxy(client, SEPOLIA_GENESIS_REP_INIT_CODE),
+						deploy: async client => await deployViaProxy(client, genesisToken.initCode),
 					},
 				] satisfies DeploymentStep[])
 			: []
@@ -455,7 +466,7 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 		zoltar: constructorArgumentsFromInitCode(getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress), Zoltar_Zoltar.evm.bytecode.object),
 	}
 	if (profile.id === 'sepolia') {
-		constructorArguments.reputationToken = constructorArgumentsFromInitCode(SEPOLIA_GENESIS_REP_INIT_CODE, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
+		constructorArguments.reputationToken = constructorArgumentsFromInitCode(getSepoliaGenesisRepDeployment(profile.genesisOutcome ?? 'yes').initCode, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
 	}
 	return constructorArguments
 }
@@ -463,8 +474,8 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly DeploymentStep[], profile: NetworkProfile): DeploymentStep[] {
 	return steps.map(step => ({
 		...step,
-		...(profile.id === 'sepolia' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
-		...(profile.id === 'mainnet' ? { expectedRuntimeCodeHash: EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(profile.id === 'sepolia' ? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES : EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES)[step.id] } : {}),
+		...(profile.id === 'mainnet' ? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES : EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES)[step.id] } : {}),
 		...(profile.id === 'simulation' && step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.proxyDeployer } : {}),
 		...(profile.id === 'simulation' ? { trustedSimulationCodePresence: TRUSTED_SIMULATION_CODE_PRESENCE } : {}),
 	}))

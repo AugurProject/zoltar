@@ -14,6 +14,8 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
+import { GenesisUniverseChoices } from './GenesisUniverseChoices.js'
+import { getGenesisUniverseHref, readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
 
 type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
@@ -108,6 +110,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 	const lineage = includeRelatedUniverses ? resolveLineage(universe) : [{ outcomeLabel: universe.outcomeLabel, universeId: universe.universeId }]
 	// The heading names this generation; ancestry belongs in the optional trail.
 	const universeName = formatUniverseViewLabel(universe, universe.universeId, false)
+	const genesisOutcome = readGenesisOutcomeFromLocation()
 	return (
 		<div className='route-view-flow universe-browser'>
 			<SectionBlock variant='plain'>
@@ -136,6 +139,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 				</div>
 			</SectionBlock>
 			{navigation}
+			{genesisOutcome === undefined ? undefined : <GenesisUniverseChoices selected={genesisOutcome} onSelect={outcome => window.location.assign(getGenesisUniverseHref(outcome, true))} />}
 			{!includeRelatedUniverses ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />

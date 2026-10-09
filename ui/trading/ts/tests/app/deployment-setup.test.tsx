@@ -23,6 +23,7 @@ import { formatChainIdHex, readInjectedChainIdNumber, requestInjectedAccount } f
 beforeEach(() => installTradingRouting())
 
 const core = {
+	genesisOutcome: 'yes' as const,
 	chainId: 11_155_111,
 	chainName: 'Sepolia',
 	defaultRpcUrl: 'https://rpc.example',

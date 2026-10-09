@@ -81,12 +81,23 @@ query (for example, `#/deploy?network=sepolia`). The application then uses
 Sepolia chain ID `11155111`, its configured public RPC, Sepolia Etherscan links,
 and Sepolia-specific deterministic contract addresses.
 
-The Sepolia deployment flow installs genesis REP before the contracts that
-depend on it; WETH is Uniswap's published Sepolia contract. Initial Sepolia REP
+The deployment flow installs both Yes and No genesis deployments. Each uses
+its own REP token and Zoltar contract; later forks use the existing universe IDs
+within that deployment. On mainnet the two tokens are Augur V2's REP Yes and REP
+No. Sepolia installs two genesis REP tokens before their dependent contracts;
+WETH is Uniswap's published Sepolia contract. Initial Sepolia REP
 holders and exact 18-decimal balances are defined in
 [`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
-dependent deployment address.
+dependent deployment address for both outcomes. Both tokens mint the same
+allocations, with the constructor lists reversed for No to give it a distinct
+CREATE2 address through the existing zero-salt proxy.
+
+All three apps require a truthful genesis choice. Use `?genesis=yes` or
+`?genesis=no` (also accepted in the route query). Without a valid choice the app
+shows the Augur V2 fork question and asks for Yes or No before starting. The
+universe browser lets users change this choice; later fork selection works as
+before.
 
 ## Testnet deployment
 

@@ -8,6 +8,7 @@ import { initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { withTimeout } from '../lib/promise.js'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
@@ -245,6 +246,7 @@ async function deploySimulationTokens({
 	zoltarAddress: Address
 }) {
 	const writeClient = createWriteClient(primaryAccount)
+	if (profile.genesisOutcome === 'no') await memoryClient.tevmSetAccount({ address: primaryAccount, nonce: 1n })
 	const repDeploymentData = encodeDeployData({
 		abi: ReputationToken_ReputationToken.abi,
 		args: [zoltarAddress],
@@ -271,9 +273,9 @@ async function deploySimulationTokens({
 	})
 }
 
-export function predictSimulationTokenAddresses(accountAddress: Address): { genesisRepTokenAddress: Address; wethAddress: Address } {
+export function predictSimulationTokenAddresses(accountAddress: Address, genesisOutcome: GenesisOutcome = 'yes'): { genesisRepTokenAddress: Address; wethAddress: Address } {
 	return {
-		genesisRepTokenAddress: getCreateAddress({ from: accountAddress, nonce: 0n }),
+		genesisRepTokenAddress: getCreateAddress({ from: accountAddress, nonce: genesisOutcome === 'yes' ? 0n : 1n }),
 		wethAddress: MAINNET_WETH_ADDRESS,
 	}
 }
