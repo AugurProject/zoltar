@@ -1,5 +1,5 @@
 import { afterEach, beforeEach } from 'bun:test'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
@@ -8,7 +8,7 @@ import type { AnvilWindowEthereum } from '../../../../../../../solidity/ts/testS
 import { useIsolatedAnvilNode } from '../../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { addressString } from '../../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
 import { createWriteClient, type WriteClient } from '../../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../../../../../../../solidity/ts/testSupport/simulator/utils/constants'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { ensureInfraDeployed } from '../../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
@@ -42,7 +42,7 @@ export function useSepoliaAnvilUiEnvironment() {
 		const client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow, walletAddress)
 		// Preserve the seeded token addresses while exercising UI writes on Sepolia.
-		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)), chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(client)
 		await ensureZoltarDeployed(client)
