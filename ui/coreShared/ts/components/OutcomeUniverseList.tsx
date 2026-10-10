@@ -1,12 +1,11 @@
 import type { ComponentChildren } from 'preact'
 import { useId } from 'preact/hooks'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { formatOpenChildUniverse } from '../../../copy/zoltar.js'
-import * as copy from '../../../copy/universeNavigation.js'
+import { Badge } from './Badge.js'
+import { OutcomeSelectionList } from './OutcomeSelectionList.js'
+import * as commonCopy from '../copy/common.js'
+import * as universeCopy from '../copy/universes.js'
 
-type Outcome = { exists: boolean; label: string; universeId: bigint; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
+type Outcome = { key: string; exists: boolean; label: string; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
 
 /**
  * Outcome names and deployment status stay consistent while navigation and selection keep their own semantics.
@@ -19,9 +18,9 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 			className={className}
 			emptyMessage={emptyMessage}
 			items={outcomes.map(outcome => ({
-				key: outcome.universeId.toString(),
-				ariaLabel: selection ? outcome.label : formatOpenChildUniverse(outcome.label),
-				describedById: `${statusId}-${outcome.universeId}`,
+				key: outcome.key,
+				ariaLabel: selection ? outcome.label : universeCopy.formatOpenChildUniverse(outcome.label),
+				describedById: `${statusId}-${outcome.key}`,
 				label: (
 					<>
 						{selection ? (
@@ -30,12 +29,12 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 							</span>
 						) : undefined}
 						{outcome.label}
-						{!selection && outcome.exists ? <span aria-hidden='true'>{copy.openOutcomeArrowTail}</span> : undefined}
+						{!selection && outcome.exists ? <span aria-hidden='true'>{universeCopy.openOutcomeArrowTail}</span> : undefined}
 					</>
 				),
 				details: (
 					<>
-						<span id={`${statusId}-${outcome.universeId}`}>
+						<span id={`${statusId}-${outcome.key}`}>
 							<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
 							{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
 						</span>

@@ -44,6 +44,13 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
+const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
+	securityPoolFactory: '0xdc370dd1a065fb80f2be0fd6a8774f2cf8ae7bab9a7eb113b12c2ce9a6ea72ab',
+	securityPoolForker: '0xb11b2a8da9a7eaf30bca074651083981e4183a53b399d04907294979d267b441',
+	shareTokenFactory: '0x6e82931828c37f6cd96894609d72f84d248b8d4cd1c8caaed6120acd1b42bc4a',
+}
+
 function getSecurityPoolUtilsRuntimeCode() {
 	const artifactRuntimeCode = `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.deployedBytecode.object}` satisfies Hex
 	const immutableAddressStart = 7
@@ -77,12 +84,19 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x89289d1316cb82849ae9a75db1110009a753d4913542281ed0f2c2dba962ac13',
-	securityPoolFactory: '0xfa492fe2236baa76f2e6addfd7d3f793db565be25203970e61bdb6fb5226b37f',
+	securityPoolFactory: '0xc665759f84eb02e6376a3b54c5322f5d9b0720d6f184e7848533e61e5724966d',
 	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xd12fb332dba1a9c4679de9c238bea9b807d6797bd0fcc01c53d80dc01fb9d042',
+	securityPoolForker: '0xb2f82cb81b54ac0850df5f4795cc717eaa5b5ee1fbd28f357d4f6d9545f09d83',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
-	shareTokenFactory: '0x1bf688e11b6f3558844dcb52898e879f878b2035f6c73b92628460dabd6d6b1e',
+	shareTokenFactory: '0x54e3cd76c897e09d7c9ebce4ef6e466f842e0bf6f2af7f2705fdaa55a8aee957',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
+}
+
+const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
+	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
+	securityPoolFactory: '0x962bf62946250c3b9ffa7007cad1d59de60efdd31c9bb52501d2e2115eece2b5',
+	securityPoolForker: '0x50c3b0fe26132cc3ff3b88fd47ce7165d0ec35f975dc0bd40fd990c9abffe8a8',
+	shareTokenFactory: '0x843817ae6125b999580f84716149c9ce04c18437007044ede4896c7278a19196',
 }
 
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: Parameters<typeof getZoltarDeploymentSteps>[1]): DeploymentStep[] {
@@ -173,8 +187,10 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({
 		...step,
-		...(profile.id === 'sepolia' && EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
-		...(profile.id === 'mainnet' && EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] } : {}),
+		...(profile.id === 'sepolia' && EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] !== undefined
+			? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES : EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES)[step.id] }
+			: {}),
+		...(profile.id === 'mainnet' && EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES : EXPECTED_MAINNET_RUNTIME_CODE_HASHES)[step.id] } : {}),
 	}))
 }
 

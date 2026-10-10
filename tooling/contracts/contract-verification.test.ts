@@ -7,9 +7,9 @@ import { repositoryRoot } from '../repo/root.mts'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
 import { createArtifactLookup, parseRequestedChainIds } from './verify-contracts.mts'
 
-async function loadRealManifest(networkId: 'mainnet' | 'sepolia'): Promise<DeploymentManifest> {
-	const rawManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'docs', `${networkId}-deployment-addresses.json`), 'utf8'))
-	return parseDeploymentManifest(rawManifest, networkId)
+async function loadRealManifest(networkId: 'mainnet' | 'sepolia', genesisOutcome: 'yes' | 'no' = 'yes'): Promise<DeploymentManifest> {
+	const rawManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'docs', `${networkId}${genesisOutcome === 'no' ? '-no' : ''}-deployment-addresses.json`), 'utf8'))
+	return parseDeploymentManifest(rawManifest, networkId, genesisOutcome)
 }
 
 async function loadRealArtifactLookup() {
@@ -19,11 +19,18 @@ async function loadRealArtifactLookup() {
 test('every manifest deployment step is either verifiable or explicitly skipped, and every init code reproduces its manifest address', async () => {
 	const artifactLookup = await loadRealArtifactLookup()
 	for (const networkId of ['mainnet', 'sepolia'] as const) {
-		const manifest = await loadRealManifest(networkId)
-		const plan = buildVerificationPlan(manifest, artifactLookup)
-		expect(plan.skipped.map(step => step.id)).toEqual(['proxyDeployer'])
-		expect(plan.jobs.map(job => job.id)).toEqual(manifest.deploymentSteps.map(step => step.id).filter(id => id !== 'proxyDeployer'))
+		for (const genesisOutcome of ['yes', 'no'] as const) {
+			const manifest = await loadRealManifest(networkId, genesisOutcome)
+			const plan = buildVerificationPlan(manifest, artifactLookup)
+			expect(plan.skipped.map(step => step.id)).toEqual(['proxyDeployer'])
+			expect(plan.jobs.map(job => job.id)).toEqual(manifest.deploymentSteps.map(step => step.id).filter(id => id !== 'proxyDeployer'))
+		}
 	}
+})
+
+test('manifest parsing rejects a different genesis outcome', async () => {
+	const manifest = await loadRealManifest('sepolia', 'no')
+	expect(() => parseDeploymentManifest(manifest, 'sepolia', 'yes')).toThrow('Expected yes genesis outcome, received no')
 })
 
 test('verification does not require a deployment for the internal scalar library', async () => {

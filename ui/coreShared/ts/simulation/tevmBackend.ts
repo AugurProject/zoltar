@@ -2,7 +2,8 @@ import { withTimeout } from '../lib/promise.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
-import { createSimulationProfile } from '../wallet/networkProfile.js'
+import { createSimulationProfile, getGenesisNetworkProfile } from '../wallet/networkProfile.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -90,17 +91,18 @@ function createWorkerConnection(workerPath: URL): SimulationWorkerConnection {
 export async function createSimulationBackend(
 	{
 		appId = 'zoltar',
+		genesisOutcome = 'yes',
 		initialBootstrapError,
 		savedState,
 		savedStateId,
 		scenario,
 		walletMode = DEFAULT_SIMULATION_WALLET_MODE,
-	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
+	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; genesisOutcome?: GenesisOutcome; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
-	const profile = createSimulationProfile(predictSimulationTokenAddresses(primaryAccount))
+	const profile = getGenesisNetworkProfile(createSimulationProfile(predictSimulationTokenAddresses(primaryAccount, genesisOutcome)), genesisOutcome)
 	const initialization: SimulationInitialization =
 		savedState !== undefined && savedStateId !== undefined
 			? {
@@ -122,6 +124,7 @@ export async function createSimulationBackend(
 	let bootstrapPromise: Promise<void> | undefined = undefined
 	let disposed = false
 	let terminalError: Error | undefined = undefined
+	let bootstrapWarning = initialBootstrapError
 	let rejectReady: ((error: Error) => void) | undefined = undefined
 
 	const rejectPendingRequests = (error: Error) => {
@@ -279,6 +282,7 @@ export async function createSimulationBackend(
 		})
 		try {
 			worker.postMessage({
+				genesisOutcome,
 				initialization,
 				type: 'init',
 			} satisfies SimulationWorkerMessage)
@@ -347,7 +351,7 @@ export async function createSimulationBackend(
 			return await bootstrapPromise
 		},
 		get bootstrapError() {
-			return requireState().bootstrapError
+			return requireState().bootstrapError ?? bootstrapWarning
 		},
 		get bootstrapLabel() {
 			return requireState().bootstrapLabel
@@ -434,6 +438,7 @@ export async function createSimulationBackend(
 			return await callWorker('getAccounts', undefined)
 		},
 		reset: async () => {
+			bootstrapWarning = undefined
 			await callWorker('reset', undefined)
 		},
 		selectAccount: async address => {

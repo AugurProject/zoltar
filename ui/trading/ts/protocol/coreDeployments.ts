@@ -4,6 +4,7 @@ import type { CoreDeployment } from './deployment.js'
 import { deploymentRegistryUnavailable } from '../copy/app.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
@@ -26,10 +27,13 @@ function parseCoreDeployments(candidate: unknown): readonly CoreDeployment[] {
 		if (!isRecord(value)) throw new Error(`Core deployment ${index.toString()} must be an object`)
 		if (typeof value['chainId'] !== 'number' || !Number.isSafeInteger(value['chainId']) || value['chainId'] <= 0) throw new Error(`Core deployment ${index.toString()} chainId must be a positive safe integer`)
 		const chainId = value['chainId']
+		const genesisOutcome = parseGenesisOutcome(typeof value['genesisOutcome'] === 'string' ? value['genesisOutcome'] : undefined)
+		if (genesisOutcome === undefined) throw new Error(`Core deployment ${index.toString()} genesisOutcome must be yes or no`)
 		const rpcUrl = value['rpcUrl'] === undefined ? defaultCoreDeploymentRpcUrls[chainId] : value['rpcUrl']
 		if (rpcUrl === undefined) throw new Error(`Core deployment ${index.toString()} has no default RPC URL`)
 		return {
 			chainId,
+			genesisOutcome,
 			chainName: requiredString(value['chainName'], `Core deployment ${index.toString()} chainName`),
 			defaultRpcUrl: requiredString(rpcUrl, `Core deployment ${index.toString()} rpcUrl`),
 			id: requiredString(value['id'], `Core deployment ${index.toString()} id`),
@@ -38,10 +42,11 @@ function parseCoreDeployments(candidate: unknown): readonly CoreDeployment[] {
 			zoltar: requiredAddress(value['zoltar'], `Core deployment ${index.toString()} zoltar`),
 		}
 	})
-	const chainIds = new Set<number>()
+	const identities = new Set<string>()
 	for (const deployment of deployments) {
-		if (chainIds.has(deployment.chainId)) throw new Error(`Core deployment registry repeats chain ${deployment.chainId.toString()}`)
-		chainIds.add(deployment.chainId)
+		const identity = `${deployment.chainId}:${deployment.genesisOutcome}`
+		if (identities.has(identity)) throw new Error(`Core deployment registry repeats chain ${deployment.chainId.toString()} genesis ${deployment.genesisOutcome}`)
+		identities.add(identity)
 	}
 	return deployments
 }
@@ -52,6 +57,7 @@ export async function loadCoreDeployments() {
 		return [
 			{
 				chainId: backend.profile.chain.id,
+				genesisOutcome: backend.profile.genesisOutcome ?? 'yes',
 				chainName: backend.profile.displayName,
 				defaultRpcUrl: 'http://127.0.0.1/',
 				id: 'simulation',
@@ -70,5 +76,5 @@ export async function loadCoreDeployments() {
 	}
 	if (!response.ok) throw new Error(deploymentRegistryUnavailable)
 	const candidate: unknown = await response.json()
-	return parseCoreDeployments(candidate)
+	return parseCoreDeployments(candidate).filter(deployment => deployment.genesisOutcome === (backend.profile.genesisOutcome ?? 'yes'))
 }

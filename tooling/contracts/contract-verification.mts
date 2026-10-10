@@ -11,7 +11,7 @@ export type DeploymentManifest = {
 	// constructor takes none); it is absent for steps not deployed from
 	// compiled init code, such as the raw proxy deployer.
 	deploymentSteps: readonly { address: Address; constructorArguments?: string; id: string; label: string }[]
-	network: { chainId: number; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
+	network: { chainId: number; genesisOutcome: 'yes' | 'no'; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
 	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint; minimumSecurityBondDebtAttoEth: bigint; minimumVaultRepDepositAttoRep: bigint }
 }
 
@@ -57,7 +57,7 @@ function readDecimalBigInt(source: Record<string, unknown>, field: string, label
 	return BigInt(value)
 }
 
-export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId: 'mainnet' | 'sepolia'): DeploymentManifest {
+export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId: 'mainnet' | 'sepolia', expectedGenesisOutcome: 'yes' | 'no' = 'yes'): DeploymentManifest {
 	if (!isRecord(rawManifest)) throw new Error('Deployment manifest must be an object')
 	const network = rawManifest['network']
 	const protocolConfig = rawManifest['protocolConfig']
@@ -69,6 +69,8 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 	if (typeof chainId !== 'number') throw new Error('Deployment manifest network.chainId must be a number')
 	const networkId = readString(network, 'id', 'network.id')
 	if (networkId !== expectedNetworkId) throw new Error(`Expected ${expectedNetworkId} deployment manifest, received ${networkId}`)
+	const genesisOutcome = readString(network, 'genesisOutcome', 'network.genesisOutcome')
+	if (genesisOutcome !== expectedGenesisOutcome) throw new Error(`Expected ${expectedGenesisOutcome} genesis outcome, received ${genesisOutcome}`)
 	return {
 		deploymentSteps: deploymentSteps.map((step, index) => {
 			if (!isRecord(step)) throw new Error(`Deployment manifest step ${index.toString()} must be an object`)
@@ -85,6 +87,7 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 		}),
 		network: {
 			chainId,
+			genesisOutcome,
 			genesisRepTokenAddress: getAddress(readString(network, 'genesisRepTokenAddress', 'network.genesisRepTokenAddress')),
 			id: networkId,
 			wethAddress: getAddress(readString(network, 'wethAddress', 'network.wethAddress')),

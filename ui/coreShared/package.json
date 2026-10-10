@@ -82,6 +82,10 @@
 			"bun": "./ts/app/components/ApplicationErrorNotice.tsx",
 			"default": "./js/app/components/ApplicationErrorNotice.js"
 		},
+		"./app/components/GenesisUniverseEntry.js": {
+			"bun": "./ts/app/components/GenesisUniverseEntry.tsx",
+			"default": "./js/app/components/GenesisUniverseEntry.js"
+		},
 		"./app/components/ThemeSetting.js": {
 			"bun": "./ts/app/components/ThemeSetting.tsx",
 			"default": "./js/app/components/ThemeSetting.js"
@@ -97,6 +101,14 @@
 		"./components/CopyStatus.js": {
 			"bun": "./ts/components/CopyStatus.tsx",
 			"default": "./js/components/CopyStatus.js"
+		},
+		"./components/ForkUniverseNavigation.js": {
+			"bun": "./ts/components/ForkUniverseNavigation.tsx",
+			"default": "./js/components/ForkUniverseNavigation.js"
+		},
+		"./components/OutcomeUniverseList.js": {
+			"bun": "./ts/components/OutcomeUniverseList.tsx",
+			"default": "./js/components/OutcomeUniverseList.js"
 		},
 		"./components/InlineHint.js": {
 			"bun": "./ts/components/InlineHint.tsx",

@@ -14,6 +14,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
+import { getGenesisUniverseHref, readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
 
 type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
@@ -40,6 +41,16 @@ function resolveLineage(universe: ZoltarUniverseSummary): readonly UniverseLinea
 	const lineage = universe.lineage
 	if (lineage !== undefined && lineage.length > 0) return lineage
 	return [{ outcomeLabel: undefined, universeId: universe.universeId }]
+}
+
+function ParentUniverseLink({ universe }: { universe: ZoltarUniverseSummary }) {
+	if (universe.universeId !== 0n) return <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />
+	if (readGenesisOutcomeFromLocation() === undefined) return commonCopy.none
+	return (
+		<a className='universe-link universe-parent-link' href={getGenesisUniverseHref(undefined, true)}>
+			{universeCopy.augurFork}
+		</a>
+	)
 }
 
 function UniverseLineageTrail({ lineage }: { lineage: readonly UniverseLineageStep[] }) {
@@ -102,7 +113,8 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 
 /**
  * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
- * universes its fork created. Opening the parent or a child changes the shared `universe` query parameter.
+ * universes its fork created. Ordinary parent and child links change the shared `universe` query parameter;
+ * a canonical root's parent returns to the historical Augur fork before choosing a deployment.
  */
 export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe, includeRelatedUniverses = universe.relatedUniversesLoaded !== false }: UniverseBrowserProps) {
 	const lineage = includeRelatedUniverses ? resolveLineage(universe) : [{ outcomeLabel: universe.outcomeLabel, universeId: universe.universeId }]
@@ -128,7 +140,9 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 						<MetricField label={universeCopy.universeId}>
 							<span className='universe-id-value'>{formatUniverseIdHex(universe.universeId)}</span>
 						</MetricField>
-						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />}</MetricField>
+						<MetricField label={universeCopy.parentUniverse}>
+							<ParentUniverseLink universe={universe} />
+						</MetricField>
 						<MetricField label={universeCopy.repSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>

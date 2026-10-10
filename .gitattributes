@@ -19,6 +19,7 @@
 /docs/reference/contracts.html linguist-generated=true
 /docs/reference/contracts/*.html linguist-generated=true
 /docs/assets/screenshots/** linguist-generated=true
+/docs/*deployment-addresses.json linguist-generated=true
 /bots/shared/src/contracts/abi.generated.ts linguist-generated=true
 /bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts linguist-generated=true
 /bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts linguist-generated=true

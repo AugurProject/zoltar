@@ -13,7 +13,8 @@ import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { loadScalarUniverseOutcome, type UniverseOutcome } from '../../../protocol/universeNavigation.js'
-import { formatOpenChildUniverse, openChildUniverse } from '../../../copy/zoltar.js'
+import { formatOpenChildUniverse } from '@zoltar/ui-core-shared/copy/universes.js'
+import { openChildUniverse } from '../../../copy/zoltar.js'
 import * as copy from '../../../copy/universeNavigation.js'
 
 export type LoadScalarUniverseOutcome = (address: Address, universeId: bigint, outcomeIndex: bigint) => Promise<UniverseOutcome>

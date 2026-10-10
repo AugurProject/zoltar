@@ -5,11 +5,12 @@ import { createPublicClient, createWalletClient, custom, encodeFunctionData, get
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../wallet/chainBackend.js'
 import { withTransactionCallbacks } from './writeClientCallbacks.js'
-import { createSimulationProfile } from '../wallet/networkProfile.js'
+import { createSimulationProfile, getGenesisNetworkProfile } from '../wallet/networkProfile.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
 import { advanceSimulationTime, advanceNextSimulationBlock, includePendingSimulationTransaction } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
-import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization, type SimulationSource } from './savedStates.js'
+import { getSimulationSource, serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationWorkerState } from './tevmWorkerProtocol.js'
 const QA_ACCOUNTS = [getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000b2'), getAddress('0x00000000000000000000000000000000000000c3')] as const satisfies readonly Address[]
@@ -181,21 +182,6 @@ function getInitializationScenario(initialization: SimulationInitialization): Si
 	return initialization.kind === 'scenario' ? initialization.scenario : initialization.envelope.baseScenario
 }
 
-function getSimulationSource(initialization: SimulationInitialization): SimulationSource {
-	return initialization.kind === 'scenario'
-		? {
-				kind: 'scenario',
-				scenario: initialization.scenario,
-			}
-		: {
-				baseScenario: initialization.envelope.baseScenario,
-				kind: 'saved-state',
-				name: initialization.envelope.name,
-				savedAt: initialization.envelope.savedAt,
-				stateId: initialization.stateId,
-			}
-}
-
 async function requireSuccessfulLoadState(memoryClient: MemoryClientLike, state: DumpedTevmState) {
 	const result = await memoryClient.tevmLoadState({ state })
 	if (result.errors === undefined || result.errors.length === 0) return
@@ -258,11 +244,11 @@ export type SimulationEngineDependencies = {
 	getZoltarAddress: (profile: ReturnType<typeof createSimulationProfile>) => Address
 }
 
-export async function createSimulationEngine({ initialization, dependencies }: { initialization: SimulationInitialization; dependencies: SimulationEngineDependencies }): Promise<SimulationEngine> {
+export async function createSimulationEngine({ initialization, dependencies, genesisOutcome = 'yes' }: { initialization: SimulationInitialization; dependencies: SimulationEngineDependencies; genesisOutcome?: GenesisOutcome }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
-	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount)
-	const profile = createSimulationProfile(predictedTokenAddresses)
+	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount, genesisOutcome)
+	const profile = getGenesisNetworkProfile(createSimulationProfile(predictedTokenAddresses), genesisOutcome)
 	const baseScenario = getInitializationScenario(initialization)
 	let memoryClient = createSimulationMemoryClient(profile)
 	const stateListeners = new Set<() => void>()
@@ -377,6 +363,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 		})
 	}
 	const restoreSavedStateEnvelope = async (envelope: SavedSimulationStateEnvelopeV1, progressLabel: string) => {
+		if ((envelope.genesisOutcome ?? 'yes') !== genesisOutcome) throw new Error('The saved state belongs to another genesis universe.')
 		bootstrapError = undefined
 		bootstrapLabel = progressLabel
 		bootstrapProgress = 0
@@ -631,6 +618,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 			if (normalizedName === '') throw new Error('Saved simulation state name is required')
 			return serializeSavedSimulationStateEnvelope({
 				baseScenario,
+				genesisOutcome,
 				name: normalizedName,
 				savedAt: new Date().toISOString(),
 				state: {

@@ -33,6 +33,8 @@ const deploymentEntries = (value: unknown, name: string): DeploymentFile['deploy
 }
 const deploymentFile = (value: unknown, source: string): DeploymentFile => {
 	if (!isRecord(value) || !isRecord(value['network'])) throw new Error(`${source} has no network object`)
+	// Universe identities are scoped to a chain in the scanner, so each chain indexes one genesis deployment.
+	if (value['network']['genesisOutcome'] !== 'yes') throw new Error(`${source}.network.genesisOutcome must be yes for the scanner deployment`)
 	return {
 		network: {
 			id: requiredString(value['network']['id'], `${source}.network.id`),

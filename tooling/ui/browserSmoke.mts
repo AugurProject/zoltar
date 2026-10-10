@@ -162,7 +162,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 	const route = process.env['UI_BROWSER_ROUTE'] ?? ''
 	if (route !== '' && !route.startsWith('#')) throw new Error(`Invalid UI_BROWSER_ROUTE '${route}'; expected an empty value or a hash route.`)
 	const simulationScenario = process.env['UI_SIMULATION_SCENARIO'] ?? (appId === 'trading' ? 'trading-funded' : 'baseline')
-	const pageUrl = `${baseUrl.replace(/\/$/, '')}/?simulate=1&simScenario=${encodeURIComponent(simulationScenario)}${route}`
+	const pageUrl = `${baseUrl.replace(/\/$/, '')}/?simulate=1&genesis=yes&simScenario=${encodeURIComponent(simulationScenario)}${route}`
 	const viewport = parseViewport(process.env['UI_VIEWPORT'])
 	const session = await createDevToolsSession(chromiumPath, pageUrl, viewport)
 	try {

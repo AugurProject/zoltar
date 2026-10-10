@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { assertDeploymentManifestCurrent, deploymentRuntimeTypeScriptProjects, ensureDeploymentRuntimeDependencies, readDeploymentSteps } from './check-mainnet-deployment.mts'
+import { assertDeploymentManifestCurrent, deploymentRuntimeTypeScriptProjects, ensureDeploymentRuntimeDependencies, manifestIds, readDeploymentSteps } from './check-mainnet-deployment.mts'
 
 describe('deployment manifest freshness', () => {
+	test('owns Yes and No manifests for both public networks', () => {
+		expect(manifestIds).toEqual(['mainnet', 'mainnet-no', 'sepolia', 'sepolia-no'])
+	})
 	test('builds shared libraries in dependency order without compiling an application leaf', () => {
 		expect(deploymentRuntimeTypeScriptProjects).toEqual(['ui/coreShared/tsconfig.json', 'ui/zoltarShared/tsconfig.json', 'ui/statoblastShared/tsconfig.json'])
 	})

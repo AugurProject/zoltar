@@ -7,11 +7,12 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import * as marketCopy from '../../../copy/market.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { OutcomeUniverseList } from './OutcomeUniverseList.js'
+import { OutcomeUniverseList } from '@zoltar/ui-core-shared/components/OutcomeUniverseList.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import type { MigrationWizardOutcome } from '../lib/migrationWizard.js'
@@ -98,7 +99,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 					return {
 						actions: outcome.exists ? (
 							<UniverseLink href={browser === undefined ? undefined : buildRouteHref(browser.routeHash, writeUniverseQueryParam(browser.search, outcome.universeId))} className='button-link secondary-link' universeId={outcome.universeId}>
-								{zoltarCopy.formatOpenChildUniverse(outcome.label)}
+								{universeCopy.formatOpenChildUniverse(outcome.label)}
 							</UniverseLink>
 						) : (
 							<TransactionActionButton
@@ -123,7 +124,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 						),
 						disabled,
 						exists: outcome.exists,
-						universeId: outcome.universeId,
+						key: outcome.universeId.toString(),
 						label: outcome.label,
 						onSelect: () => onToggleOutcomeIndex(outcome.outcomeIndex),
 						selected: outcome.selected,

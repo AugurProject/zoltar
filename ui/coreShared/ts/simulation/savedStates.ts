@@ -1,6 +1,22 @@
 import { getErrorMessage } from '../lib/errors.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
 import type { SimulationScenario } from './scenarios.js'
+import { parseGenesisOutcome, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+
+export function getSimulationSource(initialization: SimulationInitialization): SimulationSource {
+	return initialization.kind === 'scenario'
+		? {
+				kind: 'scenario',
+				scenario: initialization.scenario,
+			}
+		: {
+				baseScenario: initialization.envelope.baseScenario,
+				kind: 'saved-state',
+				name: initialization.envelope.name,
+				savedAt: initialization.envelope.savedAt,
+				stateId: initialization.stateId,
+			}
+}
 
 const SAVED_SIMULATION_STATES_STORAGE_KEY = 'zoltar.simulation.savedStates'
 const SAVED_SIMULATION_STATES_CORRUPTED_BACKUP_STORAGE_KEY = 'zoltar.simulation.savedStates.corruptedBackup'
@@ -22,6 +38,7 @@ type SimulationSnapshotV1 = {
 
 export type SavedSimulationStateEnvelopeV1 = {
 	baseScenario: SimulationScenario
+	genesisOutcome?: GenesisOutcome
 	name: string
 	savedAt: string
 	state: SimulationSnapshotV1
@@ -150,6 +167,7 @@ function isNonNegativeBigInt(value: unknown) {
 
 function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulationStateEnvelopeV1 {
 	if (!isObjectRecord(value)) throw new SavedSimulationStateError('Saved simulation state must be a JSON object')
+	if (value['genesisOutcome'] !== undefined && (typeof value['genesisOutcome'] !== 'string' || parseGenesisOutcome(value['genesisOutcome']) === undefined)) throw new SavedSimulationStateError('Saved simulation state has an invalid genesis universe')
 	if (value['version'] !== SAVED_SIMULATION_STATE_VERSION) throw new SavedSimulationStateError(`Unsupported saved simulation state version: ${String(value['version'])}`)
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state is missing a name')
 	if (typeof value['savedAt'] !== 'string' || value['savedAt'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a savedAt timestamp')

@@ -65,6 +65,37 @@ describe('UniverseBrowser', () => {
 		expect(queries.getAllByRole('link', { name: 'Open' })).toHaveLength(1)
 	})
 
+	test('keeps normal fork ancestry without repeating the historical fork choices on descendants', async () => {
+		window.history.replaceState({}, '', '?genesis=no#/zoltar?universe=11')
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<UniverseNamesProvider universe={createUniverse()}>
+					<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />
+				</UniverseNamesProvider>,
+			)
+		).cleanup
+		const queries = within(document.body)
+		expect(queries.getByRole('link', { name: 'Genesis › No' })).toBeTruthy()
+		expect(queries.queryByRole('button', { name: 'Open Genesis › No' })).toBeNull()
+		expect(queries.queryByRole('button', { name: 'Open Genesis › Yes' })).toBeNull()
+		expect(queries.queryByRole('link', { name: 'Augur v2 fork' })).toBeNull()
+		expect(queries.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('universe=21')
+	})
+
+	for (const outcome of ['yes', 'no']) {
+		test(`links the ${outcome} genesis root to its Augur parent through ordinary parent navigation`, async () => {
+			window.history.replaceState({}, '', `?genesis=${outcome}&simulate=1&simState=saved#/zoltar?zoltarView=universes&universe=0`)
+			cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+			const queries = within(document.body)
+			const field = queries.getByText('Parent universe').parentElement
+			if (field === null) throw new Error('Expected the parent universe field')
+			const parent = within(field).getByRole('link', { name: 'Augur v2 fork' })
+			expect(parent.classList.contains('universe-parent-link')).toBe(true)
+			expect(parent.getAttribute('href')).toBe('http://localhost/?simulate=1#/')
+			expect(queries.queryByRole('button', { name: 'Open Genesis › Yes' })).toBeNull()
+		})
+	}
+
 	test('shows universe and child details without disclosure controls', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} />)).cleanup
 		const field = within(document.body).getByText('REP supply').parentElement

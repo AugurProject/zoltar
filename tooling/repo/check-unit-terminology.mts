@@ -14,6 +14,8 @@ const serializedAtomicStringAllowlist = new Set([
 	'bots/liquidator/tests/config/settings.test.ts',
 	'docs/mainnet-deployment-addresses.json',
 	'docs/sepolia-deployment-addresses.json',
+	'docs/mainnet-no-deployment-addresses.json',
+	'docs/sepolia-no-deployment-addresses.json',
 	'tooling/contracts/check-mainnet-deployment.mts',
 	'solidity/ts/types/index.d.ts',
 ])

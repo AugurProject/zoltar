@@ -74,3 +74,20 @@ test('rejects unmapped deployment IDs instead of silently dropping them', async 
 		await rm(fixtureRoot, { recursive: true, force: true })
 	}
 })
+
+test('rejects metadata inputs for a different or unspecified genesis root', async () => {
+	const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-genesis-selection-'))
+	try {
+		await mkdir(path.join(fixtureRoot, 'docs'))
+		for (const genesisOutcome of ['no', undefined]) {
+			for (const network of ['mainnet', 'sepolia']) {
+				const deployment = await Bun.file(path.join(root, '../docs', `${network}-deployment-addresses.json`)).json()
+				deployment.network.genesisOutcome = genesisOutcome
+				await Bun.write(path.join(fixtureRoot, 'docs', `${network}-deployment-addresses.json`), JSON.stringify(deployment))
+			}
+			await expect(projectManifests(fixtureRoot)).rejects.toThrow('network.genesisOutcome must be yes')
+		}
+	} finally {
+		await rm(fixtureRoot, { recursive: true, force: true })
+	}
+})

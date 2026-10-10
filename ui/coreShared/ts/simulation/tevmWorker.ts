@@ -104,6 +104,7 @@ scope.onmessage = event => {
 				const dependencies = globalThis.zoltarSimulationEngineDependencies
 				if (dependencies === undefined) throw new Error('Simulation engine dependencies were not registered before worker initialization')
 				enginePromise = createSimulationEngine({
+					genesisOutcome: message.genesisOutcome,
 					dependencies,
 					initialization: message.initialization,
 				})

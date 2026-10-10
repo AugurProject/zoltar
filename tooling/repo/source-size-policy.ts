@@ -24,7 +24,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [['bots/liquidator/src/state/operator-state.ts', 632]]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
-		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
+		['ui/coreShared/ts/simulation/tevmEngine.ts', 765],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 683],
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
@@ -33,7 +33,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/testing/coverage-report.mts', 931],
 		['tooling/docs/check-docs-reference-values.mts', 791],
 		['tooling/ui/watch.mts', 781],
-		['tooling/contracts/deploy-testnet.mts', 671],
+		['tooling/contracts/deploy-testnet.mts', 666],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 1049],
