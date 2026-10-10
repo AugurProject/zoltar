@@ -10,8 +10,8 @@ export function readGenesisOutcomeFromLocation(location: GenesisLocation = windo
 	return readGenesisQueryParam(new URLSearchParams(hashSearch).has('genesis') ? hashSearch : location.search)
 }
 
-/** Selecting the initial branch preserves a deep link; switching branches retires entity and fork IDs from the previous deployment. */
-export function getGenesisUniverseHref(outcome: GenesisOutcome, resetUniverse = false, href = window.location.href) {
+/** Selecting an initial branch preserves a deep link; returning to the Augur parent or switching branches retires deployment-specific state. */
+export function getGenesisUniverseHref(outcome: GenesisOutcome | undefined, resetUniverse = false, href = window.location.href) {
 	const url = new URL(href)
 	const route = parseRouteHash(url.hash)
 	url.search = writeGenesisQueryParam(url.search, outcome)

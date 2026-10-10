@@ -491,7 +491,7 @@ for (const appId of UI_APP_IDS) {
 			const body = await driver.waitForBodyText(AUGUR_GENESIS_FORK_QUESTION)
 			expect(body).toContain('Choose the truthful universe')
 			expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
-			await driver.clickButton('Open Genesis › No')
+			await driver.clickButton('Open No universe')
 			await driver.waitForBodyText('Browser simulation')
 			expect(await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisOutcome')).toBe('no')
 			expect(await driver.evaluate('new URLSearchParams(location.search).get("genesis")')).toBe('no')

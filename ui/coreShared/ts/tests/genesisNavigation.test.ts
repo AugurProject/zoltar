@@ -21,3 +21,13 @@ test('switching genesis retires addressed entities, fork IDs, and saved states w
 	expect(url.search).toBe('?genesis=no&simulate=1&simWallet=disconnected')
 	expect(url.hash).toBe('#/?rpcUrl=https%3A%2F%2Frpc.example&simScenario=deployed')
 })
+
+test('opening the Augur parent clears both genesis parameters and deployment state before another child is selected', () => {
+	const url = new URL(getGenesisUniverseHref(undefined, true, 'http://localhost/?genesis=yes&universe=42&simulate=1&simState=saved#/zoltar?genesis=no&universe=42&simScenario=deployed'))
+	expect(url.search).toBe('?simulate=1')
+	expect(url.hash).toBe('#/?simScenario=deployed')
+	expect(readGenesisOutcomeFromLocation(url)).toBeUndefined()
+	const next = new URL(getGenesisUniverseHref('no', false, url.href))
+	expect(next.search).toBe('?simulate=1&genesis=no')
+	expect(next.hash).toBe('#/?simScenario=deployed')
+})

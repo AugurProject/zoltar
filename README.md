@@ -96,8 +96,9 @@ CREATE2 address through the existing zero-salt proxy.
 All three apps require a truthful genesis choice. Use `?genesis=yes` or
 `?genesis=no` (also accepted in the route query). Without a valid choice the app
 shows the Augur V2 fork question and asks for Yes or No before starting. The
-universe browser lets users change this choice; later fork selection works as
-before.
+genesis root's Parent universe link returns to the Augur fork, where users can
+open either child using the same outcome controls as later forks. Descendants
+keep their ordinary parent and child navigation.
 
 ## Testnet deployment
 

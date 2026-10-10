@@ -102,9 +102,13 @@
 			"bun": "./ts/components/CopyStatus.tsx",
 			"default": "./js/components/CopyStatus.js"
 		},
-		"./components/GenesisUniverseChoices.js": {
-			"bun": "./ts/components/GenesisUniverseChoices.tsx",
-			"default": "./js/components/GenesisUniverseChoices.js"
+		"./components/ForkUniverseNavigation.js": {
+			"bun": "./ts/components/ForkUniverseNavigation.tsx",
+			"default": "./js/components/ForkUniverseNavigation.js"
+		},
+		"./components/OutcomeUniverseList.js": {
+			"bun": "./ts/components/OutcomeUniverseList.tsx",
+			"default": "./js/components/OutcomeUniverseList.js"
 		},
 		"./components/InlineHint.js": {
 			"bun": "./ts/components/InlineHint.tsx",

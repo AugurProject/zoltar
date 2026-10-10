@@ -26,7 +26,8 @@ test('requires an explicit Yes or No choice before initializing or mounting any 
 			within(document.body)
 				.getAllByRole('button')
 				.map(button => button.getAttribute('aria-label')),
-		).toEqual(['Open Genesis › Yes', 'Open Genesis › No'])
+		).toEqual(['Open Yes universe', 'Open No universe'])
+		expect(within(document.body).getByRole('heading', { name: 'Child universes' })).not.toBeNull()
 		await act(() => render(null, document.body))
 	}
 })
@@ -36,13 +37,32 @@ test('choosing No records the URL choice and mounts the app after initialization
 	const initialize = mock(async () => undefined)
 	await act(async () => await mountApp({ initialize, root: () => createElement('p', {}, 'Application ready') }))
 	await act(async () => {
-		within(document.body).getByRole('button', { name: 'Open Genesis › No' }).click()
+		within(document.body).getByRole('button', { name: 'Open No universe' }).click()
 		await Promise.resolve()
 	})
 	expect(initialize).toHaveBeenCalledTimes(1)
 	expect(window.location.search).toBe('?simulate=1&genesis=no')
 	expect(window.location.hash).toBe('#/zoltar?universe=12')
 	expect(document.body.textContent).toBe('Application ready')
+})
+
+test('disables both ordinary outcome controls while the chosen deployment initializes', async () => {
+	window.history.replaceState({}, '', '/')
+	const ready = createDeferred<void>()
+	const initialize = mock(() => ready.promise)
+	const root = mock(() => createElement('p', {}, 'Application ready'))
+	await act(async () => await mountApp({ initialize, root }))
+	await act(() => within(document.body).getByRole('button', { name: 'Open No universe' }).click())
+	const buttons = within(document.body).getAllByRole('button')
+	expect(buttons.every(button => button.hasAttribute('disabled'))).toBe(true)
+	await act(() => buttons.forEach(button => button.click()))
+	expect(initialize).toHaveBeenCalledTimes(1)
+	expect(root).not.toHaveBeenCalled()
+	await act(async () => {
+		ready.resolve()
+		await ready.promise
+	})
+	expect(root).toHaveBeenCalledTimes(1)
 })
 
 test('replaces the static loading placeholder with one choice landmark when mounting into a separate app target', async () => {
