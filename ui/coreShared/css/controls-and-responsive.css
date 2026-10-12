@@ -810,10 +810,11 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 .header-toolbar {
+	position: relative;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-3);
+	gap: var(--space-1);
 	min-height: 3.5rem;
 	padding: 0.3rem 0.5rem 0.3rem 0.75rem;
 	border: 1px solid var(--divider-strong);
@@ -867,7 +868,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	justify-content: center;
 	gap: 0.35rem;
 	min-height: 2.5rem;
-	padding: 0.45rem 0.75rem;
+	padding: 0.45rem 0.5rem;
 	border: 0;
 	border-radius: var(--radius-control);
 	background: transparent;
@@ -967,11 +968,10 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 .header-toolbar-controls {
 	display: flex;
-	flex: 1 1 auto;
-	flex-wrap: wrap;
+	flex: 1 1 0;
 	align-items: center;
 	justify-content: flex-end;
-	gap: var(--space-3);
+	gap: var(--space-1);
 	min-width: min-content;
 	margin-left: auto;
 }
@@ -1061,6 +1061,11 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 /* Account popover: the full address, network facts, balances, prices, and wallet actions. */
+.header-toolbar .account-menu {
+	position: static;
+	flex: 0 0 auto;
+}
+
 .account-menu-trigger {
 	max-width: 100%;
 	min-width: 0;
@@ -1432,10 +1437,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 	.account-menu-trigger {
 		padding-right: var(--space-2);
-	}
-
-	.header-toolbar .account-menu {
-		position: static;
 	}
 
 	.header-toolbar .account-menu-popover {

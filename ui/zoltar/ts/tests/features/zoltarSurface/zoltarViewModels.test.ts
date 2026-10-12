@@ -42,7 +42,7 @@ const forkedChild = createUniverse({
 test('names a child overview from its outcome when bounded reads omit lineage', () => {
 	const universe = createUniverse({ universeId: 5n, outcomeLabel: 'Yes', lineage: undefined, relatedUniversesLoaded: false })
 	expect(deriveZoltarOverviewModel(createInput({ activeUniverseId: 5n, universe })).universeLabel).toBe('Yes')
-	expect(deriveZoltarOverviewModel(createInput({ universe: createUniverse({ lineage: undefined, outcomeLabel: 'Wrong' }) })).universeLabel).toBe('Genesis')
+	expect(deriveZoltarOverviewModel(createInput({ universe: createUniverse({ lineage: undefined, outcomeLabel: 'Wrong' }) })).universeLabel).toBe('Genesis › Yes')
 })
 
 test('overview names a cached full summary the same way as a bounded read', () => {
@@ -112,7 +112,7 @@ describe('deriveZoltarOverviewModel', () => {
 			nextStep: { kind: 'browse-questions', view: 'questions' },
 			repBalanceAttoRep: 10n,
 			status: 'operational',
-			universeLabel: 'Genesis',
+			universeLabel: 'Genesis › Yes',
 			wallet: 'connected',
 		})
 	})

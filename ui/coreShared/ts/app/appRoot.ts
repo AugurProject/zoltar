@@ -10,6 +10,8 @@ import { GenesisUniverseEntry } from './components/GenesisUniverseEntry.js'
 import { getGenesisUniverseHref, readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
 import { subscribeToLocationChanges } from '../navigation/historyEntries.js'
 
+const mountedDocuments = new WeakSet<Document>()
+
 type MountAppOptions = {
 	initialize?: () => Promise<unknown>
 	root?: () => ComponentChildren
@@ -53,11 +55,13 @@ export async function mountApp(options: MountAppOptions) {
 	if (rootOption === undefined) throw new Error('mountApp requires a root component factory')
 	const root = rootOption
 	const target = options.target ?? document.body
+	// Only capture the static fallback on startup; later mounts must leave Preact's main landmark alone.
+	const startupPlaceholder = mountedDocuments.has(target.ownerDocument) ? undefined : (target.ownerDocument.querySelector('body > main') ?? undefined)
+	mountedDocuments.add(target.ownerDocument)
 	const genesisOutcome = readGenesisOutcomeFromLocation()
 	applyThemePreference(readThemePreference())
 	if (genesisOutcome === undefined) {
-		// Trading mounts into its own target alongside the static startup placeholder.
-		if (target !== document.body) document.querySelector('body > main')?.remove()
+		if (startupPlaceholder !== target) startupPlaceholder?.remove()
 		render(
 			createElement(GenesisUniverseEntry, {
 				onSelect: async outcome => {
@@ -75,6 +79,7 @@ export async function mountApp(options: MountAppOptions) {
 			window.location.reload()
 			return
 		}
+		if (startupPlaceholder !== target) startupPlaceholder?.remove()
 		render(createElement(ApplicationErrorBoundary, { root, genesisOutcome }), target)
 	} catch (error) {
 		if (readGenesisOutcomeFromLocation() !== genesisOutcome) {
@@ -83,6 +88,7 @@ export async function mountApp(options: MountAppOptions) {
 		}
 		console.error('[ui] failed to initialize or mount application', error)
 		const errorMessage = getErrorMessage(error, appCopy.applicationInitializationErrorFallback)
+		if (startupPlaceholder !== target) startupPlaceholder?.remove()
 		render(createElement(ApplicationErrorNotice, { errorMessage, onRetry: () => mountApp(options) }), target)
 	}
 }

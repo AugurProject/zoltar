@@ -664,6 +664,7 @@ button.quiet:disabled {
 
 .wallet-chip .address-value-text {
 	min-width: 15ch;
+	width: 15ch;
 }
 
 .wallet-chip .address-value.copyable {

@@ -13,6 +13,7 @@ import { within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
 import { createUniverseSummary } from '../testUtils/universeFixtures.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE, setRuntimeNetworkProfile } from '../../wallet/networkProfile.js'
 
 const yesUniverseId = 11n
 const alphaUniverseId = 21n
@@ -55,7 +56,7 @@ describe('UniverseBrowser', () => {
 		const queries = within(document.body)
 		const trail = document.body.querySelector('nav[aria-label="Universe lineage"]')
 		if (!(trail instanceof HTMLElement)) throw new Error('Expected the lineage trail')
-		expect(within(trail).getByRole('link', { name: 'Genesis' })).toBeTruthy()
+		expect(within(trail).getByRole('link', { name: 'Genesis › Yes' })).toBeTruthy()
 		expect(trail.querySelector('[aria-current]')?.textContent).toBe('Yes')
 		expect(queries.getByRole('heading', { name: 'Yes' })).toBeTruthy()
 		expect(queries.getByText('Forked', { selector: '.badge' })).toBeTruthy()
@@ -67,6 +68,7 @@ describe('UniverseBrowser', () => {
 
 	test('keeps normal fork ancestry without repeating the historical fork choices on descendants', async () => {
 		window.history.replaceState({}, '', '?genesis=no#/zoltar?universe=11')
+		setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no'))
 		cleanupRenderedComponent = (
 			await renderIntoDocument(
 				<UniverseNamesProvider universe={createUniverse()}>
@@ -82,9 +84,10 @@ describe('UniverseBrowser', () => {
 		expect(queries.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('universe=21')
 	})
 
-	for (const outcome of ['yes', 'no']) {
+	for (const outcome of ['yes', 'no'] as const) {
 		test(`links the ${outcome} genesis root to its Augur parent through ordinary parent navigation`, async () => {
 			window.history.replaceState({}, '', `?genesis=${outcome}&simulate=1&simState=saved#/zoltar?zoltarView=universes&universe=0`)
+			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
 			cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
 			const queries = within(document.body)
 			const field = queries.getByText('Parent universe').parentElement
@@ -93,6 +96,25 @@ describe('UniverseBrowser', () => {
 			expect(parent.classList.contains('universe-parent-link')).toBe(true)
 			expect(parent.getAttribute('href')).toBe('/?simulate=1#/')
 			expect(queries.queryByRole('button', { name: 'Open Genesis › Yes' })).toBeNull()
+		})
+	}
+
+	test('uses the active No root for its heading and parent when the URL has no choice', async () => {
+		window.history.replaceState({}, '', '?simulate=1#/zoltar?zoltarView=universes&universe=0')
+		setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no'))
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+		const queries = within(document.body)
+		expect(queries.getByRole('heading', { name: 'Genesis › No' })).toBeTruthy()
+		expect(queries.getByRole('link', { name: 'Augur v2 fork' }).getAttribute('href')).toBe('/?simulate=1#/')
+		expect(queries.queryByText('Genesis › Yes')).toBeNull()
+	})
+
+	for (const outcome of ['yes', 'no'] as const) {
+		test(`keeps the active ${outcome} root label when the URL names the other root`, async () => {
+			window.history.replaceState({}, '', `?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/zoltar?universe=0`)
+			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
+			cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
+			expect(within(document.body).getByRole('heading', { name: outcome === 'yes' ? 'Genesis › Yes' : 'Genesis › No' })).toBeTruthy()
 		})
 	}
 
@@ -109,7 +131,7 @@ describe('UniverseBrowser', () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: [{ outcomeLabel: undefined, universeId: 0n }], universeId: 0n })} />)).cleanup
 		const queries = within(document.body)
 		expect(document.body.querySelector('nav[aria-label="Universe lineage"]')).toBeNull()
-		expect(queries.getByRole('heading', { name: 'Genesis' })).toBeTruthy()
+		expect(queries.getByRole('heading', { name: 'Genesis › Yes' })).toBeTruthy()
 		expect(queries.getByText('Child universes appear after this universe forks.')).toBeTruthy()
 	})
 })
@@ -195,7 +217,7 @@ describe('bounded universe overview', () => {
 		)
 		try {
 			const queries = within(document.body)
-			expect(queries.queryByRole('link', { name: 'Genesis' })).toBeNull()
+			expect(queries.queryByRole('link', { name: 'Genesis › Yes' })).toBeNull()
 			expect(queries.getByRole('link', { name: 'Yes' }).getAttribute('href')).toContain('universe=11')
 		} finally {
 			await rendered.cleanup()
@@ -224,7 +246,7 @@ describe('UniverseSwitcher', () => {
 
 	test('links directly to the browser for the active universe without a dropdown or child list', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes&simulate=1&universe=999' universe={createUniverse()} />)).cleanup
-		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes, forked. Browse universes' })
+		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes › Yes, forked. Browse universes' })
 		expect(link.getAttribute('href')).toBe('#/zoltar?zoltarView=universes&simulate=1&universe=11')
 		expect(link.querySelector('.universe-switcher-badge')?.textContent).toBe('Forked')
 		expect(document.querySelector('details')).toBeNull()
@@ -234,7 +256,7 @@ describe('UniverseSwitcher', () => {
 
 	test('shows no fork badge for a universe that has not forked', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={yesUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={createUniverse({ hasForked: false, forkTime: 0n })} />)).cleanup
-		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes. Browse universes' })
+		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes › Yes. Browse universes' })
 		expect(link.querySelector('.universe-switcher-badge')).toBeNull()
 	})
 
@@ -265,6 +287,6 @@ describe('UniverseNamesProvider', () => {
 			)
 		).cleanup
 		const parentField = within(document.body).getByText('Parent universe').parentElement
-		expect(parentField?.querySelector('a')?.textContent).toBe('Genesis › Yes')
+		expect(parentField?.querySelector('a')?.textContent).toBe('Genesis › Yes › Yes')
 	})
 })

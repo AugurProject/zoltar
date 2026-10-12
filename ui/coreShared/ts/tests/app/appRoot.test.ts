@@ -71,17 +71,35 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 	expect(root).toHaveBeenCalledTimes(1)
 })
 
-test('replaces the static loading placeholder with one choice landmark when mounting into a separate app target', async () => {
-	window.history.replaceState({}, '', '/')
-	const placeholder = document.createElement('main')
-	placeholder.textContent = 'Loading…'
-	const target = document.createElement('div')
-	document.body.append(placeholder, target)
-	await act(async () => await mountApp({ initialize: async () => undefined, root: () => createElement('p', {}, 'Ready'), target }))
-	expect(document.querySelectorAll('main')).toHaveLength(1)
-	expect(document.body.textContent).not.toContain('Loading…')
-	await act(() => render(null, target))
-})
+for (const useSeparateTarget of [false, true]) {
+	test(`replaces the static loading placeholder without adopting it or removing the pending chooser in ${useSeparateTarget ? 'a separate target' : 'the production body target'}`, async () => {
+		window.history.replaceState({}, '', '/')
+		const placeholder = document.createElement('main')
+		placeholder.textContent = 'Loading…'
+		document.body.append(placeholder)
+		const target = useSeparateTarget ? document.createElement('div') : document.body
+		if (useSeparateTarget) document.body.append(target)
+		const ready = createDeferred<void>()
+		const initialize = mock(() => ready.promise)
+		await act(async () => await mountApp({ initialize, root: () => createElement('main', {}, 'Ready'), target }))
+		expect(placeholder.isConnected).toBe(false)
+		expect(document.querySelectorAll('main')).toHaveLength(1)
+		expect(document.body.textContent).not.toContain('Loading…')
+		const chooser = document.querySelector('main')
+		await act(() => within(target).getByRole('button', { name: 'Open No universe' }).click())
+		expect(initialize).toHaveBeenCalledTimes(1)
+		expect(document.querySelector('main')).toBe(chooser)
+		expect(document.querySelectorAll('main')).toHaveLength(1)
+		expect(within(target).getByRole('status').textContent).toBe('Opening No universe')
+		await act(async () => {
+			ready.resolve()
+			await ready.promise
+		})
+		expect(document.querySelectorAll('main')).toHaveLength(1)
+		expect(document.body.textContent).toBe('Ready')
+		await act(() => render(null, target))
+	})
+}
 
 test('waits for initialization before rendering the requested root into its target', async () => {
 	const ready = createDeferred<void>()

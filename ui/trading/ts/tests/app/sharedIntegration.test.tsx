@@ -1,5 +1,6 @@
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, spyOn, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
@@ -18,6 +19,9 @@ import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiv
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { createTradingPublicClient } from '../../protocol/live.js'
+import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { initializeTradingActiveEnvironment } from '../../app/activeEnvironment.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -249,12 +253,42 @@ test('Trading keeps the shared shell, route header, section, field, and button s
 		expect(css).not.toContain(selector)
 })
 
-test('Trading keeps the initial loading fallback visible until the environment settles', async () => {
-	const source = await Bun.file(new URL('../../index.ts', import.meta.url)).text()
-	expect(source.indexOf('await initializeTradingActiveEnvironment()')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
-	expect(source.indexOf('} finally {')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
-	expect(source).toContain('initialize: initializeTradingForMount')
-})
+for (const initializationFails of [false, true]) {
+	test(`Trading keeps its static loading fallback until initialization ${initializationFails ? 'fails' : 'succeeds'}, then replaces it with one shared application landmark`, async () => {
+		const dom = installDomEnvironment('http://localhost/?genesis=yes')
+		const placeholder = document.createElement('main')
+		placeholder.textContent = 'Loading…'
+		document.body.append(placeholder)
+		const ready = createDeferred<void>()
+		const environment = await import('@zoltar/ui-core-shared/lib/activeEnvironment.js')
+		const initialize = spyOn(environment, 'initializeActiveEnvironment').mockImplementation(async () => {
+			await ready.promise
+			return createFakeBackend({ accountAddress: '0x00000000000000000000000000000000000000a1' })
+		})
+		const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+		try {
+			const mounted = mountApp({ initialize: initializeTradingActiveEnvironment, root: () => <main>Trading ready</main> })
+			expect(initialize).toHaveBeenCalledTimes(1)
+			expect(placeholder.isConnected).toBe(true)
+			expect(document.body.textContent).toBe('Loading…')
+			await act(async () => {
+				if (initializationFails) ready.reject(new Error('Trading environment unavailable'))
+				else ready.resolve()
+				await mounted
+			})
+			expect(placeholder.isConnected).toBe(false)
+			expect(document.querySelectorAll('main')).toHaveLength(1)
+			expect(document.body.textContent).not.toContain('Loading…')
+			if (initializationFails) expect(within(document.body).getByRole('alert').textContent).toContain('Trading environment unavailable')
+			else expect(document.body.textContent).toBe('Trading ready')
+		} finally {
+			await act(() => render(null, document.body))
+			initialize.mockRestore()
+			errorLog.mockRestore()
+			dom.cleanup()
+		}
+	})
+}
 
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
 	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/market')

@@ -6,15 +6,8 @@ import { installTradingRouting } from './lib/routing.js'
 import { registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from './simulation/index.js'
 
 const root = document.querySelector('#app') ?? document.body
-async function initializeTradingForMount() {
-	try {
-		await initializeTradingActiveEnvironment()
-	} finally {
-		document.querySelector('body > main')?.remove()
-	}
-}
 installTradingRouting()
 registerTradingSimulationScenario()
 const defaultSimulationUrl = withDefaultTradingSimulationScenario(window.location.href)
 if (defaultSimulationUrl !== undefined) window.history.replaceState({}, '', defaultSimulationUrl)
-void mountApp({ initialize: initializeTradingForMount, root: () => createElement(App, null), target: root })
+void mountApp({ initialize: initializeTradingActiveEnvironment, root: () => createElement(App, null), target: root })

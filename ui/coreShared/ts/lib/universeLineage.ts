@@ -1,9 +1,9 @@
 import * as universeCopy from '../copy/universes.js'
 import { formatShortUniverseId } from './universeLabels.js'
-import { readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
+import { getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
 
 function genesisUniverseName() {
-	const outcome = typeof window === 'undefined' ? undefined : readGenesisOutcomeFromLocation()
+	const outcome = getRuntimeNetworkProfile().genesisOutcome
 	return outcome === undefined ? universeCopy.genesis : universeCopy.formatGenesisUniverse(outcome)
 }
 
