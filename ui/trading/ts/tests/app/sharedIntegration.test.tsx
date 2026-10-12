@@ -267,7 +267,7 @@ for (const initializationFails of [false, true]) {
 		})
 		const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
 		try {
-			const mounted = mountApp({ initialize: initializeTradingActiveEnvironment, root: () => <main>Trading ready</main> })
+			const mounted = mountApp({ applicationTitle: appCopy.appName, initialize: initializeTradingActiveEnvironment, root: () => <main>Trading ready</main> })
 			expect(initialize).toHaveBeenCalledTimes(1)
 			expect(placeholder.isConnected).toBe(true)
 			expect(document.body.textContent).toBe('Loading…')

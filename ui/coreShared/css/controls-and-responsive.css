@@ -1289,7 +1289,8 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		right: 0;
 		bottom: 0;
 		left: 0;
-		z-index: var(--z-nav);
+		/* Header dropdowns can scroll behind the fixed bar. */
+		z-index: calc(var(--z-dropdown) + 1);
 		min-height: var(--bottom-nav-height);
 		padding: 0.25rem 0.35rem calc(0.25rem + env(safe-area-inset-bottom));
 		border-top: 1px solid var(--border-default);

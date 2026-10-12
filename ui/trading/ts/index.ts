@@ -4,10 +4,11 @@ import { App } from './app/App.js'
 import { initializeTradingActiveEnvironment } from './app/activeEnvironment.js'
 import { installTradingRouting } from './lib/routing.js'
 import { registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from './simulation/index.js'
+import { appName } from './copy/app.js'
 
 const root = document.querySelector('#app') ?? document.body
 installTradingRouting()
 registerTradingSimulationScenario()
 const defaultSimulationUrl = withDefaultTradingSimulationScenario(window.location.href)
 if (defaultSimulationUrl !== undefined) window.history.replaceState({}, '', defaultSimulationUrl)
-void mountApp({ initialize: initializeTradingActiveEnvironment, root: () => createElement(App, null), target: root })
+void mountApp({ applicationTitle: appName, initialize: initializeTradingActiveEnvironment, root: () => createElement(App, null), target: root })

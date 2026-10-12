@@ -2,9 +2,14 @@ import { expect, mock, spyOn, test } from 'bun:test'
 import { createElement, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { mountApp } from '../../app/appRoot.js'
+import { getActiveNetworkProfile, installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
 import { createDeferred } from '../testUtils/deferred.js'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '../testUtils/fakeBackend.js'
 import { within } from '../testUtils/queries.js'
+
+const applicationTitle = 'Zoltar'
 
 installDomTestLifecycle({
 	url: 'http://localhost/?genesis=yes',
@@ -13,12 +18,45 @@ installDomTestLifecycle({
 	},
 })
 
+for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Trading']) {
+	test(`keeps ${applicationTitle} branding and the Augur v2 fork context visible before a deployment is selected`, async () => {
+		window.history.replaceState({}, '', '/')
+		const initialize = mock(async () => undefined)
+		const root = mock(() => createElement('p', {}, 'Application ready'))
+		await act(async () => await mountApp({ applicationTitle, initialize, root }))
+		expect(initialize).not.toHaveBeenCalled()
+		expect(root).not.toHaveBeenCalled()
+		expect(document.querySelector('.app-chrome .header-toolbar .application-brand-name')?.textContent).toBe(applicationTitle)
+		expect(document.querySelector('.application-brand img')?.getAttribute('src')).toBe('./favicon.svg')
+		expect(document.querySelector('.application-brand img')?.getAttribute('alt')).toBe('')
+		expect(within(document.body).getByText('Augur v2 fork')).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe', level: 1 })).not.toBeNull()
+		expect(
+			within(document.body)
+				.getAllByRole('button')
+				.map(button => button.getAttribute('aria-label')),
+		).toEqual(['Open Yes universe', 'Open No universe'])
+	})
+}
+
+test('links the historical Augur fork to Ethereum mainnet while the application uses Sepolia', async () => {
+	window.history.replaceState({}, '', '/?network=sepolia')
+	const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+	try {
+		await act(async () => await mountApp({ applicationTitle, initialize: async () => undefined, root: () => createElement('p', {}, 'Application ready') }))
+		expect(getActiveNetworkProfile().id).toBe('sepolia')
+		expect(within(document.body).getByRole('link', { name: 'View fork question on Ethereum' }).getAttribute('href')).toBe('https://etherscan.io/address/0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e#readContract')
+	} finally {
+		resetEnvironment()
+	}
+})
+
 test('requires an explicit Yes or No choice before initializing or mounting any application', async () => {
 	for (const search of ['', '?universe=0', '?genesis=repv2', '?genesis=invalid']) {
 		window.history.replaceState({}, '', `/${search}`)
 		const initialize = mock(async () => undefined)
 		const root = mock(() => createElement('p', {}, 'Application ready'))
-		await act(async () => await mountApp({ initialize, root }))
+		await act(async () => await mountApp({ applicationTitle, initialize, root }))
 		expect(initialize).not.toHaveBeenCalled()
 		expect(root).not.toHaveBeenCalled()
 		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe' })).not.toBeNull()
@@ -35,7 +73,7 @@ test('requires an explicit Yes or No choice before initializing or mounting any 
 test('choosing No records the URL choice and mounts the app after initialization', async () => {
 	window.history.replaceState({}, '', '/?simulate=1#/zoltar?universe=12')
 	const initialize = mock(async () => undefined)
-	await act(async () => await mountApp({ initialize, root: () => createElement('p', {}, 'Application ready') }))
+	await act(async () => await mountApp({ applicationTitle, initialize, root: () => createElement('p', {}, 'Application ready') }))
 	await act(async () => {
 		within(document.body).getByRole('button', { name: 'Open No universe' }).click()
 		await Promise.resolve()
@@ -51,9 +89,11 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 	const ready = createDeferred<void>()
 	const initialize = mock(() => ready.promise)
 	const root = mock(() => createElement('p', {}, 'Application ready'))
-	await act(async () => await mountApp({ initialize, root }))
+	await act(async () => await mountApp({ applicationTitle, initialize, root }))
 	await act(() => within(document.body).getByRole('button', { name: 'Open No universe' }).click())
 	const buttons = within(document.body).getAllByRole('button')
+	expect(document.querySelector('.application-brand-name')?.textContent).toBe(applicationTitle)
+	expect(within(document.body).getByText('Augur v2 fork')).not.toBeNull()
 	expect(buttons.every(button => button.hasAttribute('disabled'))).toBe(true)
 	const opening = within(document.body).getByRole('status')
 	expect(opening.getAttribute('aria-live')).toBe('polite')
@@ -81,7 +121,7 @@ for (const useSeparateTarget of [false, true]) {
 		if (useSeparateTarget) document.body.append(target)
 		const ready = createDeferred<void>()
 		const initialize = mock(() => ready.promise)
-		await act(async () => await mountApp({ initialize, root: () => createElement('main', {}, 'Ready'), target }))
+		await act(async () => await mountApp({ applicationTitle, initialize, root: () => createElement('main', {}, 'Ready'), target }))
 		expect(placeholder.isConnected).toBe(false)
 		expect(document.querySelectorAll('main')).toHaveLength(1)
 		expect(document.body.textContent).not.toContain('Loading…')
@@ -106,7 +146,7 @@ test('waits for initialization before rendering the requested root into its targ
 	const target = document.createElement('div')
 	document.body.appendChild(target)
 	const root = mock(() => createElement('p', {}, 'Ready'))
-	const mounted = mountApp({ initialize: () => ready.promise, root, target })
+	const mounted = mountApp({ applicationTitle, initialize: () => ready.promise, root, target })
 	expect(root).not.toHaveBeenCalled()
 	expect(target.textContent).toBe('')
 	await act(async () => {
@@ -127,7 +167,7 @@ for (const outcome of ['no', 'invalid']) {
 			const reload = spyOn(window.location, 'reload').mockImplementation(() => undefined)
 			const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
 			try {
-				const mounted = mountApp({ initialize: () => ready.promise, root })
+				const mounted = mountApp({ applicationTitle, initialize: () => ready.promise, root })
 				window.history.replaceState({}, '', `/#/zoltar?genesis=${outcome}`)
 				await act(async () => {
 					if (failedInitialization) ready.reject(new Error('Stale Yes initialization failed'))
@@ -154,7 +194,7 @@ test('shows an initialization error and retries once even when retry is clicked 
 	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
 	try {
 		await act(async () => {
-			await mountApp({ initialize, root: () => createElement('p', {}, 'Application ready') })
+			await mountApp({ applicationTitle, initialize, root: () => createElement('p', {}, 'Application ready') })
 		})
 		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
 		const button = within(document.body).getByRole('button', { name: 'Retry' })
@@ -180,6 +220,7 @@ test('renders the same recoverable notice if constructing the root fails', async
 	try {
 		await act(async () => {
 			await mountApp({
+				applicationTitle,
 				initialize: async () => undefined,
 				root: () => {
 					throw new Error('Root failed')
@@ -201,7 +242,7 @@ test('replaces a tree that fails to render with a recoverable notice instead of 
 	}
 	try {
 		await act(async () => {
-			await mountApp({ initialize: async () => undefined, root: () => createElement(Screen, {}) })
+			await mountApp({ applicationTitle, initialize: async () => undefined, root: () => createElement(Screen, {}) })
 		})
 		const notice = within(document.body).getByRole('alert')
 		expect(notice.textContent).toContain('Application error')
@@ -220,6 +261,6 @@ test('replaces a tree that fails to render with a recoverable notice instead of 
 
 test('rejects a missing root before running initialization', async () => {
 	const initialize = mock(async () => undefined)
-	await expect(mountApp({ initialize })).rejects.toThrow('mountApp requires a root component factory')
+	await expect(mountApp({ applicationTitle, initialize })).rejects.toThrow('mountApp requires a root component factory')
 	expect(initialize).not.toHaveBeenCalled()
 })

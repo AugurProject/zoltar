@@ -13,6 +13,7 @@ import { subscribeToLocationChanges } from '../navigation/historyEntries.js'
 const mountedDocuments = new WeakSet<Document>()
 
 type MountAppOptions = {
+	applicationTitle: string
 	initialize?: () => Promise<unknown>
 	root?: () => ComponentChildren
 	target?: Element
@@ -64,6 +65,7 @@ export async function mountApp(options: MountAppOptions) {
 		if (startupPlaceholder !== target) startupPlaceholder?.remove()
 		render(
 			createElement(GenesisUniverseEntry, {
+				applicationTitle: options.applicationTitle,
 				onSelect: async outcome => {
 					window.history.replaceState({}, '', getGenesisUniverseHref(outcome))
 					await mountApp(options)
