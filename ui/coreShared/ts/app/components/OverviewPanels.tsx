@@ -247,7 +247,9 @@ export function OverviewPanels({
 			}
 			controls={
 				<>
-					<ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>
+					<ToolbarField className='universe' label={commonCopy.universe}>
+						{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}
+					</ToolbarField>
 					{accountControl}
 				</>
 			}

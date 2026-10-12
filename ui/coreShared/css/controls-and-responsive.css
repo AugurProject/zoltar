@@ -824,14 +824,16 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 .header-toolbar-brand {
 	display: flex;
-	flex: 0 0 auto;
+	flex: 1 1 0;
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
+	max-width: max-content;
 }
 
 .header-toolbar .application-brand {
 	margin: 0;
+	min-width: 0;
 	font-family: var(--font-family-sans);
 	font-size: var(--font-title);
 	font-weight: 650;
@@ -839,6 +841,13 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	letter-spacing: -0.01em;
 	white-space: nowrap;
 	overflow-wrap: normal;
+}
+
+/* The name yields before the universe, account, or actions need another row. */
+.header-toolbar .application-brand-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .header-toolbar .environment-badge-row {
@@ -1015,8 +1024,24 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	white-space: nowrap;
 }
 
-.header-toolbar-controls .toolbar-field:has(.universe-switcher) .toolbar-field-label {
+.header-toolbar-controls .toolbar-field.universe {
+	--header-universe-mark-width: calc(2 * var(--space-4));
+}
+
+.header-toolbar-controls .toolbar-field.universe .toolbar-field-label {
 	display: none;
+}
+
+/* Discovery reserves the ordinary switcher's frame without claiming a universe identity. */
+.header-toolbar-controls .toolbar-field.universe .toolbar-field-value:has(> .loading-value) {
+	box-sizing: border-box;
+	align-items: center;
+	width: calc(15ch + var(--header-universe-mark-width) + var(--space-1) + 2 * var(--space-2) + 2px);
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-2) 0 calc(var(--space-2) + var(--header-universe-mark-width) + var(--space-1));
+	border: 1px solid var(--interactive-border);
+	border-radius: var(--radius-control);
+	background: var(--interactive-bg);
 }
 
 .header-toolbar .universe-switcher {
@@ -1244,6 +1269,10 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 @media (max-width: 64rem) {
+	.header-toolbar-controls .toolbar-field.universe {
+		--header-universe-mark-width: var(--space-5);
+	}
+
 	.header-toolbar .environment-badge-row {
 		display: none;
 	}
