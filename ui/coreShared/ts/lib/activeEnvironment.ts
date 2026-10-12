@@ -1,6 +1,7 @@
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { getErrorMessage } from './errors.js'
+import { formatSavedStateGenesisMismatchDetail } from '../copy/simulation.js'
 import { getGenesisNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getDefaultNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
 import { readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
 import type { SimulationController } from '../simulation/controller.js'
@@ -120,20 +121,20 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 
 	const savedStateId = getSimulationStateId(location)
-	let initialBootstrapError: string | undefined = undefined
+	let initialBootstrapWarning: string | undefined = undefined
 	let savedState = undefined
 	if (savedStateId !== undefined) {
 		try {
 			savedState = getSavedSimulationStateEnvelope(savedStateId)
 			if (savedState !== undefined && (savedState.genesisOutcome ?? 'yes') !== (genesisOutcome ?? 'yes')) {
+				initialBootstrapWarning = formatSavedStateGenesisMismatchDetail(savedState.name, savedState.genesisOutcome ?? 'yes')
 				savedState = undefined
-				throw new Error('The saved state belongs to another genesis universe.')
 			}
 		} catch (error) {
-			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')} Falling back to the baseline scenario.`
+			initialBootstrapWarning = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')} Falling back to the baseline scenario.`
 		}
-		if (savedState === undefined && initialBootstrapError === undefined) {
-			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`
+		if (savedState === undefined && initialBootstrapWarning === undefined) {
+			initialBootstrapWarning = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`
 		}
 	}
 	const createSimulationBackendImpl = dependencies.createSimulationBackend ?? createSimulationBackend
@@ -151,7 +152,7 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 			: await createSimulationBackendImpl({
 					appId: simulationAppId,
 					...(genesisOutcome === undefined ? {} : { genesisOutcome }),
-					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
+					...(initialBootstrapWarning === undefined ? {} : { initialBootstrapWarning }),
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
 					walletMode,
 				})

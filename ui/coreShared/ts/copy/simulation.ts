@@ -1,4 +1,6 @@
 import type { CopyTemplateValue } from './types.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { formatGenesisUniverse } from './universes.js'
 
 export const deleteSave = 'Delete saved state'
 export const deletingSave = 'Deleting…'
@@ -19,6 +21,9 @@ export const plus1Month = '+1 month'
 export const plus1Year = '+1 year'
 export const formatQaAccountNumber = (accountIndex: CopyTemplateValue) => `QA account ${accountIndex}`
 export const ready = 'Ready'
+export const readyWithWarningLabel = 'Ready with warning'
+export const formatOtherGenesisSavedStateLabel = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `${stateName} (${formatGenesisUniverse(genesisOutcome)})`
+export const formatSavedStateGenesisMismatchDetail = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `Saved simulation state "${stateName}" belongs to ${formatGenesisUniverse(genesisOutcome)}. Falling back to the baseline scenario.`
 export const bootstrapping = 'Bootstrapping'
 export const formatSavedStateDetail = (stateName: CopyTemplateValue, scenarioLabel: CopyTemplateValue, savedAt: CopyTemplateValue) => `Custom state "${stateName}" based on ${scenarioLabel}. Saved ${savedAt}.`
 export const showSimulationDetails = 'Show details'

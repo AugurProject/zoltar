@@ -5,6 +5,7 @@ export const chooseTruthfulUniverse = 'Choose the truthful universe'
 export const augurFork = 'Augur v2 fork'
 export const viewAugurFork = 'View fork question on Ethereum'
 export const formatGenesisOutcome = (outcome: 'yes' | 'no') => (outcome === 'yes' ? 'Yes' : 'No')
+export const formatOpeningGenesisUniverse = (outcome: 'yes' | 'no') => `Opening ${formatGenesisOutcome(outcome)} universe`
 export const formatGenesisUniverse = (outcome: 'yes' | 'no') => `${genesis} › ${formatGenesisOutcome(outcome)}`
 export const formatUnknownLineageUniverse = (shortUniverseId: CopyTemplateValue) => `Universe ${shortUniverseId}`
 

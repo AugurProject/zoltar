@@ -4,8 +4,9 @@ import * as simulationCopy from '../copy/simulation.js'
 import type { BadgeTone } from '../types/components.js'
 import { Badge } from './Badge.js'
 
-export function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
+export function getScenarioStatus(parameters: { bootstrapError: string | undefined; bootstrapWarning: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
 	if (parameters.bootstrapError !== undefined) return { badgeTone: 'blocked', label: commonCopy.error }
+	if (parameters.isBootstrapped && parameters.bootstrapWarning !== undefined) return { badgeTone: 'warning', label: simulationCopy.readyWithWarningLabel }
 	if (parameters.isBootstrapped) return { badgeTone: 'ok', label: simulationCopy.ready }
 	return { badgeTone: 'pending', label: simulationCopy.bootstrapping }
 }

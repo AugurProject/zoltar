@@ -92,12 +92,12 @@ export async function createSimulationBackend(
 	{
 		appId = 'zoltar',
 		genesisOutcome = 'yes',
-		initialBootstrapError,
+		initialBootstrapWarning,
 		savedState,
 		savedStateId,
 		scenario,
 		walletMode = DEFAULT_SIMULATION_WALLET_MODE,
-	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; genesisOutcome?: GenesisOutcome; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
+	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; genesisOutcome?: GenesisOutcome; initialBootstrapWarning?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
@@ -124,7 +124,7 @@ export async function createSimulationBackend(
 	let bootstrapPromise: Promise<void> | undefined = undefined
 	let disposed = false
 	let terminalError: Error | undefined = undefined
-	let bootstrapWarning = initialBootstrapError
+	let bootstrapWarning = initialBootstrapWarning
 	let rejectReady: ((error: Error) => void) | undefined = undefined
 
 	const rejectPendingRequests = (error: Error) => {
@@ -296,12 +296,6 @@ export async function createSimulationBackend(
 		throw error
 	})
 
-	if (initialBootstrapError !== undefined) {
-		const state = currentState
-		if (state === undefined) throw new Error('Simulation worker state is unavailable')
-		applyState(Object.assign({}, state, { bootstrapError: initialBootstrapError }))
-	}
-
 	const requireState = () => {
 		if (currentState === undefined) throw new Error('Simulation worker state is unavailable')
 		return currentState
@@ -351,13 +345,16 @@ export async function createSimulationBackend(
 			return await bootstrapPromise
 		},
 		get bootstrapError() {
-			return requireState().bootstrapError ?? bootstrapWarning
+			return requireState().bootstrapError
 		},
 		get bootstrapLabel() {
 			return requireState().bootstrapLabel
 		},
 		get bootstrapProgress() {
 			return requireState().bootstrapProgress
+		},
+		get bootstrapWarning() {
+			return bootstrapWarning
 		},
 		createReadClient: () =>
 			createPublicClient({

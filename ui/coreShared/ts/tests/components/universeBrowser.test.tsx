@@ -91,7 +91,7 @@ describe('UniverseBrowser', () => {
 			if (field === null) throw new Error('Expected the parent universe field')
 			const parent = within(field).getByRole('link', { name: 'Augur v2 fork' })
 			expect(parent.classList.contains('universe-parent-link')).toBe(true)
-			expect(parent.getAttribute('href')).toBe('http://localhost/?simulate=1#/')
+			expect(parent.getAttribute('href')).toBe('/?simulate=1#/')
 			expect(queries.queryByRole('button', { name: 'Open Genesis › Yes' })).toBeNull()
 		})
 	}

@@ -34,7 +34,7 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 				),
 				details: (
 					<>
-						<span id={`${statusId}-${outcome.key}`}>
+						<span className={!outcome.exists && notDeployedDetail !== undefined ? 'migration-outcome-status-detail' : undefined} id={`${statusId}-${outcome.key}`}>
 							<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
 							{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
 						</span>

@@ -3,8 +3,9 @@ import { Badge } from './Badge.js'
 import { SectionBlock } from './SectionBlock.js'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
+import type { SectionBlockProps } from '../types/components.js'
 
-export function ForkUniverseNavigation({ question, loading = false, hasOutcomes = false, children }: { question?: string | undefined; loading?: boolean; hasOutcomes?: boolean; children: ComponentChildren }) {
+export function ForkUniverseNavigation({ question, loading = false, hasOutcomes = false, headingLevel = 3, children }: { question?: string | undefined; loading?: boolean; hasOutcomes?: boolean; headingLevel?: SectionBlockProps['headingLevel']; children: ComponentChildren }) {
 	return (
 		<SectionBlock
 			title={
@@ -16,6 +17,7 @@ export function ForkUniverseNavigation({ question, loading = false, hasOutcomes 
 				</span>
 			}
 			variant='plain'
+			headingLevel={headingLevel}
 			busy={loading}
 		>
 			<div className='form-grid'>

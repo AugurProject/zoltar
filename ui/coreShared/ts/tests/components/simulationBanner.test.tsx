@@ -7,7 +7,11 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { SimulationBanner } from '../../components/SimulationBanner.js'
 import type { SimulationController } from '../../simulation/controller.js'
-import { serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
+import { getSavedSimulationStateStorageSummary, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
+import { parseSavedSimulationStateEnvelope } from '../simulation/savedStateStorage.js'
+import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { getGenesisNetworkProfile } from '../../wallet/networkProfile.js'
+import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
 import { registerSimulationScenario } from '../../simulation/scenarios.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { fireEvent, waitFor, within } from '../testUtils/queries'
@@ -38,6 +42,7 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
+		bootstrapWarning: undefined,
 		blockCountSinceReset: 0n,
 		currentTimestamp: 1n,
 		currentScenario: 'baseline',
@@ -220,7 +225,7 @@ describe('SimulationBanner', () => {
 
 	test('opens the details when the scenario fails to boot', async () => {
 		const domEnvironment = installDomEnvironment()
-		const controller = createSimulationController({ bootstrapError: 'Scenario deployment failed', isBootstrapped: false, isBootstrapping: false })
+		const controller = createSimulationController({ bootstrapError: 'Scenario deployment failed', bootstrapWarning: 'Falling back to the baseline scenario.', isBootstrapped: false, isBootstrapping: false })
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
 
 		try {
@@ -230,6 +235,77 @@ describe('SimulationBanner', () => {
 			expect(disclosure.querySelector('summary')?.textContent).toContain('Error')
 		} finally {
 			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('shows a recovered baseline as ready with a visible warning and usable controls', async () => {
+		const domEnvironment = installDomEnvironment()
+		const warning = 'The saved state belongs to another genesis universe. Falling back to the baseline scenario.'
+		let notifyControllerChanged: () => void = () => undefined
+		const controller = createSimulationController({
+			bootstrapWarning: warning,
+			subscribe: handler => {
+				notifyControllerChanged = handler
+				return () => undefined
+			},
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
+
+		try {
+			const disclosure = renderedComponent.container.querySelector('.simulation-banner-details')
+			if (!isDetailsElement(disclosure)) throw new Error('Expected simulation banner disclosure')
+			expect(disclosure.open).toBe(true)
+			const summary = disclosure.querySelector('summary')
+			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation strip summary')
+			expect(summary.textContent).toContain('Ready with warning')
+			expect(summary.textContent).not.toContain('Error')
+			const warningMessage = within(disclosure).getByRole('status')
+			expect(warningMessage.getAttribute('data-message-tone')).toBe('warning')
+			expect(warningMessage.textContent).toContain(warning)
+			expect(within(disclosure).getByRole('combobox', { name: 'Simulation scenario' }).hasAttribute('disabled')).toBe(false)
+			await act(() => {
+				fireEvent.click(summary)
+				notifyControllerChanged()
+			})
+			expect(disclosure.open).toBe(false)
+			expect(summary.textContent).toContain('Ready with warning')
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('disables saved states from the other genesis without deleting them when roots switch', async () => {
+		const domEnvironment = installDomEnvironment()
+		const controller = createSimulationController()
+		const envelope = parseSavedSimulationStateEnvelope(await controller.exportState('Older Yes baseline'))
+		const yesRecord = persistSavedSimulationState(serializeSavedSimulationStateEnvelope(envelope))
+		const noRecord = persistSavedSimulationState(serializeSavedSimulationStateEnvelope({ ...envelope, genesisOutcome: 'no', name: 'No baseline' }))
+		const storedValue = domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')
+		const restoreYes = installActiveEnvironmentForTesting(createFakeBackend({ profile: getGenesisNetworkProfile(createFakeSimulationProfile(), 'yes') }), controller)
+		let restoreNo: (() => void) | undefined
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
+
+		try {
+			const queries = within(renderedComponent.container)
+			expect(queries.getByRole('option', { name: 'No baseline (Genesis › No)' }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('option', { name: 'Older Yes baseline' }).hasAttribute('disabled')).toBe(false)
+			restoreNo = installActiveEnvironmentForTesting(createFakeBackend({ profile: getGenesisNetworkProfile(createFakeSimulationProfile(), 'no') }), createSimulationController())
+			await act(() => render(<SimulationBanner controller={createSimulationController()} onRefresh={async () => undefined} />, renderedComponent.container))
+			expect(queries.getByRole('option', { name: 'Older Yes baseline (Genesis › Yes)' }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('option', { name: 'No baseline' }).hasAttribute('disabled')).toBe(false)
+			installActiveEnvironmentForTesting(createFakeBackend({ profile: getGenesisNetworkProfile(createFakeSimulationProfile(), 'yes') }), controller)
+			await act(() => render(<SimulationBanner controller={controller} onRefresh={async () => undefined} />, renderedComponent.container))
+			expect(queries.getByRole('option', { name: 'No baseline (Genesis › No)' }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('option', { name: 'Older Yes baseline' }).hasAttribute('disabled')).toBe(false)
+			expect(getSavedSimulationStateStorageSummary().records.map(record => record.id)).toContain(yesRecord.id)
+			expect(getSavedSimulationStateStorageSummary().records.map(record => record.id)).toContain(noRecord.id)
+			expect(domEnvironment.window.localStorage.getItem('zoltar.simulation.savedStates')).toBe(storedValue)
+		} finally {
+			await renderedComponent.cleanup()
+			restoreNo?.()
+			restoreYes()
 			domEnvironment.cleanup()
 		}
 	})

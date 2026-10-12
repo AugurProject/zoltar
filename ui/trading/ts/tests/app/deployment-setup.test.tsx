@@ -13,12 +13,16 @@ import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createSimulationProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { createSimulationProfile, getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
 import { createSimulationProvider } from '@zoltar/ui-core-shared/simulation/simulationProvider.js'
 import { formatChainIdHex, readInjectedChainIdNumber, requestInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+import { hasPendingTransactionActivity, setTransactionActivityOwner, transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
+import { getPendingTransactionActivityScopes } from '@zoltar/ui-core-shared/transactions/transactionActivity.js'
+import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { tradingDeploymentScope } from '../../features/tradingDeploymentPresentation.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -826,6 +830,84 @@ describe('trading deployment setup', () => {
 		await waitForText('is not a supported network')
 		expect(fallback.container.textContent).toContain(`Deploying to${otherCore.chainName}`)
 		expect(fallback.container.textContent).toContain('is not a supported network, so this deploys to Holesky instead.')
+	})
+
+	test('a pending Yes deployment preserves wallet history without locking the No deployment', async () => {
+		const yes = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'yes')
+		const no = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no')
+		const restoreYes = installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		const hash = `0x${'cd'.repeat(32)}`
+		const services: TradingDeploymentSetupServices = {
+			...walletServices,
+			createPublicClient: () => deploymentClient(),
+			deployStep: async (_client, _plan, _step, onSubmitted) => {
+				onSubmitted(`0x${'cd'.repeat(32)}`)
+				throw new Error('Receipt temporarily unavailable')
+			},
+			loadCoreDeployments: async () => [core],
+		}
+		const factoryAction = (container: HTMLElement) => {
+			const action = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy trading factory') === true)
+			if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
+			return action
+		}
+		try {
+			setTransactionActivityOwner(testWalletAccount)
+			const renderedYes = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+			cleanupRendered = renderedYes.cleanup
+			await waitForText('Deploy trading factory')
+			await connectDeploymentWallet(renderedYes.container)
+			await waitForConnectedWallet(renderedYes.container)
+			await act(async () => factoryAction(renderedYes.container).click())
+			await waitForText('Receipt temporarily unavailable')
+			const yesScope = transactionActivity.value.entries.find(entry => entry.hash === hash)?.scope
+			if (yesScope === undefined) throw new Error('Submitted Yes deployment activity is unavailable')
+			expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+			const storageKey = transactionActivity.value.storageKey
+			await renderedYes.cleanup()
+			cleanupRendered = undefined
+			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+			const restoreNo = installActiveEnvironmentForTesting(createFakeBackend({ profile: no }))
+			try {
+				setTransactionActivityOwner(testWalletAccount)
+				const renderedNo = await renderIntoDocument(
+					<TransactionActionButtonLockProvider lock={{ lockedScopes: getPendingTransactionActivityScopes(transactionActivity.value.entries), promptOpen: false }}>
+						<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, loadCoreDeployments: async () => [{ ...core, genesisOutcome: 'no', zoltar: getAddress(`0x${'78'.repeat(20)}`) }] }} />
+					</TransactionActionButtonLockProvider>,
+				)
+				cleanupRendered = renderedNo.cleanup
+				await waitForText('Deploy trading factory')
+				await connectDeploymentWallet(renderedNo.container)
+				await waitForConnectedWallet(renderedNo.container)
+				expect(transactionActivity.value.storageKey).toBe(storageKey)
+				expect(transactionActivity.value.entries).toMatchObject([{ hash, status: 'pending', title: 'Deploy trading factory' }])
+				expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+				expect(hasPendingTransactionActivity(tradingDeploymentScope())).toBeFalse()
+				expect(factoryAction(renderedNo.container).disabled).toBeFalse()
+				expect(factoryAction(renderedNo.container).getAttribute('aria-disabled')).not.toBe('true')
+				await renderedNo.cleanup()
+				cleanupRendered = undefined
+			} finally {
+				restoreNo()
+			}
+			setTransactionActivityOwner(testWalletAccount)
+			const returnedYes = await renderIntoDocument(
+				<TransactionActionButtonLockProvider lock={{ lockedScopes: getPendingTransactionActivityScopes(transactionActivity.value.entries), promptOpen: false }}>
+					<TradingDeploymentSetup onComplete={() => undefined} services={services} />
+				</TransactionActionButtonLockProvider>,
+			)
+			cleanupRendered = returnedYes.cleanup
+			await waitForText('Deploy trading factory')
+			await connectDeploymentWallet(returnedYes.container)
+			await waitForConnectedWallet(returnedYes.container)
+			expect(factoryAction(returnedYes.container).disabled).toBeTrue()
+			expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+			expect(hasPendingTransactionActivity(tradingDeploymentScope())).toBeTrue()
+		} finally {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+			restoreYes()
+		}
 	})
 
 	test('lets navigation leave a pending deployment and keeps the deploy action locked until it settles', async () => {

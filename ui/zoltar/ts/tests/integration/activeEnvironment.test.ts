@@ -71,7 +71,8 @@ void describe('active environment', () => {
 			const mismatch = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=yes&simState=${record.id}` })
 			await mismatch.waitUntilReady()
 			expect(mismatch.profile.genesisOutcome).toBe('yes')
-			expect(mismatch.bootstrapError).toContain('The saved state belongs to another genesis universe.')
+			expect(mismatch.bootstrapError).toBeUndefined()
+			expect(getActiveSimulationController()?.bootstrapWarning).toBe('Saved simulation state "No genesis" belongs to Genesis › No. Falling back to the baseline scenario.')
 			expect(getActiveSimulationController()?.simulationSource.kind).toBe('scenario')
 			const restored = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=no&simState=${record.id}` })
 			await restored.waitUntilReady()
@@ -450,7 +451,8 @@ void describe('active environment', () => {
 			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
 			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
 			expect(simulationBackend.currentScenario).toBe('baseline')
-			expect(simulationBackend.bootstrapError).toContain('could not be loaded')
+			expect(simulationBackend.bootstrapError).toBeUndefined()
+			expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
 		} finally {
 			domEnvironment.cleanup()
 		}
@@ -480,7 +482,8 @@ void describe('active environment', () => {
 			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
 			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
 			expect(simulationBackend.currentScenario).toBe('baseline')
-			expect(simulationBackend.bootstrapError).toContain('could not be loaded')
+			expect(simulationBackend.bootstrapError).toBeUndefined()
+			expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
 		} finally {
 			domEnvironment.cleanup()
 		}

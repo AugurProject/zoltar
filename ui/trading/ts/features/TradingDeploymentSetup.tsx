@@ -91,6 +91,7 @@ export function TradingDeploymentSetup({
 	walletControlRequestNonce?: number
 }) {
 	const activeNetwork = getActiveNetworkProfile()
+	const deploymentScope = tradingDeploymentScope()
 	const configuredRpcUrl = resolveConfiguredRpcUrl({ fallbackRpcUrl: activeNetwork.chain.rpcUrls.default.http[0] ?? '', networkId: activeNetwork.id })
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
 	const [registryLoading, setRegistryLoading] = useState(true)
@@ -464,8 +465,7 @@ export function TradingDeploymentSetup({
 			const deployStep = services.deployStep ?? defaultServices.deployStep
 			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentUnavailable)
 			await deployStep(publicClient, plan, step, hash => {
-				// A replacement broadcast takes over the row of the transaction it replaced.
-				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: deploymentCopy.formatDeployStep(step.label) })
+				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: deploymentScope, title: deploymentCopy.formatDeployStep(step.label) })
 				broadcastHash = hash
 			})
 			if (broadcastHash !== undefined) recordTransactionSettled(broadcastHash, { status: 'confirmed' })
@@ -534,7 +534,7 @@ export function TradingDeploymentSetup({
 								// Every contract keeps its own deploy action in place; a deployed one stays, disabled, and says so.
 								action: (
 									<TransactionActionButton
-										scope={tradingDeploymentScope}
+										scope={deploymentScope}
 										availability={availability}
 										disabledReasonElementId={externalReasonId}
 										idleLabel={deploymentCopy.formatDeployStep(step.label)}

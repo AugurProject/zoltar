@@ -13,8 +13,13 @@
 }
 
 .simulation-banner-header .detail,
-.simulation-banner .detail {
+.simulation-banner .detail,
+.simulation-banner .detail[data-message-tone="warning"] {
 	color: var(--simulation-text-secondary);
+}
+
+.simulation-banner .detail[data-message-tone="warning"] {
+	margin-top: var(--space-2);
 }
 
 .simulation-banner-warning {

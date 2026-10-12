@@ -72,7 +72,7 @@ export const generatedArtifacts: readonly GeneratedArtifact[] = [
 		tracked: true,
 		regenerate: 'bun ./tooling/contracts/check-mainnet-deployment.mts --write',
 		reason: 'Documentation, bots, and the explorer load the canonical Yes and No deployments without compiling contracts.',
-		check: 'bun run check:mainnet-deployment',
+		check: 'bun run check:mainnet-deployment:current',
 		linguist: 'generated',
 	},
 	{

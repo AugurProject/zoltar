@@ -73,6 +73,39 @@ function createReadyState(): SimulationWorkerState {
 }
 
 describe('simulation worker lifecycle', () => {
+	test('retains a saved-state recovery warning separately from a successful baseline bootstrap', async () => {
+		const worker = createWorkerHarness()
+		const warning = 'The saved state belongs to another genesis universe. Falling back to the baseline scenario.'
+		const backendPromise = createSimulationBackend({ initialBootstrapWarning: warning }, { createWorkerConnection: () => worker.connection })
+		worker.emitMessage({ state: { ...createReadyState(), isBootstrapped: false }, type: 'ready' })
+		const backend = await backendPromise
+
+		try {
+			expect(backend.bootstrapError).toBeUndefined()
+			expect(backend.bootstrapWarning).toBe(warning)
+			const bootstrap = backend.bootstrap()
+			expect(backend.isBootstrapping).toBe(true)
+			expect(backend.bootstrapError).toBeUndefined()
+			worker.emitMessage({ state: createReadyState(), type: 'state' })
+			worker.emitMessage({ id: 1, type: 'result', value: undefined })
+			await bootstrap
+			expect(backend.isBootstrapped).toBe(true)
+			expect(backend.bootstrapError).toBeUndefined()
+			expect(backend.bootstrapWarning).toBe(warning)
+			worker.emitMessage({ state: { ...createReadyState(), bootstrapError: 'Baseline bootstrap failed', isBootstrapped: false }, type: 'state' })
+			expect(backend.bootstrapError).toBe('Baseline bootstrap failed')
+			expect(backend.bootstrapWarning).toBe(warning)
+			const reset = backend.reset()
+			worker.emitMessage({ state: createReadyState(), type: 'state' })
+			worker.emitMessage({ id: 2, type: 'result', value: undefined })
+			await reset
+			expect(backend.bootstrapError).toBeUndefined()
+			expect(backend.bootstrapWarning).toBeUndefined()
+		} finally {
+			await backend.dispose()
+		}
+	})
+
 	test('passes the genesis choice to the worker and gives No a distinct REP token', async () => {
 		const tokens = []
 		for (const genesisOutcome of ['yes', 'no'] as const) {

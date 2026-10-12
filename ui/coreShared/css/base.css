@@ -608,7 +608,7 @@ button.quiet:disabled {
 	flex: 1;
 	display: flex;
 	justify-content: flex-end;
-	min-width: 0;
+	min-width: min-content;
 	max-width: 100%;
 }
 
@@ -660,6 +660,10 @@ button.quiet:disabled {
 
 .wallet-chip .address-value {
 	white-space: nowrap;
+}
+
+.wallet-chip .address-value-text {
+	min-width: 15ch;
 }
 
 .wallet-chip .address-value.copyable {
@@ -1719,6 +1723,10 @@ a.transaction-hash-link {
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
 	line-height: var(--line-height-snug);
+}
+
+.migration-outcome-status-detail {
+	grid-column: 1 / -1;
 }
 
 .migration-outcome-metric {

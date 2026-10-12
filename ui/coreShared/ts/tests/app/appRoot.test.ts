@@ -27,7 +27,7 @@ test('requires an explicit Yes or No choice before initializing or mounting any 
 				.getAllByRole('button')
 				.map(button => button.getAttribute('aria-label')),
 		).toEqual(['Open Yes universe', 'Open No universe'])
-		expect(within(document.body).getByRole('heading', { name: 'Child universes' })).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Child universes' }).tagName).toBe('H2')
 		await act(() => render(null, document.body))
 	}
 })
@@ -55,6 +55,12 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 	await act(() => within(document.body).getByRole('button', { name: 'Open No universe' }).click())
 	const buttons = within(document.body).getAllByRole('button')
 	expect(buttons.every(button => button.hasAttribute('disabled'))).toBe(true)
+	const opening = within(document.body).getByRole('status')
+	expect(opening.getAttribute('aria-live')).toBe('polite')
+	expect(opening.closest('[aria-busy="true"]') === null).toBe(true)
+	expect(opening.textContent).toBe('Opening No universe')
+	expect(within(document.body).getByRole('button', { name: 'Open No universe' }).textContent).toContain('Opening No universe')
+	expect(within(document.body).getByRole('button', { name: 'Open Yes universe' }).textContent).not.toContain('Opening')
 	await act(() => buttons.forEach(button => button.click()))
 	expect(initialize).toHaveBeenCalledTimes(1)
 	expect(root).not.toHaveBeenCalled()

@@ -19,6 +19,11 @@ import { getSepoliaGenesisRepDeployment, SEPOLIA_GENESIS_REP_ADDRESS } from '../
 import { GENESIS_OUTCOMES, MAINNET_GENESIS_UNIVERSES, parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 describe('network profile helpers', () => {
+	test('rejects allocations that would give both Sepolia roots the same REP deployment', () => {
+		const singleAllocation = [{ address: getAddress('0x0000000000000000000000000000000000000001'), amount: 1n }]
+		expect(() => getSepoliaGenesisRepDeployment('no', singleAllocation)).toThrow('Sepolia Yes and No genesis REP deployments must have distinct addresses')
+	})
+
 	test('limits canonical mainnet genesis roots to the Augur Yes and No child tokens', () => {
 		expect(GENESIS_OUTCOMES).toEqual(['yes', 'no'])
 		for (const outcome of GENESIS_OUTCOMES) {
