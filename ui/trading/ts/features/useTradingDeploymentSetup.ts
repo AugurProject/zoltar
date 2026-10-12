@@ -42,6 +42,31 @@ type DeploymentInspection =
 	| { phase: 'blocked' | 'ready'; plan: TradingDeploymentPlan; client: PublicClient; status: DeploymentStatus; revision: number }
 	| { phase: 'error'; message: string; plan?: TradingDeploymentPlan; client?: PublicClient; status?: DeploymentStatus; revision?: number }
 
+type DeploymentInspectionView =
+	| Readonly<{ phase: 'idle'; plan: undefined; status: undefined; message: undefined }>
+	| Readonly<{ phase: 'loading'; plan: TradingDeploymentPlan | undefined; status: undefined; message: undefined }>
+	| Readonly<{ phase: 'blocked' | 'ready'; plan: TradingDeploymentPlan; status: DeploymentStatus; message: undefined }>
+	| Readonly<{ phase: 'error'; message: string; plan: TradingDeploymentPlan | undefined; status: DeploymentStatus | undefined }>
+
+/** Keep the phase's required data together without exposing its RPC client or request revision. */
+function projectInspection(snapshot: DeploymentInspection): DeploymentInspectionView {
+	switch (snapshot.phase) {
+		case 'idle':
+			return { phase: snapshot.phase, plan: undefined, status: undefined, message: undefined }
+		case 'loading':
+			return { phase: snapshot.phase, plan: snapshot.plan, status: undefined, message: undefined }
+		case 'blocked':
+		case 'ready':
+			return { phase: snapshot.phase, plan: snapshot.plan, status: snapshot.status, message: undefined }
+		case 'error':
+			return { phase: snapshot.phase, message: snapshot.message, plan: snapshot.plan, status: snapshot.status }
+		default: {
+			const unexpected: never = snapshot
+			throw new Error(`Unsupported deployment inspection: ${JSON.stringify(unexpected)}`)
+		}
+	}
+}
+
 export function useTradingDeploymentSetup({ currentConfiguration, onComplete, onWorkflowLockChange = () => undefined, onWalletStateChange, services = defaultTradingDeploymentSetupServices, walletControlRequestNonce }: TradingDeploymentSetupOptions) {
 	const activeNetwork = getActiveNetworkProfile()
 	const configuredRpcUrl = resolveConfiguredRpcUrl({ fallbackRpcUrl: activeNetwork.chain.rpcUrls.default.http[0] ?? '', networkId: activeNetwork.id })
@@ -59,7 +84,6 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 	const inspectionSnapshot = useSignal<DeploymentInspection>({ phase: 'idle' })
 	const snapshot = inspectionSnapshot.value
 	const inspectionState = snapshot.phase
-	const inspectionError = snapshot.phase === 'error' ? snapshot.message : undefined
 	const plan = 'plan' in snapshot ? snapshot.plan : undefined
 	const publicClient = 'client' in snapshot ? snapshot.client : undefined
 	const deploymentStatus = 'status' in snapshot ? snapshot.status : undefined
@@ -343,7 +367,7 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 					return { step, presentation: contractStatusPresentation(deployed, isNext, inspectionState === 'error') }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
-	const inspection = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
+	const inspectionBadge = inspectionPresentation(inspectionState, { busy, deploymentComplete, inputError: inputError !== undefined, plan: plan !== undefined, registryError: registryError !== undefined, registryLoading })
 	// Only a failed read needs a manual retry; a missing Statoblast factory is rechecked automatically.
 	const retryChecks = registryError !== undefined || inspectionState === 'error'
 	const inspectionBadgeId = useId()
@@ -368,7 +392,7 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 		})
 		// The inspection badge or the network notice already states a shared blocked reason; the action references it instead of repeating it.
 		let externalReasonId: string | undefined
-		if (inspection !== undefined && inspection.label === availability.reason) externalReasonId = inspectionBadgeId
+		if (inspectionBadge !== undefined && inspectionBadge.label === availability.reason) externalReasonId = inspectionBadgeId
 		else if (wrongNetworkNotice !== undefined && availability.reason === deploymentCopy.walletMustUseNetwork(selectedCore?.chainName ?? '')) externalReasonId = networkNoticeId
 		return { availability, externalReasonId }
 	}
@@ -437,36 +461,38 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 		setRetryNonce(current => current + 1)
 	}
 	return {
-		busy,
-		busyStepId,
-		walletAccount,
-		walletConnected,
-		walletReady,
-		walletConnecting,
-		walletConnectionMessage,
-		registryLoading,
-		registryError,
-		coreDeployments,
-		selectedCore,
-		fallbackNotice,
-		inputError,
-		plan,
-		deploymentComplete,
-		deploymentSteps,
-		deploymentStatus,
-		inspectionState,
-		inspectionError,
-		inspection,
-		inspectionBadgeId,
-		networkNoticeId,
-		wrongNetworkNotice,
-		actionMessage,
-		actionError,
-		retryChecks,
-		stepAvailability,
-		connectDeploymentWallet,
-		disconnectDeploymentWallet,
-		deployStepNow,
-		retryInspection,
+		network: {
+			loading: registryLoading,
+			error: registryError,
+			configurationError: inputError,
+			core: selectedCore,
+			fallbackNotice,
+		},
+		wallet: {
+			account: walletAccount,
+			connecting: walletConnecting,
+			connectionMessage: walletConnectionMessage,
+			canConnect: !busy && !registryLoading && coreDeployments.length > 0,
+			networkNotice: wrongNetworkNotice,
+			networkNoticeId,
+		},
+		inspection: {
+			...projectInspection(snapshot),
+			complete: deploymentComplete,
+			steps: deploymentSteps,
+			badge: inspectionBadge,
+			badgeId: inspectionBadgeId,
+			canRetry: retryChecks,
+		},
+		actions: {
+			busy,
+			pendingStepId: busyStepId,
+			feedback: actionMessage === undefined ? undefined : { message: actionMessage, failed: actionError },
+			availabilityFor: stepAvailability,
+			connectWallet: connectDeploymentWallet,
+			disconnectWallet: disconnectDeploymentWallet,
+			deployStep: deployStepNow,
+			retryInspection,
+		},
 	}
 }

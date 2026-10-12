@@ -22,49 +22,19 @@ import { useTradingDeploymentSetup, type TradingDeploymentSetupOptions } from '.
 
 export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 	const { walletControlRequestNonce } = options
-	const {
-		busy,
-		busyStepId,
-		walletAccount,
-		walletConnecting,
-		walletConnectionMessage,
-		registryLoading,
-		registryError,
-		coreDeployments,
-		selectedCore,
-		fallbackNotice,
-		inputError,
-		plan,
-		deploymentComplete,
-		deploymentSteps,
-		deploymentStatus,
-		inspectionState,
-		inspectionError,
-		inspection,
-		inspectionBadgeId,
-		networkNoticeId,
-		wrongNetworkNotice,
-		actionMessage,
-		actionError,
-		retryChecks,
-		stepAvailability,
-		connectDeploymentWallet,
-		disconnectDeploymentWallet,
-		deployStepNow,
-		retryInspection,
-	} = useTradingDeploymentSetup(options)
+	const { network, wallet, inspection, actions } = useTradingDeploymentSetup(options)
 	let standaloneWalletButton
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton =
-			walletAccount !== undefined ? (
-				<WalletConnectionControl disabled={busy} ariaLabel={appCopy.disconnectWalletLabel(walletAccount)} title={appCopy.disconnectWallet} onClick={disconnectDeploymentWallet} label={<ReadOnlyAddressValue address={walletAccount} responsiveAbbreviation />} />
+			wallet.account !== undefined ? (
+				<WalletConnectionControl disabled={actions.busy} ariaLabel={appCopy.disconnectWalletLabel(wallet.account)} title={appCopy.disconnectWallet} onClick={actions.disconnectWallet} label={<ReadOnlyAddressValue address={wallet.account} responsiveAbbreviation />} />
 			) : (
-				<WalletConnectionControl disabled={busy || registryLoading || coreDeployments.length === 0} pending={walletConnecting} onClick={() => void connectDeploymentWallet()} pendingLabel={appCopy.connectingWallet} label={appCopy.connectWallet} />
+				<WalletConnectionControl disabled={!wallet.canConnect} pending={wallet.connecting} onClick={() => void actions.connectWallet()} pendingLabel={appCopy.connectingWallet} label={appCopy.connectWallet} />
 			)
 	let retryAction
-	if (retryChecks)
+	if (inspection.canRetry)
 		retryAction = (
-			<button className='secondary' type='button' disabled={busy || registryLoading || inspectionState === 'loading'} onClick={retryInspection}>
+			<button className='secondary' type='button' disabled={actions.busy || network.loading || inspection.phase === 'loading'} onClick={actions.retryInspection}>
 				{deploymentCopy.retryChecks}
 			</button>
 		)
@@ -72,22 +42,22 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 		<div className='route-view-flow'>
 			<RouteHeader title={appCopy.deploy} description={appCopy.deployRouteDescription} actions={standaloneWalletButton} />
 			<SectionBlock className='deployment-setup' title={deploymentCopy.tradingContracts}>
-				<ErrorNotice message={registryError} />
-				<ErrorNotice message={inputError} />
-				{selectedCore === undefined ? null : (
+				<ErrorNotice message={network.error} />
+				<ErrorNotice message={network.configurationError} />
+				{network.core === undefined ? null : (
 					<DataGrid dense>
-						<MetricField label={deploymentCopy.deployingTo}>{selectedCore.chainName}</MetricField>
+						<MetricField label={deploymentCopy.deployingTo}>{network.core.chainName}</MetricField>
 						<MetricField label={deploymentCopy.securityPoolFactory}>
-							<ReadOnlyAddressValue address={selectedCore.securityPoolFactory} responsiveAbbreviation />
+							<ReadOnlyAddressValue address={network.core.securityPoolFactory} responsiveAbbreviation />
 						</MetricField>
 					</DataGrid>
 				)}
-				{fallbackNotice === undefined ? null : <UserMessage className='detail' tone='warning' detail={fallbackNotice} />}
-				{plan === undefined || deploymentComplete ? null : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(plan.factory.label, plan.router.label)} />}
-				{plan === undefined ? null : (
+				{network.fallbackNotice === undefined ? null : <UserMessage className='detail' tone='warning' detail={network.fallbackNotice} />}
+				{inspection.plan === undefined || inspection.complete ? null : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(inspection.plan.factory.label, inspection.plan.router.label)} />}
+				{inspection.plan === undefined ? null : (
 					<DeploymentStepList
-						steps={deploymentSteps.map(({ step, presentation }) => {
-							const { availability, externalReasonId } = stepAvailability(step)
+						steps={inspection.steps.map(({ step, presentation }) => {
+							const { availability, externalReasonId } = actions.availabilityFor(step)
 							return {
 								// Every contract keeps its own deploy action in place; a deployed one stays, disabled, and says so.
 								action: (
@@ -97,8 +67,8 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 										disabledReasonElementId={externalReasonId}
 										idleLabel={deploymentCopy.formatDeployStep(step.label)}
 										pendingLabel={deploymentCopy.formatDeployingStep(step.label)}
-										pending={busyStepId === step.id}
-										onClick={() => void deployStepNow(step)}
+										pending={actions.pendingStepId === step.id}
+										onClick={() => void actions.deployStep(step)}
 										showDisabledReason={externalReasonId === undefined}
 									/>
 								),
@@ -112,20 +82,20 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 				)}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<DataGrid dense>
-						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(deploymentStatus)}</MetricField>
+						<MetricField label={deploymentCopy.deploymentProgress}>{deploymentProgress(inspection.status)}</MetricField>
 					</DataGrid>
-					{inspection === undefined ? null : (
-						<Badge id={inspectionBadgeId} tone={inspection.tone}>
-							{inspection.label}
+					{inspection.badge === undefined ? null : (
+						<Badge id={inspection.badgeId} tone={inspection.badge.tone}>
+							{inspection.badge.label}
 						</Badge>
 					)}
 				</div>
-				{inspectionState === 'blocked' && selectedCore !== undefined ? (
+				{inspection.phase === 'blocked' && network.core !== undefined ? (
 					<UserMessage
 						placement='section'
 						tone='warning'
 						className='deployment-setup__prerequisite'
-						detail={deploymentCopy.statoblastRequired(selectedCore.chainName)}
+						detail={deploymentCopy.statoblastRequired(network.core.chainName)}
 						actions={
 							<a className='button-link secondary-link' href={deployContractsGuideHref} target='_blank' rel='noreferrer'>
 								{deploymentCopy.deploymentGuide}
@@ -133,22 +103,22 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 						}
 					/>
 				) : null}
-				<ErrorNotice id={networkNoticeId} message={wrongNetworkNotice} />
-				{wrongNetworkNotice === undefined || selectedCore === undefined ? null : (
+				<ErrorNotice id={wallet.networkNoticeId} message={wallet.networkNotice} />
+				{wallet.networkNotice === undefined || network.core === undefined ? null : (
 					<div className='actions'>
-						<button type='button' className='secondary' disabled={busy || walletConnecting} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
-							{walletConnecting ? deploymentCopy.switchingToNetwork(selectedCore.chainName) : coreAppCopy.formatSwitchToNetwork(selectedCore.chainName)}
+						<button type='button' className='secondary' disabled={actions.busy || wallet.connecting} aria-busy={wallet.connecting} onClick={() => void actions.connectWallet()}>
+							{wallet.connecting ? deploymentCopy.switchingToNetwork(network.core.chainName) : coreAppCopy.formatSwitchToNetwork(network.core.chainName)}
 						</button>
 					</div>
 				)}
-				<ErrorNotice message={walletConnectionMessage} />
-				<ErrorNotice message={inspectionError} />
-				{actionMessage === undefined || actionError ? null : <UserMessage className='detail' announcement='polite' detail={actionMessage} />}
-				<ErrorNotice message={actionError ? actionMessage : undefined} />
-				{plan === undefined || retryAction !== undefined ? (
+				<ErrorNotice message={wallet.connectionMessage} />
+				<ErrorNotice message={inspection.message} />
+				{actions.feedback === undefined || actions.feedback.failed ? null : <UserMessage className='detail' announcement='polite' detail={actions.feedback.message} />}
+				<ErrorNotice message={actions.feedback?.failed ? actions.feedback.message : undefined} />
+				{inspection.plan === undefined || retryAction !== undefined ? (
 					<div className='actions'>
 						{/* Until the network is known there are no contract rows; one disabled action keeps the place and explains what is missing. */}
-						{plan === undefined ? <PlaceholderDeployAction {...stepAvailability(undefined)} /> : null}
+						{inspection.plan === undefined ? <PlaceholderDeployAction {...actions.availabilityFor(undefined)} /> : null}
 						{retryAction}
 					</div>
 				) : null}
