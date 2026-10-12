@@ -1,4 +1,4 @@
-import { createBuildQueue } from './buildQueue.mts'
+import { createWatchBuilds } from './watchBuilds.mts'
 import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -380,34 +380,16 @@ const restartServer = async (reason: string) => {
 	}
 }
 
-type BuildJob = 'contracts' | 'shared' | 'vendor' | 'worker'
-
-// Upstream inputs always rebuild before the jobs that consume their outputs.
-const buildQueue = createBuildQueue<BuildJob>({
-	priority: ['shared', 'contracts', 'vendor', 'worker'],
+const { runVendorBuild, runWorkerBuild, runSharedBuild, runContractBuild, runProjectArtifactBuild } = createWatchBuilds({
+	appPaths,
+	bunExecutablePath: BUN_EXECUTABLE_PATH,
 	isStopped: () => shuttingDown,
 	onIdle: queueLiveReload,
-	run: async (job, reason) => {
+	run: async (job, step, reason) => {
 		console.log(`[app:watch] Rebuilding ${job} because ${reason} changed`)
-		const buildSteps = {
-			contracts: { command: [BUN_EXECUTABLE_PATH, './tooling/contracts/build-app-contracts.mts', appId], cwd: REPOSITORY_ROOT_PATH, label: 'Solidity and UI contract artifacts' },
-			shared: { command: [BUN_EXECUTABLE_PATH, './tooling/repo/build-shared.mts', appId], cwd: REPOSITORY_ROOT_PATH, label: 'Shared TypeScript build' },
-			vendor: { command: [BUN_EXECUTABLE_PATH, VENDOR_BUILD_PATH, appId, '--scoped-artifacts'], cwd: UI_ROOT_PATH, label: 'Vendor rebuild' },
-			worker: { command: [BUN_EXECUTABLE_PATH, WORKER_BUILD_PATH, appId, '--artifacts-current'], cwd: UI_ROOT_PATH, label: 'Simulation worker rebuild' },
-		}
-		const step = buildSteps[job]
-		if (!(await runBuildStep(step.command, step.cwd, step.label))) return false
-		if (job === 'contracts' && appId === 'trading') void buildQueue.enqueue('vendor', reason)
-		if (job === 'shared' || job === 'vendor') void buildQueue.enqueue('worker', reason)
-		return true
+		return runBuildStep(step.command, step.cwd, step.label)
 	},
 })
-
-const runVendorBuild = (reason: string) => buildQueue.enqueue('vendor', reason)
-const runWorkerBuild = (reason: string) => buildQueue.enqueue('worker', reason)
-const runSharedBuild = (reason: string) => buildQueue.enqueue('shared', reason)
-const runContractBuild = (reason: string) => buildQueue.enqueue('contracts', reason)
-const runProjectArtifactBuild = (reason: string) => (appId === 'trading' ? runVendorBuild(reason) : runContractBuild(reason))
 
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
 	watchFileWithCleanup(filePath, onChange, callback => {

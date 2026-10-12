@@ -3,7 +3,8 @@ import * as fs from 'node:fs'
 import { createProjectTaskPlan } from '../repo/run-project-tasks.mts'
 import { projectsInTaskGroup } from '../repo/projects.ts'
 import { getAppBuildCommands } from './apps.mts'
-import { getUiAppDependencyOrder, getUiCoreSharedPaths } from './appPaths.mts'
+import { getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, UI_APP_IDS, type UiAppId } from './appPaths.mts'
+import { createWatchBuilds } from './watchBuilds.mts'
 
 type PackageJson = {
 	scripts?: Record<string, string | undefined>
@@ -12,6 +13,28 @@ type PackageJson = {
 function readRootPackageJson(): PackageJson {
 	const { repositoryRoot } = getUiCoreSharedPaths()
 	return JSON.parse(fs.readFileSync(`${repositoryRoot}/package.json`, 'utf8')) as PackageJson
+}
+
+function collectWatchBuilds(appId: UiAppId) {
+	const appPaths = getUiAppPaths(appId)
+	const calls: string[] = []
+	const commands: string[][] = []
+	const workingDirectories: string[] = []
+	const builds = createWatchBuilds({
+		appPaths,
+		bunExecutablePath: process.execPath,
+		isStopped: () => false,
+		onIdle: () => {
+			calls.push('reload')
+		},
+		run: async (job, step) => {
+			calls.push(job)
+			commands.push(step.command)
+			workingDirectories.push(step.cwd)
+			return true
+		},
+	})
+	return { ...builds, appPaths, calls, commands, workingDirectories }
 }
 
 describe('UI build dependency direction', () => {
@@ -107,7 +130,6 @@ describe('UI build dependency direction', () => {
 		const watchSource = fs.readFileSync(`${import.meta.dir}/watch.mts`, 'utf8')
 		expect(watchSource).toContain('appPaths.sharedSourceRoots')
 		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')")
-		expect(watchSource).toContain('build-app-contracts.mts')
 		expect(watchSource).toContain("path.join(APP_ROOT_PATH, 'css')")
 		expect(watchSource).not.toContain('TRADING_PACKAGE_ROOT_PATH')
 	})
@@ -118,5 +140,91 @@ describe('UI build dependency direction', () => {
 		if (buildTestsScript === undefined) throw new Error('ui:build:tests script is missing')
 		expect(buildTestsScript).toBe('bun ./tooling/repo/run-project-tasks.mts test-build')
 		expect(createProjectTaskPlan('test-build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
+	})
+})
+
+describe('UI watcher build dependencies', () => {
+	test('Trading artifact changes rebuild scoped vendor assets before the current-artifact worker', async () => {
+		const builds = collectWatchBuilds('trading')
+		await builds.runProjectArtifactBuild('contract output')
+		expect(builds.calls).toEqual(['vendor', 'worker', 'reload'])
+		expect(builds.commands).toEqual([
+			[process.execPath, builds.appPaths.vendorBuildScript, 'trading', '--scoped-artifacts'],
+			[process.execPath, builds.appPaths.workersBuildScript, 'trading', '--artifacts-current'],
+		])
+		expect(builds.workingDirectories).toEqual([builds.appPaths.coreSharedRoot, builds.appPaths.coreSharedRoot])
+	})
+
+	test('Zoltar and Statoblast artifact changes run their owning contract build', async () => {
+		for (const appId of ['zoltar', 'statoblast'] as const) {
+			const builds = collectWatchBuilds(appId)
+			await builds.runProjectArtifactBuild('contract output')
+			expect(builds.calls).toEqual(['contracts', 'reload'])
+			expect(builds.commands).toEqual([[process.execPath, './tooling/contracts/build-app-contracts.mts', appId]])
+			expect(builds.workingDirectories).toEqual([builds.appPaths.repositoryRoot])
+		}
+	})
+
+	test('Trading contract changes rebuild contracts, vendor assets and the worker before reloading', async () => {
+		const builds = collectWatchBuilds('trading')
+		await builds.runContractBuild('Solidity source')
+		expect(builds.calls).toEqual(['contracts', 'vendor', 'worker', 'reload'])
+		expect(builds.commands[0]).toEqual([process.execPath, './tooling/contracts/build-app-contracts.mts', 'trading'])
+		expect(builds.workingDirectories).toEqual([builds.appPaths.repositoryRoot, builds.appPaths.coreSharedRoot, builds.appPaths.coreSharedRoot])
+	})
+
+	test('shared source changes rebuild shared outputs and the selected application worker', async () => {
+		for (const appId of UI_APP_IDS) {
+			const builds = collectWatchBuilds(appId)
+			await builds.runSharedBuild('shared source')
+			expect(builds.calls).toEqual(['shared', 'worker', 'reload'])
+			expect(builds.commands).toEqual([
+				[process.execPath, './tooling/repo/build-shared.mts', appId],
+				[process.execPath, builds.appPaths.workersBuildScript, appId, '--artifacts-current'],
+			])
+			expect(builds.workingDirectories).toEqual([builds.appPaths.repositoryRoot, builds.appPaths.coreSharedRoot])
+		}
+	})
+
+	test('changes during a worker build serialize and coalesce upstream rebuilds before another worker', async () => {
+		const calls: string[] = []
+		let activeBuilds = 0
+		let maximumActiveBuilds = 0
+		let releaseFirst: () => void = () => undefined
+		const firstBuild = new Promise<void>(resolve => {
+			releaseFirst = resolve
+		})
+		let started: () => void = () => undefined
+		const firstStarted = new Promise<void>(resolve => {
+			started = resolve
+		})
+		const builds = createWatchBuilds({
+			appPaths: getUiAppPaths('trading'),
+			bunExecutablePath: process.execPath,
+			isStopped: () => false,
+			onIdle: () => {
+				calls.push('reload')
+			},
+			run: async job => {
+				calls.push(job)
+				activeBuilds += 1
+				maximumActiveBuilds = Math.max(maximumActiveBuilds, activeBuilds)
+				if (calls.length === 1) {
+					started()
+					await firstBuild
+				}
+				activeBuilds -= 1
+				return true
+			},
+		})
+		const completion = builds.runWorkerBuild('worker source')
+		await firstStarted
+		void builds.runVendorBuild('vendor source')
+		void builds.runContractBuild('contract source')
+		void builds.runSharedBuild('shared source')
+		releaseFirst()
+		await completion
+		expect(calls).toEqual(['worker', 'shared', 'contracts', 'vendor', 'worker', 'reload'])
+		expect(maximumActiveBuilds).toBe(1)
 	})
 })
