@@ -473,7 +473,6 @@ contract OpenOraclePriceCoordinator {
 		if (isPriceValid()) {
 			_emitStagedOperationQueued(operationId, snapshot, false);
 			executeStagedOperation(operationId);
-			// no cost when price is valid
 			return 0;
 		}
 		bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds.length == 0;

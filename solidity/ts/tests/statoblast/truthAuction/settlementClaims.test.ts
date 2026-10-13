@@ -231,7 +231,6 @@ describe('Statoblast: truth auction', () => {
 			// Claim proceeds
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
-			// Verify they got backingUnits shares matching purchasedRep (with tolerance for rounding)
 			const vault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			const repFromBackingUnits = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vault.repBackingUnits)
 			strictEqualTypeSafe(repFromBackingUnits, purchasedAttoRep, 'the sole bidder must receive the purchased REP')

@@ -289,7 +289,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		compiledAbiFingerprint: 'b4d43db4a275c3118a700ca255a7f63d42dfdca1fb1e7c554d681e589a76ac85',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '6093653de73a0e5fa1e400d77bbded71a92de1197f58bd89da82a657887f349e',
+		readAbiFingerprint: '62f248ccd4fd8d25d37fceb4eb4a9720d7908d2e57fd1eaf3a1786b8a9f4e1c1',
 		readSurface:
 			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		readDeclarations: [

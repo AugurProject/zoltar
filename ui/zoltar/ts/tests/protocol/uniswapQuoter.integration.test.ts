@@ -27,7 +27,7 @@ void describe('Uniswap mainnet smoke checks', () => {
 	void describe('ETH/USDC (0.05% pool — known to exist on V4)', () => {
 		void test('quotes 1 ETH → USDC and returns a plausible price', async () => {
 			const usdcOut = await quoteExactInput(client, ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, ATTO_ETH_PER_ETH, { fee: 500, tickSpacing: 10 })
-			// At time of writing ETH is roughly $2 191 — assert a wide range to keep test non-brittle
+			// Broad bounds keep this live-network smoke check stable as ETH prices change.
 			expect(usdcOut).toBeGreaterThan(100n * 10n ** 6n) // > $100 USDC
 			expect(usdcOut).toBeLessThan(100_000n * 10n ** 6n) // < $100 000 USDC
 		})
