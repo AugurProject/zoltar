@@ -151,7 +151,7 @@ export function App() {
 								universeForkTime={zoltarUniverse?.forkTime}
 								universeHasForked={zoltarUniverse?.hasForked}
 								universePresentation={universePresentation}
-								universeControl={<UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
+								universeControl={<UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
 								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 							/>
 						)}

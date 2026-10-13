@@ -19,6 +19,7 @@ export const formatForkQuestion = (title: string) => `Fork question: ${title}`
 export const formatOpenChildUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
 export const openOutcomeArrowTail = ' →'
 
+export const formatSwitcherContextLabel = (rootLabel: CopyTemplateValue, leafLabel: CopyTemplateValue) => `${rootLabel} · ${leafLabel}`
 export const formatSwitcherAriaLabel = (universeLabel: CopyTemplateValue) => `Universe: ${universeLabel}. Browse universes`
 export const formatForkedSwitcherAriaLabel = (universeLabel: CopyTemplateValue) => `Universe: ${universeLabel}, forked. Browse universes`
 export const forked = 'Forked'

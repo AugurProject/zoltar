@@ -835,7 +835,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	margin: 0;
 	min-width: 0;
 	font-family: var(--font-family-sans);
-	font-size: var(--font-title);
+	font-size: var(--font-body);
 	font-weight: 650;
 	line-height: var(--line-height-tight);
 	letter-spacing: -0.01em;
@@ -1005,6 +1005,10 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	font-size: var(--font-caption);
 }
 
+.header-toolbar-settings .app-settings-trigger {
+	padding-inline: var(--space-2);
+}
+
 .header-toolbar-controls .toolbar-field {
 	flex-shrink: 1;
 	min-width: min-content;
@@ -1051,6 +1055,24 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	flex-grow: 1;
 	min-width: 15ch;
 	width: 15ch;
+}
+
+.header-toolbar .universe-switcher-label:has(.universe-switcher-label-leaf) {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	line-height: var(--line-height-tight);
+}
+
+.header-toolbar .universe-switcher-label-parent,
+.header-toolbar .universe-switcher-label-leaf {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.header-toolbar .universe-switcher-label-parent {
+	color: var(--muted);
+	font-size: var(--font-label);
 }
 
 .app-settings-menu .protocol-guide-link {

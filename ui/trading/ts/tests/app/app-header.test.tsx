@@ -15,6 +15,8 @@ import type { LiveTradingControllerServices } from '../../features/live/liveTrad
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE, setRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
 import { connectedWalletServices, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
@@ -97,6 +99,30 @@ describe('trading header', () => {
 		expect(universeSwitcher?.getAttribute('aria-label')).toBe('Universe: Genesis › Yes. Browse universes')
 		expect(universeSwitcher?.getAttribute('href')).toContain('#/universe')
 	})
+
+	for (const outcome of ['yes', 'no'] as const) {
+		test(`keeps the ${outcome} root and Alpha leaf visible for a bounded header summary`, async () => {
+			window.history.replaceState(undefined, '', `/?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/market?universe=21`)
+			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
+			const rendered = await renderIntoDocument(
+				<App
+					initializeEnvironment={async () => undefined}
+					loadLiveDeployment={async () => configuration}
+					liveTradingServices={{ ...offlineControllerServices, discoverUniverses: async () => emptyDiscoveryPage([0n, 21n], 21n) }}
+					loadUniverseSummary={async () => createUniverseSummary({ universeId: 21n, outcomeLabel: 'Alpha', relatedUniversesLoaded: false, hasForked: true })}
+				/>,
+			)
+			cleanupRendered = rendered.cleanup
+			const root = outcome === 'yes' ? 'Genesis › Yes' : 'Genesis › No'
+			await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label-parent')?.textContent).toBe(root))
+			const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .universe-switcher')
+			expect(universeSwitcher?.querySelector('.universe-switcher-label-leaf')?.textContent).toBe('Alpha')
+			expect(universeSwitcher?.getAttribute('aria-label')).toBe(`Universe: ${root} · Alpha, forked. Browse universes`)
+			expect(universeSwitcher?.getAttribute('title')).toBe(`${root} · Alpha`)
+			expect(universeSwitcher?.getAttribute('href')).toContain('universe=21')
+			expect(universeSwitcher?.querySelector('.universe-switcher-badge')?.textContent).toBe('Forked')
+		})
+	}
 
 	test('rewrites a malformed or empty universe request to the discovered universe instead of keeping a value the routes ignore', async () => {
 		for (const universe of ['abc', '-1', '']) {
