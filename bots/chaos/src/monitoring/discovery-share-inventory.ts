@@ -1,3 +1,4 @@
+import type { DiscoveryIssue } from '../operations/types.ts'
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, type EcosystemDiscoveryContext } from './discovery-context.ts'
 import { erc1155Abi, shareTokenAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
@@ -29,7 +30,7 @@ export function trustedIndexedReportsForDiscovery(parameters: { deployments: Eco
 	return parameters.reports.filter(trustedReport)
 }
 
-export async function discoverShareInventory(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], pairs: readonly PairSnapshot[], universes: readonly UniverseSnapshot[], questions: readonly QuestionSnapshot[], blockNumber: bigint, warnings: string[]) {
+export async function discoverShareInventory(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], pairs: readonly PairSnapshot[], universes: readonly UniverseSnapshot[], questions: readonly QuestionSnapshot[], blockNumber: bigint, issues: DiscoveryIssue[]) {
 	const { client, deployments, wallet } = context
 	if (wallet === undefined) return []
 	const shares: ShareInventory[] = []
@@ -64,7 +65,7 @@ export async function discoverShareInventory(context: EcosystemDiscoveryContext,
 		const targetCount = BigInt(migrationTargetsFor(pool).length)
 		plannedFanout += BigInt(operatorsFor(pool.shareToken).size) + 4n * targetCount
 		if (plannedFanout > BigInt(DISCOVERY_AGGREGATE_ITEM_LIMIT)) {
-			warnings.push(`Share-inventory discovery truncated because planned approval and migration fan-out is at least ${plannedFanout.toString()} entries, exceeding the configured ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-entry aggregate limit`)
+			issues.push({ kind: 'share-fanout', plannedFanout: plannedFanout.toString(), limit: DISCOVERY_AGGREGATE_ITEM_LIMIT })
 			return []
 		}
 	}

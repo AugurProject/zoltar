@@ -1,3 +1,4 @@
+import { discoveryCoverageIsComplete } from '../monitoring/discovery-coverage.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../monitoring/carry-proof-storage.ts'
 import { scanCarryStorage } from '../monitoring/carry-storage-scan.ts'
 import { availableHistoryExecutionReady } from './scan-readiness.ts'
@@ -9,11 +10,12 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS, type OperatorSettings } from '../config/settings.ts'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery-client.ts'
-import { discoverEcosystemSnapshot, discoveryCoverageIsComplete } from '../monitoring/discovery.ts'
+import { discoverEcosystemSnapshot } from '../monitoring/discovery.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
 import { updateProtocolIndexWithQuorum } from '../monitoring/protocol-index-quorum.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
-import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../monitoring/topology-cache.ts'
+import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../monitoring/topology-cache.ts'
+import { type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../monitoring/topology-schema.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
 import { walletInventory, type WalletBalanceState } from '../state/runtime-state.ts'
@@ -386,7 +388,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 	const discovery = await discoverWithQuorum(settings, pool, wallet, anchor, compatibleIndex, cachedTopology)
 	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
-	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
+	const discoveryComplete = discoveryCoverageIsComplete(topology.discoveryIssues)
 	const updatedCandidate = discoveryComplete ? await updateIndexWithQuorum(settings, pool, indexWallet, anchor, topology, compatibleIndex) : undefined
 	const partialIndex = updatedCandidate?.index ?? compatibleIndex
 	const historyWarning =
@@ -423,7 +425,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 	const inventory = walletInventory(snapshot)
 	let evaluations = applyExecutionPolicy(evaluated, settings, executionReady, indexedThroughBlock, anchor.blockNumber.toString(), BigInt(snapshot.wallet.ethBalanceAttoEth))
 	if (settings.runtime.execute) evaluations = applyLiveNoveltyInventoryReadiness(evaluations, inventory, snapshot.universes, settings.strategy)
-	if (!discoveryCoverageIsComplete(topology.warnings)) {
+	if (!discoveryCoverageIsComplete(topology.discoveryIssues)) {
 		evaluations = blockExecutableEvaluations(evaluations, 'Canonical discovery reached a configured scan limit; raise the discovery limit and complete a full scan before execution')
 	}
 	return {
