@@ -12,7 +12,7 @@ export type NetworkProfile = {
 	chainIdHex: string
 	displayName: string
 	genesisRepTokenAddress: Address
-	genesisOutcome?: GenesisOutcome
+	genesisOutcome: GenesisOutcome
 	id: 'mainnet' | 'sepolia' | 'simulation'
 	isSupportedAppChain: boolean
 	repPricingMode: 'unavailable' | 'uniswap' | 'mock'
@@ -129,11 +129,12 @@ export function resetRuntimeNetworkProfile() {
 	globalThis.__zoltarRuntimeNetworkProfile__ = undefined
 }
 
-export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }: { genesisRepTokenAddress: Address; wethAddress: Address }): NetworkProfile {
+export function createSimulationProfile({ genesisOutcome, genesisRepTokenAddress, wethAddress }: { genesisOutcome: GenesisOutcome; genesisRepTokenAddress: Address; wethAddress: Address }): NetworkProfile {
 	return {
 		chain: simulationChain,
 		chainIdHex: '0x539',
 		displayName: appCopy.browserSimulation,
+		genesisOutcome,
 		genesisRepTokenAddress,
 		id: 'simulation',
 		isSupportedAppChain: true,

@@ -101,7 +101,7 @@ describe('trading header', () => {
 	})
 
 	for (const outcome of ['yes', 'no'] as const) {
-		test(`keeps the ${outcome} root and Alpha leaf visible for a bounded header summary`, async () => {
+		test(`keeps the ${outcome} root context and Alpha leaf visible for a bounded header summary`, async () => {
 			window.history.replaceState(undefined, '', `/?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/market?universe=21`)
 			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
 			const rendered = await renderIntoDocument(
@@ -114,7 +114,7 @@ describe('trading header', () => {
 			)
 			cleanupRendered = rendered.cleanup
 			const root = outcome === 'yes' ? 'Genesis › Yes' : 'Genesis › No'
-			await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label-parent')?.textContent).toBe(root))
+			await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label-parent')?.textContent).toBe(`${root} ·`))
 			const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .universe-switcher')
 			expect(universeSwitcher?.querySelector('.universe-switcher-label-leaf')?.textContent).toBe('Alpha')
 			expect(universeSwitcher?.getAttribute('aria-label')).toBe(`Universe: ${root} · Alpha, forked. Browse universes`)

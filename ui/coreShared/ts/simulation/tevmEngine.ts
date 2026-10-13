@@ -5,7 +5,7 @@ import { createPublicClient, createWalletClient, custom, encodeFunctionData, get
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../wallet/chainBackend.js'
 import { withTransactionCallbacks } from './writeClientCallbacks.js'
-import { createSimulationProfile, getGenesisNetworkProfile } from '../wallet/networkProfile.js'
+import { createSimulationProfile } from '../wallet/networkProfile.js'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
 import { advanceSimulationTime, advanceNextSimulationBlock, includePendingSimulationTransaction } from './clock.js'
@@ -248,7 +248,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount, genesisOutcome)
-	const profile = getGenesisNetworkProfile(createSimulationProfile(predictedTokenAddresses), genesisOutcome)
+	const profile = createSimulationProfile({ ...predictedTokenAddresses, genesisOutcome })
 	const baseScenario = getInitializationScenario(initialization)
 	let memoryClient = createSimulationMemoryClient(profile)
 	const stateListeners = new Set<() => void>()

@@ -69,6 +69,10 @@ const EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Recor
 	...EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES,
 	zoltar: '0x796d74a448e70d580410ccc52031c5118fba02694a77b51a4725d3c99e26ac66',
 }
+const EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES = {
+	mainnet: { yes: EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES },
+	sepolia: { yes: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES },
+}
 const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [
 	{
 		inputs: [
@@ -389,7 +393,7 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: RpcStateRetryWait): DeploymentStep[] {
 	const addresses = getZoltarContractAddresses(profile)
-	const genesisToken = getSepoliaGenesisRepDeployment(profile.genesisOutcome ?? 'yes')
+	const genesisToken = getSepoliaGenesisRepDeployment(profile.genesisOutcome)
 	const testTokenSteps =
 		profile.id === 'sepolia'
 			? ([
@@ -466,7 +470,7 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 		zoltar: constructorArgumentsFromInitCode(getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress), Zoltar_Zoltar.evm.bytecode.object),
 	}
 	if (profile.id === 'sepolia') {
-		constructorArguments.reputationToken = constructorArgumentsFromInitCode(getSepoliaGenesisRepDeployment(profile.genesisOutcome ?? 'yes').initCode, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
+		constructorArguments.reputationToken = constructorArgumentsFromInitCode(getSepoliaGenesisRepDeployment(profile.genesisOutcome).initCode, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
 	}
 	return constructorArguments
 }
@@ -474,8 +478,7 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly DeploymentStep[], profile: NetworkProfile): DeploymentStep[] {
 	return steps.map(step => ({
 		...step,
-		...(profile.id === 'sepolia' ? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES : EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES)[step.id] } : {}),
-		...(profile.id === 'mainnet' ? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES : EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES)[step.id] } : {}),
+		...(profile.id === 'sepolia' || profile.id === 'mainnet' ? { expectedRuntimeCodeHash: EXPECTED_PUBLIC_DEPLOYMENT_RUNTIME_CODE_HASHES[profile.id][profile.genesisOutcome][step.id] } : {}),
 		...(profile.id === 'simulation' && step.id === 'proxyDeployer' ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.proxyDeployer } : {}),
 		...(profile.id === 'simulation' ? { trustedSimulationCodePresence: TRUSTED_SIMULATION_CODE_PRESENCE } : {}),
 	}))

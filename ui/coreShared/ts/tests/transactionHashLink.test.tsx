@@ -29,7 +29,7 @@ describe('TransactionHashLink', () => {
 	})
 	test('shows the full local hash without an external link when no explorer exists', async () => {
 		const address = '0x0000000000000000000000000000000000000001'
-		const restore = installActiveEnvironmentForTesting(createInjectedBackend({ profile: createSimulationProfile({ genesisRepTokenAddress: address, wethAddress: address }) }))
+		const restore = installActiveEnvironmentForTesting(createInjectedBackend({ profile: createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: address, wethAddress: address }) }))
 		try {
 			const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12'
 			const rendered = await renderIntoDocument(<TransactionHashLink hash={hash} />)

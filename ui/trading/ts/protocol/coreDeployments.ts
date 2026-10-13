@@ -57,7 +57,7 @@ export async function loadCoreDeployments() {
 		return [
 			{
 				chainId: backend.profile.chain.id,
-				genesisOutcome: backend.profile.genesisOutcome ?? 'yes',
+				genesisOutcome: backend.profile.genesisOutcome,
 				chainName: backend.profile.displayName,
 				defaultRpcUrl: 'http://127.0.0.1/',
 				id: 'simulation',
@@ -76,5 +76,5 @@ export async function loadCoreDeployments() {
 	}
 	if (!response.ok) throw new Error(deploymentRegistryUnavailable)
 	const candidate: unknown = await response.json()
-	return parseCoreDeployments(candidate).filter(deployment => deployment.genesisOutcome === (backend.profile.genesisOutcome ?? 'yes'))
+	return parseCoreDeployments(candidate).filter(deployment => deployment.genesisOutcome === backend.profile.genesisOutcome)
 }

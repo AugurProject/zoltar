@@ -2,7 +2,7 @@ import { withTimeout } from '../lib/promise.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
-import { createSimulationProfile, getGenesisNetworkProfile } from '../wallet/networkProfile.js'
+import { createSimulationProfile } from '../wallet/networkProfile.js'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import type { SimulationController } from './controller.js'
 import { predictSimulationTokenAddresses } from './bootstrap.js'
@@ -102,7 +102,7 @@ export async function createSimulationBackend(
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
 	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
-	const profile = getGenesisNetworkProfile(createSimulationProfile(predictSimulationTokenAddresses(primaryAccount, genesisOutcome)), genesisOutcome)
+	const profile = createSimulationProfile({ ...predictSimulationTokenAddresses(primaryAccount, genesisOutcome), genesisOutcome })
 	const initialization: SimulationInitialization =
 		savedState !== undefined && savedStateId !== undefined
 			? {

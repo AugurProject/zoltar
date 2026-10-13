@@ -117,7 +117,7 @@ export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: U
 	const zoltarOracleStep = { ...zoltarOracle, id: 'zoltarDeploymentStatusOracle', label: 'Zoltar Deployment Status Oracle' }
 	const protocolStepsWithExternalDependencies = protocolSteps.map(step => (step.id === 'openOracle' ? { ...step, dependencies: [...step.dependencies, 'permit2'] } : step))
 	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, zoltarOracleStep, ...protocolStepsWithExternalDependencies, ...getTradingDeploymentSteps(profile)].map(step => {
-		const outcome = profile.genesisOutcome ?? 'yes'
+		const outcome = profile.genesisOutcome
 		const networkHashProfile = profile.id === 'mainnet' ? 'mainnet' : 'sepolia'
 		const hashProfile = uniswap.kind === 'deterministic' ? 'deterministic' : networkHashProfile
 		const tradingHash = EXPECTED_TRADING_RUNTIME_CODE_HASHES[hashProfile][outcome][step.id]

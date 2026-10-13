@@ -15,7 +15,6 @@ import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { getGenesisUniverseHref } from '../navigation/genesisNavigation.js'
-import { getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
 
 type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
@@ -46,7 +45,6 @@ function resolveLineage(universe: ZoltarUniverseSummary): readonly UniverseLinea
 
 function ParentUniverseLink({ universe }: { universe: ZoltarUniverseSummary }) {
 	if (universe.universeId !== 0n) return <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />
-	if (getRuntimeNetworkProfile().genesisOutcome === undefined) return commonCopy.none
 	const parent = new URL(getGenesisUniverseHref(undefined, true))
 	return (
 		<a className='universe-link universe-parent-link' href={`${parent.pathname}${parent.search}${parent.hash}`}>

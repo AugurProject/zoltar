@@ -270,12 +270,12 @@ describe('UniverseSwitcher', () => {
 		test(`keeps the canonical ${outcome} root and actual leaf for a bounded summary`, async () => {
 			window.history.replaceState({}, '', `?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/zoltar?universe=21`)
 			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
-			const universe = createUniverse({ universeId: alphaUniverseId, lineage: undefined, outcomeLabel: 'Alpha', relatedUniversesLoaded: false })
+			const universe = createUniverse({ universeId: alphaUniverseId, parentUniverseId: yesUniverseId, lineage: undefined, outcomeLabel: 'Alpha', relatedUniversesLoaded: false })
 			cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={universe} />)).cleanup
 			const root = outcome === 'yes' ? 'Genesis › Yes' : 'Genesis › No'
 			const link = within(document.body).getByRole('link', { name: `Universe: ${root} · Alpha, forked. Browse universes` })
 			expect(link.getAttribute('title')).toBe(`${root} · Alpha`)
-			expect(link.querySelector('.universe-switcher-label-parent')?.textContent).toBe(root)
+			expect(link.querySelector('.universe-switcher-label-parent')?.textContent).toBe(`${root} ·`)
 			expect(link.querySelector('.universe-switcher-label-leaf')?.textContent).toBe('Alpha')
 			expect(link.querySelector('.universe-switcher-badge')?.textContent).toBe('Forked')
 		})
@@ -292,7 +292,7 @@ describe('UniverseSwitcher', () => {
 		})
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseSwitcher activeUniverseId={alphaUniverseId} browseHref='#/zoltar?zoltarView=universes' universe={universe} />)).cleanup
 		const link = within(document.body).getByRole('link', { name: 'Universe: Genesis › Yes · Alpha, forked. Browse universes' })
-		expect(link.querySelector('.universe-switcher-label-parent')?.textContent).toBe('Genesis › Yes')
+		expect(link.querySelector('.universe-switcher-label-parent')?.textContent).toBe('Genesis › Yes ·')
 		expect(link.querySelector('.universe-switcher-label-leaf')?.textContent).toBe('Alpha')
 		expect(link.textContent).not.toContain('Unverified parent')
 	})

@@ -75,6 +75,7 @@ describe('network profile helpers', () => {
 
 	test('returns undefined explorer url when URL base is not configured', () => {
 		const profile = createSimulationProfile({
+			genesisOutcome: 'yes',
 			genesisRepTokenAddress: getAddress('0x0000000000000000000000000000000000000101'),
 			wethAddress: getAddress('0x0000000000000000000000000000000000000202'),
 		})
@@ -101,8 +102,9 @@ describe('network profile helpers', () => {
 		expect(() => getPublicNetworkProfile('sepolai')).toThrow('Unsupported network "sepolai". Use "mainnet" or "sepolia".')
 	})
 
-	test('creates a deterministic simulation profile from constructor inputs', () => {
+	test.each(GENESIS_OUTCOMES)('creates a deterministic %s simulation profile from constructor inputs', genesisOutcome => {
 		const profile = createSimulationProfile({
+			genesisOutcome,
 			genesisRepTokenAddress: getAddress('0x0000000000000000000000000000000000000101'),
 			wethAddress: getAddress('0x0000000000000000000000000000000000000202'),
 		})
@@ -111,6 +113,9 @@ describe('network profile helpers', () => {
 		expect(profile.chain.id).toBe(1337)
 		expect(profile.chainIdHex).toBe('0x539')
 		expect(profile.displayName).toBe('Browser simulation')
+		expect(profile.genesisOutcome).toBe(genesisOutcome)
+		expect(profile.genesisRepTokenAddress).toBe(getAddress('0x0000000000000000000000000000000000000101'))
+		expect(profile.wethAddress).toBe(getAddress('0x0000000000000000000000000000000000000202'))
 		expect(profile.repPricingMode).toBe('mock')
 		expect(profile.transactionExplorerBaseUrl).toBeUndefined()
 	})

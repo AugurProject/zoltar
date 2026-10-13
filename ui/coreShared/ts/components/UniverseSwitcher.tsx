@@ -25,8 +25,9 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe, inclu
 		if (lineage !== undefined && lineage[0]?.universeId === 0n && parentStep !== undefined && leafStep?.universeId === activeUniverseId) {
 			labelParts = { parent: formatUniverseLineageLabel(lineage.slice(0, -1), parentStep.universeId), leaf: formatUniverseStepName(leafStep) }
 		} else {
-			labelParts = { parent: formatUniverseLineageLabel(undefined, 0n), leaf: formatUniverseViewLabel(loadedUniverse, activeUniverseId, false) }
-			universeLabel = universeCopy.formatSwitcherContextLabel(labelParts.parent, labelParts.leaf)
+			const rootLabel = formatUniverseLineageLabel(undefined, 0n)
+			labelParts = { parent: universeCopy.formatSwitcherContextRootLabel(rootLabel), leaf: formatUniverseViewLabel(loadedUniverse, activeUniverseId, false) }
+			universeLabel = universeCopy.formatSwitcherContextLabel(rootLabel, labelParts.leaf)
 		}
 	}
 	const destination = parseRouteHash(browseHref)

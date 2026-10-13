@@ -533,7 +533,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
 		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
-		const profile = createSimulationProfile({ genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
+		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
 		const { securityPoolFactory } = getInfraContractAddresses(profile)
 		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 		const readFixtureContract = async (data: Hex) => {

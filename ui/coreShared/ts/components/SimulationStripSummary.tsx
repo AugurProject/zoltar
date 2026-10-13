@@ -36,7 +36,16 @@ export function SimulationStripSummary({ accountLabel, bootstrapLabel, bootstrap
 			<span className='simulation-strip'>
 				<h2 className='simulation-strip-title'>{appCopy.browserSimulation}</h2>
 				<Badge tone={status.badgeTone} ariaLabel={status.label}>
-					{status.compactLabel ?? status.label}
+					{status.compactLabel === undefined ? (
+						status.label
+					) : (
+						<>
+							<span className='simulation-strip-status-full'>{status.label}</span>
+							<span aria-hidden='true' className='simulation-strip-status-compact'>
+								{status.compactLabel}
+							</span>
+						</>
+					)}
 				</Badge>
 				<strong className='simulation-strip-scenario'>{scenarioLabel}</strong>
 				{bootstrapping ? (

@@ -489,7 +489,7 @@ describe('trading deployment setup', () => {
 	})
 
 	test('reads a simulated deployment through the active simulation client instead of the configured RPC URL', async () => {
-		const profile = createSimulationProfile({ genesisRepTokenAddress: getAddress(`0x${'aa'.repeat(20)}`), wethAddress: getAddress(`0x${'bb'.repeat(20)}`) })
+		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(`0x${'aa'.repeat(20)}`), wethAddress: getAddress(`0x${'bb'.repeat(20)}`) })
 		const simulationCore = { ...core, chainId: profile.chain.id, proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: getInfraContractAddresses(profile).securityPoolFactory }
 		const plan = getTradingDeploymentPlan(simulationCore, 30)
 		let readClients = 0

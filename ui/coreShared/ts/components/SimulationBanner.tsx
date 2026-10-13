@@ -267,7 +267,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		bootstrapWarning: bootstrapWarning.value,
 		isBootstrapped: isBootstrapped.value,
 	})
-	const genesisOutcome = getActiveNetworkProfile().genesisOutcome ?? 'yes'
+	const genesisOutcome = getActiveNetworkProfile().genesisOutcome
 	const selectedAccountIndex = controller.accounts.findIndex(account => account === selectedAccount.value)
 	const selectedAccountLabel = walletMode.value === 'disconnected' ? appCopy.qaAccountDisconnected : getSimulationAccountOptionLabel(selectedAccountIndex < 0 ? 0 : selectedAccountIndex)
 

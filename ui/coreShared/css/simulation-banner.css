@@ -80,6 +80,10 @@
 	font-size: var(--font-xs);
 }
 
+.simulation-strip-status-compact {
+	display: none;
+}
+
 .simulation-strip-scenario {
 	font-size: var(--font-caption);
 }
@@ -347,6 +351,16 @@
 	color: var(--simulation-text);
 	border-color: var(--simulation-border-hover);
 	background: var(--simulation-success-bg);
+}
+
+@media (max-width: 40rem) {
+	.simulation-strip-status-full {
+		display: none;
+	}
+
+	.simulation-strip-status-compact {
+		display: inline;
+	}
 }
 
 @media (max-width: 64rem) {

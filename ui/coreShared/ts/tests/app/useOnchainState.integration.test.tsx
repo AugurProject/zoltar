@@ -627,6 +627,7 @@ describe('useOnchainState (integration)', () => {
 			getChainId: async () => 11155111,
 		} as ReadClient
 		const profile = createSimulationProfile({
+			genesisOutcome: 'yes',
 			genesisRepTokenAddress: getAddress('0x00000000000000000000000000000000000000f1'),
 			wethAddress: getAddress('0x00000000000000000000000000000000000000f2'),
 		})

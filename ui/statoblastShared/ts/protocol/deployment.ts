@@ -98,9 +98,14 @@ const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<Deploymen
 	securityPoolForker: '0x50c3b0fe26132cc3ff3b88fd47ce7165d0ec35f975dc0bd40fd990c9abffe8a8',
 	shareTokenFactory: '0x843817ae6125b999580f84716149c9ce04c18437007044ede4896c7278a19196',
 }
+const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
+	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
+	sepolia: { yes: EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, no: EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES },
+}
 
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: Parameters<typeof getZoltarDeploymentSteps>[1]): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
+	const expectedRuntimeCodeHashes = profile.id === 'simulation' ? undefined : EXPECTED_PUBLIC_RUNTIME_CODE_HASHES[profile.id][profile.genesisOutcome]
 	const steps: DeploymentStep[] = [
 		// Statoblast replaces the deployment status oracle step: the statoblast oracle
 		// must monitor additional Statoblast contracts, so it is deployed with
@@ -187,10 +192,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({
 		...step,
-		...(profile.id === 'sepolia' && EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] !== undefined
-			? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES : EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES)[step.id] }
-			: {}),
-		...(profile.id === 'mainnet' && EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: (profile.genesisOutcome === 'no' ? EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES : EXPECTED_MAINNET_RUNTIME_CODE_HASHES)[step.id] } : {}),
+		...(expectedRuntimeCodeHashes?.[step.id] === undefined ? {} : { expectedRuntimeCodeHash: expectedRuntimeCodeHashes[step.id] }),
 	}))
 }
 
