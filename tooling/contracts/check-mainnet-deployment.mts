@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import * as url from 'node:url'
+import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
 import { deploymentManifestIds, getDeploymentManifestFileName, parseDeploymentManifestId } from './deployment-manifests.mts'
@@ -27,7 +28,7 @@ type ManifestDeploymentStep = {
 type ManifestNetwork = {
 	chainId: number
 	chainIdHex: string
-	genesisOutcome: 'yes' | 'no'
+	genesisOutcome: GenesisOutcome
 	genesisRepTokenAddress: string
 	id: 'mainnet' | 'sepolia'
 	name: string

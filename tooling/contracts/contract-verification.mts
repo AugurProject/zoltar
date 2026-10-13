@@ -1,6 +1,7 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import type { GenesisOutcome } from '../../shared/zoltar/ts/deployment/genesisUniverses.ts'
 
 const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
 const ZERO_SALT = toHex(0, { size: 32 })
@@ -11,7 +12,7 @@ export type DeploymentManifest = {
 	// constructor takes none); it is absent for steps not deployed from
 	// compiled init code, such as the raw proxy deployer.
 	deploymentSteps: readonly { address: Address; constructorArguments?: string; id: string; label: string }[]
-	network: { chainId: number; genesisOutcome: 'yes' | 'no'; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
+	network: { chainId: number; genesisOutcome: GenesisOutcome; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
 	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint; minimumSecurityBondDebtAttoEth: bigint; minimumVaultRepDepositAttoRep: bigint }
 }
 
@@ -57,7 +58,7 @@ function readDecimalBigInt(source: Record<string, unknown>, field: string, label
 	return BigInt(value)
 }
 
-export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId: 'mainnet' | 'sepolia', expectedGenesisOutcome: 'yes' | 'no' = 'yes'): DeploymentManifest {
+export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId: 'mainnet' | 'sepolia', expectedGenesisOutcome: GenesisOutcome = 'yes'): DeploymentManifest {
 	if (!isRecord(rawManifest)) throw new Error('Deployment manifest must be an object')
 	const network = rawManifest['network']
 	const protocolConfig = rawManifest['protocolConfig']

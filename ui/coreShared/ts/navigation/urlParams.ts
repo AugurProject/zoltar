@@ -1,5 +1,5 @@
 import { tryParseBigIntInput } from '../forms/integerInput.js'
-import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { parseGenesisOutcome, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUESTION_ID_QUERY_PARAM = 'questionId'
@@ -37,8 +37,7 @@ function writeStringQueryParam(search: string, key: string, value: string | unde
 
 /** Only the Yes and No branches of the Augur fork are canonical genesis universes. */
 export function readGenesisQueryParam(search: string): GenesisOutcome | undefined {
-	const value = readStringQueryParam(search, GENESIS_QUERY_PARAM)
-	return value === 'yes' || value === 'no' ? value : undefined
+	return parseGenesisOutcome(readStringQueryParam(search, GENESIS_QUERY_PARAM))
 }
 
 export function writeGenesisQueryParam(search: string, outcome: GenesisOutcome | undefined) {

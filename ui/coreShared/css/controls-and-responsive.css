@@ -1413,7 +1413,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 	/* The settings dialog scrolls inside the space between the top bar and the bottom tab bar instead of running off screen. */
 	.app-settings-menu {
-		max-height: calc(100dvh - var(--bottom-nav-height) - 7rem);
+		max-height: calc(100dvh - var(--bottom-nav-height) - 8rem);
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
