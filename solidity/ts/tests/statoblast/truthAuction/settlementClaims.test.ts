@@ -195,8 +195,6 @@ describe('Statoblast: truth auction', () => {
 
 			// Migrate vault to yes
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			// Skip escalation game migration for simpler test
-			// await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 
 			// Wait for migration period
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)

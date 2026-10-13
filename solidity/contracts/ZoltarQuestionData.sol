@@ -37,7 +37,6 @@ contract ZoltarQuestionData {
 			require(questionData.displayValueMax > questionData.displayValueMin, 'Scalar question display max must be greater than display min');
 			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
-			// Check that all strings are non-empty
 			uint256 previous = type(uint256).max;
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Outcome option label must not be an empty string');

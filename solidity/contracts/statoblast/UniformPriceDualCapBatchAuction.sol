@@ -338,7 +338,6 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 
 			totalRefundAttoEth += originalBidAmountAttoEth;
 
-			// Update tree totals to remove this losing bid
 			bool removedTick;
 			(root, removedTick) = UniformPriceDualCapBatchAuctionStorage.decrease(nodes, root, tick, originalBidAmountAttoEth, underfundedThreshold);
 			if (removedTick) activeTickCount -= 1;

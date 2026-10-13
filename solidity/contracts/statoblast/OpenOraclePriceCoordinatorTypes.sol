@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-// price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 // Sepolia test deployments have sparse oracle activity, so their prices stay valid longer.
 uint256 constant SEPOLIA_CHAIN_ID = 11155111;
