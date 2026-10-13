@@ -330,7 +330,7 @@ export function App({
 								!showWalletControls && !showUniverseField ? undefined : (
 									<>
 										{showUniverseField ? (
-											<ToolbarField className='universe' label={appCopy.universe}>
+											<ToolbarField className='universe' hideLabel label={appCopy.universe}>
 												{universeValue}
 											</ToolbarField>
 										) : undefined}

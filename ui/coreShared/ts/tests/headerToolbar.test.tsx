@@ -27,12 +27,13 @@ describe('header toolbar primitives', () => {
 		expect(toolbar?.querySelector('.header-toolbar-brand > h2.application-brand')?.textContent).toBe('Zoltar')
 		expect(toolbar?.querySelector('.header-toolbar-brand > .environment-badge-row .badge')?.textContent).toBe('Simulation')
 		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-label')?.textContent).toBe('Universe')
+		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-label')?.classList.contains('visually-hidden')).toBe(false)
 		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-value')?.textContent).toBe('Genesis')
 	})
 
 	test('keeps the universe caption accessible for loading, unavailable, and plain values', async () => {
 		const style = document.createElement('style')
-		style.textContent = readFileSync(new URL('../../css/controls-and-responsive.css', import.meta.url), 'utf8')
+		style.textContent = [readFileSync(new URL('../../css/base.css', import.meta.url), 'utf8'), readFileSync(new URL('../../css/controls-and-responsive.css', import.meta.url), 'utf8')].join('\n')
 		document.head.appendChild(style)
 		try {
 			for (const value of [<LoadingText announce={false} />, <span>Unavailable</span>, <span title='Genesis'>Genesis</span>]) {
@@ -40,7 +41,7 @@ describe('header toolbar primitives', () => {
 					<HeaderToolbar
 						brand='Trading'
 						controls={
-							<ToolbarField className='universe' label='Universe'>
+							<ToolbarField className='universe' hideLabel label='Universe'>
 								{value}
 							</ToolbarField>
 						}
@@ -50,9 +51,16 @@ describe('header toolbar primitives', () => {
 					const caption = rendered.container.querySelector('.toolbar-field.universe .toolbar-field-label')
 					if (!(caption instanceof HTMLElement)) throw new Error('Expected the universe caption')
 					expect(caption.textContent).toBe('Universe')
-					expect(getComputedStyle(caption).display).not.toBe('none')
-					expect(getComputedStyle(caption).visibility).not.toBe('hidden')
-					expect(caption.getAttribute('aria-hidden')).not.toBe('true')
+					expect(caption.classList.contains('visually-hidden')).toBe(true)
+					const captionStyle = getComputedStyle(caption)
+					expect(captionStyle.position).toBe('absolute')
+					expect(captionStyle.width).toBe('1px')
+					expect(captionStyle.height).toBe('1px')
+					expect(captionStyle.overflow).toBe('hidden')
+					expect(captionStyle.display).not.toBe('none')
+					expect(captionStyle.visibility).not.toBe('hidden')
+					expect(caption.hasAttribute('aria-hidden')).toBe(false)
+					expect(caption.hasAttribute('hidden')).toBe(false)
 				} finally {
 					await rendered.cleanup()
 				}

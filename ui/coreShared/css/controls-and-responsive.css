@@ -1025,16 +1025,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	--header-universe-mark-width: calc(2 * var(--space-4));
 }
 
-.header-toolbar-controls .toolbar-field.universe .toolbar-field-label {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	white-space: nowrap;
-}
-
 /* Discovery reserves the ordinary switcher's frame without claiming a universe identity. */
 .header-toolbar-controls .toolbar-field.universe .toolbar-field-value:has(> .loading-value, > .unavailable-value) {
 	box-sizing: border-box;
@@ -1266,19 +1256,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	}
 
 	.header-toolbar .app-settings-label {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-		white-space: nowrap;
-	}
-}
-
-/* Below full desktop width the universe caption is dropped; the universe keeps its value. */
-@media (max-width: 80rem) {
-	.header-toolbar-controls .toolbar-field-label {
 		position: absolute;
 		width: 1px;
 		height: 1px;

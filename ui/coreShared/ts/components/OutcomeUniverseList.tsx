@@ -9,7 +9,7 @@ type Outcome = { key: string; exists?: boolean; label: string; selected?: boolea
 
 /**
  * Outcome names and deployment status stay consistent while navigation and selection keep their own semantics.
- * Unknown deployment status omits its badge; the caller explicitly enables navigation when it is available.
+ * Unknown deployment status omits its badge; callers may disable navigation explicitly while it is pending.
  * `notDeployedDetail` explains a not-yet-deployed child beside its badge, inside the row's description, so a disabled row says why.
  */
 export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage, className = '', notDeployedDetail }: { outcomes: readonly Outcome[]; selection?: boolean; emptyMessage?: ComponentChildren; className?: string; notDeployedDetail?: ComponentChildren }) {
@@ -45,7 +45,7 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 							{outcome.details}
 						</>
 					),
-				disabled: outcome.disabled ?? !outcome.exists,
+				disabled: outcome.disabled ?? outcome.exists === false,
 				...(selection && outcome.selected !== undefined ? { selected: outcome.selected } : {}),
 				actions: outcome.actions,
 				onSelect: outcome.onSelect,
