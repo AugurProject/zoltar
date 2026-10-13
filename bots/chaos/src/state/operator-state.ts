@@ -18,7 +18,8 @@ import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementS
 import type { PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import { assertExactKeys, identifier, nonemptyString, requiredRecord } from './validators.ts'
-import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
+import { loadPersistedProtocolIndex, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFilesystem } from './protocol-index-store.ts'
+import { parseProtocolIndexReference, type ProtocolIndexReference } from './protocol-index-format.ts'
 
 const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
 

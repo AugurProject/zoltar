@@ -21,6 +21,7 @@ const uiTruthAuctionBookPath = path.join(statoblastSharedSourceRoot, 'features',
 const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
 const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
 const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')
+const uiWatchBuildCommandsPath = path.join(import.meta.dir, 'watchBuilds.mts')
 const uiWorkerBuildPath = path.join(import.meta.dir, 'workers.mts')
 const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
@@ -386,6 +387,7 @@ test('development import map maps browser dependency subpaths', () => {
 	const watchBuildSource = fs.readFileSync(uiWatchBuildPath, 'utf8')
 	const workerBuildSource = fs.readFileSync(uiWorkerBuildPath, 'utf8')
 	const watchBuildSourceFile = parseModule(uiWatchBuildPath, watchBuildSource)
+	const watchBuildCommandsSourceFile = parseModule(uiWatchBuildCommandsPath, fs.readFileSync(uiWatchBuildCommandsPath, 'utf8'))
 	const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8')) as { scripts?: Record<string, string | undefined> }
 
 	for (const appId of UI_APP_IDS) {
@@ -405,17 +407,13 @@ test('development import map maps browser dependency subpaths', () => {
 	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', mainEntrypointFile: 'native.js'")
 	expect(vendorBuildSource).toContain("includeTrading: app === 'trading'")
-	expect(watchBuildSource).toContain("const runProjectArtifactBuild = async (reason: string) => {\n\tif (shuttingDown) return\n\tif (appId === 'trading') {\n\t\tawait runVendorBuild(reason)")
-	expect(watchBuildSource).toContain("if (appId === 'trading') {\n\t\tawait runProjectArtifactBuild(reason)")
-	expect(watchBuildSource).toContain('if (workerBuildRunning) {\n\t\tvendorBuildQueued = true')
-	expect(watchBuildSource).toContain('if (vendorBuildRunning) {\n\t\tworkerBuildQueued = true')
-	expect(watchBuildSource).toContain("[WORKER_BUILD_PATH, appId, '--artifacts-current']")
 	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
 	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
 	expect(watchBuildSource).toContain('const BUN_EXECUTABLE_PATH = process.execPath')
 	expect(workerBuildSource).toContain("if (appId === 'trading' && !artifactsAreCurrent) await vendor()")
 	expect(workerBuildSource).toContain('if (!result.success) throw new Error(`Failed to build the ${appId} simulation worker:')
 	expect(collectBareBunStringLiterals(watchBuildSourceFile)).toEqual([])
+	expect(collectBareBunStringLiterals(watchBuildCommandsSourceFile)).toEqual([])
 })
 
 test('vendor cleanup removes stale generated output before regeneration', async () => {

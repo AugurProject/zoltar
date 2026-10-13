@@ -1,7 +1,9 @@
+import type { DiscoveryIssue } from '../operations/types.ts'
+import type { ImmutableTopologyData } from './topology-schema.ts'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
 import { type AuctionBidSnapshot, type AuctionRefundSnapshot, type ChildRepSplitProgressSnapshot, type EcosystemDeployments, type EscalationDepositSnapshot, type MigrationRepSplitProgressSnapshot, type OracleGameSnapshot } from '../operations/types.ts'
 import { type ChaosReadClient } from './discovery-client.ts'
-import { type CanonicalImmutableTopologyCache, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES } from './topology-cache.ts'
+import { type CanonicalImmutableTopologyCache, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES } from './topology-schema.ts'
 import { type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 
 export const DISCOVERY_AGGREGATE_ITEM_LIMIT = MAXIMUM_DISCOVERY_AGGREGATE_ITEMS
@@ -82,4 +84,14 @@ export function requireAggregateDiscoveryEnvelope(limits: DiscoveryLimits) {
 	if (limits.maxPools * limits.maxUniverses > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxUniverses exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
 	if (limits.maxPools * limits.maxVaultsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxVaultsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
 	if (limits.maxPools * limits.maxStagedOperationsPerPool > DISCOVERY_AGGREGATE_ITEM_LIMIT) throw new Error(`maxPools × maxStagedOperationsPerPool exceeds the ${DISCOVERY_AGGREGATE_ITEM_LIMIT.toString()}-item discovery safety envelope`)
+}
+
+/** Shared anchored inputs for the bounded topology discovery stages. */
+export type DiscoveryRun = {
+	context: EcosystemDiscoveryContext
+	blockNumber: bigint
+	limits: DiscoveryLimits
+	topology: ImmutableTopologyData
+	mutation: { changed: boolean }
+	issues: DiscoveryIssue[]
 }
