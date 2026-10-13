@@ -1,9 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { assertDeploymentManifestCurrent, deploymentRuntimeTypeScriptProjects, ensureDeploymentRuntimeDependencies, manifestIds, readDeploymentSteps } from './check-mainnet-deployment.mts'
+import { getDeploymentManifestId, parseDeploymentManifestId } from './deployment-manifests.mts'
 
 describe('deployment manifest freshness', () => {
 	test('owns Yes and No manifests for both public networks', () => {
 		expect(manifestIds).toEqual(['mainnet', 'mainnet-no', 'sepolia', 'sepolia-no'])
+	})
+	test('round-trips every canonical manifest through the shared identity policy', () => {
+		for (const manifestId of manifestIds) {
+			const { networkId, genesisOutcome } = parseDeploymentManifestId(manifestId)
+			expect(getDeploymentManifestId(networkId, genesisOutcome)).toBe(manifestId)
+		}
 	})
 	test('builds shared libraries in dependency order without compiling an application leaf', () => {
 		expect(deploymentRuntimeTypeScriptProjects).toEqual(['ui/coreShared/tsconfig.json', 'ui/zoltarShared/tsconfig.json', 'ui/statoblastShared/tsconfig.json'])

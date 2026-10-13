@@ -10,3 +10,7 @@ export function getDeploymentManifestId(networkId: 'mainnet' | 'sepolia', genesi
 export function getDeploymentManifestFileName(manifestId: DeploymentManifestId) {
 	return `${manifestId}-deployment-addresses.json`
 }
+
+export function parseDeploymentManifestId(manifestId: DeploymentManifestId): { networkId: 'mainnet' | 'sepolia'; genesisOutcome: GenesisOutcome } {
+	return { networkId: manifestId.startsWith('mainnet') ? 'mainnet' : 'sepolia', genesisOutcome: manifestId.endsWith('-no') ? 'no' : 'yes' }
+}

@@ -5,7 +5,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import * as url from 'node:url'
 import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
-import { deploymentManifestIds, getDeploymentManifestFileName } from './deployment-manifests.mts'
+import { deploymentManifestIds, getDeploymentManifestFileName, parseDeploymentManifestId } from './deployment-manifests.mts'
 
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
@@ -49,14 +49,6 @@ const deploymentRuntimeOutputPaths = [
 ] as const
 export const manifestIds = deploymentManifestIds
 type ManifestId = (typeof manifestIds)[number]
-
-function getManifestNetworkId(manifestId: ManifestId) {
-	return manifestId.startsWith('mainnet') ? 'mainnet' : 'sepolia'
-}
-
-function getManifestGenesisOutcome(manifestId: ManifestId) {
-	return manifestId.endsWith('-no') ? 'no' : 'yes'
-}
 
 async function runRepositoryCommand(args: readonly string[], label: string) {
 	const child = Bun.spawn({
@@ -163,9 +155,9 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 	const chainId = Reflect.get(chain, 'id')
 	if (typeof chainId !== 'number') throw new Error(`${manifestId} chain id must be a number`)
 	const id = readStringField(source, 'id', `${manifestId}.id`)
-	if (id !== getManifestNetworkId(manifestId)) throw new Error(`Expected ${getManifestNetworkId(manifestId)} profile id, received ${id}`)
+	if (id !== parseDeploymentManifestId(manifestId).networkId) throw new Error(`Expected ${parseDeploymentManifestId(manifestId).networkId} profile id, received ${id}`)
 	const genesisOutcome = readStringField(source, 'genesisOutcome', `${manifestId}.genesisOutcome`)
-	if (genesisOutcome !== getManifestGenesisOutcome(manifestId)) throw new Error(`Expected ${getManifestGenesisOutcome(manifestId)} genesis outcome, received ${genesisOutcome}`)
+	if (genesisOutcome !== parseDeploymentManifestId(manifestId).genesisOutcome) throw new Error(`Expected ${parseDeploymentManifestId(manifestId).genesisOutcome} genesis outcome, received ${genesisOutcome}`)
 	return {
 		chainId,
 		chainIdHex: readStringField(source, 'chainIdHex', `${manifestId}.chainIdHex`),
@@ -195,10 +187,10 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 		const getMainnetProtocolConfig = readFunction(protocolConfigModule, 'getMainnetProtocolConfig')
 		const setRuntimeNetworkProfile = readFunction(networkProfileModule, 'setRuntimeNetworkProfile')
 		const getGenesisNetworkProfile = readFunction(networkProfileModule, 'getGenesisNetworkProfile')
-		const profileExportName = getManifestNetworkId(manifestId) === 'mainnet' ? 'MAINNET_NETWORK_PROFILE' : 'SEPOLIA_NETWORK_PROFILE'
+		const profileExportName = parseDeploymentManifestId(manifestId).networkId === 'mainnet' ? 'MAINNET_NETWORK_PROFILE' : 'SEPOLIA_NETWORK_PROFILE'
 		const baseProfile = isRecord(networkProfileModule) ? Reflect.get(networkProfileModule, profileExportName) : undefined
 		if (!isRecord(baseProfile)) throw new Error(`Module export ${profileExportName} is missing`)
-		const profile = getGenesisNetworkProfile(baseProfile, getManifestGenesisOutcome(manifestId))
+		const profile = getGenesisNetworkProfile(baseProfile, parseDeploymentManifestId(manifestId).genesisOutcome)
 		setRuntimeNetworkProfile(profile)
 		const infraContractAddresses = getInfraContractAddresses(profile)
 		return {
@@ -263,9 +255,9 @@ async function readManifest(manifestId: ManifestId): Promise<DeploymentManifest>
 	const chainId = Reflect.get(network, 'chainId')
 	if (typeof chainId !== 'number') throw new Error(`${manifestId} deployment manifest chainId must be a number`)
 	const id = readStringField(network, 'id', 'network.id')
-	if (id !== getManifestNetworkId(manifestId)) throw new Error(`Expected ${getManifestNetworkId(manifestId)} manifest id, received ${id}`)
+	if (id !== parseDeploymentManifestId(manifestId).networkId) throw new Error(`Expected ${parseDeploymentManifestId(manifestId).networkId} manifest id, received ${id}`)
 	const genesisOutcome = readStringField(network, 'genesisOutcome', 'network.genesisOutcome')
-	if (genesisOutcome !== getManifestGenesisOutcome(manifestId)) throw new Error(`Expected ${getManifestGenesisOutcome(manifestId)} genesis outcome, received ${genesisOutcome}`)
+	if (genesisOutcome !== parseDeploymentManifestId(manifestId).genesisOutcome) throw new Error(`Expected ${parseDeploymentManifestId(manifestId).genesisOutcome} genesis outcome, received ${genesisOutcome}`)
 	return {
 		network: {
 			chainId,
@@ -295,7 +287,7 @@ export async function writeMainnetDeploymentManifest(): Promise<void> {
 
 export function assertDeploymentManifestCurrent(manifestId: ManifestId, expected: string, computed: string): void {
 	if (expected === computed) return
-	const displayName = `${getManifestNetworkId(manifestId) === 'mainnet' ? 'Mainnet' : 'Sepolia'}${getManifestGenesisOutcome(manifestId) === 'no' ? ' No' : ''}`
+	const displayName = `${parseDeploymentManifestId(manifestId).networkId === 'mainnet' ? 'Mainnet' : 'Sepolia'}${parseDeploymentManifestId(manifestId).genesisOutcome === 'no' ? ' No' : ''}`
 	throw new Error(`${displayName} deployment manifest is stale. Run bun ./tooling/contracts/check-mainnet-deployment.mts --write after confirming the new values.`)
 }
 
