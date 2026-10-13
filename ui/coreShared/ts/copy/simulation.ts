@@ -22,6 +22,7 @@ export const plus1Year = '+1 year'
 export const formatQaAccountNumber = (accountIndex: CopyTemplateValue) => `QA account ${accountIndex}`
 export const ready = 'Ready'
 export const readyWithWarningLabel = 'Ready with warning'
+export const warningLabel = 'Warning'
 export const formatOtherGenesisSavedStateLabel = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `${stateName} (${formatGenesisUniverse(genesisOutcome)})`
 export const formatSavedStateGenesisMismatchDetail = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `Saved simulation state "${stateName}" belongs to ${formatGenesisUniverse(genesisOutcome)}. Falling back to the baseline scenario.`
 export const bootstrapping = 'Bootstrapping'

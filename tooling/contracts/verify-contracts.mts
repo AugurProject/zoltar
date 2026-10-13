@@ -4,7 +4,20 @@ import { repositoryRoot } from '../repo/root.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
-import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type ArtifactLookup, type DeploymentManifest, type StandardJsonInputs, type VerificationOutcome, type VerificationPlan } from './contract-verification.mts'
+import {
+	buildVerificationPlan,
+	getExplorerTargets,
+	getSourcifyTarget,
+	parseDeploymentManifest,
+	verifyContractsWithExplorer,
+	verifyContractsWithSourcify,
+	type ArtifactLookup,
+	type DeploymentManifest,
+	type ExplorerFetch,
+	type StandardJsonInputs,
+	type VerificationOutcome,
+	type VerificationPlan,
+} from './contract-verification.mts'
 
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
 const NETWORK_IDS_BY_CHAIN_ID: Readonly<Record<number, 'mainnet' | 'sepolia'>> = {
@@ -95,7 +108,11 @@ function summarizeOutcomes(outcomes: readonly VerificationOutcome[]): { failed: 
 	return { failed: counts.failed, summary }
 }
 
-export async function main(argv: readonly string[] = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env): Promise<number> {
+export async function main(
+	argv: readonly string[] = process.argv.slice(2),
+	environment: Readonly<Record<string, string | undefined>> = process.env,
+	dependencies: { fetchFn: ExplorerFetch; sleep: (milliseconds: number) => Promise<void> } = { fetchFn: fetch, sleep: milliseconds => Bun.sleep(milliseconds) },
+): Promise<number> {
 	const chainIds = parseRequestedChainIds(argv)
 	const artifactLookup = await loadArtifactLookup()
 	let failures = 0
@@ -105,11 +122,18 @@ export async function main(argv: readonly string[] = process.argv.slice(2), envi
 			console.log(`Chain ${chainId.toString()} has no known Etherscan, Blockscout, or Sourcify support; skipping contract source verification.`)
 			continue
 		}
+		const plannedAddresses = new Set<string>()
 		for (const genesisOutcome of ['yes', 'no'] as const) {
 			const manifest = await loadManifest(networkId, genesisOutcome)
 			if (manifest.network.chainId !== chainId) throw new Error(`The ${networkId} deployment manifest declares chain ${manifest.network.chainId.toString()}, expected ${chainId.toString()}`)
 			const plan = buildVerificationPlan(manifest, artifactLookup)
-			console.log(`Verifying ${plan.jobs.length.toString()} ${networkId} ${genesisOutcome} contracts (chain ${chainId.toString()})`)
+			const jobs = plan.jobs.filter(job => {
+				const address = job.address.toLowerCase()
+				if (plannedAddresses.has(address)) return false
+				plannedAddresses.add(address)
+				return true
+			})
+			console.log(`Verifying ${jobs.length.toString()} ${networkId} ${genesisOutcome} contracts (chain ${chainId.toString()})`)
 			for (const skippedStep of plan.skipped) console.log(`  Skipping ${skippedStep.id}: ${skippedStep.reason}`)
 			const inputs = await buildStandardJsonInputs(plan)
 			for (const target of getExplorerTargets(chainId, environment)) {
@@ -119,11 +143,11 @@ export async function main(argv: readonly string[] = process.argv.slice(2), envi
 				}
 				console.log(`${target.name} (${target.apiUrl})`)
 				const outcomes = await verifyContractsWithExplorer({
-					fetchFn: fetch,
+					fetchFn: dependencies.fetchFn,
 					inputs,
-					jobs: plan.jobs,
+					jobs,
 					log: console.log,
-					sleep: milliseconds => Bun.sleep(milliseconds),
+					sleep: dependencies.sleep,
 					target,
 				})
 				const { failed, summary } = summarizeOutcomes(outcomes)
@@ -134,11 +158,11 @@ export async function main(argv: readonly string[] = process.argv.slice(2), envi
 			if (sourcifyTarget !== undefined) {
 				console.log(`${sourcifyTarget.name} (${sourcifyTarget.apiUrl})`)
 				const outcomes = await verifyContractsWithSourcify({
-					fetchFn: fetch,
+					fetchFn: dependencies.fetchFn,
 					inputs,
-					jobs: plan.jobs,
+					jobs,
 					log: console.log,
-					sleep: milliseconds => Bun.sleep(milliseconds),
+					sleep: dependencies.sleep,
 					target: sourcifyTarget,
 				})
 				const { failed, summary } = summarizeOutcomes(outcomes)

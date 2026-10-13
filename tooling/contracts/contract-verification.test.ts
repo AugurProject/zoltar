@@ -1,11 +1,11 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { promises as fs } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
-import { createArtifactLookup, parseRequestedChainIds } from './verify-contracts.mts'
+import { createArtifactLookup, main, parseRequestedChainIds } from './verify-contracts.mts'
 
 async function loadRealManifest(networkId: 'mainnet' | 'sepolia', genesisOutcome: 'yes' | 'no' = 'yes'): Promise<DeploymentManifest> {
 	const rawManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'docs', `${networkId}${genesisOutcome === 'no' ? '-no' : ''}-deployment-addresses.json`), 'utf8'))
@@ -163,6 +163,65 @@ function createExplorerFetchStub(respond: (action: string, call: RecordedCall) =
 }
 
 const immediateSleep = async () => {}
+
+test('dual-root verification visits each chain address once per target and preserves both roots constructor arguments', async () => {
+	const artifactLookup = await loadRealArtifactLookup()
+	const submitted = new Map<string, string[]>()
+	const lookedUp = new Map<string, string[]>()
+	const expected = new Map<number, Map<string, VerificationJob>>()
+	for (const networkId of ['mainnet', 'sepolia'] as const) {
+		const jobs = new Map<string, VerificationJob>()
+		for (const outcome of ['yes', 'no'] as const) {
+			const manifest = await loadRealManifest(networkId, outcome)
+			expected.set(manifest.network.chainId, jobs)
+			for (const job of buildVerificationPlan(manifest, artifactLookup).jobs) jobs.set(job.address.toLowerCase(), job)
+		}
+		expect([...jobs.values()].filter(job => job.id === 'zoltar')).toHaveLength(2)
+	}
+	const record = (calls: Map<string, string[]>, key: string, address: string) => calls.set(key, [...(calls.get(key) ?? []), address.toLowerCase()])
+	const fetchFn: ExplorerFetch = async (requestUrl, init) => {
+		const url = new URL(requestUrl)
+		if (url.hostname.includes('sourcify')) {
+			const segments = url.pathname.split('/')
+			if (segments.includes('contract') || init?.method === 'POST') {
+				const chainId = segments.at(-2) ?? ''
+				const address = segments.at(-1) ?? ''
+				record(init?.method === 'POST' ? submitted : lookedUp, `${chainId}:Sourcify`, address)
+				return { json: async () => ({ verificationId: address }), ok: init?.method === 'POST', status: init?.method === 'POST' ? 202 : 404 }
+			}
+			return { json: async () => ({ contract: { match: 'exact_match' }, isJobCompleted: true }), ok: true, status: 200 }
+		}
+		const parameters = new URLSearchParams([...url.searchParams, ...new URLSearchParams(init?.body)])
+		const chainId = url.hostname.includes('sepolia') ? 11_155_111 : Number(parameters.get('chainid') ?? 1)
+		const target = url.hostname.includes('blockscout') ? 'Blockscout' : 'Etherscan'
+		const action = parameters.get('action')
+		if (action === 'getsourcecode') record(lookedUp, `${chainId}:${target}`, parameters.get('address') ?? '')
+		if (action === 'verifysourcecode') {
+			const address = parameters.get('contractaddress') ?? ''
+			record(submitted, `${chainId}:${target}`, address)
+			const job = expected.get(chainId)?.get(address.toLowerCase())
+			if (job === undefined) throw new Error(`Unexpected verification submission for chain ${chainId}: ${address}`)
+			expect(parameters.get('constructorArguements')).toBe(job.constructorArguments)
+		}
+		if (action === 'getsourcecode') return { json: async () => ({ result: [{ SourceCode: '' }], status: '1' }), ok: true, status: 200 }
+		return { json: async () => ({ result: action === 'verifysourcecode' ? 'test-guid' : 'Pass - Verified', status: '1' }), ok: true, status: 200 }
+	}
+	const log = spyOn(console, 'log').mockImplementation(() => {})
+	try {
+		expect(await main([], { ETHERSCAN_API_KEY: 'test-key' }, { fetchFn, sleep: immediateSleep })).toBe(0)
+	} finally {
+		log.mockRestore()
+	}
+	expect(submitted.size).toBe(6)
+	expect(lookedUp.size).toBe(6)
+	for (const [chainId, jobs] of expected) {
+		for (const target of ['Etherscan', 'Blockscout', 'Sourcify']) {
+			const addresses = [...jobs.keys()].sort()
+			expect(submitted.get(`${chainId}:${target}`)?.sort()).toEqual(addresses)
+			expect(lookedUp.get(`${chainId}:${target}`)?.sort()).toEqual(addresses)
+		}
+	}
+})
 
 const runExplorer = async (fetchFn: ExplorerFetch, options: { jobs?: readonly VerificationJob[]; onSleep?: (delay: number) => void; target?: ExplorerTarget } = {}) => {
 	const delays: number[] = []
