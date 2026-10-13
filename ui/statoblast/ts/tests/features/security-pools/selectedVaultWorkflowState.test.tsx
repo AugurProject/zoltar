@@ -169,6 +169,8 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 				accountState: createAccountState({ address: walletOwner }),
 				onOpenLiquidationModal: (_manager, _pool, vaultAddress) => opened.push(vaultAddress),
 				poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n }),
+				// The rows' health uses the same UI price estimate as the selected vault's verdict.
+				repPerEthPrice: 10n ** 18n,
 				securityPoolAddress: zeroAddress,
 				securityPools: [
 					createSelectedPool({
@@ -198,8 +200,45 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 	expect(reason?.textContent).toBe('The target vault is not liquidatable at the current price.')
 	const unhealthyButton = getRow(unhealthyOwner).getByRole('button', { name: 'Liquidate vault' })
 	expect(unhealthyButton.hasAttribute('disabled')).toBe(false)
+	// The underwater vault leads the list with its verdict, and its liquidation is the row's main action.
+	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
+	expect(rows.map(row => row.querySelector('.vault-health')?.textContent)).toEqual(['Underwater', 'Healthy', 'Healthy'])
+	expect(rows[0]?.classList.contains('is-underwater')).toBe(true)
+	expect(within(rows[0] instanceof HTMLElement ? rows[0] : document.body).getByRole('button', { name: 'Liquidate vault' })).toBe(unhealthyButton)
+	expect(unhealthyButton.classList.contains('primary')).toBe(true)
+	expect(healthyButton.classList.contains('secondary')).toBe(true)
+	expect(getRow(walletOwner).getByText('Owned')).not.toBeNull()
 	await act(() => fireEvent.click(unhealthyButton))
 	expect(opened).toEqual([unhealthyOwner])
+})
+
+test('shows no health verdicts or risk ordering in an ended pool, where liquidation no longer applies', async () => {
+	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
+	await renderHarness(
+		<SecurityPoolWorkflowSection
+			{...createSecurityPoolWorkflowProps({
+				repPerEthPrice: 10n ** 18n,
+				securityPoolAddress: zeroAddress,
+				securityPools: [
+					createSelectedPool({
+						hasLoadedVaults: true,
+						questionOutcome: 'yes',
+						statoblastSecurityMultiplierBps: 20_000n,
+						vaultCount: 2n,
+						vaults: [createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
+					}),
+				],
+				selectedPoolView: 'vaults',
+			})}
+		/>,
+	)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
+	expect(rows).toHaveLength(2)
+	expect(document.querySelector('.vault-position-strip .vault-health')).toBeNull()
+	expect(document.querySelector('.vault-position-strip.is-underwater')).toBeNull()
+	// Rows keep the registry's order rather than leading with the riskiest.
+	expect(rows[0]?.textContent).toContain(otherOwner.slice(-4))
 })
 
 test('removes the liquidation launcher from the connected wallet’s own vault', async () => {

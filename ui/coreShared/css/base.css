@@ -1161,6 +1161,18 @@ button.currency-value.copyable:hover:not(:disabled) {
 	opacity: 0.72;
 }
 
+/* Relative-first timestamps stack the relative time over a quiet UTC line instead of wrapping one long string. */
+.timestamp-value.is-relative-first {
+	display: inline-grid;
+	gap: var(--space-1);
+}
+
+.timestamp-value-absolute {
+	color: var(--muted);
+	font-size: var(--font-caption);
+	font-weight: 400;
+}
+
 .timestamp-value-relative {
 	color: var(--muted);
 	font-weight: 400;

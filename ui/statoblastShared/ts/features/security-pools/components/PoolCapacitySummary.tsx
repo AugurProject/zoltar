@@ -5,7 +5,6 @@ import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.j
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { getRemainingMintCapacity } from '../../markets/lib/trading.js'
 
 /** Share of capacity already used as open interest, in tenths of a percent; values above capacity stay visible. */
 function formatCapacityUsedPercent(minted: bigint, capacity: bigint) {
@@ -13,15 +12,15 @@ function formatCapacityUsedPercent(minted: bigint, capacity: bigint) {
 	return formatTrimmedUnits((minted * 1000n) / capacity, 1)
 }
 
-export function PoolCapacitySummary({ capacity, minted, remainingCapacity, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; remainingCapacity?: bigint | undefined; showUnavailableReason?: boolean; showUsage?: boolean }) {
+/** `remainingCapacity` is the mintable remainder from `getPoolRemainingMintCapacity`, which is zero while an escalation game is open or the complete-set exchange rate is undefined, so every caller states the same figure as the pool directory and the Mint action. */
+export function PoolCapacitySummary({ capacity, minted, remainingCapacity, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; remainingCapacity: bigint | undefined; showUnavailableReason?: boolean; showUsage?: boolean }) {
 	const value = (
 		<>
 			<CurrencyValue value={minted} suffix={commonCopy.eth} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} exactWhenRoundedToZero />}</span>
 		</>
 	)
 	const usedPercent = capacity === undefined ? undefined : formatCapacityUsedPercent(minted, capacity)
-	// Callers pass the mintable remainder (the value the remaining-capacity sort uses); without one, commitment minus open interest.
-	const remaining = remainingCapacity ?? getRemainingMintCapacity(capacity, minted) ?? 0n
+	const remaining = remainingCapacity ?? 0n
 	const usage =
 		showUsage && usedPercent !== undefined && capacity !== undefined
 			? {

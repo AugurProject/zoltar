@@ -282,8 +282,9 @@
 	display: grid;
 }
 
+/* The dated figures take the wider column so a relative time and its UTC line each stay on one line. */
 .fork-workflow-summary {
-	grid-template-columns: minmax(0, 1.3fr) minmax(16rem, 1fr);
+	grid-template-columns: minmax(0, 1fr) minmax(16rem, 1.3fr);
 	gap: var(--space-4);
 }
 
@@ -331,9 +332,15 @@
 
 .fork-workflow-summary-metrics {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 	gap: var(--space-4);
 	align-content: start;
+}
+
+@media (max-width: 40rem) {
+	.fork-workflow-summary-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 .fork-workflow-summary-metrics .metric-label {
@@ -351,6 +358,10 @@
 	white-space: normal;
 }
 
+.fork-workflow-summary-metrics .timestamp-value.is-relative-first {
+	overflow-wrap: normal;
+}
+
 .fork-workflow-summary-metrics strong.metric-field-value {
 	display: block;
 	font-family: var(--font-family-mono);
@@ -361,19 +372,23 @@
 	overflow-wrap: anywhere;
 }
 
+/* The label keeps one line; a value too wide to sit beside it drops to its own line, still right-aligned. */
 .fork-workflow-summary-stat-copy {
 	display: flex;
+	flex-wrap: wrap;
 	justify-content: space-between;
 	align-items: baseline;
-	gap: var(--space-3);
+	gap: var(--space-1) var(--space-3);
 	font-family: var(--font-family-sans);
 }
 
-.fork-workflow-summary-stat-copy span {
+.fork-workflow-summary-stat-copy > span {
+	flex: none;
 	color: var(--muted);
 }
 
 .fork-workflow-summary-stat-copy strong {
+	margin-inline-start: auto;
 	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	color: var(--value);
@@ -381,18 +396,26 @@
 	overflow-wrap: anywhere;
 }
 
+/* Migration totals read as figures side by side, label above value, rather than as label-and-value table rows. */
 .migration-summary-primary {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
 	align-content: start;
 }
 
-.migration-summary-primary .fork-workflow-summary-stat-group {
-	padding-bottom: var(--space-4);
-	border-bottom: 1px solid var(--divider-subtle);
+.migration-summary-primary .fork-workflow-summary-stat-copy {
+	display: grid;
+	justify-content: start;
+	gap: var(--space-1);
 }
 
-.migration-summary-primary .fork-workflow-summary-stat-group:last-child {
-	padding-bottom: 0;
-	border-bottom: 0;
+.migration-summary-primary .fork-workflow-summary-stat-copy > span {
+	font-size: var(--font-label);
+}
+
+.migration-summary-primary .fork-workflow-summary-stat-copy strong {
+	margin-inline-start: 0;
+	font-size: var(--font-lg);
+	text-align: start;
 }
 
 .truth-auction-progress-track {
@@ -788,6 +811,25 @@
 	gap: var(--space-1) var(--space-2);
 }
 
+/* A price where the connected wallet has bids carries an accent edge and the amount, so your position on the ladder reads at a glance. */
+.truth-auction-ladder-row.has-viewer-bid {
+	box-shadow:
+		inset 3px 0 0 var(--accent),
+		var(--glow-inset-subtle),
+		var(--shadow-raised);
+}
+
+.truth-auction-ladder-yours {
+	color: var(--accent);
+	font-size: var(--font-label);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.truth-auction-bidder-you {
+	color: var(--accent);
+}
+
 .truth-auction-ladder-helper {
 	display: inline-flex;
 	align-items: center;
@@ -1119,17 +1161,22 @@
 	justify-content: end;
 }
 
-/* Shares tab: holdings on the left and the share actions stacked in a side column, like the Vaults tab. */
+/*
+ * Shares tab: the holdings read as one band (redeemable sets beside the Yes, No, and Invalid balances), and the four share
+ * actions sit side by side below it, each column with its purpose, button, and blocker, buttons aligned across columns.
+ */
 .trading-workspace-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+	grid-template-columns: minmax(0, 1fr);
 	align-items: start;
-	gap: var(--space-5);
+	gap: var(--space-4);
 	min-width: 0;
 }
 
-.trading-workspace-layout.is-single {
-	grid-template-columns: minmax(0, 1fr);
+.trading-workspace-layout:not(.is-single) .trading-holdings-stage {
+	grid-template-columns: minmax(12rem, 1fr) minmax(0, 3fr);
+	align-items: start;
+	gap: var(--space-4) var(--space-5);
 }
 
 .trading-workspace-layout:not(.is-single) .trading-share-distribution {
@@ -1138,24 +1185,55 @@
 	gap: var(--space-4);
 }
 
+.trading-workspace-layout:not(.is-single) .vault-action-launcher-grid {
+	grid-template-columns: none;
+	grid-auto-columns: minmax(0, 1fr);
+	grid-auto-flow: column;
+	gap: 0 var(--space-4);
+}
+
 .trading-workspace-layout:not(.is-single) .vault-action-launcher-grid .action-launcher-card,
 .trading-workspace-layout:not(.is-single) .vault-action-launcher-grid .action-launcher-card.compact {
+	grid-row: span 2;
 	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: subgrid;
 	gap: var(--space-2);
 }
 
-.trading-workspace-layout:not(.is-single) .action-launcher-card-copy .detail {
-	font-size: var(--font-caption);
+/* With no shares the holdings section is one quiet line, aligned with the section heading. */
+.trading-holdings-empty.empty-state {
+	padding: 0;
+	text-align: start;
+}
+
+.trading-holdings-empty .empty-state-title {
+	color: var(--text-secondary);
+	font-weight: 400;
+}
+
+.trading-workspace-layout:not(.is-single) .action-launcher-card-copy .detail,
+.trading-workspace-layout:not(.is-single) .action-launcher-card .tx-action-notice {
+	color: var(--muted);
+	font-size: var(--font-label);
+}
+
+/* Below full desktop width four columns are too narrow for every button label to stay on one line. */
+@media (max-width: 80rem) {
+	.trading-workspace-layout:not(.is-single) .vault-action-launcher-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-auto-flow: row;
+	}
 }
 
 @media (max-width: 64rem) {
-	.trading-workspace-layout {
+	.trading-workspace-layout:not(.is-single) .trading-holdings-stage {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
 
 @media (max-width: 40rem) {
-	.trading-workspace-layout:not(.is-single) .trading-share-distribution {
+	.trading-workspace-layout:not(.is-single) .trading-share-distribution,
+	.trading-workspace-layout:not(.is-single) .vault-action-launcher-grid {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
@@ -1718,13 +1796,8 @@
 .selected-vault-summary-body {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.vault-detail-hero {
-	align-items: start;
-}
-
 .security-pool-strip,
 .security-pool-strip-stats,
-.vault-detail-hero,
 .vault-detail-hero-secondary,
 .vault-detail-health,
 .trading-holdings-layout,
@@ -1955,16 +2028,45 @@
 	align-items: start;
 }
 
+/* The list owns the row columns and every row uses them through subgrid, so addresses, figures, and actions line up down the list. */
 .vault-position-list {
 	display: grid;
-	gap: var(--space-3);
+	grid-template-columns: minmax(11rem, 1fr) minmax(0, 2.5fr) auto;
+	gap: var(--space-3) var(--space-5);
 }
 
+.vault-position-list > * {
+	grid-column: 1 / -1;
+}
+
+/* A vault row reads left to right: address and verdict, figures, actions. Every row reserves the same edge, which an underwater or near-minimum vault colors, so the verdict does not depend on the badge alone. */
 .vault-position-strip {
 	display: grid;
-	gap: var(--space-4);
-	padding: var(--space-4) 0;
+	grid-template-columns: subgrid;
+	align-items: center;
+	row-gap: var(--space-3);
+	padding: var(--space-4) 0 var(--space-4) var(--space-3);
+	box-shadow: inset 3px 0 0 transparent;
 	border-bottom: 1px solid var(--divider-subtle);
+}
+
+.vault-position-strip.is-underwater {
+	box-shadow: inset 3px 0 0 var(--danger-border-strong);
+}
+
+.vault-position-strip.is-nearMinimum {
+	box-shadow: inset 3px 0 0 var(--warning-border-strong);
+}
+
+/* Inside a row the figures sit on one line without the stacked grid's dividers; fixed tracks keep each figure in the same column on every row, and extras wrap beneath. */
+.vault-position-strip > .workflow-vault-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-2) var(--space-4);
+}
+
+.vault-position-strip > .workflow-vault-grid > div {
+	padding-top: 0;
+	border-top: 0;
 }
 
 .vault-position-strip:first-child {
@@ -1977,11 +2079,20 @@
 }
 
 .vault-position-strip-head {
+	display: grid;
+	justify-items: start;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.vault-position-strip-meta {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-2);
+	gap: var(--space-1);
+}
+
+.vault-position-strip-meta:empty {
+	display: none;
 }
 
 .vault-position-strip-title {
@@ -2025,23 +2136,109 @@
 }
 
 .vault-position-strip-actions {
-	justify-self: start;
+	justify-self: end;
+	min-width: 0;
 }
 
+.vault-position-strip-actions > .actions {
+	flex-wrap: nowrap;
+	justify-content: flex-end;
+}
+
+/* A blocked liquidation's reason sits under the buttons without widening the actions column. */
+.vault-position-strip-actions .vault-liquidation-reason {
+	max-width: 18rem;
+	margin-inline-start: auto;
+}
+
+/* Below desktop width the address and actions share the first line and the figures take the full width beneath. */
+@media (max-width: 64rem) {
+	.vault-position-list {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	/* The address and actions share the first line, so they start at its top even when a blocked row's reason makes the actions taller. */
+	.vault-position-strip {
+		align-items: start;
+	}
+
+	.vault-position-strip > .workflow-vault-grid {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+}
+
+/* On phones the figures pair up and the actions follow them. */
+@media (max-width: 40rem) {
+	.vault-position-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-position-strip > .workflow-vault-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-row: auto;
+	}
+
+	.vault-position-strip-actions {
+		justify-self: stretch;
+	}
+
+	.vault-position-strip-actions > .actions {
+		flex-wrap: wrap;
+		justify-content: flex-start;
+	}
+
+	.vault-position-strip-actions .vault-liquidation-reason {
+		max-width: none;
+		margin-inline-start: 0;
+	}
+}
+
+/* Health, commitment limit, and REP backing share one band across the card; bad debt, dispute stake, and the backing details follow. */
 .vault-detail-stage {
 	display: grid;
-	gap: var(--space-4);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	align-items: start;
+	gap: var(--space-4) 0;
 }
 
-.vault-detail-hero {
-	grid-template-columns: minmax(11rem, 0.72fr) minmax(13rem, 0.9fr) minmax(13rem, 1fr);
-	align-items: start;
+.vault-detail-stage > :not(.vault-health-status) {
+	grid-column: 1 / -1;
+}
+
+/* The two figures become band columns of their own, divided like the pool's status strip; an ended pool has no health verdict, so they start the band. */
+.vault-detail-stage > .vault-detail-hero {
+	display: contents;
+}
+
+.vault-detail-stage > .vault-detail-hero > * {
+	padding-inline-start: var(--space-4);
+	border-inline-start: 1px solid var(--divider-subtle);
+}
+
+.vault-detail-stage > .vault-detail-hero:first-child > :first-child {
+	padding-inline-start: 0;
+	border-inline-start: 0;
+}
+
+/* Beside the vault actions the card is half width, too narrow for three columns: the health verdict heads the band and the two figures share the row below. */
+.vault-detail-layout .vault-detail-stage {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vault-detail-layout .vault-detail-stage > .vault-health-status {
+	grid-column: 1 / -1;
+}
+
+.vault-detail-layout .vault-detail-stage > .vault-detail-hero > :first-child {
+	padding-inline-start: 0;
+	border-inline-start: 0;
 }
 
 .vault-detail-hero-primary,
 .vault-detail-meta {
 	display: grid;
-	gap: var(--space-2);
+	gap: var(--space-1);
 }
 
 .vault-detail-meta .metric-label,
@@ -2130,8 +2327,7 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.security-pool-strip-stats,
-	.vault-detail-hero {
+	.security-pool-strip-stats {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
@@ -2179,204 +2375,64 @@
 	padding-top: var(--space-1);
 }
 
+/* The fork stages are sub-tabs of the Fork & migration tab, styled like the other sub-tabs; the header's stage bar carries progress. */
 .fork-workflow-stage-nav-shell {
 	display: flex;
-	justify-content: center;
 }
 
 .fork-workflow-stage-nav {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	display: inline-flex;
 	flex-wrap: wrap;
-	gap: var(--space-2);
-	width: fit-content;
+	gap: var(--space-1);
 	max-width: 100%;
-	margin: 0 auto;
 }
 
 .fork-workflow-stage {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-2);
-	min-width: 11rem;
-	padding: var(--space-3) var(--space-4);
-	border: 1px solid var(--divider-subtle);
-	border-radius: var(--radius-panel);
-	background: var(--surface-row);
-	color: var(--text);
+	gap: var(--space-1);
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid transparent;
+	border-radius: var(--radius-control);
+	background: transparent;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
 	text-align: left;
 	transition:
 		background-color var(--transition-standard),
 		border-color var(--transition-standard),
-		box-shadow var(--transition-standard),
-		color var(--transition-standard),
-		opacity var(--transition-standard);
+		color var(--transition-standard);
 }
 
-.fork-workflow-stage-icon {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 1.9rem;
-	height: 1.9rem;
-	flex: 0 0 1.9rem;
-	border-radius: var(--radius-pill);
-	background: var(--color-white-08);
-	color: currentColor;
+.fork-workflow-stage-copy strong {
+	font-weight: 700;
 }
 
-.fork-workflow-stage-icon::before,
-.fork-workflow-stage-icon::after {
-	content: "";
-	position: absolute;
-}
-
-.fork-workflow-stage-copy {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: var(--space-1);
-}
-
-.fork-workflow-stage-indicator {
-	display: inline-flex;
-	align-items: center;
-	padding: 0 var(--space-2);
-	border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
-	border-radius: var(--radius-pill);
-	background: var(--accent-soft);
-	color: color-mix(in srgb, var(--accent) 45%, var(--text));
-	font-size: var(--font-label);
-	font-weight: 600;
-	letter-spacing: 0.03em;
-	text-transform: uppercase;
-}
-
-.fork-workflow-stage-icon-triggered::before {
-	inset: 0.44rem;
-	border-radius: var(--radius-pill);
-	background: currentColor;
-}
-
-.fork-workflow-stage-icon-triggered::after {
-	inset: 0.22rem;
-	border: 1px solid currentColor;
-	border-radius: var(--radius-pill);
-	opacity: 0.45;
-}
-
-.fork-workflow-stage-icon-migration::before {
-	width: 0.8rem;
-	height: 0.18rem;
-	border-radius: var(--radius-pill);
-	background: currentColor;
-	transform: translate(-0.06rem, 0.14rem) rotate(-35deg);
-}
-
-.fork-workflow-stage-icon-migration::after {
-	width: 0.48rem;
-	height: 0.48rem;
-	border-top: 0.16rem solid currentColor;
-	border-right: 0.16rem solid currentColor;
-	transform: translate(0.38rem, -0.18rem) rotate(10deg);
-}
-
-.fork-workflow-stage-icon-auction::before {
-	width: 0.76rem;
-	height: 0.76rem;
-	border: 0.16rem solid currentColor;
-	border-radius: var(--radius-compact);
-	transform: rotate(45deg);
-}
-
-.fork-workflow-stage-icon-auction::after {
-	width: 0.16rem;
-	height: 0.96rem;
-	border-radius: var(--radius-pill);
-	background: currentColor;
-	transform: rotate(45deg);
-}
-
-.fork-workflow-stage-icon-settlement::before {
-	width: 0.5rem;
-	height: 0.9rem;
-	border-right: 0.18rem solid currentColor;
-	border-bottom: 0.18rem solid currentColor;
-	transform: translateY(-0.08rem) rotate(40deg);
-}
-
-.fork-workflow-stage-icon-pools::before,
-.fork-workflow-stage-icon-pools::after {
-	width: 0.5rem;
-	height: 0.5rem;
-	border: 0.16rem solid currentColor;
-	border-radius: var(--radius-compact);
-}
-
-.fork-workflow-stage-icon-pools::before {
-	transform: translate(-0.22rem, -0.12rem);
-}
-
-.fork-workflow-stage-icon-pools::after {
-	transform: translate(0.22rem, 0.12rem);
-}
-
-.fork-workflow-stage.is-current {
-	border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-	background: linear-gradient(135deg, var(--accent-emphasis-soft), var(--accent-faint)), var(--surface-row);
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+/* Hover and selection match the vault sub-tabs, so a hovered stage never reads as more selected than the open one. */
+.fork-workflow-stage:hover:not(:disabled):not(.is-selected) {
+	border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .fork-workflow-stage.is-selected {
-	border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-	background: linear-gradient(135deg, var(--accent-medium), color-mix(in srgb, var(--accent) 6%, transparent)), var(--surface-row);
-	box-shadow: 0 0 0 1px var(--accent-soft);
-	color: var(--text);
-}
-
-.fork-workflow-stage.is-current .fork-workflow-stage-icon,
-.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
-	background: var(--accent-emphasis-soft);
-}
-
-.fork-workflow-stage.is-selected .fork-workflow-stage-icon {
-	box-shadow: inset 0 0 0 1px var(--accent-emphasis-soft);
-}
-
-.fork-workflow-stage.is-selected .fork-workflow-stage-copy strong {
-	color: var(--text);
-}
-
-.fork-workflow-stage.is-complete:not(.is-current) {
-	border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-	background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 4%, transparent)), var(--surface-row);
+	border-color: var(--border-active);
+	background: var(--accent-soft);
 	box-shadow: inset 0 0 0 1px var(--accent-faint);
-	opacity: 0.98;
+	color: var(--text);
 }
 
 .fork-workflow-stage.is-upcoming:not(.is-selected) {
-	opacity: 0.68;
+	color: var(--muted);
 }
 
-.fork-workflow-stage-separator {
-	color: var(--text-secondary);
-	font-size: 1rem;
-	transition:
-		color var(--transition-standard),
-		opacity var(--transition-standard),
-		text-shadow var(--transition-standard);
-}
-
-.fork-workflow-stage-separator.is-complete {
-	color: var(--accent);
-	opacity: 0.95;
-	text-shadow: 0 0 0.7rem color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.fork-workflow-stage-separator.is-upcoming {
-	opacity: 0.52;
+/* The stage the pool is in carries a small accent dot after its name. */
+.fork-workflow-stage.is-current::after {
+	content: "";
+	width: 0.375rem;
+	height: 0.375rem;
+	margin-inline-start: var(--space-1);
+	border-radius: var(--radius-pill);
+	background: var(--accent);
 }
 
 .fork-workflow-child-pool-list {
@@ -2472,19 +2528,6 @@
 }
 
 @media (max-width: 64rem) {
-	.fork-workflow-stage-nav {
-		gap: var(--space-1);
-	}
-
-	.fork-workflow-stage {
-		flex: 1 1 9rem;
-		min-width: 0;
-	}
-
-	.fork-workflow-stage-separator {
-		display: none;
-	}
-
 	.vault-workspace-header {
 		align-items: flex-start;
 	}
@@ -2617,7 +2660,6 @@
 @media (max-width: 40rem) {
 	.security-pool-card-progress,
 	.security-pool-strip-stats,
-	.vault-detail-hero,
 	.vault-detail-hero-secondary,
 	.vault-detail-health,
 	.trading-holdings-layout,
@@ -2778,7 +2820,7 @@ span.rep-price-status.stale,
 	margin-left: calc(var(--space-2) * -1);
 }
 
-/* Browse rows lead with open interest against capacity: a taller meter with larger numbers and the used share. */
+/* Browse rows and the pool header lead with open interest against capacity: a taller meter with larger numbers and the used share. */
 .pool-capacity-summary.is-prominent .progress-meter-value {
 	font-size: var(--font-lg);
 }
@@ -2884,6 +2926,10 @@ span.rep-price-status.stale,
 	padding-inline-start: 0;
 }
 
+.pool-status-strip > :last-child {
+	padding-inline-end: 0;
+}
+
 .pool-status-strip > * + * {
 	border-inline-start: 1px solid var(--divider-subtle);
 }
@@ -2893,6 +2939,7 @@ span.rep-price-status.stale,
 	align-items: flex-start;
 	justify-content: flex-start;
 	gap: var(--space-2);
+	padding: var(--space-3) var(--space-4);
 	background: none;
 	border-inline-start: 1px solid var(--divider-subtle);
 }
@@ -2915,6 +2962,49 @@ span.rep-price-status.stale,
 .pool-status-strip .pool-oracle-status .oracle-price-value {
 	font-family: var(--font-family-mono);
 	font-weight: 600;
+}
+
+/* The three key figures lead each tile at title size; limits and positions stay quieter beside them. */
+.pool-status-strip .pool-capacity-summary .progress-meter-value,
+.pool-status-strip .pool-oracle-status .oracle-price-value,
+.pool-status-strip .pool-lifecycle-summary-value strong,
+.pool-strip-figure-value {
+	font-size: var(--font-title);
+	line-height: var(--line-height-tight);
+}
+
+/* A stage figure that is a single value: its label, the figure, and a quiet detail such as a deadline's UTC time. */
+.pool-strip-figure {
+	display: grid;
+	align-content: start;
+	gap: var(--space-2);
+}
+
+.pool-strip-figure-value {
+	color: var(--value);
+	font-family: var(--font-family-mono);
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+/* A figure that is a word, such as an outcome, uses the sans face; mono stays for numbers. */
+.pool-strip-figure-value.is-text {
+	font-family: var(--font-family-sans);
+}
+
+.pool-strip-figure-detail {
+	color: var(--muted);
+	font-size: var(--font-caption);
+}
+
+.pool-status-strip .pool-capacity-limit,
+.pool-status-strip .pool-lifecycle-position {
+	font-size: var(--font-caption);
+}
+
+/* "/ limit" wraps as one unit, so a narrow column never leaves the slash at the end of a line. */
+.pool-status-strip .pool-capacity-limit {
+	white-space: nowrap;
 }
 
 .vault-risk-summary:empty {
@@ -3147,13 +3237,16 @@ span.rep-price-status.stale,
 
 .vault-health-status {
 	display: grid;
-	gap: var(--space-1);
+	justify-items: start;
+	align-content: start;
+	gap: var(--space-2);
+	padding-inline-end: var(--space-4);
 }
 
-.vault-health {
-	font-size: 0.8125rem;
-	font-weight: 600;
-	margin: 0;
+/* The verdict wraps rather than crossing into the next band column when its third of the card is narrow. */
+.vault-health-status .vault-health {
+	max-width: 100%;
+	white-space: normal;
 }
 
 .vault-risk-summary {
@@ -3162,8 +3255,10 @@ span.rep-price-status.stale,
 	gap: var(--space-4);
 }
 
-.vault-workspace .vault-detail-hero {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Bad debt and dispute stake read like the band's figures: label above value, never run together. */
+.vault-risk-summary > div {
+	display: grid;
+	gap: var(--space-1);
 }
 
 .vault-workspace .vault-detail-hero strong {
@@ -3225,9 +3320,18 @@ span.rep-price-status.stale,
 }
 
 @media (max-width: 40rem) {
-	.vault-workspace .vault-detail-hero,
 	.vault-address-lookup .lookup-field-controls.has-action {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-detail-stage,
+	.vault-detail-layout .vault-detail-stage {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-detail-stage > .vault-detail-hero > * {
+		padding-inline-start: 0;
+		border-inline-start: 0;
 	}
 
 	.vault-address-lookup .lookup-field-controls.has-action > .actions {
@@ -3621,24 +3725,72 @@ span.rep-price-status.stale,
 .pool-lifecycle-steps {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
-	gap: 3px;
+	gap: var(--space-2);
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
 .pool-lifecycle-steps li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-content: start;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+/* Each segment carries its stage name, so the whole lifecycle and the current position read at a glance. */
+.pool-lifecycle-steps li::before {
+	content: "";
 	height: 0.375rem;
 	border-radius: var(--radius-pill);
 	background: var(--border-default);
 }
 
-.pool-lifecycle-steps li.completed {
-	background: var(--accent-medium);
+/* Finished stages stay clearly filled, a step quieter than the current one, so progress reads at a glance. */
+.pool-lifecycle-steps li.completed::before {
+	background: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-.pool-lifecycle-steps li.current {
+/* A stage the pool passed over is hollow, so the bar never claims the pool went through it. */
+.pool-lifecycle-steps li.skipped::before {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--border-default);
+}
+
+.pool-lifecycle-steps li.current::before {
 	background: var(--accent);
+}
+
+/* The current stage is named in full above the bar, so the per-segment names are supplementary context at caption-eyebrow size. */
+.pool-lifecycle-step-label {
+	color: var(--muted);
+	font-size: var(--font-xs);
+	line-height: var(--line-height-tight);
+}
+
+.pool-lifecycle-steps li.completed .pool-lifecycle-step-label {
+	color: var(--text-secondary);
+}
+
+.pool-lifecycle-steps li.current .pool-lifecycle-step-label {
+	color: var(--text);
+	font-weight: 500;
+}
+
+/* Below full desktop width the segments are too narrow for their names; the heading above names the current stage, and the names remain for assistive technology and as hover titles. */
+@media (max-width: 80rem) {
+	.pool-lifecycle-step-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+		border: 0;
+	}
 }
 
 .pool-reference-details > details > summary {
@@ -3766,13 +3918,26 @@ span.rep-price-status.stale,
 		font-size: var(--font-label);
 	}
 
+	/* On phones a row keeps its control beside the label, which wraps instead; a status such as "Shown below" drops the button-sized padding and height. */
 	.pool-action-item {
+		flex-wrap: nowrap;
+		align-items: flex-start;
 		gap: var(--space-2);
 	}
 
-	/* On phones the figures stack so each value keeps its line; rules separate them instead of columns. */
+	.pool-action-control:has(> .pool-action-current) {
+		min-height: 0;
+	}
+
+	.pool-action-current {
+		min-height: 0;
+		padding-inline: 0;
+		white-space: nowrap;
+	}
+
+	/* On phones the two leading figures share a row and the stage takes the full width beneath, so the header stays short. */
 	.pool-status-strip {
-		grid-template-columns: minmax(0, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
 	.pool-status-strip > *,
@@ -3781,8 +3946,20 @@ span.rep-price-status.stale,
 		border-inline-start: 0;
 	}
 
-	.pool-status-strip > * + * {
+	.pool-status-strip > :nth-child(2):not(.pool-lifecycle) {
+		padding-inline-start: var(--space-3);
+		border-inline-start: 1px solid var(--divider-subtle);
+	}
+
+	.pool-status-strip > .pool-lifecycle {
+		grid-column: 1 / -1;
 		border-top: 1px solid var(--divider-subtle);
+	}
+
+	.pool-status-strip .pool-capacity-summary .progress-meter-value,
+	.pool-status-strip .pool-oracle-status .oracle-price-value,
+	.pool-strip-figure-value {
+		font-size: var(--font-lg);
 	}
 
 	.pool-status-strip > .pool-oracle-status.warning {
@@ -3879,6 +4056,17 @@ span.rep-price-status.stale,
 	font-size: 0.875rem;
 }
 
+/* The vault address slot spans the card; its control fits the address so the copy glyph follows the visible text. */
+.selected-vault-address {
+	display: block;
+	min-width: 0;
+}
+
+.selected-vault-address-control {
+	display: inline-flex;
+	max-width: 100%;
+}
+
 .vault-operations-flow {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
@@ -3963,8 +4151,19 @@ span.rep-price-status.stale,
 	overflow-x: auto;
 }
 
+/* The preview stays in view while the longer form scrolls beside it, so totals and the review button are always at hand. */
 .vault-operations-preview {
+	position: sticky;
+	top: var(--space-4);
 	min-width: 0;
+}
+
+.vault-operations-wallet {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2);
+	margin: 0;
 }
 
 .vault-operations-preview .section-block-body {
@@ -3973,9 +4172,25 @@ span.rep-price-status.stale,
 	gap: var(--space-3);
 }
 
+/* Directly under the vault card, whose bottom rule already divides them, the form and the preview beside it drop their own top rule. */
+.vault-operations-flow > .vault-operations-layout:first-child > .section-block.embedded {
+	padding-top: 0;
+	border-top: 0;
+}
+
 @media (max-width: 64rem) {
 	.vault-operations-layout {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-operations-preview {
+		position: static;
+	}
+
+	/* Stacked under the form, the preview keeps the rule that separates it. */
+	.vault-operations-flow > .vault-operations-layout:first-child > .vault-operations-preview {
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--divider-subtle);
 	}
 }
 

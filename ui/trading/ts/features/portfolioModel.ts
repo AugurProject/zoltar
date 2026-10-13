@@ -34,6 +34,9 @@ type PortfolioAction = 'sell' | 'redeem' | 'settle' | 'withdraw-liquidity'
 /** `sellSide` is the outcome a sell action opens the ticket on. */
 export type PortfolioActionItem = Readonly<{ kind: PortfolioActionKind; action: PortfolioAction; pool: LiveMarket['pool']; title: string; deadline: bigint | undefined; sellSide: 'YES' | 'NO' }>
 
+/** One market's action items, listed once however many actions it needs. `deadline` is the soonest of its items' deadlines. */
+export type PortfolioActionGroup = Readonly<{ pool: LiveMarket['pool']; title: string; deadline: bigint | undefined; items: readonly PortfolioActionItem[] }>
+
 export type PortfolioRow = Readonly<{
 	entry: PortfolioBalanceEntry
 	state: PortfolioRowState
@@ -53,8 +56,8 @@ export type PortfolioOverview = Readonly<{
 	unvaluedCount: number
 	/** Rows with shares left out of the total until the question resolves. */
 	pendingResolutionCount: number
-	/** Every row's action items, dated ones first by deadline, then undated ones in row order. */
-	actionItems: readonly PortfolioActionItem[]
+	/** Each market that needs attention, with its action items: dated markets first by deadline, then undated ones in row order. */
+	actionGroups: readonly PortfolioActionGroup[]
 }>
 
 type Holdings = Pick<LiveBalances, 'yes' | 'no' | 'invalid' | 'lp'>
@@ -160,13 +163,19 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	return { entry, state, valuation, canSell, sellSide, canRedeem, actionItems }
 }
 
-function compareActionItems(left: PortfolioActionItem, right: PortfolioActionItem) {
+function compareActionGroups(left: PortfolioActionGroup, right: PortfolioActionGroup) {
 	if (left.deadline === undefined || right.deadline === undefined) {
 		if (left.deadline === right.deadline) return 0
 		return left.deadline === undefined ? 1 : -1
 	}
 	if (left.deadline === right.deadline) return 0
 	return left.deadline < right.deadline ? -1 : 1
+}
+
+function soonestDeadline(items: readonly PortfolioActionItem[]) {
+	let soonest: bigint | undefined
+	for (const { deadline } of items) if (deadline !== undefined && (soonest === undefined || deadline < soonest)) soonest = deadline
+	return soonest
 }
 
 export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], nowSeconds: bigint): PortfolioOverview {
@@ -179,7 +188,10 @@ export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], now
 		else totalValueAttoEth += row.valuation.attoEth
 		if ((row.valuation.kind === 'exit' || row.valuation.kind === 'complete-sets') && row.valuation.pendingResolution) pendingResolutionCount += 1
 	}
-	// Array.prototype.sort is stable, so undated items keep row order.
-	const actionItems = rows.flatMap(row => row.actionItems).sort(compareActionItems)
-	return { rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionItems }
+	// Array.prototype.sort is stable, so undated markets keep row order.
+	const actionGroups = rows
+		.filter(row => row.actionItems.length > 0)
+		.map(row => ({ pool: row.entry.market.pool, title: row.entry.market.title, deadline: soonestDeadline(row.actionItems), items: row.actionItems }))
+		.sort(compareActionGroups)
+	return { rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionGroups }
 }

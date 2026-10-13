@@ -157,7 +157,8 @@ export function SecurityPoolVaultWorkspace({
 					<SecurityPoolVaultDirectory
 						emptyState={browseEmptyState}
 						pool={selectedPool}
-						renderActions={vault => {
+						poolEnded={poolState?.lifecycleState === 'ended'}
+						renderActions={(vault, healthTier) => {
 							if (selectedPool === undefined) return undefined
 							// The connected wallet's own vault can never be liquidated by it, so its row offers no liquidation.
 							const ownVault = isWalletVault(vault.vaultAddress)
@@ -178,7 +179,14 @@ export function SecurityPoolVaultWorkspace({
 											{workspaceCopy.openVault}
 										</button>
 										{ownVault ? undefined : (
-											<button aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId} className='secondary' disabled={liquidationBlocker !== undefined} type='button' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}>
+											// An underwater vault's liquidation is the row's main action.
+											<button
+												aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId}
+												className={healthTier === 'underwater' ? 'primary' : 'secondary'}
+												disabled={liquidationBlocker !== undefined}
+												type='button'
+												onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}
+											>
 												{liquidationCopy.liquidateVault}
 											</button>
 										)}
@@ -187,7 +195,11 @@ export function SecurityPoolVaultWorkspace({
 								</>
 							)
 						}}
-						renderBadge={vault => (selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='ok'>{commonCopy.selected}</Badge> : undefined)}
+						renderBadge={vault => {
+							// The row's health badge carries the color, so ownership and selection stay neutral beside it.
+							if (isWalletVault(vault.vaultAddress)) return <Badge tone='muted'>{securityPoolCopy.owned}</Badge>
+							return selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='muted'>{commonCopy.selected}</Badge> : undefined
+						}}
 						repPerEthPrice={repPerEthPrice}
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}

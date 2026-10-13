@@ -99,15 +99,17 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	})()
 	const migrationRepDisplay = renderMetricValue(selectedOutcomeMigratedAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
 	const migrationSettlementCollateralDisplay = renderMetricValue(model.forkAuctionDetails?.settlementCollateralAttoEth ?? model.previewPool?.settlementCollateralAttoEth, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
-	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
-	const migrationEndsDisplay = (() => {
-		if (model.forkAuctionDetails === undefined) return model.migrationSummaryText
-		if (model.hasStartedSelectedTruthAuctionTimeline && model.effectiveTruthAuctionStartedAt !== undefined && model.effectiveTruthAuctionStartedAt > 0n) {
-			return <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={model.effectiveTruthAuctionStartedAt} />
-		}
-		if (model.forkAuctionDetails.migrationEndsAt === undefined) return forkAuctionCopy.notStarted
-
-		return <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={model.forkAuctionDetails.migrationEndsAt} />
+	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} relativeFirst timestamp={migrationStartedAt} />
+	// Migration ends at its deadline, or earlier if the selected outcome's truth auction has already started; it never ends later than the deadline. A passed end reads as ended, as in the pool header.
+	const migrationEnd = (() => {
+		if (model.forkAuctionDetails === undefined) return { display: model.migrationSummaryText, label: forkAuctionCopy.migrationEnds }
+		const { migrationEndsAt } = model.forkAuctionDetails
+		const auctionStartedAt = model.hasStartedSelectedTruthAuctionTimeline && model.effectiveTruthAuctionStartedAt !== undefined && model.effectiveTruthAuctionStartedAt > 0n ? model.effectiveTruthAuctionStartedAt : undefined
+		const effectiveEndsAt = auctionStartedAt !== undefined && (migrationEndsAt === undefined || auctionStartedAt < migrationEndsAt) ? auctionStartedAt : migrationEndsAt
+		if (effectiveEndsAt === undefined) return { display: forkAuctionCopy.notStarted, label: forkAuctionCopy.migrationEnds }
+		// Migration still accepts a call at its deadline and closes only after it, while a started auction has already ended it.
+		const ended = model.effectiveCurrentTimestamp !== undefined && (effectiveEndsAt === auctionStartedAt ? effectiveEndsAt <= model.effectiveCurrentTimestamp : effectiveEndsAt < model.effectiveCurrentTimestamp)
+		return { display: <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} relativeFirst timestamp={effectiveEndsAt} />, label: ended ? forkAuctionCopy.migrationEnded : forkAuctionCopy.migrationEnds }
 	})()
 	const truthAuctionStateBadgeElement = <Badge tone={model.truthAuctionStateBadge.tone}>{model.truthAuctionStateBadge.label}</Badge>
 	const pendingRefundDisplay = (() => {
@@ -166,7 +168,8 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				displayedEthRaisedAttoEth={model.displayedEthRaisedAttoEth}
 				displayedRepSoldAttoRep={model.displayedRepSoldAttoRep}
 				ended={biddingClosed}
-				endsDisplay={displays.endsDisplay}
+				// The pool header shows the auction deadline while this pool's own auction runs, so the card leaves it out then.
+				endsDisplay={model.lifecycleStateOverride === 'forkTruthAuction' && model.isViewingOwnAuction ? undefined : displays.endsDisplay}
 				attoEthRaiseCap={model.truthAuctionStatus.attoEthRaiseCap}
 				ethRaisedProgress={model.ethRaisedProgress}
 				maxAttoRepBeingSold={model.truthAuctionStatus.maxAttoRepBeingSold}
@@ -185,6 +188,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			/>
 		)
 	})()
+	const headerShowsMigration = model.lifecycleStateOverride === 'poolForked' || model.lifecycleStateOverride === 'forkMigration'
 	const migrationSummaryCard = (
 		<ForkAuctionMigrationSummaryCard
 			badge={displays.migrationStatusBadge}
@@ -192,10 +196,12 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			forkTypeDisplay={model.resolvedForkTypeLabel}
 			migratedRepDisplay={migrationRepDisplay}
 			migratedRepLabel={forkAuctionCopy.formatMigratedAttoRepToOutcome(model.selectedOutcomeLabel)}
-			migrationEndsDisplay={migrationEndsDisplay}
+			// The pool header shows the migration deadline and settlement collateral while the pool is forked or migrating, so the card leaves them out then.
+			migrationEndsDisplay={headerShowsMigration ? undefined : migrationEnd.display}
+			migrationEndsLabel={migrationEnd.label}
 			migrationStartedDisplay={migrationStartedDisplay}
 			repAtForkDisplay={migrationRepAtForkDisplay}
-			settlementCollateralDisplay={migrationSettlementCollateralDisplay}
+			settlementCollateralDisplay={headerShowsMigration ? undefined : migrationSettlementCollateralDisplay}
 		/>
 	)
 	const truthAuctionMarketViewSection = (() => {

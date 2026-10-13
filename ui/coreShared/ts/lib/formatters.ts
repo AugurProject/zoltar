@@ -186,8 +186,12 @@ export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFra
 	return `${negative ? '-' : ''}${formatGroupedInteger(whole)}${fraction.length > 0 ? `.${fraction}` : ''}`
 }
 
-/** `down` truncates toward zero, for figures such as limits that must never read above the exact value. It always uses standard notation, because compact SI rounding could read above the exact value. */
-export type AmountRounding = 'nearest' | 'down'
+/**
+ * `down` truncates toward zero, for figures such as limits that must never read above the exact value; `up` rounds away
+ * from zero, for minimums a user must reach, so following the shown figure is always enough. Both always use standard
+ * notation, because compact SI rounding could cross the exact value.
+ */
+export type AmountRounding = 'nearest' | 'down' | 'up'
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2, rounding: AmountRounding = 'nearest') {
 	if (value === undefined) return '—'
@@ -203,7 +207,10 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 
 	const scale = 10n ** BigInt(effectiveDecimals)
 	const base = 10n ** BigInt(units)
-	const rounded = (absoluteValue * scale + (rounding === 'down' ? 0n : base / 2n)) / base
+	let roundingOffset = base / 2n
+	if (rounding === 'down') roundingOffset = 0n
+	else if (rounding === 'up') roundingOffset = base - 1n
+	const rounded = (absoluteValue * scale + roundingOffset) / base
 	const integerPart = rounded / scale
 
 	if (effectiveDecimals === 0) return `${prefix}${formatGroupedInteger(integerPart)}`

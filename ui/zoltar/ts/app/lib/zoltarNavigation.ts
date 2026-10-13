@@ -36,3 +36,8 @@ export function getZoltarViewHref(view: ZoltarView) {
 	const search = getRouteHashSearch()
 	return buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(writeUniverseQueryParam(search, readUniverseQueryParam(search)), view))
 }
+
+/** The app-wide fork notice shows on every page of a forked universe except the Overview, whose status and next step already state the fork. */
+export function showsUniverseForkedNotice({ route, universeHasForked, zoltarView }: { route: string; universeHasForked: boolean; zoltarView: ZoltarView }) {
+	return universeHasForked && !(route === 'zoltar' && zoltarView === 'overview')
+}

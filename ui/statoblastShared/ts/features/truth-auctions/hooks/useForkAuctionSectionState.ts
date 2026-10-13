@@ -184,6 +184,8 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		selectedBookTick,
 		tickSummaries: activeTickSummaries,
 		truthAuction: truthAuctionStatus,
+		viewerBids: truthAuctionBookData.viewerBids,
+		viewerBidsIncomplete: hasMoreViewerBids,
 	})
 	const liveBidGuidance = getTruthAuctionLiveBidGuidance(truthAuctionStatus, enteredBidTick)
 	const selectBidPriceTick = (tick: bigint) => {
@@ -242,6 +244,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	})()
 	const settlementActionPendingLabel = forkAuctionCopy.settlingSelectedBids
 	const auctionBidRows = buildTruthAuctionBidRows({
+		accountAddress: context.accountState.address,
 		bids: aggregatedAuctionBids,
 		truthAuction: truthAuctionStatus,
 	})

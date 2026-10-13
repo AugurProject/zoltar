@@ -10,12 +10,14 @@ type TimestampValueProps = {
 	currentTimestamp?: bigint
 	loading?: boolean
 	relative?: boolean
+	/** Leads with the relative time and sets the UTC time quietly beneath it, for narrow columns where the full form would wrap over three lines. */
+	relativeFirst?: boolean
 	timestamp: bigint | undefined
 	undefinedText?: ComponentChildren
 	zeroText?: ComponentChildren
 }
 
-export function TimestampValue({ className = '', currentTimestamp, loading = false, relative = true, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
+export function TimestampValue({ className = '', currentTimestamp, loading = false, relative = true, relativeFirst = false, timestamp, undefinedText = getMetricPlaceholderPresentation(undefined)?.placeholder, zeroText }: TimestampValueProps) {
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp ?? getWallClockTimestamp()
 
@@ -44,6 +46,14 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	// UTC stays the visible canonical value; the viewer's own time, which creation forms use, is added where it differs.
 	const localTimestamp = formatLocalTimestamp(timestamp)
 	const localTimeLabel = localTimestamp === undefined ? undefined : commonCopy.formatLocalTimeLabel(localTimestamp)
+
+	if (relativeFirst)
+		return (
+			<time className={`timestamp-value is-relative-first ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
+				<span className='timestamp-value-lead'>{relativeTimestamp}</span> <span className='timestamp-value-absolute'>{absoluteTimestamp}</span>
+				{localTimeLabel === undefined ? undefined : <span className='visually-hidden'> {localTimeLabel}</span>}
+			</time>
+		)
 
 	return (
 		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>

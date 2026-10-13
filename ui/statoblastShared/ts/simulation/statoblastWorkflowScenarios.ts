@@ -1,11 +1,14 @@
 import { requireQaAccount, reportBootstrapProgress } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
-import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
 import { CAPACITY_OWNERSHIP_ATTO_REP, DAY_IN_SECONDS, SECURITY_POOL_REP_DEPOSIT, loadRequiredSecurityVault, seedSecurityPool, settleOracleReportIfNeeded, type ScenarioSeedParameters } from './statoblastScenarioSeeding.js'
 
 const ENDED_POOL_COMMITMENT_QUESTION_TITLE = 'Will this resolve? (ended pool)'
+const ESCALATION_IN_PROGRESS_QUESTION_TITLE = 'Will this resolve? (escalation in progress)'
 const LIQUIDATION_DISTANCE_QUESTION_TITLE = 'Will this resolve? (liquidation distance)'
+const NEAR_MINIMUM_VAULT_QUESTION_TITLE = 'Will this resolve? (near-minimum vault)'
 const ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
 const LIQUIDATION_DISTANCE_TARGET_REP_DEPOSIT = 1_000n * 10n ** 18n
 // At the seeded 3 REP/ETH price both targets are healthy. At the repriced 4 REP/ETH price both are
@@ -14,10 +17,35 @@ const LIQUIDATION_DISTANCE_TARGET_REP_DEPOSIT = 1_000n * 10n ** 18n
 const LIQUIDATION_DISTANCE_NEAR_TARGET_COMMITMENT_ATTO_ETH = 128n * 10n ** 18n
 const LIQUIDATION_DISTANCE_FAR_TARGET_COMMITMENT_ATTO_ETH = 160n * 10n ** 18n
 const LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE = 4n * 10n ** 18n
+// At the repriced 4 REP/ETH price the 820 REP vault's 100 ETH commitment needs 800 REP at the 2x multiplier, so the
+// vault stays healthy at 2.05x backing: inside the 5% band above the multiplier that reads as near minimum.
+const NEAR_MINIMUM_VAULT_REP_DEPOSIT = 820n * 10n ** 18n
+const NEAR_MINIMUM_VAULT_COMMITMENT_ATTO_ETH = 100n * 10n ** 18n
+const NEAR_MINIMUM_VAULT_REPRICED_REP_ETH_PRICE = 4n * 10n ** 18n
 async function loadRequiredSeededPoolByTitle(readClient: ReadClient, questionTitle: string) {
 	const seededPool = (await getScenarioProtocol().loadAllSecurityPools(readClient)).find(pool => pool.marketDetails.title === questionTitle)
 	if (seededPool === undefined) throw new Error(`Expected a seeded security pool for ${questionTitle}`)
 	return seededPool
+}
+
+/** Lets the seeding price expire, then settles a fresh REP/ETH price last so it stays valid when the app opens. */
+async function repriceSeededPool({ managerAddress, memoryClient, price, readClient, writeClient }: { managerAddress: Address; memoryClient: ScenarioSeedParameters['memoryClient']; price: bigint; readClient: ReadClient; writeClient: WriteClient }) {
+	await advanceSimulationTime(memoryClient, ORACLE_PRICE_VALIDITY_SECONDS + 60n)
+	await getScenarioProtocol().requestOraclePrice(writeClient, managerAddress, price)
+	const managerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)
+	if (managerDetails.pendingReportId === 0n) throw new Error(`Expected a pending repricing report for ${managerAddress}`)
+	await settleOracleReportIfNeeded({ memoryClient, openOracleAddress: managerDetails.openOracleAddress, pendingReportId: managerDetails.pendingReportId, readClient, writeClient })
+	const repricedManagerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)
+	if (!repricedManagerDetails.isPriceValid || repricedManagerDetails.lastPrice !== price) throw new Error(`Expected a valid ${price.toString()} REP/ETH price for ${managerAddress}`)
+}
+
+/** Ends the seeded pool's question so its escalation game can open. */
+async function endSeededQuestion({ accountAddress, memoryClient, readClient, securityPoolAddress }: { accountAddress: Address; memoryClient: ScenarioSeedParameters['memoryClient']; readClient: ReadClient; securityPoolAddress: Address }) {
+	const reportingBeforeEnd = await getScenarioProtocol().loadReportingDetails(readClient, securityPoolAddress, accountAddress)
+	if (reportingBeforeEnd.marketDetails.endTime >= reportingBeforeEnd.currentTime) {
+		await advanceSimulationTime(memoryClient, reportingBeforeEnd.marketDetails.endTime - reportingBeforeEnd.currentTime + DAY_IN_SECONDS)
+	}
+	return reportingBeforeEnd
 }
 
 export async function seedEndedPoolCommitmentScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
@@ -42,10 +70,7 @@ export async function seedEndedPoolCommitmentScenario({ accounts, createReadClie
 	const pool = await loadRequiredSeededPoolByTitle(readClient, ENDED_POOL_COMMITMENT_QUESTION_TITLE)
 
 	await reportBootstrapProgress(onProgress, 'Ending the seeded question', 0.95)
-	const reportingBeforeEnd = await getScenarioProtocol().loadReportingDetails(readClient, pool.securityPoolAddress, reporterAccount)
-	if (reportingBeforeEnd.marketDetails.endTime >= reportingBeforeEnd.currentTime) {
-		await advanceSimulationTime(memoryClient, reportingBeforeEnd.marketDetails.endTime - reportingBeforeEnd.currentTime + DAY_IN_SECONDS)
-	}
+	const reportingBeforeEnd = await endSeededQuestion({ accountAddress: reporterAccount, memoryClient, readClient, securityPoolAddress: pool.securityPoolAddress })
 	// A wallet-funded report leaves the committed vault without dispute-staked REP, so only its commitment blocks redemption.
 	const reporterWriteClient = createWriteClient(reporterAccount)
 	await getScenarioProtocol().approveErc20(reporterWriteClient, profile.genesisRepTokenAddress, pool.securityPoolAddress, reportingBeforeEnd.startBondAttoRep, 'approveRep')
@@ -92,15 +117,83 @@ export async function seedLiquidationDistanceScenario({ accounts, createReadClie
 	})
 	const pool = await loadRequiredSeededPoolByTitle(readClient, LIQUIDATION_DISTANCE_QUESTION_TITLE)
 
-	// Let the seeding price expire, then settle a fresh higher REP/ETH price last so it stays valid when the app opens.
 	await reportBootstrapProgress(onProgress, 'Repricing REP for the liquidation targets', 0.95)
-	await advanceSimulationTime(memoryClient, ORACLE_PRICE_VALIDITY_SECONDS + 60n)
-	const receiverWriteClient = createWriteClient(receiverAccount)
-	await getScenarioProtocol().requestOraclePrice(receiverWriteClient, pool.managerAddress, LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE)
-	const managerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, pool.managerAddress)
-	if (managerDetails.pendingReportId === 0n) throw new Error('Expected a pending repricing report for the liquidation-distance pool')
-	await settleOracleReportIfNeeded({ memoryClient, openOracleAddress: managerDetails.openOracleAddress, pendingReportId: managerDetails.pendingReportId, readClient, writeClient: receiverWriteClient })
-	const repricedManagerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, pool.managerAddress)
-	if (!repricedManagerDetails.isPriceValid || repricedManagerDetails.lastPrice !== LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE) throw new Error(`Expected a valid ${LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE.toString()} REP/ETH price for the liquidation-distance pool`)
+	await repriceSeededPool({ managerAddress: pool.managerAddress, memoryClient, price: LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE, readClient, writeClient: createWriteClient(receiverAccount) })
 	await reportBootstrapProgress(onProgress, 'Seeded liquidation-distance scenario is ready', 0.98)
+}
+
+/** One pool whose question ended, with your Yes report disputed by a larger No report, so the escalation game is running. */
+export async function seedEscalationInProgressScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
+	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for escalation-in-progress')
+	const challengerAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for escalation-in-progress')
+	const readClient = createReadClient()
+	await seedSecurityPool({
+		createReadClient,
+		createWriteClient,
+		memoryClient,
+		onProgress,
+		poolSpec: {
+			poolLabel: 'escalation-in-progress pool',
+			progressRange: { start: 0.78, end: 0.94 },
+			questionTitle: ESCALATION_IN_PROGRESS_QUESTION_TITLE,
+			readyLabel: 'Seeded the reporting vault',
+			vaults: [{ accountAddress: primaryAccount, vaultRepBackingDepositAttoRep: SECURITY_POOL_REP_DEPOSIT, underwritingLimitAttoEth: CAPACITY_OWNERSHIP_ATTO_REP }],
+		},
+		profile,
+		seedTimestamp: await getSimulationChainTimestamp(memoryClient),
+	})
+	const pool = await loadRequiredSeededPoolByTitle(readClient, ESCALATION_IN_PROGRESS_QUESTION_TITLE)
+
+	await reportBootstrapProgress(onProgress, 'Ending the seeded question', 0.95)
+	const reportingBeforeEnd = await endSeededQuestion({ accountAddress: primaryAccount, memoryClient, readClient, securityPoolAddress: pool.securityPoolAddress })
+	// Both reports are wallet-funded; the Yes report still counts as your vault's dispute stake.
+	const primaryWriteClient = createWriteClient(primaryAccount)
+	await getScenarioProtocol().approveErc20(primaryWriteClient, profile.genesisRepTokenAddress, pool.securityPoolAddress, reportingBeforeEnd.startBondAttoRep, 'approveRep')
+	await getScenarioProtocol().reportOutcomeInSecurityPool(primaryWriteClient, pool.securityPoolAddress, 'yes', reportingBeforeEnd.startBondAttoRep, reportingBeforeEnd.startBondAttoRep, 'wallet')
+
+	await reportBootstrapProgress(onProgress, 'Disputing the initial report', 0.97)
+	const openedReporting = await getScenarioProtocol().loadReportingDetails(readClient, pool.securityPoolAddress, challengerAccount)
+	if (openedReporting.status !== 'active') throw new Error('Expected the escalation-in-progress game to be active')
+	// The game trims a deposit that would tie the leading side, so the dispute doubles the bond and takes the lead outright.
+	const disputeAttoRep = openedReporting.currentRequiredBond * 2n
+	const challengerWriteClient = createWriteClient(challengerAccount)
+	await getScenarioProtocol().approveErc20(challengerWriteClient, profile.genesisRepTokenAddress, pool.securityPoolAddress, disputeAttoRep, 'approveRep')
+	await getScenarioProtocol().reportOutcomeInSecurityPool(challengerWriteClient, pool.securityPoolAddress, 'no', disputeAttoRep, disputeAttoRep, 'wallet')
+
+	const disputedReporting = await getScenarioProtocol().loadReportingDetails(readClient, pool.securityPoolAddress, primaryAccount)
+	if (disputedReporting.status !== 'active' || disputedReporting.escalationEndTime <= disputedReporting.currentTime) throw new Error('Expected the disputed escalation game to stay open')
+	if (disputedReporting.questionOutcome !== 'none') throw new Error(`Expected the disputed question to stay unresolved, got ${disputedReporting.questionOutcome}`)
+	await reportBootstrapProgress(onProgress, 'Seeded escalation-in-progress scenario is ready', 0.98)
+}
+
+/** One pool repriced so your vault stays healthy but sits just above the security multiplier, beside a comfortably backed vault. */
+export async function seedNearMinimumVaultScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
+	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for near-minimum-vault')
+	const secondaryAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for near-minimum-vault')
+	const readClient = createReadClient()
+	await seedSecurityPool({
+		createReadClient,
+		createWriteClient,
+		memoryClient,
+		onProgress,
+		poolSpec: {
+			poolLabel: 'near-minimum-vault pool',
+			progressRange: { start: 0.78, end: 0.94 },
+			questionTitle: NEAR_MINIMUM_VAULT_QUESTION_TITLE,
+			readyLabel: 'Seeded the near-minimum vault',
+			vaults: [
+				{ accountAddress: primaryAccount, vaultRepBackingDepositAttoRep: NEAR_MINIMUM_VAULT_REP_DEPOSIT, underwritingLimitAttoEth: NEAR_MINIMUM_VAULT_COMMITMENT_ATTO_ETH },
+				{ accountAddress: secondaryAccount, vaultRepBackingDepositAttoRep: SECURITY_POOL_REP_DEPOSIT, underwritingLimitAttoEth: CAPACITY_OWNERSHIP_ATTO_REP },
+			],
+		},
+		profile,
+		seedTimestamp: await getSimulationChainTimestamp(memoryClient),
+	})
+	const pool = await loadRequiredSeededPoolByTitle(readClient, NEAR_MINIMUM_VAULT_QUESTION_TITLE)
+
+	await reportBootstrapProgress(onProgress, 'Repricing REP toward the vault minimum', 0.95)
+	await repriceSeededPool({ managerAddress: pool.managerAddress, memoryClient, price: NEAR_MINIMUM_VAULT_REPRICED_REP_ETH_PRICE, readClient, writeClient: createWriteClient(secondaryAccount) })
+	const vault = await loadRequiredSecurityVault(readClient, pool.securityPoolAddress, primaryAccount, primaryAccount)
+	if (vault.vaultAttoRepBacking !== NEAR_MINIMUM_VAULT_REP_DEPOSIT || vault.underwritingLimitAttoEth !== NEAR_MINIMUM_VAULT_COMMITMENT_ATTO_ETH) throw new Error('Expected the near-minimum vault to keep its seeded REP backing and commitment')
+	await reportBootstrapProgress(onProgress, 'Seeded near-minimum-vault scenario is ready', 0.98)
 }

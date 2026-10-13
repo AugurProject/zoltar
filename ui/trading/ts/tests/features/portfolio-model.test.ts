@@ -201,11 +201,17 @@ describe('portfolio overview', () => {
 		expect(overview.unvaluedCount).toBe(1)
 		expect(overview.pendingResolutionCount).toBe(0)
 		expect(portfolioOverview([entry({}, { lp: SET })], NOW).pendingResolutionCount).toBe(1)
-		expect(overview.actionItems.map(item => [item.kind, item.title])).toEqual([
-			['trading-closes', 'Closing'],
-			['redeem', 'Resolved'],
-			['settle', 'Forked'],
+		expect(overview.actionGroups.map(group => [group.title, group.deadline, group.items.map(item => item.kind)])).toEqual([
+			['Closing', NOW + 60n, ['trading-closes']],
+			['Resolved', undefined, ['redeem']],
+			['Forked', undefined, ['settle']],
 		])
-		expect(portfolioOverview([], NOW)).toEqual({ rows: [], positionCount: 0, totalValueAttoEth: 0n, unvaluedCount: 0, pendingResolutionCount: 0, actionItems: [] })
+		expect(portfolioOverview([], NOW)).toEqual({ rows: [], positionCount: 0, totalValueAttoEth: 0n, unvaluedCount: 0, pendingResolutionCount: 0, actionGroups: [] })
+	})
+
+	test('lists a market that needs several actions once, with each action', () => {
+		const overview = portfolioOverview([entry({ title: 'Forked', universeForkTime: 1n, systemState: 1 }, { yes: SET, lp: SET })], NOW)
+		expect(overview.actionGroups).toHaveLength(1)
+		expect(overview.actionGroups[0]?.items.map(item => item.kind)).toEqual(['settle', 'withdraw-liquidity'])
 	})
 })

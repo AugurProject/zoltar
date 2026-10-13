@@ -53,7 +53,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}
-									className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${showDepthClearingTick && clearingTick === point.tick ? ' is-clearing' : ''}`}
+									className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${showDepthClearingTick && clearingTick === point.tick ? ' is-clearing' : ''}${point.viewerBidAttoEth > 0n ? ' has-viewer-bid' : ''}`}
 									key={point.tick.toString()}
 									onClick={() => onSelectTick(point.tick)}
 									type='button'
@@ -64,6 +64,11 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 											<strong>{renderPriceValue(point.price)}</strong>
 											<div className='truth-auction-price-row-badges'>
 												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.yourBidPrice}</span> : undefined}
+												{point.viewerBidAttoEth > 0n ? (
+													<span className='truth-auction-ladder-yours'>
+														{point.viewerBidAttoEthIsLowerBound ? forkAuctionCopy.yourBidsAtPriceAtLeast : forkAuctionCopy.yourBidsAtPrice} <CurrencyValue value={point.viewerBidAttoEth} suffix={commonCopy.eth} />
+													</span>
+												) : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
 											</div>
 										</div>

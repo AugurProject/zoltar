@@ -189,6 +189,10 @@
 			"bun": "./ts/features/security-pools/lib/uiPriceOracle.ts",
 			"default": "./js/features/security-pools/lib/uiPriceOracle.js"
 		},
+		"./features/security-pools/lib/vaultHealth.js": {
+			"bun": "./ts/features/security-pools/lib/vaultHealth.ts",
+			"default": "./js/features/security-pools/lib/vaultHealth.js"
+		},
 		"./features/transactionPresentations.js": {
 			"bun": "./ts/features/transactionPresentations.tsx",
 			"default": "./js/features/transactionPresentations.js"

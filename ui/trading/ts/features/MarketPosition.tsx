@@ -8,11 +8,13 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as workflowCopy from '../copy/workflows.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import { BackingDetails } from './BackingDetails.js'
+import { isUnresolvedRedemptionBlocked } from '../lib/shareValue.js'
+import * as payoutCopy from '../copy/payout.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import type { TicketBalances, TicketWallet } from './LivePositionControls.js'
 
 function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, balanceState: BalanceState, market: LiveMarket) {
-	if (value !== undefined) return <OutcomeHolding amount={value} outcome={outcome} market={market} />
+	if (value !== undefined) return <OutcomeHolding amount={value} outcome={outcome} market={market} noteRedemption={false} />
 	// One loading line under the list speaks for all three cells.
 	if (balanceState === 'loading') return commonCopy.metricUnavailablePlaceholder
 	if (balanceState === 'error') return appCopy.unavailable
@@ -35,6 +37,8 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 	return (
 		<section className='market-position' aria-labelledby='market-position-heading' aria-busy={holdings.balanceState === 'loading'}>
 			<h3 id='market-position-heading'>{marketsCopy.yourPosition}</h3>
+			{/* Blocked redemption applies to every share alike, so it is said once, under the heading, and only to a wallet that holds shares. */}
+			{holdings.balances !== undefined && holdings.balances.yes + holdings.balances.no + holdings.balances.invalid > 0n && isUnresolvedRedemptionBlocked(market) ? <UserMessage className='detail market-position-note' detail={payoutCopy.shareRedemptionUnavailable} /> : undefined}
 			{/* Without a wallet there is no position to show; the ticket's primary button offers to connect. */}
 			{holdings.balanceState === 'disconnected' && holdings.balances === undefined ? (
 				<UserMessage className='market-position-disconnected' detail={marketsCopy.connectToSeePosition} />

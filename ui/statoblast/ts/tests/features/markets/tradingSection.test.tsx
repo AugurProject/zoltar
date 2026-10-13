@@ -921,7 +921,7 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(ethMetric, '1.5 ETH')).toHaveLength(1)
 	})
 
-	void test('blocks minting once the selected market has finalized', async () => {
+	void test('leaves minting out once the selected market has finalized, since it can never apply again', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -932,9 +932,18 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
-		expect(mintButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('This question has already finalized.')
+		expect(documentQueries.queryByRole('button', { name: 'Mint complete sets' })).toBeNull()
+		// Every other share action can still apply, so each stays in place with its reason when blocked.
+		expect(Array.from(document.querySelectorAll('.vault-action-launcher-grid .action-launcher-card button')).map(button => button.textContent)).toEqual(['Redeem complete sets', 'Migrate forked shares', 'Redeem resolved shares'])
+	})
+
+	void test('replaces empty holdings with one line once balances load as zero', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingDetails: createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 0n, shareBalances: createShareBalances({ invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }) }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.querySelector('.trading-holdings-empty')?.textContent).toBe('You hold no shares in this pool.')
+		expect(document.querySelector('.trading-holdings-hero')).toBeNull()
+		expect(document.querySelector('.ranked-bar-list')).toBeNull()
 	})
 
 	void test('shows mint write failures through the shared error notice', async () => {

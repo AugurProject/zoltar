@@ -1,6 +1,5 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getDisplayedLeadingEscalationOutcome } from '../lib/reporting.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -8,9 +7,10 @@ import { EscalationReminderLine } from './EscalationReminderLine.js'
 import * as copy from '../../../copy/reporting.js'
 import { isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { escalationExplanationHref, formatReportingDeadline, getViewerPositions } from '../lib/reportingViewerStatus.js'
+import { renderRepAmount } from './RepAmount.js'
 
 export function ReportingViewerStatus({ details, onTakeLead, disabled }: { details: ActiveReportingDetails; onTakeLead: (side: ReportingOutcomeKey, amount: bigint) => void; disabled: boolean }) {
-	const positions = getViewerPositions(details)
+	const positions = getViewerPositions(details, renderRepAmount)
 	if (positions.length === 0 || isPoolQuestionFinalized(details)) return undefined
 	const forked = details.hasReachedNonDecision || details.systemState !== 'operational'
 	const tied = getDisplayedLeadingEscalationOutcome(details.sides) === undefined
@@ -46,7 +46,7 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 			<>
 				{positions.map(position => (
 					<p key={position.side.key}>
-						<strong>{copy.forkViewerStake(position.side.label, formatCurrencyBalance(position.stake))}</strong>
+						<strong>{copy.forkViewerStake(position.side.label, renderRepAmount(position.stake))}</strong>
 					</p>
 				))}
 			</>
@@ -78,7 +78,7 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 	return (
 		<SectionBlock className='reporting-viewer-status' title={copy.yourPositions} variant='plain'>
 			{detail}
-			{!forked && tied ? positions.map(position => <p key={position.side.key}>{copy.forkViewerStake(position.side.label, formatCurrencyBalance(position.stake))}</p>) : undefined}
+			{!forked && tied ? positions.map(position => <p key={position.side.key}>{copy.forkViewerStake(position.side.label, renderRepAmount(position.stake))}</p>) : undefined}
 			<EscalationReminderLine key={details.securityPoolAddress} details={details} />
 		</SectionBlock>
 	)

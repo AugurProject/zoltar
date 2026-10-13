@@ -43,6 +43,11 @@ export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefi
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
 }
 
+/** A listed pool's mintable remainder, the figure the pool directory and the pool header both show: zero once an escalation game starts, the backing capacity is zero or unknown, or the complete-set exchange rate is undefined. */
+export function getPoolRemainingMintCapacity(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean; settlementCollateralAttoEth: bigint; shareTokenSupplyAttoShares: bigint }) {
+	return getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares)
+}
+
 /** The largest mint that fits both the remaining capacity and the wallet ETH left after the gas reserve. */
 export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined, remainingMintCapacityAttoEth: bigint | undefined) {
 	if (walletEthBalanceAttoEth === undefined || remainingMintCapacityAttoEth === undefined) return undefined

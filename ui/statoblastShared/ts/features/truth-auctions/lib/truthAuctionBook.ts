@@ -37,6 +37,10 @@ export type TruthAuctionDepthPoint = {
 	isSelected: boolean
 	isPreviewTick: boolean
 	submissionCount: bigint
+	/** The connected wallet's live bids at this price, so the ladder shows where your money sits. */
+	viewerBidAttoEth: bigint
+	/** True while some of the wallet's bids are not loaded yet, so `viewerBidAttoEth` is only a lower bound. */
+	viewerBidAttoEthIsLowerBound: boolean
 }
 
 type TruthAuctionBidSettlementEstimate = {
@@ -301,8 +305,24 @@ export function sortTruthAuctionTickSummariesDescending(tickSummaries: TruthAuct
 	})
 }
 
-export function buildTruthAuctionDepthPoints({ enteredBidTick, selectedBookTick, tickSummaries, truthAuction }: { enteredBidTick: bigint | undefined; selectedBookTick: bigint | undefined; tickSummaries: TruthAuctionTickSummary[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionDepthPoint[] {
+export function buildTruthAuctionDepthPoints({
+	enteredBidTick,
+	selectedBookTick,
+	tickSummaries,
+	truthAuction,
+	viewerBids = [],
+	viewerBidsIncomplete = false,
+}: {
+	enteredBidTick: bigint | undefined
+	selectedBookTick: bigint | undefined
+	tickSummaries: TruthAuctionTickSummary[]
+	truthAuction: TruthAuctionMetrics | undefined
+	viewerBids?: readonly TruthAuctionBidView[]
+	/** More of the wallet's bids exist than are loaded. */
+	viewerBidsIncomplete?: boolean
+}): TruthAuctionDepthPoint[] {
 	let cumulativeBidAttoEth = 0n
+	const viewerBidAttoEthAtTick = (tick: bigint) => viewerBids.reduce((total, bid) => (bid.tick === tick && !bid.refunded ? total + bid.bidAmountAttoEth : total), 0n)
 
 	return tickSummaries
 		.filter(tickSummary => tickSummary.active || tickSummary.currentTotalBidAttoEth > 0n)
@@ -317,6 +337,8 @@ export function buildTruthAuctionDepthPoints({ enteredBidTick, selectedBookTick,
 				isSelected: selectedBookTick === tickSummary.tick,
 				isPreviewTick: enteredBidTick !== undefined && enteredBidTick === tickSummary.tick,
 				submissionCount: tickSummary.submissionCount,
+				viewerBidAttoEth: viewerBidAttoEthAtTick(tickSummary.tick),
+				viewerBidAttoEthIsLowerBound: viewerBidsIncomplete,
 			}
 		})
 }

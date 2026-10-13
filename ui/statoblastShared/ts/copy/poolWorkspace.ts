@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as securityPoolCopy from './securityPool.js'
 
 export const poolDetails = 'Pool details'
@@ -32,6 +33,16 @@ export const lifecycleStepLabels = {
 	truthAuction: commonCopy.truthAuction,
 } as const
 export const lifecycleStepPosition = (step: number, total: number) => `${step.toString()} of ${total.toString()}`
+export const auctionEnds = 'Auction ends'
+export const lifecycleStepSkipped = 'skipped'
+
+export function formatSkippedLifecycleStep(label: string) {
+	return `${label} (${lifecycleStepSkipped})`
+}
+
+export const auctionEnded = 'Auction ended'
+export const ethBid = 'ETH bid'
+export const formatShareOfTarget = (percent: CopyTemplateValue) => `${percent}% of target`
 export const nextActions = 'Next actions'
 export const nothingToDoNow = 'Nothing needs your action on this pool right now.'
 export const deadlineLabel = 'By'
@@ -42,7 +53,7 @@ export const actionLabels = {
 	connectWallet: 'Connect a wallet to see actions for your positions',
 	depositRep: 'Deposit REP to back this pool',
 	escalationStake: 'Your escalation deposits are locked',
-	exitVaultCommitment: 'Set your commitment limit to 0 ETH to redeem vault REP',
+	exitVaultCommitment: 'Redeem your vault REP',
 	finalizeTruthAuction: 'Finalize the truth auction',
 	manageVault: 'Manage your vault',
 	migrateVault: 'Migrate your vault',

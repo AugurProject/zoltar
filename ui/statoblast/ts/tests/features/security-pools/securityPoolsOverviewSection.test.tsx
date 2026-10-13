@@ -764,15 +764,14 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
 		expect(rowText).toContain('/ 5.00 ETH')
-		expect(rowText).toContain('0 ETH remaining')
+		expect(document.querySelector('.pool-directory-row .pool-capacity-summary .progress-meter-detail')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('0 ETH remaining')
 	})
 
 	test('shows no remaining capacity when the complete-set exchange rate is undefined', async () => {
 		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n, totalUnderwritingLimitAttoEth: 8n * 10n ** 18n })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
-		expect(rowText).toContain('0 ETH remaining')
+		expect(document.querySelector('.pool-directory-row .pool-capacity-summary .progress-meter-detail')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('0 ETH remaining')
 	})
 
 	test('offers to open a pasted address that is downloaded but not listed in the active collection', async () => {

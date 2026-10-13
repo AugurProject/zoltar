@@ -2392,11 +2392,28 @@ html:has(.global-transaction-dialog-nonblocking) {
 	gap: var(--space-3);
 }
 
-/* Target rows carry status badges, not metrics, so they flow as content-sized chips. */
-.fork-target-picker .migration-outcome-metrics {
+/* A target row reads as one line: the child universe, then its status badges at the row's end. A disabled reason wraps onto its own line below them. */
+.fork-target-picker .migration-outcome-select {
+	padding: var(--space-3) var(--space-4);
+}
+
+.fork-target-picker .migration-outcome-copy {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--space-2);
+}
+
+.fork-target-picker .migration-outcome-label {
+	flex: 1 1 auto;
+}
+
+.fork-target-picker .migration-outcome-metrics {
+	display: contents;
+}
+
+.fork-target-picker .migration-outcome-metrics > :not(.badge) {
+	flex-basis: 100%;
 }
 
 .fork-target-shortcuts {

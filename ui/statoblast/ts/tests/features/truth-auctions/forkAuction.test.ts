@@ -403,6 +403,27 @@ void describe('fork auction helpers', () => {
 		expect(depthPoints.map(point => point.isSelected)).toEqual([true, false, false])
 		expect(depthPoints.map(point => point.isPreviewTick)).toEqual([false, false, true])
 		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])
+		expect(depthPoints.map(point => point.viewerBidAttoEth)).toEqual([0n, 0n, 0n])
+	})
+
+	void test('sums the connected wallet live bids at each depth price, leaving out refunded ones', () => {
+		const tickSummaries = sortTruthAuctionTickSummariesDescending([createTickSummary({ active: true, currentTotalBidAttoEth: 5n * ONE_UNIT, submissionCount: 3n, tick: 1n }), createTickSummary({ active: true, currentTotalBidAttoEth: 3n * ONE_UNIT, submissionCount: 1n, tick: 3n })])
+		const depthPoints = buildTruthAuctionDepthPoints({
+			enteredBidTick: undefined,
+			selectedBookTick: undefined,
+			tickSummaries,
+			truthAuction: createTruthAuction({ clearingTick: 3n, hitCap: true }),
+			viewerBids: [createBid({ bidIndex: 1n, bidAmountAttoEth: ONE_UNIT, tick: 1n }), createBid({ bidIndex: 2n, bidAmountAttoEth: 2n * ONE_UNIT, tick: 1n }), createBid({ bidIndex: 3n, bidAmountAttoEth: 4n * ONE_UNIT, refunded: true, tick: 1n })],
+		})
+
+		expect(depthPoints.map(point => [point.tick, point.viewerBidAttoEth])).toEqual([
+			[3n, 0n],
+			[1n, 3n * ONE_UNIT],
+		])
+		expect(depthPoints.every(point => !point.viewerBidAttoEthIsLowerBound)).toBe(true)
+		// While more of the wallet's bids are still to load, each total is only a lower bound.
+		const partial = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: createTruthAuction({ clearingTick: 3n, hitCap: true }), viewerBids: [createBid({ bidIndex: 1n, tick: 1n })], viewerBidsIncomplete: true })
+		expect(partial.map(point => point.viewerBidAttoEthIsLowerBound)).toEqual([true, true])
 	})
 
 	void test('derives provisional truth auction progress from loaded depth', () => {
@@ -851,12 +872,15 @@ void describe('fork auction helpers', () => {
 			{
 				bidder: walletAddress,
 				bidAmountAttoEth: 2n,
+				isViewer: false,
 				key: 'aggregate:11:1',
 				price: getTruthAuctionPriceAtTick(11n),
 				statusLabel: 'Winning',
 				statusToneClassName: 'is-success',
 			},
 		])
+		// The connected wallet's own bids are marked so the table can name them as yours.
+		expect(buildTruthAuctionBidRows({ accountAddress: walletAddress, bids: [createBid({ bidIndex: 1n, cumulativeBidAttoEth: 3n, bidAmountAttoEth: 2n, tick: 11n })], truthAuction: finalizedAuction }).map(row => row.isViewer)).toEqual([true])
 		expect(buildTruthAuctionBidRows({ bids: rows.map(row => createBid({ bidIndex: 1n, bidder: row.bidder, cumulativeBidAttoEth: 3n, bidAmountAttoEth: row.bidAmountAttoEth, tick: 11n })), truthAuction: undefined })).toEqual([])
 	})
 

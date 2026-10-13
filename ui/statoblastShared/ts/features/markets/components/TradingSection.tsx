@@ -7,6 +7,7 @@ import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLaun
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -98,6 +99,8 @@ export function TradingSection({
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	// Once balances load and every one is zero, a single line replaces the empty sets figure and three empty bars.
+	const holdsNoShares = shareBalances !== undefined && shareBalances.yesAttoShares === 0n && shareBalances.noAttoShares === 0n && shareBalances.invalidAttoShares === 0n
 	const outcomeBacking = (outcome: 'yes' | 'no' | 'invalid') => {
 		if (displayShareBalances === undefined) return undefined
 		return selectedPool?.questionOutcome === 'none' || selectedPool?.questionOutcome === outcome ? displayShareBalances[outcome] : 0n
@@ -270,16 +273,22 @@ export function TradingSection({
 			)}
 		</>
 	)
+	// Minting can never resume once the question has finalized, so its launcher is left out rather than shown disabled; every other action can still apply later and stays with its reason.
+	const questionFinalized = selectedPool !== undefined && selectedPool.questionOutcome !== 'none'
 	const tradingLaunchers: ReadinessAction[] = [
-		{
-			actionLabel: tradingCopy.mintCompleteSets,
-			description: tradingCopy.completeSetMintDescription,
-			key: 'mint-complete-sets',
-			readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.mintCompleteSets,
-			...(!walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
-			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
-		},
+		...(questionFinalized
+			? []
+			: [
+					{
+						actionLabel: tradingCopy.mintCompleteSets,
+						description: tradingCopy.completeSetMintDescription,
+						key: 'mint-complete-sets',
+						readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
+						title: tradingCopy.mintCompleteSets,
+						...(!walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
+						...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
+					} satisfies ReadinessAction,
+				]),
 		{
 			actionLabel: tradingCopy.redeemCompleteSets,
 			description: tradingCopy.completeSetBurnDescription,
@@ -319,51 +328,55 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			{/* Holdings beside the share actions, the same details-and-actions split as the Vaults tab. */}
+			{/* Holdings first, then one row of share actions with their buttons aligned across the cards. */}
 			<div className={selectedPool === undefined ? 'trading-workspace-layout is-single' : 'trading-workspace-layout'}>
 				{selectedPool === undefined ? undefined : (
 					<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
-						<div className='trading-holdings-stage'>
-							<div className='trading-holdings-hero'>
-								<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
-								<strong className='trading-holdings-value'>
-									<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} />
-									{displayMaxRedeemableCompleteSets === undefined ? undefined : (
-										<span className='trading-holdings-backing'>
-											(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
-										</span>
-									)}
-								</strong>
-								<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
+						{holdsNoShares ? (
+							<EmptyState className='trading-holdings-empty' title={tradingCopy.noSharesHeld} />
+						) : (
+							<div className='trading-holdings-stage'>
+								<div className='trading-holdings-hero'>
+									<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
+									<strong className='trading-holdings-value'>
+										<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} />
+										{displayMaxRedeemableCompleteSets === undefined ? undefined : (
+											<span className='trading-holdings-backing'>
+												(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
+											</span>
+										)}
+									</strong>
+									<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
+								</div>
+								<div className='trading-holdings-layout'>
+									<RankedBarList
+										className='trading-share-distribution'
+										emptyMessage={tradingCopy.walletBalancesUnavailable}
+										items={[
+											{
+												key: 'yes',
+												label: commonCopy.yes,
+												valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
+												...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
+											},
+											{
+												key: 'no',
+												label: commonCopy.no,
+												valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
+												...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
+											},
+											{
+												key: 'invalid',
+												label: commonCopy.invalid,
+												valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
+												...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
+											},
+										]}
+									/>
+									<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
+								</div>
 							</div>
-							<div className='trading-holdings-layout'>
-								<RankedBarList
-									className='trading-share-distribution'
-									emptyMessage={tradingCopy.walletBalancesUnavailable}
-									items={[
-										{
-											key: 'yes',
-											label: commonCopy.yes,
-											valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
-											...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
-										},
-										{
-											key: 'no',
-											label: commonCopy.no,
-											valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
-											...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
-										},
-										{
-											key: 'invalid',
-											label: commonCopy.invalid,
-											valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
-											...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
-										},
-									]}
-								/>
-								<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
-							</div>
-						</div>
+						)}
 					</SectionBlock>
 				)}
 

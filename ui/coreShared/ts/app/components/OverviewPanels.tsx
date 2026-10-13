@@ -56,7 +56,8 @@ export type OverviewPanelsProps = {
 	/** Interactive universe control, such as the shared universe switcher, shown in place of the plain universe label. */
 	universeControl?: ComponentChildren
 	universeForkTime?: bigint | undefined
-	universeHasForked?: boolean | undefined
+	/** Shows the app-wide notice that the active universe forked; an app leaves it off where its own view already states the fork. */
+	showUniverseForkedNotice?: boolean | undefined
 	/** Where the fork notice's "Migrate REP" action leads; each application links to its own migration flow. */
 	migrateRepHref?: string | undefined
 	universePresentation: UserMessagePresentation | undefined
@@ -179,7 +180,7 @@ export function OverviewPanels({
 	showWethBalance = false,
 	universeControl,
 	universeForkTime,
-	universeHasForked,
+	showUniverseForkedNotice,
 	universePresentation,
 	universeRepBalanceAttoRep,
 	isRefreshing,
@@ -251,7 +252,7 @@ export function OverviewPanels({
 					{accountControl}
 				</>
 			}
-			notices={universeHasForked ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
+			notices={showUniverseForkedNotice ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
 			footer={
 				universePresentation === undefined ? undefined : (
 					<StateHint

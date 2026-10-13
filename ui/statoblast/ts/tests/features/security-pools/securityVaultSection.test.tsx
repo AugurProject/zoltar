@@ -973,6 +973,7 @@ describe('SecurityVaultSection', () => {
 		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-success')
 		expect(within(document.body).getByText('Healthy')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('ok')).toBe(true)
 	})
 
 	test('colors associated REP per capacity yellow when the vault is near the security multiplier', async () => {
@@ -993,6 +994,7 @@ describe('SecurityVaultSection', () => {
 		const metricValue = within(document.body).getByText('2.05×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-warning')
 		expect(within(document.body).getByText('Near minimum')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('warning')).toBe(true)
 	})
 
 	test('colors associated REP per capacity red when the current vault health is underwater', async () => {
@@ -1013,6 +1015,7 @@ describe('SecurityVaultSection', () => {
 		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-danger')
 		expect(within(document.body).getByText('Underwater')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('danger')).toBe(true)
 	})
 
 	test('does not infer vault health text from associated REP per capacity when current health is unavailable', async () => {
@@ -1032,6 +1035,7 @@ describe('SecurityVaultSection', () => {
 
 		expect(within(document.body).queryByText('1.9×')).toBeNull()
 		expect(within(document.body).getByText('Health unavailable')).not.toBeNull()
+		expect(document.querySelector('.vault-health')?.classList.contains('muted')).toBe(true)
 		expect(within(document.body).queryByText('Healthy')).toBeNull()
 		expect(within(document.body).queryByText('Near minimum')).toBeNull()
 		expect(within(document.body).queryByText('Underwater')).toBeNull()

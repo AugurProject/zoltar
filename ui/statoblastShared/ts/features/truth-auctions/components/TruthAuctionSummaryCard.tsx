@@ -17,7 +17,8 @@ type TruthAuctionSummaryCardProps = {
 	displayedRepSoldAttoRep: bigint
 	/** Bidding has closed, so the end time reads in the past tense. */
 	ended: boolean
-	endsDisplay: ComponentChildren
+	/** Left out while the pool header already shows the auction deadline. */
+	endsDisplay: ComponentChildren | undefined
 	attoEthRaiseCap: bigint
 	ethRaisedProgress: number
 	maxAttoRepBeingSold: bigint
@@ -79,7 +80,7 @@ export function TruthAuctionSummaryCard({
 				</div>
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label={forkAuctionCopy.started}>{startedDisplay}</MetricField>
-					<MetricField label={ended ? forkAuctionCopy.ended : commonCopy.ends}>{endsDisplay}</MetricField>
+					{endsDisplay === undefined ? undefined : <MetricField label={ended ? forkAuctionCopy.ended : commonCopy.ends}>{endsDisplay}</MetricField>}
 					<MetricField label={forkAuctionCopy.clearingPrice}>{clearingPriceDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.minBid}>{<CurrencyValue value={minBidSizeAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					{reservePriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.reservePrice}>{reservePriceDisplay}</MetricField>}

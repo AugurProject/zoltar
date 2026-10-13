@@ -50,6 +50,10 @@ export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
 export const formatDepthChartPointLabel = ({ depth, price, status }: { depth: CopyTemplateValue; price: CopyTemplateValue; status: string | undefined }) => `Select bid price ${price}\u00a0ETH per REP. ${depth}\u00a0ETH bid at or above this price.${status === undefined ? '' : ` ${status}.`}`
 export const depthChartClearingStatus = 'Current clearing price'
 export const yourBidPrice = 'Your bid price'
+export const yourBidsAtPrice = 'Yours'
+/** Labels a partial total while more of the wallet's bids are still to load. */
+export const yourBidsAtPriceAtLeast = 'Yours ≥'
+export const bidderYou = 'You'
 export const depthChartClearingAndSelectedStatus = 'Current clearing price and your bid price'
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security pool for the ${outcomeLabel} universe does not exist.`
 export const migration = 'Migration'
@@ -150,6 +154,7 @@ export const formatMigratedAttoRepToOutcome = (outcomeLabel: CopyTemplateValue) 
 export const settlementCollateral = 'Settlement collateral'
 export const migrationStarted = 'Migration started'
 export const migrationEnds = 'Migration ends'
+export const migrationEnded = 'Migration ended'
 export const forkType = 'Fork type'
 export const advancedDiagnostics = 'Advanced diagnostics'
 export const totalPoolHeldRepAtForkAttoRep = 'Pool-held REP at fork'
@@ -158,7 +163,6 @@ export const escrowSourceRepAtForkAttoRep = 'Dispute-staked REP source at fork'
 export const formatSettleSelectedValueForkCarriedDeposits = (outcomeLabel: CopyTemplateValue) => `Settle selected ${outcomeLabel} parent deposits`
 export const settlingForkCarriedDepositsTruncated = 'Settling parent deposits…'
 export const forkLifecycleStages = 'Fork lifecycle stages'
-export const viewing = 'Viewing'
 export const triggeredAt = 'Triggered at'
 export const forkNotTriggered = 'Fork not triggered'
 export const yourMigrationBalances = 'Your migration balances'

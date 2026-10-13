@@ -76,6 +76,38 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 		expect(reportingLoadCalls).toBe(1)
 	})
 
+	test('autoloads reporting on any tab once an escalation has started, so the header knows whether the pool is forked', async () => {
+		let reportingLoadCalls = 0
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b2')
+		await renderWorkflow(
+			createLoadedPoolProps({
+				checkedSecurityPoolAddress: selectedPoolAddress,
+				reporting: createReportingProps({ onLoadReporting: () => (reportingLoadCalls += 1), reportingForm: yesReportingForm(selectedPoolAddress) }),
+				securityPoolAddress: selectedPoolAddress,
+				securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), ordinaryEscalationGameStarted: true, securityPoolAddress: selectedPoolAddress })],
+				selectedPoolView: 'vaults',
+			}),
+			atChainTimeOne,
+		)
+		expect(reportingLoadCalls).toBe(1)
+	})
+
+	test('leaves reporting unloaded outside the reporting tab while no escalation has started', async () => {
+		let reportingLoadCalls = 0
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b3')
+		await renderWorkflow(
+			createLoadedPoolProps({
+				checkedSecurityPoolAddress: selectedPoolAddress,
+				reporting: createReportingProps({ onLoadReporting: () => (reportingLoadCalls += 1), reportingForm: yesReportingForm(selectedPoolAddress) }),
+				securityPoolAddress: selectedPoolAddress,
+				securityPools: [endedPoolAt(selectedPoolAddress)],
+				selectedPoolView: 'vaults',
+			}),
+			atChainTimeOne,
+		)
+		expect(reportingLoadCalls).toBe(0)
+	})
+
 	test('re-arms reporting autoload after leaving and re-entering the reporting tab', async () => {
 		let reportingLoadCalls = 0
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
@@ -123,6 +155,38 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 		await rerender({ ...baseProps, selectedPoolView: 'fork-migration' })
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry reporting' }))
 		expect(reportingLoadCalls).toBe(3)
+	})
+
+	test('loads a forked pool’s fork details on any tab, so its header deadline does not depend on visiting the fork workflow', async () => {
+		let forkLoadCalls = 0
+		const onLoadForkAuction = () => {
+			forkLoadCalls += 1
+		}
+		const forkedPool = createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' })
+		const { rerender } = await renderWorkflow(createLoadedPoolProps({ forkAuction: createForkAuctionProps({ onLoadForkAuction }), securityPools: [forkedPool], selectedPoolView: 'vaults' }))
+		expect(forkLoadCalls).toBe(1)
+		// While the read is in flight, the deadline tile holds its place with a loading value instead of leaving a gap.
+		await rerender(createLoadedPoolProps({ forkAuction: createForkAuctionProps({ loadingForkAuctionDetails: true, onLoadForkAuction }), securityPools: [forkedPool], selectedPoolView: 'vaults' }))
+		const deadlineTile = Array.from(document.querySelectorAll('.pool-status-strip .pool-strip-figure')).find(tile => tile.querySelector('.metric-label')?.textContent === 'Migration ends')
+		expect(deadlineTile?.querySelector('.loading-value')).not.toBeNull()
+	})
+
+	test('loads fork details for a parent pool in a forked universe, whose registry state is still operational', async () => {
+		let forkLoadCalls = 0
+		await renderWorkflow(createLoadedPoolProps({ forkAuction: createForkAuctionProps({ onLoadForkAuction: () => (forkLoadCalls += 1) }), securityPools: [createSelectedPool({ universeHasForked: true })], selectedPoolView: 'vaults' }))
+		expect(forkLoadCalls).toBe(1)
+	})
+
+	test('leaves no spinning deadline tile once a fork-details read has failed', async () => {
+		const forkedPool = createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' })
+		await renderWorkflow(createLoadedPoolProps({ forkAuction: forkAuctionFailure(() => undefined), securityPools: [forkedPool], selectedPoolView: 'vaults' }))
+		expect(document.querySelector('.pool-status-strip .loading-value')).toBeNull()
+	})
+
+	test('leaves an operational pool’s fork details unloaded outside the fork workflow', async () => {
+		let forkLoadCalls = 0
+		await renderWorkflow(createLoadedPoolProps({ forkAuction: createForkAuctionProps({ onLoadForkAuction: () => (forkLoadCalls += 1) }), selectedPoolView: 'vaults' }))
+		expect(forkLoadCalls).toBe(0)
 	})
 
 	test('stabilizes a failed fork autoload until retry or the selected pool changes', async () => {

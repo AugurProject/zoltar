@@ -1,5 +1,6 @@
 import { getDisplayedLeadingEscalationOutcome, getReportingOutcomeLabel } from './reporting.js'
-import { formatCurrencyBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmount, formatRelativeTimestamp, formatTimestamp, withApproximateMarker, type AmountRounding } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
@@ -11,7 +12,12 @@ export function formatReportingDeadline(deadline: bigint, currentTime: bigint) {
 	return `${formatTimestamp(deadline).replace(/:\d{2} UTC$/, ' UTC')} · ${formatRelativeTimestamp(deadline, currentTime)}`
 }
 
-export function getViewerPositions(details: ActiveReportingDetails) {
+/**
+ * The viewer's position on each side they backed. `renderAmount` presents a REP amount, with its unit, inside the status
+ * sentences: the UI passes a rounded value that shows the exact amount on hover, and plain text passes a rounded string.
+ * The minimum to take the lead is rendered rounding `up`, so adding the shown figure always takes the lead.
+ */
+export function getViewerPositions<Amount>(details: ActiveReportingDetails, renderAmount: (attoRep: bigint, rounding?: AmountRounding) => Amount) {
 	const leader = getDisplayedLeadingEscalationOutcome(details.sides)
 	const deadline = formatReportingDeadline(details.escalationEndTime, details.currentTime)
 	return details.sides
@@ -23,14 +29,19 @@ export function getViewerPositions(details: ActiveReportingDetails) {
 			const leading = leader === side.key
 			const minimum = getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 			const lead = leading ? copy.winningStatusLead(side.label) : copy.losingStatusLead(side.label)
-			const detail = leading ? copy.winningStatusDetail(formatCurrencyBalance(stake), formatCurrencyBalance(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? undefined : formatCurrencyBalance(minimum), deadline, formatCurrencyBalance(stake))
-			let positionStatus = copy.losingPosition
-			if (details.hasReachedNonDecision || details.systemState !== 'operational') positionStatus = copy.forkPosition
-			else if (worth === undefined) positionStatus = copy.tiedPosition
-			else if (leading) positionStatus = copy.winningPosition(formatCurrencyBalance(worth))
+			const detail: readonly (string | Amount)[] = leading ? copy.winningStatusDetail(renderAmount(stake), renderAmount(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? undefined : renderAmount(minimum, 'up'), deadline, renderAmount(stake))
+			let positionStatus: readonly (string | Amount)[] = copy.losingPosition(renderAmount(0n))
+			if (details.hasReachedNonDecision || details.systemState !== 'operational') positionStatus = [copy.forkPosition]
+			else if (worth === undefined) positionStatus = [copy.tiedPosition]
+			else if (leading) positionStatus = copy.winningPosition(renderAmount(worth))
 			return { side, stake, worth, leading, minimum, lead, detail, positionStatus }
 		})
 		.sort((a, b) => Number(b.leading) - Number(a.leading))
+}
+
+/** A REP amount as rounded plain text, for sentences outside the page such as a calendar reminder. */
+function formatRoundedRep(attoRep: bigint, rounding: AmountRounding = 'nearest') {
+	return `${withApproximateMarker(formatAmount(attoRep, { rounding }))} ${commonCopy.rep}`
 }
 
 export function getViewerStatusSentence(details: ActiveReportingDetails) {
@@ -38,7 +49,7 @@ export function getViewerStatusSentence(details: ActiveReportingDetails) {
 	const leader = getDisplayedLeadingEscalationOutcome(details.sides)
 	if (details.sides.every(side => side.balance === 0n)) return `${copy.tieStatusLead} ${copy.zeroBalanceStatusDetail}`
 	if (leader === undefined) return `${copy.tieStatusLead} ${copy.tieStatusDetail(formatReportingDeadline(details.escalationEndTime, details.currentTime))}${copy.tiesResolve}${copy.tieStatusEnd}`
-	const positions = getViewerPositions(details)
+	const positions = getViewerPositions(details, formatRoundedRep)
 	if (positions.length === 0) return copy.formatLeaderWinsNext(formatReportingDeadline(details.escalationEndTime, details.currentTime), getReportingOutcomeLabel(leader))
-	return positions.map(position => `${position.lead} ${position.detail}`).join(' ')
+	return positions.map(position => `${position.lead} ${position.detail.join('')}`).join(' ')
 }

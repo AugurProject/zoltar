@@ -197,6 +197,25 @@ describe('ForkAuctionSection', () => {
 		expect(document.body.textContent).not.toContain('Select a pool to inspect')
 	})
 
+	test('keeps migration labelled as ending at its exact deadline, matching its open window', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ForkAuctionSection, createProps({ currentStageView: 'migration', currentTimestamp: 300n, forkAuctionDetails: createForkAuctionDetails({ currentTime: 300n, migrationEndsAt: 300n, systemState: 'forkMigration', truthAuctionStartedAt: 0n }), securityPools: [createChildPool({ truthAuctionStartedAt: 0n })] })),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const labels = Array.from(document.querySelectorAll('.migration-summary-card .metric-label')).map(element => element.textContent)
+		expect(labels).toContain('Migration ends')
+		expect(labels).not.toContain('Migration ended')
+	})
+
+	test('ends migration at its deadline when the selected outcome’s truth auction started after it', async () => {
+		// The auction started at 200s, after the 100s deadline, so migration ended at the deadline rather than at the auction start.
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ currentTimestamp: 300n, forkAuctionDetails: createForkAuctionDetails({ currentTime: 300n, migrationEndsAt: 100n }), securityPools: [createChildPool({ truthAuctionStartedAt: 200n })] })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		// The end has passed, so it reads as ended, matching the pool header.
+		const migrationEnded = Array.from(document.querySelectorAll('.migration-summary-card .metric-label')).find(element => element.textContent === 'Migration ended')
+		expect(migrationEnded?.nextElementSibling?.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:01:40.000Z')
+	})
+
 	test('renders the embedded fork workflow navigator and reports stage changes', async () => {
 		const onSelectedStageViewChange = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps({ onSelectedStageViewChange })))
@@ -216,19 +235,17 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('View stage')).toBeNull()
 		expect(documentQueries.queryByText('Current stage')).toBeNull()
 		expect(documentQueries.queryByText('This step becomes active once migration is underway.')).toBeNull()
-		expect(forkTriggeredTab.querySelector('.fork-workflow-stage-icon')).not.toBeNull()
+		// Sub-tabs carry no stage glyphs, so a check mark never suggests an upcoming stage is done.
+		expect(forkTriggeredTab.querySelector('.fork-workflow-stage-icon')).toBeNull()
 		expect(migrationTab.className.includes('is-selected')).toBe(true)
 		expect(migrationTab.className.includes('is-complete')).toBe(true)
-		expect(within(migrationTab).getByText('Viewing')).not.toBeNull()
+		expect(migrationTab.getAttribute('aria-selected')).toBe('true')
 		expect(auctionTab.getAttribute('aria-current')).toBe('step')
 		expect(auctionTab.className.includes('is-current')).toBe(true)
 		expect(settlementTab.className.includes('is-upcoming')).toBe(true)
 		expect(documentQueries.queryByRole('tab', { name: 'New Security pools' })).toBeNull()
-		const separators = Array.from(document.body.querySelectorAll('.fork-workflow-stage-separator'))
-		expect(separators).toHaveLength(3)
-		expect(separators[0]?.className.includes('is-complete')).toBe(true)
-		expect(separators[1]?.className.includes('is-complete')).toBe(true)
-		expect(separators[2]?.className.includes('is-upcoming')).toBe(true)
+		// The header's stage bar carries progress, so the sub-tabs have no arrows between them.
+		expect(document.body.querySelectorAll('.fork-workflow-stage-separator')).toHaveLength(0)
 
 		fireEvent.click(settlementTab)
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('settlement')
@@ -240,7 +257,7 @@ describe('ForkAuctionSection', () => {
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('auction')
 	})
 
-	test('shows Viewing on the currently selected migration tab even when migration is also the current stage', async () => {
+	test('marks the selected migration tab as selected even when migration is also the current stage', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -259,7 +276,9 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		const migrationTab = documentQueries.getByRole('tab', { name: 'Migration' })
-		expect(within(migrationTab).getByText('Viewing')).not.toBeNull()
+		expect(migrationTab.getAttribute('aria-selected')).toBe('true')
+		expect(migrationTab.getAttribute('aria-current')).toBe('step')
+		expect(migrationTab.className.includes('is-selected')).toBe(true)
 	})
 
 	test('shows the fork trigger timestamp when the system is forking', async () => {
@@ -1126,7 +1145,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('1970-01-01 00:00:01 UTC')).not.toBeNull()
 		expect(documentQueries.getByText('Ends')).not.toBeNull()
 		expect(documentQueries.getByText('1970-01-08 00:00:01 UTC')).not.toBeNull()
-		expect(documentQueries.getByText('(in 6d 23h)')).not.toBeNull()
+		expect(documentQueries.getByText('in 6d 23h')).not.toBeNull()
 		const truthAuctionHeading = documentQueries.getByRole('heading', { name: 'Truth auction' })
 		const truthAuctionCard = truthAuctionHeading.closest('.section-block')
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
@@ -1134,6 +1153,64 @@ describe('ForkAuctionSection', () => {
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 		expect(within(truthAuctionCard).queryByText('Pending refund')).toBeNull()
 		expect(within(truthAuctionCard).getByText('The ETH target has not been reached, so there is no clearing price yet. Once it is reached, a single clearing price decides which bids win.')).not.toBeNull()
+	})
+
+	test('leaves the truth auction end to the pool header while the pool workspace shows its own auction', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					currentTimestamp: 5n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedBidAttoEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							bidAtClearingTickAttoEth: 0n,
+							attoEthRaiseCap: 1n,
+							attoEthRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxAttoRepBeingSold: 1n,
+							minBidSizeAttoEth: 1n,
+							attoRepPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalAttoRepPurchased: 0n,
+							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningAttoEth: 0n,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					lifecycleStateOverride: 'forkTruthAuction',
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summary = within(document.body).getByRole('heading', { name: 'Truth auction' }).closest('.section-block')?.querySelector('.fork-workflow-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected truth auction summary')
+		expect(within(summary).getByText('Started')).not.toBeNull()
+		expect(within(summary).queryByText('Ends')).toBeNull()
+		expect(within(summary).queryByText('in 6d 23h')).toBeNull()
 	})
 
 	test('keeps refund withdrawal disabled while loading, then shows the credited amount beside an enabled action', async () => {
@@ -1796,7 +1873,7 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('1970-01-01 00:00:01 UTC')).not.toBeNull()
-		expect(documentQueries.getByText('(16m ago)')).not.toBeNull()
+		expect(documentQueries.getByText('16m ago')).not.toBeNull()
 	})
 
 	test('shows the migration start timestamp in migration status', async () => {
@@ -1824,7 +1901,7 @@ describe('ForkAuctionSection', () => {
 		const migrationStartedMetric = migrationStartedLabel.closest('div')
 		if (!(migrationStartedMetric instanceof HTMLElement)) throw new Error('Expected migration started metric')
 		expect(within(migrationStartedMetric).getByText('1970-01-01 00:00:02 UTC')).not.toBeNull()
-		expect(within(migrationStartedMetric).getByText('(8s ago)')).not.toBeNull()
+		expect(within(migrationStartedMetric).getByText('8s ago')).not.toBeNull()
 		const migrationHeading = documentQueries.getByRole('heading', { name: 'Migration status' })
 		const migrationCard = migrationHeading.closest('.section-block')
 		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
@@ -1832,6 +1909,30 @@ describe('ForkAuctionSection', () => {
 		expect(within(migrationCard).getByText('REP at fork')).not.toBeNull()
 		expect(within(migrationCard).getByText('REP migrated to Yes')).not.toBeNull()
 		expect(within(migrationCard).getByText('Settlement collateral')).not.toBeNull()
+	})
+
+	test('leaves the migration deadline and settlement collateral to the pool header while the pool workspace shows a migrating pool', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					currentTimestamp: 10n,
+					forkAuctionDetails: createForkAuctionDetails({ currentTime: 10n, migrationEndsAt: 4_838_402n, systemState: 'forkMigration', truthAuctionStartedAt: 0n }),
+					lifecycleStateOverride: 'forkMigration',
+					selectedStageView: 'migration',
+					universeForkTime: 2n,
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const migrationCard = within(document.body).getByRole('heading', { name: 'Migration status' }).closest('.section-block')
+		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
+		expect(within(migrationCard).getByText('REP at fork')).not.toBeNull()
+		expect(within(migrationCard).getByText('Migration started')).not.toBeNull()
+		expect(within(migrationCard).queryByText('Settlement collateral')).toBeNull()
+		expect(within(migrationCard).queryByText(/^Migration end/)).toBeNull()
 	})
 
 	test('reports REP migrated into the selected outcome child pool instead of the parent pool own migrated amount', async () => {

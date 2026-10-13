@@ -34,24 +34,25 @@ function LockedCaption({ balances, outcome }: { balances: LiveBalances; outcome:
 	return lockedMigratedBalance(balances, outcome) === 0n ? null : <small className='payout-caption holding-locked'>{marketsCopy.lockedAfterMigration}</small>
 }
 
+/** A row's holdings; when redemption is blocked, the row's value caption already says the shares must migrate, so no holding repeats it. */
 function PortfolioHoldings({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
 	return (
 		<ul className='portfolio-holdings'>
 			{balances.yes === 0n ? undefined : (
 				<li className='portfolio-holding-yes'>
-					<OutcomeHolding amount={balances.yes} outcome={shareOutcome.yes} market={market} />
+					<OutcomeHolding amount={balances.yes} outcome={shareOutcome.yes} market={market} noteRedemption={false} />
 					<LockedCaption balances={balances} outcome={shareOutcome.yes} />
 				</li>
 			)}
 			{balances.no === 0n ? undefined : (
 				<li className='portfolio-holding-no'>
-					<OutcomeHolding amount={balances.no} outcome={shareOutcome.no} market={market} />
+					<OutcomeHolding amount={balances.no} outcome={shareOutcome.no} market={market} noteRedemption={false} />
 					<LockedCaption balances={balances} outcome={shareOutcome.no} />
 				</li>
 			)}
 			{balances.invalid === 0n ? undefined : (
 				<li>
-					<OutcomeHolding amount={balances.invalid} outcome={shareOutcome.invalid} market={market} />
+					<OutcomeHolding amount={balances.invalid} outcome={shareOutcome.invalid} market={market} noteRedemption={false} />
 					<LockedCaption balances={balances} outcome={shareOutcome.invalid} />
 				</li>
 			)}
@@ -89,8 +90,8 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 			{balances.lp === 0n ? undefined : (
 				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
-						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValue(yesClaim, shareOutcome.yes, market)}</MetricField>
-						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValue(noClaim, shareOutcome.no, market)}</MetricField>
+						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValue(yesClaim, shareOutcome.yes, market, 4, 'nearest', { noteRedemption: false })}</MetricField>
+						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValue(noClaim, shareOutcome.no, market, 4, 'nearest', { noteRedemption: false })}</MetricField>
 						<MetricField label={portfolioCopy.claimInsuredByInvalid}>{formatCompleteSetWithValue(coveredSets, market)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>
@@ -181,7 +182,7 @@ export function LivePortfolio({
 				/>
 			) : null}
 			{showSummary ? <PortfolioSummary overview={overview} /> : null}
-			{showSummary ? <PortfolioActionItems items={overview.actionItems} nowSeconds={nowSeconds} /> : null}
+			{showSummary ? <PortfolioActionItems groups={overview.actionGroups} nowSeconds={nowSeconds} /> : null}
 			{visibleEntries.length === 0 ? null : (
 				<ul className='portfolio-position-list' aria-label={portfolioCopy.positions}>
 					{overview.rows.map(row => {

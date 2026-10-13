@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { buildPoolPageRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
-import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, isForkWorkflowPrimary } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolLifecycle.js'
+import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkWorkflowPrimary } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolLifecycle.js'
 import { derivePoolActionItems, type PoolActionInput } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolActions.js'
 import { derivePoolViewModel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolViewModel.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
@@ -48,6 +48,15 @@ describe('pool locations', () => {
 })
 
 describe('pool lifecycle stage', () => {
+	test('marks the stages a settled pool passed over as skipped', () => {
+		expect(getSkippedLifecycleSteps({ escalationStarted: false, hasForkActivity: false, step: 'settled' })).toEqual(['escalation', 'forkMigration', 'truthAuction'])
+		expect(getSkippedLifecycleSteps({ escalationStarted: true, hasForkActivity: false, step: 'settled' })).toEqual(['forkMigration', 'truthAuction'])
+		// A pool that settled through a fork went through every stage, and an unsettled pool has not skipped anything yet.
+		expect(getSkippedLifecycleSteps({ escalationStarted: true, hasForkActivity: true, step: 'settled' })).toEqual([])
+		expect(getSkippedLifecycleSteps({ escalationStarted: false, hasForkActivity: false, step: 'escalation' })).toEqual([])
+		expect(getSkippedLifecycleSteps({ escalationStarted: false, hasForkActivity: false, step: undefined })).toEqual([])
+	})
+
 	test('maps the lifecycle and reporting axes onto Operational → Escalation → Fork & migration → Truth auction → Settled', () => {
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: false })).toBe('operational')
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: true })).toBe('escalation')
@@ -191,6 +200,14 @@ describe('derivePoolViewModel', () => {
 		expect(model.view).toBe('fork-workflow')
 		expect(model.forkWorkflowPrimary).toBe(true)
 		expect(model.actionItems.find(item => item.id === 'reviewForkMigration')?.deadline).toBe(900n)
+	})
+
+	test('skips the fork stages of a pool that settled after an escalation without a fork', () => {
+		const settled = derive({ securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 10n }), ordinaryEscalationGameStarted: true, questionOutcome: 'yes', securityPoolAddress: POOL })] })
+		expect(settled.lifecycleStep).toBe('settled')
+		expect(settled.skippedLifecycleSteps).toEqual(['forkMigration', 'truthAuction'])
+		const operational = derive({ securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 100n }), securityPoolAddress: POOL })] })
+		expect(operational.skippedLifecycleSteps).toEqual([])
 	})
 
 	test('keeps an explicit tab and does not act on an unloaded pool', () => {

@@ -48,6 +48,16 @@ describe('TimestampValue', () => {
 		expect(document.body.querySelector('.timestamp-value-relative')?.textContent).toContain('ago')
 	})
 
+	test('relative-first timestamps lead with the relative time and keep UTC beneath it', async () => {
+		const renderedComponent = await renderIntoDocument(<TimestampValue currentTimestamp={1_000n} relativeFirst timestamp={1_060n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const time = document.querySelector('time.is-relative-first')
+		expect(time?.getAttribute('datetime')).toBe('1970-01-01T00:17:40.000Z')
+		expect(time?.querySelector('.timestamp-value-lead')?.textContent).toBe('in 1m')
+		expect(time?.querySelector('.timestamp-value-absolute')?.textContent).toBe(formatTimestamp(1_060n))
+		expect(document.querySelector('.timestamp-value-relative')).toBeNull()
+	})
+
 	test('absolute-only timestamps retain semantic time and omit relative text', async () => {
 		const renderedComponent = await renderIntoDocument(<TimestampValue timestamp={1_060n} relative={false} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

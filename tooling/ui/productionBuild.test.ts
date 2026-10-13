@@ -905,7 +905,9 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	}
 	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (ended pool)')
-	await driver.waitForBodyText('FINALIZED AS YES')
+	// The badge says the pool finalized; the header strip beside it leads with the outcome.
+	await driver.waitForBodyText('FINALIZED')
+	await driver.waitForBodyText('Outcome\nYes')
 	await driver.waitForButtonEnabled('Open vaults')
 	await driver.clickButton('Open vaults')
 	await driver.waitForBodyWithoutText('Loading vault details…')

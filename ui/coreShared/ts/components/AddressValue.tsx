@@ -16,6 +16,8 @@ export type AddressWidthConstraint = {
 
 type AddressValueProps = {
 	address: string | undefined
+	/** Always shows the short form, for compact rows where the full address would only push the copy icon away; the full address stays in the title, the copy label, and visually hidden text. */
+	abbreviated?: boolean
 	className?: string
 	compactAbbreviation?: boolean
 	copyable?: boolean
@@ -23,7 +25,7 @@ type AddressValueProps = {
 	widthConstraint?: AddressWidthConstraint | undefined
 }
 
-function AddressText({ address, compactAbbreviation, responsiveAbbreviation, widthConstraint }: { address: string; compactAbbreviation: boolean; responsiveAbbreviation: boolean; widthConstraint?: AddressWidthConstraint | undefined }) {
+function AddressText({ alwaysAbbreviated, address, compactAbbreviation, responsiveAbbreviation, widthConstraint }: { alwaysAbbreviated: boolean; address: string; compactAbbreviation: boolean; responsiveAbbreviation: boolean; widthConstraint?: AddressWidthConstraint | undefined }) {
 	const container = useRef<HTMLSpanElement>(null)
 	const full = useRef<HTMLSpanElement>(null)
 	const [abbreviated, setAbbreviated] = useState(false)
@@ -46,6 +48,14 @@ function AddressText({ address, compactAbbreviation, responsiveAbbreviation, wid
 		if (widthConstraint?.control.current) observer.observe(widthConstraint.control.current)
 		return () => observer.disconnect()
 	}, [address, responsiveAbbreviation, widthConstraint])
+	// The short form is what sighted users read; the full address stays in the text for assistive technology and text search.
+	if (alwaysAbbreviated)
+		return (
+			<>
+				<span className='visually-hidden'>{address}</span>
+				<span aria-hidden='true'>{compactAbbreviation ? abbreviateAddress(address, 6, 4) : abbreviateAddress(address)}</span>
+			</>
+		)
 	if (!responsiveAbbreviation) return <>{address}</>
 	return (
 		<span className={`address-value-text${widthConstraint === undefined ? '' : ' address-value-fit-content'}`} data-abbreviated={abbreviated} ref={container}>
@@ -59,7 +69,7 @@ function AddressText({ address, compactAbbreviation, responsiveAbbreviation, wid
 	)
 }
 
-export function ReadOnlyAddressValue({ address, className = '', compactAbbreviation = false, responsiveAbbreviation = true, widthConstraint }: Omit<AddressValueProps, 'copyable'>) {
+export function ReadOnlyAddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, responsiveAbbreviation = true, widthConstraint }: Omit<AddressValueProps, 'copyable'>) {
 	if (address === undefined) {
 		const placeholder = getMetricPlaceholderPresentation(address)?.placeholder
 		return (
@@ -70,20 +80,20 @@ export function ReadOnlyAddressValue({ address, className = '', compactAbbreviat
 	}
 	return (
 		<span className={`address-value ${className}`} title={address}>
-			<AddressText address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
+			<AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
 		</span>
 	)
 }
 
-export function AddressValue({ address, className = '', compactAbbreviation = false, copyable = true, responsiveAbbreviation = true, widthConstraint }: AddressValueProps) {
+export function AddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, copyable = true, responsiveAbbreviation = true, widthConstraint }: AddressValueProps) {
 	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
 
-	if (address === undefined || !copyable) return <ReadOnlyAddressValue address={address} className={className} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
+	if (address === undefined || !copyable) return <ReadOnlyAddressValue abbreviated={abbreviated} address={address} className={className} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
 
 	return (
 		<span className='copy-value-wrap'>
 			<button type='button' className={`address-value copyable ${className}`} data-copied={copied.value} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
-				<AddressText address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
+				<AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} responsiveAbbreviation={responsiveAbbreviation} widthConstraint={widthConstraint} />
 				<CopyGlyph />
 			</button>
 			<CopyStatus copied={copied.value} message={commonCopy.copiedAddress} />

@@ -1,8 +1,9 @@
-import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+import { getAssociatedRepPerCapacityBps } from '../lib/vaultHealth.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import { useMemo, useRef } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -20,6 +21,20 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 	variant?: 'embedded' | 'record'
 }
 
+/** The full card width is the stable slot, so a shortened address keeps its copy glyph right after the visible text. */
+function SelectedVaultAddress({ address }: { address: string }) {
+	const slot = useRef<HTMLSpanElement>(null)
+	const control = useRef<HTMLSpanElement>(null)
+	const widthConstraint = useMemo(() => ({ control, slot }), [])
+	return (
+		<span className='selected-vault-address' ref={slot}>
+			<span className='selected-vault-address-control' ref={control}>
+				<AddressValue address={address} widthConstraint={widthConstraint} />
+			</span>
+		</span>
+	)
+}
+
 export function SelectedVaultSummarySection({
 	repPerEthPrice,
 	repPerEthSource,
@@ -32,8 +47,7 @@ export function SelectedVaultSummarySection({
 	selectedVaultIsOwnedByAccount,
 	variant = 'record',
 }: SelectedVaultSummarySectionProps) {
-	const requiredBaseAttoRep = repPerEthPrice === undefined || repPerEthPrice <= 0n ? undefined : ceilDiv(underwritingLimitAttoEth * repPerEthPrice, 10n ** 18n)
-	const associatedRepPerCapacityBps = requiredBaseAttoRep === undefined || requiredBaseAttoRep === 0n ? undefined : ((securityVaultDetails.vaultAttoRepBacking + securityVaultDetails.disputeStakedAttoRep) * 10_000n) / requiredBaseAttoRep
+	const associatedRepPerCapacityBps = getAssociatedRepPerCapacityBps({ disputeStakedAttoRep: securityVaultDetails.disputeStakedAttoRep, repPerEthPrice, underwritingLimitAttoEth, vaultAttoRepBacking: securityVaultDetails.vaultAttoRepBacking })
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 	const repTokenSymbol = securityVaultDetails.repTokenSymbol ?? commonCopy.rep
 	const embeddedContent = (
@@ -103,10 +117,8 @@ export function SelectedVaultSummarySection({
 			</SectionBlock>
 		)
 	return (
-		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} surface='flat' title={selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails} variant='record'>
-			<span className='selected-vault-address'>
-				<AddressValue address={securityVaultDetails.vaultAddress} responsiveAbbreviation />
-			</span>
+		<EntityCard badge={<Badge tone='muted'>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} surface='flat' title={selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails} variant='record'>
+			<SelectedVaultAddress address={securityVaultDetails.vaultAddress} />
 			{gridContent}
 		</EntityCard>
 	)

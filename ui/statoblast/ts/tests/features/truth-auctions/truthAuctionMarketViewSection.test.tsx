@@ -55,6 +55,35 @@ describe('TruthAuctionMarketViewSection', () => {
 		expect(document.querySelectorAll('[data-message-placement] .loading-value[role="status"]')).toHaveLength(1)
 	})
 
+	test('marks the ladder prices that hold the connected wallet bids with their total', async () => {
+		const point = { cumulativeBidAttoEth: 5n * 10n ** 18n, currentTotalBidAttoEth: 5n * 10n ** 18n, disposition: { label: 'Winning', tone: 'success' as const }, isPreviewTick: false, isSelected: false, price: 2n, submissionCount: 2n }
+		const rendered = await renderIntoDocument(
+			<TruthAuctionMarketViewSection
+				clearingTick={1n}
+				hasMoreTickSummaries={false}
+				loadingTruthAuctionBook={false}
+				maxTickAttoEth={5n * 10n ** 18n}
+				onLoadNextTickPage={() => undefined}
+				onSelectTick={() => undefined}
+				renderPriceValue={value => value?.toString()}
+				showDepthClearingTick={false}
+				truthAuctionBookError={undefined}
+				truthAuctionDepthPoints={[
+					{ ...point, tick: 2n, viewerBidAttoEth: 3n * 10n ** 18n, viewerBidAttoEthIsLowerBound: false },
+					{ ...point, tick: 1n, viewerBidAttoEth: 0n, viewerBidAttoEthIsLowerBound: false },
+					{ ...point, tick: 0n, viewerBidAttoEth: 2n * 10n ** 18n, viewerBidAttoEthIsLowerBound: true },
+				]}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		const rows = Array.from(document.querySelectorAll('.truth-auction-ladder-row'))
+		expect(rows.map(row => row.classList.contains('has-viewer-bid'))).toEqual([true, false, true])
+		expect(rows[0]?.querySelector('.truth-auction-ladder-yours')?.textContent).toBe('Yours 3.00 ETH')
+		expect(rows[1]?.querySelector('.truth-auction-ladder-yours')).toBeNull()
+		// A total from a partly loaded list of the wallet's bids reads as a lower bound.
+		expect(rows[2]?.querySelector('.truth-auction-ladder-yours')?.textContent).toBe('Yours ≥ 2.00 ETH')
+	})
+
 	test('depth-chart points announce the price they fill, the depth, and the clearing and bid-price status', async () => {
 		const onSelectTick = mock((_tick: bigint) => undefined)
 		const point = { cumulativeBidAttoEth: 3n * 10n ** 18n, currentTotalBidAttoEth: 10n ** 18n, disposition: { label: 'Winning', tone: 'success' as const }, isPreviewTick: true, isSelected: false, price: 2n, submissionCount: 1n }

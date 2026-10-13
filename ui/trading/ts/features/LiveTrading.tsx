@@ -459,7 +459,7 @@ export function LiveTrading({
 						<div key={selected.pool} className='market-layout'>
 							<MarketTicketPanel>{ticket}</MarketTicketPanel>
 							<SectionBlock className='market-layout__main' variant='plain'>
-								<MarketOverview market={selected} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
+								<MarketOverview market={selected} nowSeconds={nowSeconds} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
 							</SectionBlock>
 						</div>
 					)

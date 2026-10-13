@@ -1,13 +1,16 @@
 /// <reference types="bun-types" />
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { isLiquidationBeyondMinPriceDistance, isVaultHealthyAtFactor } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
+import { getVaultSummaryHealth } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/vaultHealth.js'
 import { getVaultRedeemRepGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
+import { loadForkAuctionDetails } from '@zoltar/ui-statoblast-shared/protocol/forks.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { loadReportingDetails } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
-import { loadAllSecurityPools, loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadAllSecurityPools, loadSecurityPoolVaultSummary, loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { isSecurityPoolEscalationResolved } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
 
 const BPS = 10_000n
@@ -28,17 +31,28 @@ async function loadOnlyPool(backend: SimulationBackend, title: string) {
 
 void describe('production workflow simulation scenarios', () => {
 	let endedPoolBackend: SimulationBackend
+	let escalationBackend: SimulationBackend
 	let liquidationDistanceBackend: SimulationBackend
+	let nearMinimumBackend: SimulationBackend
 
 	beforeAll(async () => {
-		const [nextEndedPoolBackend, nextLiquidationDistanceBackend] = await Promise.all([createBootstrappedSimulationBackendWithRetry('ended-pool-commitment', 1, 'statoblast'), createBootstrappedSimulationBackendWithRetry('liquidation-distance', 1, 'statoblast')])
+		const [nextEndedPoolBackend, nextEscalationBackend, nextLiquidationDistanceBackend, nextNearMinimumBackend] = await Promise.all([
+			createBootstrappedSimulationBackendWithRetry('ended-pool-commitment', 1, 'statoblast'),
+			createBootstrappedSimulationBackendWithRetry('escalation-in-progress', 1, 'statoblast'),
+			createBootstrappedSimulationBackendWithRetry('liquidation-distance', 1, 'statoblast'),
+			createBootstrappedSimulationBackendWithRetry('near-minimum-vault', 1, 'statoblast'),
+		])
 		endedPoolBackend = nextEndedPoolBackend
+		escalationBackend = nextEscalationBackend
 		liquidationDistanceBackend = nextLiquidationDistanceBackend
-	}, 180_000)
+		nearMinimumBackend = nextNearMinimumBackend
+	}, 240_000)
 
 	afterAll(async () => {
 		if (endedPoolBackend !== undefined) await endedPoolBackend.dispose()
+		if (escalationBackend !== undefined) await escalationBackend.dispose()
 		if (liquidationDistanceBackend !== undefined) await liquidationDistanceBackend.dispose()
+		if (nearMinimumBackend !== undefined) await nearMinimumBackend.dispose()
 		resetActiveEnvironmentForTesting()
 	}, 30_000)
 
@@ -59,6 +73,42 @@ void describe('production workflow simulation scenarios', () => {
 		expect(vault.underwritingLimitAttoEth).toBe(80n * 10n ** 18n)
 		expect(vault.disputeStakedAttoRep).toBe(0n)
 		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: vault.disputeStakedAttoRep, redeemableRepAmountAttoRep: vault.vaultAttoRepBacking, underwritingLimitAttoEth: vault.underwritingLimitAttoEth })).toContain('Set your commitment limit to 0 ETH')
+	}, 60_000)
+
+	void test('escalation-in-progress keeps your Yes report disputed by a larger No report while the game runs', async () => {
+		activateSimulationBackendProfile(escalationBackend)
+		const readClient = escalationBackend.createReadClient()
+		const primaryAccount = requireAccount(escalationBackend, 0)
+		const pool = await loadOnlyPool(escalationBackend, 'Will this resolve? (escalation in progress)')
+		const reporting = await loadReportingDetails(readClient, pool.securityPoolAddress, primaryAccount)
+		if (reporting.status !== 'active') throw new Error('Expected an active escalation game')
+		const yes = reporting.sides.find(side => side.key === 'yes')
+		const no = reporting.sides.find(side => side.key === 'no')
+		if (yes === undefined || no === undefined) throw new Error('Expected Yes and No escalation sides')
+
+		expect(escalationBackend.currentScenario).toBe('escalation-in-progress')
+		expect(reporting.questionOutcome).toBe('none')
+		expect(reporting.systemState).toBe('operational')
+		expect(reporting.escalationEndTime).toBeGreaterThan(reporting.currentTime)
+		expect(yes.userDeposits.length).toBeGreaterThan(0)
+		expect(no.userDeposits).toEqual([])
+		expect(no.balance).toBeGreaterThan(yes.balance)
+		// The wallet-funded report still counts as the reporting vault's dispute stake.
+		expect(reporting.viewerVaultDisputeStakedAttoRep).toBe(yes.balance)
+	}, 60_000)
+
+	void test('near-minimum-vault leaves your vault healthy just above the multiplier, beside a comfortably backed vault', async () => {
+		activateSimulationBackendProfile(nearMinimumBackend)
+		const readClient = nearMinimumBackend.createReadClient()
+		const pool = await loadOnlyPool(nearMinimumBackend, 'Will this resolve? (near-minimum vault)')
+		const manager = await loadOracleManagerDetails(readClient, pool.managerAddress)
+		const tierOf = async (account: Address) => getVaultSummaryHealth({ multiplierBps: pool.statoblastSecurityMultiplierBps, repPerEthPrice: manager.lastPrice, vault: await loadSecurityPoolVaultSummary(readClient, pool.securityPoolAddress, account) }).tier
+
+		expect(nearMinimumBackend.currentScenario).toBe('near-minimum-vault')
+		expect(manager.isPriceValid).toBe(true)
+		expect(manager.lastPrice).toBe(4n * 10n ** 18n)
+		expect(await tierOf(requireAccount(nearMinimumBackend, 0))).toBe('nearMinimum')
+		expect(await tierOf(requireAccount(nearMinimumBackend, 1))).toBe('healthy')
 	}, 60_000)
 
 	void test('liquidation-distance prices one unhealthy vault inside the minimum distance and one past it', async () => {
@@ -86,5 +136,34 @@ void describe('production workflow simulation scenarios', () => {
 			expect(isVaultHealthyAtFactor({ ...vaultState, healthFactorBps: BPS, repPerEthPrice: manager.lastPrice })).toBe(healthy)
 			if (beyondDistance !== undefined) expect(isLiquidationBeyondMinPriceDistance({ ...vaultState, currentPrice: manager.lastPrice, minPriceDistanceBps })).toBe(beyondDistance)
 		}
+	}, 60_000)
+})
+
+void describe('finalized truth auction simulation scenario', () => {
+	let finalizedAuctionBackend: SimulationBackend
+
+	beforeAll(async () => {
+		finalizedAuctionBackend = await createBootstrappedSimulationBackendWithRetry('finalized-truth-auction', 1, 'statoblast')
+	}, 240_000)
+
+	afterAll(async () => {
+		if (finalizedAuctionBackend !== undefined) await finalizedAuctionBackend.dispose()
+		resetActiveEnvironmentForTesting()
+	}, 30_000)
+
+	void test('finalized-truth-auction ends and finalizes the Yes child truth auction after its bids', async () => {
+		activateSimulationBackendProfile(finalizedAuctionBackend)
+		const readClient = finalizedAuctionBackend.createReadClient()
+		const pools = await loadAllSecurityPools(readClient)
+		const parentPool = pools.find(pool => pool.marketDetails.title === 'Will this resolve? (securitypoolx2 #1)')
+		if (parentPool === undefined) throw new Error('Expected the forked parent pool')
+		const yesChildPool = pools.find(pool => pool.parent === parentPool.securityPoolAddress && pool.questionOutcome === 'yes')
+		if (yesChildPool === undefined) throw new Error('Expected the Yes child pool')
+		const forkDetails = await loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
+
+		expect(finalizedAuctionBackend.currentScenario).toBe('finalized-truth-auction')
+		expect(forkDetails.truthAuction?.finalized).toBe(true)
+		expect(forkDetails.truthAuction?.timeRemaining).toBe(0n)
+		expect(forkDetails.truthAuction?.totalAttoRepPurchased).toBeGreaterThan(0n)
 	}, 60_000)
 })

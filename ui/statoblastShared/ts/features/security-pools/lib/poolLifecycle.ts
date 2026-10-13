@@ -43,6 +43,12 @@ export function derivePoolLifecycleStep({ forkSettled = false, hasForkActivity, 
 	}
 }
 
+/** The stages a settled pool passed over: the fork stages when it settled without a fork, and escalation too when no escalation game ever started. */
+export function getSkippedLifecycleSteps({ escalationStarted, hasForkActivity, step }: { escalationStarted: boolean; hasForkActivity: boolean; step: PoolLifecycleStep | undefined }): PoolLifecycleStep[] {
+	if (step !== 'settled' || hasForkActivity) return []
+	return escalationStarted ? ['forkMigration', 'truthAuction'] : ['escalation', 'forkMigration', 'truthAuction']
+}
+
 /** The pool tab that holds the stage's main work, used when the pool URL does not name a tab. */
 export function getDefaultPoolTab(step: PoolLifecycleStep | undefined, hasForkActivity: boolean): SelectedPoolView {
 	switch (step) {
