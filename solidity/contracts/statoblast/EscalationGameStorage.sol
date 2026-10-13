@@ -23,6 +23,7 @@ abstract contract EscalationGameStorage {
 	uint256 public forkResumedAt;
 	OutcomeState[3] internal outcomeState;
 	uint256 internal nextNodeId = 1;
+	// Game-local node ID -> deposit node; zero is the absent-node sentinel.
 	mapping(uint256 => Node) public nodes;
 	mapping(address => EscalationClaimBundle) internal escalationClaimBundles;
 	// Logical escrow: unsettled local/bundle principal plus remaining inherited
@@ -31,8 +32,10 @@ abstract contract EscalationGameStorage {
 	mapping(address => uint256) internal unresolvedRepByVaultAttoRep;
 	// Original local principal still represented by unconsumed claims.
 	uint256 internal totalLocalUnresolvedAttoRep;
+	// Vault address -> principal in attoREP indexed by BinaryOutcome (Invalid, Yes, No).
 	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
 	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
+	// Vault address -> BinaryOutcome index -> forked escrow accounting.
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 	bool internal winnerHaircutPaidByFork;

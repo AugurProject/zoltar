@@ -19,6 +19,7 @@ contract Zoltar {
 		uint248 parentUniverseId;
 	}
 
+	// Universe ID keys each mapping; child outcome indexes follow deployment order.
 	mapping(uint248 => Universe) public universes;
 	mapping(uint248 => uint256[]) private deployedChildOutcomeIndexes;
 	mapping(uint248 => uint256) private universeTheoreticalSupplies;

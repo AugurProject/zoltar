@@ -5,6 +5,7 @@ import { Zoltar } from '../../Zoltar.sol';
 
 contract ShareTokenFactory {
 	Zoltar immutable zoltar;
+	// keccak256(abi.encode(caller, salt, questionId)) -> the caller's deployed share token.
 	mapping(bytes32 => ShareToken) private shareTokens;
 
 	constructor(Zoltar _zoltar) {

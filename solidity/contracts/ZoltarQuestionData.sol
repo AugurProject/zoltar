@@ -17,6 +17,7 @@ contract ZoltarQuestionData {
 		string answerUnit;
 	}
 
+	// Each mapping is keyed by the question ID returned by getQuestionId.
 	mapping(uint256 => uint256) public questionCreatedTimestamp;
 	mapping(uint256 => string[]) private outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;

@@ -44,9 +44,12 @@ contract LiquidationApprovalRegistry {
 	bytes32 private constant EIP712_NAME_HASH = keccak256('Statoblast Liquidation Approvals');
 	bytes32 private constant EIP712_VERSION_HASH = keccak256('1');
 
+	// EIP-712 approval struct hash -> approval terms and remaining, reserved, and consumed debt.
 	mapping(bytes32 => LiquidationApprovalState) private liquidationApprovals;
+	// Receiver vault address -> approval nonce -> whether that nonce has already been installed.
 	mapping(address => mapping(uint256 => bool)) private usedLiquidationApprovalNonces;
 	mapping(address => uint256) public minimumLiquidationApprovalNonce;
+	// Coordinator operation ID -> the debt reservation backing that staged liquidation.
 	mapping(uint256 => LiquidationReservation) public liquidationReservations;
 
 	event RegistryInitialized(address indexed coordinator);

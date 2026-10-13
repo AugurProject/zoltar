@@ -17,10 +17,13 @@ contract ERC1155 is IERC1155 {
 	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155BatchReceived.selector;
 	bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
 
+	// Mapping from token ID to account balances
 	mapping(uint256 => mapping(address => uint256)) public _balances;
 
+	// Mapping from token ID to total supply
 	mapping(uint256 => uint256) public _supplies;
 
+	// Mapping from account to operator approvals
 	mapping(address => mapping(address => bool)) public _operatorApprovals;
 
 	constructor() {}

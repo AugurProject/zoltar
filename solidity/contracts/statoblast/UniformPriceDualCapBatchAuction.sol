@@ -29,8 +29,11 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 
 	uint256 constant MIN_BID_SIZE_DIVISOR = 100_000;
 
+	// AVL node ID -> price-level aggregate; zero is the absent-node sentinel.
 	mapping(uint256 => UniformPriceDualCapBatchAuctionStorage.Node) private nodes;
+	// Price tick -> bids in submission order; their array indexes identify bids at that tick.
 	mapping(int256 => Bid[]) private bidsAtTick;
+	// Price tick -> one-based Fenwick index -> refunded ETH sum for that tree node, in attoETH.
 	mapping(int256 => mapping(uint256 => uint256)) private refundedBidPrefixTree;
 
 	uint256 private root;

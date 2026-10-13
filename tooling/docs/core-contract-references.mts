@@ -5,7 +5,7 @@ export const coreContractReferences: ContractReference[] = [
 		compiledAbiFingerprint: '580109cfcebb3ce505def01895f7b6567e75bbd8e8ccac857bdd00d54f15c37f',
 		name: 'ZoltarQuestionData',
 		purpose: 'Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.',
-		readAbiFingerprint: '964d0ce318d2890011ff485c8d78e933cabc8d10e489a0c22f0e266fa2563ded',
+		readAbiFingerprint: '99f2b8a4050d1976f27248afe6870e944c9dc4377e193ee5e3f87a7112ffc3ac',
 		readSurface:
 			'Use `getQuestionId` before submission; `questionCreatedTimestamp` and `questions` for direct lookup; `getQuestionCount` and `getQuestions` for indexed or paged discovery; and `getQuestionEndDate`, `getOutcomeLabels`, `splitUint256IntoTwoWithInvalid`, `hasNonZeroScalarReservedBits`, `isMalformedAnswerOption`, and `getAnswerOptionName` when validating or displaying answers. In the `QuestionData` tuple, `startTime` and `endTime` are `uint48`, while `numTicks` is `uint120`; clients must use these exact widths because they determine the `getQuestionId` and `createQuestion` selectors.',
 		readDeclarations: [

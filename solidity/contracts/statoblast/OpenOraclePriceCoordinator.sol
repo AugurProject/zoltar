@@ -72,10 +72,12 @@ contract OpenOraclePriceCoordinator {
 	// Active-operation paging is newest-first so UI previews remain stable after
 	// execution removes older entries from the set.
 	uint256 public stagedOperationCounter;
+	// Coordinator operation ID -> operation record; operator is cleared when consumed.
 	mapping(uint256 => StagedOperation) public stagedOperations;
 	mapping(address => uint256) private latestBackingTargetOperationIds;
 	uint256 private activeStagedOperationCount;
 	uint256 private latestActiveStagedOperationId;
+	// Active operation ID -> neighboring operation IDs in the paging list; zero marks either end.
 	mapping(uint256 => uint256) private olderActiveStagedOperationIds;
 	mapping(uint256 => uint256) private newerActiveStagedOperationIds;
 	mapping(uint256 => bool) private isActiveStagedOperation;

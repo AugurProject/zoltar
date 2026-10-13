@@ -5,7 +5,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		compiledAbiFingerprint: 'c4c3b830e96f478974149aacb56eee2bb36bee4c0ef7f104ffa43239dcb28ada',
 		name: 'LiquidationApprovalRegistry',
 		purpose: 'Stores coordinator-local, bounded authorization for a receiver vault to accept liquidation debt from an exact operator.',
-		readAbiFingerprint: '04465d90cef2bd37454bf8496fffcaccf07f0ec5808f31ffd6481d4cdc46f810',
+		readAbiFingerprint: 'b60052cad1ad645b06600310891f34d5208b2e0b17446f74306cb4caad3e5185',
 		readSurface:
 			'Use `coordinator` to identify the validating coordinator and implied security pool. `LIQUIDATION_APPROVAL_TYPEHASH`, `DOMAIN_SEPARATOR`, and `liquidationApprovalDigest` define the chain- and registry-bound EIP-712 message. `getLiquidationApproval` reports parameters plus available, reserved, consumed, and revoked state; `minimumLiquidationApprovalNonce` reports receiver invalidation state; `liquidationReservations` and `minimumHealthFactorBps` expose operation reservation state and its execution-time health floor.',
 		readDeclarations: [{ name: 'DOMAIN_SEPARATOR' }, { name: 'liquidationApprovalDigest' }, { name: 'getLiquidationApproval' }, { name: 'minimumHealthFactorBps' }],
@@ -289,7 +289,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		compiledAbiFingerprint: 'b4d43db4a275c3118a700ca255a7f63d42dfdca1fb1e7c554d681e589a76ac85',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '62f248ccd4fd8d25d37fceb4eb4a9720d7908d2e57fd1eaf3a1786b8a9f4e1c1',
+		readAbiFingerprint: '6093653de73a0e5fa1e400d77bbded71a92de1197f58bd89da82a657887f349e',
 		readSurface:
 			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		readDeclarations: [
