@@ -4,12 +4,13 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
+import { OutcomeUniverseList } from '../../components/OutcomeUniverseList.js'
 import { UniverseBrowser } from '../../components/UniverseBrowser.js'
 import { UniverseNamesProvider } from '../../components/UniverseNames.js'
 import { UniverseSwitcher } from '../../components/UniverseSwitcher.js'
 import type { ZoltarUniverseSummary } from '../../types/contracts.js'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
-import { within } from '../testUtils/queries.js'
+import { fireEvent, within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
 import { createUniverseSummary } from '../testUtils/universeFixtures.js'
@@ -49,6 +50,31 @@ describe('UniverseBrowser', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('allows an outcome with unknown deployment status without inventing a description', async () => {
+		let selected = false
+		const view = await renderIntoDocument(
+			<OutcomeUniverseList
+				outcomes={[
+					{
+						key: 'yes',
+						label: 'Yes',
+						onSelect: () => {
+							selected = true
+						},
+					},
+				]}
+			/>,
+		)
+		cleanupRenderedComponent = view.cleanup
+		const open = within(view.container).getByRole('button', { name: 'Open Yes universe' })
+		expect(open.hasAttribute('disabled')).toBe(false)
+		expect(open.hasAttribute('aria-describedby')).toBe(false)
+		expect(view.container.querySelector('.badge')).toBeNull()
+		expect(view.container.querySelector('.migration-outcome-metrics')).toBeNull()
+		fireEvent.click(open)
+		expect(selected).toBe(true)
 	})
 
 	test('shows the lineage trail, fork status, and child universes with their deployment state', async () => {
