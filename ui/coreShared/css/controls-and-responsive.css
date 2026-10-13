@@ -824,7 +824,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 .header-toolbar-brand {
 	display: flex;
-	flex: 1 1 0;
+	flex: 0 0 auto;
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
@@ -841,13 +841,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	letter-spacing: -0.01em;
 	white-space: nowrap;
 	overflow-wrap: normal;
-}
-
-/* The name yields before the universe, account, or actions need another row. */
-.header-toolbar .application-brand-name {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .header-toolbar .environment-badge-row {
