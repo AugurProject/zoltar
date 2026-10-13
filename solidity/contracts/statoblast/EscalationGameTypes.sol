@@ -46,7 +46,8 @@ struct OutcomeState {
 	uint256 inheritedUnresolvedTotalAttoRep;
 	uint256 inheritedConsumedSourceAttoRep;
 	uint256 inheritedConsumedRetainedAttoRep;
-	// Fenwick sums in immutable MMR leaf order, used to compact exported intervals.
+	// One-based Fenwick index -> consumed principal sum in attoREP, in immutable MMR leaf order.
+	// Used to compact exported intervals.
 	mapping(uint256 => uint256) consumedPrincipalTree;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
@@ -55,6 +56,7 @@ struct OutcomeState {
 	uint256 localHeadNodeId;
 	uint256 localUnresolvedTotalAttoRep;
 	uint256[] localNodeIds;
+	// MMR subtree height -> zero-based starting leaf index -> current subtree hash.
 	mapping(uint256 => mapping(uint256 => bytes32)) currentCarryNodeHashes;
 	// Authoritative settled-set for inherited and local carried parentDepositIndexes in this instance.
 	mapping(uint256 => bool) consumedParentDepositIndexes;
