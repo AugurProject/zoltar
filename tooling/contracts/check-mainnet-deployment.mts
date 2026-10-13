@@ -5,6 +5,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import * as url from 'node:url'
 import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
+import { deploymentManifestIds, getDeploymentManifestFileName } from './deployment-manifests.mts'
 
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
@@ -46,7 +47,7 @@ const deploymentRuntimeOutputPaths = [
 	path.join(repositoryRootPath, 'ui', 'statoblastShared', 'js', 'protocol', 'deploymentHelpers.js'),
 	path.join(repositoryRootPath, 'ui', 'statoblastShared', 'js', 'protocol', 'deployment.js'),
 ] as const
-export const manifestIds = ['mainnet', 'mainnet-no', 'sepolia', 'sepolia-no'] as const
+export const manifestIds = deploymentManifestIds
 type ManifestId = (typeof manifestIds)[number]
 
 function getManifestNetworkId(manifestId: ManifestId) {
@@ -84,7 +85,7 @@ export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () =
 }
 
 function getManifestPath(manifestId: ManifestId) {
-	return path.join(repositoryRootPath, 'docs', `${manifestId}-deployment-addresses.json`)
+	return path.join(repositoryRootPath, 'docs', getDeploymentManifestFileName(manifestId))
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null

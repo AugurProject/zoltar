@@ -6,9 +6,10 @@ import * as path from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
 import { createArtifactLookup, main, parseRequestedChainIds } from './verify-contracts.mts'
+import { getDeploymentManifestFileName, getDeploymentManifestId } from './deployment-manifests.mts'
 
 async function loadRealManifest(networkId: 'mainnet' | 'sepolia', genesisOutcome: 'yes' | 'no' = 'yes'): Promise<DeploymentManifest> {
-	const rawManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'docs', `${networkId}${genesisOutcome === 'no' ? '-no' : ''}-deployment-addresses.json`), 'utf8'))
+	const rawManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'docs', getDeploymentManifestFileName(getDeploymentManifestId(networkId, genesisOutcome))), 'utf8'))
 	return parseDeploymentManifest(rawManifest, networkId, genesisOutcome)
 }
 

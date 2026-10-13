@@ -31,6 +31,14 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 		expect(document.querySelector('.application-brand img')?.getAttribute('alt')).toBe('')
 		expect(within(document.body).getByText('Augur v2 fork')).not.toBeNull()
 		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe', level: 1 })).not.toBeNull()
+		expect(document.querySelectorAll('.migration-outcome-list .badge')).toHaveLength(0)
+		expect(document.querySelectorAll('.migration-outcome-label')).toHaveLength(2)
+		for (const outcome of ['Yes', 'No']) {
+			const button = within(document.body).getByRole('button', { name: `Open ${outcome} universe` })
+			expect(button.textContent).toContain(`${outcome} →`)
+			expect(button.hasAttribute('disabled')).toBe(false)
+			expect(button.hasAttribute('aria-describedby')).toBe(false)
+		}
 		expect(
 			within(document.body)
 				.getAllByRole('button')

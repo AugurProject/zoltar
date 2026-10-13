@@ -5,10 +5,11 @@ import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 
-type Outcome = { key: string; exists: boolean; label: string; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
+type Outcome = { key: string; exists?: boolean; label: string; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
 
 /**
  * Outcome names and deployment status stay consistent while navigation and selection keep their own semantics.
+ * Unknown deployment status omits its badge; the caller explicitly enables navigation when it is available.
  * `notDeployedDetail` explains a not-yet-deployed child beside its badge, inside the row's description, so a disabled row says why.
  */
 export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage, className = '', notDeployedDetail }: { outcomes: readonly Outcome[]; selection?: boolean; emptyMessage?: ComponentChildren; className?: string; notDeployedDetail?: ComponentChildren }) {
@@ -20,7 +21,7 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 			items={outcomes.map(outcome => ({
 				key: outcome.key,
 				ariaLabel: selection ? outcome.label : universeCopy.formatOpenChildUniverse(outcome.label),
-				describedById: `${statusId}-${outcome.key}`,
+				...(outcome.exists === undefined ? {} : { describedById: `${statusId}-${outcome.key}` }),
 				label: (
 					<>
 						{selection ? (
@@ -29,18 +30,21 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 							</span>
 						) : undefined}
 						{outcome.label}
-						{!selection && outcome.exists ? <span aria-hidden='true'>{universeCopy.openOutcomeArrowTail}</span> : undefined}
+						{!selection && outcome.exists !== false ? <span aria-hidden='true'>{universeCopy.openOutcomeArrowTail}</span> : undefined}
 					</>
 				),
-				details: (
-					<>
-						<span className={!outcome.exists && notDeployedDetail !== undefined ? 'migration-outcome-status-detail' : undefined} id={`${statusId}-${outcome.key}`}>
-							<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
-							{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
-						</span>
-						{outcome.details}
-					</>
-				),
+				details:
+					outcome.exists === undefined && outcome.details === undefined ? undefined : (
+						<>
+							{outcome.exists === undefined ? undefined : (
+								<span className={!outcome.exists && notDeployedDetail !== undefined ? 'migration-outcome-status-detail' : undefined} id={`${statusId}-${outcome.key}`}>
+									<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
+									{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
+								</span>
+							)}
+							{outcome.details}
+						</>
+					),
 				disabled: outcome.disabled ?? !outcome.exists,
 				...(selection && outcome.selected !== undefined ? { selected: outcome.selected } : {}),
 				actions: outcome.actions,

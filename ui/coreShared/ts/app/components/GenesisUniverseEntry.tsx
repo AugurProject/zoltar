@@ -33,8 +33,6 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 						outcomes={GENESIS_OUTCOMES.map(outcome => ({
 							key: outcome,
 							label: copy.formatGenesisOutcome(outcome),
-							// These are the existing historical Augur children, before a Zoltar deployment is selected.
-							exists: true,
 							disabled: pending,
 							details: openingOutcome === outcome ? <UserMessage placement='field' as='span' detail={copy.formatOpeningGenesisUniverse(outcome)} /> : undefined,
 							onSelect: () => {

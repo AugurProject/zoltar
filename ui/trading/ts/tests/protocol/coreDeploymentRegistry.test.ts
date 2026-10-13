@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { coreDeploymentFromManifest } from '../../../build/core-deployments.mts'
+import { coreDeploymentFromManifest, writeCoreDeploymentRegistry } from '../../../build/core-deployments.mts'
 import { defaultCoreDeploymentRpcUrls } from '../../protocol/coreDeploymentDefaults.ts'
 import { loadCoreDeploymentsFrom } from '../support/coreDeployments.ts'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -12,6 +15,23 @@ import { publicErrorMessage } from '../../protocol/publicError.ts'
 import * as appCopy from '../../copy/app.ts'
 
 describe('trading core deployment registry', () => {
+	test('writes both canonical genesis roots for each public network from their real manifests', async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), 'trading-genesis-registry-'))
+		try {
+			const output = path.join(directory, 'core-deployments.json')
+			await writeCoreDeploymentRegistry(output)
+			const registry: unknown = JSON.parse(await readFile(output, 'utf8'))
+			for (const outcome of ['yes', 'no'] as const) {
+				const deployments = await loadCoreDeploymentsFrom(registry, outcome)
+				expect(deployments.map(deployment => [deployment.chainId, deployment.genesisOutcome])).toEqual([
+					[1, outcome],
+					[11_155_111, outcome],
+				])
+			}
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	})
 	test('selects one genesis deployment per network and rejects duplicate or noncanonical choices', async () => {
 		const registry = ['yes', 'no'].map(genesisOutcome => ({
 			genesisOutcome,

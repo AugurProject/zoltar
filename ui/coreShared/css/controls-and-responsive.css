@@ -1036,7 +1036,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 /* Discovery reserves the ordinary switcher's frame without claiming a universe identity. */
-.header-toolbar-controls .toolbar-field.universe .toolbar-field-value:has(> .loading-value) {
+.header-toolbar-controls .toolbar-field.universe .toolbar-field-value:has(> .loading-value, > .unavailable-value) {
 	box-sizing: border-box;
 	align-items: center;
 	width: calc(15ch + var(--header-universe-mark-width) + var(--space-1) + 2 * var(--space-2) + 2px);

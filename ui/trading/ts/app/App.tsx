@@ -177,7 +177,7 @@ export function App({
 	const universeForked = headerUniverse.state.kind === 'ready' && headerUniverse.state.universe?.hasForked === true
 	let universeValue: ComponentChildren = <LoadingText announce={false}>{appCopy.loadingWithEllipsis}</LoadingText>
 	if (headerUniverseId !== undefined) universeValue = <UniverseSwitcher activeUniverseId={BigInt(headerUniverseId)} browseHref={getTradingRouteHref('#/universe')} universe={headerUniverse.state.kind === 'ready' ? headerUniverse.state.universe : undefined} />
-	else if (discoveryState === 'error' || discoveryState === 'not-found') universeValue = <span>{appCopy.unavailable}</span>
+	else if (discoveryState === 'error' || discoveryState === 'not-found') universeValue = <span class='unavailable-value'>{appCopy.unavailable}</span>
 	const walletSummary = walletSummaryForUniverse(liveWalletSummary, selectedUniverseId)
 	const retryWalletSummary = () => {
 		setLiveWalletSummary(current => ({ account: current.account, ethAttoEth: undefined, repAttoRep: undefined, status: current.account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId: selectedUniverseId }))

@@ -208,6 +208,10 @@ describe('trading header', () => {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
 		// The header learns about the failure through the route's state effect, one commit after the route itself.
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable'))
+		const universeValue = rendered.container.querySelector('.header-toolbar-controls .toolbar-field.universe .toolbar-field-value')
+		expect(universeValue?.querySelector('.unavailable-value')?.textContent).toBe('Unavailable')
+		expect(universeValue?.querySelector('[data-universe-id]')).toBeNull()
+		expect(universeValue?.querySelector('a')).toBeNull()
 	})
 
 	test('shows wallet connection failures on the universe route', async () => {

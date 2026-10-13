@@ -3,6 +3,7 @@ import path from 'node:path'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from '../ts/protocol/coreDeploymentDefaults.ts'
 import { parseGenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { deploymentManifestIds, getDeploymentManifestFileName } from '../../../tooling/contracts/deployment-manifests.mts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
@@ -46,7 +47,7 @@ export function coreDeploymentFromManifest(candidate: unknown) {
 
 export async function writeCoreDeploymentRegistry(output: string) {
 	const repositoryRoot = path.resolve(import.meta.dir, '../../..')
-	const manifestPaths = ['mainnet', 'mainnet-no', 'sepolia', 'sepolia-no'].map(network => path.join(repositoryRoot, `docs/${network}-deployment-addresses.json`))
+	const manifestPaths = deploymentManifestIds.map(manifestId => path.join(repositoryRoot, 'docs', getDeploymentManifestFileName(manifestId)))
 	const deployments = await Promise.all(
 		manifestPaths.map(async manifestPath => {
 			const candidate: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'))

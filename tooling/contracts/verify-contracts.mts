@@ -4,6 +4,7 @@ import { repositoryRoot } from '../repo/root.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
+import { getDeploymentManifestFileName, getDeploymentManifestId } from './deployment-manifests.mts'
 import {
 	buildVerificationPlan,
 	getExplorerTargets,
@@ -62,7 +63,7 @@ async function loadArtifactLookup(): Promise<ArtifactLookup> {
 }
 
 async function loadManifest(networkId: 'mainnet' | 'sepolia', genesisOutcome: 'yes' | 'no'): Promise<DeploymentManifest> {
-	const manifestPath = path.join(repositoryRoot, 'docs', `${networkId}${genesisOutcome === 'no' ? '-no' : ''}-deployment-addresses.json`)
+	const manifestPath = path.join(repositoryRoot, 'docs', getDeploymentManifestFileName(getDeploymentManifestId(networkId, genesisOutcome)))
 	const rawManifest: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
 	return parseDeploymentManifest(rawManifest, networkId, genesisOutcome)
 }
