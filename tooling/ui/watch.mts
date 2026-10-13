@@ -1,3 +1,4 @@
+import { createWatchBuilds } from './watchBuilds.mts'
 import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -37,22 +38,8 @@ type ManagedProcess = ReturnType<typeof spawn>
 let shuttingDown = false
 let restartingServer = false
 let serverProcess: ManagedProcess | undefined
-let sharedBuildProcess: ManagedProcess | undefined
-let sharedBuildQueued = false
-let sharedBuildRunning = false
+let buildProcess: ManagedProcess | undefined
 const typeScriptWatchProcesses: ManagedProcess[] = []
-let vendorBuildProcess: ManagedProcess | undefined
-let vendorBuildRunning = false
-let vendorBuildQueued = false
-let workerBuildProcess: ManagedProcess | undefined
-let workerBuildRunning = false
-let workerBuildQueued = false
-let contractBuildProcess: ManagedProcess | undefined
-let contractBuildRunning = false
-let contractBuildQueued = false
-let projectArtifactBuildProcess: ManagedProcess | undefined
-let projectArtifactBuildRunning = false
-let projectArtifactBuildQueued = false
 let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
 
@@ -344,11 +331,11 @@ const refreshContractSourceWatchers = async () => {
 	}
 }
 
-const runSharedBuildStep = async (command: string[], cwd: string, label: string) => {
+const runBuildStep = async (command: string[], cwd: string, label: string) => {
 	try {
 		const [executable, ...args] = command
 		if (executable === undefined) throw new Error(`Missing executable for ${label}`)
-		sharedBuildProcess = spawn(executable, args, {
+		buildProcess = spawn(executable, args, {
 			cwd,
 			stdio: 'inherit',
 		})
@@ -358,7 +345,7 @@ const runSharedBuildStep = async (command: string[], cwd: string, label: string)
 		await shutdown(1)
 		return false
 	}
-	const childProcess = sharedBuildProcess
+	const childProcess = buildProcess
 	attachProcessErrorHandler(childProcess, label)
 	let exitCode: number | null
 	let signalCode: NodeJS.Signals | null
@@ -367,11 +354,11 @@ const runSharedBuildStep = async (command: string[], cwd: string, label: string)
 	} catch (error) {
 		console.error(`[app:watch] ${label} failed to start`)
 		console.error(error)
-		sharedBuildProcess = undefined
+		buildProcess = undefined
 		await shutdown(1)
 		return false
 	}
-	sharedBuildProcess = undefined
+	buildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
 		console.error(`[app:watch] ${label} failed (${signalCode ?? failureCode})`)
@@ -393,249 +380,16 @@ const restartServer = async (reason: string) => {
 	}
 }
 
-const runVendorBuild = async (reason: string) => {
-	if (shuttingDown) return
-	if (vendorBuildRunning) {
-		vendorBuildQueued = true
-		return
-	}
-	if (workerBuildRunning) {
-		vendorBuildQueued = true
-		return
-	}
-	vendorBuildRunning = true
-	console.log(`[app:watch] Rebuilding UI vendor assets because ${reason} changed`)
-	try {
-		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH, appId, '--scoped-artifacts'], {
-			cwd: UI_ROOT_PATH,
-			stdio: 'inherit',
-		})
-	} catch (error) {
-		vendorBuildRunning = false
-		console.error('[app:watch] Failed to start vendor rebuild')
-		console.error(error)
-		await shutdown(1)
-		return
-	}
-	const childProcess = vendorBuildProcess
-	attachProcessErrorHandler(childProcess, 'Vendor rebuild')
-	let exitCode: number | null
-	let signalCode: NodeJS.Signals | null
-	try {
-		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
-	} catch (error) {
-		console.error('[app:watch] Vendor rebuild failed to start')
-		console.error(error)
-		vendorBuildRunning = false
-		vendorBuildProcess = undefined
-		await shutdown(1)
-		return
-	}
-	vendorBuildRunning = false
-	vendorBuildProcess = undefined
-	if (exitCode !== 0) {
-		const failureCode = exitCode ?? 1
-		console.error(`[app:watch] Vendor rebuild failed (${signalCode ?? failureCode})`)
-		await shutdown(failureCode)
-		return
-	}
-	if (vendorBuildQueued) {
-		vendorBuildQueued = false
-		await runVendorBuild('queued vendor input')
-		return
-	}
-	if (workerBuildQueued) {
-		workerBuildQueued = false
-		await runWorkerBuild('completed vendor rebuild')
-	}
-	queueLiveReload(reason)
-}
-
-const runWorkerBuild = async (reason: string) => {
-	if (shuttingDown) return
-	if (vendorBuildRunning) {
-		workerBuildQueued = true
-		return
-	}
-	if (workerBuildRunning) {
-		workerBuildQueued = true
-		return
-	}
-	workerBuildRunning = true
-	console.log(`[app:watch] Rebuilding simulation worker because ${reason} changed`)
-	try {
-		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH, appId, '--artifacts-current'], {
-			cwd: UI_ROOT_PATH,
-			stdio: 'inherit',
-		})
-	} catch (error) {
-		workerBuildRunning = false
-		console.error('[app:watch] Failed to start simulation worker rebuild')
-		console.error(error)
-		await shutdown(1)
-		return
-	}
-	const childProcess = workerBuildProcess
-	attachProcessErrorHandler(childProcess, 'Simulation worker rebuild')
-	let exitCode: number | null
-	let signalCode: NodeJS.Signals | null
-	try {
-		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
-	} catch (error) {
-		console.error('[app:watch] Simulation worker rebuild failed to start')
-		console.error(error)
-		workerBuildRunning = false
-		workerBuildProcess = undefined
-		await shutdown(1)
-		return
-	}
-	workerBuildRunning = false
-	workerBuildProcess = undefined
-	if (exitCode !== 0) {
-		const failureCode = exitCode ?? 1
-		console.error(`[app:watch] Simulation worker rebuild failed (${signalCode ?? failureCode})`)
-		await shutdown(failureCode)
-		return
-	}
-	if (vendorBuildQueued) {
-		vendorBuildQueued = false
-		await runVendorBuild('queued vendor input')
-		return
-	}
-	if (workerBuildQueued) {
-		workerBuildQueued = false
-		await runWorkerBuild('queued TypeScript input')
-		return
-	}
-}
-
-const runSharedBuild = async (reason: string) => {
-	if (shuttingDown) return
-	if (sharedBuildRunning) {
-		sharedBuildQueued = true
-		return
-	}
-	sharedBuildRunning = true
-	console.log(`[app:watch] Rebuilding shared package outputs because ${reason} changed`)
-	const builtSharedOutputs = await runSharedBuildStep([BUN_EXECUTABLE_PATH, './tooling/repo/build-shared.mts', appId], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
-	if (!builtSharedOutputs) return
-	sharedBuildRunning = false
-	if (sharedBuildQueued) {
-		sharedBuildQueued = false
-		await runSharedBuild('queued shared input')
-		return
-	}
-	await runWorkerBuild(reason)
-	queueLiveReload(reason)
-}
-
-const runProjectArtifactBuild = async (reason: string) => {
-	if (shuttingDown) return
-	if (appId === 'trading') {
-		await runVendorBuild(reason)
-		return
-	}
-	if (projectArtifactBuildRunning) {
-		projectArtifactBuildQueued = true
-		return
-	}
-	projectArtifactBuildRunning = true
-	console.log(`[app:watch] Rebuilding UI contract artifacts because ${reason} changed`)
-	try {
-		projectArtifactBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['./tooling/contracts/build-app-contracts.mts', appId], {
-			cwd: REPOSITORY_ROOT_PATH,
-			stdio: 'inherit',
-		})
-	} catch (error) {
-		projectArtifactBuildRunning = false
-		console.error('[app:watch] Failed to start UI contract artifact rebuild')
-		console.error(error)
-		await shutdown(1)
-		return
-	}
-	const childProcess = projectArtifactBuildProcess
-	attachProcessErrorHandler(childProcess, 'UI contract artifact rebuild')
-	let exitCode: number | null
-	let signalCode: NodeJS.Signals | null
-	try {
-		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
-	} catch (error) {
-		console.error('[app:watch] UI contract artifact rebuild failed to start')
-		console.error(error)
-		projectArtifactBuildRunning = false
-		projectArtifactBuildProcess = undefined
-		await shutdown(1)
-		return
-	}
-	projectArtifactBuildRunning = false
-	projectArtifactBuildProcess = undefined
-	if (exitCode !== 0) {
-		const failureCode = exitCode ?? 1
-		console.error(`[app:watch] UI contract artifact rebuild failed (${signalCode ?? failureCode})`)
-		await shutdown(failureCode)
-		return
-	}
-	if (projectArtifactBuildQueued) {
-		projectArtifactBuildQueued = false
-		await runProjectArtifactBuild('queued project artifact input')
-		return
-	}
-	queueLiveReload(reason)
-}
-
-const runContractBuild = async (reason: string) => {
-	if (shuttingDown) return
-	if (contractBuildRunning) {
-		contractBuildQueued = true
-		return
-	}
-	contractBuildRunning = true
-	console.log(`[app:watch] Rebuilding Solidity contracts and UI artifacts because ${reason} changed`)
-	try {
-		contractBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['./tooling/contracts/build-app-contracts.mts', appId], {
-			cwd: REPOSITORY_ROOT_PATH,
-			stdio: 'inherit',
-		})
-	} catch (error) {
-		contractBuildRunning = false
-		console.error('[app:watch] Failed to start Solidity rebuild')
-		console.error(error)
-		await shutdown(1)
-		return
-	}
-	const childProcess = contractBuildProcess
-	attachProcessErrorHandler(childProcess, 'Solidity rebuild')
-	let exitCode: number | null
-	let signalCode: NodeJS.Signals | null
-	try {
-		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
-	} catch (error) {
-		console.error('[app:watch] Solidity rebuild failed to start')
-		console.error(error)
-		contractBuildRunning = false
-		contractBuildProcess = undefined
-		await shutdown(1)
-		return
-	}
-	contractBuildRunning = false
-	contractBuildProcess = undefined
-	if (exitCode !== 0) {
-		const failureCode = exitCode ?? 1
-		console.error(`[app:watch] Solidity rebuild failed (${signalCode ?? failureCode})`)
-		await shutdown(failureCode)
-		return
-	}
-	if (contractBuildQueued) {
-		contractBuildQueued = false
-		await runContractBuild('queued Solidity input')
-		return
-	}
-	if (appId === 'trading') {
-		await runProjectArtifactBuild(reason)
-		return
-	}
-	queueLiveReload(reason)
-}
+const { runVendorBuild, runWorkerBuild, runSharedBuild, runContractBuild, runProjectArtifactBuild } = createWatchBuilds({
+	appPaths,
+	bunExecutablePath: BUN_EXECUTABLE_PATH,
+	isStopped: () => shuttingDown,
+	onIdle: queueLiveReload,
+	run: async (job, step, reason) => {
+		console.log(`[app:watch] Rebuilding ${job} because ${reason} changed`)
+		return runBuildStep(step.command, step.cwd, step.label)
+	},
+})
 
 const watchFile = (filePath: string, onChange: (relativePath: string) => void) => {
 	watchFileWithCleanup(filePath, onChange, callback => {
@@ -653,11 +407,7 @@ const shutdown = async (exitCode: number) => {
 	typeScriptOutputWatchers.clear()
 	typeScriptSourceWatchers.clear()
 	contractSourceWatchers.clear()
-	await stopProcess(sharedBuildProcess)
-	await stopProcess(vendorBuildProcess)
-	await stopProcess(workerBuildProcess)
-	await stopProcess(contractBuildProcess)
-	await stopProcess(projectArtifactBuildProcess)
+	await stopProcess(buildProcess)
 	await stopProcess(serverProcess)
 	for (const typeScriptWatchProcess of typeScriptWatchProcesses) await stopProcess(typeScriptWatchProcess)
 	process.exit(exitCode)

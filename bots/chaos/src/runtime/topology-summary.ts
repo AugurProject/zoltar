@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
+import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-schema.ts'
 import type { RuntimeTopologySummary } from '../state/operator-state.ts'
 import type { CanonicalScanResult } from './canonical-scan.ts'
 

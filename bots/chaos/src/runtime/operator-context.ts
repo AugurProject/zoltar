@@ -5,7 +5,7 @@ import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-op
 import { errorMessage as formatErrorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { OperatorSettings } from '../config/settings.ts'
-import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
+import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-schema.ts'
 import { saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 import { createChaosReadPool } from './canonical-scan.ts'
 import type { ConfigurationState } from './dashboard-controller.ts'
