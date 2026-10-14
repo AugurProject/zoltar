@@ -38,7 +38,7 @@
 					<li>Vault owners deposit REP; traders deposit ETH to mint complete sets.</li>
 					<li>Traders may exchange shares through an exchange such as <a href="./trading.html">Trading</a>.</li>
 					<li>After the question ends, the first REP deposit on an outcome opens the <a href="../reference/glossary.html#escalation-game">Escalation Game</a>.</li>
-					<li>An unchallenged report wins three days later; a contested game runs until one outcome is the strict leader at its deadline. Holders then redeem winning shares from the pool's settlement collateral.</li>
+					<li>If the game finalizes locally, holders redeem winning shares from the pool's settlement collateral.</li>
 				</ol>
 				<figure class="diagram" id="fig-statoblast-share-lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="606" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.</span></div>
@@ -111,7 +111,7 @@
 					<h2>4. Local resolution</h2>
 					<a class="anchor-link" href="#local-resolution" aria-label="Link to Local resolution">#</a>
 				</div>
-				<p>The game opens with the first REP deposit after the question ends. REP-backed balances then accumulate behind Invalid, Yes, and No. Their median is <a href="../reference/glossary.html#binding-capital">binding capital</a> and determines the moving deadline. After that deadline, exactly one strict balance leader produces the local winner. Winning shares redeem from that pool.</p>
+				<p>The game opens with the first REP deposit after the question ends. REP-backed balances then accumulate behind Invalid, Yes, and No. Their median is <a href="../reference/glossary.html#binding-capital">binding capital</a> and determines the scheduled deadline. When the game finalizes locally, winning shares redeem from that pool.</p>
 				<p>If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the game does not choose between them. Anyone can then fork the universe on the market question through Statoblast, which pays the <a href="../reference/glossary.html#fork-threshold">fork threshold</a> from the REP held by the pool and the game. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the required-support curve, deadlines, payouts, and how games continue across forks.</p>
 			</section>
 
