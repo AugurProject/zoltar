@@ -22,7 +22,7 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 }
 
 /** The full card width is the stable slot, so a shortened address keeps its copy glyph right after the visible text. */
-function SelectedVaultAddress({ address }: { address: string }) {
+function VaultCardAddress({ address }: { address: string }) {
 	const slot = useRef<HTMLSpanElement>(null)
 	const control = useRef<HTMLSpanElement>(null)
 	const widthConstraint = useMemo(() => ({ control, slot }), [])
@@ -118,7 +118,7 @@ export function SelectedVaultSummarySection({
 		)
 	return (
 		<EntityCard badge={<Badge tone='muted'>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} surface='flat' title={selectedVaultIsOwnedByAccount ? workspaceCopy.myVault : workspaceCopy.vaultDetails} variant='record'>
-			<SelectedVaultAddress address={securityVaultDetails.vaultAddress} />
+			<VaultCardAddress address={securityVaultDetails.vaultAddress} />
 			{gridContent}
 		</EntityCard>
 	)

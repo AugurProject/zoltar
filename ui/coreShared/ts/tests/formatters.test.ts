@@ -125,7 +125,7 @@ void describe('formatting helpers', () => {
 		})
 
 		void test('rounds up at the displayed precision when asked, so a minimum never reads below its exact value', () => {
-			// One wei above a whole amount reads as the next cent, which is enough to reach the minimum.
+			// The smallest unit above a whole amount reads as the next cent, which is enough to reach the minimum.
 			expect(formatAmount(10n ** 18n + 1n, { rounding: 'up' })).toEqual({ approximate: true, exact: '1.000000000000000001', text: '1.01' })
 			expect(formatAmount(4_266_666_666_666_667n, { rounding: 'up' }).text).toBe('0.0043')
 			expect(formatAmount(5n * 10n ** 18n, { rounding: 'up' })).toEqual({ approximate: false, exact: '5', text: '5.00' })
