@@ -34,22 +34,17 @@ type DiscoveryState = {
 	totalCount: bigint | undefined
 }
 
-/** Scanning the chain is an explicit, one-page-at-a-time action so public RPC users only pay for what they ask for. */
-function DiscoveryControl({ discovery, discoverLabel, disabled = false, emphasize = false, nounPlural }: { disabled?: boolean; discoverLabel: string; discovery: DiscoveryState; emphasize?: boolean; nounPlural: string }) {
-	const label = (() => {
-		if (!discovery.hasScanned) return discoverLabel
-		return discovery.hasMore ? favoritesCopy.discoverMore : favoritesCopy.rescan
-	})()
+/** The first page loads automatically; users request only additional bounded pages. */
+function DiscoveryControl({ discovery, disabled = false, emphasize = false, nounPlural }: { disabled?: boolean; discovery: DiscoveryState; emphasize?: boolean; nounPlural: string }) {
+	if (!discovery.hasScanned) return discovery.loading ? <LoadingText>{favoritesCopy.discovering}</LoadingText> : undefined
+	if (!discovery.hasMore) return undefined
 	return (
 		<div className='discovery-control'>
-			{/* Progress only matters while pages remain; a finished scan is already told by the Scan again label. */}
-			{discovery.totalCount === undefined || !discovery.hasMore ? undefined : (
-				<p className='detail' role='status'>
-					{favoritesCopy.formatDiscoveredProgress(discovery.scannedItemCount.toString(), discovery.totalCount.toString(), nounPlural)}
-				</p>
-			)}
+			<p className='detail' role='status'>
+				{favoritesCopy.formatDiscoveredProgress(discovery.scannedItemCount.toString(), discovery.totalCount?.toString() ?? '', nounPlural)}
+			</p>
 			<button className={emphasize ? 'primary' : 'secondary'} type='button' disabled={disabled || discovery.loading} onClick={discovery.discoverNext}>
-				{discovery.loading ? <LoadingText>{favoritesCopy.discovering}</LoadingText> : label}
+				{discovery.loading ? <LoadingText>{favoritesCopy.discovering}</LoadingText> : favoritesCopy.discoverMore}
 			</button>
 		</div>
 	)
@@ -66,19 +61,18 @@ type LocalBrowseDirectoryState = {
 
 type LocalBrowseBarProps = {
 	directory: LocalBrowseDirectoryState
-	discoverLabel: string
 	disabled?: boolean
 	/** Shown once a scan has run. */
 	freshness?: DataFreshness | undefined
 	nounPlural: string
 }
 
-export function LocalBrowseBar({ directory, discoverLabel, disabled = false, freshness, nounPlural }: LocalBrowseBarProps) {
+export function LocalBrowseBar({ directory, disabled = false, freshness, nounPlural }: LocalBrowseBarProps) {
 	return (
 		<div className='local-browse-bar'>
 			<LocalCollectionSwitcher collection={directory.collection} downloadedCount={directory.downloaded.entries.length} favoritesCount={directory.favoriteEntries.length} onChange={directory.setCollection} />
 			{directory.discovery.hasScanned && freshness !== undefined ? <UpdatedAgo {...freshness} /> : undefined}
-			<DiscoveryControl discovery={directory.discovery} discoverLabel={discoverLabel} disabled={disabled} emphasize={directory.downloaded.entries.length === 0} nounPlural={nounPlural} />
+			<DiscoveryControl discovery={directory.discovery} disabled={disabled} emphasize={directory.downloaded.entries.length === 0} nounPlural={nounPlural} />
 		</div>
 	)
 }
@@ -98,7 +92,6 @@ type LocalCollectionEmptyStateProps = {
 	action?: ComponentChildren
 	copy: {
 		downloadedEmpty: string
-		downloadedEmptyDetail: string
 		favoritesEmpty: string
 		favoritesEmptyDetail: string
 		favoritesEmptyWithDownloadsDetail: string
@@ -127,5 +120,5 @@ export function LocalCollectionEmptyState({ action, copy, directory, registryEmp
 		)
 	if (directory.discovery.hasScanned && directory.discovery.totalCount === 0n) return <>{registryEmpty}</>
 	if (directory.collection === 'favorites') return <EmptyState title={copy.favoritesEmpty} detail={copy.favoritesEmptyDetail} actions={action} />
-	return <EmptyState title={copy.downloadedEmpty} detail={copy.downloadedEmptyDetail} actions={action} />
+	return <EmptyState title={copy.downloadedEmpty} actions={action} />
 }
