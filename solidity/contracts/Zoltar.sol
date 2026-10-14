@@ -19,6 +19,7 @@ contract Zoltar {
 		uint248 parentUniverseId;
 	}
 
+	// Universe ID keys each mapping; child outcome indexes follow deployment order.
 	mapping(uint248 => Universe) public universes;
 	mapping(uint248 => uint256[]) private deployedChildOutcomeIndexes;
 	mapping(uint248 => uint256) private universeTheoreticalSupplies;
@@ -165,7 +166,6 @@ contract Zoltar {
 		require(universe.forkTime != 0, 'Universe has not forked, so child universes are unavailable');
 		require(!zoltarQuestionData.isMalformedAnswerOption(universe.forkQuestionId, outcomeIndex), 'Malformed outcome index for the universe fork question');
 		uint248 childUniverseId = getChildUniverseId(universeId, outcomeIndex);
-		// Prevent overwriting an existing child universe
 		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed for this outcome');
 		ReputationToken childReputationToken = new ReputationToken{salt: bytes32(uint256(childUniverseId))}(address(this));
 		uint256 childUniverseTheoreticalSupplyAttoRep = childUniverseTheoreticalSupplySnapshotsAttoRep[universeId];

@@ -1,5 +1,5 @@
 import { requirePositiveLimit } from './discovery-client.ts'
-import { type CountedRegistryCursor, emptyCountedRegistryCursor } from './topology-cache.ts'
+import { type CountedRegistryCursor, emptyCountedRegistryCursor } from './topology-schema.ts'
 import { type Address, type Hash, getAddress } from '@zoltar/bot-shared/ethereum'
 import { createHash } from 'node:crypto'
 
@@ -49,12 +49,6 @@ export function assertRegistryCountNotRegressed(cursor: CountedRegistryCursor | 
 	if (cursor !== undefined && (BigInt(cursor.nextIndex) > count || BigInt(cursor.canonicalCount) > count)) {
 		throw new Error(`${label} canonical count ${count.toString()} no longer extends its authenticated cursor`)
 	}
-}
-
-export function registryCatchUpWarning(label: string, cursor: CountedRegistryCursor) {
-	return BigInt(cursor.nextIndex) < BigInt(cursor.canonicalCount)
-		? `${label} discovery truncated while bounded catch-up authenticated ${cursor.nextIndex} of ${cursor.canonicalCount} canonical entries`
-		: `${label} discovery truncated after authenticating the exact canonical total ${cursor.canonicalCount}; configured resident safety envelope cannot hold complete topology (entry limit ${cursor.residentLimit})`
 }
 
 export function sameRegistryCursor(left: CountedRegistryCursor, right: CountedRegistryCursor) {

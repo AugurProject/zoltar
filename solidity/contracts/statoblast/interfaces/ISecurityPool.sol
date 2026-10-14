@@ -20,7 +20,7 @@ struct SecurityVault {
 }
 
 /// @notice Complete pool fee and settlement-collateral accounting state.
-/// @dev ETH-denominated protocol accounting uses attoETH terminology without changing the existing scale.
+/// @dev ETH amounts are in attoETH (10^-18 ETH).
 /// Fee indexes use 1e18 fixed-point precision.
 struct PoolAccountingSnapshot {
 	/// @dev ETH reserved as complete-set settlement collateral, denominated in attoETH.

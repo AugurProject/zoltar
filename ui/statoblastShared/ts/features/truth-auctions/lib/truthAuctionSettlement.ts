@@ -29,7 +29,7 @@ type TruthAuctionSettlementSelectionState = {
 type TruthAuctionSettlementSelectionEstimate = {
 	estimatedAssignedUnderwritingLimitAttoEth: bigint | undefined
 	estimatedRefundedAttoEth: bigint
-	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
+	// The REP backing estimate remains available for underfunded auctions.
 	estimatedVaultRepBackingAttoRep: bigint
 }
 

@@ -15,24 +15,17 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/monitoring/discovery.ts', 974],
-		['bots/chaos/src/monitoring/topology-cache.ts', 941],
 		['bots/chaos/src/dashboard/dashboard-server.ts', 816],
-		['bots/chaos/src/state/protocol-index-store.ts', 900],
 		['bots/chaos/src/execution/recovery.ts', 644],
 		['bots/chaos/src/monitoring/protocol-index.ts', 691],
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [['bots/liquidator/src/state/operator-state.ts', 632]]),
-	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
-		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
-		['ui/statoblastShared/ts/protocol/securityPools.ts', 683],
-	]),
+	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [['ui/coreShared/ts/simulation/tevmEngine.ts', 777]]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
 		['tooling/docs/check-docs-examples.mts', 1043],
 		['tooling/testing/coverage-report.mts', 931],
 		['tooling/docs/check-docs-reference-values.mts', 791],
-		['tooling/ui/watch.mts', 781],
 		['tooling/contracts/deploy-testnet.mts', 671],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
