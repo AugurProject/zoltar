@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
+import { PortfoliosSection } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfoliosSection.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
@@ -22,6 +23,7 @@ const STATOBLAST_NOT_FOUND_LINKS = [
 type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
 	openOracle: ComponentProps<typeof OpenOracleSection>
+	portfolios: ComponentProps<typeof PortfoliosSection>
 	readBackendMessage: string | undefined
 	route: StatoblastRoute
 	securityPools: ComponentProps<typeof SecurityPoolsSection>
@@ -31,7 +33,7 @@ function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 're
 	return shouldRenderAppRouteContent(route, readBackendMessage)
 }
 
-export function AppRouteContent({ deploy, openOracle, readBackendMessage, route, securityPools }: Props) {
+export function AppRouteContent({ deploy, openOracle, portfolios, readBackendMessage, route, securityPools }: Props) {
 	if (!shouldRenderRouteContent({ readBackendMessage, route })) return null
 
 	switch (route) {
@@ -39,6 +41,8 @@ export function AppRouteContent({ deploy, openOracle, readBackendMessage, route,
 			return <DeploymentRouteContent {...deploy} />
 		case 'pools':
 			return <SecurityPoolsSection {...securityPools} />
+		case 'portfolios':
+			return <PortfoliosSection {...portfolios} />
 		case 'open-oracle':
 			return <OpenOracleSection {...openOracle} />
 		case 'not-found':

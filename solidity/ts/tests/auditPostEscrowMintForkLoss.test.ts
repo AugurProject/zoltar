@@ -40,9 +40,11 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 		const settlementCollateralAttoEth = 1n * 10n ** 18n
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, 10n * PRICE_PRECISION)
+		await mockWindow.setTime(questionData.endTime - 2n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, 10n * PRICE_PRECISION)
-		await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 
 		// Reconstruct the full-bad-debt accounting boundary so this regression isolates
 		// fork finalization from the independent liquidation setup.

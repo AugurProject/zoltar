@@ -5,6 +5,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { MarketCreationResult, MarketDetails, ReadClient, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type {
+	AuthenticatedForkClaim,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
 	LiquidationApprovalDetails,
@@ -283,12 +284,18 @@ export type ForkAuctionRouteContentProps = {
 	accountState: AccountState
 	forkAuctionDetails: ForkAuctionDetails | undefined
 	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined
+	forkClaimPreparation?: { outcome: ReportingOutcomeKey; parentDepositIndex: bigint } | undefined
 	forkAuctionError: string | undefined
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean
 	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
+	onPrepareChildPriceFeed: () => void
+	onPrepareChildDependencies: () => void
 	onCreateChildUniverse: () => void
+	onInitializeChildHistory: () => void
+	onPrepareForkClaim: (identity: AuthenticatedForkClaim) => void
+	onPrepareAndSettleForkClaim: (identity: AuthenticatedForkClaim) => void
 	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
 	onForkUniverse: () => void

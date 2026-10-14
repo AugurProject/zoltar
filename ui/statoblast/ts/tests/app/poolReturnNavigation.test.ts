@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { getRouteHref, resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { installStatoblastRouting, statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from '../../app/lib/routeValidation.js'
 
 let cleanup: (() => void) | undefined
 beforeEach(() => {
@@ -65,4 +66,17 @@ test('returns to Browse or Universes with the same list controls and selected un
 test('uses the Favorites browser when no pool context was selected', () => {
 	window.history.replaceState({}, '', '#/open-oracle')
 	expect(getRouteHref('pools')).toBe('#/pools')
+})
+
+test('opens Portfolios from a remembered OpenOracle view and preserves the return context', () => {
+	for (const openOracleView of ['create', 'selected-report']) {
+		window.history.replaceState({}, '', `#/open-oracle?openOracleView=${openOracleView}&openOracleReportId=42&universe=7`)
+		const href = getRouteHref('portfolios')
+		const search = href.split('?')[1] ?? ''
+		const resolvedRoute = statoblastRouting.resolve(href)
+		expect(resolvedRoute).toBe('portfolios')
+		expect(isInvalidStatoblastRouteState(getInvalidStatoblastRouteState({ openOracleView: new URLSearchParams(search).get('openOracleView') ?? '', pageSearch: '', resolvedRoute, search, selectedPoolView: '' }))).toBe(false)
+		window.history.replaceState({}, '', href)
+		expect(getRouteHref('open-oracle')).toBe(`#/open-oracle?openOracleView=${openOracleView}&openOracleReportId=42&universe=7`)
+	}
 })

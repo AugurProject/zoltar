@@ -1,3 +1,4 @@
+import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
@@ -6,7 +7,8 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, zeroAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { discoverChildPoolPreparations } from '../../src/monitoring/discovery-child-preparation.ts'
 import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
 import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
@@ -18,7 +20,7 @@ import { discoverStagedOperations } from '../../src/monitoring/discovery-staged-
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { urgentOperationPlans } from '../support/operation-plans.ts'
 import type { OracleGameSnapshot, PlanningOptions } from '../../src/operations/types.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
@@ -58,6 +60,21 @@ test('monitors inventory for a known execution address without requiring a signe
 	expect(fake.contractReads.filter(read => read.functionName === 'balanceOf').every(read => read.args?.[0] === wallet)).toBe(true)
 })
 
+test('discovers a shared feed with aggregate exposure instead of empty question collateral', async () => {
+	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n ** 18n })
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: (10n ** 18n).toString(), settlementCollateralAttoEth: 0n.toString() })
+})
+
+for (const shared of [false, true])
+	for (const ready of [false, true])
+		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
+			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
+			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
+			expect(preparation['1']).toEqual({ portfolio: shared ? address(90) : zeroAddress, childUniverseId: '88', childPool: ready ? address(93) : zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: ready, feedRequired: shared && !ready, dependenciesRequired: !ready })
+			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(shared)
+		})
+
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
 	const fake = refundBackfillClient(25n)
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
@@ -87,7 +104,7 @@ test('canonical scans publish inventory only for a successfully scanned executio
 			networkConfigured: true,
 			runtime: { ...example.runtime, protocolStartBlock: '0', stateFile: await temporaryStatePath() },
 		})
-		settings.deployment = snapshotFixture().deployments
+		settings.deployment = { ...snapshotFixture().deployments, multicall3: address(90) }
 		const pool = createChaosReadPool(settings)
 		const read = chaosReadClients(settings, pool)[0]
 		if (read === undefined) throw new Error('Canonical scan fixture needs one client')
@@ -215,6 +232,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
+	childPreparation?: { shared: boolean; ready: boolean }
 	chainId?: number
 	missingContract?: Address
 	missingContracts?: readonly Address[]
@@ -336,6 +354,18 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return graph.universeTheoreticalSupplyAttoRep ?? 1_000_000n
 				case 'forkBurnDivisor':
 					return 5n
+				case 'getChildUniverseId':
+					return 88n
+				case 'getSecurityPoolPortfolio':
+					return graph.childPreparation?.shared ? address(90) : zeroAddress
+				case 'getSecurityPoolOriginId':
+					return hash(90)
+				case 'getChildPoolDependencies':
+					return graph.childPreparation?.ready ? [address(91), address(92)] : [zeroAddress, zeroAddress]
+				case 'getSecurityPool':
+					return graph.childPreparation?.ready ? address(93) : zeroAddress
+				case 'sharedPriceFeeds':
+					return graph.childPreparation?.ready ? address(94) : zeroAddress
 				case 'getMigrationRepBalanceAttoRep':
 					return 0n
 				case 'getDeployedChildUniverses': {
@@ -375,6 +405,8 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Pool-deployment page arguments required')
 					return [...(graph.poolDeployments ?? [])].slice(Number(start), Number(start + count))
 				}
+				case 'escalationGame':
+					return zeroAddress
 				case 'balanceOf':
 				case 'allowance':
 					return 0n
@@ -398,6 +430,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 }
 
 interface RefundBackfillOverrides {
+	sharedExposure?: bigint
 	auctionFinalized?: boolean
 	badDebtGeneration?: bigint
 	baseFeePerGas?: bigint
@@ -500,8 +533,14 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return 100n
 				case 'lastPrice':
 					return 10n ** 18n
+				case 'priceFeed':
+					return overrides.sharedExposure === undefined ? coordinator : address(80)
+				case 'aggregateExposureAttoEth':
+					expect(parameters.blockNumber).toBe(10n)
+					expect(parameters.address).toBe(address(80))
+					return overrides.sharedExposure ?? 0n
 				case 'minimumToken1ReportAttoEth':
-					return 10_001n * (1n + callBaseFee)
+					return 10_001n + ((overrides.sharedExposure ?? 0n) / 100n > 10_001n * callBaseFee ? (overrides.sharedExposure ?? 0n) / 100n : 10_001n * callBaseFee)
 				case 'gasConsumedOpenOracleReportPrice':
 				case 'getSettlementCallbackGasLimit':
 				case 'gasUnitsForOneDispute':

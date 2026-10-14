@@ -15,8 +15,8 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
-		['bots/chaos/src/monitoring/discovery.ts', 974],
-		['bots/chaos/src/monitoring/topology-cache.ts', 941],
+		['bots/chaos/src/monitoring/discovery.ts', 968],
+		['bots/chaos/src/monitoring/topology-cache.ts', 896],
 		['bots/chaos/src/dashboard/dashboard-server.ts', 816],
 		['bots/chaos/src/state/protocol-index-store.ts', 900],
 		['bots/chaos/src/execution/recovery.ts', 644],
@@ -31,9 +31,9 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
 		['tooling/docs/check-docs-examples.mts', 1043],
 		['tooling/testing/coverage-report.mts', 931],
-		['tooling/docs/check-docs-reference-values.mts', 791],
+		['tooling/docs/check-docs-reference-values.mts', 790],
 		['tooling/ui/watch.mts', 781],
-		['tooling/contracts/deploy-testnet.mts', 671],
+		['tooling/contracts/deploy-testnet.mts', 641],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 1049],
@@ -44,7 +44,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
 		['solidity/contracts/statoblast/SecurityPool.sol', 704],
-		['solidity/contracts/statoblast/SecurityPoolForker.sol', 617],
-		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 639],
+		['solidity/contracts/statoblast/SecurityPoolForker.sol', 613],
 	]),
 ])

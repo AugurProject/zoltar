@@ -336,7 +336,7 @@ describe('chaos operation catalog', () => {
 		if (firstPool === undefined) throw new Error('OpenOracle dispute fixture is missing its first pool')
 		firstPool.pendingReportId = '41'
 		const secondCoordinator = address(91)
-		snapshot.pools.push({ ...firstPool, address: address(90), coordinator: secondCoordinator, pendingReportId: '42' })
+		snapshot.pools.push({ ...firstPool, address: address(90), coordinator: secondCoordinator, priceFeed: secondCoordinator, pendingReportId: '42' })
 		const report = {
 			currentAmount1: '1000',
 			currentAmount2: '1000',

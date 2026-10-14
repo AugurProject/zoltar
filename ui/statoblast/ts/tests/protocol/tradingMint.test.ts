@@ -7,6 +7,23 @@ import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/pr
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 
 void describe('complete-set mint submission', () => {
+	test.each([100n, 101n])('rejects minting at or after the question end without an escalation game (%s)', async currentTimestamp => {
+		const send = mock(() => undefined)
+		const client = {
+			...asWriteClient(
+				createMockWriteClient(send, async request => {
+					if (request.functionName === 'escalationGame') return zeroAddress
+					if (request.functionName === 'questionData') return pool
+					if (request.functionName === 'questionId' || request.functionName === 'universeId') return 1n
+					if (request.functionName === 'getQuestionEndDate') return 100n
+					throw new Error(`Unexpected read ${request.functionName}`)
+				}),
+			),
+			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
+		}
+		await expect(createCompleteSetInSecurityPool(client, pool, 10n ** 18n)).rejects.toThrow('question ended')
+		expect(send).not.toHaveBeenCalled()
+	})
 	test.each([3540n, 10n ** 9n])('submits the selected mint amount without reading the oracle at %s', async currentTimestamp => {
 		const send = mock((request: { data?: `0x${string}`; value?: bigint }) => {
 			expect(request.value).toBe(10n ** 18n)
@@ -17,7 +34,9 @@ void describe('complete-set mint submission', () => {
 			...asWriteClient(
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'escalationGame') return zeroAddress
-					if (request.functionName === 'universeId') return 1n
+					if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
+					if (request.functionName === 'questionData') return pool
+					if (request.functionName === 'getQuestionEndDate') return currentTimestamp + 1n
 					throw new Error(`Unexpected read ${request.functionName}`)
 				}),
 			),

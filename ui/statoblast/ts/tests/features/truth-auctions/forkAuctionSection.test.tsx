@@ -2,7 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -11,7 +11,7 @@ import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReportingDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { AuthenticatedForkClaim, EscalationDeposit, ImportedEscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReportingDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
@@ -150,6 +150,16 @@ function createForkMigrationReadClient(): Pick<ReadClient, 'readContract'> {
 			switch (request.functionName) {
 				case 'getChildUniverseId':
 					return 11n
+				case 'getSecurityPoolPortfolio':
+					return zeroAddress
+				case 'getSecurityPoolOriginId':
+					return `0x${'00'.repeat(32)}`
+				case 'escalationGame':
+					return zeroAddress
+				case 'getChildPoolDependencies':
+					return [PARENT_POOL_ADDRESS, PARENT_POOL_ADDRESS]
+				case 'getSecurityPool':
+					return PARENT_POOL_ADDRESS
 				case 'getMigrationProxyAddress':
 					return zeroAddress
 				case 'getRepToken':
@@ -626,7 +636,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved deposits for No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
-		expect(button.disabled).toBe(false)
+		await waitFor(() => expect(button.disabled).toBe(false))
 		fireEvent.click(button)
 		expect(onMigrateUnresolvedEscalation).toHaveBeenLastCalledWith('no')
 	})
@@ -699,6 +709,16 @@ describe('ForkAuctionSection', () => {
 							switch (request.functionName) {
 								case 'getChildUniverseId':
 									return 11n
+								case 'getSecurityPoolPortfolio':
+									return zeroAddress
+								case 'getSecurityPoolOriginId':
+									return `0x${'00'.repeat(32)}`
+								case 'escalationGame':
+									return zeroAddress
+								case 'getChildPoolDependencies':
+									return [PARENT_POOL_ADDRESS, PARENT_POOL_ADDRESS]
+								case 'getSecurityPool':
+									return PARENT_POOL_ADDRESS
 								case 'getMigrationProxyAddress':
 									return zeroAddress
 								case 'getRepToken':
@@ -741,7 +761,7 @@ describe('ForkAuctionSection', () => {
 	const FORKED_VAULT_ADDRESS = getAddress('0x00000000000000000000000000000000000000ab')
 	const POOL_REP_AT_FORK_ATTO_REP = 2_000_000n * 10n ** 18n
 
-	function createSeedStatusReadClient(balances: { childPool: () => bigint; proxy: () => bigint }, onLoad: () => void = () => undefined): Pick<ReadClient, 'readContract'> {
+	function createSeedStatusReadClient(balances: { childPool: () => bigint; proxy: () => bigint }, onLoad: () => void = () => undefined, missingChild = false): Pick<ReadClient, 'readContract'> {
 		const proxyAddress = getAddress('0x00000000000000000000000000000000000000a9')
 		return {
 			readContract: mock(async request => {
@@ -749,6 +769,16 @@ describe('ForkAuctionSection', () => {
 					case 'getChildUniverseId':
 						onLoad()
 						return 11n
+					case 'getSecurityPoolPortfolio':
+						return zeroAddress
+					case 'getSecurityPoolOriginId':
+						return `0x${'00'.repeat(32)}`
+					case 'escalationGame':
+						return zeroAddress
+					case 'getChildPoolDependencies':
+						return [PARENT_POOL_ADDRESS, PARENT_POOL_ADDRESS]
+					case 'getSecurityPool':
+						return missingChild ? zeroAddress : PARENT_POOL_ADDRESS
 					case 'getMigrationProxyAddress':
 						return proxyAddress
 					case 'getRepToken':
@@ -796,6 +826,15 @@ describe('ForkAuctionSection', () => {
 			...overrides,
 		})
 	}
+
+	test('pool-held REP can be split before child creation while vault migration waits for preparation', async () => {
+		const forkMigrationReadClient = createSeedStatusReadClient({ childPool: () => 0n, proxy: () => 0n }, undefined, true)
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ forkMigrationReadClient })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate pool to Yes universe').disabled).toBe(false))
+		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(true)
+		expect(getTransactionButtonState(document.body, 'Create child pool').disabled).toBe(false)
+	})
 
 	test('shows and reviews the forked vault share of pool-held REP at fork instead of its emptied current backing', async () => {
 		const onMigrateVault = mock((_vault?: { repAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint }) => undefined)
@@ -890,6 +929,97 @@ describe('ForkAuctionSection', () => {
 		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').reason).toBe('Migration window has closed for this parent pool.')
 		expect(documentQueries.getByText('Moves all your vault REP and underwriting commitments to the Yes universe. This can’t be undone or split across outcomes.')).not.toBeNull()
 		expect(document.body.textContent).not.toContain('migration power')
+	})
+
+	test('shows pending preparation only on the selected inherited claim', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const reportingDetails = createActiveReportingDetails({ questionOutcome: 'yes' })
+		if (reportingDetails.status !== 'active') throw new Error('Active reporting fixture required')
+		const yes = reportingDetails.sides.find(side => side.key === 'yes')
+		if (yes === undefined) throw new Error('Yes outcome fixture required')
+		yes.importedUserDeposits = [9n, 10n].map(parentDepositIndex => ({ amountAttoRep: 12n, cumulativeAmountAttoRep: 12n, depositor: walletAddress, parentDepositIndex, claimCheckpoint: { nextSourceGame: walletAddress, pendingSteps: 8n, complete: false, ready: false } }))
+		const rendered = await renderIntoDocument(
+			h(ForkAuctionSection, createProps({ accountState: createAccountState({ address: walletAddress }), currentStageView: 'settlement', selectedStageView: 'settlement', reportingDetails, forkAuctionActiveAction: 'prepareForkClaim', forkClaimPreparation: { outcome: 'yes', parentDepositIndex: 9n } })),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const buttons = Array.from(document.querySelectorAll('button'))
+		expect(buttons.filter(button => button.textContent?.includes('Preparing inherited claim'))).toHaveLength(1)
+		expect(buttons.filter(button => button.textContent === 'Prepare inherited claim')).toHaveLength(1)
+		expect(buttons.find(button => button.textContent === 'Prepare inherited claim')?.disabled).toBe(true)
+	})
+
+	test('keeps separate claim preparation and settlement controls in place through final batches, missing identity, pending and completion', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const reportingDetails = createActiveReportingDetails({ questionOutcome: 'yes' })
+		if (reportingDetails.status !== 'active') throw new Error('Active reporting fixture required')
+		const yes = reportingDetails.sides.find(side => side.key === 'yes')
+		if (yes === undefined) throw new Error('Yes outcome fixture required')
+		const identity: AuthenticatedForkClaim = { escalationGame: reportingDetails.escalationGameAddress, outcome: 'yes', snapshotRoot: zeroHash, snapshotLeafCount: 1n, amountAttoRep: 12n, cumulativeAmountAttoRep: 12n, depositor: walletAddress, parentDepositIndex: 9n, leafIndex: 0n }
+		const onPrepareForkClaim = mock(() => undefined)
+		const onPrepareAndSettleForkClaim = mock(() => undefined)
+		const deposit: ImportedEscalationDeposit = { amountAttoRep: 12n, cumulativeAmountAttoRep: 12n, depositor: walletAddress, parentDepositIndex: 9n, claimIdentity: identity, claimCheckpoint: { nextSourceGame: zeroAddress, pendingSteps: 8n, complete: false, ready: false } }
+		yes.importedUserDeposits = [deposit]
+		const props = createProps({ accountState: createAccountState({ address: walletAddress }), currentStageView: 'settlement', selectedStageView: 'settlement', reportingDetails, onPrepareForkClaim, onPrepareAndSettleForkClaim })
+		const rendered = await renderIntoDocument(h(ForkAuctionSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		const prepareButton = queries.getByRole('button', { name: 'Prepare inherited claim' })
+		const settleButton = queries.getByRole('button', { name: 'Prepare and settle' })
+		if (!(prepareButton instanceof HTMLButtonElement) || !(settleButton instanceof HTMLButtonElement)) throw new Error('Expected inherited claim transaction controls')
+		expect(prepareButton.disabled).toBeFalse()
+		expect(settleButton.disabled).toBeFalse()
+		await act(async () => {
+			fireEvent.click(prepareButton)
+			fireEvent.click(settleButton)
+		})
+		expect(onPrepareForkClaim).toHaveBeenCalledWith(identity)
+		expect(onPrepareAndSettleForkClaim).toHaveBeenCalledWith(identity)
+		for (const pendingSteps of [0n, 1n, 8n, 9n]) {
+			deposit.claimCheckpoint = { nextSourceGame: zeroAddress, pendingSteps, complete: false, ready: false }
+			await act(async () => {
+				render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails } }), rendered.container)
+			})
+			expect(queries.getByRole('button', { name: 'Prepare inherited claim' })).toBe(prepareButton)
+			expect(queries.getByRole('button', { name: 'Prepare and settle' })).toBe(settleButton)
+			expect(settleButton.disabled).toBe(pendingSteps === 0n || pendingSteps > 8n)
+		}
+		deposit.claimCheckpoint = { nextSourceGame: walletAddress, pendingSteps: 1n, complete: false, ready: false }
+		await act(async () => {
+			render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails } }), rendered.container)
+		})
+		expect(getTransactionButtonState(document.body, 'Prepare and settle').reason).toBe('Prepare earlier ancestry steps first.')
+		deposit.claimCheckpoint = { nextSourceGame: zeroAddress, pendingSteps: 1n, complete: false, ready: false }
+		delete deposit.claimIdentity
+		await act(async () => {
+			render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails } }), rendered.container)
+		})
+		expect(getTransactionButtonState(document.body, 'Prepare inherited claim').reason).toBe('Refresh the pool to verify this deposit.')
+		expect(getTransactionButtonState(document.body, 'Prepare and settle').reason).toBe('Refresh the pool to verify this deposit.')
+		deposit.claimIdentity = identity
+		await act(async () => {
+			render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails }, forkAuctionActiveAction: 'settleForkedEscalation', forkClaimPreparation: { outcome: 'yes', parentDepositIndex: 9n } }), rendered.container)
+		})
+		expect(queries.getByRole('button', { name: 'Preparing and settling…' })).toBe(settleButton)
+		expect(getTransactionButtonState(document.body, 'Preparing and settling…').disabled).toBeTrue()
+		expect(getTransactionButtonState(document.body, 'Prepare inherited claim').disabled).toBeTrue()
+		await act(async () => {
+			render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails }, forkAuctionActiveAction: 'prepareForkClaim', forkClaimPreparation: { outcome: 'yes', parentDepositIndex: 9n } }), rendered.container)
+		})
+		expect(getTransactionButtonState(document.body, 'Preparing inherited claim…').disabled).toBeTrue()
+		expect(getTransactionButtonState(document.body, 'Prepare and settle').disabled).toBeTrue()
+		await act(async () => {
+			render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails }, forkAuctionActiveAction: 'settleForkedEscalation', forkClaimPreparation: { outcome: 'yes', parentDepositIndex: 10n } }), rendered.container)
+		})
+		expect(getTransactionButtonState(document.body, 'Prepare inherited claim').disabled).toBeTrue()
+		expect(getTransactionButtonState(document.body, 'Prepare and settle').disabled).toBeTrue()
+		deposit.claimCheckpoint = { nextSourceGame: zeroAddress, pendingSteps: 0n, complete: true, ready: true }
+		await act(async () => {
+			render(h(ForkAuctionSection, { ...props, reportingDetails: { ...reportingDetails } }), rendered.container)
+		})
+		expect(queries.getByRole('button', { name: 'Prepare inherited claim' })).toBe(prepareButton)
+		expect(queries.getByRole('button', { name: 'Prepare and settle' })).toBe(settleButton)
+		expect(getTransactionButtonState(document.body, 'Prepare inherited claim').reason).toBe('Claim preparation complete')
+		expect(getTransactionButtonState(document.body, 'Prepare and settle').reason).toBe('Claim preparation complete')
 	})
 
 	test('keeps fork-carried settlement disabled until the child pool question finalizes', async () => {

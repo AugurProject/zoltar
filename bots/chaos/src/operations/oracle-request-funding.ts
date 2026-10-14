@@ -1,6 +1,6 @@
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import type { CanonicalUintString } from '../core/units.ts'
-import type { OracleRequestFundingSnapshot } from './types.ts'
+import type { OracleRequestFundingSnapshot, PoolSnapshot } from './types.ts'
 
 export const BPS_DENOMINATOR = 10_000n
 const OPEN_INTEREST_DIVIDER = 100n
@@ -263,4 +263,9 @@ export function assertOracleRequestFundingEnvelope(parameters: { coordinator: Or
 	if (currentEscalationHalt > persistedEscalationHalt) {
 		throw oracleRequestFundingError(`${subject} no longer covers the current escalation halt`)
 	}
+}
+
+/** Ordinary pools use question collateral; shared feeds protect all live question exposure. */
+export function poolOracleExposure(pool: PoolSnapshot) {
+	return pool.priceFeed.toLowerCase() === pool.coordinator.toLowerCase() ? pool.settlementCollateralAttoEth : pool.oracleExposureAttoEth
 }

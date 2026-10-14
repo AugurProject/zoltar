@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. Rows marked &quot;through <code>fallback()</code>&quot; are not in the compiled ABI: the pool forwards exactly those four selectors to <code>SecurityPoolOperationsDelegate</code> by <code>delegatecall</code> and rejects every other unknown selector with <code>Unsupported pool operation</code>.</p>
 				<!-- Validated read ABI fingerprint: 9a1fd89f52b252ecbe5f71586c5396279656674e65e3fcf13473f751fc270bc3 -->
-				<!-- Validated complete compiled ABI fingerprint: 55af283fc44f7e5f092698af7fd25a7a60e03670fc57067245b645b25d3e4beb -->
+				<!-- Validated complete compiled ABI fingerprint: cdc2fbcd070241bcfcadb222bb1136c779526ab334f9c31092e9fcdcaa5f208f -->
 				<table>
 					<thead>
 						<tr>
@@ -44,7 +44,7 @@
 						<tr>
 							<td><code>setUnderwritingLimit(limitAttoEth)</code></td>
 							<td>Vault owner</td>
-							<td>Operational pool (<code>Pool inactive</code>) in an unforked universe (<code>Forked</code>); a resolved operational pool may still reduce a commitment after an unrelated late fork. Increases require open admission, a fresh price (<code>Stale price</code>), and both full-commitment backing checks (<code>Vault backing insufficient</code>). Reductions, including a zero exit, must leave total commitments at least equal to tracked settlement collateral (<code>Commitments below collateral</code>).</td>
+							<td>Operational pool (<code>Pool inactive</code>) in an unforked universe (<code>Forked</code>); a resolved operational pool may still reduce a commitment after an unrelated late fork. Increases require open admission, a fresh price (<code>Stale price</code>), and both full-commitment backing checks (<code>Vault backing insufficient</code>). Before final resolution, reductions must leave total commitments at least equal to tracked settlement collateral (<code>Commitments below collateral</code>). With a concrete final outcome, reductions may reach zero while shares remain outstanding; their ETH collateral stays reserved.</td>
 							<td>Checkpoints the vault fees, then changes the <a href="../glossary.html#underwriting-commitment">underwriting commitment</a> independently of REP ownership and recalculates retention. A call that repeats the current value returns before the checkpoint and changes nothing.</td>
 							<td>Fee-accrual and retention-change <code>PoolAccountingCheckpoint</code> events when due; then <code>UnderwritingLimitSet</code>, <code>VaultAccountingCheckpoint</code>, and <code>PoolAccountingCheckpoint</code>; no event for a call that repeats the current value</td>
 						</tr>
@@ -93,7 +93,7 @@
 						<tr>
 							<td><code>createCompleteSet()</code> with ETH</td>
 							<td>Trader</td>
-							<td>Operational and unforked; no escalation game, pending continuation, or inherited fixed outcome; positive ETH converts to at least one complete-set unit. Resulting tracked collateral must not exceed total commitments; no oracle price or REP backing is checked. A contract trader must accept <code>onERC1155BatchReceived</code> under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>.</td>
+							<td>Operational and unforked; timestamp before question end (<code>Question ended</code> otherwise); no escalation game, pending continuation, or inherited fixed outcome; positive ETH converts to at least one complete-set unit. Resulting tracked collateral must not exceed total commitments; no oracle price or REP backing is checked. A contract trader must accept <code>onERC1155BatchReceived</code> under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>.</td>
 							<td>Adds collateral and mints one <code>Invalid</code>, <code>Yes</code>, and <code>No</code> share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.</td>
 							<td>Accrual <code>PoolAccountingCheckpoint</code> when due; <code>CompleteSetCreated</code>, <code>PoolAccountingCheckpoint</code>, then ERC-1155 <code>TransferBatch</code> on a successful callback; retention <code>PoolAccountingCheckpoint</code> when the rate changes</td>
 						</tr>
@@ -203,11 +203,11 @@
 							<td>Escalation <code>GameContinuedFromFork</code>, then pool <code>EscalationGameSet</code></td>
 						</tr>
 						<tr>
-							<td><code>initializeForkCarrySnapshotWithResolutionBalances(sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots)</code><wbr /></td>
+							<td><code>initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)</code><wbr /></td>
 							<td><code>SecurityPoolForker</code> only</td>
-							<td>A game is configured; it is a fork continuation with no prior snapshot; leaf counts fit the MMR; supplied or computed snapshot ID matches the data.</td>
-							<td>Installs the continuation game's immutable carry peaks, counts, totals, resolution balances, and normalized nullifier roots.</td>
-							<td><code>ForkCarryCheckpoint</code></td>
+							<td>A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.</td>
+							<td>Installs the next outcome of the continuation game’s canonical snapshot. Three calls complete its immutable carry peaks, counts, totals, resolution balances, and normalized nullifier roots.</td>
+							<td><code>ForkCarryCheckpoint</code> on completion of the third outcome</td>
 						</tr>
 						<tr>
 							<td><code>resumeForkedEscalationGame()</code></td>

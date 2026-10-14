@@ -1,3 +1,4 @@
+import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import { validateDoctorCompanionState } from '../../src/cli/doctor.ts'
 import { parseSettings } from '../../src/config/settings.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -5,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, validateImmutableTopologySidecarIfPresent, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, validateImmutableTopologySidecarIfPresent, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { address, hash } from '../operations/fixture.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
 

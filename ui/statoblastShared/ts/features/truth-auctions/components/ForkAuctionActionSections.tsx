@@ -22,6 +22,7 @@ export type ForkAuctionActionOptions = {
 	availability?: ActionAvailability
 	forceEnabled?: boolean
 	idleLabel: string
+	inlineHint?: string | undefined
 	onClick: () => void
 	pendingLabel: string
 	pending?: boolean
@@ -30,11 +31,12 @@ export type ForkAuctionActionOptions = {
 
 /** Renders fork and truth auction actions. The wallet prerequisite comes before every other blocker, so a disconnected wallet or wrong network offers its connect or switch fix. */
 export function createForkAuctionActionRenderer({ activeAction, forkPoolState, walletGuard }: { activeAction: ForkAuctionSectionProps['forkAuctionActiveAction']; forkPoolState: SecurityPoolStateModel; walletGuard: WalletGuard }) {
-	return ({ action, availability = { disabled: false, reason: undefined }, forceEnabled, idleLabel, onClick, pendingLabel, pending, tone = 'secondary' }: ForkAuctionActionOptions) => {
+	return ({ action, availability = { disabled: false, reason: undefined }, forceEnabled, idleLabel, inlineHint, onClick, pendingLabel, pending, tone = 'secondary' }: ForkAuctionActionOptions) => {
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
 		return (
 			<TransactionActionButton
 				idleLabel={idleLabel}
+				inlineHint={inlineHint}
 				pendingLabel={pendingLabel}
 				onClick={onClick}
 				pending={pending ?? activeAction === action}

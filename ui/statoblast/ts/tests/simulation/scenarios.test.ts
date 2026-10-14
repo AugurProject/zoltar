@@ -7,6 +7,9 @@ import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, get
 void describe('statoblast simulation scenarios', () => {
 	void test('registers scenarios into the shared registry', () => {
 		registerStatoblastSimulationScenarios()
+		expect(getRegisteredSimulationScenarios()).toContain('portfolio')
+		expect(getSimulationScenarioLabel('portfolio')).toBe('Portfolio')
+		expect(getSimulationScenarioDescription('portfolio')).toContain('automatic underwriting enabled')
 		expect(getRegisteredSimulationScenarios()).toContain('security-pool')
 		expect(getRegisteredSimulationScenarios()).toContain('securitypoolx2')
 		expect(getRegisteredSimulationScenarios()).toContain('securitypoolx2-auction')

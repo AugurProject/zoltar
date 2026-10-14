@@ -44,10 +44,20 @@
 			"bun": "./ts/statoblast/vaultOperations.ts",
 			"default": "./js/statoblast/vaultOperations.js"
 		},
+		"./statoblast/securityPoolPortfolio": {
+			"types": "./ts/statoblast/securityPoolPortfolio.ts",
+			"bun": "./ts/statoblast/securityPoolPortfolio.ts",
+			"default": "./js/statoblast/securityPoolPortfolio.js"
+		},
 		"./deployment/initCodes": {
 			"types": "./ts/deployment/initCodes.ts",
 			"bun": "./ts/deployment/initCodes.ts",
 			"default": "./js/deployment/initCodes.js"
+		},
+		"./escalationGame/claimCheckpoint": {
+			"types": "./ts/escalationGame/claimCheckpoint.ts",
+			"bun": "./ts/escalationGame/claimCheckpoint.ts",
+			"default": "./js/escalationGame/claimCheckpoint.js"
 		}
 	},
 	"files": [

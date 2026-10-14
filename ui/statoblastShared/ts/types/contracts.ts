@@ -27,7 +27,11 @@ export type LiquidationApprovalDetails = {
 export type ForkAuctionAction =
 	| 'forkWithOwnEscalation'
 	| 'initiateFork'
+	| 'prepareChildPriceFeed'
+	| 'prepareChildDependencies'
 	| 'createChildUniverse'
+	| 'initializeChildHistory'
+	| 'prepareForkClaim'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
 	| 'claimParentEscalationDeposits'
@@ -121,6 +125,8 @@ export type SecurityVaultActionResult = ActionResult & {
 }
 
 export type OracleManagerDetails = {
+	priceFeedAddress?: Address
+	pendingReportCoordinator?: Address
 	activeStagedOperationCount?: bigint
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
@@ -315,7 +321,22 @@ export type EscalationDeposit = {
 	depositor: Address
 }
 
+export type AuthenticatedForkClaim = {
+	escalationGame: Address
+	outcome: ReportingOutcomeKey
+	snapshotRoot: Hex
+	snapshotLeafCount: bigint
+	amountAttoRep: bigint
+	cumulativeAmountAttoRep: bigint
+	depositor: Address
+	parentDepositIndex: bigint
+	leafIndex: bigint
+}
+
 export type ImportedEscalationDeposit = {
+	claimIdentity?: AuthenticatedForkClaim
+	claimCheckpoint?: { nextSourceGame: Address; pendingSteps: bigint; complete: boolean; ready: boolean }
+	claimAllocation?: { retainedAmountAttoRep: bigint; rewardAmountAttoRep: bigint; retainedCumulativeAttoRep: bigint } | undefined
 	amountAttoRep: bigint
 	cumulativeAmountAttoRep: bigint
 	depositor: Address
@@ -470,6 +491,7 @@ export type TruthAuctionBidderBidPage = {
 }
 
 export type ForkAuctionDetails = {
+	childHistoryReady?: boolean
 	auctionedUnderwritingLimitAttoEth: bigint
 	claimingAvailable: boolean
 	settlementCollateralAttoEth: bigint

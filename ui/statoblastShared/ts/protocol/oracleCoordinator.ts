@@ -3,7 +3,7 @@ import { writeStagedOperationAndWaitForReceipt } from './oracleStagedOperationEx
 import { readCoordinatorMinimumReport } from './oracleInitialReportFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { parseAbiItem, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { parseAbi, parseAbiItem, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
@@ -20,10 +20,19 @@ import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, 
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { requireBigintArray, requireBigintValue } from './decoders.js'
+import { requireAddressValue, requireBigintArray, requireBigintValue } from './decoders.js'
 import { wrapWeth } from './openOracle.js'
 
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
+const sharedPriceFeedAbi = parseAbi(['function priceFeed() view returns (address)', 'function pendingCoordinator() view returns (address)'])
+
+async function readPriceFeed(client: Pick<ReadClient, 'readContract'>, managerAddress: Address, pendingReportId: bigint) {
+	const priceFeedAddress = requireAddressValue(await client.readContract({ address: managerAddress, abi: sharedPriceFeedAbi, functionName: 'priceFeed' }), 'price feed')
+	let pendingReportCoordinator = zeroAddress
+	if (pendingReportId !== 0n) pendingReportCoordinator = priceFeedAddress.toLowerCase() === managerAddress.toLowerCase() ? managerAddress : requireAddressValue(await client.readContract({ address: priceFeedAddress, abi: sharedPriceFeedAbi, functionName: 'pendingCoordinator' }), 'pending report coordinator')
+	return { priceFeedAddress, pendingReportCoordinator }
+}
+
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
 
@@ -184,6 +193,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		}
 	}
 	return {
+		...(await readPriceFeed(client, managerAddress, pendingReportId)),
 		activeStagedOperationCount,
 		callbackStateHash,
 		exactToken1Report,
@@ -258,10 +268,12 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 			args: [],
 		}),
 	])
+	const feedState = pendingReportId === 0n ? undefined : await readPriceFeed(client, managerAddress, pendingReportId)
 	const timing = rawIsPriceValid ? await Promise.all([client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', args: [] }), client.getBlock()]) : undefined
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationCostAttoEth, 'queued operation ETH cost')
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceCostAttoEth, 'request price ETH cost')
 	const managerDetails: OracleManagerDetails = {
+		...feedState,
 		callbackStateHash: undefined,
 		exactToken1Report: undefined,
 		isPriceValid: rawIsPriceValid,

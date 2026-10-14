@@ -274,24 +274,24 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Bad nullifier proof|Deposit settled/)
 	})
 
-	test('fork carry proof settlement rejects when no carry snapshot is available', async () => {
+	test('fork carry proof settlement blocks incomplete initialization and rejects empty snapshots', async () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const proof = {
+			depositor: client.account.address,
+			amountAttoRep: reportBond,
+			parentDepositIndex: 0n,
+			cumulativeAmountAttoRep: reportBond,
+			sourceNodeId: 1n,
+			leafIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			merkleMountainRangePeakIndex: 0n,
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		}
+		await assert.rejects(advanceForkContinuationPastStart(child.escalationGameAddress), /Fork snapshot incomplete/)
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Question not final/)
+		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
-
-		await assert.rejects(
-			withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, {
-				depositor: client.account.address,
-				amountAttoRep: reportBond,
-				parentDepositIndex: 0n,
-				cumulativeAmountAttoRep: reportBond,
-				sourceNodeId: 1n,
-				leafIndex: 0n,
-				merkleMountainRangeSiblings: [],
-				merkleMountainRangePeakIndex: 0n,
-				nullifierSiblings: new SparseNullifierTree().getProof(0n),
-			}),
-			/Not winning outcome|Carry peak absent/,
-		)
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Not winning outcome|Carry peak absent/)
 	})
 })

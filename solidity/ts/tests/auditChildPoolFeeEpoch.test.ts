@@ -107,11 +107,12 @@ describe('Child-pool fee epoch regression', () => {
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'initialEscalationGameDepositAttoRep' }), childLiveSupply / 10_000_000n, 'child escalation economics should remain based on its unchanged live supply')
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'minimumVaultRepDepositAttoRep' }), childLiveSupply / 100_000n, 'child vault economics should remain based on its unchanged live supply')
 
+		const mintedShares = 2n * 10n ** 18n
+		await createCompleteSet(client, child.securityPool, mintedShares)
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 		await updateSettlementCollateral(client, child.securityPool)
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'getFeeEpochEndTime' }), 2n ** 256n - 1n, 'unresolved child horizon must remain open beyond question end')
-		const mintedShares = 2n * 10n ** 18n
-		await createCompleteSet(client, child.securityPool, mintedShares)
+		await assert.rejects(createCompleteSet(client, child.securityPool, mintedShares), /Question ended/)
 		const collateralBefore = await getSettlementCollateralAttoEth(client, child.securityPool)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, child.securityPool)

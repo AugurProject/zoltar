@@ -31,7 +31,9 @@ export function resolveOracleOperationEthFunding({ managerDetails, priceUsable }
 
 // Only the free, fresh-price route depends on this price surviving inclusion.
 export function getOracleOperationTimingGuard(managerDetails: OracleManagerDetails | undefined, currentTimestamp: bigint | undefined, priceUsable?: boolean) {
-	if (managerDetails === undefined || (priceUsable ?? managerDetails.isPriceValid) !== true) return undefined
+	if (managerDetails === undefined) return undefined
+	if (managerDetails.pendingReportId !== 0n && managerDetails.pendingReportCoordinator !== undefined && managerDetails.pendingReportCoordinator.toLowerCase() !== managerDetails.managerAddress.toLowerCase()) return securityPoolCopy.sharedPoolPricePending
+	if ((priceUsable ?? managerDetails.isPriceValid) !== true) return undefined
 	const hasWindow = hasOraclePriceSubmissionWindow(currentTimestamp, managerDetails.priceValidUntilTimestamp)
 	if (hasWindow === undefined) return securityPoolCopy.oracleOperationTimingUnavailable
 	if (hasWindow === false) return securityPoolCopy.oracleOperationPriceExpiresTooSoon

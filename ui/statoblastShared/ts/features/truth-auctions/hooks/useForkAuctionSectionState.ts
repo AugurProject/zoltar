@@ -329,6 +329,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const bidAmountMax = { amount: maxBidAmountAttoEth, unavailableReason: maxBidUnavailableReason, showUnavailableReason: context.accountState.address !== undefined }
 	const startTruthAuctionAvailabilityMessage = (() => {
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
+		if (context.selectedAuctionContext?.childHistoryReady === false) return forkAuctionCopy.initializeChildHistoryFirst
 		return startTruthAuctionGuardMessage
 	})()
 	const setSelectedParentEscalationClaimDepositIndexes = (nextSelectedDepositIndexes: bigint[]) => {
@@ -340,6 +341,16 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 			},
 		})
 	}
+	const childPreparation = context.selectedOutcomeMigrationSeedStatus
+	const childPreparationLoading = context.loadingSelectedOutcomeMigrationSeedStatus || childPreparation === undefined
+	const childPreparationReadGuard = context.selectedOutcomeMigrationSeedStatusError ?? (childPreparationLoading ? forkAuctionCopy.checkingChildPreparation : undefined)
+	const childPoolReady = childPreparation?.childPool !== undefined && childPreparation.childPool !== zeroAddress
+	const childPreparationGuard = (() => {
+		if (childPreparationReadGuard !== undefined) return childPreparationReadGuard
+		if (!childPoolReady) return forkAuctionCopy.prepareChildBeforeMigration
+		return childPreparation?.historyReady ? undefined : forkAuctionCopy.initializeChildHistoryFirst
+	})()
+
 	const claimSelectedParentEscalationDepositsGuardMessage = (() => {
 		if (claimParentEscalationBalanceGuardMessage !== undefined) return claimParentEscalationBalanceGuardMessage
 		if (context.loadingReportingDetails) return forkAuctionCopy.eligibleDepositsLoading
@@ -347,7 +358,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (isMigrationRequired) return forkAuctionCopy.useUnresolvedMigrationReason
 		if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredReason
 		if (selectedParentEscalationClaimDeposits.length === 0) return forkAuctionCopy.formatNoClaimableParentEscalationDeposits(context.selectedOutcomeLabel)
-		if (selectedParentEscalationClaimDepositIndexes.length > 0) return undefined
+		if (selectedParentEscalationClaimDepositIndexes.length > 0) return childPreparationGuard
 		return forkAuctionCopy.parentEscalationClaimSelectionRequired
 	})()
 	const migrationWindowClosedGuardMessage = getMigrationWindowClosedGuardMessage({
@@ -359,11 +370,11 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (timingGuard !== undefined) return timingGuard
 		if (context.loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
 		if (selectedOutcomeEscalationEntitlementMaterialized) return forkAuctionCopy.formatEntitlementAlreadyMaterialized(context.selectedOutcomeLabel)
-		if (hasStoredEscalationMigrationEntitlement) return undefined
+		if (hasStoredEscalationMigrationEntitlement) return childPreparationGuard
 		if (!isMigrationRequired) return forkAuctionCopy.unresolvedMigrationUnavailableReason
 		if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
 		if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
-		return undefined
+		return childPreparationGuard
 	})()
 	const seedStatusCheckingMessage = context.loadingSelectedOutcomeMigrationSeedStatus ? forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(context.selectedOutcomeLabel) : undefined
 	const migratePoolToUniverseAvailability = (() => {
@@ -387,7 +398,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		const blockingReason = migrationWindowClosedGuardMessage ?? vaultMigrationInProgressMessage ?? migrateVaultCompletedMessage ?? migrateVaultBalanceGuardMessage
 		if (blockingReason !== undefined) return { disabled: true, reason: blockingReason }
 		if (seedStatusCheckingMessage !== undefined) return { disabled: true, loading: true, reason: seedStatusCheckingMessage }
-		const reason = selectedOutcomeMigrationSeedGuardMessage
+		const reason = childPreparationGuard ?? selectedOutcomeMigrationSeedGuardMessage
 		return { disabled: reason !== undefined, reason }
 	})()
 	const submitBidGuardMessage = truthAuctionBidGuardMessage ?? bidPriceValidationMessage
@@ -546,6 +557,9 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		setSelectedParentEscalationClaimDepositIndexes,
 		selectedParentEscalationClaimDeposits,
 		selectedParentEscalationClaimDepositIndexes,
+		childPreparation,
+		childPreparationReadGuard,
+		childPoolReady,
 		childSecurityPools,
 		hasStartedTruthAuction,
 	}

@@ -221,6 +221,11 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 					label: 'Escalation Game Proof Verifier',
 					address: readStringField(infraContractAddresses, 'escalationGameProofVerifier', 'infraContractAddresses.escalationGameProofVerifier'),
 				},
+				{
+					id: 'escalationGameDepositDelegate',
+					label: 'Escalation Game Deposit Delegate',
+					address: readStringField(infraContractAddresses, 'escalationGameDepositDelegate', 'infraContractAddresses.escalationGameDepositDelegate'),
+				},
 			],
 		}
 	} catch (error) {

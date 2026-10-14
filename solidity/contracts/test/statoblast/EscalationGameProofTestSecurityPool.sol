@@ -5,7 +5,8 @@ import { Zoltar } from '../../Zoltar.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { BinaryOutcomes } from '../../statoblast/BinaryOutcomes.sol';
 import { EscalationGame } from '../../statoblast/EscalationGame.sol';
-import { CarriedDepositProof } from '../../statoblast/EscalationGameTypes.sol';
+import { CarriedDepositProof, NULLIFIER_DEPTH } from '../../statoblast/EscalationGameTypes.sol';
+import { MerkleMountainRange } from '../../statoblast/MerkleMountainRange.sol';
 
 contract EscalationGameProofTestSecurityPool {
 	Zoltar public immutable zoltar;
@@ -73,30 +74,58 @@ contract EscalationGameProofTestSecurityPool {
 
 	function initializeForkCarrySnapshot(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) external {
 		uint256 totalInheritedPrincipal = inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
-		if (totalInheritedPrincipal > 0) {
+		if (totalInheritedPrincipal > 0 && escalationGame.forkCarrySnapshotOutcomesInitialized() == 0) {
 			ReputationToken rep = zoltar.getRepToken(universeId);
 			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
 		}
-		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(address(0x0), bytes32(0), inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedCarryTotals, inheritedNullifierRoots);
+		_initializeSnapshot(address(0x0), bytes32(0), inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedCarryTotals, inheritedNullifierRoots);
 	}
 
 	function initializeForkCarrySnapshotWithResolutionBalances(bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, uint256[3] memory inheritedResolutionBalances, bytes32[3] memory inheritedNullifierRoots) external {
 		uint256 totalResolutionBalance =
 			inheritedResolutionBalances[0] + inheritedResolutionBalances[1] + inheritedResolutionBalances[2];
-		if (totalResolutionBalance > 0) {
+		if (totalResolutionBalance > 0 && escalationGame.forkCarrySnapshotOutcomesInitialized() == 0) {
 			ReputationToken rep = zoltar.getRepToken(universeId);
 			rep.transferFrom(msg.sender, address(escalationGame), totalResolutionBalance);
 		}
-		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(address(0x0), bytes32(0), inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots);
+		_initializeSnapshot(address(0x0), bytes32(0), inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots);
 	}
 
 	function initializeForkCarrySnapshotFromSource(address sourceGame, bytes32 snapshotId, bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, bytes32[3] memory inheritedNullifierRoots) external {
 		uint256 totalInheritedPrincipal = inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
-		if (totalInheritedPrincipal > 0) {
+		if (totalInheritedPrincipal > 0 && escalationGame.forkCarrySnapshotOutcomesInitialized() == 0) {
 			ReputationToken rep = zoltar.getRepToken(universeId);
 			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
 		}
-		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedCarryTotals, inheritedNullifierRoots);
+		_initializeSnapshot(sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedCarryTotals, inheritedNullifierRoots);
+	}
+
+	function _initializeSnapshot(address sourceGame, bytes32 snapshotId, bytes32[64][3] memory peaks, uint256[3] memory leafCounts, uint256[3] memory totals, uint256[3] memory balances, bytes32[3] memory nullifierRoots) private {
+		uint8 nextOutcome = escalationGame.forkCarrySnapshotOutcomesInitialized();
+		require(nextOutcome < 3, 'Snapshot initialized');
+		if (snapshotId == bytes32(0)) {
+			bytes32[3] memory roots;
+			bytes32 emptyNullifierRoot;
+			for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++)
+				emptyNullifierRoot = MerkleMountainRange.hashParent(emptyNullifierRoot, emptyNullifierRoot);
+			for (uint8 outcome = 0; outcome < 3; outcome++) {
+				bytes32 root;
+				bool first = true;
+				for (uint256 height = 64; height > 0; ) {
+					unchecked {
+						--height;
+					}
+					if (((leafCounts[outcome] >> height) & 1) == 0) continue;
+					root =
+						first ? peaks[outcome][height] : MerkleMountainRange.hashParent(peaks[outcome][height], root);
+					first = false;
+				}
+				roots[outcome] = root;
+				if (nullifierRoots[outcome] == bytes32(0)) nullifierRoots[outcome] = emptyNullifierRoot;
+			}
+			snapshotId = keccak256(abi.encode(sourceGame, roots, nullifierRoots, leafCounts, totals, balances));
+		}
+		escalationGame.initializeForkCarryOutcome(sourceGame, snapshotId, peaks[nextOutcome], leafCounts[nextOutcome], totals[nextOutcome], balances[nextOutcome], nullifierRoots[nextOutcome]);
 	}
 
 	function withdrawDeposit(BinaryOutcomes.BinaryOutcome outcome, CarriedDepositProof calldata proof) external returns (address depositor, uint256 amountToWithdrawAttoRep, uint256 originalDepositAmountAttoRep) {

@@ -39,6 +39,8 @@
 				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
 
 				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. Its freshness window is one hour on Sepolia and five minutes on other chains. The window starts at settlement eligibility (the final report timestamp plus <code>settlementTime</code>), not when <code>settle</code> is called, and <code>lastSettlementTimestamp</code> records that start. A late settlement therefore cannot extend the life of a price that was frozen earlier. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
+				<p>For shared feeds, the report-size and escalation-halt formulas below use the sum of <code>max(totalUnderwritingLimitAttoEth, settlementCollateralAttoEth)</code> across active question ledgers in place of one ledger's settlement collateral. Accounting checkpoints reconcile one contribution at a time; anyone may synchronize a final ledger to remove its contribution. The callback gas limit adds 150,000 gas for feed bookkeeping to the existing four-action allowance, and the request bounty uses that full limit. These request-time floors do not impose a ceiling on later commitments.</p>
+				<p>Only the initiating question and sponsor can attach operations to a shared pending report; other questions wait for settlement. Shared queues reject work beyond the four-action budget. The feed stores acceptance or rejection before attempting the local callback, so a failed operation callback cannot erase an accepted price. Deferred operations remain individually executable or removable; each queued shared action checks the terminal outcome of its original report and cannot execute after rejection or recovery.</p>
 			</section>
 
 			<section id="optional-upstream-capabilities">
@@ -50,14 +52,14 @@
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
 
-				<p>Every security pool has its own <code>OpenOraclePriceCoordinator</code>. The coordinator connects users, the pool, and the shared OpenOracle instance. It keeps the pool's cached REP/ETH price, pending report state, staged-operation queue, and settlement callback state. Keeping this state per pool prevents one pool's pending report or freshness window from becoming a protocol-wide queue.</p>
+				<p>Each question ledger has an <code>OpenOraclePriceCoordinator</code> for its operations and approvals. A standalone question keeps report state there. In a multi-question portfolio, <code>priceFeed()</code> instead identifies one <code>SharedPoolPriceFeed</code> for that portfolio and universe; all its questions read the same price, freshness clock, and pending report. Other portfolios have separate feeds.</p>
 
-				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>OpenOraclePriceCoordinatorFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory calls <code>setSecurityPool</code> once with the nonzero pool address.</p>
+				<p><code>OpenOraclePriceCoordinator</code> is deployed with an immutable <code>OpenOracle</code> address. For each origin or child security pool, <code>SecurityPoolFactory</code> asks <code>OpenOraclePriceCoordinatorFactory</code> for a fresh coordinator wired to the shared OpenOracle instance, shared WETH, and that universe's REP token. <code>SecurityPoolDeployer</code> passes the coordinator to the pool, after which the factory authenticates a one-time <code>setSecurityPool</code> call through the coordinator factory and deployment worker. Only the coordinator’s deployer may bind its pool.</p>
 
-				<p>Only the configured pool may seed the coordinator's inherited <code>lastPrice</code>. A child pool inherits the parent's numeric price as a starting value, but its settlement timestamp remains zero, so that number is unusable until the child accepts its own report.</p>
+				<p>Only the configured ledger may seed a standalone coordinator's inherited <code>lastPrice</code>. A standalone child inherits the parent's numeric price but starts with a zero settlement timestamp. Portfolio child ledgers share a new feed for their child REP token, initially with zero price and timestamp. Adding another question never resets an existing shared feed.</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
 					<div aria-label="OpenOracle integration flow" class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-height="1170" data-plot-width="980" role="img"><span class="plot-chart-fallback">After OpenOracle settles, the coordinator validates the report. An accepted report refreshes the REP/ETH price and runs pending operations through local guardrails. A rejected report leaves the price cache unchanged and terminally fails the attached pending batch.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> The coordinator is the trust boundary between Statoblast operations and OpenOracle reports.</p>
+					<p class="diagram-caption"><span class="figure-label">Integration flow.</span> Standalone integration. For a portfolio, the shared feed validates and stores the price, then attempts the initiating question coordinator's bounded callback.</p>
 				</figure>
 			</section>
 
@@ -69,10 +71,10 @@
 				<ol>
 					<li><strong>Validate and stage the operation.</strong> The coordinator checks the caller, target vault, requested amount, and validity window before any report is requested.</li>
 					<li><strong>Check the cached price.</strong> If the cached REP/ETH price is fresh, the coordinator attempts the operation immediately.</li>
-					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the coordinator creates the report as its initial reporter.</li>
+					<li><strong>Open a report when the price is stale.</strong> The refresh sponsor supplies the request bounty and initial WETH/REP position, and the price source creates the report as its initial reporter: the coordinator for a standalone ledger, or the shared feed for a portfolio.</li>
 					<li><strong>Allow corrections.</strong> Other participants may replace the report by posting the position required by OpenOracle. Every valid replacement installs a new reporter and restarts the settlement window.</li>
-					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls the coordinator.</li>
-					<li><strong>Accept or reject the price.</strong> The coordinator validates the report identity, history, economics, amounts, and settlement-time base fee before updating the cache.</li>
+					<li><strong>Settle the current report.</strong> Once the settlement deadline is reached without another dispute, any account can call OpenOracle's <code>settle</code>, which finalizes the report and calls its price source.</li>
+					<li><strong>Accept or reject the price.</strong> The price source validates the report identity, history, economics, amounts, and settlement-time base fee before updating the cache.</li>
 					<li><strong>Execute queued operations.</strong> An accepted fresh price allows the coordinator to attempt the queued pool operations, each of which still performs its own current safety checks.</li>
 				</ol>
 

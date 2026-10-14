@@ -1,4 +1,10 @@
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
+import {
+	statoblast_EscalationGame_EscalationGame,
+	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate as checkpointArtifact,
+	test_statoblast_EscalationClaimCheckpointHarness_EscalationClaimCheckpointHarness as checkpointHarness,
+	statoblast_Multicall3_Multicall3 as multicallArtifact,
+} from '../../types/contractArtifact'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import {
 	createCompleteSet,
@@ -45,11 +51,13 @@ import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/
 import { approximatelyEqual, strictEqualTypeSafe, ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
 import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './fixture'
+import { readClaimCheckpointBatch } from '../../testSupport/simulator/utils/contracts/claimCheckpoints'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'
 
 const localUnresolvedPrincipalAbi = [
 	{
@@ -228,7 +236,7 @@ describe('Statoblast: escalation migration', () => {
 		assert.deepStrictEqual(await readChildStateGuard(), stateBefore, 'inactive claim path must preserve the activated child, deposits, REP, and parent vault')
 	})
 
-	test("own-fork claims reject another vault owner's deposit and roll back consumption, child deployment, and REP state", async () => {
+	test("own-fork claims reject another vault owner's deposit and roll back consumption and parent and child REP state", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -239,12 +247,18 @@ describe('Statoblast: escalation migration', () => {
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
 		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const childGame = await getSecurityPoolsEscalationGame(client, yesChildPool)
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childGame, functionName: 'isForkCarryFundingComplete' }), true, 'the child must be initialized and funded before testing deposit ownership')
 		const readWrongVaultState = async () => ({
 			childExists: await contractExists(client, yesChildPool),
+			childGameRep: await getERC20Balance(client, childRepToken, childGame),
+			childPoolRep: await getERC20Balance(client, childRepToken, yesChildPool),
 			clientVault: await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address),
 			deposits: await getEscalationGameDeposits(client, parentGame, QuestionOutcome.Yes),
 			otherVault: await getSecurityVault(client, securityPoolAddresses.securityPool, otherVault.account.address),
@@ -256,7 +270,7 @@ describe('Statoblast: escalation migration', () => {
 		strictEqualTypeSafe(otherVaultDeposit.depositor, otherVault.account.address, 'the selected deposit must belong to the other vault')
 
 		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [otherVaultDeposit.depositIndex]), /execution reverted/)
-		assert.deepStrictEqual(await readWrongVaultState(), stateBefore, 'wrong-vault claim must roll back deposit consumption, child deployment, REP balances, and both vaults')
+		assert.deepStrictEqual(await readWrongVaultState(), stateBefore, 'wrong-vault claim must roll back deposit consumption, parent and child REP balances, and both vaults')
 	})
 
 	test('resolved escalation withdrawal rejects mixed-vault batches and rolls back every deposit and vault mutation', async () => {
@@ -291,11 +305,13 @@ describe('Statoblast: escalation migration', () => {
 
 	test('optional vault migration clears unresolved parent dispute-staked REP accounting without creating child escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await mockWindow.setTime(endTime - 2n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -443,10 +459,12 @@ describe('Statoblast: escalation migration', () => {
 		if (vaultRepBeforeTopUp < 3n * forkThresholdAttoRep) {
 			await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep - vaultRepBeforeTopUp, questionId)
 		}
-		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await mockWindow.setTime(endTime - 2n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -464,11 +482,13 @@ describe('Statoblast: escalation migration', () => {
 
 	test('external-fork unresolved migration expires without requiring another user to process it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await mockWindow.setTime(endTime - 2n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await mockWindow.setTime(endTime + 10000n)
+		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -521,7 +541,7 @@ describe('Statoblast: escalation migration', () => {
 		assert.deepStrictEqual(await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address), vaultBeforeRelayedAttempt, 'a rejected relayer must not mutate the parent vault')
 	})
 
-	test('migrateVaultWithUnresolvedEscalation clears parent escrow as dust when the child allocation rounds to zero', async () => {
+	test('zero child funding cannot erase positive parent escrow as rounding dust', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
@@ -553,18 +573,24 @@ describe('Statoblast: escalation migration', () => {
 		})
 
 		const { yesSecurityPool } = getYesChildPool()
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'forkCarrySnapshotInitialized' }), true, 'the empty funding bucket must not prevent installing the immutable history')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'isForkCarryFundingComplete' }), false, 'zero child funding cannot cover positive inherited claims')
+		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childVaultBeforeMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Fork carry not ready/)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const parentDepositsAfterMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const parentNoDepositsAfterMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
-		const childPoolExists = await contractExists(client, yesSecurityPool.securityPool)
-		const childVaultAfterMigration = childPoolExists ? await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address) : undefined
+		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'zero child allocation should clear the parent unresolved REP lock as dust')
+		assert.deepStrictEqual(parentVaultAfterMigration, parentVaultBeforeMigration, 'zero child funding must preserve the parent vault and its positive unresolved REP lock')
+		assert.deepStrictEqual(childVaultAfterMigration, childVaultBeforeMigration, 'zero child funding must not migrate vault accounting')
 		assert.deepStrictEqual(parentDepositsAfterMigration, parentYesDepositsBeforeMigration, 'the immutable parent proof commitment should retain every yes deposit leaf')
 		assert.deepStrictEqual(parentNoDepositsAfterMigration, parentNoDepositsBeforeMigration, 'the immutable parent proof commitment should retain every no deposit leaf')
-		strictEqualTypeSafe(childVaultAfterMigration?.disputeStakedAttoRep ?? 0n, 0n, 'zero child allocation should not create child escrow')
+		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedAttoRep, 0n, 'zero child funding should not create child escrow')
 	})
 
 	test('non-own fork claims rely on the continuation snapshot without replaying local deposits or vault escrow', async () => {
@@ -677,10 +703,11 @@ describe('Statoblast: escalation migration', () => {
 		strictEqualTypeSafe(theoreticalSupplyBeforeClaim - (await getTotalTheoreticalSupply(client, childRepToken)), (reportBond * 2n) / 5n, 'the unrelated continuation should burn the winner haircut at settlement')
 	})
 
-	async function resumeUnrelatedContinuation(inheritedNo: bigint) {
+	async function resumeUnrelatedContinuation(inheritedNo: bigint, secondYes = 0n) {
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 		await refreshCurrentPrice()
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 100n * reportBond)
+		if (secondYes > 0n) await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondYes)
 		if (inheritedNo > 0n) await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, inheritedNo)
 		const forkQuestion = { ...questionData, title: 'mixed settlement and response period regression', endTime: (await mockWindow.getTime()) + DAY }
 		await createQuestion(client, forkQuestion, outcomes)
@@ -702,6 +729,166 @@ describe('Statoblast: escalation migration', () => {
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'truthAuctionRepBeforeAttoRep' }), 0n, 'fixture must not apply an auction haircut')
 		return { pool, game, token: getRepTokenAddress(universe) }
 	}
+
+	test('atomic final checkpoint and pool withdrawal preserve sender, beneficiary, and nullifier rollback', async () => {
+		const { pool, game, token } = await resumeUnrelatedContinuation(20n * reportBond, 50n * reportBond)
+		const deadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
+		await mockWindow.setTime(deadline + DAY)
+		const nullifiers = new SparseNullifierTree()
+		const proofs = await Promise.all(
+			[0n, 1n].map(async index =>
+				createCarryProof(client, securityPoolAddresses.escalationGame, {
+					expectedOutcome: QuestionOutcome.Yes,
+					parentDepositIndex: index,
+					leafIndex: index,
+					sourceNodeId: index + 1n,
+					merkleMountainRangePeakIndex: 1n,
+					merkleMountainRangeSiblings: [await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 2n - index)],
+					nullifierSiblings: nullifiers.getProof(index),
+				}),
+			),
+		)
+		const first = proofs[0]
+		const second = proofs[1]
+		if (first === undefined || second === undefined) throw new Error('Missing inherited claim proofs')
+		// Ancestry accounting is synthetic. The pool, funded child game, MMR
+		// commitments, nullifiers, token transfers, and caller checks are production.
+		const transforms = Array.from({ length: 9 }, (_, depth) => ({ before: depth === 0 ? 0n : 7n, remaining: depth === 0 ? 0n : 5n, consumed: depth === 0 ? 0n : reportBond / 101n }))
+		let source = zeroAddress
+		for (const [depth, transform] of transforms.entries()) {
+			const hash = await client.sendTransaction({ data: encodeDeployData({ abi: checkpointHarness.abi, bytecode: `0x${checkpointHarness.evm.bytecode.object}`, args: [source, depth === 0 ? 0n : 2n, transform.before, transform.remaining, transform.consumed] }) })
+			const receipt = await client.waitForTransactionReceipt({ hash })
+			if (receipt.contractAddress === undefined) throw new Error('Missing synthetic checkpoint ancestor')
+			source = receipt.contractAddress
+		}
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(`${import.meta.dir}/..`), 'contracts/statoblast/EscalationGame.sol', 'EscalationGame'))
+		const sourceSlot = layout.find(entry => entry.label === 'forkCarrySourceGame')
+		if (sourceSlot === undefined) throw new Error('Missing claim source storage slot')
+		await mockWindow.addStateOverrides({ [game]: { stateDiff: { [formatStorageSlot(BigInt(sourceSlot.slot))]: BigInt(source) } } })
+		const tuple = (proof: typeof first) => [QuestionOutcome.Yes, proof.amountAttoRep, proof.cumulativeAmountAttoRep, proof.leafIndex] as const
+		const progress = (proof: typeof first) => client.readContract({ abi: checkpointArtifact.abi, address: game, functionName: 'getClaimCheckpointProgress', args: tuple(proof) })
+		const state = (proof: typeof first) => client.readContract({ abi: checkpointArtifact.abi, address: game, functionName: 'getClaimCheckpointState', args: tuple(proof) })
+		const expectedEconomics = (proof: typeof first) => {
+			let principalStart = proof.cumulativeAmountAttoRep - proof.amountAttoRep
+			let principalEnd = proof.cumulativeAmountAttoRep
+			let rewardStart = principalStart
+			let rewardEnd = principalEnd
+			for (const { before, remaining, consumed } of transforms) {
+				if (before === 0n) continue
+				principalStart = (principalStart * remaining) / before
+				principalEnd = (principalEnd * remaining) / before
+				rewardStart = (rewardStart * remaining) / before
+				rewardEnd = (rewardEnd * remaining) / before
+				if (proof.leafIndex > 0n) {
+					principalStart -= consumed
+					principalEnd -= consumed
+				}
+				assert.ok(principalStart >= 0n)
+			}
+			// The losing 20 REP supplies 12 REP in rewards and 8 REP to burn,
+			// allocated over the first 30 REP of the winner's reward coordinates.
+			assert.ok(rewardEnd <= 30n * reportBond)
+			const principal = principalEnd - principalStart
+			const reward = rewardEnd - rewardStart
+			return { allocation: [principal, principal, reward, rewardEnd], payout: principal + (reward * 12n) / 30n, burn: (reward * 8n) / 30n }
+		}
+		assert.notStrictEqual(expectedEconomics(second).allocation[1], expectedEconomics(second).allocation[2], 'consumed offsets change principal rounding without moving reward coordinates')
+		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getBindingCapitalAttoRep' }), 20n * reportBond)
+		const economics = async () => ({
+			recipient: await getERC20Balance(client, token, second.depositor),
+			supply: await getTotalTheoreticalSupply(client, token),
+			gameBalance: await getERC20Balance(client, token, game),
+			poolBalance: await getERC20Balance(client, token, pool.securityPool),
+			escrow: await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'totalDisputeStakedAttoRep' }),
+			outcome: await getEscalationGameOutcomeState(client, game, QuestionOutcome.Yes),
+		})
+		const assertConserved = (before: Awaited<ReturnType<typeof economics>>, after: Awaited<ReturnType<typeof economics>>, expected: ReturnType<typeof expectedEconomics>) => {
+			assert.strictEqual(after.recipient - before.recipient, expected.payout, 'exact authenticated beneficiary payout')
+			assert.strictEqual(before.supply - after.supply, expected.burn, 'exact winner haircut burned once')
+			assert.strictEqual(before.gameBalance - after.gameBalance, expected.payout + expected.burn, 'funded tokens cover payout plus burn')
+			assert.strictEqual(before.escrow - after.escrow, expected.payout + expected.burn, 'logical inherited escrow tracks actual expenditure')
+			assert.strictEqual(after.poolBalance, before.poolBalance, 'the pool retains no payout or burn tokens')
+		}
+		const initialEconomics = await economics()
+		for (const proof of proofs) {
+			assert.strictEqual((await progress(proof))[3], false)
+			await writeContractAndWait(client, () => client.writeContract({ abi: checkpointArtifact.abi, address: game, functionName: 'processClaimCheckpoint', args: [...tuple(proof), 8n, zeroHash, []] }))
+			assert.deepStrictEqual((await progress(proof)).slice(0, 3), [zeroAddress, 8n, false])
+		}
+		const relayer = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const multicall = getInfraContractAddresses().multicall3
+		const batch = await readClaimCheckpointBatch(client, game, tuple(second))
+		const prepare = { target: game, allowFailure: false, callData: encodeFunctionData({ abi: checkpointArtifact.abi, functionName: 'processClaimCheckpoint', args: [...tuple(second), 8n, batch.baseCommitment, batch.transforms] }) }
+		const directGameWithdrawal = { target: game, allowFailure: false, callData: encodeFunctionData({ abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'withdrawDeposit', args: [second, QuestionOutcome.Yes] }) }
+		const before = await progress(second)
+		const stateBefore = await state(second)
+		const relayerNonceBefore = await client.getTransactionCount({ address: relayer.account.address })
+		await assert.rejects(relayer.writeContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [[prepare, directGameWithdrawal]], gas: CARRY_PROOF_GAS_LIMIT }), /Multicall3: call failed/)
+		assert.strictEqual(await client.getTransactionCount({ address: relayer.account.address }), relayerNonceBefore + 1n, 'the rejected direct game call must be mined to exercise rollback')
+		assert.deepStrictEqual(await progress(second), before)
+		assert.deepStrictEqual(await state(second), stateBefore)
+		assert.deepStrictEqual(await economics(), initialEconomics, 'the direct-call failure rolls back all token and claim accounting')
+		const firstBatch = await readClaimCheckpointBatch(client, game, tuple(first))
+		await writeContractAndWait(client, () => client.writeContract({ abi: checkpointArtifact.abi, address: game, functionName: 'processClaimCheckpoint', args: [...tuple(first), 8n, firstBatch.baseCommitment, firstBatch.transforms] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [first]] }))
+		const afterFirstEconomics = await economics()
+		assertConserved(initialEconomics, afterFirstEconomics, expectedEconomics(first))
+		const staleWithdrawal = { target: pool.securityPool, allowFailure: false, callData: encodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [second]] }) }
+		const balanceBefore = await getERC20Balance(client, token, second.depositor)
+		await assert.rejects(relayer.simulateContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [[prepare, staleWithdrawal]] }), /Multicall3: call failed/)
+		const diagnostic = await relayer.simulateContract({
+			abi: multicallArtifact.abi,
+			address: multicall,
+			functionName: 'aggregate3',
+			args: [
+				[
+					{ ...prepare, allowFailure: true },
+					{ ...staleWithdrawal, allowFailure: true },
+				],
+			],
+		})
+		assert.deepStrictEqual(diagnostic.result, [
+			{ success: true, returnData: encodeAbiParameters([{ type: 'bool' }], [true]) },
+			{ success: false, returnData: concatHex(['0x08c379a0', encodeAbiParameters([{ type: 'string' }], ['Bad nullifier proof'])]) },
+		])
+		assert.deepStrictEqual(await progress(second), before, 'diagnostic simulation must not persist successful preparation')
+		assert.deepStrictEqual(await state(second), stateBefore)
+		assert.deepStrictEqual(await economics(), afterFirstEconomics)
+		assert.strictEqual(await client.getTransactionCount({ address: relayer.account.address }), relayerNonceBefore + 1n, 'diagnosis must not submit a transaction')
+		await assert.rejects(relayer.writeContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [[prepare, staleWithdrawal]], gas: CARRY_PROOF_GAS_LIMIT }), /Multicall3: call failed/)
+		assert.strictEqual(await client.getTransactionCount({ address: relayer.account.address }), relayerNonceBefore + 2n, 'the stale proof failure must be mined to exercise rollback')
+		assert.deepStrictEqual(await progress(second), before, 'a stale nullifier must roll back successful final preparation')
+		assert.deepStrictEqual(await state(second), stateBefore)
+		assert.strictEqual(await getERC20Balance(client, token, second.depositor), balanceBefore)
+		assert.deepStrictEqual(await economics(), afterFirstEconomics, 'stale nullifiers roll back payout, burn, escrow, and carry state')
+		nullifiers.consume(first.parentDepositIndex)
+		const refreshed = { ...second, nullifierSiblings: nullifiers.getProof(second.parentDepositIndex) }
+		const withdrawal = { ...staleWithdrawal, callData: encodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [refreshed]] }) }
+		const relayerBefore = await getERC20Balance(client, token, relayer.account.address)
+		const multicallBefore = await getERC20Balance(client, token, multicall)
+		const comparisonSnapshot = await mockWindow.anvilSnapshot()
+		const comparisonNonce = await client.getTransactionCount({ address: relayer.account.address })
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: checkpointArtifact.abi, address: game, functionName: 'processClaimCheckpoint', args: [...tuple(second), 8n, batch.baseCommitment, batch.transforms] }))
+		assert.deepStrictEqual(await client.readContract({ abi: checkpointArtifact.abi, address: game, functionName: 'getInheritedClaimAllocation', args: tuple(second) }), expectedEconomics(second).allocation)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [refreshed]] }))
+		assert.strictEqual(await client.getTransactionCount({ address: relayer.account.address }), comparisonNonce + 2n, 'separate final preparation and withdrawal require two mined transactions')
+		const separateEconomics = await economics()
+		const separateCheckpoint = await state(second)
+		assertConserved(afterFirstEconomics, separateEconomics, expectedEconomics(second))
+		await mockWindow.anvilRevert(comparisonSnapshot)
+		assert.deepStrictEqual(await economics(), afterFirstEconomics)
+		assert.deepStrictEqual(await state(second), stateBefore)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [[prepare, withdrawal]] }))
+		assert.strictEqual(await client.getTransactionCount({ address: relayer.account.address }), comparisonNonce + 1n, 'combined final preparation and withdrawal require one mined transaction')
+		assert.deepStrictEqual(await progress(second), [zeroAddress, 0n, true, true])
+		assert.deepStrictEqual(await economics(), separateEconomics, 'atomic and separate settlement preserve identical token, escrow, carry, and nullifier accounting')
+		assert.deepStrictEqual(await state(second), separateCheckpoint)
+		assertConserved(afterFirstEconomics, await economics(), expectedEconomics(second))
+		assert.strictEqual(await getERC20Balance(client, token, relayer.account.address), relayerBefore)
+		assert.strictEqual(await getERC20Balance(client, token, multicall), multicallBefore)
+		nullifiers.consume(second.parentDepositIndex)
+		assert.strictEqual((await getEscalationGameOutcomeState(client, game, QuestionOutcome.Yes)).currentNullifierRoot, nullifiers.root)
+	})
 
 	// I = inherited winner, L = local loser, W = local winner.
 	for (const order of ['ILW', 'IWL', 'LIW', 'LWI', 'WIL', 'WLI']) {
@@ -1020,11 +1207,15 @@ describe('Statoblast: escalation migration', () => {
 		const parentNoOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
 		const { yesSecurityPool } = getYesChildPool()
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'forkCarrySnapshotInitialized' }), true, 'the history must be fully installed before testing the funding guard')
+		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const childVaultBeforeMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Fork carry not ready/)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const childPoolExists = await contractExists(client, yesSecurityPool.securityPool)
-		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const invalidOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Invalid)
 		const yesOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)
 		const noOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.No)
@@ -1036,7 +1227,8 @@ describe('Statoblast: escalation migration', () => {
 		const childEscrowPrincipal = childYesEscrowPrincipal + childNoEscrowPrincipal
 		const childEscrowChildRep = childYesEscrowChildRep + childNoEscrowChildRep
 
-		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'an underfunded child branch should still clear the parent unresolved REP lock after the migration succeeds')
+		assert.deepStrictEqual(parentVaultAfterMigration, parentVaultBeforeMigration, 'an underfunded child must preserve the parent vault and its unresolved REP lock')
+		assert.deepStrictEqual(childVaultAfterMigration, childVaultBeforeMigration, 'an underfunded child must not migrate vault accounting')
 		strictEqualTypeSafe(childPoolExists, true, 'an underfunded child branch should deploy the child pool')
 		strictEqualTypeSafe(childVaultAfterMigration.disputeStakedAttoRep, 0n, 'underfunding should not create scaled vault escrow')
 		strictEqualTypeSafe(invalidOutcomeState.balanceAttoRep, parentInvalidOutcomeState.balanceAttoRep, 'the child invalid balance should stay aligned with the parent snapshot')
@@ -1670,6 +1862,7 @@ describe('Statoblast: escalation migration', () => {
 		await depositToEscalationGame(client, yesSecurityPool.securityPool, QuestionOutcome.No, childForkThreshold)
 		await forkZoltarWithOwnEscalationGame(client, yesSecurityPool.securityPool)
 		await migrateRepToZoltar(client, yesSecurityPool.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, yesSecurityPool.securityPool, QuestionOutcome.Yes)
 		const hash = await client.writeContract({
 			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			address: getInfraContractAddresses().securityPoolForker,

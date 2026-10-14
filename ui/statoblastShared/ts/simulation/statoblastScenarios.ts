@@ -1,3 +1,4 @@
+import { seedPortfolioScenario } from './portfolioScenario.js'
 import { getSeededVaultDepositTargetFactorBps } from './seededVaultTarget.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
@@ -232,7 +233,9 @@ export async function forkSecurityPoolUniverseWithOwnEscalation({
 	await getScenarioProtocol().forkZoltarWithOwnEscalation(writeClient, parentPool.securityPoolAddress, parentPool.universeId)
 
 	await reportBootstrapProgress(onProgress, 'Creating and funding Yes child universe', 0.99)
+	await getScenarioProtocol().prepareChildPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes', 'dependencies')
 	await getScenarioProtocol().createChildUniverseFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
+	for (let outcome = 0; outcome < 3; outcome++) await getScenarioProtocol().initializeChildDisputeHistory(writeClient, parentPool.securityPoolAddress, parentPool.universeId, 'yes')
 	await getScenarioProtocol().migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
 }
 
@@ -329,6 +332,7 @@ export async function applyStatoblastScenario({ accounts, createReadClient, crea
 				profile,
 			})
 			return true
+		case 'portfolio':
 		case 'securitypoolx2':
 			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 }, getScenarioProtocol().getDeploymentSteps)
 			await seedSecurityPoolX2Scenario({
@@ -339,6 +343,7 @@ export async function applyStatoblastScenario({ accounts, createReadClient, crea
 				onProgress,
 				profile,
 			})
+			if (scenario === 'portfolio') await seedPortfolioScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile })
 			return true
 		case 'securitypoolx2-auction':
 			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 }, getScenarioProtocol().getDeploymentSteps)

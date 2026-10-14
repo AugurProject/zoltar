@@ -23,6 +23,7 @@ for (const [entityType, contractKind] of [
 			awaitingForkContinuation: [false],
 			isEscalationResolved: [false],
 			isPriceValid: [false],
+			priceFeed: [coordinator],
 			finalized: [false],
 		}
 		const read: StateRead = async (address, abi, functionName, args = []) => {
@@ -184,4 +185,17 @@ test('unavailable claim reconstruction preserves the tagged basic escalation sta
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'escalation', entityIdentity: pool, address: pool }, read)
 	expect(snapshot.readStatus).toBe('success')
 	expect(snapshot.readResult).toMatchObject({ outcomeBalancesAttoRep: ['1', '2', '3'], claimEvidence: { status: 'unavailable', reason: 'Claim ancestry unavailable' } })
+})
+
+test('attributes a member ledger snapshot to its shared pool price feed', async () => {
+	const feed = getAddress('0x4444444444444444444444444444444444444444')
+	const read: StateRead = async (_address, _abi, name) => {
+		if (name === 'priceFeed') return feed
+		if (name === 'isPriceValid') return true
+		if (name === 'awaitingForkContinuation' || name === 'isEscalationResolved') return false
+		return 1n
+	}
+	const snapshot = await sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool, coordinatorAddress: coordinator }, read)
+	expect(snapshot.readStatus).toBe('success')
+	expect(snapshot.readResult?.['price']).toEqual({ repPerEth1e18: '1', settlementTimestamp: '1', protocolValid: true, sourceContract: feed.toLowerCase() })
 })

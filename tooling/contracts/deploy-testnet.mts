@@ -1,4 +1,5 @@
 import { appendFile } from 'node:fs/promises'
+import { CONSERVATIVE_DEPLOYMENT_GAS } from './deployment-gas.mts'
 import * as process from 'node:process'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
@@ -24,38 +25,7 @@ const OSAKA_CAPABILITY_PROBE = '0x5f1e60005260206000f3'
 const OSAKA_CAPABILITY_RESULT = '0x0000000000000000000000000000000000000000000000000000000000000100'
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hash
 const MAX_SIGNABLE_TRANSACTION_GAS = 16_777_216n
-// Fresh Osaka Anvil gas usage plus roughly 50%, rounded up and capped at the
-// signer's Osaka 2^24 limit. Canonical deployer ceilings cover optional atomic
-// funding; their fixed raw-transaction costs are added separately.
-export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
-	arachnidCreate2Deployer: 500_000n,
-	permit2: 3_250_000n,
-	proxyDeployer: 500_000n,
-	tradingFactory: 7_000_000n,
-	tradingRouter: 6_250_000n,
-	uniswapV3Factory: 8_500_000n,
-	uniswapV3Quoter: 3_000_000n,
-	uniswapV3SwapRouter: 4_250_000n,
-	uniswapV4PoolManager: 8_000_000n,
-	uniswapV4Quoter: 2_250_000n,
-	deploymentStatusOracle: 1_000_000n,
-	zoltarDeploymentStatusOracle: 1_000_000n,
-	weth: 1_000_000n,
-	reputationToken: 1_250_000n,
-	multicall3: 1_250_000n,
-	uniformPriceDualCapBatchAuctionFactory: 4_750_000n,
-	securityPoolUtils: 2_000_000n,
-	securityPoolOperationsDelegate: 3_000_000n,
-	openOracle: 4_250_000n,
-	zoltarQuestionData: 2_750_000n,
-	zoltar: 4_250_000n,
-	shareTokenFactory: 5_500_000n,
-	openOraclePriceCoordinatorFactory: 12_250_000n,
-	securityPoolForker: 16_250_000n,
-	escalationGameClaimDelegate: 1_250_000n,
-	escalationGameFactory: 14_250_000n,
-	securityPoolFactory: 14_750_000n,
-}
+export { CONSERVATIVE_DEPLOYMENT_GAS } from './deployment-gas.mts'
 const CANONICAL_DEPLOYER_STEP_IDS = new Set(['arachnidCreate2Deployer', 'proxyDeployer'])
 type DeploymentPlanStep<TClient> = {
 	address: Address

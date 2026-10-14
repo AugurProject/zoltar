@@ -14,9 +14,10 @@ import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
+	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier, _claimDelegate) {
 		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
-		depositDelegate = new EscalationGameDepositDelegate();
+		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
+		depositDelegate = _depositDelegate;
 	}
 
 	function start(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external {

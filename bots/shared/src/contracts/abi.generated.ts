@@ -608,6 +608,31 @@ export const securityPoolFactoryAbi = [
 	},
 	{
 		type: 'function',
+		name: 'deployPortfolioSecurityPool',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'universeId', type: 'uint248', internalType: 'uint248' },
+			{ name: 'questionId', type: 'uint256', internalType: 'uint256' },
+			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256', internalType: 'uint256' },
+			{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }],
+	},
+	{
+		type: 'function',
+		name: 'getChildPoolDependencies',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
+			{ name: 'outcomeIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'coordinator', type: 'address', internalType: 'contract OpenOraclePriceCoordinator' },
+			{ name: 'auction', type: 'address', internalType: 'contract UniformPriceDualCapBatchAuction' },
+		],
+	},
+	{
+		type: 'function',
 		name: 'getOriginId',
 		stateMutability: 'pure',
 		inputs: [
@@ -630,6 +655,19 @@ export const securityPoolFactoryAbi = [
 	},
 	{
 		type: 'function',
+		name: 'getPortfolioOriginId',
+		stateMutability: 'pure',
+		inputs: [
+			{ name: 'portfolio', type: 'address', internalType: 'address' },
+			{ name: 'originUniverseId', type: 'uint248', internalType: 'uint248' },
+			{ name: 'questionId', type: 'uint256', internalType: 'uint256' },
+			{ name: 'statoblastSecurityMultiplierBps', type: 'uint256', internalType: 'uint256' },
+			{ name: 'initialReportPriorityFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }],
+	},
+	{
+		type: 'function',
 		name: 'getSecurityPool',
 		stateMutability: 'view',
 		inputs: [
@@ -640,8 +678,33 @@ export const securityPoolFactoryAbi = [
 	},
 	{ type: 'function', name: 'getSecurityPoolHasInheritedForkOutcome', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'getSecurityPoolOriginId', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }] },
+	{ type: 'function', name: 'getSecurityPoolPortfolio', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'initializePortfolioPriceFeed', stateMutability: 'nonpayable', inputs: [{ name: 'configurationSeed', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'minimumSecurityBondDebtAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'minimumVaultRepDepositAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'prepareChildPoolDependencies',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
+			{ name: 'outcomeIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'coordinator', type: 'address', internalType: 'contract OpenOraclePriceCoordinator' },
+			{ name: 'auction', type: 'address', internalType: 'contract UniformPriceDualCapBatchAuction' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'preparePortfolioChildPriceFeed',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
+			{ name: 'outcomeIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [{ name: '', type: 'address', internalType: 'address' }],
+	},
 	{ type: 'function', name: 'securityPoolDeploymentCount', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -671,6 +734,16 @@ export const securityPoolFactoryAbi = [
 				],
 			},
 		],
+	},
+	{
+		type: 'function',
+		name: 'sharedPriceFeeds',
+		stateMutability: 'view',
+		inputs: [
+			{ name: '', type: 'address', internalType: 'address' },
+			{ name: '', type: 'uint248', internalType: 'uint248' },
+		],
+		outputs: [{ name: '', type: 'address', internalType: 'address' }],
 	},
 ] as const
 
@@ -1011,16 +1084,16 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'initialEscalationGameDepositAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
-		name: 'initializeForkCarrySnapshotWithResolutionBalances',
+		name: 'initializeForkCarryOutcome',
 		stateMutability: 'nonpayable',
 		inputs: [
 			{ name: 'sourceGame', type: 'address', internalType: 'address' },
 			{ name: 'snapshotId', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 'inheritedCarryPeaks', type: 'bytes32[64][3]', internalType: 'bytes32[64][3]' },
-			{ name: 'inheritedCarryLeafCounts', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'inheritedCarryTotals', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'inheritedResolutionBalances', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'inheritedNullifierRoots', type: 'bytes32[3]', internalType: 'bytes32[3]' },
+			{ name: 'peaks', type: 'bytes32[64]', internalType: 'bytes32[64]' },
+			{ name: 'leafCount', type: 'uint256', internalType: 'uint256' },
+			{ name: 'carryTotalAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'resolutionBalanceAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'nullifierRoot', type: 'bytes32', internalType: 'bytes32' },
 		],
 		outputs: [],
 	},
@@ -1477,6 +1550,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: '_escalationHaltMultiplierBps', type: 'uint256', internalType: 'uint256' },
 			{ name: '_maxSettlementBaseFeeMultiplierBps', type: 'uint256', internalType: 'uint256' },
 			{ name: '_minLiquidationPriceDistanceBps', type: 'uint256', internalType: 'uint256' },
+			{ name: '_reportDelegate', type: 'address', internalType: 'contract OpenOracleReportDelegate' },
 		],
 	},
 	{
@@ -1571,6 +1645,7 @@ export const openOraclePriceCoordinatorAbi = [
 	},
 	{ type: 'event', name: 'RepEthPriceSet', anonymous: false, inputs: [{ name: 'price', type: 'uint256', internalType: 'uint256', indexed: false }] },
 	{ type: 'event', name: 'SecurityPoolSet', anonymous: false, inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool', indexed: true }] },
+	{ type: 'event', name: 'SharedPriceFeedSet', anonymous: false, inputs: [{ name: 'priceFeed', type: 'address', internalType: 'address', indexed: true }] },
 	{
 		type: 'event',
 		name: 'StagedOperationQueued',
@@ -1691,13 +1766,16 @@ export const openOraclePriceCoordinatorAbi = [
 		outputs: [],
 	},
 	{ type: 'function', name: 'openOracleSecurityMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'operationReportIds', stateMutability: 'view', inputs: [{ name: '', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'pendingOperationSlotId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'pendingReportId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'pendingReportSponsor', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'priceFeed', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'protocolFee', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
 	{ type: 'function', name: 'protocolFeeRecipient', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{ type: 'function', name: 'recoverSettledPendingReport', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+	{ type: 'function', name: 'reportDelegate', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract OpenOracleReportDelegate' }] },
 	{ type: 'function', name: 'reputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract ReputationToken' }] },
 	{
 		type: 'function',
@@ -1745,7 +1823,20 @@ export const openOraclePriceCoordinatorAbi = [
 	{ type: 'function', name: 'setLiquidationApprovalRegistry', stateMutability: 'nonpayable', inputs: [{ name: 'registry', type: 'address', internalType: 'contract LiquidationApprovalRegistry' }], outputs: [] },
 	{ type: 'function', name: 'setRepEthPrice', stateMutability: 'nonpayable', inputs: [{ name: '_lastPrice', type: 'uint256', internalType: 'uint256' }], outputs: [] },
 	{ type: 'function', name: 'setSecurityPool', stateMutability: 'nonpayable', inputs: [{ name: '_securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [] },
+	{ type: 'function', name: 'setSharedPriceFeed', stateMutability: 'nonpayable', inputs: [{ name: 'feed', type: 'address', internalType: 'contract SharedPoolPriceFeed' }], outputs: [] },
 	{ type: 'function', name: 'settlementTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint48', internalType: 'uint48' }] },
+	{ type: 'function', name: 'sharedPriceFeed', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract SharedPoolPriceFeed' }] },
+	{
+		type: 'function',
+		name: 'sharedPriceSettled',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256' },
+			{ name: 'accepted', type: 'bool', internalType: 'bool' },
+			{ name: 'reason', type: 'string', internalType: 'string' },
+		],
+		outputs: [],
+	},
 	{
 		type: 'function',
 		name: 'stageVaultOperations',
@@ -1781,10 +1872,178 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 		],
 	},
+	{ type: 'function', name: 'syncExposure', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 	{ type: 'function', name: 'targetPriceErrorForDispute', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'timeType', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'trackDisputes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'vaultOperations', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract VaultOperations' }] },
+	{ type: 'function', name: 'weth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract IWeth9' }] },
+] as const
+
+export const sharedPoolPriceFeedAbi = [
+	{
+		type: 'constructor',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: '_configCoordinator', type: 'address', internalType: 'address' },
+			{ name: '_securityPoolFactory', type: 'address', internalType: 'address' },
+			{ name: '_portfolio', type: 'address', internalType: 'address' },
+			{ name: '_universeId', type: 'uint248', internalType: 'uint248' },
+			{ name: '_reputationToken', type: 'address', internalType: 'contract ReputationToken' },
+		],
+	},
+	{
+		type: 'event',
+		name: 'CoordinatorRegistered',
+		anonymous: false,
+		inputs: [
+			{ name: 'coordinator', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'securityPool', type: 'address', internalType: 'address', indexed: true },
+		],
+	},
+	{
+		type: 'event',
+		name: 'CoordinatorSettlementDeferred',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'coordinator', type: 'address', internalType: 'address', indexed: true },
+		],
+	},
+	{
+		type: 'event',
+		name: 'ExposureCheckpoint',
+		anonymous: false,
+		inputs: [
+			{ name: 'coordinator', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'exposureAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'aggregateExposureAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'PendingReportRecovered',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'settlementTimestamp', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'pendingReportId', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'lastPrice', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'lastSettlementTimestamp', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'PriceReportRejected',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'reason', type: 'string', internalType: 'string', indexed: false },
+			{ name: 'pendingReportId', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'lastPrice', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'lastSettlementTimestamp', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'PriceReported',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'price', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'lastSettlementTimestamp', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'PriceRequested',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
+		name: 'ReportFundingAssigned',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'coordinator', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'sponsor', type: 'address', internalType: 'address', indexed: true },
+		],
+	},
+	{ type: 'function', name: 'FEED_SETTLEMENT_GAS_OVERHEAD', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'MAX_PENDING_SETTLEMENT_OPERATIONS', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'OPEN_INTEREST_DIVIDER', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'SETTLEMENT_GAS_OVERHEAD', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'aggregateExposureAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'configCoordinator', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'coordinatorExposureAttoEth', stateMutability: 'view', inputs: [{ name: '', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'disputeDelay', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
+	{ type: 'function', name: 'escalationHaltMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'feePercentage', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
+	{ type: 'function', name: 'gasConsumedOpenOracleReportPrice', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'gasConsumedSettlement', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint32', internalType: 'uint32' }] },
+	{ type: 'function', name: 'gasUnitsForOneDispute', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getRequestPriceCostAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getSettlementCallbackGasLimit', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint32', internalType: 'uint32' }] },
+	{ type: 'function', name: 'initialReportPriorityFeeAttoEthPerGas', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'isPriceValid', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'lastPrice', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'lastSettlementTimestamp', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'maxSettlementBaseFeeMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'minimumToken1ReportAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'multiplier', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint16', internalType: 'uint16' }] },
+	{ type: 'function', name: 'openOracle', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract OpenOracle' }] },
+	{
+		type: 'function',
+		name: 'openOracleCallback',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256' },
+			{ name: 'amount1', type: 'uint256', internalType: 'uint256' },
+			{ name: 'amount2', type: 'uint256', internalType: 'uint256' },
+			{ name: '', type: 'uint256', internalType: 'uint256' },
+			{ name: '', type: 'address', internalType: 'address' },
+			{ name: '', type: 'address', internalType: 'address' },
+		],
+		outputs: [],
+	},
+	{ type: 'function', name: 'openOracleSecurityMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'pendingCoordinator', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'pendingReportId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'pendingReportSponsor', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'portfolio', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'protocolFee', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24', internalType: 'uint24' }] },
+	{ type: 'function', name: 'protocolFeeRecipient', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'recoverSettledPendingReport', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+	{ type: 'function', name: 'registerCoordinator', stateMutability: 'nonpayable', inputs: [{ name: 'coordinatorAddress', type: 'address', internalType: 'address' }], outputs: [] },
+	{ type: 'function', name: 'registeredCoordinators', stateMutability: 'view', inputs: [{ name: '', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'reportOutcome', stateMutability: 'view', inputs: [{ name: '', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }] },
+	{ type: 'function', name: 'reputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract ReputationToken' }] },
+	{
+		type: 'function',
+		name: 'requestPrice',
+		stateMutability: 'payable',
+		inputs: [
+			{ name: 'sponsor', type: 'address', internalType: 'address' },
+			{ name: 'proposedRepPerEthPrice', type: 'uint256', internalType: 'uint256' },
+			{ name: 'requestedInitialAttoWeth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'bountyAttoEth', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
+	{ type: 'function', name: 'securityPoolFactory', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'settlementTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint48', internalType: 'uint48' }] },
+	{ type: 'function', name: 'syncExposure', stateMutability: 'nonpayable', inputs: [{ name: 'coordinatorAddress', type: 'address', internalType: 'address' }], outputs: [] },
+	{ type: 'function', name: 'targetPriceErrorForDispute', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'timeType', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'trackDisputes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'universeId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint248', internalType: 'uint248' }] },
 	{ type: 'function', name: 'weth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract IWeth9' }] },
 ] as const
 
@@ -2021,6 +2280,16 @@ export const securityPoolForkerAbi = [
 	},
 	{
 		type: 'function',
+		name: 'continueChildUniverse',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
+			{ name: 'outcomeIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
 		name: 'createChildUniverse',
 		stateMutability: 'nonpayable',
 		inputs: [
@@ -2089,6 +2358,19 @@ export const securityPoolForkerAbi = [
 	{ type: 'function', name: 'getMigrationProxyAddress', stateMutability: 'view', inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 	{
 		type: 'function',
+		name: 'getOrDeployChildPoolForEscalation',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
+			{ name: 'outcomeIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'child', type: 'address', internalType: 'contract ISecurityPool' },
+			{ name: 'game', type: 'address', internalType: 'contract EscalationGame' },
+		],
+	},
+	{
+		type: 'function',
 		name: 'getOwnForkMigrationStatus',
 		stateMutability: 'view',
 		inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }],
@@ -2124,17 +2406,6 @@ export const securityPoolForkerAbi = [
 			{ name: '', type: 'uint256', internalType: 'uint256' },
 			{ name: '', type: 'uint256', internalType: 'uint256' },
 		],
-	},
-	{
-		type: 'function',
-		name: 'initializeChildForkedEscalationGameIfNeeded',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'parent', type: 'address', internalType: 'contract ISecurityPool' },
-			{ name: 'child', type: 'address', internalType: 'contract ISecurityPool' },
-			{ name: 'childEscalationGame', type: 'address', internalType: 'contract EscalationGame' },
-		],
-		outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGame' }],
 	},
 	{ type: 'function', name: 'initiateSecurityPoolFork', stateMutability: 'nonpayable', inputs: [{ name: 'securityPool', type: 'address', internalType: 'contract ISecurityPool' }], outputs: [] },
 	{
@@ -2232,6 +2503,7 @@ export const escalationGameAbi = [
 			{ name: '_repToken', type: 'address', internalType: 'contract ReputationToken' },
 			{ name: '_proofVerifier', type: 'address', internalType: 'contract EscalationGameProofVerifier' },
 			{ name: '_claimDelegate', type: 'address', internalType: 'contract EscalationGameClaimDelegate' },
+			{ name: '_depositDelegate', type: 'address', internalType: 'contract EscalationGameDepositDelegate' },
 		],
 	},
 	{
@@ -2487,6 +2759,7 @@ export const escalationGameAbi = [
 	{ type: 'function', name: 'exportVaultUnresolvedTotalsWithoutTransfer', stateMutability: 'nonpayable', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: 'principalByOutcomeAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' }] },
 	{ type: 'function', name: 'fixedQuestionOutcome', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' }] },
 	{ type: 'function', name: 'forkCarrySnapshotInitialized', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'forkCarrySnapshotOutcomesInitialized', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }] },
 	{ type: 'function', name: 'forkContinuation', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'forkElapsedAtStart', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'forkResumedAt', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
@@ -2621,16 +2894,16 @@ export const escalationGameAbi = [
 	{ type: 'function', name: 'hasReachedNonDecision', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{
 		type: 'function',
-		name: 'initializeForkCarrySnapshotWithResolutionBalances',
+		name: 'initializeForkCarryOutcome',
 		stateMutability: 'nonpayable',
 		inputs: [
 			{ name: 'sourceGame', type: 'address', internalType: 'address' },
 			{ name: 'snapshotId', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]', internalType: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'snapshotCarryTotalsAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'snapshotResolutionBalancesAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]', internalType: 'bytes32[3]' },
+			{ name: 'peaks', type: 'bytes32[64]', internalType: 'bytes32[64]' },
+			{ name: 'leafCount', type: 'uint256', internalType: 'uint256' },
+			{ name: 'carryTotalAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'resolutionBalanceAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'nullifierRoot', type: 'bytes32', internalType: 'bytes32' },
 		],
 		outputs: [],
 	},
@@ -2768,6 +3041,89 @@ export const escalationGameAbi = [
 	},
 	{
 		type: 'function',
+		name: 'getClaimCheckpointProgress',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'outcomeIndex', type: 'uint8', internalType: 'uint8' },
+			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'cumulativeAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'nextSourceGame', type: 'address', internalType: 'address' },
+			{ name: 'pendingSteps', type: 'uint256', internalType: 'uint256' },
+			{ name: 'complete', type: 'bool', internalType: 'bool' },
+			{ name: 'ready', type: 'bool', internalType: 'bool' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'getClaimCheckpointState',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'outcomeIndex', type: 'uint8', internalType: 'uint8' },
+			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'cumulativeAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'initialized', type: 'bool', internalType: 'bool' },
+			{ name: 'pendingCommitment', type: 'bytes32', internalType: 'bytes32' },
+			{ name: 'reusedCheckpointGame', type: 'address', internalType: 'address' },
+			{
+				name: 'interval',
+				type: 'tuple',
+				internalType: 'struct EscalationClaimInterval',
+				components: [
+					{ name: 'startAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'endAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'rewardStartAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'rewardEndAttoRep', type: 'uint256', internalType: 'uint256' },
+				],
+			},
+		],
+	},
+	{
+		type: 'function',
+		name: 'getClaimCheckpointWitnessSegment',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'outcomeIndex', type: 'uint8', internalType: 'uint8' },
+			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'cumulativeAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'sourceGame', type: 'address', internalType: 'address' },
+			{ name: 'previousCommitment', type: 'bytes32', internalType: 'bytes32' },
+			{ name: 'firstStep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'steps', type: 'uint256', internalType: 'uint256' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'getClaimIntervalTransform',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'outcomeIndex', type: 'uint8', internalType: 'uint8' },
+			{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [
+			{ name: 'sourceGame', type: 'address', internalType: 'address' },
+			{
+				name: 'transform',
+				type: 'tuple',
+				internalType: 'struct EscalationClaimTransform',
+				components: [
+					{ name: 'repBeforeAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'repRemainingAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'consumedBeforeAttoRep', type: 'uint256', internalType: 'uint256' },
+				],
+			},
+		],
+	},
+	{
+		type: 'function',
 		name: 'getInheritedClaimAllocation',
 		stateMutability: 'view',
 		inputs: [
@@ -2781,6 +3137,208 @@ export const escalationGameAbi = [
 			{ name: 'retainedAmountAttoRep', type: 'uint256', internalType: 'uint256' },
 			{ name: 'rewardAmountAttoRep', type: 'uint256', internalType: 'uint256' },
 			{ name: 'retainedCumulativeAttoRep', type: 'uint256', internalType: 'uint256' },
+		],
+	},
+	{ type: 'function', name: 'isClaimHistoryFrozen', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{
+		type: 'function',
+		name: 'processClaimCheckpoint',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'outcomeIndex', type: 'uint8', internalType: 'uint8' },
+			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'cumulativeAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
+			{ name: 'maxSteps', type: 'uint256', internalType: 'uint256' },
+			{ name: 'baseCommitment', type: 'bytes32', internalType: 'bytes32' },
+			{
+				name: 'transforms',
+				type: 'tuple[]',
+				internalType: 'struct EscalationClaimTransform[]',
+				components: [
+					{ name: 'repBeforeAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'repRemainingAttoRep', type: 'uint256', internalType: 'uint256' },
+					{ name: 'consumedBeforeAttoRep', type: 'uint256', internalType: 'uint256' },
+				],
+			},
+		],
+		outputs: [{ name: 'complete', type: 'bool', internalType: 'bool' }],
+	},
+] as const
+
+export const multicall3Abi = [
+	{
+		type: 'function',
+		name: 'aggregate',
+		stateMutability: 'payable',
+		inputs: [
+			{
+				name: 'calls',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Call[]',
+				components: [
+					{ name: 'target', type: 'address', internalType: 'address' },
+					{ name: 'callData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+		outputs: [
+			{ name: 'blockNumber', type: 'uint256', internalType: 'uint256' },
+			{ name: 'returnData', type: 'bytes[]', internalType: 'bytes[]' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'aggregate3',
+		stateMutability: 'payable',
+		inputs: [
+			{
+				name: 'calls',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Call3[]',
+				components: [
+					{ name: 'target', type: 'address', internalType: 'address' },
+					{ name: 'allowFailure', type: 'bool', internalType: 'bool' },
+					{ name: 'callData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+		outputs: [
+			{
+				name: 'returnData',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Result[]',
+				components: [
+					{ name: 'success', type: 'bool', internalType: 'bool' },
+					{ name: 'returnData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+	},
+	{
+		type: 'function',
+		name: 'aggregate3Value',
+		stateMutability: 'payable',
+		inputs: [
+			{
+				name: 'calls',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Call3Value[]',
+				components: [
+					{ name: 'target', type: 'address', internalType: 'address' },
+					{ name: 'allowFailure', type: 'bool', internalType: 'bool' },
+					{ name: 'value', type: 'uint256', internalType: 'uint256' },
+					{ name: 'callData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+		outputs: [
+			{
+				name: 'returnData',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Result[]',
+				components: [
+					{ name: 'success', type: 'bool', internalType: 'bool' },
+					{ name: 'returnData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+	},
+	{
+		type: 'function',
+		name: 'blockAndAggregate',
+		stateMutability: 'payable',
+		inputs: [
+			{
+				name: 'calls',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Call[]',
+				components: [
+					{ name: 'target', type: 'address', internalType: 'address' },
+					{ name: 'callData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+		outputs: [
+			{ name: 'blockNumber', type: 'uint256', internalType: 'uint256' },
+			{ name: 'blockHash', type: 'bytes32', internalType: 'bytes32' },
+			{
+				name: 'returnData',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Result[]',
+				components: [
+					{ name: 'success', type: 'bool', internalType: 'bool' },
+					{ name: 'returnData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+	},
+	{ type: 'function', name: 'getBasefee', stateMutability: 'view', inputs: [], outputs: [{ name: 'basefee', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getBlockHash', stateMutability: 'view', inputs: [{ name: 'blockNumber', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: 'blockHash', type: 'bytes32', internalType: 'bytes32' }] },
+	{ type: 'function', name: 'getBlockNumber', stateMutability: 'view', inputs: [], outputs: [{ name: 'blockNumber', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getChainId', stateMutability: 'view', inputs: [], outputs: [{ name: 'chainid', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getCurrentBlockCoinbase', stateMutability: 'view', inputs: [], outputs: [{ name: 'coinbase', type: 'address', internalType: 'address' }] },
+	{ type: 'function', name: 'getCurrentBlockDifficulty', stateMutability: 'view', inputs: [], outputs: [{ name: 'difficulty', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getCurrentBlockGasLimit', stateMutability: 'view', inputs: [], outputs: [{ name: 'gaslimit', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getCurrentBlockTimestamp', stateMutability: 'view', inputs: [], outputs: [{ name: 'timestamp', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getEthBalance', stateMutability: 'view', inputs: [{ name: 'addr', type: 'address', internalType: 'address' }], outputs: [{ name: 'balance', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'getLastBlockHash', stateMutability: 'view', inputs: [], outputs: [{ name: 'blockHash', type: 'bytes32', internalType: 'bytes32' }] },
+	{
+		type: 'function',
+		name: 'tryAggregate',
+		stateMutability: 'payable',
+		inputs: [
+			{ name: 'requireSuccess', type: 'bool', internalType: 'bool' },
+			{
+				name: 'calls',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Call[]',
+				components: [
+					{ name: 'target', type: 'address', internalType: 'address' },
+					{ name: 'callData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+		outputs: [
+			{
+				name: 'returnData',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Result[]',
+				components: [
+					{ name: 'success', type: 'bool', internalType: 'bool' },
+					{ name: 'returnData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+	},
+	{
+		type: 'function',
+		name: 'tryBlockAndAggregate',
+		stateMutability: 'payable',
+		inputs: [
+			{ name: 'requireSuccess', type: 'bool', internalType: 'bool' },
+			{
+				name: 'calls',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Call[]',
+				components: [
+					{ name: 'target', type: 'address', internalType: 'address' },
+					{ name: 'callData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
+		],
+		outputs: [
+			{ name: 'blockNumber', type: 'uint256', internalType: 'uint256' },
+			{ name: 'blockHash', type: 'bytes32', internalType: 'bytes32' },
+			{
+				name: 'returnData',
+				type: 'tuple[]',
+				internalType: 'struct Multicall3.Result[]',
+				components: [
+					{ name: 'success', type: 'bool', internalType: 'bool' },
+					{ name: 'returnData', type: 'bytes', internalType: 'bytes' },
+				],
+			},
 		],
 	},
 ] as const

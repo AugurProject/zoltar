@@ -12,6 +12,7 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		require(!awaitingForkContinuation, 'Fork await');
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
+		require(block.timestamp < pool.questionData().getQuestionEndDate(pool.questionId()), 'Question ended');
 		pool.updateSettlementCollateral();
 		completeSetsToMintAttoShares = pool.attoEthToAttoShares(msg.value);
 		require(completeSetsToMintAttoShares > 0, 'Exchange rate undefined');

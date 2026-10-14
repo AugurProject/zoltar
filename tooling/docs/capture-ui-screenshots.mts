@@ -18,8 +18,8 @@ const SETTLE_MILLISECONDS = 1500
 const usage = `Usage: bun run docs:screenshots [-- --app <app>] [--only <id,id>] [--sync-sizes]
 
 Captures the documentation screenshots listed in tooling/docs/ui-screenshot-specs.mts from the walletless
-simulation, writes them to docs/assets/screenshots/<app>/<id>.png, updates the <img> sizes on the pages that
-embed them, and records the app's source fingerprint. It builds the app from this checkout and serves it on a
+simulation, writes them to docs/assets/screenshots/<app>/<id>.png, updates image sizes and marked simulation
+pool references on their documentation pages, and records the app's source fingerprint. It builds the app from this checkout and serves it on a
 free port for the run. --sync-sizes only copies the existing images' sizes into the embedding pages, without a browser.`
 
 // Runs in the page: finds controls by their visible label or accessible name.
@@ -126,15 +126,36 @@ async function runHelper(session: DevToolsSession, call: string, context: string
 async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId: string) {
 	const context = `Screenshot '${specId}'`
 	const waitOptions = { attempts: 600, intervalMilliseconds: 100, retryFailures: true }
+	let simulationSecurityPoolAddress: string | undefined
 	if ('click' in step) {
 		await session.waitFor(`window.__docsScreenshot.enabled(${quote(step.click)})`, { ...waitOptions, message: `${context}: no enabled control labelled "${step.click}" appeared` })
 		await runHelper(session, `click(${quote(step.click)}, ${(step.nth ?? 0).toString()})`, context)
-	} else if ('fill' in step) await runHelper(session, `fill(${quote(step.fill)}, ${quote(step.value)})`, context)
-	else if ('waitForText' in step) await session.waitFor(`document.body.innerText.includes(${quote(step.waitForText)})`, { ...waitOptions, message: `${context}: timed out waiting for text "${step.waitForText}"` })
+	} else if ('fill' in step) {
+		const value =
+			typeof step.value === 'string'
+				? step.value
+				: await session.evaluate(`(async () => {
+			const [{ getActiveBackend }, { loadAllSecurityPools }] = await Promise.all([
+				import('@zoltar/ui-core-shared/lib/activeEnvironment.js'),
+				import('@zoltar/ui-statoblast-shared/protocol/securityPools.js'),
+			])
+			const backend = getActiveBackend()
+			if (backend.id !== 'simulation') throw new Error('Screenshot requires simulation')
+			await backend.waitUntilReady?.()
+			const pools = await loadAllSecurityPools(backend.createReadClient())
+			const pool = pools[0]
+			if (pools.length !== 1 || pool === undefined) throw new Error('Expected one seeded security pool, found ' + pools.length)
+			return pool.securityPoolAddress
+		})()`)
+		if (typeof value !== 'string') throw new Error(`${context}: fill value did not resolve to text`)
+		if (typeof step.value !== 'string') simulationSecurityPoolAddress = value
+		await runHelper(session, `fill(${quote(step.fill)}, ${quote(value)})`, context)
+	} else if ('waitForText' in step) await session.waitFor(`document.body.innerText.includes(${quote(step.waitForText)})`, { ...waitOptions, message: `${context}: timed out waiting for text "${step.waitForText}"` })
 	else if ('waitForNoText' in step) await session.waitFor(`!document.body.innerText.includes(${quote(step.waitForNoText)})`, { ...waitOptions, message: `${context}: text "${step.waitForNoText}" never disappeared` })
 	else if ('waitForEnabled' in step) await session.waitFor(`window.__docsScreenshot.enabled(${quote(step.waitForEnabled)})`, { ...waitOptions, message: `${context}: "${step.waitForEnabled}" never became enabled` })
 	else await session.evaluate('history.back()')
 	await Bun.sleep(300)
+	return simulationSecurityPoolAddress
 }
 
 const isRect = (value: unknown): value is { x: number; y: number; width: number; height: number } => typeof value === 'object' && value !== null && ['x', 'y', 'width', 'height'].every(key => key in value && typeof Reflect.get(value, key) === 'number')
@@ -145,7 +166,7 @@ async function cropRect(session: DevToolsSession, crop: UiScreenshotCrop, specId
 	return { ...rect, scale: 1 }
 }
 
-async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: UiScreenshotSpec): Promise<Uint8Array> {
+async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: UiScreenshotSpec): Promise<{ image: Uint8Array; simulationSecurityPoolAddress: string | undefined }> {
 	const app = screenshotApp(spec.app)
 	const viewport = spec.viewport ?? DEFAULT_VIEWPORT
 	const pageUrl = `${baseUrl}/?simulate=1&simScenario=${encodeURIComponent(spec.scenario)}${spec.route ?? ''}`
@@ -169,8 +190,9 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 			message: `Screenshot '${spec.id}': ${app.title} did not finish loading ${pageUrl}`,
 		})
 		await Bun.sleep(SETTLE_MILLISECONDS)
+		let simulationSecurityPoolAddress: string | undefined
 		try {
-			for (const step of spec.steps ?? []) await runStep(session, step, spec.id)
+			for (const step of spec.steps ?? []) simulationSecurityPoolAddress = (await runStep(session, step, spec.id)) ?? simulationSecurityPoolAddress
 			for (const text of spec.expectText ?? [])
 				await session.waitFor(`document.body.innerText.includes(${quote(text)})`, { attempts: 300, intervalMilliseconds: 100, message: `Screenshot '${spec.id}': expected text "${text}" is not visible. If the UI label changed, update the screenshot spec and the documentation that quotes it.` })
 		} catch (error) {
@@ -192,7 +214,7 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 		if (typeof data !== 'string') throw new Error(`Screenshot '${spec.id}': Chromium returned no image data`)
 		const pageErrors = session.issues.filter(issue => issue.kind === 'pageerror')
 		if (pageErrors.length > 0) console.warn(`Screenshot '${spec.id}' page errors:\n${pageErrors.map(issue => `  ${issue.detail}`).join('\n')}`)
-		return Buffer.from(data, 'base64')
+		return { image: Buffer.from(data, 'base64'), simulationSecurityPoolAddress }
 	} finally {
 		await session.close()
 	}
@@ -220,13 +242,18 @@ async function main() {
 	const fingerprints = await readScreenshotFingerprints(repositoryRoot)
 	for (const appId of screenshotAppIds(specs)) {
 		const { server, baseUrl } = await startDevServer(appId)
+		let appSimulationSecurityPoolAddress: string | undefined
 		try {
 			for (const spec of specs.filter(candidate => candidate.app === appId)) {
 				const outputPath = screenshotOutputPath(spec)
-				const image = await captureScreenshot(chromiumPath, baseUrl, spec)
+				const { image, simulationSecurityPoolAddress } = await captureScreenshot(chromiumPath, baseUrl, spec)
+				if (simulationSecurityPoolAddress !== undefined) {
+					if (appSimulationSecurityPoolAddress !== undefined && appSimulationSecurityPoolAddress !== simulationSecurityPoolAddress) throw new Error(`${appId} screenshots resolved inconsistent seeded security pools`)
+					appSimulationSecurityPoolAddress = simulationSecurityPoolAddress
+				}
 				await fs.mkdir(path.dirname(path.join(repositoryRoot, outputPath)), { recursive: true })
 				await fs.writeFile(path.join(repositoryRoot, outputPath), image)
-				await updateEmbeddingPages(path.join(repositoryRoot, 'docs'), spec, outputPath, readPngSize(image), console.warn)
+				await updateEmbeddingPages(path.join(repositoryRoot, 'docs'), spec, outputPath, readPngSize(image), console.warn, simulationSecurityPoolAddress)
 				console.log(`Captured ${outputPath}`)
 			}
 		} finally {

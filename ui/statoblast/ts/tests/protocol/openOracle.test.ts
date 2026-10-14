@@ -335,6 +335,7 @@ describe('openOracle protocol client', () => {
 				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n]
 			},
 			readContract: async request => {
+				if (request.functionName === 'priceFeed') return managerAddress
 				if (request.functionName === 'getSettlementCallbackGasLimit') return 10
 				if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
 				if (request.functionName === 'getActiveStagedOperations') {

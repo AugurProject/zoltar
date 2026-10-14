@@ -21,6 +21,10 @@ describe('statoblast document title', () => {
 		expect(getAppPageTitle({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'pools' })).toBe('Browse pools')
 	})
 
+	test('names the portfolio route', () => {
+		expect(getAppPageTitle({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'portfolios' })).toBe('Portfolios')
+	})
+
 	test('keeps the plain page title without a pool', () => {
 		expect(getPoolDocumentTitleDetail({ requestedPoolAddress: '', selectedPool: undefined })).toBeUndefined()
 		expect(getPoolDocumentTitleDetail({ requestedPoolAddress: 'not-an-address', selectedPool: undefined })).toBeUndefined()

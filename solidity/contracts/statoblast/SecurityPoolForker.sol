@@ -207,6 +207,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function _snapshotEscalationAtFork(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, EscalationGame escalationGame, uint256 forkTime) private {
 		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
+		require(!escalationGame.forkContinuation() || escalationGame.forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
 		EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[securityPool];
 		// Keep this unreachable initialization guard data-free for the EIP-170 size limit.
 		if (snapshot.initialized) revert();
@@ -273,25 +274,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		if (address(migrationProxy) != address(0x0)) return migrationProxy;
 		migrationProxy = new SecurityPoolMigrationProxy{salt: _getMigrationProxySalt(securityPool)}(zoltar, securityPool.repToken(), securityPool.universeId(), address(this));
 		migrationProxyByPool[securityPool] = migrationProxy;
-	}
-
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal override returns (EscalationGame) {
-		_validateChildEscalationGame(child, childEscalationGame);
-		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		if (!parentForkData.unresolvedEscalationAtFork) return childEscalationGame;
-		if (address(childEscalationGame) == address(0x0)) {
-			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
-			child.initializeForkedEscalationGame(parentForkData.escalationStartBondAtForkAttoRep, parentForkData.escalationNonDecisionThresholdAtForkAttoRep, parentForkData.escalationElapsedAtFork, childForkData.fixedQuestionOutcomePlusOne == 0 ? BinaryOutcomes.BinaryOutcome.None : BinaryOutcomes.BinaryOutcome(childForkData.fixedQuestionOutcomePlusOne - 1));
-			childEscalationGame = child.escalationGame();
-			_validateChildEscalationGame(child, childEscalationGame);
-		}
-		return super._initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
-	}
-
-	/// @notice Self-call only: initializes the child's fork-continuation escalation game when the parent forked with an unresolved escalation.
-	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) external returns (EscalationGame) {
-		if (msg.sender != address(this)) revert('Only self');
-		return _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
 	/// @notice Activates fork mode on a pool in a forked universe and locks its REP and unresolved escrow REP into Zoltar migration; callable by anyone.
@@ -363,6 +345,18 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.createChildUniverse, (securityPool, outcomeIndex)));
 	}
 
+	/// @notice Installs one bounded outcome of an already registered child's carry snapshot, including after migration closes.
+	function continueChildUniverse(ISecurityPool parent, uint256 outcomeIndex) external {
+		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.continueChildUniverse, (parent, outcomeIndex)));
+	}
+
+	/// @notice Self-call only: shares the canonical child deployment path with the escalation migration delegate.
+	function getOrDeployChildPoolForEscalation(ISecurityPool parent, uint256 outcomeIndex) external returns (ISecurityPool child, EscalationGame game) {
+		require(msg.sender == address(this), 'Only self');
+		bytes memory result = _delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.getOrDeployChildPoolForEscalation, (parent, outcomeIndex)));
+		return abi.decode(result, (ISecurityPool, EscalationGame));
+	}
+
 	/// @notice Vault-only: after an own-game fork, carries the vault's deposits on `outcomeIndex` into the child game and exports the child REP to the vault.
 	function claimForkedEscalationDeposits(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] calldata depositIndexes) external {
 		require(msg.sender == vault, 'Vault');
@@ -413,6 +407,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	{
 		require(securityPool.systemState() == SystemState.ForkMigration, 'Not mig');
 		parent = securityPool.parent();
+		EscalationGame game = securityPool.escalationGame();
+		_validateChildEscalationGame(securityPool, game);
+		_requireChildForkCarryReady(parent, game);
 		// The truth auction ends the parent's pool-specific migration phase for this child branch.
 		uint256 parentForkActivationTime = forkDataByPool[parent].forkActivationTime;
 		require(parentForkActivationTime > 0 && block.timestamp > parentForkActivationTime + SecurityPoolUtils.MIGRATION_TIME, 'Active');

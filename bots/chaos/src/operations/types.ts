@@ -1,3 +1,4 @@
+import type { ForkedCarryWithdrawalPresenceSnapshot, ForkedCarryWithdrawalSnapshot, ForkedClaimCheckpointSnapshot } from './carry-types.ts'
 import type { UniverseUniswapSnapshot } from './uniswap-types.ts'
 import type { OperationInputValues } from './input-values.ts'
 import type { OperationDefinition } from './operation-definition.ts'
@@ -131,6 +132,11 @@ export interface PoolSnapshot {
 	repToken: Address
 	shareToken: Address
 	coordinator: Address
+	/** Actual OpenOracle callback and report creator, shared by portfolio questions. */
+	childPoolPreparations: Record<string, { portfolio: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
+	priceFeed: Address
+	/** Conservative report exposure across this feed at the snapshot block. */
+	oracleExposureAttoEth: CanonicalUintString
 	vaultOperations: Address
 	escalationGame: Address
 	/** Canonical operational-resolution state used to classify inherited carry work. */
@@ -247,50 +253,6 @@ export interface EscalationDepositSnapshot {
 	claimed: boolean
 }
 
-/** A serialization-safe carried-deposit proof verified against one canonical anchor. */
-interface ForkedCarryDepositProofSnapshot {
-	depositor: Address
-	amountAttoRep: CanonicalUintString
-	parentDepositIndex: string
-	cumulativeAmountAttoRep: CanonicalUintString
-	sourceNodeId: string
-	leafIndex: string
-	merkleMountainRangeSiblings: Hash[]
-	merkleMountainRangePeakIndex: string
-	nullifierSiblings: Hash[]
-}
-
-/** One independently executable inherited escalation withdrawal. */
-export interface ForkedCarryWithdrawalSnapshot {
-	pool: Address
-	game: Address
-	sourcePool: Address
-	sourceGame: Address
-	claimSourceGame: Address
-	outcome: 0 | 1 | 2
-	depositor: Address
-	amountAttoRep: CanonicalUintString
-	parentDepositIndex: string
-	sourceNodeId: string
-	proof: ForkedCarryDepositProofSnapshot
-	resultingCarryRoot: Hash
-	resultingNullifierRoot: Hash
-	amountToWithdrawAttoRep: CanonicalUintString
-	burnAmountAttoRep: CanonicalUintString
-	preflightExpectedResult: Hex
-}
-
-/** Lightweight canonical identity retained independently of bounded proof work. */
-interface ForkedCarryWithdrawalPresenceSnapshot {
-	pool: Address
-	game: Address
-	sourceGame: Address
-	claimSourceGame: Address
-	outcome: 0 | 1 | 2
-	parentDepositIndex: string
-	sourceNodeId: string
-}
-
 export interface MigrationRepSplitProgressSnapshot {
 	universeId: string
 	outcomeIndex: string
@@ -385,6 +347,7 @@ export interface PairSnapshot {
 }
 
 export interface EcosystemDeployments {
+	multicall3?: Address
 	zoltar: Address
 	questionData: Address
 	securityPoolFactory: Address
@@ -408,6 +371,7 @@ export interface EcosystemSnapshot {
 	stagedOperations: StagedOperationSnapshot[]
 	escalationDeposits: EscalationDepositSnapshot[]
 	/** Verified, unconsumed inherited deposits owned by the configured wallet. */
+	forkedClaimCheckpoints?: ForkedClaimCheckpointSnapshot[]
 	forkedCarryWithdrawals?: ForkedCarryWithdrawalSnapshot[]
 	/** Complete raw identities used for lifecycle absence confirmation. */
 	forkedCarryWithdrawalPresence?: ForkedCarryWithdrawalPresenceSnapshot[]

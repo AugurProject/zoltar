@@ -114,6 +114,8 @@ function withMinimumReportFixture<T extends Pick<ReturnType<typeof createConnect
 					return 0
 				case 'feePercentage':
 					return 0
+				case 'priceFeed':
+					return request.address
 				case 'securityPool':
 					return getAddress(WETH_ADDRESS)
 				case 'settlementCollateralAttoEth':

@@ -18,6 +18,8 @@ import {
 	getEscalationGameFactoryByteCode,
 	getInfraStepConstructorArguments,
 	getOpenOraclePriceCoordinatorFactoryByteCode,
+	getPriceCoordinatorDeploymentWorkerByteCode,
+	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
 	getSecurityPoolOperationsDelegateByteCode,
@@ -32,15 +34,17 @@ import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
+	escalationGameClaimDelegate: '0xaab738fe516485dd6597aa145d2ed7fa0e2e5149489df77d2b9b68929217fdb0',
+	escalationGameFactory: '0xe1bfc8a94d4aa00074d25e51331944bfd3a7b24c576c736f2c58801901a62e5e',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xdab4f996e38183895fe41d8e242004f3e079e35ec7fbc5e8e581ba150e9b2a0f',
-	securityPoolFactory: '0x0cf83ee917f6d1d44d63bd50a9b44c0db59a4776427de2219c9bd7cb316cc5ad',
-	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xbfeb383cdb8f9d635c6e34176ca50f010c8a396a66c3744ec21a6a8110fcd7b0',
+	openOraclePriceCoordinatorFactory: '0xfcca1f411f2050766168246353ded1afbf82c606f2bad490b05fb91e5586bc30',
+	priceCoordinatorDeploymentWorker: '0x9fb1769a8606207986959139621d1b81b2e59dc4f701f2fd9045f387452c3931',
+	securityPoolFactory: '0xf73e3994e92b80b6714b33614a6c9f439ae298ec1db245b495f346c4ce3b97c0',
+	securityPoolForker: '0x334bfd80a4c74727dc778aa081a98c12a46c020e9059115e5ba3402eaaf27db6',
+	securityPoolOperationsDelegate: '0x9e25144655b6513b00c0ec4a499cac4f76743c1359bd53f271cdec69163ea0d9',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0xd166e808a1860481541ec6f53d80cd284bdc172bfbe286c8b5b65da8978c8c93',
+	sharedPoolPriceFeedDeploymentWorker: '0x07ac6b0c397b09cc0870480ee3fc5f756f59c81f359ce47ca039c76c1d3454ad',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
@@ -73,15 +77,17 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xf9ccbaab9f6900e8b69d2eb202d4f057131073f2055f14fb2a46dacf8fd3f9c5',
+	escalationGameClaimDelegate: '0xaab738fe516485dd6597aa145d2ed7fa0e2e5149489df77d2b9b68929217fdb0',
+	escalationGameFactory: '0xe1bfc8a94d4aa00074d25e51331944bfd3a7b24c576c736f2c58801901a62e5e',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x89289d1316cb82849ae9a75db1110009a753d4913542281ed0f2c2dba962ac13',
-	securityPoolFactory: '0xfa492fe2236baa76f2e6addfd7d3f793db565be25203970e61bdb6fb5226b37f',
-	securityPoolOperationsDelegate: '0x803bfa19e2b75cdd3e34a0ca848bc292e9eb89b15d955db9bc85be6357fc4d92',
-	securityPoolForker: '0xd12fb332dba1a9c4679de9c238bea9b807d6797bd0fcc01c53d80dc01fb9d042',
+	openOraclePriceCoordinatorFactory: '0x3954eeffef226816d45ec4947071ce4222c5f69f530c59a77b2fa308bb678c5a',
+	priceCoordinatorDeploymentWorker: '0x9fb1769a8606207986959139621d1b81b2e59dc4f701f2fd9045f387452c3931',
+	securityPoolFactory: '0xa3bfb656ddcf461c9d61034218b64970bba427e1a443227f9c964c6aae83760b',
+	securityPoolForker: '0x847a95eaac2819fad7ffda5e67e145dbedd3c5df004a27025cb8b7e525748ea8',
+	securityPoolOperationsDelegate: '0x9e25144655b6513b00c0ec4a499cac4f76743c1359bd53f271cdec69163ea0d9',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0x1bf688e11b6f3558844dcb52898e879f878b2035f6c73b92628460dabd6d6b1e',
+	sharedPoolPriceFeedDeploymentWorker: '0x07ac6b0c397b09cc0870480ee3fc5f756f59c81f359ce47ca039c76c1d3454ad',
 	uniformPriceDualCapBatchAuctionFactory: '0xef7782aeeb22a6d00cbd223d4a11cc90c8d54391ea277f41c030405370d8825d',
 }
 
@@ -136,10 +142,24 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getShareTokenFactoryByteCode(addresses.zoltar)),
 		},
 		{
+			id: 'priceCoordinatorDeploymentWorker',
+			label: 'PriceCoordinatorDeploymentWorker',
+			address: addresses.priceCoordinatorDeploymentWorker,
+			dependencies: ['proxyDeployer', 'securityPoolUtils'],
+			deploy: async client => await deployViaProxy(client, getPriceCoordinatorDeploymentWorkerByteCode()),
+		},
+		{
+			id: 'sharedPoolPriceFeedDeploymentWorker',
+			label: 'SharedPoolPriceFeedDeploymentWorker',
+			address: addresses.sharedPoolPriceFeedDeploymentWorker,
+			dependencies: ['proxyDeployer', 'securityPoolUtils'],
+			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedDeploymentWorkerByteCode()),
+		},
+		{
 			id: 'openOraclePriceCoordinatorFactory',
 			label: 'OpenOraclePriceCoordinatorFactory',
 			address: addresses.openOraclePriceCoordinatorFactory,
-			dependencies: ['proxyDeployer'],
+			dependencies: ['proxyDeployer', 'priceCoordinatorDeploymentWorker', 'sharedPoolPriceFeedDeploymentWorker'],
 			deploy: async client => await deployViaProxy(client, getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress)),
 		},
 		{
@@ -203,6 +223,8 @@ function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNe
 		addresses.securityPoolOperationsDelegate,
 		addresses.openOracle,
 		addresses.shareTokenFactory,
+		addresses.priceCoordinatorDeploymentWorker,
+		addresses.sharedPoolPriceFeedDeploymentWorker,
 		addresses.openOraclePriceCoordinatorFactory,
 		addresses.securityPoolForker,
 		addresses.escalationGameClaimDelegate,

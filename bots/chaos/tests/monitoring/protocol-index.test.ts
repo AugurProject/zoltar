@@ -1,3 +1,4 @@
+import { canonicalPoolReportRoutes } from '../../src/monitoring/discovery-price-feed.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
 import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
@@ -5,10 +6,25 @@ import { describe, expect, test } from 'bun:test'
 import { bytesToHex } from '@zoltar/core-shared/evm/ethereum'
 import { encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
 import { deriveChildUniverseId } from '../support/universe.ts'
-import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
+import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { updateProtocolIndexWithQuorum } from '../../src/monitoring/protocol-index-quorum.ts'
 import type { ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
+
+test('deduplicates shared question report aliases while rejecting inconsistent report identities', () => {
+	const snapshot = snapshotFixture()
+	const first = snapshot.pools[0]
+	if (first === undefined) throw new Error('Missing pool')
+	first.priceFeed = address(80)
+	first.pendingReportId = '42'
+	const second = { ...first, address: address(81), coordinator: address(82) }
+	const routes = canonicalPoolReportRoutes([first, second])
+	expect(routes).toEqual([{ coordinator: address(80), pendingReportId: '42', repToken: first.repToken }])
+	const trust = { ...indexTrust, ...indexDeployments, coordinatorReports: routes, wallet: address(1) }
+	expect(() => trustedOpenOracleReportPredicate(trust)).not.toThrow()
+	second.priceFeed = address(83)
+	expect(() => trustedOpenOracleReportPredicate({ ...trust, coordinatorReports: canonicalPoolReportRoutes([first, second]) })).toThrow('assigned to multiple coordinators')
+})
 
 const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
 const indexTrust = {

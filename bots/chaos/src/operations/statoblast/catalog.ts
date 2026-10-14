@@ -1,3 +1,4 @@
+import { CHILD_PREPARATION_OPERATIONS, initializeChildHistory } from './child-preparation.ts'
 import { OperationDefinition } from '../types.ts'
 
 import { checkpointDefinition, deployPool, depositVault, exitCommitmentLimit, setCommitmentLimit, vaultActionDefinition } from './vaults.ts'
@@ -16,9 +17,11 @@ import { claimForkedEscalation, forkDefinition, migrateVaultWithUnresolvedEscala
 
 import { auctionDefinition, finalizeTruthAuctionRoute, refundLosingAuctionBids, settleAuctionBids, startTruthAuction } from './auctions.ts'
 
-import { sweepResidualEscalation, withdrawForkedCarry } from './carry.ts'
+import { sweepResidualEscalation, withdrawForkedCarry, prepareInheritedClaim } from './carry.ts'
 
 export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
+	...CHILD_PREPARATION_OPERATIONS,
+	initializeChildHistory,
 	deployPool,
 	checkpointDefinition('collateral'),
 	checkpointDefinition('retention'),
@@ -55,6 +58,7 @@ export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	auctionDefinition('withdraw-refund'),
 	withdrawEscalation,
 	withdrawForkedCarry,
+	prepareInheritedClaim,
 	sweepResidualEscalation,
 	refundLosingAuctionBids,
 ]

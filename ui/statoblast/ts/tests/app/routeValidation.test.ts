@@ -31,10 +31,15 @@ describe('statoblast route validation', () => {
 		expect(validateRoute({ openOracleView: 'selected-report', resolvedRoute: 'open-oracle', search: '?openOracleView=selected-report&openOracleReportId=9' }).hasInvalidOpenOracleView).toBe(false)
 	})
 
-	test('accepts a remembered OpenOracle view while visiting Pools or Deploy', () => {
-		for (const resolvedRoute of ['pools', 'deploy'] as const) {
+	test('accepts a remembered OpenOracle view while visiting Pools, Portfolios or Deploy', () => {
+		for (const resolvedRoute of ['pools', 'portfolios', 'deploy'] as const) {
 			expect(validateRoute({ openOracleView: 'selected-report', resolvedRoute, search: '?openOracleView=selected-report&openOracleReportId=9' }).hasInvalidOpenOracleView).toBe(false)
 		}
+	})
+
+	test('still rejects empty and unknown remembered OpenOracle views on Portfolios', () => {
+		expect(isRouteInvalid({ resolvedRoute: 'portfolios', search: '?openOracleView=' })).toBe(true)
+		expect(isRouteInvalid({ openOracleView: 'invalid', resolvedRoute: 'portfolios', search: '?openOracleView=invalid' })).toBe(true)
 	})
 
 	test('rejects a malformed universe instead of silently opening Genesis', () => {

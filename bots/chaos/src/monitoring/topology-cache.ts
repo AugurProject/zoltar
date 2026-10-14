@@ -1,9 +1,10 @@
+import { parseTopologyIdentity as parseIdentity, sameTopologyIdentity as sameIdentity, topologyAddress as address, type ImmutableTopologyIdentity } from './topology-identity.ts'
 import { randomUUID } from 'node:crypto'
 import { mkdir, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { isExistingTargetError, ownerDirectory, ownerFilesystem, parseJsonDocument, readOwnerFile, syncOwnerDirectory, writeOwnerFile } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
-import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import { compareUnsignedStrings } from '../core/units.ts'
 import type { QuestionSnapshot } from '../operations/types.ts'
 import { collectionDigest, manifestWithDigest, sha256 } from '../state/content-digest.ts'
@@ -35,19 +36,6 @@ function configuredResidentLimitError(message: string) {
 	const error = new Error(message)
 	configuredResidentLimitErrors.add(error)
 	return error
-}
-
-export interface ImmutableTopologyIdentity {
-	chainId: number
-	openOracle: Address
-	questionData: Address
-	securityPoolFactory: Address
-	securityPoolForker: Address
-	tradingFactory: Address
-	tradingRouter: Address
-	uniswapV3Factory?: Address | undefined
-	weth: Address
-	zoltar: Address
 }
 
 export interface CachedPoolDeployment {
@@ -176,15 +164,6 @@ function boundedUtf8String(value: unknown, label: string, maximumBytes: number) 
 	return value
 }
 
-function address(value: unknown, label: string) {
-	if (typeof value !== 'string') throw new Error(`${label} must be an address`)
-	try {
-		return getAddress(value)
-	} catch (error) {
-		throw new Error(`${label} must be an address`, { cause: error })
-	}
-}
-
 function parseCountedRegistryCursor(value: unknown, label: string): CountedRegistryCursor {
 	const cursor = requiredRecord(value, label)
 	assertExactKeys(cursor, ['canonicalCount', 'commitment', 'nextIndex', 'residentLimit', 'retentionMode'], [], label)
@@ -224,25 +203,6 @@ function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestD
 	return {
 		poolDeployments: parseCountedRegistryCursor(cursors['poolDeployments'], `${label}.poolDeployments`),
 		questions: parseCountedRegistryCursor(cursors['questions'], `${label}.questions`),
-	}
-}
-
-function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity {
-	const identity = requiredRecord(value, label)
-	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
-	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], [], label)
-	if (typeof identity['chainId'] !== 'number' || !Number.isSafeInteger(identity['chainId']) || identity['chainId'] <= 0) throw new Error(`${label}.chainId must be a positive safe integer`)
-	return {
-		chainId: identity['chainId'],
-		openOracle: address(identity['openOracle'], `${label}.openOracle`),
-		questionData: address(identity['questionData'], `${label}.questionData`),
-		securityPoolFactory: address(identity['securityPoolFactory'], `${label}.securityPoolFactory`),
-		securityPoolForker: address(identity['securityPoolForker'], `${label}.securityPoolForker`),
-		tradingFactory: address(identity['tradingFactory'], `${label}.tradingFactory`),
-		tradingRouter: address(identity['tradingRouter'], `${label}.tradingRouter`),
-		...('uniswapV3Factory' in identity ? { uniswapV3Factory: address(identity['uniswapV3Factory'], `${label}.uniswapV3Factory`) } : {}),
-		weth: address(identity['weth'], `${label}.weth`),
-		zoltar: address(identity['zoltar'], `${label}.zoltar`),
 	}
 }
 
@@ -403,11 +363,6 @@ function validateImmutableTopologyCache(value: CanonicalImmutableTopologyCache, 
 	const cache = parseTopologyCache(value)
 	assertTopologyResidentBounds(cache, limits)
 	return cache
-}
-
-function sameIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyIdentity) {
-	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
-	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }
 
 function manifestPayload(parameters: Omit<TopologyManifestPayload, 'manifestSchemaVersion' | 'payloadSchemaVersion' | 'storeSchemaVersion'>): TopologyManifestPayload {

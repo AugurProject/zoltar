@@ -161,6 +161,7 @@ export function projectEscalationDeposit({
 function getWinningWithdrawalAmount({
 	bindingCapitalAttoRep,
 	depositAmountAttoRep,
+	principalAttoRep = depositAmountAttoRep,
 	depositEndAttoRep,
 	depositStartAttoRep,
 	forkThresholdAttoRep,
@@ -169,6 +170,7 @@ function getWinningWithdrawalAmount({
 }: {
 	bindingCapitalAttoRep: bigint
 	depositAmountAttoRep: bigint
+	principalAttoRep?: bigint
 	depositEndAttoRep: bigint
 	depositStartAttoRep: bigint
 	forkThresholdAttoRep: bigint
@@ -179,14 +181,14 @@ function getWinningWithdrawalAmount({
 	const rewardEligiblePrincipalAttoRep = winningOutcomeBalanceAttoRep < rewardEligibleCapAttoRep ? winningOutcomeBalanceAttoRep : rewardEligibleCapAttoRep
 	let amountToWithdrawAttoRep: bigint
 	if (rewardEligiblePrincipalAttoRep === 0n) {
-		amountToWithdrawAttoRep = depositAmountAttoRep
+		amountToWithdrawAttoRep = principalAttoRep
 	} else {
 		const eligibleEndAttoRep = depositEndAttoRep < rewardEligibleCapAttoRep ? depositEndAttoRep : rewardEligibleCapAttoRep
 		const rewardEligibleDepositAttoRep = eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0n
 		const cappedRewardEligibleDepositAttoRep = rewardEligibleDepositAttoRep > depositAmountAttoRep ? depositAmountAttoRep : rewardEligibleDepositAttoRep
 		const rewardBonusPoolAttoRep = (bindingCapitalAttoRep * 3n) / 5n
 		const bonusAttoRep = (cappedRewardEligibleDepositAttoRep * rewardBonusPoolAttoRep) / rewardEligiblePrincipalAttoRep
-		amountToWithdrawAttoRep = depositAmountAttoRep + bonusAttoRep
+		amountToWithdrawAttoRep = principalAttoRep + bonusAttoRep
 	}
 	if (forkThresholdAttoRep < nonDecisionThresholdAttoRep) return (amountToWithdrawAttoRep * forkThresholdAttoRep) / nonDecisionThresholdAttoRep
 	return amountToWithdrawAttoRep
@@ -221,6 +223,7 @@ export function getWinningEscalationDepositClaimAmount({
 export function getWinningImportedEscalationDepositClaimAmount({
 	bindingCapitalAttoRep,
 	depositAmountAttoRep,
+	principalAttoRep,
 	postDepositCumulativeAmountAttoRep,
 	forkThresholdAttoRep,
 	nonDecisionThresholdAttoRep,
@@ -228,6 +231,7 @@ export function getWinningImportedEscalationDepositClaimAmount({
 }: {
 	bindingCapitalAttoRep: bigint
 	depositAmountAttoRep: bigint
+	principalAttoRep?: bigint
 	postDepositCumulativeAmountAttoRep: bigint
 	forkThresholdAttoRep: bigint
 	nonDecisionThresholdAttoRep: bigint
@@ -236,6 +240,7 @@ export function getWinningImportedEscalationDepositClaimAmount({
 	return getWinningWithdrawalAmount({
 		bindingCapitalAttoRep,
 		depositAmountAttoRep,
+		principalAttoRep: principalAttoRep ?? depositAmountAttoRep,
 		depositEndAttoRep: postDepositCumulativeAmountAttoRep,
 		depositStartAttoRep: postDepositCumulativeAmountAttoRep - depositAmountAttoRep,
 		forkThresholdAttoRep,

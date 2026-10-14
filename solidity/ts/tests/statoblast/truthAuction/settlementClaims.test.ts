@@ -128,9 +128,10 @@ describe('Statoblast: truth auction', () => {
 			test(`partial truth auction selling about ${percentSold}% preserves the migrated vault and bidder REP claims`, async () => {
 				const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 				await approveAndDepositRepToVault(passiveVault, repDeposit, questionId)
-				await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
 				await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
+				await mockWindow.setTime((await getQuestionEndDate(client, questionId)) - 2n)
 				await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+				await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
 
 				await triggerExternalForkForSecurityPool(undefined, `partial ${percentSold}% truth auction source`)
 				await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -179,13 +180,14 @@ describe('Statoblast: truth auction', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 			await approveAndDepositRepToVault(passiveRepHolder, repDeposit, questionId)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await mockWindow.setTime(endTime + 10000n)
 
 			// Fork the security pool
 			await triggerExternalForkForSecurityPool(undefined, 'simple truth auction fork source')
@@ -247,13 +249,14 @@ describe('Statoblast: truth auction', () => {
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 			await setVaultCapacityFixture(passiveRepHolder, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, passiveRepHolder.account.address, repDeposit / 4n)
-			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+			await mockWindow.setTime(endTime - 2n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await mockWindow.setTime(endTime + 10000n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'refund-only claim fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

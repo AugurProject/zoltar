@@ -169,7 +169,7 @@ describe('Escalation math parity', () => {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+				args: [testSecurityPoolAddress, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
@@ -219,17 +219,20 @@ describe('Escalation math parity', () => {
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
 		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
-	) =>
-		await writeContractAndWait(
-			client,
-			async () =>
-				await client.writeContract({
-					abi: initializeForkCarrySnapshotTestPoolAbi,
-					address: testSecurityPoolAddress,
-					functionName: 'initializeForkCarrySnapshot',
-					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
-				}),
-		)
+	) => {
+		for (let outcome = 0; outcome < 3; outcome++) {
+			await writeContractAndWait(
+				client,
+				async () =>
+					await client.writeContract({
+						abi: initializeForkCarrySnapshotTestPoolAbi,
+						address: testSecurityPoolAddress,
+						functionName: 'initializeForkCarrySnapshot',
+						args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+					}),
+			)
+		}
+	}
 
 	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipalAttoRep: bigint, childRepAmountAttoRep: bigint) =>
 		await writeContractAndWait(

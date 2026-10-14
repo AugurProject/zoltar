@@ -1,3 +1,4 @@
+import { childPreparationCount, childPreparationSteps, childLedgerNeedsPreparation } from './child-preparation.ts'
 import { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 import { amount, choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
@@ -75,7 +76,9 @@ function claimForkedEscalationCandidates(snapshot: EcosystemSnapshot, options?: 
 		const deposits = snapshot.escalationDeposits.filter(deposit => !deposit.claimed && deposit.pool.toLowerCase() === pool.address.toLowerCase() && deposit.vault.toLowerCase() === snapshot.wallet.address.toLowerCase()).sort((left, right) => compareDecimalStrings(left.depositIndex, right.depositIndex))
 		return [...new Set(deposits.map(deposit => deposit.outcome))].flatMap(outcome => lifecycleBatches(deposits.filter(deposit => deposit.outcome === outcome)).map(batch => ({ deadline, deposits: batch, outcome, pool })))
 	})
-	return enforceTopologyCapacity && options !== undefined ? candidates.filter(candidate => childRouteTopologyCapacityBlocker(snapshot, candidate.pool, candidate.outcome.toString(), options, 'Forked escalation claim child route') === undefined) : candidates
+	return enforceTopologyCapacity && options !== undefined
+		? candidates.filter(candidate => !childLedgerNeedsPreparation(candidate.pool, candidate.outcome.toString()) && childRouteTopologyCapacityBlocker(snapshot, candidate.pool, candidate.outcome.toString(), options, 'Forked escalation claim child route') === undefined)
+		: candidates
 }
 
 function claimForkedDepositIndexes(candidate: ReturnType<typeof claimForkedEscalationCandidates>[number]) {
@@ -160,7 +163,7 @@ function unresolvedMigrationCandidates(snapshot: EcosystemSnapshot, options: Pla
 }
 
 function actionableUnresolvedMigrationCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
-	return unresolvedMigrationCandidates(snapshot, options).filter(candidate => walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, candidate.outcome, options, 'Unresolved vault migration child route') === undefined)
+	return unresolvedMigrationCandidates(snapshot, options).filter(candidate => !childLedgerNeedsPreparation(candidate.pool, candidate.outcome) && walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, candidate.outcome, options, 'Unresolved vault migration child route') === undefined)
 }
 
 function unresolvedMigrationPresenceCandidates(snapshot: EcosystemSnapshot) {
@@ -283,7 +286,9 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 		const now = amount(snapshot.anchor.timestamp)
 		return vaultMigrationPresenceCandidates(snapshot).flatMap(candidate => {
 			if (!timestampDeadlineHasRequiredSafety(now, candidate.deadline, options)) return []
-			const routes = forkOutcomesForPool(snapshot, candidate.pool).filter(outcome => isOpenChildRoute(snapshot, candidate.pool, outcome) && (!enforceCapacity || walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, outcome, options, 'Vault migration child route') === undefined))
+			const routes = forkOutcomesForPool(snapshot, candidate.pool).filter(
+				outcome => !childLedgerNeedsPreparation(candidate.pool, outcome) && isOpenChildRoute(snapshot, candidate.pool, outcome) && (!enforceCapacity || walletVaultMigrationRouteCapacityBlocker(snapshot, candidate.pool, outcome, options, 'Vault migration child route') === undefined),
+			)
 			return routes.length === 0 ? [] : [{ ...candidate, routes }]
 		})
 	}
@@ -325,7 +330,9 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 			}
 			if (kind === 'create-child' && forkOutcomes.length === 0) return []
 			if (pool.systemState !== 1 || amount(pool.forkActivationTime) === 0n || !timestampDeadlineHasRequiredSafety(now, deadline, options)) return []
-			return missingChildOutcomes.flatMap(outcome => (!enforceCapacity || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Child pool creation route') === undefined ? [{ deadline, outcome, pool }] : []))
+			return missingChildOutcomes
+				.filter(outcome => timestampDeadlineHasRequiredSafety(now, deadline, options, childPreparationCount(pool, outcome)))
+				.flatMap(outcome => (!enforceCapacity || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Child pool creation route') === undefined ? [{ deadline, outcome, pool }] : []))
 		})
 	}
 	const candidateMetadata = (candidate: ForkCandidate): Record<string, string | number | boolean> => {
@@ -359,11 +366,13 @@ export function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child'
 			risk: 'irreversible',
 			snapshot,
 			steps: [
+				...(kind === 'create-child' ? childPreparationSteps(snapshot, candidate.pool, outcome) : []),
 				encodeStep({
 					abi: securityPoolForkerAbi,
 					args,
 					evidence,
 					functionName: method,
+					...(kind === 'create-child' ? { gasLimit: 16_777_216n } : {}),
 					id: kind === 'migrate-rep' || kind === 'migrate-vault' ? `${method}-${candidate.pool.address.toLowerCase()}-${outcome}` : method,
 					label: kind === 'migrate-vault' ? `migrate-vault through outcome ${outcome}` : kind,
 					to: snapshot.deployments.securityPoolForker,

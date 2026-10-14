@@ -46,7 +46,8 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		if (
 			address(childEscalationGame) == address(0x0) ||
 			child.systemState() != SystemState.Operational ||
-			childEscalationGame.forkResumedAt() != 0
+			childEscalationGame.forkResumedAt() != 0 ||
+			!childEscalationGame.forkCarrySnapshotInitialized()
 		) return;
 		child.resumeForkedEscalationGame();
 	}
@@ -59,21 +60,27 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 	}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal virtual returns (EscalationGame) {
+	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool, ISecurityPool child, EscalationGame childEscalationGame) internal virtual returns (EscalationGame) {
 		_validateChildEscalationGame(child, childEscalationGame);
-		EscalationGame parentEscalationGame = parent.escalationGame();
-		if (
-			forkDataByPool[parent].unresolvedEscalationAtFork &&
-			address(parentEscalationGame) != address(0x0) &&
-			address(childEscalationGame) != address(0x0) &&
-			!childEscalationGame.forkCarrySnapshotInitialized()
-		) {
-			EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[parent];
-			require(snapshot.initialized, 'Fork snapshot missing');
-			child.initializeForkCarrySnapshotWithResolutionBalances(address(parentEscalationGame), forkDataByPool[parent].escalationSnapshotId, snapshot.carryPeaks, snapshot.carryLeafCounts, snapshot.carryTotalsAttoRep, snapshot.resolutionBalancesAttoRep, snapshot.nullifierRoots);
-		}
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
 		return childEscalationGame;
+	}
+
+	function _continueChildForkCarry(ISecurityPool parent, ISecurityPool child) internal {
+		EscalationGame game = child.escalationGame();
+		_validateChildEscalationGame(child, game);
+		if (!forkDataByPool[parent].unresolvedEscalationAtFork) return;
+		require(address(game) != address(0), 'Child game');
+		if (game.forkCarrySnapshotInitialized()) return;
+		EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[parent];
+		require(snapshot.initialized, 'Fork snapshot missing');
+		uint8 nextOutcome = game.forkCarrySnapshotOutcomesInitialized();
+		child.initializeForkCarryOutcome(address(parent.escalationGame()), forkDataByPool[parent].escalationSnapshotId, snapshot.carryPeaks[nextOutcome], snapshot.carryLeafCounts[nextOutcome], snapshot.carryTotalsAttoRep[nextOutcome], snapshot.resolutionBalancesAttoRep[nextOutcome], snapshot.nullifierRoots[nextOutcome]);
+	}
+
+	function _requireChildForkCarryReady(ISecurityPool parent, EscalationGame game) internal view {
+		if (!forkDataByPool[parent].unresolvedEscalationAtFork) return;
+		require(address(game) != address(0) && game.isForkCarryFundingComplete(), 'Fork carry not ready');
 	}
 
 	function _initializeOwnForkRepBuckets(ISecurityPool parent, uint256 vaultRepAtForkAttoRep, uint256 escalationChildRepAtForkAttoRep, uint256 escalationSourceAttoRep) internal {

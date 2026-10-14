@@ -109,6 +109,7 @@ export function ForkAuctionMigrationStage({
 	migratePoolAvailability,
 	migrateUnresolvedGuardMessage,
 	migrateVaultAvailability,
+	childPreparationContent,
 	migrationBalancesContent,
 	migrationSummaryCard,
 	onParentDepositSelectionChange,
@@ -141,6 +142,7 @@ export function ForkAuctionMigrationStage({
 	migratePoolAvailability: ActionAvailability
 	migrateUnresolvedGuardMessage: string | undefined
 	migrateVaultAvailability: ActionAvailability
+	childPreparationContent: ComponentChildren
 	migrationBalancesContent: ComponentChildren
 	migrationSummaryCard: ComponentChildren
 	onParentDepositSelectionChange: (depositIndexes: bigint[]) => void
@@ -182,6 +184,7 @@ export function ForkAuctionMigrationStage({
 		<fieldset aria-labelledby='fork-workflow-stage-migration' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-migration' role='tabpanel'>
 			{selectedStageAheadMessage === undefined ? undefined : <UserMessage className='detail' detail={selectedStageAheadMessage} />}
 			{migrationSummaryCard}
+			{childPreparationContent}
 			<SectionBlock title={forkAuctionCopy.yourMigrationBalances} variant='embedded' description={forkAuctionCopy.parentWalletBalancesDescription}>
 				{migrationBalancesContent}
 				{!accountConnected ? undefined : (

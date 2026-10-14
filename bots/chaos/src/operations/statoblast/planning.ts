@@ -12,7 +12,7 @@ import { sharesToProjectedEth } from '../pool-economics.ts'
 
 import { erc20Abi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 
-import { isOracleRequestFundingError, oracleRequestFundingEnvelope, oracleRequestSettlementCollateralCeiling, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
+import { isOracleRequestFundingError, poolOracleExposure, oracleRequestFundingEnvelope, oracleRequestSettlementCollateralCeiling, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
 
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 
@@ -323,7 +323,7 @@ export function oracleRequestPreparation(snapshot: EcosystemSnapshot, pool: Pool
 			maximumRepPrincipalAttoRep: (repInventory < maximumRepPrincipal ? repInventory : maximumRepPrincipal).toString(),
 			maximumWethPrincipalAttoEth: (amount(weth.balance) < maximumEthPrincipal ? amount(weth.balance) : maximumEthPrincipal).toString(),
 			proposedRepPerEthPrice: price.toString(),
-			settlementCollateralCeilingAttoEth: pool.settlementCollateralAttoEth,
+			settlementCollateralCeilingAttoEth: poolOracleExposure(pool),
 		}
 		const currentEnvelope = oracleRequestFundingEnvelope(envelopeParameters)
 		const settlementCollateralCeilingAttoEth = amount(oracleRequestSettlementCollateralCeiling({ coordinator: pool.oracleRequestFunding, envelope: currentEnvelope }))

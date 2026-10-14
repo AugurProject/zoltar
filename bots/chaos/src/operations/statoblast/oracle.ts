@@ -6,7 +6,7 @@ import { ONE_TOKEN, allowance, amount, choose, eligible, encodeStep, erc20Allowa
 
 import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 
-import { assertOracleRequestFundingEnvelope, isOracleRequestFundingError, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
+import { assertOracleRequestFundingEnvelope, isOracleRequestFundingError, poolOracleExposure, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
 
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 
@@ -34,7 +34,7 @@ function oracleRequestMetadata(snapshot: EcosystemSnapshot, pool: PoolSnapshot, 
 	}
 }
 
-function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, weth: `0x${string}`, repToken: `0x${string}`, prepared: PreparedOracleRequest) {
+function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, priceFeed: `0x${string}`, weth: `0x${string}`, repToken: `0x${string}`, prepared: PreparedOracleRequest) {
 	const initialWethAttoEth = amount(prepared.envelope.maximumInitialAttoWeth)
 	const initialRepAttoRep = amount(prepared.envelope.maximumInitialAttoRep)
 	const requestCostAttoEth = amount(prepared.envelope.maximumRequestPriceCostAttoEth)
@@ -50,7 +50,7 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 			abi: openOraclePriceCoordinatorAbi,
 			args: [prepared.price, initialWethAttoEth, requestCostAttoEth],
 			evidence: [
-				eventEvidence(coordinator, 'PriceRequested(uint256,uint256)'),
+				eventEvidence(priceFeed, 'PriceRequested(uint256,uint256)'),
 				exactTokenTransferToCoordinatorEvidence(snapshot, weth, coordinator, initialWethAttoEth),
 				exactTokenTransferToCoordinatorEvidence(snapshot, repToken, coordinator, initialRepAttoRep),
 				...(allowance(tokenInventory(snapshot, weth), coordinator) <= initialWethAttoEth ? [erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n)] : []),
@@ -68,7 +68,7 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 }
 
 function buildPreparedOracleRequestPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot, prepared: PreparedOracleRequest, metadata: OperationPlan['metadata'], confirmedCleanupCount = 0) {
-	const steps = oracleRequestSteps(snapshot, pool.coordinator, snapshot.deployments.weth, pool.repToken, prepared)
+	const steps = oracleRequestSteps(snapshot, pool.coordinator, pool.priceFeed, snapshot.deployments.weth, pool.repToken, prepared)
 	const plannedApprovalCount = steps.filter(step => step.id === 'approve-oracle-weth' || step.id === 'approve-oracle-rep').length
 	const maximumCleanupTransactionCount = confirmedCleanupCount + plannedApprovalCount
 	return planBase({
@@ -155,7 +155,7 @@ function oracleRequestContinuationIsSafe(snapshot: EcosystemSnapshot, pool: Pool
 		if (snapshot.deployments.weth.toLowerCase() !== persisted.weth.toLowerCase()) return false
 		const currentPrice = amount(pool.lastRepPerEthPrice) > 0n ? amount(pool.lastRepPerEthPrice) : ONE_TOKEN
 		if (currentPrice !== persisted.prepared.price) return false
-		const currentCollateral = amount(pool.settlementCollateralAttoEth)
+		const currentCollateral = amount(poolOracleExposure(pool))
 		if (currentCollateral > persisted.settlementCollateralCeilingAttoEth) return false
 		const persistedWeth = amount(persisted.envelope.maximumInitialAttoWeth)
 		const persistedRep = amount(persisted.envelope.maximumInitialAttoRep)
@@ -260,7 +260,7 @@ export const recoverSettledReport: OperationDefinition = {
 			priority: 'urgent',
 			risk: 'low',
 			snapshot,
-			steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.coordinator, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
+			steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
 		})
 	},
 	buildLifecyclePlans(snapshot) {
@@ -276,7 +276,7 @@ export const recoverSettledReport: OperationDefinition = {
 					priority: 'urgent',
 					risk: 'low',
 					snapshot,
-					steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.coordinator, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
+					steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
 				}),
 			)
 	},

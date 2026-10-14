@@ -33,10 +33,6 @@ function expectMintingPlansIgnoreOracleHorizon(snapshot: ReturnType<typeof snaps
 		const candidate = plan(snapshot, definitionId)
 		expect(candidate, definitionId).toBeDefined()
 		const deadline = candidate?.deadlineTimestamp
-		if (definitionId === 'statoblast.complete-set.create') {
-			expect(deadline, definitionId).toBeUndefined()
-			continue
-		}
 		if (deadline === undefined) throw new Error(`${definitionId} must keep its question-end deadline`)
 		expect(BigInt(deadline) > oracleExpiry, definitionId).toBe(true)
 		expect(BigInt(deadline) <= questionLastSecond, definitionId).toBe(true)

@@ -6,6 +6,7 @@ import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGameClaimDelegate } from '../EscalationGameClaimDelegate.sol';
+import { EscalationGameDepositDelegate } from '../EscalationGameDepositDelegate.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
@@ -14,6 +15,7 @@ contract EscalationGameFactory {
 
 	EscalationGameProofVerifier public immutable proofVerifier;
 	EscalationGameClaimDelegate public immutable claimDelegate;
+	EscalationGameDepositDelegate public immutable depositDelegate;
 	address private immutable escalationGameCreationCodePartOne;
 	address private immutable escalationGameCreationCodePartTwo;
 
@@ -26,6 +28,8 @@ contract EscalationGameFactory {
 			creationCode.length < CREATION_CODE_CHUNK_SIZE ? creationCode.length : CREATION_CODE_CHUNK_SIZE;
 		escalationGameCreationCodePartOne = _deployCodePart(creationCode, 0, firstPartLength);
 		escalationGameCreationCodePartTwo = _deployCodePart(creationCode, firstPartLength, creationCode.length - firstPartLength);
+		// Stateless delegate code is shared by every game; game storage stays isolated through delegatecall.
+		depositDelegate = new EscalationGameDepositDelegate();
 	}
 
 	function _deployCodePart(bytes memory completeCode, uint256 offset, uint256 length) private returns (address codePart) {
@@ -81,7 +85,7 @@ contract EscalationGameFactory {
 		}
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
-		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate));
+		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate, depositDelegate));
 		address deployed = Create2Deployment.deploy(initCode, 0);
 		require(deployed != address(0x0), 'Escalation game deployment failed');
 		gameImplementation = EscalationGame(deployed);

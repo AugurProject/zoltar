@@ -21,7 +21,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(address(child) != address(0x0) && address(truthAuction) != address(0x0) && address(truthAuction).code.length != 0 && !trustedAuctionAddresses[address(truthAuction)] && address(forkDataByPool[child].truthAuction) == address(0x0) && address(child.parent()) == address(parent) && child.universeId() == childUniverseId && address(child.securityPoolFactory()) == parentFactory && child.securityPoolForker() == address(this) && child.truthAuction() == address(truthAuction), 'Invalid child');
 	}
 
-	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal returns (ISecurityPool child, EscalationGame childEscalationGame) {
+	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal virtual returns (ISecurityPool child, EscalationGame childEscalationGame) {
 		child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) {
 			require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');

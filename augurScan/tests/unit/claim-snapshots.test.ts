@@ -51,9 +51,9 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean } = {}): StateRead =>
+	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
-		const kind = name === 'getInheritedClaimAllocation' ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
+		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
 		const abi = abiForKind(kind)
 		if (abi === undefined) throw new Error(`Missing compiled claim ABI ${kind}`)
@@ -99,6 +99,8 @@ const fixtureRead =
 				return target === child && outcome === 1 ? (options.consumed ?? []) : []
 			case 'isEscalationDepositClaimedDirectly':
 				return options.directlyClaimed === true && args[2] === 1n
+			case 'getClaimCheckpointProgress':
+				return [root, 0n, false, !options.checkpointRequired]
 			case 'getInheritedClaimAllocation':
 				return [50n, 33n, 33n, (Number(args[3]) + 1) * 33 + '']
 			default:
@@ -178,4 +180,16 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 	}
 	expect((await sampleClaimPositions(game(31), read, state)).status).toBe('available')
 	await expect(sampleClaimPositions(game(32), read, state)).rejects.toThrow('32-generation limit')
+})
+
+test('keeps authenticated proofs and withholds payout quotes until a deep claim checkpoint is ready', async () => {
+	const result = await sampleClaimPositions(child, fixtureRead({ checkpointRequired: true }), state)
+	expect(result.positions).toHaveLength(3)
+	expect(result.positions[0]).toMatchObject({ status: 'checkpoint-required', kind: 'inherited', proof: { leafIndex: '0' } })
+	for (const position of result.positions) {
+		expect(position['retained_principal_atto_rep']).toBeUndefined()
+		expect(position['source_principal_atto_rep']).toBeUndefined()
+		expect(position['reward_amount_atto_rep']).toBeUndefined()
+		expect(position['payout_atto_rep']).toBeUndefined()
+	}
 })

@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: '55af283fc44f7e5f092698af7fd25a7a60e03670fc57067245b645b25d3e4beb',
+	compiledAbiFingerprint: 'cdc2fbcd070241bcfcadb222bb1136c779526ab334f9c31092e9fcdcaa5f208f',
 	name: 'SecurityPool',
 	interactionNotes: 'Rows marked "through `fallback()`" are not in the compiled ABI: the pool forwards exactly those four selectors to `SecurityPoolOperationsDelegate` by `delegatecall` and rejects every other unknown selector with `Unsupported pool operation`.',
 	purpose: 'Holds ETH [settlement collateral](./glossary.html#settlement-collateral) and REP underwriting, accounts for [vaults](./glossary.html#vault) and fees, mints [outcome shares](./glossary.html#outcome-share), and routes local escalation.',
@@ -78,7 +78,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Checkpoints the vault fees, then changes the [underwriting commitment](./glossary.html#underwriting-commitment) independently of REP ownership and recalculates retention. A call that repeats the current value returns before the checkpoint and changes nothing.',
 			declarations: [{ name: 'setUnderwritingLimit' }],
 			preconditions:
-				'Operational pool (`Pool inactive`) in an unforked universe (`Forked`); a resolved operational pool may still reduce a commitment after an unrelated late fork. Increases require open admission, a fresh price (`Stale price`), and both full-commitment backing checks (`Vault backing insufficient`). Reductions, including a zero exit, must leave total commitments at least equal to tracked settlement collateral (`Commitments below collateral`).',
+				'Operational pool (`Pool inactive`) in an unforked universe (`Forked`); a resolved operational pool may still reduce a commitment after an unrelated late fork. Increases require open admission, a fresh price (`Stale price`), and both full-commitment backing checks (`Vault backing insufficient`). Before final resolution, reductions must leave total commitments at least equal to tracked settlement collateral (`Commitments below collateral`). With a concrete final outcome, reductions may reach zero while shares remain outstanding; their ETH collateral stays reserved.',
 			signals: 'Fee-accrual and retention-change `PoolAccountingCheckpoint` events when due; then `UnderwritingLimitSet`, `VaultAccountingCheckpoint`, and `PoolAccountingCheckpoint`; no event for a call that repeats the current value',
 		},
 		{
@@ -137,7 +137,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 			declarations: [{ name: 'createCompleteSet' }],
 			preconditions:
-				'Operational and unforked; no escalation game, pending continuation, or inherited fixed outcome; positive ETH converts to at least one complete-set unit. Resulting tracked collateral must not exceed total commitments; no oracle price or REP backing is checked. A contract trader must accept `onERC1155BatchReceived` under [A22 asset-recipient compatibility](./security-model.html#assumption-a22).',
+				'Operational and unforked; timestamp before question end (`Question ended` otherwise); no escalation game, pending continuation, or inherited fixed outcome; positive ETH converts to at least one complete-set unit. Resulting tracked collateral must not exceed total commitments; no oracle price or REP backing is checked. A contract trader must accept `onERC1155BatchReceived` under [A22 asset-recipient compatibility](./security-model.html#assumption-a22).',
 			signals: 'Accrual `PoolAccountingCheckpoint` when due; `CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback; retention `PoolAccountingCheckpoint` when the rate changes',
 		},
 		{
@@ -275,12 +275,12 @@ export const securityPoolContractReference: ContractReference = {
 			signals: 'Escalation `GameContinuedFromFork`, then pool `EscalationGameSet`',
 		},
 		{
-			call: '`initializeForkCarrySnapshotWithResolutionBalances(sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots)`',
+			call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)`',
 			caller: '`SecurityPoolForker` only',
-			declarations: [{ name: 'initializeForkCarrySnapshotWithResolutionBalances' }],
-			effect: "Installs the continuation game's immutable carry peaks, counts, totals, resolution balances, and normalized nullifier roots.",
-			preconditions: 'A game is configured; it is a fork continuation with no prior snapshot; leaf counts fit the MMR; supplied or computed snapshot ID matches the data.',
-			signals: '`ForkCarryCheckpoint`',
+			declarations: [{ name: 'initializeForkCarryOutcome' }],
+			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls complete its immutable carry peaks, counts, totals, resolution balances, and normalized nullifier roots.',
+			preconditions: 'A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.',
+			signals: '`ForkCarryCheckpoint` on completion of the third outcome',
 		},
 		{
 			call: '`resumeForkedEscalationGame()`',

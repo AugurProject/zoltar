@@ -178,15 +178,21 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			let principal = leaf.amountAttoRep
 			let rewardAmount = leaf.amountAttoRep
 			let rewardCumulative = leaf.cumulativeAmountAttoRep
+			let allocationReady = !directlyClaimed
 			if (isInherited && !directlyClaimed) {
-				const allocation = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getInheritedClaimAllocation', [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]))
-				sourcePrincipal = uint(allocation[0])
-				principal = uint(allocation[1])
-				rewardAmount = uint(allocation[2])
-				rewardCumulative = uint(allocation[3])
+				const claim = [outcome, leaf.amountAttoRep, leaf.cumulativeAmountAttoRep, leaf.index]
+				const progress = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getClaimCheckpointProgress', claim))
+				allocationReady = flag(progress[3])
+				if (allocationReady) {
+					const allocation = array(await call(gameAddress, 'escalationGameClaimDelegate', 'getInheritedClaimAllocation', claim))
+					sourcePrincipal = uint(allocation[0])
+					principal = uint(allocation[1])
+					rewardAmount = uint(allocation[2])
+					rewardCumulative = uint(allocation[3])
+				} else if (status === 'claimable') status = 'checkpoint-required'
 			}
 			if (principal > sourcePrincipal) throw new Error('Retained claim principal exceeds source allocation')
-			const result = status === 'claimable' ? allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding: uint(state['bindingCapitalAttoRep']), winningBalance: uint(view['balanceAttoRep']), forkThreshold, nonDecisionThreshold: uint(state['nonDecisionThresholdAttoRep']) }) : undefined
+			const result = allocationReady && status === 'claimable' ? allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding: uint(state['bindingCapitalAttoRep']), winningBalance: uint(view['balanceAttoRep']), forkThreshold, nonDecisionThreshold: uint(state['nonDecisionThresholdAttoRep']) }) : undefined
 			positions.push({
 				depositor: leaf.depositor.toLowerCase(),
 				outcome: String(outcome),
@@ -195,11 +201,12 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 				kind: isInherited ? 'inherited' : 'local',
 				status,
 				principal_atto_rep: leaf.amountAttoRep.toString(),
-				source_principal_atto_rep: directlyClaimed ? undefined : sourcePrincipal.toString(),
-				retained_principal_atto_rep: directlyClaimed ? undefined : principal.toString(),
-				auction_haircut_atto_rep: directlyClaimed ? undefined : (sourcePrincipal - principal).toString(),
-				reward_amount_atto_rep: directlyClaimed ? undefined : rewardAmount.toString(),
-				reward_cumulative_atto_rep: directlyClaimed ? undefined : rewardCumulative.toString(),
+				source_principal_atto_rep: allocationReady ? sourcePrincipal.toString() : undefined,
+				retained_principal_atto_rep: allocationReady ? principal.toString() : undefined,
+				auction_haircut_atto_rep: allocationReady ? (sourcePrincipal - principal).toString() : undefined,
+				reward_amount_atto_rep: allocationReady ? rewardAmount.toString() : undefined,
+				reward_cumulative_atto_rep: allocationReady ? rewardCumulative.toString() : undefined,
+				checkpoint_ready: isInherited ? allocationReady : undefined,
 				calculation: { binding_capital_atto_rep: state['bindingCapitalAttoRep'], winning_balance_atto_rep: uint(view['balanceAttoRep']).toString(), fork_threshold_atto_rep: forkThreshold.toString(), non_decision_threshold_atto_rep: state['nonDecisionThresholdAttoRep'] },
 				payout_atto_rep: result?.payout.toString(),
 				burn_atto_rep: result?.burn.toString(),

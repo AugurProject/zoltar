@@ -1,9 +1,11 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
-export type StatoblastScenario = 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction' | 'ended-pool-commitment' | 'liquidation-distance'
+export type StatoblastScenario = 'portfolio' | 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction' | 'ended-pool-commitment' | 'liquidation-distance'
 
 export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 	switch (scenario) {
+		case 'portfolio':
+			return 'Portfolio'
 		case 'security-pool':
 			return 'Security pool'
 		case 'securitypoolx2':
@@ -21,6 +23,8 @@ export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 
 export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 	switch (scenario) {
+		case 'portfolio':
+			return 'A funded portfolio with two question positions and automatic underwriting enabled. Test demand-backed minting, withdrawal requests and independent position recovery.'
 		case 'security-pool':
 			return 'One seeded question, one security pool, and one funded vault with a standing ETH commitment. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':

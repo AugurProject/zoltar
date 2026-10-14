@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, projectEscalationDeposit } from './escalationMath'
+import { getWinningImportedEscalationDepositClaimAmount, computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, projectEscalationDeposit } from './escalationMath'
 
 describe('escalation math', () => {
 	test('preserves logarithm components at exact power-of-two ratios', () => {
@@ -37,4 +37,8 @@ describe('escalation math', () => {
 		expect(hasReachedNonDecision([3n, 3n, 1n], 3n)).toBe(true)
 		expect(hasReachedNonDecision([3n, 3n, 3n], 3n)).toBe(true)
 	})
+})
+
+void test('inherited rewards retain the canonical principal after distinct ancestry haircuts', () => {
+	expect(getWinningImportedEscalationDepositClaimAmount({ bindingCapitalAttoRep: 100n, depositAmountAttoRep: 10n, principalAttoRep: 4n, postDepositCumulativeAmountAttoRep: 10n, forkThresholdAttoRep: 100n, nonDecisionThresholdAttoRep: 100n, winningOutcomeBalanceAttoRep: 100n })).toBe(10n)
 })

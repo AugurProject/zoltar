@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Address } from '@zoltar/bot-shared/ethereum'
+import { zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from './settings.ts'
 
 export function deploymentFactoryId(profileId: string, factory: Address) {
@@ -10,6 +10,8 @@ export function deploymentFactoryId(profileId: string, factory: Address) {
 
 export function executionProfileId(settings: Pick<OperatorSettings, 'deployment' | 'network'>) {
 	const deployment = {
+		// Preserve the existing empty-bootstrap identity; executable deployments always have a pinned Multicall3.
+		...(settings.deployment.multicall3 === zeroAddress ? {} : { multicall3: settings.deployment.multicall3.toLowerCase() }),
 		openOracle: settings.deployment.openOracle.toLowerCase(),
 		questionData: settings.deployment.questionData.toLowerCase(),
 		securityPoolFactory: settings.deployment.securityPoolFactory.toLowerCase(),

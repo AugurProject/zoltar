@@ -281,3 +281,5 @@ export const formatOracleOperationPriceExpiresTooSoon = (seconds: bigint) => {
 }
 export const oracleOperationFundingChanged = 'Oracle funding requirements changed. Review funding again before sending.'
 export const oracleOperationTimingUnavailable = 'Checking oracle price validity…'
+
+export const sharedPoolPricePending = 'Another question is refreshing the shared pool price. Wait for its report to settle.'

@@ -1583,9 +1583,9 @@
 								<p>Each vault's <a href="./glossary.html#underwriting-commitment">underwriting commitment</a> <code>X</code> (<code>underwritingLimitAttoEth</code>) is separate from its REP backing. The pool maintains the total commitment <code>T</code> incrementally; <code>L</code> is tracked <a href="./glossary.html#settlement-collateral">settlement collateral</a>.</p>
 								<ul>
 									<li><strong>Obligation.</strong> With positive <code>T</code>, a vault's obligation is <code>L × X / T</code>, rounded upward to the next atomic unit with full-precision arithmetic. For <code>L ≤ T</code>, each rounded obligation is at most <code>X</code>; independently rounded obligations need not sum exactly to <code>L</code>.</li>
-									<li><strong>Authorization.</strong> REP deposits do not increase <code>X</code>. Redemptions and fees reduce <code>L</code> without reducing <code>X</code>, empty settlement epochs do not revoke it, and price or backing changes leave it unchanged.</li>
-									<li><strong>Minting.</strong> Minting requires <code>L + deposit ≤ T</code> and no escalation or fork-continuation game. It reads no oracle price and checks no REP backing: every vault already answers for its full commitment, so collateral within <code>T</code> adds no REP exposure. Minters therefore accept the current backing of the pool's commitments; minting is not blocked when that backing is insufficient. The usable collateral ceiling equals <code>T</code>.</li>
-									<li><strong>Withdrawal.</strong> A REP withdrawal must preserve aggregate backing for all of <code>T</code> and the withdrawing vault's full-commitment backing.</li>
+									<li><strong>Authorization.</strong> REP deposits do not increase <code>X</code>. Share redemptions and fees reduce <code>L</code> without reducing <code>X</code>, empty settlement epochs do not revoke it, and price or backing changes leave it unchanged.</li>
+									<li><strong>Minting.</strong> Minting requires a timestamp before the question end, <code>L + deposit ≤ T</code>, and no escalation or fork-continuation game. It reads no oracle price and checks no REP backing: every vault already answers for its full commitment, so collateral within <code>T</code> adds no REP exposure. Minters therefore accept the current backing of the pool's commitments; minting is not blocked when that backing is insufficient. The usable collateral ceiling equals <code>T</code>.</li>
+									<li><strong>Withdrawal.</strong> Before final resolution, a REP withdrawal must preserve aggregate backing for all of <code>T</code> and the withdrawing vault's full-commitment backing. After a concrete final outcome, a vault may set <code>X</code> to zero even when <code>L &gt; T</code>, then redeem its available REP once its dispute escrow is clear. The outstanding shares retain their funded ETH claims.</li>
 									<li><strong>Individual health.</strong> Each vault remains subject to full-commitment backing requirements and liquidation; aggregate health does not imply that every vault is healthy. Liquidation transfers commitment and backing to an authorized, sufficiently backed receiver without writing off collateral or changing <code>T</code>, so recovery depends on an eligible receiver.</li>
 								</ul>
 							</div>
@@ -2216,7 +2216,7 @@
 									<li><strong>Own fork.</strong> Let <code>R</code> be the snapshot's raw unresolved principal: the sum of <code>inheritedUnresolvedTotalAttoRep</code> and <code>localUnresolvedTotalAttoRep</code> across all three outcomes, before direct-claim deductions. Initial backing must be at least <code>R - ⌊R / 5⌋</code>, where <code>5</code> is the fixed <code>Constants.MINIMUM_FORK_BURN_DIVISOR</code>, not the universe's configured fork burn divisor. The live balance must cover the initial backing not yet exported by valid direct pre-resume claims, scaled down by any REP a <a href="./glossary.html#truth-auction">Truth Auction</a> removed from the game.</li>
 								</ul>
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
+							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child supplies its aggregate backing; three permissionless initialization steps complete its snapshot before Alice migrates. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -3407,9 +3407,9 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								<p>No mandatory transition iterates over the whole deposit, bid, or vault history in one transaction; callers use bounded pages, fixed outcome sets, proofs, or balanced-tree traversal.</p>
-								<p>Work is not constant in fork depth. Computing a carried claim's payout calls <code>getUnresolvedClaimInterval</code> on each source game between the claiming game and the game where the deposit was made, so its gas grows linearly with the number of forks the deposit has been carried across. The contracts enforce no maximum fork depth. The lookups that stay depth-independent are listed in <a href="#ext-05"><code>EXT-05</code></a>.</p>
+								<p>Child deployment and inherited-history copying use separate transactions; each initialization step copies at most one outcome’s 64 peaks. Carried-claim reads inspect at most eight ancestors. Deeper claims use permissionless checkpoints with at most eight frozen-ancestor traversal or transformation steps per call, plus a fixed parent-cache check and initialization lookup. Completed canonical checkpoints for the same claim tuple let descendants skip an already-prepared prefix; the excluded source transform is still processed. An unfinished checkpoint can adopt a parent cache completed later, including after partial application. Pending transforms are hash-committed, with recovery anchors every eight steps so batches can be reconstructed from current state. Each batch supplies one base commitment and forward-ordered transforms; the complete hash is verified before reverse-order application. Exact rounding is retained and the immediate parent and target remain live. A first preparation with no reusable prefix still grows with fork depth; subsequent preparation processes only the uncached history. Other depth-independent lookups are listed in <a href="#ext-05"><code>EXT-05</code></a>.</p>
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Settling one carried deposit verifies one proof and makes one interval call per ancestor game; it does not iterate over the other deposits in those games.</p>
+							<p class="invariant-example"><strong>Example:</strong> A deep carried deposit first completes its checkpoint over several bounded transactions, then settles with one proof. A different caller can continue the same checkpoint without changing its claim tuple or restarting progress.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -3574,7 +3574,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Origin registration, inherited-fork detection during child construction, and direct-claim replay checks do not traverse universe or pool ancestry. Carried-claim payout reads are not covered: their cost grows with fork depth, as <a href="#life-05"><code>LIFE-05</code></a> states.
+								Origin registration, inherited-fork detection during child construction, and direct-claim replay checks do not traverse universe or pool ancestry. Carried claims use bounded preparation and reads, as <a href="#life-05"><code>LIFE-05</code></a> states.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> At lineage depths 1 and 32, a replay query for the same global deposit id performs the same lineage-registry and claimed-id lookups rather than 1 or 32 parent calls.</p>
 							<dl class="invariant-metadata">

@@ -42,8 +42,11 @@ const ORACLE_SETTLEMENT_PARAMETERS = [
 ] as const
 
 /** ABI-encoded OpenOraclePriceCoordinatorFactory constructor arguments. */
-function encodeOpenOraclePriceCoordinatorFactoryArguments(weth: Address): Hex {
-	return encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES], [weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ...ORACLE_SETTLEMENT_PARAMETERS])
+function encodeOpenOraclePriceCoordinatorFactoryArguments(weth: Address, coordinatorWorker: Address, feedWorker: Address): Hex {
+	return encodeAbiParameters(
+		[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }, { type: 'address' }],
+		[weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ...ORACLE_SETTLEMENT_PARAMETERS, coordinatorWorker, feedWorker],
+	)
 }
 
 type PriceCoordinatorArguments = {
@@ -51,13 +54,14 @@ type PriceCoordinatorArguments = {
 	openOracle: Address
 	repToken: Address
 	weth: Address
+	reportDelegate: Address
 }
 
 /** @internal ABI-encoded OpenOraclePriceCoordinator constructor arguments; the contract simulator derives price coordinator addresses from them. */
-export function encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth }: PriceCoordinatorArguments): Hex {
+export function encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth, reportDelegate }: PriceCoordinatorArguments): Hex {
 	return encodeAbiParameters(
-		[{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES],
-		[openOracle, repToken, weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, initialReportPriorityFeeAttoEthPerGas, ...ORACLE_SETTLEMENT_PARAMETERS],
+		[{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES, { type: 'address' }],
+		[openOracle, repToken, weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, initialReportPriorityFeeAttoEthPerGas, ...ORACLE_SETTLEMENT_PARAMETERS, reportDelegate],
 	)
 }
 
@@ -71,6 +75,8 @@ type StatoblastInfrastructureArtifacts = {
 	multicall3: BytecodeArtifact
 	openOracle: BytecodeArtifact
 	openOraclePriceCoordinatorFactory: BytecodeArtifact
+	priceCoordinatorDeploymentWorker: BytecodeArtifact
+	sharedPoolPriceFeedDeploymentWorker: BytecodeArtifact
 	securityPoolFactory: ContractArtifact
 	securityPoolForker: ContractArtifact
 	securityPoolOperationsDelegate: BytecodeArtifact
@@ -105,7 +111,11 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 
 	const getShareTokenFactoryByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.shareTokenFactory.abi, bytecode: bytecodeOf(artifacts.shareTokenFactory), args: [zoltar] })
 	const getEscalationGameFactoryByteCode = (claimDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate] })
-	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) => concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth)])
+	const getPriceCoordinatorDeploymentWorkerByteCode = () => applyLibraries(artifacts.priceCoordinatorDeploymentWorker.evm.bytecode.object)
+	const getSharedPoolPriceFeedDeploymentWorkerByteCode = () => applyLibraries(artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object)
+	const getWorkerAddress = (bytecode: Hex) => getCreate2Address({ bytecode, from: proxyDeployerAddress, salt: zeroSalt })
+	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) =>
+		concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
 	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: applyLibraries(artifacts.securityPoolForker.evm.bytecode.object), args: [zoltar] })
 	const getSecurityPoolOperationsDelegateByteCode = () => applyLibraries(artifacts.securityPoolOperationsDelegate.evm.bytecode.object)
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
@@ -140,6 +150,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			multicall3Bytecode: bytecodeOf(artifacts.multicall3),
 			openOracleBytecode: bytecodeOf(artifacts.openOracle),
 			openOraclePriceCoordinatorFactoryBytecode: () => getOpenOraclePriceCoordinatorFactoryByteCode(weth),
+			priceCoordinatorDeploymentWorkerBytecode: getPriceCoordinatorDeploymentWorkerByteCode(),
+			sharedPoolPriceFeedDeploymentWorkerBytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(),
 			proxyDeployerAddress,
 			securityPoolUtilsBytecode: bytecodeOf(artifacts.securityPoolUtils),
 			securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
@@ -152,6 +164,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		createInfraContractAddresses,
 		getEscalationGameFactoryByteCode,
 		getOpenOraclePriceCoordinatorFactoryByteCode,
+		getPriceCoordinatorDeploymentWorkerByteCode,
+		getSharedPoolPriceFeedDeploymentWorkerByteCode,
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolForkerByteCode,
 		getSecurityPoolOperationsDelegateByteCode,

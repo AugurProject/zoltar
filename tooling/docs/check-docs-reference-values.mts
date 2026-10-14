@@ -35,7 +35,7 @@ const escalationGameCalculations = await readFile('solidity/contracts/statoblast
 const escalationGameSettlement = await readFile('solidity/contracts/statoblast/EscalationGameSettlement.sol', 'utf8')
 const escalationGameEscrow = await readFile('solidity/contracts/statoblast/EscalationGameEscrow.sol', 'utf8')
 const escalationGameFactory = await readFile('solidity/contracts/statoblast/factories/EscalationGameFactory.sol', 'utf8')
-const priceCoordinator = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 'utf8')
+const priceCoordinator = `${await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 'utf8')}\n${await readFile('solidity/contracts/statoblast/OpenOraclePriceSource.sol', 'utf8')}\n${await readFile('solidity/contracts/statoblast/OpenOracleReportDelegate.sol', 'utf8')}`
 const priceCoordinatorTypes = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol', 'utf8')
 const liquidationApprovalRegistry = await readFile('solidity/contracts/statoblast/LiquidationApprovalRegistry.sol', 'utf8')
 const authorizationSignatures = await readFile('solidity/contracts/vendor/authorization/AuthorizationSignatures.sol', 'utf8')
@@ -204,7 +204,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	}
 	assert.match(priceCoordinatorTypes, /uint256 constant REQUEST_BOUNTY_OFFSET_ATTO_ETH = 101;[\s\S]*enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*SetVaultUnderwritingLimit,\s*VaultOperations\s*\}/, 'coordinator types must pin the documented 101 attoETH bounty offset and the operation enum')
 	assert.match(priceCoordinator, /operationValue > 0 \|\| operation == OperationType.SetVaultUnderwritingLimit/, 'zero is a valid absolute underwriting-limit exit; other staged operations require a positive amount')
-	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "SetVaultUnderwritingLimit", "3": "VaultOperations" \}/)
+	assert.match(coordinatorData, /"OperationType":\s*\{\s*"0":\s*"Liquidation",\s*"1":\s*"WithdrawRep",\s*"2":\s*"SetVaultUnderwritingLimit",\s*"3":\s*"VaultOperations"\s*\}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
 	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)
@@ -242,7 +242,7 @@ function assertLazyClaimCommitmentDocs(): void {
 	assert.match(liquidationHtml, /id="fig-liquidation-punitive-flow"/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /moveEscalationClaim|payoutClaimBundle|getClaimOwner|liquidationClaimRep/)
 	assert.doesNotMatch(escalationGameEscrow, /Escrow principal missing/)
-	assert.match(escalationGameClaimDelegate, /retainedAmountAttoRep = _applyTruthAuctionRetention\(endAttoRep\) - _applyTruthAuctionRetention\(startAttoRep\)/)
+	assert.match(escalationGameClaimDelegate, /retainedAmountAttoRep =\s*_applyTruthAuctionRetention\(interval\.endAttoRep\) - _applyTruthAuctionRetention\(interval\.startAttoRep\)/)
 }
 
 function assertEscalationGameBytecodeDocs(): void {
@@ -253,7 +253,7 @@ function assertEscalationGameBytecodeDocs(): void {
 }
 
 function assertAggregateEscalationContinuationDocs(): void {
-	assert.match(escalationGameCarry, /forkCarryDisputeStakedAttoRep/, 'continuation implementation must retain an aggregate dispute-staked REP backing bucket')
+	assert.match(escalationGameDepositDelegate, /forkCarryDisputeStakedAttoRep/, 'continuation implementation must retain an aggregate dispute-staked REP backing bucket')
 	assert.match(invariantsHtml, /id="fork-08"/)
 	const nonDivisibleSourcePrincipal = 6n
 	assert.equal(nonDivisibleSourcePrincipal - nonDivisibleSourcePrincipal / 5n, 5n, 'own-fork documentation boundary must round the 80% backing minimum up for non-divisible principal')
@@ -339,17 +339,17 @@ function assertCoordinatorRecoveryBranch(): void {
 	assert.match(openOracleIntegration, /<section id="callback-rejection-and-recovery">/)
 	assert.match(
 		priceCoordinator,
-		/function recoverSettledPendingReport\(\)[\s\S]*require\(reportId != 0, 'No report to recover'\)[\s\S]*require\(settlementTimestamp != 0, 'Report not settled'\)[\s\S]*pendingReportId = 0;[\s\S]*pendingReportSponsor = address\(0\);[\s\S]*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*_failPendingSettlementOperations\('Report recovered'\)/,
+		/function recoverSettledPendingReport\(\)[\s\S]*require\(reportId != 0, 'No report to recover'\)[\s\S]*require\(settlementTimestamp != 0, 'Report not settled'\)[\s\S]*standalonePendingReportId = 0;[\s\S]*standalonePendingReportSponsor = address\(0\);[\s\S]*standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*_failPendingSettlementOperations\('Report recovered'\)/,
 		'coordinator recovery must require settlement and clear pending state before failing every attached operation',
 	)
-	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId, 'Oracle report mismatch'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
+	assert.match(priceCoordinator, /require\(msg\.sender == address\(openOracle\), 'Only OpenOracle'\)[\s\S]*require\(reportId == pendingReportId\(\), 'Oracle report mismatch'\)/, 'coordinator callback must enforce the configured oracle and current pending report identity')
 	assert.match(openOracleIntegration, /data-source="requestPriceCostAttoEth = block\.basefee \\cdot 4 \\cdot \(callbackGasLimit \+ gasConsumedOpenOracleReportPrice\) \+ 101"/, 'OpenOracle documentation must retain the canonical request-cost equation')
 	const requestCostEquation = openOracleIntegration.match(/<figure class="equation" id="eq-openoracle-request-price-cost">[\s\S]*?<\/figure>/)?.[0]
 	assert.ok(requestCostEquation, 'OpenOracle documentation must retain the request-cost equation figure')
 	assert.match(requestCostEquation, /<mi>requestPriceCostAttoEth<\/mi>[\s\S]*?<mi>block\.basefee<\/mi>[\s\S]*?<mn>4<\/mn>[\s\S]*?<mi>callbackGasLimit<\/mi>[\s\S]*?<mi>gasConsumedOpenOracleReportPrice<\/mi>[\s\S]*?<mn>101<\/mn>/)
 	assert.match(
 		priceCoordinator,
-		/function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{\s*return block\.basefee \* _requestGasUnits\(\) \+ REQUEST_BOUNTY_OFFSET_ATTO_ETH;[\s\S]*?function _requestGasUnits\(\) private view returns \(uint256\) \{\s*return 4 \* \(getSettlementCallbackGasLimit\(\) \+ gasConsumedOpenOracleReportPrice\);/,
+		/function getRequestPriceCostAttoEth\(\) public view returns \(uint256\) \{[\s\S]*?return block\.basefee \* _requestGasUnits\(\) \+ REQUEST_BOUNTY_OFFSET_ATTO_ETH;[\s\S]*?function _requestGasUnits\(\) private view returns \(uint256\) \{\s*return 4 \* \(getSettlementCallbackGasLimit\(\) \+ gasConsumedOpenOracleReportPrice\);/,
 		'coordinator request-cost implementation must retain the documented factors and boundary offset',
 	)
 }
@@ -369,13 +369,13 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.ok(correctionGasBudget * 3n < settlementGasCostAboveAssumption * 10n, 'an actual priority fee above configuration can weaken the 10/3 base-fee-only bound')
 	assert.match(
 		priceCoordinator,
-		/uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas;\s*pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;\s*\(string memory rejectionReason, uint256 priceTimestamp\) = _validateSettledReport\(reportId, amount1, amount2, maxSettlementBaseFeeAttoEthPerGas\);[\s\S]*?function _validateSettledReport\([\s\S]*?\{\s*if \(block\.basefee > maxSettlementBaseFeeAttoEthPerGas\)/,
-		'coordinator must preserve the request-time cap before clearing it and accept an equal settlement base fee',
+		/uint256 maxSettlementBaseFeeAttoEthPerGas = pendingReportMaxSettlementBaseFeeAttoEthPerGas\(\);\s*standalonePendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;[\s\S]*reportDelegate\.validateSettledReport\(address\(this\), reportId, amount1, amount2, maxSettlementBaseFeeAttoEthPerGas\)/,
+		'coordinator passes the request cap to its stateless validator after clearing pending state',
 	)
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
-	assert.match(priceCoordinator, /lastPrice = Math\.mulDiv\(amount2, SecurityPoolUtils\.PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
+	assert.match(priceCoordinator, /standaloneLastPrice = Math\.mulDiv\(amount2, SecurityPoolUtils\.PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
 	assert.match(priceCoordinator, /uint256 costAttoEth = getRequestPriceCostAttoEth\(\);\s*require\(bountyAttoEth >= costAttoEth, 'Oracle bounty too small'\);\s*require\(msg\.value >= bountyAttoEth/, 'coordinator must require the committed bounty to cover getRequestPriceCostAttoEth and msg.value to cover the bounty')
-	assert.match(priceCoordinator, /uint256 settlerRewardAttoEth = bountyAttoEth;[\s\S]*?= _settlementBaseFeeCapForBounty\(bountyAttoEth\)[\s\S]*?settlerReward: uint96\(settlerRewardAttoEth\)/, 'coordinator must retain the committed bounty as the settler reward and derive the base-fee cap from it')
+	assert.match(priceCoordinator, /impliedRequestBaseFeeAttoEthPerGas = \(bountyAttoEth - REQUEST_BOUNTY_OFFSET_ATTO_ETH\) \/ requestGasUnits;[\s\S]*?settlerReward: uint96\(bountyAttoEth\)/, 'coordinator must retain the committed bounty as the settler reward and derive the base-fee cap from it')
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {
@@ -443,8 +443,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGame, /function resumeFromFork\(\) external \{[\s\S]*EscalationGameDepositDelegate\.resumeFromFork/)
 	assert.match(escalationGameDepositDelegate, /function resumeFromFork\(\) external \{[\s\S]*?require\(forkResumedAt == 0, 'Fork resumed'\);[\s\S]*?forkResumedAt = block\.timestamp;[\s\S]*?emit ForkContinuationResumed/)
 	assert.match(escalationGameDepositDelegate, /require\(game\.isForkCarryFundingComplete\(\), 'Fork carry underfunded'\)/)
-	assert.match(escalationGameCarry, /function initializeForkCarrySnapshotWithResolutionBalances\([\s\S]*?\) external \{\s*_initializeForkCarrySnapshot\(/)
-	assert.match(escalationGameCarry, /function _initializeForkCarrySnapshot\([\s\S]*?require\(msg\.sender == address\(securityPool\), 'Only pool'\);\s*require\(forkContinuation, 'No fork mode'\);\s*require\(!forkCarrySnapshotInitialized\(\), 'Snapshot initialized'\)/)
+	assert.match(escalationGameCarry, /function initializeForkCarryOutcome\([\s\S]*?\) external \{\s*_delegateDepositCall\(abi\.encodeCall\(EscalationGameDepositDelegate\.initializeForkCarryOutcome/)
+	assert.match(escalationGameCarry, /function forkCarrySnapshotInitialized\(\) public view returns \(bool\) \{\s*return forkCarrySnapshotOutcomesInitialized == 3;/)
 	assert.match(securityPool, /function withdrawForkedEscalationDeposits\([\s\S]*for \(uint256 index = 0; index < proofs\.length; index\+\+\)[\s\S]*_registerVault\(beneficiaryVault\)/)
 	assert.match(securityPool, /function withdrawFromEscalationGame\([\s\S]*for \(uint256 index = 0; index < depositIndexes\.length; index\+\+\)[\s\S]*_registerVault\(beneficiaryVault\)/)
 	assert.match(
@@ -526,11 +526,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /\(child, childEscalationGame\) = _migrateVaultAndReturnChild\(securityPool, childOutcomeIndex\);[\s\S]*\(securityPool, vault, childOutcomeIndex, child, childEscalationGame\)/)
 	assert.match(escalationGameForker, /ISecurityPool child = migratedChild;[\s\S]*EscalationGame childEscalationGame = migratedChildEscalationGame;[\s\S]*if \(address\(child\) == address\(0x0\)\)[\s\S]*_validateChildEscalationGame\(child, childEscalationGame\)/)
 	assert.equal((securityPoolForkerVaultMigrationBase.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'child setup must capture the child game exactly once')
-	assert.equal((securityPoolForker.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'the zero-game initialization branch must capture the newly initialized game exactly once')
-	assert.equal((securityPoolForkerBase.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'auction completion must capture the child game exactly once')
+	assert.equal((securityPoolForkerVaultMigrationDelegate.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'the zero-game initialization branch must capture the newly initialized game exactly once')
+	assert.equal((securityPoolForkerBase.match(/child\.escalationGame\(\)/g) ?? []).length, 2, 'auction completion and history continuation each capture the child game exactly once')
 	assert.doesNotMatch(escalationGameForker, /child\.escalationGame\(\)/, 'claim and unresolved cleanup must reuse the validated child game instead of reading the child getter')
 	assert.match(securityPoolForkerBase, /function _finalizeEscalationStateAfterAuction\([\s\S]*childEscalationGame = child\.escalationGame\(\);\s*_validateChildEscalationGame\(child, childEscalationGame\);[\s\S]*_finalizeAwaitingForkContinuationIfReady\(child, childEscalationGame\)/)
-	assert.match(securityPoolForker, /if \(!parentForkData\.unresolvedEscalationAtFork\) return childEscalationGame;\s*if \(address\(childEscalationGame\) == address\(0x0\)\)/)
+	assert.match(securityPoolForkerVaultMigrationDelegate, /if \(!parentForkData\.unresolvedEscalationAtFork\) return childEscalationGame;\s*if \(address\(childEscalationGame\) == address\(0x0\)\)/)
 	assert.match(securityPool, /updateVaultFees\(request\.targetVault\);\s*updateVaultFees\(request\.receiverVault\);[\s\S]*abi\.encodeCall\(SecurityPoolOperationsDelegate\.performBundledLiquidation, \(executionRequest\)\)/)
 	assert.match(securityPoolOperationsDelegate, /securityVaults\[request\.receiverVault\]\.underwritingLimitAttoEth \+= debtToMoveAttoEth/)
 	assert.doesNotMatch(escalationGameClaimDelegate, /function moveEscalationClaim|payoutClaimBundle|forkCarryPayoutClaimImportCursor/)
@@ -574,11 +574,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /block\.timestamp <= data\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
 	assert.match(securityPoolForkerVaultMigrationDelegate, /require\(address\(childrenByPoolAndOutcome\[parent\]\[outcomeIndex\]\) == address\(0x0\), 'Child pool exists'\)/)
 	assert.match(priceCoordinator, /if \(block\.basefee > maxSettlementBaseFeeAttoEthPerGas\) return \('Base fee too high', 0\);/)
-	assert.match(priceCoordinator, /return \('Counter saturated', 0\);\s*if \(numReports == 0 \|\| !_isFinalReportProfitable\(reportId, numReports, amount1\)\)\s*return \('Report uneconomic', 0\);/)
-	assert.match(priceCoordinator, /\+ settlementTime;\s*if \(!_isFreshPriceTimestamp\(priceTimestamp\)\) return \('Report stale', 0\);[\s\S]*?return \('Empty oracle settlement', 0\);[\s\S]*?return \('Oracle price is zero', 0\);/)
-	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, rejectionReason\);\s*return;\s*\}[\s\S]*?lastSettlementTimestamp = priceTimestamp;/)
-	assert.match(priceCoordinator, /require\(\s*msg\.sender == pendingReportSponsor,\s*'Only the pending report sponsor can queue more operations until settlement'/)
-	assert.match(priceCoordinator, /bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds\.length == 0/)
+	assert.match(priceCoordinator, /return \('Counter saturated', 0\);\s*if \(numReports == 0 \|\| !_isFinalReportProfitable\(config, reportId, numReports, amount1\)\)\s*return \('Report uneconomic', 0\);/)
+	assert.match(priceCoordinator, /\+ config\.settlementTime\(\);[\s\S]*priceTimestamp \+ validForSeconds <= block\.timestamp\) return \('Report stale', 0\);[\s\S]*?return \('Empty oracle settlement', 0\);[\s\S]*?return \('Oracle price is zero', 0\);/)
+	assert.match(priceCoordinator, /_rejectReportAndPendingOperations\(reportId, rejectionReason\);\s*return;\s*\}[\s\S]*?standaloneLastSettlementTimestamp = priceTimestamp;/)
+	assert.match(priceCoordinator, /require\(\s*msg\.sender == pendingReportSponsor\(\),\s*'Only the pending report sponsor can queue more operations until settlement'/)
+	assert.match(priceCoordinator, /bool shouldRequestPrice = pendingReportId\(\) == 0 && pendingSettlementOperationIds\.length == 0/)
 	assert.match(priceCoordinator, /if \(shouldRequestPrice && isPendingSettlementOperationId\)/)
 	assert.match(escalationGameForker, /if \(child\.systemState\(\) != SystemState\.ForkMigration\) revert\((?:'[^']*')?\)/)
 	assert.match(escalationGameForker, /block\.timestamp > forkDataByPool\[parent\]\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME\) revert\((?:'[^']*')?\)/)
@@ -629,8 +629,11 @@ function assertContractInteractionDistinctions(): void {
 		/function withdrawDeposit\(\s*CarriedDepositProof calldata proof,[\s\S]*?require\(questionResolution != BinaryOutcomes\.BinaryOutcome\.None, 'Question not final'\)[\s\S]*?'Parent deposit claimed'[\s\S]*?require\(outcome == questionResolution, 'Not winning outcome'\)[\s\S]*?_verifyAndConsumeCarriedDepositProof/,
 	)
 	assert.match(escalationGameEscrow, /function _exportVaultUnresolvedTotals\([\s\S]*?require\(!localUnresolvedTotalsExportedByVault\[vault\], 'Vault totals exported'\)[\s\S]*?emit VaultUnresolvedTotalsExported\([\s\S]*?if \(principalToTransferAttoRep == 0\) return principalByOutcomeAttoRep/)
-	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*parent,\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeAttoEthPerGas\s*\)/)
-	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*address\(0x0\),\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeAttoEthPerGas\s*\)/)
+	assert.match(
+		securityPoolFactory,
+		/function _prepareChildPoolDependencies\([\s\S]*?uint256 priorityFee = parent\.openOraclePriceCoordinator\(\)\.initialReportPriorityFeeAttoEthPerGas\(\);[\s\S]*?bytes32 salt = keccak256\(abi\.encode\(parent, universeId, parent\.questionId\(\), parent\.statoblastSecurityMultiplierBps\(\), priorityFee\)\)/,
+	)
+	assert.match(securityPoolFactory, /bytes32 securityPoolSalt =\s*portfolio == address\(0\)\s*\? keccak256\(abi\.encode\(address\(0x0\), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas\)\)\s*: originId/)
 	assert.match(priceCoordinatorFactory, /bytes32 deploymentSalt = keccak256\(abi\.encode\(msg\.sender, salt\)\)[\s\S]*priceCoordinatorDeploymentWorker\.deploy\([\s\S]*deploymentSalt[\s\S]*liquidationApprovalRegistryDeployer\.deploy\([\s\S]*address\(coordinator\),\s*deploymentSalt/)
 	assert.match(truthAuctionFactory, /new UniformPriceDualCapBatchAuction\{\s*salt:\s*keccak256\(abi\.encode\(msg\.sender, salt\)\)\s*\}/)
 	assert.match(securityPoolDeployer, /Create2Deployment\.deploy\(initCode, 0\)/)
@@ -672,14 +675,10 @@ function assertContractInteractionDistinctions(): void {
 
 async function assertProductionSolidityInventory(): Promise<void> {
 	const inventoryDocuments = `${contractInteractionReference}\n${operatorReference}`
-	for (const sourcePath of await listSoliditySources('solidity/contracts')) {
+	for (const sourcePath of (await walkFiles('solidity/contracts', { include: file => file.endsWith('.sol') })).map(file => file.replaceAll('\\', '/')).sort()) {
 		if (sourcePath.includes('/test/')) continue
 		assert.ok(inventoryDocuments.includes(repositorySourceUrl(sourcePath)), `Contract and operator references must inventory production source ${sourcePath}`)
 	}
-}
-
-async function listSoliditySources(directoryPath: string): Promise<string[]> {
-	return (await walkFiles(directoryPath, { include: file => file.endsWith('.sol') })).map(file => file.replaceAll('\\', '/')).sort()
 }
 
 function readSolidityFunctionBody(source: string, functionPrefix: string): string {

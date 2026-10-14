@@ -10,6 +10,7 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
@@ -205,6 +206,9 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const validateBeforeSubmit = async () => {
 		const game = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' })
 		if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
+		const [questionData, questionId] = await Promise.all([client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'questionData' }), client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'questionId' })])
+		const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
+		if (block.timestamp >= endTime) throw new Error('Minting closed when the question ended.')
 	}
 	await validateBeforeSubmit()
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)

@@ -7,6 +7,7 @@ type SecurityPoolCoreAddresses = {
 	escalationGameProofVerifier: Address
 	openOracle: Address
 	openOraclePriceCoordinatorFactory: Address
+	priceCoordinatorDeploymentWorker: Address
 	securityPoolFactory: Address
 	securityPoolForker: Address
 	shareTokenFactory: Address
@@ -64,23 +65,31 @@ function getSecurityPoolDeploymentWorkerAddress(securityPoolFactory: Address) {
 }
 
 export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfig) {
-	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, originUniverseId = 0n, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) => {
+	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, originUniverseId = 0n, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, portfolio = zeroAddress) => {
 		const infraContracts = config.getInfraContracts()
-		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
+		const originId =
+			portfolio === zeroAddress
+				? getSecurityPoolOriginId(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
+				: keccak256(
+						encodeAbiParameters(
+							[{ type: 'bytes32' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+							[keccak256(toHex('Statoblast portfolio origin')), portfolio, originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas],
+						),
+					)
+		const securityPoolSalt = portfolio !== zeroAddress && parent === zeroAddress ? originId : getSecurityPoolSalt(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
 		const securityPoolSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, securityPoolSalt)
 
 		const repToken = config.getRepTokenAddress(universeId)
 		const openOraclePriceCoordinator = getCreate2Address({
 			bytecode: config.getOpenOraclePriceCoordinatorInitCode(infraContracts.openOracle, repToken, initialReportPriorityFeeAttoEthPerGas),
-			// The factory creates the registry deployer first and the coordinator
-			// deployment worker second in its constructor.
-			from: getCreateAddress({ from: infraContracts.openOraclePriceCoordinatorFactory, nonce: 2n }),
-			salt: securityPoolSaltWithMsgSender,
+			// The shared worker authenticates configuration to each deploying factory.
+			from: infraContracts.priceCoordinatorDeploymentWorker,
+			salt: getCallerScopedSalt(infraContracts.openOraclePriceCoordinatorFactory, securityPoolSaltWithMsgSender),
 		})
 		const shareToken = getCreate2Address({
 			bytecode: config.getShareTokenInitCode(infraContracts.securityPoolFactory, infraContracts.zoltar, questionId),
 			from: infraContracts.shareTokenFactory,
-			salt: getSecurityPoolOriginId(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas),
+			salt: originId,
 		})
 		const truthAuction =
 			parent === zeroAddress

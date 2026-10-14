@@ -8,6 +8,7 @@ import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkPr
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
+import * as portfolioCopy from '../../ui/statoblastShared/ts/copy/portfolio.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
@@ -17,6 +18,7 @@ const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS = 30_000
 const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
+const PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS = 600_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server | undefined
@@ -264,7 +266,7 @@ type ProductionBrowserDriver = {
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
-async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
+async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>, bootstrapTimeoutMilliseconds = PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS) {
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 	const page = await launchChromium({ commandTimeoutMilliseconds: CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS, path: chromiumPath, profilePrefix: 'zoltar-production-browser-', viewport: { height: 900, width: 1440 } })
 	try {
@@ -303,7 +305,8 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		await send('Page.navigate', { url: pageUrl })
 		let state = ''
 		let applicationReady = false
-		for (let attempt = 0; attempt < 2400; attempt += 1) {
+		const bootstrapDeadline = Date.now() + bootstrapTimeoutMilliseconds
+		while (Date.now() < bootstrapDeadline) {
 			state = readEvaluationString(
 				await send('Runtime.evaluate', {
 					expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: innerHeight, html: document.documentElement?.outerHTML ?? '', width: innerWidth })`,
@@ -389,8 +392,8 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 	}
 }
 
-async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
-	return await withChromiumTestLock(async () => await loadProductionDocumentInChromiumUnlocked(pageUrl, viewport, interact))
+async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>, bootstrapTimeoutMilliseconds = PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS) {
+	return await withChromiumTestLock(async () => await loadProductionDocumentInChromiumUnlocked(pageUrl, viewport, interact, bootstrapTimeoutMilliseconds))
 }
 
 const productionBrowserScenarios = [
@@ -456,6 +459,67 @@ for (const scenario of productionBrowserScenarios) {
 	if (scenario.workflow) productionWorkflowTest('auction-boot', run)
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
 }
+
+test(
+	'production bundle boots the authenticated Statoblast portfolio and seeded question balances in Chromium',
+	async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		await loadProductionDocumentInChromium(
+			`${baseUrl}/statoblast/#/portfolios?simulate=1&simScenario=portfolio`,
+			{ height: 900, width: 1440 },
+			async driver => {
+				// The worker bootstrap can finish before main-thread discovery authenticates the seeded manager.
+				const body = await driver.waitForBodyText(portfolioCopy.snapshot)
+				expect(body).toContain('Browser simulation')
+				expect(body).not.toContain('Could not load the portfolio snapshot')
+				expect(body).toContain(portfolioCopy.subsetCoverage)
+				expect(await driver.evaluate(`[...document.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length`)).toBe(1)
+				// Bootstrap reads only the immutable initial question; owners explicitly select further questions.
+				const seededPools = await createWorkflowActions(driver).loadSeededPools()
+				const questionIds = seededPools
+					.filter(pool => pool.universeId === 0n && pool.parent === zeroAddress)
+					.slice(0, 2)
+					.map(pool => String(pool.questionId))
+				expect(questionIds).toHaveLength(2)
+				await driver.setInputByLabel(portfolioCopy.questionFilter, questionIds.join(', '))
+				await driver.waitForButtonEnabled(portfolioCopy.load)
+				await driver.clickButton(portfolioCopy.load)
+				await driver.waitForBodyText(portfolioCopy.snapshot)
+				expect(
+					await driver.evaluate(`(() => {
+			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
+			const balances = [...document.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === ${JSON.stringify(portfolioCopy.snapshot)});
+			const amounts = label => [...balances.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
+			const questions = [...document.querySelectorAll('.metric-label')].filter(node => node.textContent === ${JSON.stringify(portfolioCopy.questionId)}).map(node => node.parentElement.querySelector('code')?.textContent);
+			const manager = input(${JSON.stringify(portfolioCopy.manager)});
+			return {
+				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
+				owner: input(${JSON.stringify(portfolioCopy.owner)})?.toLowerCase(),
+				idle: amounts(${JSON.stringify(portfolioCopy.idle)}),
+				backing: amounts(${JSON.stringify(portfolioCopy.allocated)}),
+				commitments: amounts(${JSON.stringify(portfolioCopy.commitment)}),
+				poolLinks: [...balances.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length,
+				questionCount: new Set(questions).size,
+				questionIdsValid: questions.every(question => /^0x[0-9a-f]+$/i.test(question))
+			};
+		})()`),
+				).toEqual({
+					managerLoaded: true,
+					owner: '0x00000000000000000000000000000000000000a1',
+					idle: ['3000REP'],
+					backing: ['1000REP', '1000REP'],
+					commitments: ['1ETH', '1ETH'],
+					poolLinks: 2,
+					questionCount: 2,
+					questionIdsValid: true,
+				})
+			},
+			PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+		)
+	},
+	PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS,
+)
 
 function createWorkflowActions(driver: ProductionBrowserDriver) {
 	// Completed prerequisite labels stay in the form; submitted outcomes use the shared status panel.
@@ -813,7 +877,40 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.clickButton('Migrate pool to Yes universe')
 	await completeTransactionReview('Migrate REP to Zoltar')
 	await driver.waitForTransactionStatus('Confirmed', 'Migrate REP to Zoltar')
+	const captureChildPreparation = async (state: string, anchor: string) => {
+		const directory = process.env['UI_CHILD_PREPARATION_SCREENSHOT_DIRECTORY']
+		if (directory === undefined || directory === '') return
+		await fs.mkdir(directory, { recursive: true })
+		for (const viewport of [
+			{ height: 900, width: 1440, name: 'desktop' },
+			{ height: 844, width: 390, name: 'narrow' },
+		]) {
+			await driver.resize(viewport)
+			await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(anchor)}))?.scrollIntoView({ block: 'center', behavior: 'instant' })`)
+			await driver.captureScreenshot(path.join(directory, `fork-${state}-${viewport.name}.png`))
+		}
+		await driver.resize({ height: 900, width: 1440 })
+	}
+	await driver.waitForButtonEnabled('Prepare child pool contracts')
+	await captureChildPreparation('dependencies-ready', 'Prepare child pool contracts')
+	await driver.clickButton('Prepare child pool contracts')
+	await captureChildPreparation('dependencies-review', 'Prepare child pool contracts')
+	await completeTransactionReview('Prepare child dependencies')
+	await driver.waitForButtonEnabled('Create child pool')
+	await captureChildPreparation('dependencies-confirmed', 'Create child pool')
+	await driver.clickButton('Create child pool')
+	await completeTransactionReview('Create child universe')
+	for (let outcome = 0; outcome < 3; outcome++) {
+		await driver.waitForBodyText(`${outcome} of 3 outcomes initialized`)
+		await driver.waitForButtonEnabled('Initialize dispute history')
+		await captureChildPreparation(`history-${outcome}-ready`, 'Initialize dispute history')
+		await driver.clickButton('Initialize dispute history')
+		await completeTransactionReview('Initialize dispute history')
+		await driver.waitForTransactionStatus('Confirmed', 'Initialize dispute history')
+	}
+	await driver.waitForBodyText('3 of 3 outcomes initialized')
 	await driver.waitForButtonEnabled('Migrate vault to Yes')
+	await captureChildPreparation('child-confirmed', 'Migrate vault to Yes')
 	await driver.clickButton('Migrate vault to Yes')
 	await completeTransactionReview('Migrate vault')
 	await driver.waitForTransactionStatus('Confirmed', 'Migrate vault')
@@ -825,7 +922,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
 	await driver.waitForButtonEnabled('Deploy next contract')
 	await driver.clickButton('Deploy next contract')
-	const deployedBody = await driver.waitForBodyText('1 / 15')
+	const deployedBody = await driver.waitForBodyText('1 / 17')
 	expect(deployedBody).toContain('Proxy Deployer')
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.

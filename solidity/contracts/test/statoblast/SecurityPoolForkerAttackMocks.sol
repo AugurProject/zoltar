@@ -445,7 +445,7 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		forkResumeCount++;
 	}
 
-	function initializeForkCarrySnapshotWithResolutionBalances(address, bytes32, bytes32[64][3] memory, uint256[3] memory, uint256[3] memory, uint256[3] memory, bytes32[3] memory) external pure {}
+	function initializeForkCarryOutcome(address, bytes32, bytes32[64] memory, uint256, uint256, uint256, bytes32) external pure {}
 
 	function updateVaultFees(address) external pure {}
 

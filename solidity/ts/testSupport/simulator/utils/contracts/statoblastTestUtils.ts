@@ -61,8 +61,9 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(reportStatus.currentAmount1, expectedAmount1, 'pending report should preserve the coordinator-selected token1 amount')
 	assert.strictEqual(reportStatus.currentAmount2, expectedAmount2, 'pending report should already encode the forced price before settlement')
 	assert.notStrictEqual(reportStatus.currentReporter, zeroAddress, 'pending report should already have an initial reporter')
-	assert.strictEqual(reportStatus.currentReporter, openOraclePriceCoordinator, 'pending report should use the coordinator as the current reporter')
-	assert.strictEqual(reportStatus.initialReporter, openOraclePriceCoordinator, 'pending report should preserve the coordinator as the initial reporter')
+	const priceFeed = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: openOraclePriceCoordinator, functionName: 'priceFeed' })
+	assert.strictEqual(reportStatus.currentReporter, priceFeed, 'pending report should use the configured price feed as the current reporter')
+	assert.strictEqual(reportStatus.initialReporter, priceFeed, 'pending report should preserve the configured price feed as the initial reporter')
 	assert.ok(reportStatus.reportTimestamp > 0n, 'pending report should already have a report timestamp')
 
 	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)

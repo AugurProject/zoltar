@@ -1533,24 +1533,23 @@ describe('event-only replay', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		const childDeploymentHash = await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
+		const initializedAtBlock = await client.getBlockNumber()
 		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, QuestionOutcome.Yes)
 		const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
 		const factory = getInfraContractAddresses().securityPoolFactory
 		const forker = getInfraContractAddresses().securityPoolForker
-		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, initializedAtBlock)
 		const canonicalPools = new Set([securityPoolAddresses.securityPool.toLowerCase(), child.securityPool.toLowerCase()])
 		const deploymentLogs = factoryLogs.filter(log => {
 			const deployedPool = log.args['securityPool']
 			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && canonicalPools.has(deployedPool.toLowerCase())
 		})
 		const [sourcePoolLogs, sourceGameLogs, forkerLogs] = await Promise.all([
-			getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, receipt.blockNumber),
-			getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, receipt.blockNumber),
-			getContractReplayLogs(forker, statoblast_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(securityPoolAddresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(securityPoolAddresses.escalationGame, statoblast_EscalationGame_EscalationGame.abi, fromBlock, initializedAtBlock),
+			getContractReplayLogs(forker, statoblast_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, initializedAtBlock),
 		])
-		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)]))
-			.flat()
-			.filter(log => log.transactionHash === childDeploymentHash)
+		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, statoblast_SecurityPool_SecurityPool.abi, receipt.blockNumber, initializedAtBlock), getContractReplayLogs(child.escalationGame, statoblast_EscalationGame_EscalationGame.abi, receipt.blockNumber, initializedAtBlock)])).flat()
 		const continued = receiptLogs.find(log => log.eventName === 'GameContinuedFromFork')
 		const carryCheckpoint = receiptLogs.find(log => log.eventName === 'ForkCarryCheckpoint')
 		const gameSet = receiptLogs.find(log => log.eventName === 'EscalationGameSet')
@@ -1558,6 +1557,7 @@ describe('event-only replay', () => {
 			throw new Error('child continuation is missing deployment, carry, or discovery events')
 		}
 		if (continued.logIndex >= gameSet.logIndex) throw new Error('child continuation event did not precede pool relationship event')
+		if (carryCheckpoint.transactionHash === childDeploymentHash) throw new Error('carry checkpoint must follow bounded initialization in a separate transaction')
 		if (receiptLogs.some(log => log.eventName === 'SystemStateSet')) throw new Error('child constructor state should not depend on a synthetic system-state event')
 
 		const replayed = replayZoltarEvents([...deploymentLogs, ...sourcePoolLogs, ...sourceGameLogs, ...forkerLogs, ...receiptLogs], new Set(), new Set([factory]))

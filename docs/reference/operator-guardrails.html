@@ -98,7 +98,7 @@
 							</tr>
 							<tr>
 								<td>Complete-set capacity</td>
-								<td>Like other operational flows, <a href="./glossary.html#complete-set">complete-set</a> minting first requires an unforked universe (<code>Forked</code>) and an <code>Operational</code> pool (<code>Pool inactive</code>). It then reverts with <code>Fork await</code> while a fork continuation is pending, <code>Escalation mint closed</code> once an Escalation Game exists, <code>Settlement unavailable</code> for zero ETH or an inherited fork outcome, <code>Exchange rate undefined</code> when the deposit converts to no shares or outstanding shares have no collateral, and <code>Over capacity</code> when <a href="./glossary.html#settlement-collateral">settlement collateral</a> plus the deposit would exceed the pool's total <a href="./glossary.html#underwriting-commitment">underwriting commitments</a>. Minting reads no oracle price or REP backing; <a href="./invariants.html#bal-03">BAL-03</a> states the rule.</td>
+								<td>Like other operational flows, <a href="./glossary.html#complete-set">complete-set</a> minting first requires an unforked universe (<code>Forked</code>) and an <code>Operational</code> pool (<code>Pool inactive</code>). It then reverts with <code>Fork await</code> while a fork continuation is pending, <code>Escalation mint closed</code> once an Escalation Game exists, <code>Settlement unavailable</code> for zero ETH or an inherited fork outcome, <code>Question ended</code> at or after the question end time, <code>Exchange rate undefined</code> when the deposit converts to no shares or outstanding shares have no collateral, and <code>Over capacity</code> when <a href="./glossary.html#settlement-collateral">settlement collateral</a> plus the deposit would exceed the pool's total <a href="./glossary.html#underwriting-commitment">underwriting commitments</a>. Minting reads no oracle price or REP backing; <a href="./invariants.html#bal-03">BAL-03</a> states the rule.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.createCompleteSet</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.createCompleteSet</code></a>
@@ -139,7 +139,7 @@
 							</tr>
 							<tr>
 								<td>External fork withdrawal lock</td>
-								<td>If the universe forked before the local escalation game ended and non-decision was not reached, parent-pool escalation withdrawal reverts. The child continuation already has the canonical snapshot and aggregate backing: winning inherited deposits settle there by proof, inherited losers require no transaction, and clearing the vault's unresolved parent escalation-deposit accounting is optional.</td>
+								<td>If the universe forked before the local escalation game ended and non-decision was not reached, parent-pool escalation withdrawal reverts. After permissionless initialization completes, the child continuation has the canonical snapshot and aggregate backing: winning inherited deposits settle there by proof, inherited losers require no transaction, and clearing the vault's unresolved parent escalation-deposit accounting is optional.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry._getEffectiveInheritedUnresolvedTotalAttoRep</code></a>
@@ -392,7 +392,7 @@
 							<tr>
 								<td>Carried-claim gas</td>
 								<td>
-									Allocation reads call each source game in the deposit's <a href="./glossary.html#lineage">lineage</a>, so gas grows with fork depth. No maximum depth is enforced; see <a href="./invariants.html#life-05"><code>LIFE-05</code></a
+									Allocation reads inspect at most eight ancestors in the deposit's <a href="./glossary.html#lineage">lineage</a>. Deeper histories require resumable <code>processClaimCheckpoint</code> calls, each limited to eight steps. Completed canonical ancestor checkpoints skip previously prepared history for the same claim. Discover with an empty transform array and zero base commitment, then submit one base commitment and transforms in forward hash order matching the pending commitment. The contract applies the verified transforms in reverse order; the current segment needs at most eight local transform reads, without historical logs. Preparation preserves per-generation rounding; the immediate parent and target remain live. See <a href="./invariants.html#life-05"><code>LIFE-05</code></a
 									>.
 								</td>
 								<td>
@@ -491,7 +491,7 @@
 							</tr>
 							<tr>
 								<td>Continuation setup</td>
-								<td>Child creation installs the canonical carry commitment, source-game link, and aggregate backing without waiting for vault transactions or copying claims and owners. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range carry-proof peaks</a>.</td>
+								<td>Child creation deploys and funds the continuation. Anyone then calls <code>continueChildUniverse</code> three times, installing one outcome per transaction from the fixed parent snapshot. Vault migration, direct claims, auctions, and continuation resume wait for all three outcomes. Initialization of a registered child can finish after the migration cutoff without extending that cutoff. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range carry-proof peaks</a>.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerBase.sol"><code>SecurityPoolForkerBase._finalizeAwaitingForkContinuationIfReady</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a

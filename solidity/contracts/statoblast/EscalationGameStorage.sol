@@ -8,6 +8,7 @@ import {
 	NonDecisionState,
 	OutcomeState
 } from './EscalationGameTypes.sol';
+import { EscalationClaimCheckpoint } from './EscalationClaimCheckpointTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { DelegateCall } from './DelegateCall.sol';
 
@@ -47,6 +48,11 @@ abstract contract EscalationGameStorage {
 	uint256 internal forkCarryBackingExportedBeforeResumeAttoRep;
 	uint256 public truthAuctionRepBeforeAttoRep;
 	uint256 public truthAuctionRepRemainingAttoRep;
+	uint8 public forkCarrySnapshotOutcomesInitialized;
+	bytes32 internal forkCarrySnapshotId;
+	// A checkpoint stores only frozen grandparent-and-earlier transforms. The
+	// current game and its immediate source always remain live.
+	mapping(bytes32 => EscalationClaimCheckpoint) internal claimCheckpoints;
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
 		// A provisional leader cannot close an unresolved unrelated continuation's

@@ -5,6 +5,9 @@ import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
+import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
+import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
+import { DelegateCall } from './DelegateCall.sol';
 import { SystemState } from './interfaces/ISecurityPool.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import {
@@ -30,6 +33,75 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
+
+	/// @notice Pool-only delegate target: install exactly one outcome from a bound fork snapshot.
+	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot, EscalationGameProofVerifier proofVerifier, EscalationGameClaimDelegate claimDelegate, bytes32 emptyNullifierRoot) external {
+		require(msg.sender == IEscalationGameDepositContext(address(this)).securityPool(), 'Only pool');
+		require(forkContinuation, 'No fork mode');
+		uint8 outcomeIndex = forkCarrySnapshotOutcomesInitialized;
+		require(outcomeIndex < 3, 'Snapshot initialized');
+		require(leafCount < (uint256(1) << MERKLE_MOUNTAIN_RANGE_MAX_PEAKS), 'Leaf count high');
+		if (outcomeIndex == 0) {
+			require(snapshotId != bytes32(0), 'Snapshot id missing');
+			forkCarrySnapshotId = snapshotId;
+			forkCarrySourceGame = sourceGame;
+		} else {
+			require(forkCarrySnapshotId == snapshotId && forkCarrySourceGame == sourceGame, 'Snapshot changed');
+		}
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		state.currentNullifierRoot = nullifierRoot == bytes32(0) ? emptyNullifierRoot : nullifierRoot;
+		state.snapshotLeafCount = leafCount;
+		state.currentLeafCount = leafCount;
+		uint256 peakStartIndex;
+		for (uint256 height = MERKLE_MOUNTAIN_RANGE_MAX_PEAKS; height > 0; ) {
+			unchecked {
+				--height;
+			}
+			state.snapshotPeaks[height] = peaks[height];
+			state.currentPeaks[height] = peaks[height];
+			if (((leafCount >> height) & 1) == 0) continue;
+			state.currentCarryNodeHashes[height][peakStartIndex] = peaks[height];
+			peakStartIndex += uint256(1) << height;
+		}
+		state.balanceAttoRep = resolutionBalanceAttoRep;
+		state.inheritedUnresolvedTotalAttoRep = carryTotalAttoRep;
+		if (outcomeIndex != 2) {
+			forkCarrySnapshotOutcomesInitialized = outcomeIndex + 1;
+			return;
+		}
+		_finalizeForkCarrySnapshot(sourceGame, snapshotId, proofVerifier, claimDelegate);
+	}
+
+	function _finalizeForkCarrySnapshot(address sourceGame, bytes32 snapshotId, EscalationGameProofVerifier proofVerifier, EscalationGameClaimDelegate claimDelegate) private {
+		bytes32[3] memory carryRoots;
+		bytes32[3] memory nullifierRoots;
+		uint256[3] memory leafCounts;
+		uint256[3] memory carryTotals;
+		uint256[3] memory balances;
+		uint256 totalCarryAttoRep;
+		for (uint8 index = 0; index < 3; index++) {
+			OutcomeState storage state = outcomeState[index];
+			leafCounts[index] = state.snapshotLeafCount;
+			carryRoots[index] = proofVerifier.bagCarryPeaks(state.snapshotPeaks, leafCounts[index]);
+			nullifierRoots[index] = state.currentNullifierRoot;
+			carryTotals[index] = state.inheritedUnresolvedTotalAttoRep;
+			balances[index] = state.balanceAttoRep;
+			totalCarryAttoRep += carryTotals[index];
+		}
+		require(snapshotId == keccak256(abi.encode(sourceGame, carryRoots, nullifierRoots, leafCounts, carryTotals, balances)), 'Snapshot id mismatch');
+		if (totalDisputeStakedAttoRep == 0) {
+			forkCarryDisputeStakedAttoRep = forkCarryInitialBackingAttoRep;
+			totalDisputeStakedAttoRep = forkCarryInitialBackingAttoRep;
+		}
+		forkCarrySnapshotRequiresForkedEscrow = totalCarryAttoRep > 0;
+		if (proofVerifier.hasReachedNonDecision(balances, nonDecisionThresholdAttoRep))
+			nonDecisionState = NonDecisionState.InheritedThresholdTie;
+		forkCarrySnapshotOutcomesInitialized = 3;
+		emit ForkCarryCheckpoint(sourceGame, snapshotId, carryRoots, nullifierRoots, leafCounts, carryTotals, balances);
+		if (sourceGame != address(0))
+			DelegateCall.invoke(address(claimDelegate), abi.encodeCall(EscalationGameClaimDelegate.initializeForkClaimCheckpoint, (sourceGame)));
+		if (nonDecisionState == NonDecisionState.InheritedThresholdTie) emit InheritedThresholdTie(sourceGame);
+	}
 
 	/// @notice Game delegatecall target: records a pool-funded deposit for `depositor` on `outcome` and returns its parent deposit index.
 	function recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) external returns (uint256 parentDepositIndex) {
@@ -129,6 +201,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 
 	/// @notice Game delegatecall target: records fork-carried escrow for `depositor` on `outcome`, applying any truth-auction retention.
 	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external {
+		require(!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(depositor != address(0x0), 'Depositor is zero');
 		if (sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0) return;
@@ -143,6 +216,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	function _validateAcceptedDeposit(BinaryOutcomes.BinaryOutcome outcome, uint8 outcomeIndex, uint256 currentBalanceAttoRep, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private view {
+		require(!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(_isDepositResolutionOpen(IEscalationGameDepositContext(address(this)).getQuestionResolution()), 'Question resolved');
@@ -196,6 +270,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		address poolAddress = game.securityPool();
 		require(msg.sender == IEscalationGameSecurityPoolContext(poolAddress).securityPoolForker(), 'Only forker');
 		require(forkContinuation && forkResumedAt == 0, 'Fork not paused');
+		require(forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(truthAuctionRepBeforeAttoRep == 0, 'Haircut applied');
 		uint256 repBeforeAttoRep = IERC20(game.repToken()).balanceOf(address(this));
 		require(repToRemoveAttoRep < repBeforeAttoRep, 'Haircut too high');
@@ -230,6 +305,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		require(msg.sender == game.securityPool(), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(forkResumedAt == 0, 'Fork resumed');
+		require(forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
 		require(game.isForkCarryFundingComplete(), 'Fork carry underfunded');
 		if (forkCarryDisputeStakedAttoRep == 0 && forkCarrySnapshotRequiresForkedEscrow) {
 			for (uint256 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {

@@ -22,6 +22,8 @@ type InfraContractAddressConfig = {
 	multicall3Bytecode: Hex
 	openOracleBytecode: Hex
 	openOraclePriceCoordinatorFactoryBytecode: () => Hex
+	priceCoordinatorDeploymentWorkerBytecode: Hex
+	sharedPoolPriceFeedDeploymentWorkerBytecode: Hex
 	proxyDeployerAddress: Address
 	securityPoolUtilsBytecode: Hex
 	securityPoolOperationsDelegateBytecode: Hex
@@ -35,9 +37,12 @@ type InfraContractAddresses = {
 	escalationGameClaimDelegate: Address
 	escalationGameFactory: Address
 	escalationGameProofVerifier: Address
+	escalationGameDepositDelegate: Address
 	multicall3: Address
 	openOracle: Address
 	openOraclePriceCoordinatorFactory: Address
+	priceCoordinatorDeploymentWorker: Address
+	sharedPoolPriceFeedDeploymentWorker: Address
 	securityPoolFactory: Address
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
@@ -57,6 +62,8 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
 			zoltar: config.getZoltarAddress(),
 			shareTokenFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getShareTokenFactoryByteCode(config.getZoltarAddress())),
+			priceCoordinatorDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.priceCoordinatorDeploymentWorkerBytecode),
+			sharedPoolPriceFeedDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.sharedPoolPriceFeedDeploymentWorkerBytecode),
 			openOraclePriceCoordinatorFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOraclePriceCoordinatorFactoryBytecode()),
 			securityPoolForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerByteCode(config.getZoltarAddress())),
 			escalationGameClaimDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameClaimDelegateBytecode),
@@ -73,6 +80,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			...addresses,
 			escalationGameFactory,
 			escalationGameProofVerifier,
+			escalationGameDepositDelegate: getCreateAddress({ from: escalationGameFactory, nonce: 4n }),
 			securityPoolOperationsDelegate,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,

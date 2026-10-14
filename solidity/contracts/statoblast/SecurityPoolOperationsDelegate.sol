@@ -119,7 +119,8 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		context.updateVaultFees(vault);
 		uint256 nextTotalAttoEth = totalUnderwritingLimitAttoEth - oldLimitAttoEth + limitAttoEth;
-		if (limitAttoEth < oldLimitAttoEth)
+		// Final outcomes end REP underwriting; outstanding shares retain their funded ETH claims.
+		if (limitAttoEth < oldLimitAttoEth && !pool.isEscalationResolved())
 			require(nextTotalAttoEth >= settlementCollateralAttoEth, 'Commitments below collateral');
 		if (limitAttoEth > oldLimitAttoEth) {
 			require(pool.openOraclePriceCoordinator().isPriceValid(), 'Stale price');

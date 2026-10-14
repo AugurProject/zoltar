@@ -254,3 +254,23 @@ export const formatMigratePoolReviewDescription = (outcomeLabels: CopyTemplateVa
 export const formatMigrateVaultReviewTitle = (outcomeLabel: CopyTemplateValue, amount?: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}${formatRepAmountSuffix(amount)}`
 export const formatMigrateVaultReviewDescription = (outcomeLabel: CopyTemplateValue, amounts?: { rep: CopyTemplateValue | undefined; eth: CopyTemplateValue }) =>
 	`Moves all your vault REP${amounts?.rep === undefined ? '' : ` (${amounts.rep}\u00a0REP)`} and underwriting commitments${amounts === undefined ? '' : ` (${amounts.eth}\u00a0ETH)`} from this pool to the ${outcomeLabel} universe. This can’t be undone or split across outcomes.`
+
+export const prepareChildTitle = 'Prepare child pool'
+export const prepareChildDescription = 'Complete each preparation transaction, then choose how to migrate your REP.'
+export const checkingChildPreparation = 'Checking child pool preparation…'
+export const prepareChildBeforeMigration = 'Prepare and create the child pool first.'
+export const childPreparationComplete = 'Already prepared'
+export const childPoolExists = 'Child pool already created'
+export const prepareChildFeed = 'Prepare child price feed'
+export const preparingChildFeed = 'Preparing child price feed…'
+export const prepareChildContracts = 'Prepare child pool contracts'
+export const preparingChildContracts = 'Preparing child pool contracts…'
+export const prepareChildFeedFirst = 'Prepare the child price feed first.'
+export const prepareChildContractsFirst = 'Prepare the child pool contracts first.'
+export const createChildPool = 'Create child pool'
+export const creatingChildPool = 'Creating child pool…'
+
+export const initializeChildHistory = 'Initialize dispute history'
+export const initializingChildHistory = 'Initializing dispute history…'
+export const initializeChildHistoryFirst = 'Initialize all dispute history outcomes first.'
+export const formatChildHistoryProgress = (completed: CopyTemplateValue) => `${completed} of 3 outcomes initialized`

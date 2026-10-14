@@ -13,6 +13,8 @@ contract SecurityPoolEventEmitter is SecurityPoolStorage {
 	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleUnderwritingLimitAttoEth);
 
 	function emitPoolAccountingCheckpoint(AccountingReason reason, address vault) external payable {
+		// Every capacity/collateral checkpoint also reconciles the shared report security budget.
+		ISecurityPool(payable(address(this))).openOraclePriceCoordinator().syncExposure();
 		emit PoolAccountingCheckpoint(reason, vault, settlementCollateralAttoEth, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth, feeIndex, feeIndexRemainder, totalFeesOwedRemainder, uncheckpointedFeeEligibleUnderwritingLimitAttoEth, lastUpdatedFeeAccumulator, currentRetentionRate);
 	}
 

@@ -10,6 +10,7 @@ const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 describe('oracle manager queue funding helpers', () => {
 	test('uses zero ETH when reusing a pending-report join slot', async () => {
 		const readContract: Parameters<typeof loadOracleManagerQueueOperationEthValue>[0]['readContract'] = async request => {
+			if (request.functionName === 'priceFeed') return MANAGER_ADDRESS as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'lastPrice') return (10n ** 18n) as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'getPendingSettlementOperationIds') return [1n] as never
 			if (request.address === MANAGER_ADDRESS && request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n as never
@@ -31,6 +32,8 @@ describe('oracle manager queue funding helpers', () => {
 test('includes the current block base fee in new oracle request funding', async () => {
 	const readContract = createReadContractStub(async request => {
 		switch (request.functionName) {
+			case 'priceFeed':
+				return MANAGER_ADDRESS
 			case 'lastPrice':
 				return 0n
 			case 'getPendingSettlementOperationIds':
@@ -65,6 +68,8 @@ for (const baseFeePerGas of [1_040_635_026n, 0n]) {
 			expect(request.blockNumber).toBe(11_806_221n)
 			expect(request.gasPrice).toBeUndefined()
 			switch (request.functionName) {
+				case 'priceFeed':
+					return MANAGER_ADDRESS
 				case 'gasUnitsForOneDispute':
 					return 300_000n
 				case 'initialReportPriorityFeeAttoEthPerGas':
@@ -146,6 +151,8 @@ for (const mode of ['fresh', 'stale-join', 'becomes-stale'] as const) {
 			},
 			async request => {
 				switch (request.functionName) {
+					case 'priceFeed':
+						return MANAGER_ADDRESS
 					case 'lastPrice':
 						return 10n ** 18n
 					case 'lastSettlementTimestamp':

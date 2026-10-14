@@ -58,10 +58,10 @@ describe('Statoblast: truth auction', () => {
 			client.writeContract({
 				abi: forkerAbi,
 				address: forkerAddress,
-				functionName: 'initializeChildForkedEscalationGameIfNeeded',
-				args: [parentPool, parentPool, addressString(0n)],
+				functionName: 'getOrDeployChildPoolForEscalation',
+				args: [parentPool, BigInt(QuestionOutcome.Yes)],
 			}),
-			/execution reverted/,
+			/Only self/,
 		)
 		await assert.rejects(
 			client.writeContract({

@@ -167,13 +167,14 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 	const start = candidates.length === 0 ? 0 : Number(blockNumber % BigInt(candidates.length))
 	return candidates.map(({ slots, index, nullifier, ...candidate }, position) => {
 		const selected = (position - start + candidates.length) % candidates.length < CARRY_STORAGE_MAXIMUM_WITHDRAWALS
-		if (!selected) return { ...candidate, proof: undefined }
+		if (!selected) return { ...candidate, leafIndex: index.toString(), proof: undefined }
 		const mmr = createMerkleMountainRangeProof(
 			slots.map(slot => slot.hash),
 			index,
 		)
 		return {
 			...candidate,
+			leafIndex: index.toString(),
 			proof: {
 				depositor: candidate.depositor,
 				amountAttoRep: candidate.amountAttoRep,

@@ -6,7 +6,8 @@ import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { discoverUniverseUniswap } from './discovery-uniswap.ts'
 import { canonicalUintString, compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
-import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
+import { discoverChildPoolPreparations } from './discovery-child-preparation.ts'
+import { discoverPoolPriceFeed } from './discovery-price-feed.ts'
 import type { AuctionSnapshot, ChildRepSplitProgressSnapshot, EcosystemSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
 import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, requirePositiveLimit, type ChaosReadClient } from './discovery-client.ts'
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, limitsWithDefaults, requireAggregateDiscoveryEnvelope, type DiscoveryLimits, type EcosystemDiscoveryContext } from './discovery-context.ts'
@@ -17,7 +18,6 @@ import { advanceVaultRegistryCursor, assertRegistryCountNotRegressed, collectCou
 import { discoverShareInventory, trustedIndexedReportsForDiscovery } from './discovery-share-inventory.ts'
 import { discoverStagedOperations, discoverVault } from './discovery-staged-operations.ts'
 import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES, type CountedRegistryCursor, type ImmutableTopologyData } from './topology-cache.ts'
-
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 const OUTCOME_LABEL_PAGE_SIZE = 256n
 const hasCode = (code: string | undefined): code is string => code !== undefined && code !== '0x'
@@ -25,7 +25,6 @@ const utf8Encoder = new TextEncoder()
 type TopologyMutationState = {
 	changed: boolean
 }
-
 async function discoverOutcomeLabels(client: ChaosReadClient, questionData: Address, questionId: bigint, blockNumber: bigint, limits: DiscoveryLimits) {
 	const outcomeLabels: string[] = []
 	let utf8Bytes = 0
@@ -508,14 +507,7 @@ async function discoverPools(
 			settlementCallbackGasLimit: settlementCallbackGasLimit.toString(),
 			targetPriceErrorForDispute: targetPriceErrorForDispute.toString(),
 		}
-		assertAnchoredOracleRequestFunding({
-			baseFeePerGas: anchorBaseFeePerGas.toString(),
-			coordinator: oracleRequestFunding,
-			minimumToken1ReportAttoEth: minimumReport.toString(),
-			requestPriceCostAttoEth: requestCost.toString(),
-			settlementCollateralAttoEth: accounting.settlementCollateralAttoEth.toString(),
-			subject: `Coordinator ${coordinator}`,
-		})
+		const priceFeedSnapshot = await discoverPoolPriceFeed(client, coordinator, blockNumber, accounting.settlementCollateralAttoEth, oracleRequestFunding, minimumReport, requestCost, anchorBaseFeePerGas)
 		const [auctionableAttoRepAtFork, , , migratedAttoRep, , , , , ownFork, unresolvedEscalationAtFork, outcomeIndex, forkActivationTime] = forkDataResult
 		const parentForkActivationTime = parentForkDataResult?.[11] ?? 0n
 		const [statusOwnFork, statusAuctionableAttoRepAtFork, vaultRepAtForkAttoRep] = ownForkMigrationStatusResult
@@ -664,6 +656,8 @@ async function discoverPools(
 			awaitingForkContinuation,
 			canonicalVaultCount: vaultCount.toString(),
 			coordinator,
+			...priceFeedSnapshot,
+			childPoolPreparations: await discoverChildPoolPreparations(client, deployments.securityPoolFactory, deployments.zoltar, address, universeId, systemState === 1n ? validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes) : [], blockNumber),
 			vaultOperations: getAddress(vaultOperations),
 			currentMintingCapacityAttoEth: currentMintingCapacity.toString(),
 			escalationCanTriggerOwnFork,

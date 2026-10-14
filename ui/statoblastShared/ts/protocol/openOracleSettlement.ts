@@ -4,9 +4,16 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import type { OpenOraclePriceSettlement } from '../types/contracts.js'
+import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
+
+const sharedFeedLinkAbi = [
+	{ type: 'function', name: 'securityPoolFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'portfolio', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'universeId', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint248' }] },
+] as const
 
 // Generic OpenOracle reports have no pool freshness rule. Verify both sides of the callback/pool association.
 export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, game: OpenOracleStatePreimage['game'], chainId?: number) {
@@ -16,8 +23,33 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 		{ address: game.callbackContract, abi, functionName: 'openOracle' },
 		{ address: game.callbackContract, abi, functionName: 'securityPool' },
 	])
-	if (oracle.status !== 'success' || pool.status !== 'success' || !sameAddress(oracle.result, openOracleAddress) || pool.result === zeroAddress) return undefined
-	const [coordinator] = await readOptionalMulticall(client, [{ address: pool.result, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' }])
+	if (oracle.status !== 'success' || !sameAddress(oracle.result, openOracleAddress)) return undefined
+	const securityPool = pool.status === 'success' ? pool.result : zeroAddress
+	if (securityPool === zeroAddress) {
+		const [factory, portfolio, universe, weth, rep] = await readOptionalMulticall(client, [
+			{ address: game.callbackContract, abi: sharedFeedLinkAbi, functionName: 'securityPoolFactory' },
+			{ address: game.callbackContract, abi: sharedFeedLinkAbi, functionName: 'portfolio' },
+			{ address: game.callbackContract, abi: sharedFeedLinkAbi, functionName: 'universeId' },
+			{ address: game.callbackContract, abi, functionName: 'weth' },
+			{ address: game.callbackContract, abi, functionName: 'reputationToken' },
+		])
+		if (
+			factory.status !== 'success' ||
+			!sameAddress(factory.result, getInfraContractAddresses().securityPoolFactory) ||
+			portfolio.status !== 'success' ||
+			portfolio.result === zeroAddress ||
+			universe.status !== 'success' ||
+			weth.status !== 'success' ||
+			!sameAddress(weth.result, game.token1) ||
+			rep.status !== 'success' ||
+			!sameAddress(rep.result, game.token2)
+		)
+			return undefined
+		const [registeredFeed] = await readOptionalMulticall(client, [{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [portfolio.result, universe.result] }])
+		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, game.callbackContract)) return undefined
+		return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
+	}
+	const [coordinator] = await readOptionalMulticall(client, [{ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' }])
 	if (coordinator.status !== 'success' || !sameAddress(coordinator.result, game.callbackContract)) return undefined
 	return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
 }

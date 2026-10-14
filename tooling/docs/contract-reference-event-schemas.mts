@@ -1,4 +1,5 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
+	{ name: 'ClaimCheckpointProgress', parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
 	{ name: 'RegistryInitialized', parameters: 'address indexed coordinator', sourcePath: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol' },
 	{ name: 'LiquidationApprovalRegistrySet', parameters: 'LiquidationApprovalRegistry indexed registry', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol' },
 	{ name: 'EthReceived', parameters: 'address indexed sender,uint256 amountAttoEth', sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol' },
@@ -175,14 +176,6 @@ export const assemblyEventEmissions: Array<{
 	sourcePath: string
 }> = [
 	{
-		dataArguments: 'carryRoots, nullifierRoots, leafCounts, unresolvedTotalsAttoRep, resolutionBalancesAttoRep',
-		indexedArguments: 'sourceGame, snapshotId',
-		name: 'ForkCarryCheckpoint',
-		signature: 'ForkCarryCheckpoint(address,bytes32,bytes32[3],bytes32[3],uint256[3],uint256[3],uint256[3])',
-		signatureConstant: 'FORK_CARRY_CHECKPOINT_SIGNATURE',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
-	},
-	{
 		dataArguments: 'outcomeIndex, amountAttoRep, reason, carryTotalAttoRep, _getCurrentNullifierRoot(outcomeIndex), carryRoot',
 		indexedArguments: 'parentDepositIndex, sourceNodeId, depositor',
 		name: 'CarryDepositConsumed',
@@ -192,4 +185,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '37b0ebe4d6970558d4c0791a9c61fe61fa7970b897e24c7d1dfa0944339a2b7a'
+export const referencedEventAbiFingerprint = '933f3706eb1559d69037e2034b765a1974b835efd5a9ec073edcc690360450ce'

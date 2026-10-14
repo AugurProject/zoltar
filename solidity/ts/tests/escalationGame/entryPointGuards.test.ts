@@ -20,7 +20,7 @@ import {
 	readNonDecisionTimestamp,
 } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../../types/contractArtifact'
-import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL } from './carryHelpers'
+import { ESCALATION_TIME_LENGTH, FRESH_FORK_RESPONSE_PERIOD, NON_DECISION_STATE_LOCAL, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: deposits and entry-point guards', () => {
@@ -34,6 +34,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 		startEscalation,
 		startEscalationFromFork,
 		resumeEscalationFromFork,
+		initializeSnapshotViaTestSecurityPool,
 		depositOnOutcomeViaProofTestSecurityPool,
 		recordForkedEscrowForOutcomeViaTestSecurityPool,
 		claimDepositForWinningViaTestSecurityPool,
@@ -134,6 +135,8 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 
 		const emptyFinal = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(emptyFinal.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await assert.rejects(resumeEscalationFromFork(emptyFinal.escalationGameAddress), /Fork snapshot incomplete/)
+		await initializeSnapshotViaTestSecurityPool(emptyFinal.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await resumeEscalationFromFork(emptyFinal.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)
 		await assert.rejects(
@@ -162,6 +165,8 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 
 		const escrowed = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(escrowed.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n), /Fork snapshot incomplete/)
+		await initializeSnapshotViaTestSecurityPool(escrowed.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n)
 		await resumeEscalationFromFork(escrowed.escalationGameAddress)
 		await mockWindow.advanceTime(FRESH_FORK_RESPONSE_PERIOD + 1n)

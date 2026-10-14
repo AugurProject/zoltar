@@ -78,13 +78,14 @@ export async function setupFinalizedAuctionWithUnclaimedUnderwritingLimitAttoEth
 	const endTime = await getQuestionEndDate(client, questionId)
 	const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 	await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-	await mockWindow.setTime(endTime + 10000n)
 
 	const securityPoolUnderwritingLimitAttoEth = repDeposit / 8n
 	await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 	await setVaultCapacityFixture(unmigratedUnderwritingLimitAttoEthHolder, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, unmigratedUnderwritingLimitAttoEthHolder.account.address, securityPoolUnderwritingLimitAttoEth)
 
+	await mockWindow.setTime(endTime - 2n)
 	await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+	await mockWindow.setTime(endTime + 10000n)
 
 	await triggerExternalForkForSecurityPool(undefined, forkSource)
 	await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

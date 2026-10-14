@@ -70,8 +70,9 @@ function getWinningImportedEscalationDepositClaimAmount(details: ActiveReporting
 	if (winningOutcomeBalance === undefined) return undefined
 	return computeWinningImportedEscalationDepositClaimAmount({
 		bindingCapitalAttoRep: details.bindingCapital,
-		postDepositCumulativeAmountAttoRep: deposit.cumulativeAmountAttoRep,
-		depositAmountAttoRep: deposit.amountAttoRep,
+		postDepositCumulativeAmountAttoRep: deposit.claimAllocation?.retainedCumulativeAttoRep ?? deposit.cumulativeAmountAttoRep,
+		depositAmountAttoRep: deposit.claimAllocation?.rewardAmountAttoRep ?? deposit.amountAttoRep,
+		principalAttoRep: deposit.claimAllocation?.retainedAmountAttoRep ?? deposit.amountAttoRep,
 		forkThresholdAttoRep: details.forkThresholdAttoRep,
 		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
 		winningOutcomeBalanceAttoRep: winningOutcomeBalance,
@@ -87,6 +88,7 @@ export function getImportedEscalationDepositClaimAmount(details: ReportingDetail
 	if (details === undefined || details.status !== 'active') return undefined
 	if (!isPoolQuestionFinalized(details)) return undefined
 	if (details.questionOutcome !== outcome) return 0n
+	if (deposit.claimCheckpoint?.ready === false) return undefined
 	return getWinningImportedEscalationDepositClaimAmount(details, outcome, deposit)
 }
 

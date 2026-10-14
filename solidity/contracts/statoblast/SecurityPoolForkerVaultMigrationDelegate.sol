@@ -3,7 +3,6 @@ pragma solidity 0.8.35;
 
 import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
-import { ISecurityPoolForkerChildEscalationGameInitializer } from './interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -34,8 +33,16 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal override returns (EscalationGame) {
-		return
-			ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
+		_validateChildEscalationGame(child, childEscalationGame);
+		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
+		if (!parentForkData.unresolvedEscalationAtFork) return childEscalationGame;
+		if (address(childEscalationGame) == address(0x0)) {
+			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
+			child.initializeForkedEscalationGame(parentForkData.escalationStartBondAtForkAttoRep, parentForkData.escalationNonDecisionThresholdAtForkAttoRep, parentForkData.escalationElapsedAtFork, childForkData.fixedQuestionOutcomePlusOne == 0 ? BinaryOutcomes.BinaryOutcome.None : BinaryOutcomes.BinaryOutcome(childForkData.fixedQuestionOutcomePlusOne - 1));
+			childEscalationGame = child.escalationGame();
+			_validateChildEscalationGame(child, childEscalationGame);
+		}
+		return super._initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
 	function createChildUniverse(ISecurityPool parent, uint256 outcomeIndex) public {
@@ -43,9 +50,20 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 		_getOrDeployChildPool(parent, outcomeIndex);
 	}
 
+	function getOrDeployChildPoolForEscalation(ISecurityPool parent, uint256 outcomeIndex) public returns (ISecurityPool child, EscalationGame game) {
+		return _getOrDeployChildPool(parent, outcomeIndex);
+	}
+
+	function continueChildUniverse(ISecurityPool parent, uint256 outcomeIndex) public {
+		ISecurityPool child = childrenByPoolAndOutcome[parent][outcomeIndex];
+		require(address(child) != address(0), 'Child pool missing');
+		_continueChildForkCarry(parent, child);
+	}
+
 	function migrateVault(ISecurityPool parent, uint256 outcomeIndex) public returns (ISecurityPool child, EscalationGame childEscalationGame) {
 		require(block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME, 'Migration window closed');
 		(child, childEscalationGame) = _getOrDeployChildPool(parent, outcomeIndex);
+		_requireChildForkCarryReady(parent, childEscalationGame);
 		_migrateNonEscrowedVaultAccounting(parent, child, msg.sender);
 		return (child, childEscalationGame);
 	}

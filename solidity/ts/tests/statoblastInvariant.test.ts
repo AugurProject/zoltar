@@ -214,12 +214,13 @@ describe('Statoblast invariant harness', () => {
 		const endTime = await getQuestionEndDate(client, context.questionId)
 		const attackerClient = createClient(1)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
-		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 		await setVaultCapacityFixture(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, context.questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createClient(2)
+		await mockWindow.setTime(endTime - 2n)
 		await createCompleteSet(openInterestHolder, context.securityPool, openInterestAmount)
+		await mockWindow.setTime(endTime + 10000n)
 		await triggerExternalForkForSecurityPool(undefined, 'mixed bids fork source')
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])

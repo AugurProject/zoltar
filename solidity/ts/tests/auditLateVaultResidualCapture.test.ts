@@ -309,7 +309,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPoolAddresses.securityPool, repToken, infra.escalationGameProofVerifier, infra.escalationGameClaimDelegate],
+				args: [securityPoolAddresses.securityPool, repToken, infra.escalationGameProofVerifier, infra.escalationGameClaimDelegate, infra.escalationGameDepositDelegate],
 			}),
 		})
 		const deploymentReceipt = await attacker.waitForTransactionReceipt({ hash: deploymentHash })

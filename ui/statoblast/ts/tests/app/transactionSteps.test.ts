@@ -493,6 +493,7 @@ function createCoordinatorFundingReads(readAllowance: (token: string) => bigint,
 					return 0
 				case 'feePercentage':
 					return 0
+				case 'priceFeed':
 				case 'securityPool':
 					return account
 				case 'settlementCollateralAttoEth':
@@ -1058,6 +1059,9 @@ test('minting complete sets sends the transaction directly and tracks its receip
 		getBlock: async () => createBlockWithTimestamp(1n),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
+			if (request.functionName === 'questionData') return account
+			if (request.functionName === 'questionId') return 1n
+			if (request.functionName === 'getQuestionEndDate') return 1000n
 			if (request.functionName === 'universeId') return 0n
 			if (request.functionName === 'openOraclePriceCoordinator') return account
 			if (request.functionName === 'lastSettlementTimestamp') return 1n

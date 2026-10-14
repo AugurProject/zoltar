@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. <code>claimForkedEscalationDeposits</code> and <code>migrateVaultWithUnresolvedEscalation</code> revert without reason data when one of the prerequisites marked &quot;no reason data&quot; fails; the forker omits those reason strings to stay within the contract code-size limits.</p>
 				<!-- Validated read ABI fingerprint: 44f89debf797ddb63c2614a513b7d04dfe528074f30a513ae53c700d9627fb51 -->
-				<!-- Validated complete compiled ABI fingerprint: cbde7d4ca1c41aa7a92d04162002915ae0edbcf1e47ae3cf9328a0603356d840 -->
+				<!-- Validated complete compiled ABI fingerprint: 743d966ba0b2f33b54a634df471ddeacf1956e12af4db22250aa001477a1837f -->
 				<table>
 					<thead>
 						<tr>
@@ -59,13 +59,20 @@
 							<td><code>createChildUniverse(securityPool, outcomeIndex)</code><wbr /></td>
 							<td>Anyone</td>
 							<td>Parent in migration window; selected fork outcome is well formed; child pool is not already deployed. The returned auction is nonzero, deployed, and has never been trusted by this forker; the child's fork-data slot is unused; and the child reports the expected parent, universe, source factory, forker, and auction. The selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. These relationship checks do not independently prove configured-factory registration.</td>
-							<td>Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and initializes any continuation snapshot and materializes or sweeps child backing through that validated game.</td>
-							<td><code>DeployChild</code> only when child REP was absent; always <code>SecurityPoolRegistered</code>, <code>DeploySecurityPool</code>, <code>AuthorizationUpdated</code>, <code>ChildPoolLinked</code>, and <code>TotalRepBackingUnitsSet</code>; <code>AwaitingForkContinuationSet</code>, <code>EscalationGameSet</code>, <code>GameContinuedFromFork</code>, <code>ForkCarryCheckpoint</code>, <code>MigrationRepSplit</code>, <code>ChildDisputeStakedRepMaterialized</code>, and <code>PoolHeldRepSweptToChild</code> as continuation and backing state requires</td>
+							<td>Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and materializes or sweeps child backing through that validated game. An unresolved continuation stays inactive until three separate <code>continueChildUniverse</code> calls install its history.</td>
+							<td><code>DeployChild</code> only when child REP was absent; always <code>SecurityPoolRegistered</code>, <code>DeploySecurityPool</code>, <code>AuthorizationUpdated</code>, <code>ChildPoolLinked</code>, and <code>TotalRepBackingUnitsSet</code>; <code>AwaitingForkContinuationSet</code>, <code>EscalationGameSet</code>, <code>GameContinuedFromFork</code>, <code>MigrationRepSplit</code>, <code>ChildDisputeStakedRepMaterialized</code>, and <code>PoolHeldRepSweptToChild</code> as continuation and backing state requires</td>
+						</tr>
+						<tr>
+							<td><code>continueChildUniverse(parent, outcomeIndex)</code><wbr /></td>
+							<td>Anyone</td>
+							<td>Child already registered. Completion remains available after the parent migration cutoff and never extends that cutoff. Vault migration, direct claims, and the Truth Auction require a complete snapshot.</td>
+							<td>Installs the next outcome of a registered child’s canonical inherited history, with at most 64 peaks copied per call. Three successful steps complete an unresolved continuation; an already complete child requires no further work.</td>
+							<td><code>ForkCarryCheckpoint</code> on the third outcome; additionally <code>InheritedThresholdTie</code> when the completed balances reach the threshold</td>
 						</tr>
 						<tr>
 							<td><code>migrateVault(securityPool, outcomeIndex)</code><wbr /></td>
 							<td>Vault owner for their non-escrowed position</td>
-							<td>Migration window open; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.</td>
+							<td>Migration window open; an unresolved continuation must already have all three outcomes initialized and sufficient REP backing; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.</td>
 							<td>Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers the underwriting commitment and any tracked vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. The underwriting commitment migrates separately from REP backing. Repeat calls can have no additional REP backing units, underwriting commitment, or vault bad debt to move.</td>
 							<td><code>VaultBadDebtMigrated</code> and <code>VaultMigrationCheckpoint</code></td>
 						</tr>
@@ -79,14 +86,14 @@
 						<tr>
 							<td><code>claimForkedEscalationDeposits(securityPool, vault, outcomeIndex, depositIndexes)</code><wbr /></td>
 							<td>The named vault owner (<code>Vault</code>)</td>
-							<td>Caller equals <code>vault</code>. No reason data: unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies <code>canTriggerOwnFork()</code> by having either a local non-decision or an inherited threshold tie without a fixed outcome; the selected child remains in <code>ForkMigration</code>, is inside the eight-week claim window, and has a continuation game; every listed deposit commits <code>vault</code> as its immutable depositor. The selected child can be created or loaded and its game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. A nonempty list additionally requires the matching winning outcome and unclaimed deposit identities.</td>
-							<td>First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.</td>
-							<td><code>DeployChild</code>, <code>SecurityPoolRegistered</code>, <code>DeploySecurityPool</code>, <code>AuthorizationUpdated</code>, <code>ChildPoolLinked</code>, <code>TotalRepBackingUnitsSet</code>, <code>AwaitingForkContinuationSet</code>, <code>EscalationGameSet</code>, <code>GameContinuedFromFork</code>, <code>ForkCarryCheckpoint</code>, <code>MigrationRepSplit</code>, <code>ChildDisputeStakedRepMaterialized</code>, and <code>PoolHeldRepSweptToChild</code> as setup requires; per claimed deposit, <code>CarryDepositConsumed</code> and <code>ClaimDeposit</code>; escrow record/export events when REP is paid; always <code>ClaimForkedEscalationDepositsToWallet</code>, including for an empty list</td>
+							<td>Caller equals <code>vault</code>. No reason data: unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies <code>canTriggerOwnFork()</code> by having either a local non-decision or an inherited threshold tie without a fixed outcome; the selected child remains in <code>ForkMigration</code>, is inside the eight-week claim window, and has a continuation game; every listed deposit commits <code>vault</code> as its immutable depositor. The selected child must already exist with all three outcomes initialized and sufficient REP backing; its game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>. A nonempty list additionally requires the matching winning outcome and unclaimed deposit identities.</td>
+							<td>Loads the prepared child, captures and validates its escalation game, and uses that same game for backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still checks readiness and emits a zero-valued claim summary.</td>
+							<td>Per claimed deposit, <code>CarryDepositConsumed</code> and <code>ClaimDeposit</code>; escrow record/export events when REP is paid; always <code>ClaimForkedEscalationDepositsToWallet</code>, including for an empty list</td>
 						</tr>
 						<tr>
 							<td><code>startTruthAuction(securityPool)</code></td>
 							<td>Anyone</td>
-							<td>Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
+							<td>Child migration window ended; pool is in fork migration; required child REP is available; an unresolved continuation has all three outcomes initialized and sufficient game backing. If unresolved escalation existed at fork, any game reported during immediate completion passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.</td>
 							<td><code>ShareTokenSupplySet</code>, then <code>TruthAuctionStarted</code> when an auction starts; immediate no-auction completion instead emits <code>TruthAuctionFinalized</code>, pool accounting checkpoints, and <code>ForkContinuationResumed</code> for an unresolved continuation</td>
 						</tr>
@@ -119,11 +126,11 @@
 							<td>For processed bids, underlying auction <code>BidSettled</code>; one aggregate <code>EthRefundCredited</code> per call when total credited ETH is positive; <code>ClaimAuctionProceeds</code> when REP backing, underwriting commitment, or raw auction bad-debt settlement advances. Its cumulative claimed and total auctioned bad-debt fields are raw counters; effective vault debt still requires the recorded auction generation to match the pool’s current generation; no event for an empty list</td>
 						</tr>
 						<tr>
-							<td><code>initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame)</code><wbr /></td>
-							<td>This <code>SecurityPoolForker</code> contract only (<code>Only self</code>), through its migration delegate callback</td>
-							<td>External caller is the forker itself, so parent and child come from its own migration path; a supplied nonzero game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
-							<td>Allows delegated migration code to initialize a child continuation while preserving the forker as the authoritative caller and the already captured child-game identity. When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use.</td>
-							<td><code>EscalationGameSet</code> and <code>GameContinuedFromFork</code> when a continuation game is created; <code>ForkCarryCheckpoint</code> when the carry snapshot is installed; <code>ForkContinuationResumed</code> and <code>AwaitingForkContinuationSet</code> only when the child is already operational</td>
+							<td><code>getOrDeployChildPoolForEscalation(parent, outcomeIndex)</code><wbr /></td>
+							<td>This <code>SecurityPoolForker</code> contract only (<code>Only self</code>), through its escalation migration delegate</td>
+							<td>External caller is the forker itself; the child creation, lineage, game validation, and migration-window guards of <code>createChildUniverse</code> apply.</td>
+							<td>Routes child creation and backing through the same vault migration delegate used by <code>createChildUniverse</code>. Returns the child and its captured, validated game so escrow work uses that exact pair. Unresolved history requires the separate continuation steps before migration.</td>
+							<td>The same child creation and backing signals as <code>createChildUniverse</code>; no carry checkpoint until separate history initialization completes</td>
 						</tr>
 						<tr>
 							<td>Direct ETH transfer to <code>receive()</code></td>

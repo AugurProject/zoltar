@@ -1,3 +1,14 @@
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { createWalletClient, custom, publicActions, encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { prepareForkClaimCheckpoint as submitPreparation, prepareAndSettleForkClaim as submitCombined, withdrawForkedEscalationDeposits as submitSettlement } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useForkAuctionInteractionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionInteractionState.js'
 import { useTruthAuctionSettlementActionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js'
 import { ForkAuctionWorkflowShell } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionWorkflowShell.js'
@@ -15,12 +26,12 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { AuthenticatedForkClaim, CarriedDepositProof, ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 
 type UseForkAuctionOperationsState = ReturnType<typeof useForkAuctionOperations>
@@ -29,6 +40,24 @@ type TestForkAuctionWriteClient = { kind: 'injected-write-client' }
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 const TRUTH_AUCTION_ADDRESS = getAddress('0x00000000000000000000000000000000000000c3')
+
+function createAuthenticatedClaim(): AuthenticatedForkClaim {
+	return { escalationGame: TRUTH_AUCTION_ADDRESS, outcome: 'yes', snapshotRoot: zeroHash, snapshotLeafCount: 2n, amountAttoRep: 10n, cumulativeAmountAttoRep: 20n, depositor: WALLET_ADDRESS, parentDepositIndex: 9n, leafIndex: 1n }
+}
+
+function createClaimProof(identity = createAuthenticatedClaim()): CarriedDepositProof {
+	return {
+		depositor: identity.depositor,
+		amountAttoRep: identity.amountAttoRep,
+		cumulativeAmountAttoRep: identity.cumulativeAmountAttoRep,
+		parentDepositIndex: identity.parentDepositIndex,
+		leafIndex: identity.leafIndex,
+		sourceNodeId: 2n,
+		merkleMountainRangePeakIndex: 0n,
+		merkleMountainRangeSiblings: [],
+		nullifierSiblings: [],
+	}
+}
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
@@ -98,6 +127,18 @@ function getTransactionRowValueProp(state: ReturnType<typeof createInitialTransa
 function createForkAuctionOperationsDependencies(overrides: Partial<UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>> = {}): UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient> {
 	return {
 		buildForkCarriedEscalationProofs: async () => [],
+		initializeChildDisputeHistory: async () => {
+			throw new Error('Unexpected initialization')
+		},
+		prepareAndSettleForkClaim: async () => {
+			throw new Error('Unexpected combined claim')
+		},
+		prepareForkClaimCheckpoint: async () => {
+			throw new Error('Unexpected claim checkpoint')
+		},
+		prepareChildPool: async () => {
+			throw new Error('prepareChildPool should not be called in this test')
+		},
 		createChildUniverseFromSecurityPool: async () => {
 			throw new Error('createChildUniverseFromSecurityPool should not be called in this test')
 		},
@@ -152,8 +193,14 @@ function createForkAuctionOperationsDependencies(overrides: Partial<UseForkAucti
 	}
 }
 
-function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>, onRender: (state: UseForkAuctionOperationsState) => void, onTransactionFailed: (message: string) => void) {
-	return function ForkAuctionOperationsHarness() {
+function createHarness(
+	dependencies: UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>,
+	onRender: (state: UseForkAuctionOperationsState) => void,
+	onTransactionFailed: (message: string) => void,
+	selectedPool: () => Address = () => SECURITY_POOL_ADDRESS,
+	refreshState: () => Promise<void> = async () => undefined,
+) {
+	return function ForkAuctionOperationsHarness({ poolAddress = selectedPool() }: { poolAddress?: Address }) {
 		const state = useForkAuctionOperations(
 			{
 				accountAddress: WALLET_ADDRESS,
@@ -163,8 +210,8 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 				onTransactionPrepared: () => undefined,
 				onTransactionRequested: () => undefined,
 				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+				refreshState,
+				selectedSecurityPoolAddress: poolAddress,
 			},
 			dependencies,
 		)
@@ -174,7 +221,385 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 }
 
 describe('useForkAuctionOperations', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
+	const { trackCleanup, replaceEnvironment } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
+
+	test('bounded initialization stays available after migration closes and rejects a duplicate pending submission', async () => {
+		const completion = createDeferred<void>()
+		const initializeChildDisputeHistory = mock(async () => {
+			await completion.promise
+			return createForkAuctionResult('initializeChildHistory')
+		})
+		const onTransactionFailed = mock(() => undefined)
+		let hookState: UseForkAuctionOperationsState | undefined
+		const Harness = createHarness(
+			createForkAuctionOperationsDependencies({ initializeChildDisputeHistory }),
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+		)
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(async () => {
+			const first = requireHookState(hookState).initializeChildHistory()
+			const duplicate = requireHookState(hookState).initializeChildHistory()
+			await waitFor(() => expect(initializeChildDisputeHistory.mock.calls.length).toBeGreaterThan(0))
+			completion.resolve()
+			await Promise.all([first, duplicate])
+		})
+		expect(initializeChildDisputeHistory).toHaveBeenCalledTimes(1)
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
+	test('keeps the authenticated claim identity while preparation sends one transaction without rebuilding proofs', async () => {
+		const completion = createDeferred<void>()
+		const identity = createAuthenticatedClaim()
+		const buildForkCarriedEscalationProofs = mock(async () => [])
+		const prepareForkClaimCheckpoint = mock(async () => {
+			await completion.promise
+			throw new Error('Wallet rejected preparation')
+		})
+		const dependencies = createForkAuctionOperationsDependencies({ buildForkCarriedEscalationProofs, prepareForkClaimCheckpoint })
+		const onTransactionFailed = mock(() => undefined)
+		let hookState: UseForkAuctionOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+		)
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		let first: Promise<void> | undefined
+		let duplicate: Promise<void> | undefined
+		await act(async () => {
+			first = requireHookState(hookState).prepareForkClaim(identity)
+			duplicate = requireHookState(hookState).prepareForkClaim({ ...identity, outcome: 'no', parentDepositIndex: 10n })
+			await waitFor(() => expect(prepareForkClaimCheckpoint).toHaveBeenCalledTimes(1))
+		})
+		expect(requireHookState(hookState).forkClaimPreparation).toEqual({ outcome: 'yes', parentDepositIndex: 9n })
+		expect(buildForkCarriedEscalationProofs).not.toHaveBeenCalled()
+		expect(prepareForkClaimCheckpoint).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, identity)
+		await act(async () => {
+			completion.resolve()
+			await Promise.all([first, duplicate])
+		})
+		expect(requireHookState(hookState).forkClaimPreparation).toBeUndefined()
+		expect(dependencies.createWalletWriteClient).toHaveBeenCalledTimes(1)
+		expect(onTransactionFailed).toHaveBeenCalledTimes(1)
+	})
+
+	for (const fails of [false, true])
+		test(`combined claim builds one fresh proof, blocks duplicates and never switches transaction type (failure=${fails})`, async () => {
+			const completion = createDeferred<void>()
+			const identity = createAuthenticatedClaim()
+			const proof = createClaimProof(identity)
+			const buildForkCarriedEscalationProofs = mock(async () => [proof])
+			const prepareForkClaimCheckpoint = mock(async () => createForkAuctionResult('prepareForkClaim'))
+			const withdrawForkedEscalationDeposits = mock(async () => createForkAuctionResult('settleForkedEscalation'))
+			const prepareAndSettleForkClaim = mock(async () => {
+				await completion.promise
+				if (fails) throw new Error('Atomic settlement reverted')
+				return createForkAuctionResult('settleForkedEscalation')
+			})
+			const dependencies = createForkAuctionOperationsDependencies({ buildForkCarriedEscalationProofs, prepareAndSettleForkClaim, prepareForkClaimCheckpoint, withdrawForkedEscalationDeposits })
+			const onTransactionFailed = mock(() => undefined)
+			let hookState: UseForkAuctionOperationsState | undefined
+			const Harness = createHarness(
+				dependencies,
+				state => {
+					hookState = state
+				},
+				onTransactionFailed,
+			)
+			trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+			let first: Promise<void> | undefined
+			let duplicate: Promise<void> | undefined
+			await act(async () => {
+				first = requireHookState(hookState).prepareAndSettleForkDeposit(identity)
+				duplicate = requireHookState(hookState).prepareAndSettleForkDeposit(identity)
+				await waitFor(() => expect(prepareAndSettleForkClaim).toHaveBeenCalledTimes(1))
+			})
+			expect(requireHookState(hookState).forkClaimPreparation).toEqual({ outcome: 'yes', parentDepositIndex: 9n })
+			expect(buildForkCarriedEscalationProofs).toHaveBeenCalledWith(SECURITY_POOL_ADDRESS, 'yes', [9n])
+			expect(buildForkCarriedEscalationProofs).toHaveBeenCalledTimes(1)
+			expect(prepareAndSettleForkClaim).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, identity, proof, expect.any(Function))
+			await act(async () => {
+				completion.resolve()
+				await Promise.all([first, duplicate])
+			})
+			expect(dependencies.createWalletWriteClient).toHaveBeenCalledTimes(1)
+			expect(prepareForkClaimCheckpoint).not.toHaveBeenCalled()
+			expect(withdrawForkedEscalationDeposits).not.toHaveBeenCalled()
+			expect(requireHookState(hookState).forkClaimPreparation).toBeUndefined()
+			expect(onTransactionFailed).toHaveBeenCalledTimes(fails ? 1 : 0)
+		})
+
+	test('changing pools while the final withdrawal proof loads cancels before creating a writer', async () => {
+		const proofReady = createDeferred<void>()
+		const identity = createAuthenticatedClaim()
+		const buildForkCarriedEscalationProofs = mock(async () => {
+			await proofReady.promise
+			return [createClaimProof(identity)]
+		})
+		const prepareAndSettleForkClaim = mock(async () => createForkAuctionResult('settleForkedEscalation'))
+		const dependencies = createForkAuctionOperationsDependencies({ buildForkCarriedEscalationProofs, prepareAndSettleForkClaim })
+		const onTransactionFailed = mock(() => undefined)
+		let selectedPool = SECURITY_POOL_ADDRESS
+		let hookState: UseForkAuctionOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+			() => selectedPool,
+		)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(rendered.cleanup)
+		let pending: Promise<void> | undefined
+		await act(async () => {
+			pending = requireHookState(hookState).prepareAndSettleForkDeposit(identity)
+			await waitFor(() => expect(buildForkCarriedEscalationProofs).toHaveBeenCalledTimes(1))
+		})
+		await act(async () => {
+			selectedPool = getAddress('0x00000000000000000000000000000000000000b3')
+			render(h(Harness, { poolAddress: selectedPool }), rendered.container)
+		})
+		await act(async () => {
+			proofReady.resolve()
+			await pending
+		})
+		expect(prepareAndSettleForkClaim).not.toHaveBeenCalled()
+		expect(dependencies.createWalletWriteClient).not.toHaveBeenCalled()
+		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).forkClaimPreparation).toBeUndefined()
+	})
+
+	for (const status of ['ready', 'consumed', 'unrelated'] as const)
+		test(`claim state refreshes after another actor changes it (${status})`, async () => {
+			const identity = createAuthenticatedClaim()
+			const message = status === 'ready' ? 'Claim preparation is complete. Settle the claim separately.' : 'Parent deposit #9 is already settled.'
+			const prepareAndSettleForkClaim = mock(async () => {
+				if (status === 'unrelated') throw new Error('RPC disconnected')
+				throw Object.assign(new Error(message), { claimStateChanged: true })
+			})
+			const loadForkAuctionDetails = mock(async () => createForkAuctionDetails())
+			const refresh = mock(async () => undefined)
+			const dependencies = createForkAuctionOperationsDependencies({ buildForkCarriedEscalationProofs: async () => [createClaimProof(identity)], prepareAndSettleForkClaim, loadForkAuctionDetails })
+			const failed = mock(() => undefined)
+			let state: UseForkAuctionOperationsState | undefined
+			const Harness = createHarness(
+				dependencies,
+				value => {
+					state = value
+				},
+				failed,
+				() => SECURITY_POOL_ADDRESS,
+				refresh,
+			)
+			trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+			await act(async () => {
+				await requireHookState(state).prepareAndSettleForkDeposit(identity)
+			})
+			expect(refresh).toHaveBeenCalledTimes(status === 'unrelated' ? 0 : 1)
+			expect(loadForkAuctionDetails).toHaveBeenCalledTimes(status === 'unrelated' ? 1 : 2)
+			expect(failed).toHaveBeenCalledTimes(1)
+			expect(requireHookState(state).forkAuctionFeedback?.status.detail).toContain(status === 'unrelated' ? 'RPC disconnected' : message)
+		})
+
+	for (const cancel of ['wallet', 'review'] as const)
+		test(`canceling during proof reconstruction stops before writer creation (${cancel})`, async () => {
+			const ready = createDeferred<void>()
+			const identity = createAuthenticatedClaim()
+			let account = WALLET_ADDRESS
+			replaceEnvironment({ ...createFakeBackend({ accountAddress: account }), getAccounts: async () => [account] })
+			const scope = new AbortController()
+			const release = registerTransactionReviewScope(scope.signal)
+			const buildForkCarriedEscalationProofs = mock(async () => {
+				await ready.promise
+				return [createClaimProof(identity)]
+			})
+			const prepareAndSettleForkClaim = mock(async () => createForkAuctionResult('settleForkedEscalation'))
+			const dependencies = createForkAuctionOperationsDependencies({ buildForkCarriedEscalationProofs, prepareAndSettleForkClaim })
+			let state: UseForkAuctionOperationsState | undefined
+			const Harness = createHarness(
+				dependencies,
+				value => {
+					state = value
+				},
+				() => undefined,
+			)
+			trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+			let pending: Promise<void> | undefined
+			try {
+				await act(async () => {
+					pending = requireHookState(state).prepareAndSettleForkDeposit(identity)
+					await waitFor(() => expect(buildForkCarriedEscalationProofs).toHaveBeenCalledTimes(1))
+				})
+				await act(async () => {
+					if (cancel === 'wallet') account = SECURITY_POOL_ADDRESS
+					else scope.abort()
+					ready.resolve()
+					await pending
+				})
+				expect(dependencies.createWalletWriteClient).not.toHaveBeenCalled()
+				expect(prepareAndSettleForkClaim).not.toHaveBeenCalled()
+			} finally {
+				release()
+			}
+		})
+
+	for (const phase of ['combined simulation', 'combined retry', 'combined estimate', 'combined review', 'preparation reads', 'preparation review', 'settlement review', 'injected accounts', 'injected chain'] as const)
+		test(`changing pools after proof loading cancels at the wallet boundary (${phase})`, async () => {
+			const identity = createAuthenticatedClaim()
+			const proof = createClaimProof(identity)
+			const reached = createDeferred<void>()
+			const resume = createDeferred<void>()
+			const sent = mock(() => undefined)
+			const failed = mock(() => undefined)
+			let simulations = 0
+			let selectedPool = SECURITY_POOL_ADDRESS
+			let state: UseForkAuctionOperationsState | undefined
+			let writer: ReturnType<typeof createReviewedClient> | undefined
+			const transform = { repBeforeAttoRep: 20n, repRemainingAttoRep: 15n, consumedBeforeAttoRep: 1n }
+			const claimId = keccak256(encodeAbiParameters([{ type: 'uint8' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [1, 10n, 20n, 1n]))
+			const commitment = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [identity.escalationGame, claimId, zeroHash, 20n, 15n, 1n]))
+			const requireWriter = () => {
+				if (writer === undefined) throw new Error('Missing claim writer')
+				if (phase.endsWith('review')) writer.onTransactionPlan?.([{ functionName: phase.startsWith('preparation') ? 'processClaimCheckpoint' : 'aggregate3', contractAddress: phase.startsWith('preparation') ? identity.escalationGame : getMulticall3Address(), requireReview: true }])
+				if (phase === 'settlement review') writer.onTransactionPlan?.([{ functionName: 'withdrawForkedEscalationDeposits', contractAddress: SECURITY_POOL_ADDRESS, requireReview: true }])
+				return writer
+			}
+			const dependencies = createForkAuctionOperationsDependencies({
+				buildForkCarriedEscalationProofs: async () => [proof],
+				createWalletWriteClient: (_wallet, callbacks) => {
+					const base = createWalletClient({
+						account: WALLET_ADDRESS,
+						chain: MAINNET_NETWORK_PROFILE.chain,
+						transport: custom({
+							request: async () => {
+								throw new Error('Unexpected RPC')
+							},
+						}),
+					}).extend(publicActions)
+					const client = Object.assign(
+						base,
+						asWriteClient(
+							createMockWriteClient(sent, async request => {
+								if (request.functionName === 'universeId') return 1n
+								if (request.functionName === 'escalationGame') return identity.escalationGame
+								if (request.functionName === 'getOutcomeState') {
+									if (phase === 'preparation reads') {
+										reached.resolve()
+										await resume.promise
+									}
+									return { snapshotLeafCount: 2n, snapshotPeaks: Array.from({ length: 64 }, () => zeroHash) }
+								}
+								if (request.functionName === 'getClaimCheckpointProgress') return [zeroAddress, 1n, false, false]
+								if (request.functionName === 'getClaimCheckpointState') return [true, commitment, zeroAddress, { startAttoRep: 10n, endAttoRep: 20n, rewardStartAttoRep: 10n, rewardEndAttoRep: 20n }]
+								if (request.functionName === 'getClaimCheckpointWitnessSegment') return [SECURITY_POOL_ADDRESS, zeroHash, 0n, 1n]
+								if (request.functionName === 'getClaimIntervalTransform') return [zeroAddress, transform]
+								throw new Error(`Unexpected ${request.functionName}`)
+							}),
+						),
+						{
+							getBlockNumber: async () => 1n,
+							getBlock: async () => ({ number: 1n, hash: commitment, timestamp: 1n, transactions: [] }),
+							simulateContract: async () => {
+								simulations++
+								if (phase === 'combined retry' && simulations === 1) throw new Error('execution reverted: Bad nullifier proof')
+								if (phase === 'combined simulation' || phase === 'combined retry') {
+									reached.resolve()
+									await resume.promise
+								}
+								return { result: [] }
+							},
+							estimateGas: async () => {
+								if (phase === 'combined estimate') {
+									reached.resolve()
+									await resume.promise
+								}
+								return 500_000n
+							},
+							call: async () => ({ data: '0x' as const }),
+							onTransactionPrepared: callbacks?.onTransactionPrepared,
+						},
+					)
+					if (phase === 'injected accounts' || phase === 'injected chain') {
+						let prepared = false
+						const backend = withTransactionReviews(
+							createInjectedBackend({
+								profile: SEPOLIA_NETWORK_PROFILE,
+								provider: {
+									request: async ({ method }) => {
+										if (prepared && method === (phase === 'injected accounts' ? 'eth_accounts' : 'eth_chainId')) {
+											reached.resolve()
+											await resume.promise
+										}
+										if (method === 'eth_accounts') return [WALLET_ADDRESS]
+										if (method === 'eth_chainId') return SEPOLIA_NETWORK_PROFILE.chainIdHex
+										if (method === 'eth_sendTransaction') {
+											sent()
+											return commitment
+										}
+										throw new Error(`Unexpected injected request: ${method}`)
+									},
+								},
+							}),
+						)
+						writer = Object.assign(
+							backend.createWriteClient(WALLET_ADDRESS, {
+								...callbacks,
+								onTransactionPrepared: preview => {
+									callbacks?.onTransactionPrepared?.(preview)
+									prepared = true
+								},
+							}),
+							{ readContract: client.readContract, getBlock: client.getBlock, getBlockNumber: client.getBlockNumber, simulateContract: client.simulateContract, estimateGas: client.estimateGas, call: client.call, waitForTransactionReceipt: client.waitForTransactionReceipt },
+						)
+					} else writer = createReviewedClient(client, async () => undefined, callbacks?.reviewSignal)
+					return { kind: 'injected-write-client' }
+				},
+				prepareForkClaimCheckpoint: async (_client, pool, claim) => await submitPreparation(requireWriter(), pool, claim),
+				prepareAndSettleForkClaim: async (_client, pool, claim, initialProof, rebuild) => await submitCombined(requireWriter(), pool, claim, initialProof, rebuild),
+				withdrawForkedEscalationDeposits: async (_client, pool, outcome, proofs) => await submitSettlement(requireWriter(), pool, outcome, proofs),
+			})
+			const Harness = createHarness(
+				dependencies,
+				value => {
+					state = value
+				},
+				failed,
+				() => selectedPool,
+			)
+			const rendered = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(rendered.cleanup)
+			let pending: Promise<void> | undefined
+			try {
+				await act(async () => {
+					if (phase.startsWith('preparation')) pending = requireHookState(state).prepareForkClaim(identity)
+					else if (phase === 'settlement review') pending = requireHookState(state).settleForkedEscalation('yes', [identity.parentDepositIndex])
+					else pending = requireHookState(state).prepareAndSettleForkDeposit(identity)
+					if (phase.endsWith('review')) await waitFor(() => expect(transactionSteps.value?.steps[0]?.phase).toBe('review'))
+					else await reached.promise
+				})
+				await act(async () => {
+					selectedPool = getAddress('0x00000000000000000000000000000000000000b3')
+					render(h(Harness, { poolAddress: selectedPool }), rendered.container)
+				})
+				await act(async () => {
+					if (phase.endsWith('review')) transactionSteps.value?.confirmStep(0)
+					resume.resolve()
+					await pending
+				})
+				expect(sent).not.toHaveBeenCalled()
+				expect(failed).not.toHaveBeenCalled()
+			} finally {
+				resume.resolve()
+				transactionSteps.value?.cancel()
+				await pending
+			}
+		})
 
 	for (const remaining of [0n, 1n, 60n, 61n]) {
 		test(`unresolved migration rechecks the loaded deadline before calling the writer (${remaining})`, async () => {

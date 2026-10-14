@@ -1,9 +1,9 @@
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
-import { contractExists, requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
+import { contractExists, getChildUniverseId, requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
-import type { Abi, Address } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Abi, type Address } from '@zoltar/core-shared/evm/ethereum'
 
 const getQuestionOutcomeAbi = [
 	{
@@ -84,8 +84,9 @@ export const migrateRepToZoltar = async (client: WriteClient, securityPoolAddres
 		}),
 	)
 
-export const migrateVault = async (client: WriteClient, securityPoolAddress: Address, outcome: bigint | QuestionOutcome) =>
-	await writeContractAndWait(client, () =>
+export const migrateVault = async (client: WriteClient, securityPoolAddress: Address, outcome: bigint | QuestionOutcome) => {
+	await prepareUnresolvedChild(client, securityPoolAddress, outcome)
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVault',
@@ -93,6 +94,7 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 			args: [securityPoolAddress, BigInt(outcome)],
 		}),
 	)
+}
 
 export const forkerBackingUnitsToAttoRep = async (client: ReadClient, securityPoolAddress: Address, repBackingUnits: bigint): Promise<bigint> =>
 	await client.readContract({
@@ -102,8 +104,9 @@ export const forkerBackingUnitsToAttoRep = async (client: ReadClient, securityPo
 		args: [securityPoolAddress, repBackingUnits],
 	})
 
-export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address, childOutcome: bigint | QuestionOutcome) =>
-	await writeContractAndWait(client, () =>
+export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address, childOutcome: bigint | QuestionOutcome) => {
+	await prepareUnresolvedChild(client, securityPoolAddress, childOutcome)
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
@@ -111,6 +114,7 @@ export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, 
 			args: [securityPoolAddress, vault, BigInt(childOutcome)],
 		}),
 	)
+}
 
 export const startTruthAuction = async (client: WriteClient, securityPoolAddress: Address) =>
 	await writeContractAndWait(client, () =>
@@ -191,8 +195,8 @@ export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress
 	)
 }
 
-export const createChildUniverse = async (client: WriteClient, securityPoolAddress: Address, outcome: bigint | QuestionOutcome) =>
-	await writeContractAndWait(client, () =>
+export const createChildUniverse = async (client: WriteClient, securityPoolAddress: Address, outcome: bigint | QuestionOutcome) => {
+	const hash = await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'createChildUniverse',
@@ -200,6 +204,39 @@ export const createChildUniverse = async (client: WriteClient, securityPoolAddre
 			args: [securityPoolAddress, BigInt(outcome)],
 		}),
 	)
+	await finishChildInitialization(client, securityPoolAddress, outcome)
+	return hash
+}
+
+async function getChildPoolAddress(client: ReadClient, parent: Address, outcome: bigint | QuestionOutcome) {
+	const factory = getInfraContractAddresses().securityPoolFactory
+	const [originId, universeId] = await Promise.all([
+		client.readContract({ address: factory, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'getSecurityPoolOriginId', args: [parent] }),
+		client.readContract({ address: parent, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId' }),
+	])
+	return await client.readContract({ address: factory, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'getSecurityPool', args: [originId, getChildUniverseId(universeId, BigInt(outcome))] })
+}
+
+// Integration fixtures complete permissionless setup with separate transactions.
+// Tests of partial initialization call the contract entry points directly.
+export async function finishChildInitialization(client: WriteClient, parent: Address, outcome: bigint | QuestionOutcome) {
+	const child = await getChildPoolAddress(client, parent, outcome)
+	if (child === zeroAddress) return
+	const game = await client.readContract({ address: child, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' })
+	if (game === zeroAddress) return
+	for (let step = 0; step < 3; step++) {
+		const complete = await client.readContract({ address: game, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkCarrySnapshotInitialized' })
+		if (complete) return
+		await writeContractAndWait(client, () => client.writeContract({ address: getInfraContractAddresses().securityPoolForker, abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'continueChildUniverse', args: [parent, BigInt(outcome)] }))
+	}
+}
+
+async function prepareUnresolvedChild(client: WriteClient, parent: Address, outcome: bigint | QuestionOutcome) {
+	if (!(await getSecurityPoolForkerForkData(client, parent)).unresolvedEscalationAtFork) return
+	const child = await getChildPoolAddress(client, parent, outcome)
+	if (child === zeroAddress) await createChildUniverse(client, parent, outcome)
+	else await finishChildInitialization(client, parent, outcome)
+}
 
 export const getSecurityPoolForkerForkData = async (client: ReadClient, securityPoolAddress: Address): Promise<SecurityPoolForkerForkData> => {
 	const data = requireArray(
@@ -275,8 +312,9 @@ export const getForkedEscrowChildRepByOutcomeAndVault = async (client: ReadClien
 	return childRep
 }
 
-export const claimForkedEscalationDeposits = async (client: WriteClient, parentSecurityPool: Address, vault: Address, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) =>
-	await writeContractAndWait(client, () =>
+export const claimForkedEscalationDeposits = async (client: WriteClient, parentSecurityPool: Address, vault: Address, outcomeIndex: QuestionOutcome, depositIndexes: bigint[]) => {
+	await prepareUnresolvedChild(client, parentSecurityPool, outcomeIndex)
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'claimForkedEscalationDeposits',
@@ -284,3 +322,4 @@ export const claimForkedEscalationDeposits = async (client: WriteClient, parentS
 			args: [parentSecurityPool, vault, Number.parseInt(outcomeIndex.toString(), 10), depositIndexes],
 		}),
 	)
+}

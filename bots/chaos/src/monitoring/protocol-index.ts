@@ -53,7 +53,7 @@ export interface UpdateProtocolIndexContext {
 	previous?: ChaosProtocolIndex
 }
 
-interface CanonicalCoordinatorReportRoute {
+export interface CanonicalCoordinatorReportRoute {
 	coordinator: Address
 	pendingReportId: string
 	repToken: Address

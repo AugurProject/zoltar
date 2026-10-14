@@ -652,6 +652,66 @@
 		"./features/security-pools/components/VaultBackingFactorForm.js": {
 			"bun": "./ts/features/security-pools/components/VaultBackingFactorForm.tsx",
 			"default": "./js/features/security-pools/components/VaultBackingFactorForm.js"
+		},
+		"./features/portfolios/components/PortfoliosSection.js": {
+			"bun": "./ts/features/portfolios/components/PortfoliosSection.tsx",
+			"default": "./js/features/portfolios/components/PortfoliosSection.js"
+		},
+		"./features/portfolios/components/PortfolioAutomaticPanel.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioAutomaticPanel.tsx",
+			"default": "./js/features/portfolios/components/PortfolioAutomaticPanel.js"
+		},
+		"./features/portfolios/components/PortfolioBalances.js": {
+			"bun": "./ts/features/portfolios/components/PortfolioBalances.tsx",
+			"default": "./js/features/portfolios/components/PortfolioBalances.js"
+		},
+		"./features/portfolios/hooks/usePortfolio.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolio.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolio.js"
+		},
+		"./features/portfolios/hooks/usePortfolioActions.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioActions.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioActions.js"
+		},
+		"./features/portfolios/hooks/usePortfolioAutomatic.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioAutomatic.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioAutomatic.js"
+		},
+		"./features/portfolios/lib/runoff.js": {
+			"bun": "./ts/features/portfolios/lib/runoff.ts",
+			"default": "./js/features/portfolios/lib/runoff.js"
+		},
+		"./features/portfolios/lib/preferences.js": {
+			"bun": "./ts/features/portfolios/lib/preferences.ts",
+			"default": "./js/features/portfolios/lib/preferences.js"
+		},
+		"./features/portfolios/lib/draft.js": {
+			"bun": "./ts/features/portfolios/lib/draft.ts",
+			"default": "./js/features/portfolios/lib/draft.js"
+		},
+		"./protocol/securityPoolPortfolio.js": {
+			"bun": "./ts/protocol/securityPoolPortfolio.ts",
+			"default": "./js/protocol/securityPoolPortfolio.js"
+		},
+		"./features/portfolios/lib/history.js": {
+			"bun": "./ts/features/portfolios/lib/history.ts",
+			"default": "./js/features/portfolios/lib/history.js"
+		},
+		"./features/truth-auctions/components/ForkChildPreparation.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkChildPreparation.tsx",
+			"default": "./js/features/truth-auctions/components/ForkChildPreparation.js"
+		},
+		"./protocol/forkPreparation.js": {
+			"bun": "./ts/protocol/forkPreparation.ts",
+			"default": "./js/protocol/forkPreparation.js"
+		},
+		"./protocol/oracleInitialReportFunding.js": {
+			"bun": "./ts/protocol/oracleInitialReportFunding.ts",
+			"default": "./js/protocol/oracleInitialReportFunding.js"
+		},
+		"./protocol/openOracleSettlement.js": {
+			"bun": "./ts/protocol/openOracleSettlement.ts",
+			"default": "./js/protocol/openOracleSettlement.js"
 		}
 	},
 	"version": "1.0.0"

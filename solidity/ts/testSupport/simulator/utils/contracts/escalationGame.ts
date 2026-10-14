@@ -142,7 +142,7 @@ export const deployEscalationGame = async (writeClient: WriteClient, startBondAt
 		data: encodeDeployData({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate],
+			args: [writeClient.account.address, getRepTokenAddress(0n), proofVerifierAddress, getInfraContractAddresses().escalationGameClaimDelegate, getInfraContractAddresses().escalationGameDepositDelegate],
 		}),
 	})
 	const deploymentReceipt = await writeClient.waitForTransactionReceipt({ hash: deploymentHash })

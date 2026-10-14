@@ -6,7 +6,7 @@ import { isPristineBootstrapState } from './pristine.ts'
 
 function obsoleteEmptyProfile(settings: OperatorSettings) {
 	// Identify only the previously shipped zero-root bootstrap, never an operated deployment.
-	return executionProfileId({ ...settings, deployment: { openOracle: zeroAddress, questionData: zeroAddress, securityPoolFactory: zeroAddress, securityPoolForker: zeroAddress, tradingFactory: zeroAddress, tradingRouter: zeroAddress, weth: zeroAddress, zoltar: zeroAddress } })
+	return executionProfileId({ ...settings, deployment: { multicall3: zeroAddress, openOracle: zeroAddress, questionData: zeroAddress, securityPoolFactory: zeroAddress, securityPoolForker: zeroAddress, tradingFactory: zeroAddress, tradingRouter: zeroAddress, weth: zeroAddress, zoltar: zeroAddress } })
 }
 
 function isMissingBootstrapDeployment(activity: Activity, chainId: number) {
