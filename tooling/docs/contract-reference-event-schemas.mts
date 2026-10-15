@@ -1,4 +1,5 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
+	{ name: 'VaultPositionSplit', parameters: 'address indexed source,address indexed recipient,uint256 numerator,uint256 denominator', sourcePath: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol' },
 	{ name: 'ClaimCheckpointProgress', parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
 	{ name: 'RegistryInitialized', parameters: 'address indexed coordinator', sourcePath: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol' },
 	{ name: 'LiquidationApprovalRegistrySet', parameters: 'LiquidationApprovalRegistry indexed registry', sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol' },
@@ -185,4 +186,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '933f3706eb1559d69037e2034b765a1974b835efd5a9ec073edcc690360450ce'
+export const referencedEventAbiFingerprint = 'a478f01b480166d007650f92faed89907a8cb46cf3a9aba1c8bf522cb9a4978e'

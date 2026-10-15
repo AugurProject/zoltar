@@ -29,11 +29,6 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 	const cancel = (sender = fixture.owner(), vault = fixture.vault) => writeContractAndWait(sender, () => sender.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'cancelWithdrawal' }))
 	const allowForfeiture = (allowed = true, sender = fixture.owner()) => writeContractAndWait(sender, () => sender.writeContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'setWithdrawalResidualForfeiture', args: [allowed] }))
 	const process = (questionId = fixture.base.questionId, sender = fixture.other(), vault = fixture.vault) => writeContractAndWait(sender, () => sender.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'processWithdrawal', args: [questionId, fixture.base.genesisUniverse] }))
-	const enable = async () => {
-		const version = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'allocationPolicyVersion' })
-		const nonce = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'allocationPolicyNonce' })
-		return writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'setAutomaticUnderwriting', args: [version, nonce, 0n, 10_000n, 100n, 0n] }))
-	}
 	const accounting = () => fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'getPoolAccountingSnapshot' })
 	const checkpoint = (vault = fixture.vault) => writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'updateVaultFees', args: [vault] }))
 	const ordinaryResolution = async () => {
@@ -147,34 +142,24 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 
 	test('only the owner can start or cancel runoff, which immediately pays idle REP to that owner', async () => {
 		await fixture.transferRep(fixture.vault, 300n * unit)
-		await enable()
 		await expect(request(fixture.other())).rejects.toThrow('Only vault owner')
 		await expect(process()).rejects.toThrow('No withdrawal requested')
 		await expect(allowForfeiture()).rejects.toThrow('No withdrawal requested')
 		const ownerBefore = await balance()
 		const callerBefore = await balance(fixture.other().account.address)
-		const settings = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' })
 		await request()
 		expect(await balance()).toBe(ownerBefore + 300n * unit)
 		expect(await balance(fixture.vault)).toBe(0n)
 		expect(await balance(fixture.other().account.address)).toBe(callerBefore)
-		expect((await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' }))[0]).toBe(false)
-		await expect(fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'quoteAllocationForMint', args: [fixture.base.questionId, unit] })).rejects.toThrow('Withdrawal active')
-		await expect(enable()).rejects.toThrow('Withdrawal active')
 		await expect(request()).rejects.toThrow('Withdrawal already active')
 		await expect(cancel(fixture.other())).rejects.toThrow('Only vault owner')
 		await allowForfeiture()
 		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'withdrawalResidualForfeitureAllowed' })).toBe(true)
 		await cancel()
 		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'withdrawalResidualForfeitureAllowed' })).toBe(false)
-		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' })).toEqual(settings)
 		await expect(process()).rejects.toThrow('No withdrawal requested')
 		await fixture.transferRep(fixture.vault, 300n * unit)
 		await fixture.refreshPrice(fixture.base.questionId)
-		const [, reservationFee] = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'quoteAllocationForMint', args: [fixture.base.questionId, unit] })
-		await writeContractAndWait(fixture.other(), () =>
-			fixture.other().writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.questionId, [{ vault: fixture.vault, maximumCommitmentIncreaseAttoEth: unit }], fixture.other().account.address, 0n, unit], value: unit + reservationFee }),
-		)
 		await request()
 		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'withdrawalResidualForfeitureAllowed' })).toBe(false)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getWithdrawalRequests', args: [0n, 64n] })).toEqual([
@@ -186,7 +171,6 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 	test('outstanding unresolved collateral keeps REP allocated while surplus commitment runs off', async () => {
 		await fixture.allocate(fixture.base.questionId)
 		await createCompleteSet(fixture.owner(), pool(), 80n * unit)
-		await enable()
 		await request()
 		const ownerBefore = await balance()
 		await process()

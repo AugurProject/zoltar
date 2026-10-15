@@ -9,7 +9,7 @@ void describe('statoblast simulation scenarios', () => {
 		registerStatoblastSimulationScenarios()
 		expect(getRegisteredSimulationScenarios()).toContain('portfolio')
 		expect(getSimulationScenarioLabel('portfolio')).toBe('Portfolio')
-		expect(getSimulationScenarioDescription('portfolio')).toContain('automatic underwriting enabled')
+		expect(getSimulationScenarioDescription('portfolio')).toContain('A shared REP reserve funding two questions')
 		expect(getRegisteredSimulationScenarios()).toContain('security-pool')
 		expect(getRegisteredSimulationScenarios()).toContain('securitypoolx2')
 		expect(getRegisteredSimulationScenarios()).toContain('securitypoolx2-auction')

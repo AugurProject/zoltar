@@ -470,10 +470,17 @@ test(
 			{ height: 900, width: 1440 },
 			async driver => {
 				// The worker bootstrap can finish before main-thread discovery authenticates the seeded manager.
-				const body = await driver.waitForBodyText(portfolioCopy.snapshot)
+				const body = await driver.waitForBodyText(portfolioCopy.sharedFund)
 				expect(body).toContain('Browser simulation')
 				expect(body).not.toContain('Could not load the portfolio snapshot')
-				expect(body).toContain(portfolioCopy.subsetCoverage)
+				// Seeded reservation fees make this available only after the authenticated fund snapshot loads.
+				await driver.waitForButtonEnabled(portfolioCopy.claimFundFees)
+				expect(
+					await driver.evaluate(
+						`(() => { const summary = [...document.querySelectorAll('summary')].find(node => node.textContent === ${JSON.stringify(portfolioCopy.recovery)}); const details = summary?.parentElement; if (!(summary instanceof HTMLElement) || !(details instanceof HTMLDetailsElement)) return false; summary.click(); return details.open })()`,
+					),
+				).toBe(true)
+				expect(await driver.waitForBodyText(portfolioCopy.snapshot)).toContain(portfolioCopy.subsetCoverage)
 				expect(await driver.evaluate(`[...document.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length`)).toBe(1)
 				// Bootstrap reads only the immutable initial question; owners explicitly select further questions.
 				const seededPools = await createWorkflowActions(driver).loadSeededPools()
@@ -483,36 +490,50 @@ test(
 					.map(pool => String(pool.questionId))
 				expect(questionIds).toHaveLength(2)
 				await driver.setInputByLabel(portfolioCopy.questionFilter, questionIds.join(', '))
-				await driver.waitForButtonEnabled(portfolioCopy.load)
-				await driver.clickButton(portfolioCopy.load)
-				await driver.waitForBodyText(portfolioCopy.snapshot)
+				let bothQuestionsLoaded = false
+				for (let attempt = 0; attempt < 600 && !bothQuestionsLoaded; attempt++) {
+					bothQuestionsLoaded = (await driver.evaluate(`[...document.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length`)) === 2
+					if (!bothQuestionsLoaded) await Bun.sleep(50)
+				}
+				expect(bothQuestionsLoaded).toBe(true)
+				await driver.waitForButtonEnabled(portfolioCopy.claimFundFees)
 				expect(
 					await driver.evaluate(`(() => {
 			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
-			const balances = [...document.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === ${JSON.stringify(portfolioCopy.snapshot)});
-			const amounts = label => [...balances.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
-			const questions = [...document.querySelectorAll('.metric-label')].filter(node => node.textContent === ${JSON.stringify(portfolioCopy.questionId)}).map(node => node.parentElement.querySelector('code')?.textContent);
+			const section = title => [...document.querySelectorAll('section')].find(node => node.querySelector('h3')?.textContent === title);
+			const balances = section(${JSON.stringify(portfolioCopy.snapshot)});
+			const fund = section(${JSON.stringify(portfolioCopy.sharedFund)});
+			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
+			const questionsByPool = new Map(${JSON.stringify(seededPools.map(pool => [pool.securityPool.toLowerCase(), String(pool.questionId)]))});
+			const poolLinks = [...balances.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)});
+			const questions = poolLinks.map(link => questionsByPool.get(link.hash.match(/0x[0-9a-f]{40}/i)?.[0]?.toLowerCase()));
 			const manager = input(${JSON.stringify(portfolioCopy.manager)});
 			return {
 				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
 				owner: input(${JSON.stringify(portfolioCopy.owner)})?.toLowerCase(),
-				idle: amounts(${JSON.stringify(portfolioCopy.idle)}),
-				backing: amounts(${JSON.stringify(portfolioCopy.allocated)}),
-				commitments: amounts(${JSON.stringify(portfolioCopy.commitment)}),
-				poolLinks: [...balances.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)}).length,
-				questionCount: new Set(questions).size,
-				questionIdsValid: questions.every(question => /^0x[0-9a-f]+$/i.test(question))
+				fundRep: amounts(fund, ${JSON.stringify(portfolioCopy.poolAssets)}),
+				availableRep: amounts(fund, ${JSON.stringify(portfolioCopy.availableBacking)}),
+				fundShares: amounts(fund, ${JSON.stringify(portfolioCopy.yourFundShares)}),
+				ownerRepClaim: amounts(fund, ${JSON.stringify(portfolioCopy.yourCurrentRep)}),
+				idle: amounts(balances, ${JSON.stringify(portfolioCopy.idle)}),
+				backing: amounts(balances, ${JSON.stringify(portfolioCopy.allocated)}),
+				commitments: amounts(balances, ${JSON.stringify(portfolioCopy.commitment)}),
+				poolLinks: poolLinks.length,
+				questions: questions.toSorted()
 			};
 		})()`),
 				).toEqual({
 					managerLoaded: true,
 					owner: '0x00000000000000000000000000000000000000a1',
-					idle: ['3000REP'],
-					backing: ['1000REP', '1000REP'],
-					commitments: ['1ETH', '1ETH'],
+					fundRep: ['5000REP'],
+					availableRep: ['4820REP'],
+					fundShares: ['5000'],
+					ownerRepClaim: ['5000REP'],
+					idle: ['0REP'],
+					backing: ['0REP', '0REP'],
+					commitments: ['0ETH', '0ETH'],
 					poolLinks: 2,
-					questionCount: 2,
-					questionIdsValid: true,
+					questions: questionIds.toSorted(),
 				})
 			},
 			PORTFOLIO_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,

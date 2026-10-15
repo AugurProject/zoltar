@@ -47,14 +47,11 @@ describe('Statoblast: bounded portfolio allocation policies', () => {
 		await expect(allocate(fixture.base.questionId, unit, 0n, installedVersion)).rejects.toThrow()
 	})
 
-	test('a delegated allowlist does not switch off automatic backing for other eligible questions', async () => {
+	test('a delegated allowlist restricts recovered positions to the approved questions', async () => {
 		await prepare()
 		await install(config(), rules().slice(0, 1))
-		expect((await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' }))[0]).toBe(true)
 		await expect(allocate(fixture.secondQuestionId)).rejects.toThrow('Question not approved by policy')
-		const quote = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'quoteAllocationForMint', args: [fixture.secondQuestionId, unit] })
-		expect(quote[0]).toBeGreaterThan(0n)
-		expect(quote[1]).toBeGreaterThan(0n)
+		await allocate(fixture.base.questionId)
 	})
 
 	test('only approved questions receive separately accounted capital and the idle reserve remains liquid', async () => {

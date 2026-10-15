@@ -43,7 +43,7 @@ describe('Statoblast: independently reserved question portfolios', () => {
 		expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'questionCount' })).toBe(2n)
 		await expect(owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getPool', args: [123n, 0n] })).rejects.toThrow('Question not registered')
 		await expect(owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getPool', args: [secondQuestionId, 123n] })).rejects.toThrow('Question pool unavailable')
-		await expect(owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getQuestions', args: [0n, 65n] })).rejects.toThrow('Question page too large')
+		await expect(owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getQuestions', args: [0n, 65n] })).rejects.toThrow('Invalid page')
 	})
 
 	test('late admission is rejected while ended registered questions remain addressable', async () => {

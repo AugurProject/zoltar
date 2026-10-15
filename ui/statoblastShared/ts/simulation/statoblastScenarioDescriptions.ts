@@ -24,7 +24,7 @@ export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 	switch (scenario) {
 		case 'portfolio':
-			return 'A funded portfolio with two question positions and automatic underwriting enabled. Test demand-backed minting, withdrawal requests and independent position recovery.'
+			return 'A shared REP reserve funding two questions. Test aggregate deposits and purchases, proportional exits, and individual position recovery.'
 		case 'security-pool':
 			return 'One seeded question, one security pool, and one funded vault with a standing ETH commitment. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':

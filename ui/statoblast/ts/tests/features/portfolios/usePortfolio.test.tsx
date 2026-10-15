@@ -70,6 +70,19 @@ test('clears loading when disabled and starts a fresh load when reenabled', asyn
 	expect(hook.state().selection?.owner).toBe(owner)
 })
 
+test('loads route-derived owner changes without a separate load action', async () => {
+	const { hook, firstChainId } = await renderDeferredPortfolio()
+	firstChainId.resolve(1)
+	await waitFor(() => expect(hook.state().selection?.owner).toBe(owner))
+	const nextOwner = getAddress('0x0000000000000000000000000000000000000012')
+	await act(() => {
+		window.location.hash = `/portfolios?portfolio=${manager}&owner=${nextOwner}`
+		window.dispatchEvent(new Event('hashchange'))
+	})
+	await waitFor(() => expect(hook.state().selection?.owner).toBe(nextOwner))
+	expect(hook.state().loading).toBe(false)
+})
+
 function registryFixture(questionCount = 300n, options: { observationRead?: () => Promise<void>; pendingPerPool?: number; allocatedCount?: bigint; readPosition?: (questionId: bigint) => Promise<void> } = {}) {
 	const vault = getAddress('0x0000000000000000000000000000000000000033')
 	const hash = toHex(1n, { size: 32 })
@@ -133,8 +146,6 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 						return [{ universeId: 0n, executor: zeroAddress, expiresAt: 0n, depositBudgetAttoRep: 0n, commitmentIncreaseBudgetAttoEth: 0n, minimumIdleAttoRep: 0n, minimumHealthFactorBps: 10000n }, owner, 0n, 0n]
 					case 'getEthBalance':
 						return 0n
-					case 'automaticUnderwriting':
-						return [false, 0n, 12000n, 100n, 0n]
 					case 'allocationPolicyVersion':
 					case 'allocationPolicyNonce':
 					case 'withdrawalRequestId':
@@ -155,6 +166,7 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 					case 'getQuestions': {
 						const [start, count] = args
 						if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Invalid question page')
+						if (functionName === 'getQuestions' && questionCount === 0n) return []
 						return Array.from({ length: Number(count) }, (_, index) => start + BigInt(index) + 1n)
 					}
 					case 'questionOriginIds':
@@ -228,6 +240,15 @@ test('permissionless registry growth cannot block saved owner selections and kno
 	expect(queries.filter(query => query.functionName === 'getQuestions')).toEqual([])
 })
 
+test('a new portfolio remains available before its first question is registered', async () => {
+	registryFixture(0n)
+	const hook = lifecycle.trackRendered(await renderHookWithProps(usePortfolio, { accountAddress: owner, enabled: true, environmentKey: 0, activeUniverseId: 0n }))
+	await waitFor(() => expect(hook.state().loading).toBe(false))
+	expect(hook.state().selection?.portfolio).toBe(manager)
+	expect(hook.state().snapshot).toBeUndefined()
+	expect(hook.state().error).toBeUndefined()
+})
+
 test('bootstraps only the fixed initial question and never expands it on later refreshes', async () => {
 	const { queries, preferencesKey } = registryFixture()
 	const hook = lifecycle.trackRendered(await renderHookWithProps(usePortfolio, { accountAddress: owner, enabled: true, environmentKey: 0, activeUniverseId: 0n }))
@@ -244,17 +265,14 @@ test('bootstraps only the fixed initial question and never expands it on later r
 	expect(hook.state().questionFilter).toBe('1')
 })
 
-test('persists explicit questions and retains known funded positions when selection or watchlists change', async () => {
+test('automatically loads explicit questions and retains known funded positions when selection or watchlists change', async () => {
 	const { queries, preferencesKey } = registryFixture()
 	const hook = lifecycle.trackRendered(await renderHookWithProps(usePortfolio, { accountAddress: owner, enabled: true, environmentKey: 0, activeUniverseId: 0n }))
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	await act(() => {
 		hook.state().setQuestionFilter('0x2, 3')
 	})
-	await act(async () => {
-		await hook.state().load()
-	})
-	expect(hook.state().snapshot?.questions).toEqual([2n, 3n, 1n])
+	await waitFor(() => expect(hook.state().snapshot?.questions).toEqual([2n, 3n, 1n]))
 	await act(() => {
 		hook.state().toggleWatch(2n)
 		hook.state().toggleWatch(2n)

@@ -1,14 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, parseAbi, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
-	buildPortfolioAutomaticUnderwritingRequest,
 	buildPortfolioMintRequest,
 	buildPortfolioWithdrawalRequest,
 	buildPortfolioWithdrawEthRequest,
 	buildPortfolioCancelWithdrawalRequest,
 	buildPortfolioWithdrawalResidualForfeitureRequest,
 	buildPortfolioProcessWithdrawalRequest,
-	loadPortfolioAutomaticState,
+	loadPortfolioRecoveryState,
 	loadPortfolioWithdrawalRequests,
 } from './securityPoolPortfolioAutomatic.js'
 import { exportPortfolioTransaction } from './securityPoolPortfolio.js'
@@ -18,44 +17,21 @@ const owner: Address = '0x0000000000000000000000000000000000000001'
 const vault: Address = '0x0000000000000000000000000000000000000002'
 const portfolio: Address = '0x0000000000000000000000000000000000000003'
 const processor: Address = '0x0000000000000000000000000000000000000004'
-const abi = parseAbi([
-	'function setAutomaticUnderwriting(uint256,uint256,uint256,uint256,uint256,uint256)',
-	'function createCompleteSet(uint256,(address vault,uint256 maximumCommitmentIncreaseAttoEth)[],address,uint256,uint256) payable',
-	'function requestWithdrawal()',
-	'function withdrawEth()',
-	'function cancelWithdrawal()',
-	'function setWithdrawalResidualForfeiture(bool)',
-	'function processWithdrawal(uint256,uint248)',
-])
+const abi = parseAbi(['function createCompleteSet(uint256,address,uint256,uint256) payable', 'function requestWithdrawal()', 'function withdrawEth()', 'function cancelWithdrawal()', 'function setWithdrawalResidualForfeiture(bool)', 'function processWithdrawal(uint256,uint248)'])
 
-describe('automatic portfolio authority and atomic mint requests', () => {
-	test('binds consent to the reviewed authority and encodes reserve and health without question budgets', () => {
-		const parameters = { owner, vault, expectedVersion: 3n, expectedNonce: 7n, minimumIdleAttoRep: 100n, minimumHealthFactorBps: 12000n, reservationFeeBps: 100n, minimumAllocationFeeAttoEth: 2n }
-		const request = buildPortfolioAutomaticUnderwritingRequest(parameters)
-		expect(request).toMatchObject({ account: owner, to: vault, value: 0n })
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setAutomaticUnderwriting', args: [3n, 7n, 100n, 12000n, 100n, 2n] })
-		expect(() => buildPortfolioAutomaticUnderwritingRequest({ ...parameters, minimumHealthFactorBps: 9999n })).toThrow('Health buffer')
-		expect(() => buildPortfolioAutomaticUnderwritingRequest({ ...parameters, expectedNonce: -1n })).toThrow('Policy nonce')
-		expect(() => buildPortfolioAutomaticUnderwritingRequest({ ...parameters, reservationFeeBps: 0n })).toThrow('Reservation fee')
-		expect(() => buildPortfolioAutomaticUnderwritingRequest({ ...parameters, reservationFeeBps: 10001n })).toThrow('Reservation fee')
-		expect(() => buildPortfolioAutomaticUnderwritingRequest({ ...parameters, minimumAllocationFeeAttoEth: -1n })).toThrow('Minimum allocation fee')
-	})
-
-	test('binds ETH payment, contributor bounds, recipient and minimum shares to one mint call', () => {
-		const contributions = [{ vault, maximumCommitmentIncreaseAttoEth: 8n }]
-		const parameters = { trader: processor, portfolio, questionId: 51n, contributions, recipient: owner, minimumShares: 6n, mintAttoEth: 10n, maximumReservationFeeAttoEth: 3n }
+describe('native recovery authority and aggregate mint requests', () => {
+	test('binds aggregate mint collateral, maximum fee, recipient and minimum shares', () => {
+		const parameters = { trader: processor, portfolio, questionId: 51n, recipient: owner, minimumShares: 6n, mintAttoEth: 10n, maximumReservationFeeAttoEth: 3n }
 		const request = buildPortfolioMintRequest(parameters)
 		expect(request).toMatchObject({ account: processor, to: portfolio, value: 13n })
 		const exported = exportPortfolioTransaction({ chainId: 1, request })
 		expect(exported.value).toBe('13')
-		expect(decodeFunctionData({ abi, data: exported.data }).args?.[4]).toBe(10n)
-		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [51n, contributions, owner, 6n, 10n] })
-		expect(() => buildPortfolioMintRequest({ ...parameters, contributions: [...contributions, ...contributions] })).toThrow('unique')
+		expect(decodeFunctionData({ abi, data: exported.data }).args?.[3]).toBe(10n)
+		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [51n, owner, 6n, 10n] })
 		expect(() => buildPortfolioMintRequest({ ...parameters, mintAttoEth: 0n })).toThrow('positive')
 		expect(() => buildPortfolioMintRequest({ ...parameters, recipient: zeroAddress })).toThrow('nonzero')
 		expect(() => buildPortfolioMintRequest({ ...parameters, maximumReservationFeeAttoEth: -1n })).toThrow('Maximum reservation fee')
 		expect(() => buildPortfolioMintRequest({ ...parameters, maximumReservationFeeAttoEth: (1n << 256n) - 1n })).toThrow('ETH value')
-		expect(() => buildPortfolioMintRequest({ ...parameters, contributions: [] })).not.toThrow()
 	})
 
 	test('separates owner request/cancel from permissionless processing and offers no payout recipient override', () => {
@@ -80,8 +56,7 @@ function reads(count = 65n) {
 			switch (functionName) {
 				case 'getEthBalance':
 					return 12n
-				case 'automaticUnderwriting':
-					return [true, 100n, 12000n, 100n, 2n]
+
 				case 'allocationPolicyVersion':
 					return 3n
 				case 'allocationPolicyNonce':
@@ -116,10 +91,10 @@ function reads(count = 65n) {
 	return { client, calls }
 }
 
-test('automatic discovery pages only this owner’s allocations and anchors every read', async () => {
+test('native recovery discovery pages only this owner’s allocations and anchors every read', async () => {
 	const { client, calls } = reads()
-	const state = await loadPortfolioAutomaticState({ client, portfolio, vault, blockNumber: 33n })
-	expect(state).toMatchObject({ enabled: true, ethBalanceAttoEth: 12n, reservationFeeBps: 100n, minimumAllocationFeeAttoEth: 2n, withdrawalRequested: true, withdrawalResidualForfeitureAllowed: false, withdrawalRequestId: 2n, allocatedQuestionsComplete: true })
+	const state = await loadPortfolioRecoveryState({ client, vault, blockNumber: 33n })
+	expect(state).toMatchObject({ ethBalanceAttoEth: 12n, withdrawalRequested: true, withdrawalResidualForfeitureAllowed: false, withdrawalRequestId: 2n, allocatedQuestionsComplete: true })
 	expect(state.allocatedQuestions).toHaveLength(65)
 	expect(calls.filter(call => call.functionName === 'getAllocatedQuestions').map(call => call.args)).toEqual([
 		[0n, 64n],
@@ -131,7 +106,7 @@ test('automatic discovery pages only this owner’s allocations and anchors ever
 
 test('reports bounded allocation discovery and keeps independent request identities', async () => {
 	const { client } = reads()
-	const state = await loadPortfolioAutomaticState({ client, portfolio, vault, blockNumber: 33n, maximumQuestions: 1 })
+	const state = await loadPortfolioRecoveryState({ client, vault, blockNumber: 33n, maximumQuestions: 1 })
 	expect(state.allocatedQuestionsComplete).toBe(false)
 	expect(state.allocatedQuestions).toEqual([1n])
 	expect(await loadPortfolioWithdrawalRequests({ client, portfolio, blockNumber: 33n, start: 0n, count: 16n })).toEqual({

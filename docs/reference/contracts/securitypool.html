@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns. Rows marked &quot;through <code>fallback()</code>&quot; are not in the compiled ABI: the pool forwards exactly those four selectors to <code>SecurityPoolOperationsDelegate</code> by <code>delegatecall</code> and rejects every other unknown selector with <code>Unsupported pool operation</code>.</p>
 				<!-- Validated read ABI fingerprint: 9a1fd89f52b252ecbe5f71586c5396279656674e65e3fcf13473f751fc270bc3 -->
-				<!-- Validated complete compiled ABI fingerprint: cdc2fbcd070241bcfcadb222bb1136c779526ab334f9c31092e9fcdcaa5f208f -->
+				<!-- Validated complete compiled ABI fingerprint: b507c5f022cf5937e0757c189b9e65bd5ce6c53ec9e128783813135a9a6c540b -->
 				<table>
 					<thead>
 						<tr>
@@ -34,6 +34,13 @@
 						</tr>
 					</thead>
 					<tbody>
+						<tr>
+							<td><code>splitVaultPosition(recipient, numerator, denominator)</code><wbr /></td>
+							<td>Vault owner</td>
+							<td><code>recipient</code> is nonzero and differs from the caller (<code>Invalid position recipient</code>); <code>0 &lt; numerator &lt;= denominator</code> (<code>Invalid position fraction</code>). Its <code>onSecurityPoolVaultPositionReceived(source)</code> callback must return that callback’s selector (<code>Position not accepted</code>). After the callback, the pool must be operational or forked (<code>Pool inactive</code>) and the caller must have no dispute-staked REP (<code>Source has dispute escrow</code>).</td>
+							<td>Checkpoints both vaults, then moves the requested fraction of the caller’s REP backing units, underwriting commitment, current-generation bad debt, claimable fees, and fractional fee carry to <code>recipient</code>. Each component rounds down; the caller keeps the remainder. No REP or ETH is transferred, and total backing, commitment, and bad debt are unchanged. Combining fee carry can make another whole attoETH claimable from the unallocated fee reserve, or from settlement collateral when the pool is forked.</td>
+							<td>Fee and vault checkpoints when due; <code>VaultPositionSplit</code>, then <code>VaultAccountingCheckpoint</code> for each vault and <code>PoolAccountingCheckpoint</code></td>
+						</tr>
 						<tr>
 							<td><code>burnEscalationWinnerHaircut(amountAttoRep)</code></td>
 							<td>This pool's <code>EscalationGame</code> only</td>

@@ -42,8 +42,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
-	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
-		['solidity/contracts/statoblast/SecurityPool.sol', 704],
-		['solidity/contracts/statoblast/SecurityPoolForker.sol', 613],
-	]),
+	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive; the position-split ABI forwarding remains here while its implementation is delegated.', [['solidity/contracts/statoblast/SecurityPool.sol', 708]]),
+	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [['solidity/contracts/statoblast/SecurityPoolForker.sol', 613]]),
 ])

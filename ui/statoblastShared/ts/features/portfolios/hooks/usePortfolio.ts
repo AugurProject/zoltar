@@ -113,6 +113,12 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			if (scopedQuestions.length === 0) {
 				// The first entry is fixed at construction; permissionless additions cannot change this bootstrap read.
 				const seed = await client.readContract({ address: portfolio, abi: registrySeedAbi, functionName: 'getQuestions', args: [0n, 1n] })
+				if (!current()) return
+				if (Array.isArray(seed) && seed.length === 0) {
+					snapshot.value = undefined
+					history.value = []
+					return
+				}
 				if (!Array.isArray(seed) || seed.length !== 1 || typeof seed[0] !== 'bigint') throw new Error('Portfolio is missing its initial question.')
 				scopedQuestions = [seed[0]]
 				selected = [String(seed[0])]
@@ -241,6 +247,13 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 			void refresh()
 		}
 	}, [accountAddress])
+	useEffect(() => {
+		if (!enabled || !isAddress(managerInput.value) || !isAddress(ownerInput.value)) return
+		const timer = setTimeout(() => {
+			void refresh()
+		}, 250)
+		return () => clearTimeout(timer)
+	}, [enabled, managerInput.value, ownerInput.value, questionFilter.value])
 	const changeInput = (kind: 'manager' | 'owner', value: string) => {
 		generation.current += 1
 		snapshot.value = undefined
@@ -254,6 +267,17 @@ export function usePortfolio({ accountAddress, enabled, environmentKey, activeUn
 		if (kind === 'manager') managerInput.value = value
 		else ownerInput.value = value
 	}
+	useEffect(() => {
+		const updateRouteSelection = () => {
+			const query = new URLSearchParams(window.location.hash.split('?')[1])
+			const portfolio = query.get('portfolio')
+			const owner = query.get('owner')
+			if (portfolio !== null && portfolio !== managerInput.value) changeInput('manager', portfolio)
+			if (owner !== null && owner !== ownerInput.value) changeInput('owner', owner)
+		}
+		window.addEventListener('hashchange', updateRouteSelection)
+		return () => window.removeEventListener('hashchange', updateRouteSelection)
+	}, [])
 	const savePreferences = (next: PortfolioPreferences) => {
 		if (scope.value === undefined) return
 		rememberPreferences(portfolioStorageKey(scope.value, 'preferences'), next)

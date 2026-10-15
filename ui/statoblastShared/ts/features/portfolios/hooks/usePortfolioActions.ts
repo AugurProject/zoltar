@@ -60,7 +60,7 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 		}
 	}, [backend, vault, snapshot])
 	const connectedOwner = parameters.accountAddress !== undefined && selection?.owner.toLowerCase() === parameters.accountAddress.toLowerCase()
-	const scope = mergeTransactionScopes(createTransactionScope('portfolio-vault', vault), ...(snapshot?.branches.flatMap(item => item.positions.map(position => securityPoolTransactionScope(position.pool))) ?? []))
+	const scope = mergeTransactionScopes(createTransactionScope('portfolio', selection?.portfolio), createTransactionScope('portfolio-vault', vault), ...(snapshot?.branches.flatMap(item => item.positions.map(position => securityPoolTransactionScope(position.pool))) ?? []))
 	useLayoutEffect(() => {
 		drafts.value = {}
 		exported.value = undefined
@@ -317,7 +317,7 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 					to: branch.repToken,
 					value: 0n,
 					data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'transfer', args: [recipient, amount] }),
-					reviewDescription: `Transfer ${formatEther(amount)} REP from ${account} to portfolio vault ${recipient} in universe ${branch.universeId}. Origin-universe REP becomes available for automatic backing of any eligible question under the vault’s reserve, health and fee settings, unless withdrawal is active. Child-universe REP stays separate.`,
+					reviewDescription: copy.nativeFundingReview(formatEther(amount), account, recipient, branch.universeId),
 					validateBeforeSubmit: async () => {
 						const balance = await createConnectedReadClient().readContract({ address: branch.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [account] })
 						if (balance < amount) throw new Error(copy.insufficient)
@@ -329,7 +329,7 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 		revokePolicy: () =>
 			run('revokePortfolioPolicy', copy.revoke, () => ({
 				...buildPortfolioRevokePolicyRequest({ owner: owner(), vault: requireVault(), vaultAbi: vaultArtifact.abi }),
-				reviewDescription: `Revoke delegated executor allocation for portfolio vault ${requireVault()}. Automatic backing remains active unless withdrawal is requested. Existing question positions remain unchanged.`,
+				reviewDescription: copy.revokePolicyReview(requireVault()),
 			})),
 		exportBatch: () => exportRequest(batchRequest),
 		exportCreate: () => exportRequest(createVaultRequest),

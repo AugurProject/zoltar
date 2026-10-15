@@ -266,6 +266,11 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.updateVaultFees, (vault)));
 	}
 
+	/// @notice Moves the caller's proportional backing, commitment, debt and fees to a consenting vault.
+	function splitVaultPosition(address recipient, uint256 numerator, uint256 denominator) external {
+		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.splitVaultPosition, (recipient, numerator, denominator)));
+	}
+
 	/// @notice Checkpoints `vault` and sends its claimable fees to it in ETH; callable by anyone.
 	function redeemFees(address vault) external {
 		updateVaultFees(vault);

@@ -2,7 +2,13 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './interfaces/ISecurityPool.sol';
+import {
+	ISecurityPool,
+	ISecurityPoolVaultPositionReceiver,
+	SecurityVault,
+	SystemState,
+	LiquidationExecutionRequest
+} from './interfaces/ISecurityPool.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -41,6 +47,55 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	event RepDepositedToVault(address indexed vault, uint256 amountAttoRep, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
+	event VaultPositionSplit(address indexed source, address indexed recipient, uint256 numerator, uint256 denominator);
+
+	/// @notice Moves ownership without changing pool-wide backing, capacity, debt or fork denominators.
+	function splitVaultPosition(address recipient, uint256 numerator, uint256 denominator) external {
+		require(recipient != address(0) && recipient != msg.sender, 'Invalid position recipient');
+		require(numerator > 0 && numerator <= denominator, 'Invalid position fraction');
+		// Consent precedes eligibility checks and accounting reads so its callback cannot invalidate either.
+		require(ISecurityPoolVaultPositionReceiver(recipient).onSecurityPoolVaultPositionReceived(msg.sender) == ISecurityPoolVaultPositionReceiver.onSecurityPoolVaultPositionReceived.selector, 'Position not accepted');
+		require(systemState == SystemState.Operational || systemState == SystemState.PoolForked, 'Pool inactive');
+		require(address(escalationGame) == address(0) || escalationGame.disputeStakedRepByVaultAttoRep(msg.sender) == 0, 'Source has dispute escrow');
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		pool.updateVaultFees(msg.sender);
+		pool.updateVaultFees(recipient);
+		SecurityVault storage source = securityVaults[msg.sender];
+		SecurityVault storage target = securityVaults[recipient];
+		uint256 units = Math.mulDiv(source.repBackingUnits, numerator, denominator);
+		uint256 commitment = Math.mulDiv(source.underwritingLimitAttoEth, numerator, denominator);
+		uint256 fees = Math.mulDiv(source.claimableFeesAttoEth, numerator, denominator);
+		uint256 debt = Math.mulDiv(_getVaultBadDebtAttoEth(msg.sender), numerator, denominator);
+		uint256 remainder = Math.mulDiv(vaultFeeRemainders[msg.sender], numerator, denominator);
+		source.repBackingUnits -= units;
+		source.underwritingLimitAttoEth -= commitment;
+		source.claimableFeesAttoEth -= fees;
+		target.repBackingUnits += units;
+		target.underwritingLimitAttoEth += commitment;
+		target.claimableFeesAttoEth += fees;
+		_setVaultBadDebtAttoEth(msg.sender, _getVaultBadDebtAttoEth(msg.sender) - debt);
+		_setVaultBadDebtAttoEth(recipient, _getVaultBadDebtAttoEth(recipient) + debt);
+		vaultFeeRemainders[msg.sender] -= remainder;
+		uint256 combinedRemainder = vaultFeeRemainders[recipient] + remainder;
+		uint256 wholeFee = combinedRemainder / SecurityPoolUtils.PRICE_PRECISION;
+		vaultFeeRemainders[recipient] = combinedRemainder % SecurityPoolUtils.PRICE_PRECISION;
+		if (wholeFee > 0) {
+			// Fork checkpoints may have returned their terminal fractional reserve to collateral.
+			// A merge makes one of those previously unassignable whole attoETH claimable again.
+			if (unallocatedAccruedFeesAttoEth >= wholeFee) unallocatedAccruedFeesAttoEth -= wholeFee;
+			else {
+				require(systemState == SystemState.PoolForked, 'Fee reserve unavailable');
+				settlementCollateralAttoEth -= wholeFee - unallocatedAccruedFeesAttoEth;
+				unallocatedAccruedFeesAttoEth = 0;
+			}
+			target.claimableFeesAttoEth += wholeFee;
+			totalClaimableVaultFeesAttoEth += wholeFee;
+		}
+		emit VaultPositionSplit(msg.sender, recipient, numerator, denominator);
+		_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (msg.sender)));
+		_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (recipient)));
+		_delegateEvent(address(pool.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, msg.sender)));
+	}
 
 	/// @notice Pool delegatecall target: accrues pool fees and moves `vault`'s fee share into its claimable fees.
 	function updateVaultFees(address vault) external {

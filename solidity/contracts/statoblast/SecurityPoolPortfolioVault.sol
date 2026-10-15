@@ -18,13 +18,14 @@ interface ISecurityPoolPortfolio {
 	function maximumQuestionHorizonSeconds() external view returns (uint256);
 	function repToken() external view returns (IERC20);
 	function enqueueWithdrawal(uint256 requestId) external;
+	function isPositionSourceForPool(address source, address pool) external view returns (bool);
 }
 
 /// @notice One underwriter's account across independently collateralized question pools.
 /// @dev Idle assets belong solely to owner. Allocated REP is held by the native pool, never credited
 /// as spendable here. Neither portfolio membership nor another owner's deposit changes this account.
-/// Active accounts always back eligible paid minting. Only withdrawal runoff pauses automatic backing.
-/// Owner execution cancels delegated allocation authority, while preserving automatic settings.
+/// Shared underwriting assets are held by the portfolio. This account receives the owner's
+/// recovered question positions and preserves independent native operations and fork choices.
 contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 	using SafeERC20Ops for IERC20;
 
@@ -36,27 +37,11 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 	uint256 public allocationPolicyNonce;
 	AllocationPolicy public allocationPolicy;
 	mapping(uint256 => AllocationLimit) public allocationLimits;
-	AutomaticUnderwriting private underwritingSettings;
 	bool public withdrawalRequested;
 	uint256 public withdrawalRequestId;
 	bool public withdrawalResidualForfeitureAllowed;
 	uint256[] private allocatedQuestions;
 	mapping(uint256 => bool) private allocatedQuestionKnown;
-
-	struct AutomaticUnderwriting {
-		uint256 minimumIdleAttoRep;
-		uint256 minimumHealthFactorBps;
-		uint256 reservationFeeBps;
-		uint256 minimumAllocationFeeAttoEth;
-	}
-
-	struct AutomaticAllocationQuote {
-		ISecurityPool pool;
-		uint256 commitmentAttoEth;
-		uint256 depositAttoRep;
-		uint256 newlyReservedAttoRep;
-		uint256 reservationFeeAttoEth;
-	}
 
 	struct Call {
 		address target;
@@ -112,8 +97,6 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 	event AllocationQuestionApproved(uint256 indexed version, uint256 indexed questionId, ISecurityPool indexed pool, uint256 depositBudgetAttoRep, uint256 maximumCommitmentAttoEth);
 	event AllocationPolicyRevoked(uint256 indexed version);
 	event AllocationExecuted(uint256 indexed version, uint256 indexed nonce, uint256 indexed questionId, uint256 depositAttoRep, uint256 commitmentIncreaseAttoEth);
-	event AutomaticUnderwritingSet(uint256 indexed version, uint256 minimumIdleAttoRep, uint256 minimumHealthFactorBps, uint256 reservationFeeBps, uint256 minimumAllocationFeeAttoEth);
-	event ReservationFeePaid(uint256 indexed questionId, uint256 newlyReservedAttoRep, uint256 feeAttoEth);
 	event EthWithdrawn(uint256 amountAttoEth);
 	event WithdrawalRequested(uint256 indexed requestId);
 	event WithdrawalCancelled(uint256 indexed requestId);
@@ -125,7 +108,6 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 		require(address(_portfolio).code.length > 0, 'Portfolio has no code');
 		owner = _owner;
 		portfolio = _portfolio;
-		underwritingSettings = AutomaticUnderwriting(0, 12_000, 100, 0.001 ether);
 	}
 
 	modifier onlyOwner() {
@@ -299,105 +281,21 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 		require(pool.systemState() == SystemState.Operational && !pool.isEscalationResolved(), 'Allocation pool inactive');
 	}
 
-	/// @notice Automatic backing is active whenever this account is not withdrawing.
-	function automaticUnderwriting()
-		external
-		view
-		returns (
-			bool enabled,
-			uint256 minimumIdleAttoRep,
-			uint256 minimumHealthFactorBps,
-			uint256 reservationFeeBps,
-			uint256 minimumAllocationFeeAttoEth
-		)
-	{
-		AutomaticUnderwriting memory settings = underwritingSettings;
-		return (
-			!withdrawalRequested,
-			settings.minimumIdleAttoRep,
-			settings.minimumHealthFactorBps,
-			settings.reservationFeeBps,
-			settings.minimumAllocationFeeAttoEth
-		);
+	/// @notice Accept only the aggregate or one of its immutable archives for this exact question ledger.
+	function onSecurityPoolVaultPositionReceived(address source) external returns (bytes4) {
+		require(portfolio.isPositionSourceForPool(source, msg.sender), 'Position source is not portfolio');
+		ISecurityPool pool = ISecurityPool(payable(msg.sender));
+		uint256 questionId = pool.questionId();
+		require(address(portfolio.getPool(questionId, pool.universeId())) == msg.sender, 'Position pool is not canonical');
+		_recordPortfolioQuestion(questionId);
+		return this.onSecurityPoolVaultPositionReceived.selector;
 	}
 
-	/// @notice Configure the terms for backing eligible origin questions through paid complete-set minting.
-	/// @dev No question allowlist or rolling budget: the idle reserve and health buffer apply to this account.
-	function setAutomaticUnderwriting(uint256 expectedVersion, uint256 expectedNonce, uint256 minimumIdleAttoRep, uint256 minimumHealthFactorBps, uint256 reservationFeeBps, uint256 minimumAllocationFeeAttoEth) external onlyOwner nonReentrant {
-		require(!withdrawalRequested, 'Withdrawal active');
-		require(expectedVersion == allocationPolicyVersion && expectedNonce == allocationPolicyNonce, 'Allocation authorization changed');
-		require(minimumHealthFactorBps >= 10_000, 'Policy health factor below one');
-		require(reservationFeeBps > 0 && reservationFeeBps <= 10_000, 'Invalid reservation fee rate');
-		delete allocationPolicy;
-		underwritingSettings = AutomaticUnderwriting(minimumIdleAttoRep, minimumHealthFactorBps, reservationFeeBps, minimumAllocationFeeAttoEth);
-		emit AutomaticUnderwritingSet(++allocationPolicyVersion, minimumIdleAttoRep, minimumHealthFactorBps, reservationFeeBps, minimumAllocationFeeAttoEth);
-	}
-
-	/// @notice Quote immediate backing and the owner's nonrefundable capital-reservation fee.
-	/// @dev Existing unused backing is charged when newly committed. The native deposit floor is
-	/// charged on opening, even for tiny mints; fees never enter shareholders' settlement collateral.
-	function quoteAllocationForMint(uint256 questionId, uint256 increaseAttoEth) external view returns (uint256 depositAttoRep, uint256 reservationFeeAttoEth) {
-		AutomaticAllocationQuote memory quote = _quoteAllocationForMint(questionId, increaseAttoEth);
-		return (quote.depositAttoRep, quote.reservationFeeAttoEth);
-	}
-
-	function _quoteAllocationForMint(uint256 questionId, uint256 increaseAttoEth) private view returns (AutomaticAllocationQuote memory quote) {
-		AutomaticUnderwriting memory policy = underwritingSettings;
-		require(!withdrawalRequested, 'Withdrawal active');
-		require(increaseAttoEth > 0, 'Allocation increase zero');
-		uint248 universeId = portfolio.originUniverseId();
-		ISecurityPool pool = portfolio.getPool(questionId, universeId);
-		_requireAllocatable(pool, questionId, universeId);
-		require(pool.openOraclePriceCoordinator().isPriceValid() && pool.openOraclePriceCoordinator().pendingReportId() == 0, 'Allocation needs settled fresh price');
-		(uint256 units, uint256 previousCommitment, , ) = pool.securityVaults(address(this));
-		uint256 price = pool.openOraclePriceCoordinator().lastPrice();
-		quote.pool = pool;
-		quote.commitmentAttoEth = previousCommitment + increaseAttoEth;
-		uint256 requiredRep = _requiredAutomaticBacking(pool, quote.commitmentAttoEth, price, policy.minimumHealthFactorBps);
-		uint256 totalUnits = pool.totalRepBackingUnits();
-		uint256 held = pool.getTotalPoolHeldAttoRep();
-		if (totalUnits == 0) quote.depositAttoRep = requiredRep;
-		else {
-			require(held > 0, 'Pool backing exhausted');
-			uint256 neededUnits = Math.mulDiv(requiredRep, totalUnits, held, Math.Rounding.Ceil);
-			if (neededUnits > units)
-				quote.depositAttoRep = Math.mulDiv(neededUnits - units, held, totalUnits, Math.Rounding.Ceil);
-		}
-		uint256 idle = pool.repToken().balanceOf(address(this));
-		require(idle >= quote.depositAttoRep && idle - quote.depositAttoRep >= policy.minimumIdleAttoRep, 'Policy idle reserve violated');
-		uint256 previouslyReserved = Math.min(pool.backingUnitsToAttoRep(units), _requiredAutomaticBacking(pool, previousCommitment, price, policy.minimumHealthFactorBps));
-		// Price-induced recapitalization and rounding deposits also consume the owner's capital.
-		quote.newlyReservedAttoRep = Math.max(quote.depositAttoRep, requiredRep - previouslyReserved);
-		uint256 reservedValueAttoEth = Math.mulDiv(quote.newlyReservedAttoRep, 1e18, price, Math.Rounding.Ceil);
-		quote.reservationFeeAttoEth = Math.max(Math.mulDiv(reservedValueAttoEth, policy.reservationFeeBps, 10_000, Math.Rounding.Ceil), policy.minimumAllocationFeeAttoEth);
-	}
-
-	function _requiredAutomaticBacking(ISecurityPool pool, uint256 commitment, uint256 price, uint256 healthFactorBps) private view returns (uint256) {
-		if (commitment == 0) return 0;
-		uint256 requiredRep = Math.mulDiv(commitment, price, 1e18, Math.Rounding.Ceil);
-		// With no dispute escrow, the full multiplier dominates migration coverage except for the 5% liquidation reserve.
-		requiredRep = Math.mulDiv(requiredRep, Math.max(pool.statoblastSecurityMultiplierBps(), 10_500), 10_000, Math.Rounding.Ceil);
-		return
-			Math.max(Math.mulDiv(requiredRep, healthFactorBps, 10_000, Math.Rounding.Ceil), pool.minimumVaultRepDepositAttoRep());
-	}
-
-	/// @dev Only the portfolio's atomic paid-mint route can consume automatic authority. The fee stays
-	/// in this owner's account, independently of native pool fees, and is not refunded on share redemption.
-	function allocateForMint(uint256 questionId, uint256 increaseAttoEth) external payable nonReentrant {
-		require(msg.sender == address(portfolio), 'Only portfolio');
-		AutomaticAllocationQuote memory quote = _quoteAllocationForMint(questionId, increaseAttoEth);
-		require(msg.value == quote.reservationFeeAttoEth, 'Reservation fee mismatch');
-		uint256 nonce = allocationPolicyNonce++;
-		_submitVaultOperations(questionId, portfolio.originUniverseId(), VaultOperationsInput(quote.depositAttoRep, true, quote.commitmentAttoEth, new VaultLiquidationInput[](0), 0, underwritingSettings.minimumHealthFactorBps, 300), 0, 0, 0, 0);
-		// Native oracle execution can record a failure without reverting its caller. Require its resulting state.
-		require(quote.pool.getVaultUnderwritingLimitAttoEth(address(this)) == quote.commitmentAttoEth, 'Automatic allocation did not execute');
-		require(_isHealthy(quote.pool, underwritingSettings.minimumHealthFactorBps), 'Policy health buffer violated');
+	function _recordPortfolioQuestion(uint256 questionId) private {
 		if (!allocatedQuestionKnown[questionId]) {
 			allocatedQuestionKnown[questionId] = true;
 			allocatedQuestions.push(questionId);
 		}
-		emit AllocationExecuted(allocationPolicyVersion, nonce, questionId, quote.depositAttoRep, increaseAttoEth);
-		emit ReservationFeePaid(questionId, quote.newlyReservedAttoRep, quote.reservationFeeAttoEth);
 	}
 
 	function allocatedQuestionCount() external view returns (uint256) {
@@ -409,7 +307,7 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 	}
 
 	/// @notice Withdraw this account's ETH to its owner without changing REP allocation authority.
-	/// @dev Includes reservation fees and any native fees or refunds already paid to this account.
+	/// @dev Includes native fees, archived-position fees, and refunds already paid to this account.
 	function withdrawEth() external onlyOwner nonReentrant {
 		uint256 amount = address(this).balance;
 		require(amount > 0, 'No ETH available');
@@ -438,7 +336,7 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 		_payWithdrawal(portfolio.repToken());
 	}
 
-	/// @notice Resume automatic backing with the retained settings; delegated authority stays revoked.
+	/// @notice Cancel runoff of recovered positions; delegated authority stays revoked.
 	function cancelWithdrawal() external onlyOwner nonReentrant {
 		require(withdrawalRequested, 'No withdrawal requested');
 		withdrawalRequested = false;

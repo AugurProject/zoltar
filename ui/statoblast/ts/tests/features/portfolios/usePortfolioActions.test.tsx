@@ -7,7 +7,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { asWriteClient, createMockReadClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import type { ChainBackend, TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { vaultArtifact, type loadPortfolioPolicy } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
@@ -58,6 +58,7 @@ function createExportBackend(
 		getChainId: readChainId,
 		...createMockReadClient(async request => {
 			if (request.functionName === 'questionId') return 5n
+			if (request.functionName === 'balanceOf') return 1000n * 10n ** 18n
 			const policy = await readPolicy()
 			if (request.functionName === 'allocationPolicy') return [policy.config, policy.repToken, policy.spentDepositAttoRep, policy.spentCommitmentIncreaseAttoEth]
 			if (request.functionName === 'allocationPolicyVersion') return policy.version
@@ -86,6 +87,55 @@ async function preparePolicy(hook: Awaited<ReturnType<typeof renderActions>>) {
 		hook.state().setCommitmentBudget('0')
 	})
 }
+
+for (const universe of [0n, 9n]) {
+	test(`funding native recovery in universe ${universe} reviews vault custody without promising shared underwriting`, async () => {
+		const repToken = getAddress('0x0000000000000000000000000000000000000055')
+		const plans: TransactionPlanStep[] = []
+		const sent: { to?: `0x${string}` | null | undefined; data?: Hex | undefined; value?: bigint | undefined }[] = []
+		const client = asWriteClient(createMockWriteClient(request => sent.push(request)))
+		const hook = await renderActions(undefined, undefined, undefined, () => ({ ...client, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }), onTransactionPlan: steps => plans.push(...steps) }))
+		if (selectedModel.snapshot === undefined) throw new Error('Expected recovery snapshot')
+		await hook.setProps({ model: { ...selectedModel, snapshot: { ...selectedModel.snapshot, branches: [{ universeId: universe, repToken, idleAttoRep: 0n, forkTime: 0n, positions: [] }] } }, universe })
+		await act(async () => {
+			hook.state().setFundingAmount('12.5')
+			await hook.state().fund()
+		})
+		expect(hook.state().error).toBeUndefined()
+		expect(plans).toHaveLength(1)
+		expect(sent).toHaveLength(1)
+		const review = plans[0]
+		if (review?.data === undefined) throw new Error('Expected recovery transfer review')
+		expect(review.requireReview).toBe(true)
+		expect(review.contractAddress).toBe(repToken)
+		expect(sent[0]).toMatchObject({ to: repToken, data: review.data, value: 0n })
+		expect(decodeFunctionData({ abi: parseAbi(['function transfer(address recipient,uint256 amount)']), data: review.data })).toMatchObject({ functionName: 'transfer', args: [vault, 125n * 10n ** 17n] })
+		expect(review.reviewDescription).toContain(`Transfer 12.5 REP from ${owner} to recovery vault ${vault} in universe ${universe}`)
+		expect(review.reviewDescription).toContain('manual or delegated recovery operations')
+		expect(review.reviewDescription).toContain('does not buy shared fund shares or supply shared mint capacity')
+		expect(review.reviewDescription).not.toMatch(/automatic backing|fee settings/i)
+	})
+}
+
+test('revoking executor authority reviews only recovery custody and leaves shared underwriting intact', async () => {
+	const plans: TransactionPlanStep[] = []
+	const sent: { to?: `0x${string}` | null | undefined; data?: Hex | undefined; value?: bigint | undefined }[] = []
+	const client = asWriteClient(createMockWriteClient(request => sent.push(request)))
+	const hook = await renderActions(undefined, undefined, undefined, () => ({ ...client, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }), onTransactionPlan: steps => plans.push(...steps) }))
+	await act(async () => await hook.state().revokePolicy())
+	expect(hook.state().error).toBeUndefined()
+	expect(plans).toHaveLength(1)
+	expect(sent).toHaveLength(1)
+	const review = plans[0]
+	if (review?.data === undefined) throw new Error('Expected recovery revocation review')
+	expect(review.requireReview).toBe(true)
+	expect(review.contractAddress).toBe(vault)
+	expect(sent[0]).toMatchObject({ to: vault, data: review.data, value: 0n })
+	expect(decodeFunctionData({ abi: vaultArtifact.abi, data: review.data })).toMatchObject({ functionName: 'revokeAllocationPolicy' })
+	expect(review.reviewDescription).toContain(`Revoke executor authority over recovery vault ${vault}`)
+	expect(review.reviewDescription).toContain('Existing question positions and shared fund ownership and allocations remain unchanged')
+	expect(review.reviewDescription).not.toContain('Automatic backing')
+})
 
 const policyEdits: readonly { field: string; edit: (actions: ReturnType<typeof usePortfolioActions>) => void }[] = [
 	{ field: 'reserve', edit: actions => actions.setReserve('25') },

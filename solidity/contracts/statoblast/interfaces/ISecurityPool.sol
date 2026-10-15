@@ -102,6 +102,11 @@ enum QuestionOutcome {
 	No
 }
 
+interface ISecurityPoolVaultPositionReceiver {
+	/// @notice Explicit consent to receive the source vault's backing and obligations from the calling pool.
+	function onSecurityPoolVaultPositionReceived(address source) external returns (bytes4);
+}
+
 interface ISecurityPool {
 	/// @notice Authoritative resulting accounting state after a mutation. `vault` is zero for pool-wide causes.
 	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalUnderwritingLimitAttoEth, uint256 feeEligibleUnderwritingLimitAttoEth, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
@@ -177,6 +182,8 @@ interface ISecurityPool {
 	function updateRetentionRate() external;
 	function updateVaultFees(address vault) external;
 	function redeemFees(address vault) external;
+	/// @notice Transfers a proportional slice of the caller's non-escrowed position to a consenting vault.
+	function splitVaultPosition(address recipient, uint256 numerator, uint256 denominator) external;
 
 	function withdrawRepFromVault(address vault, uint256 amountAttoRep) external;
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external;

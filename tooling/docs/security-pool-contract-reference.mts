@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const securityPoolContractReference: ContractReference = {
-	compiledAbiFingerprint: 'cdc2fbcd070241bcfcadb222bb1136c779526ab334f9c31092e9fcdcaa5f208f',
+	compiledAbiFingerprint: 'b507c5f022cf5937e0757c189b9e65bd5ce6c53ec9e128783813135a9a6c540b',
 	name: 'SecurityPool',
 	interactionNotes: 'Rows marked "through `fallback()`" are not in the compiled ABI: the pool forwards exactly those four selectors to `SecurityPoolOperationsDelegate` by `delegatecall` and rejects every other unknown selector with `Unsupported pool operation`.',
 	purpose: 'Holds ETH [settlement collateral](./glossary.html#settlement-collateral) and REP underwriting, accounts for [vaults](./glossary.html#vault) and fees, mints [outcome shares](./glossary.html#outcome-share), and routes local escalation.',
@@ -64,6 +64,16 @@ export const securityPoolContractReference: ContractReference = {
 	],
 	sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
 	interactions: [
+		{
+			call: '`splitVaultPosition(recipient, numerator, denominator)`',
+			caller: 'Vault owner',
+			effect:
+				'Checkpoints both vaults, then moves the requested fraction of the caller’s REP backing units, underwriting commitment, current-generation bad debt, claimable fees, and fractional fee carry to `recipient`. Each component rounds down; the caller keeps the remainder. No REP or ETH is transferred, and total backing, commitment, and bad debt are unchanged. Combining fee carry can make another whole attoETH claimable from the unallocated fee reserve, or from settlement collateral when the pool is forked.',
+			declarations: [{ name: 'splitVaultPosition' }],
+			preconditions:
+				'`recipient` is nonzero and differs from the caller (`Invalid position recipient`); `0 < numerator <= denominator` (`Invalid position fraction`). Its `onSecurityPoolVaultPositionReceived(source)` callback must return that callback’s selector (`Position not accepted`). After the callback, the pool must be operational or forked (`Pool inactive`) and the caller must have no dispute-staked REP (`Source has dispute escrow`).',
+			signals: 'Fee and vault checkpoints when due; `VaultPositionSplit`, then `VaultAccountingCheckpoint` for each vault and `PoolAccountingCheckpoint`',
+		},
 		{
 			call: '`burnEscalationWinnerHaircut(amountAttoRep)`',
 			caller: "This pool's `EscalationGame` only",

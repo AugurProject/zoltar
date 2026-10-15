@@ -1,4 +1,5 @@
 export const eventSourceByName: Record<string, string> = {
+	VaultPositionSplit: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol',
 	ClaimCheckpointProgress: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol',
 	CoordinatorRegistered: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	CoordinatorSettlementDeferred: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',

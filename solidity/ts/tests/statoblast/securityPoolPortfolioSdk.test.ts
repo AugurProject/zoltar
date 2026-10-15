@@ -1,13 +1,61 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
-import { loadPortfolioSnapshot, planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact } from '../../types/contractArtifact'
+import { buildPortfolioDeploymentRequest, buildPortfolioDepositRequest, buildPortfolioMintRequest, buildPortfolioSyncRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote, loadPortfolioSnapshot, planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { emptyOperations, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { emptyOperations, maximumQuestionHorizonSeconds, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: portfolio SDK against native contracts', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 	const snapshot = async () => await loadPortfolioSnapshot({ client: fixture.owner(), portfolio: fixture.portfolio, vault: fixture.vault, universeIds: [fixture.base.genesisUniverse] })
+
+	test('aggregate reads use public configuration links before the first question or owner vault exists', async () => {
+		const client = fixture.owner()
+		const hash = await client.sendTransaction(
+			buildPortfolioDeploymentRequest({
+				owner: client.account.address,
+				factory: getInfraContractAddresses().securityPoolFactory,
+				initialOriginPool: fixture.base.securityPoolAddresses.securityPool,
+				maximumQuestionHorizonSeconds,
+				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
+			}),
+		)
+		const { contractAddress: portfolio } = await client.waitForTransactionReceipt({ hash })
+		if (portfolio === null || portfolio === undefined) throw new Error('Portfolio deployment address missing')
+		expect(await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionCount' })).toBe(0n)
+		const empty = await loadPortfolioAggregateSnapshot({ client, portfolio, owner: client.account.address })
+		expect(empty).toMatchObject({ originUniverseId: fixture.base.genesisUniverse, forkTime: 0n, repToken: getRepTokenAddress(fixture.base.genesisUniverse), shares: 0n, totalShares: 0n, assetsAttoRep: 0n, allowanceAttoRep: 0n, positionCount: 0n, positionStart: 0n, positions: [], activeQuestions: [] })
+		expect(empty.walletAttoRep).toBeGreaterThan(100n * unit)
+		await approveToken(client, empty.repToken, portfolio)
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner: client.account.address, portfolio, amountAttoRep: 100n * unit, minimumShares: 100n * unit })))
+		const funded = await loadPortfolioAggregateSnapshot({ client, portfolio, owner: client.account.address })
+		expect(funded).toMatchObject({ shares: 100n * unit, totalShares: 100n * unit, assetsAttoRep: 100n * unit, ownerAssetsAttoRep: 100n * unit, idleAttoRep: 100n * unit, availableAttoRep: 100n * unit, positionCount: 0n, positions: [], activeQuestions: [] })
+		expect((await client.getBlock({ blockNumber: funded.blockNumber })).hash).toBe(funded.blockHash)
+	})
+
+	test('aggregate SDK decodes live quotes and archived owner claims from the contract ABI', async () => {
+		const client = fixture.owner()
+		const owner = client.account.address
+		const portfolio = fixture.portfolio
+		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), portfolio)
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner, portfolio, amountAttoRep: 5_000n * unit, minimumShares: 5_000n * unit })))
+		await fixture.refreshPrice(fixture.base.questionId)
+		const funded = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
+		const quote = await loadPortfolioMintQuote({ client, snapshot: funded, questionId: fixture.base.questionId, mintAttoEth: 100n * unit })
+		expect(quote.depositAttoRep).toBeGreaterThan(0n)
+		expect(quote.availableAttoRep).toBe(5_000n * unit)
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio, recipient: owner, questionId: fixture.base.questionId, mintAttoEth: 100n * unit, maximumReservationFeeAttoEth: quote.reservationFeeAttoEth, minimumShares: 0n })))
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioSyncRequest({ processor: owner, portfolio })))
+		const archived = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
+		expect(archived.positionCount).toBe(1n)
+		expect(archived.positions).toHaveLength(1)
+		expect(archived.positions[0]).toMatchObject({ positionId: 1n, questionId: fixture.base.questionId, ownerShares: 5_000n * unit })
+		expect(archived.activeQuestions).toEqual([])
+	})
 
 	test('a pinned snapshot decodes real pool accounting and its buffered plan executes with matching balances', async () => {
 		await fixture.transferRep(fixture.vault, 2_100n * unit)

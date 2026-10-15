@@ -1203,6 +1203,17 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'settlementCollateralAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'shareToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract IShareToken' }] },
 	{ type: 'function', name: 'shareTokenSupplyAttoShares', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{
+		type: 'function',
+		name: 'splitVaultPosition',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'recipient', type: 'address', internalType: 'address' },
+			{ name: 'numerator', type: 'uint256', internalType: 'uint256' },
+			{ name: 'denominator', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
 	{ type: 'function', name: 'statoblastSecurityMultiplierBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'systemState', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'enum SystemState' }] },
 	{ type: 'function', name: 'totalAccruedFeesAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },

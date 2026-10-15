@@ -8,7 +8,7 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { applyLibraries, deployOriginSecurityPool, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { approveToken, getChildUniverseId, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { createCompleteSet, getAwaitingForkContinuation, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getAwaitingForkContinuation, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { finishChildInitialization, finalizeTruthAuction, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameOutcomeState, getNonDecisionThresholdAttoRep, getStartBond, getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { balanceOfShares, migrateShares } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -19,10 +19,11 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
 } from '../../types/contractArtifact'
-import { unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, maximumQuestionHorizonSeconds } from './securityPoolPortfolioFixture'
+import { useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
 
 describe('Statoblast: portfolio fork isolation', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const { fixture, deposit, mint, sync, claim } = useAggregatePortfolioFixture()
 	const forkA = async () => {
 		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(fixture.owner(), fixture.base.genesisUniverse, fixture.base.questionId)
@@ -46,13 +47,19 @@ describe('Statoblast: portfolio fork isolation', () => {
 	test('A forks while B is future; each owner chooses a different branch for each question', async () => {
 		const { owner, other, base, vault, portfolio, poolFor, secondQuestionId } = fixture
 		const otherVault = await fixture.createVault(other())
+		await deposit(5_000n * unit)
+		await deposit(5_000n * unit, other())
+		await fixture.refreshPrice(base.questionId)
 		for (const question of [base.questionId, secondQuestionId]) {
-			await fixture.allocate(question)
-			await fixture.allocate(question, 1_000n * unit, 100n * unit, other(), otherVault)
-			await createCompleteSet(owner(), poolFor(question).securityPool, 20n * unit)
+			await mint(20n * unit, question, 10n * unit, 0n, owner().account.address)
 		}
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		await forkA()
+		await sync()
+		for (const positionId of [1n, 2n]) {
+			await claim(positionId)
+			await claim(positionId, other().account.address)
+		}
 		const yesUniverse = getChildUniverseId(base.genesisUniverse, QuestionOutcome.Yes)
 		const noUniverse = getChildUniverseId(base.genesisUniverse, QuestionOutcome.No)
 		const forker = getInfraContractAddresses().securityPoolForker
