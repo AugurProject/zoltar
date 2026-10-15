@@ -5,6 +5,7 @@ import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { QuestionsView } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/QuestionsView.js'
 import { questionDownloadStore } from '@zoltar/ui-zoltar-shared/lib/questionBrowse.js'
@@ -87,7 +88,54 @@ describe('QuestionsView', () => {
 		},
 	})
 
-	test('renders favorite questions from the local cache without cross-application actions or a chain scan', async () => {
+	test('loads the first registry page on entry without a discovery click', async () => {
+		const loadPage = mock(async () => undefined)
+		const renderedComponent = await renderIntoDocument(view({ loadPage }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(loadPage).toHaveBeenCalledTimes(1)
+		expect(loadPage).toHaveBeenCalledWith(0, 10)
+		await act(async () => {
+			render(view({ loadPage, zoltarQuestionPage: { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [question] } }), renderedComponent.container)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+		expect(getRenderedQuestionTitles()).toEqual([question.title])
+		expect(loadPage).toHaveBeenCalledTimes(1)
+	})
+
+	test('keeps cached questions visible while the initial page loads', async () => {
+		seedQuestions([question])
+		const request = createDeferred<void>()
+		const loadPage = mock(() => request.promise)
+		const renderedComponent = await renderIntoDocument(view({ loadPage }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getRenderedQuestionTitles()).toEqual([question.title])
+		expect(within(document.body).getByRole('status').textContent).toContain('Loading')
+		expect(loadPage).toHaveBeenCalledTimes(1)
+		await act(async () => request.resolve(undefined))
+	})
+
+	test('ignores an old request failure after switching contexts', async () => {
+		const oldRequest = createDeferred<void>()
+		const oldLoadPage = mock(() => oldRequest.promise)
+		const renderedComponent = await renderIntoDocument(view({ loadPage: oldLoadPage }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const newLoadPage = mock(async () => undefined)
+		await act(async () => {
+			render(view({ loadPage: newLoadPage, requestContextKey: 1 }), renderedComponent.container)
+			await Promise.resolve()
+		})
+		expect(newLoadPage).toHaveBeenCalledTimes(1)
+		await act(async () => {
+			oldRequest.reject(new Error('Old network failed'))
+			await Promise.resolve()
+		})
+		expect(document.body.textContent).not.toContain('Questions could not be loaded.')
+	})
+
+	test('renders favorite questions from the local cache while refreshing without cross-application actions', async () => {
 		seedQuestions([question])
 		const loadPage = mock(async () => undefined)
 		const activeViews: string[] = []
@@ -113,18 +161,17 @@ describe('QuestionsView', () => {
 		})
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(activeViews).toEqual(['fork'])
-		expect(loadPage).not.toHaveBeenCalled()
+		expect(loadPage).toHaveBeenCalledTimes(1)
 	})
 
-	test('scans the registry on request and favorites a question when its details are opened', async () => {
+	test('loads the registry automatically and favorites a question when its details are opened', async () => {
 		const loadPage = mock(async () => undefined)
 		const renderedComponent = await renderIntoDocument(view({ loadPage }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No favorite questions yet')).not.toBeNull()
+		expect(loadPage).toHaveBeenCalledWith(0, 10)
 
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
 			await Promise.resolve()
 		})
 		expect(loadPage).toHaveBeenCalledWith(0, 10)
@@ -146,7 +193,7 @@ describe('QuestionsView', () => {
 		expect(documentQueries.getByRole('button', { name: 'Favorites (1)' })).not.toBeNull()
 	})
 
-	test('records refreshed question pages and shows their age only after a scan', async () => {
+	test('records refreshed question pages and shows their age after its automatic initial read', async () => {
 		const loadPage = mock(async () => undefined)
 		const freshness = { refreshing: false, updatedAt: Date.now() - 15_000 }
 		const page = (title: string): MarketDetailsPage => ({ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [{ ...createQuestion(1), title }] })
@@ -158,7 +205,6 @@ describe('QuestionsView', () => {
 		expect(documentQueries.getByRole('button', { name: 'Downloaded (0)' })).not.toBeNull()
 
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
 			await Promise.resolve()
 		})
 		await act(async () => {
@@ -211,7 +257,6 @@ describe('QuestionsView', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
 			await Promise.resolve()
 			await Promise.resolve()
 		})
@@ -231,7 +276,6 @@ describe('QuestionsView', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
 			await Promise.resolve()
 		})
 		await act(async () => {
@@ -275,7 +319,6 @@ describe('QuestionsView', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
 			await Promise.resolve()
 		})
 		await act(async () => {
@@ -283,7 +326,7 @@ describe('QuestionsView', () => {
 			await Promise.resolve()
 		})
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover more' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Show more' }))
 			await Promise.resolve()
 		})
 		expect(loadPage).toHaveBeenLastCalledWith(1, 10)
@@ -293,7 +336,6 @@ describe('QuestionsView', () => {
 			await Promise.resolve()
 		})
 		await act(async () => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
 			await Promise.resolve()
 		})
 		expect(loadPage).toHaveBeenLastCalledWith(0, 10)
