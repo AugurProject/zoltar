@@ -153,11 +153,13 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 		await expect(allowForfeiture()).rejects.toThrow('No withdrawal requested')
 		const ownerBefore = await balance()
 		const callerBefore = await balance(fixture.other().account.address)
+		const settings = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' })
 		await request()
 		expect(await balance()).toBe(ownerBefore + 300n * unit)
 		expect(await balance(fixture.vault)).toBe(0n)
 		expect(await balance(fixture.other().account.address)).toBe(callerBefore)
 		expect((await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' }))[0]).toBe(false)
+		await expect(fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'quoteAllocationForMint', args: [fixture.base.questionId, unit] })).rejects.toThrow('Withdrawal active')
 		await expect(enable()).rejects.toThrow('Withdrawal active')
 		await expect(request()).rejects.toThrow('Withdrawal already active')
 		await expect(cancel(fixture.other())).rejects.toThrow('Only vault owner')
@@ -165,15 +167,14 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'withdrawalResidualForfeitureAllowed' })).toBe(true)
 		await cancel()
 		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'withdrawalResidualForfeitureAllowed' })).toBe(false)
-		expect((await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' }))[0]).toBe(false)
+		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' })).toEqual(settings)
 		await expect(process()).rejects.toThrow('No withdrawal requested')
 		await fixture.transferRep(fixture.vault, 300n * unit)
 		await fixture.refreshPrice(fixture.base.questionId)
-		await expect(
-			writeContractAndWait(fixture.other(), () =>
-				fixture.other().writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.questionId, [{ vault: fixture.vault, maximumCommitmentIncreaseAttoEth: unit }], fixture.other().account.address, 0n, unit], value: unit }),
-			),
-		).rejects.toThrow('Automatic underwriting disabled')
+		const [, reservationFee] = await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'quoteAllocationForMint', args: [fixture.base.questionId, unit] })
+		await writeContractAndWait(fixture.other(), () =>
+			fixture.other().writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [fixture.base.questionId, [{ vault: fixture.vault, maximumCommitmentIncreaseAttoEth: unit }], fixture.other().account.address, 0n, unit], value: unit + reservationFee }),
+		)
 		await request()
 		expect(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'withdrawalResidualForfeitureAllowed' })).toBe(false)
 		expect(await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getWithdrawalRequests', args: [0n, 64n] })).toEqual([

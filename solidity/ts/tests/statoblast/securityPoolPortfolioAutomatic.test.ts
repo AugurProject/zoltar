@@ -34,11 +34,19 @@ describe('Statoblast: automatic portfolio underwriting', () => {
 		await enable()
 	}
 
-	test('requires owner consent and restricts allocation to the atomic paid-mint route', async () => {
+	test('funding a new vault backs paid minting without an enable transaction', async () => {
+		await fixture.transferRep(fixture.vault, 5_000n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		expect([...(await fixture.owner().readContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'automaticUnderwriting' }))]).toEqual([true, 0n, 12_000n, 100n, 10n ** 15n])
+		await mint()
+		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).underwritingLimitAttoEth).toBe(100n * unit)
+		expect(await nonce()).toBe(1n)
+	})
+
+	test('requires owner authorization to change settings and restricts allocation to the atomic paid-mint route', async () => {
 		await fixture.transferRep(fixture.vault, 5_000n * unit)
 		await fixture.refreshPrice(fixture.base.questionId)
 		await expect(enable(0n, 10_000n, fixture.other())).rejects.toThrow('Only vault owner')
-		await expect(mint()).rejects.toThrow('Automatic underwriting disabled')
 		await expect(enable(0n, 9_999n)).rejects.toThrow('Policy health factor below one')
 		await enable()
 		await expect(writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'allocateForMint', args: [fixture.base.questionId, unit] }))).rejects.toThrow('Only portfolio')
@@ -152,15 +160,16 @@ describe('Statoblast: automatic portfolio underwriting', () => {
 		expect(await nonce()).toBe(0n)
 	})
 
-	test('a later nonconsenting contribution rolls back the first owner deposit and nonce', async () => {
+	test('a later withdrawing contribution rolls back the first owner deposit and nonce', async () => {
 		await prepare()
 		const otherVault = await fixture.createVault(fixture.other())
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: vaultArtifact.abi, address: otherVault, functionName: 'requestWithdrawal' }))
 		await expect(
 			mint(fixture.base.questionId, 100n * unit, [
 				{ vault: fixture.vault, maximumCommitmentIncreaseAttoEth: 50n * unit },
 				{ vault: otherVault, maximumCommitmentIncreaseAttoEth: 50n * unit },
 			]),
-		).rejects.toThrow('Automatic underwriting disabled')
+		).rejects.toThrow('Withdrawal active')
 		expect(await idle()).toBe(5_000n * unit)
 		expect(await nonce()).toBe(0n)
 		expect(await fixture.repClaim(pool())).toBe(0n)
@@ -178,11 +187,19 @@ describe('Statoblast: automatic portfolio underwriting', () => {
 		expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 	})
 
-	test('owner execution revokes automatic consent before another payer can use it', async () => {
+	test('owner execution preserves automatic backing and its configured settings', async () => {
 		await prepare()
 		await fixture.execute(pool(), encodeFunctionData({ abi: poolArtifact.abi, functionName: 'setUnderwritingLimit', args: [0n] }))
-		await expect(mint()).rejects.toThrow('Automatic underwriting disabled')
-		expect(await idle()).toBe(5_000n * unit)
+		await mint()
+		expect(await idle()).toBeLessThan(5_000n * unit)
+		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).underwritingLimitAttoEth).toBe(100n * unit)
+	})
+
+	test('revoking delegated authority never disables automatic backing', async () => {
+		await prepare()
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: vaultArtifact.abi, address: fixture.vault, functionName: 'revokeAllocationPolicy' }))
+		await mint()
+		expect(await nonce()).toBe(1n)
 	})
 
 	test('ended questions and a forked universe cannot consume automatic authority', async () => {

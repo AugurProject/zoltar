@@ -11,7 +11,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolPortfolioVaultDeployer } from './SecurityPoolPortfolioVaultDeployer.sol';
 
 /// @notice Groups canonical question ledgers and creates independently owned underwriting accounts.
-/// @dev Membership grants no claim on capital. Owners may consent to automatic paid-mint allocation;
+/// @dev Membership grants no claim on capital. Active owner accounts automatically back paid minting;
 /// collateral, fees, dispute stakes and repair inventory remain in their existing question ledgers.
 /// Different questions may have different dates. Registration never extends an existing commitment.
 contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
@@ -107,7 +107,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		for (uint256 index = 0; index < count; index++) page[index] = questions[startIndex + index];
 	}
 
-	/// @notice Create the caller's immutable-owner account. Automatic allocation needs separate owner consent.
+	/// @notice Create the caller's immutable-owner account with automatic backing active from creation.
 	function createVault() external returns (SecurityPoolPortfolioVault vault) {
 		vault = vaultOf[msg.sender];
 		if (address(vault) != address(0)) return vault;

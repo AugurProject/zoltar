@@ -166,8 +166,8 @@ export function usePortfolioAutomatic(model: Pick<ReturnType<typeof usePortfolio
 		return snapshot
 	}
 	const run = (action: string, label: string, build: () => Promise<PortfolioTransaction> | PortfolioTransaction) => actions.runPortfolioAction(action, label, build)
-	const enable = () =>
-		run('enablePortfolioAutomatic', copy.enableAutomatic, () => {
+	const configure = () =>
+		run('configurePortfolioAutomatic', copy.saveAutomatic, () => {
 			const selected = requireSelection()
 			if (state === undefined || !acknowledged.value) throw new Error(copy.acknowledgeRequired)
 			if (state.withdrawalRequested) throw new Error(copy.cancelBeforeAutomatic)
@@ -177,7 +177,7 @@ export function usePortfolioAutomatic(model: Pick<ReturnType<typeof usePortfolio
 			const minimumAllocationFeeAttoEth = parsePortfolioAmount(minimumAllocationFee.value)
 			return {
 				...buildPortfolioAutomaticUnderwritingRequest({ owner: selected.owner, vault: selected.vault, expectedVersion: state.version, expectedNonce: state.nonce, minimumIdleAttoRep, minimumHealthFactorBps, reservationFeeBps, minimumAllocationFeeAttoEth }),
-				reviewDescription: `Authorize eligible mint demand to allocate origin-universe REP while preserving ${formatEther(minimumIdleAttoRep)} REP idle and at least ${minimumHealthFactorBps} bps health. Charge ${reservationFeeBps} bps on the ETH value of additional REP encumbered, with at least ${formatEther(minimumAllocationFeeAttoEth)} ETH for each nonzero allocation, paid to your vault. Native minimum backing can exceed the requested commitment. Question horizon: ${state.maximumQuestionHorizonSeconds} seconds. This replaces earlier allocation authority. Question maturity does not guarantee REP release; reporting, losses and forks may delay or reduce recovery.`,
+				reviewDescription: `Update automatic backing of eligible mint demand using origin-universe REP while preserving ${formatEther(minimumIdleAttoRep)} REP idle and at least ${minimumHealthFactorBps} bps health. Charge ${reservationFeeBps} bps on the ETH value of additional REP encumbered, with at least ${formatEther(minimumAllocationFeeAttoEth)} ETH for each nonzero allocation, paid to your vault. Native minimum backing can exceed the requested commitment. Question horizon: ${state.maximumQuestionHorizonSeconds} seconds. Automatic backing remains active. This revokes earlier delegated executor authority. Question maturity does not guarantee REP release; reporting, losses and forks may delay or reduce recovery.`,
 				validateBeforeSubmit: async () => {
 					await reviewedState()
 				},
@@ -328,10 +328,10 @@ export function usePortfolioAutomatic(model: Pick<ReturnType<typeof usePortfolio
 		setAcknowledged: (value: boolean) => {
 			acknowledged.value = value
 		},
-		enableReason: ownerReason ?? stateReason ?? (state?.withdrawalRequested ? copy.cancelBeforeAutomatic : undefined) ?? (origin?.forkTime !== 0n ? copy.forkAutomatic : undefined) ?? inputReason ?? (!acknowledged.value ? copy.acknowledgeRequired : undefined),
+		configureReason: ownerReason ?? stateReason ?? (state?.withdrawalRequested ? copy.cancelBeforeAutomatic : undefined) ?? (origin?.forkTime !== 0n ? copy.forkAutomatic : undefined) ?? inputReason ?? (!acknowledged.value ? copy.acknowledgeRequired : undefined),
 		requestReason: ownerReason ?? stateReason ?? (state?.withdrawalRequested ? copy.withdrawalActive : undefined),
 		cancelReason: ownerReason ?? stateReason ?? (!state?.withdrawalRequested ? copy.noWithdrawal : undefined),
-		enable,
+		configure,
 		requestWithdrawal,
 		withdrawEth,
 		withdrawEthReason: ownerReason ?? stateReason ?? (state?.ethBalanceAttoEth === 0n ? copy.noVaultEth : undefined),

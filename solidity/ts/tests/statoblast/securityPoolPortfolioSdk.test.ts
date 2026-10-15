@@ -81,9 +81,10 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 		const withdrawal = position.queuedOperations.find(operation => operation.operationType === 1n)
 		if (!withdrawal) throw new Error('Missing native withdrawal operation')
 		const expiry = withdrawal.queuedAt + position.settlementTime + withdrawal.validForSeconds
-		await fixture.base.mockWindow.advanceTime(expiry - (await fixture.owner().getBlock()).timestamp)
+		await fixture.base.mockWindow.setTime(expiry)
+		expect((await fixture.owner().getBlock()).timestamp).toBe(expiry)
 		await expect(fixture.owner().simulateContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'expireStagedOperation', args: [withdrawal.operationId] })).rejects.toThrow('Staged operation active')
-		await fixture.base.mockWindow.advanceTime(1n)
+		await fixture.base.mockWindow.setTime(expiry + 1n)
 		await fixture.owner().simulateContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'expireStagedOperation', args: [withdrawal.operationId] })
 	})
 })

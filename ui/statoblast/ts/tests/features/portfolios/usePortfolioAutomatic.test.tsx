@@ -65,7 +65,6 @@ async function renderAutomatic(
 ) {
 	let version = 3n
 	let vaultEthBalance = 0n
-	let enabled = true
 	let residualForfeitureAllowed = false
 	let reservationFeeBps = 100n
 	let quotedFee = lookup.quoteFee ?? 10n ** 15n
@@ -131,7 +130,7 @@ async function renderAutomatic(
 				case 'getEthBalance':
 					return vaultEthBalance
 				case 'automaticUnderwriting':
-					return [enabled, 5n, 12000n, reservationFeeBps, 10n ** 15n]
+					return [!withdrawal, 5n, 12000n, reservationFeeBps, 10n ** 15n]
 				case 'allocationPolicyVersion':
 					return version
 				case 'allocationPolicyNonce':
@@ -206,24 +205,24 @@ async function renderAutomatic(
 			reservationFeeBps += 1n
 		},
 		disableContributor: () => {
-			enabled = false
+			withdrawal = true
 		},
 	}
 }
 
-test('automatic consent needs acknowledgement and rejects a changed reviewed authority before submission', async () => {
+test('updating automatic settings needs review and rejects a changed reviewed authority before submission', async () => {
 	const { hook, captured, changeAuthority } = await renderAutomatic()
-	expect(hook.state().enableReason).toContain('accept')
+	expect(hook.state().configureReason).toContain('Review')
 	await act(() => {
 		hook.state().setReserve('2')
 		hook.state().setAcknowledged(true)
 	})
-	expect(hook.state().enableReason).toBeUndefined()
+	expect(hook.state().configureReason).toBeUndefined()
 	await act(async () => {
-		await hook.state().enable()
+		await hook.state().configure()
 	})
 	const request = captured()
-	if (request === undefined) throw new Error('Expected consent request')
+	if (request === undefined) throw new Error('Expected settings request')
 	expect(decodeFunctionData({ abi: parseAbi(['function setAutomaticUnderwriting(uint256,uint256,uint256,uint256,uint256,uint256)']), data: request.data }).args).toEqual([3n, 2n, 2n * 10n ** 18n, 12000n, 100n, 10n ** 15n])
 	changeAuthority()
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('authority changed')
@@ -231,7 +230,7 @@ test('automatic consent needs acknowledgement and rejects a changed reviewed aut
 
 test('final withdrawal remains processable with outstanding collateral and stale price, and uses the selected native branch', async () => {
 	const { hook, captured } = await renderAutomatic({ resolved: true, priceValid: false }, true)
-	expect(hook.state().enableReason).toContain('Cancel')
+	expect(hook.state().configureReason).toContain('Cancel')
 	const position = hook.state().positions[0]
 	if (position === undefined) throw new Error('Expected position')
 	expect(position.processReason).toBeUndefined()
@@ -243,6 +242,19 @@ test('final withdrawal remains processable with outstanding collateral and stale
 	expect(request.account).toBe(owner)
 	expect(request.to).toBe(vault)
 	expect(decodeFunctionData({ abi: parseAbi(['function processWithdrawal(uint256,uint248)']), data: request.data }).args).toEqual([51n, 0n])
+})
+
+test('cancelling withdrawal explicitly reviews resuming automatic backing and invalidates stale state', async () => {
+	const { hook, captured, changeAuthority } = await renderAutomatic({}, true)
+	expect(hook.state().state?.enabled).toBe(false)
+	await act(async () => await hook.state().cancelWithdrawal())
+	const request = captured()
+	if (request === undefined) throw new Error('Expected cancellation request')
+	expect(decodeFunctionData({ abi: parseAbi(['function cancelWithdrawal()']), data: request.data }).functionName).toBe('cancelWithdrawal')
+	expect(request.reviewDescription).toContain('resumes automatic backing')
+	await request.validateBeforeSubmit?.()
+	changeAuthority()
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('authority changed')
 })
 
 test('mint demand exposes a native price prerequisite before a transaction is attempted', async () => {
@@ -258,7 +270,7 @@ test('mint demand exposes a native price prerequisite before a transaction is at
 	expect(captured()).toBeUndefined()
 })
 
-test('disabled contributor consent blocks a capacity-deficit mint', async () => {
+test('a withdrawing contributor blocks a capacity-deficit mint', async () => {
 	const { hook, disableContributor } = await renderAutomatic()
 	disableContributor()
 	await act(() => {
@@ -267,7 +279,7 @@ test('disabled contributor consent blocks a capacity-deficit mint', async () => 
 		hook.state().setMinimumShares('0.9')
 		hook.state().setContributors(`${vault}, `)
 	})
-	await waitFor(() => expect(hook.state().mintReason).toContain('disabled automatic'))
+	await waitFor(() => expect(hook.state().mintReason).toContain('requested withdrawal'))
 })
 
 test('loads a registered entered question outside the watchlist before minting without changing tracked positions', async () => {
@@ -513,7 +525,7 @@ test('owner fee edits reset acknowledgement and fee changes invalidate reviewed 
 		hook.state().setMinimumAllocationFee('0.002')
 		hook.state().setAcknowledged(true)
 	})
-	await act(async () => await hook.state().enable())
+	await act(async () => await hook.state().configure())
 	const request = captured()
 	if (request === undefined) throw new Error('Expected fee authorization request')
 	expect(decodeFunctionData({ abi: parseAbi(['function setAutomaticUnderwriting(uint256,uint256,uint256,uint256,uint256,uint256)']), data: request.data }).args?.slice(-2)).toEqual([250n, 2n * 10n ** 15n])

@@ -43,9 +43,5 @@ export async function seedPortfolioScenario({ accounts, createReadClient, create
 	await sendPortfolioTransaction(client, buildPortfolioQuestionBatchRequest({ owner, vault, vaultAbi: vaultArtifact.abi, operations, requireImmediate: true }), 'Allocate portfolio REP')
 	const version = await readClient.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'allocationPolicyVersion' })
 	const nonce = await readClient.readContract({ address: vault, abi: vaultArtifact.abi, functionName: 'allocationPolicyNonce' })
-	await sendPortfolioTransaction(
-		client,
-		buildPortfolioAutomaticUnderwritingRequest({ owner, vault, expectedVersion: version, expectedNonce: nonce, minimumIdleAttoRep: 1000n * 10n ** 18n, minimumHealthFactorBps: 12000n, reservationFeeBps: 100n, minimumAllocationFeeAttoEth: 10n ** 15n }),
-		'Enable automatic underwriting',
-	)
+	await sendPortfolioTransaction(client, buildPortfolioAutomaticUnderwritingRequest({ owner, vault, expectedVersion: version, expectedNonce: nonce, minimumIdleAttoRep: 1000n * 10n ** 18n, minimumHealthFactorBps: 12000n, reservationFeeBps: 100n, minimumAllocationFeeAttoEth: 10n ** 15n }), 'Save underwriting settings')
 }

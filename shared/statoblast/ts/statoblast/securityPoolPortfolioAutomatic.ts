@@ -108,7 +108,7 @@ export function buildPortfolioWithdrawalRequest(parameters: { owner: Address; va
 	return request(parameters.owner, parameters.vault, 'requestWithdrawal')
 }
 
-/** Cancelling a request does not restore allocation consent. */
+/** Cancelling resumes automatic backing with saved settings; delegated executor authority stays revoked. */
 export function buildPortfolioCancelWithdrawalRequest(parameters: { owner: Address; vault: Address }) {
 	return request(parameters.owner, parameters.vault, 'cancelWithdrawal')
 }

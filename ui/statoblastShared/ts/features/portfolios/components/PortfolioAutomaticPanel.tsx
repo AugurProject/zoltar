@@ -96,8 +96,7 @@ export function PortfolioAutomaticPanel({ model, actions }: { model: Model; acti
 				{copy.automaticConsent}
 			</label>
 			<div className='actions'>
-				<PortfolioButton model={actions} action='enablePortfolioAutomatic' label={copy.enableAutomatic} pendingLabel={copy.enablingAutomatic} reason={model.enableReason} onClick={model.enable} />
-				<PortfolioButton model={actions} action='revokePortfolioPolicy' label={copy.revoke} pendingLabel={copy.revoking} reason={actions.vaultReason} onClick={actions.revokePolicy} />
+				<PortfolioButton model={actions} action='configurePortfolioAutomatic' label={copy.saveAutomatic} pendingLabel={copy.savingAutomatic} reason={model.configureReason} onClick={model.configure} />
 				<PortfolioButton model={actions} action='withdrawPortfolioEth' label={copy.withdrawVaultEth} pendingLabel={copy.withdrawingVaultEth} reason={model.withdrawEthReason} onClick={model.withdrawEth} />
 			</div>
 		</SectionBlock>
