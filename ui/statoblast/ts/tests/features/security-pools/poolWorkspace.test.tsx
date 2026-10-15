@@ -298,10 +298,11 @@ test('shows the mintable remainder in the header capacity summary', async () => 
 	expect(getHeaderRemainingText()).toBe('5.00 ETH remaining')
 })
 
-test('shows no remaining capacity in the header once an escalation game has started', async () => {
+test('says minting is paused in the header once an escalation game has started', async () => {
 	await renderPoolPage(createSelectedPool({ mintingCapacityAttoEth: 5n * 10n ** 18n, ordinaryEscalationGameStarted: true }))
 	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('5.00 ETH')
-	expect(getHeaderRemainingText()).toBe('0 ETH remaining')
+	// A zero remainder beside "0% used" would contradict itself, so the caption names why nothing can be minted.
+	expect(getHeaderRemainingText()).toBe('Minting paused')
 })
 
 test('shows no remaining capacity in the header when the complete-set exchange rate is undefined', async () => {
@@ -458,11 +459,11 @@ test('labels a passed migration deadline as ended', async () => {
 	expect(getStripFigures()).toContain('Migration ended: 1m ago')
 })
 
-test('leads a pool in its truth auction with the ETH bid against the target and the auction deadline', async () => {
-	// Before finalization the raise is not known without the order book, so the header shows the ETH bid against the target.
+test('leads a pool in its truth auction with the ETH it raises against the target and the auction deadline', async () => {
+	// Before finalization the clearing amount, capped at the target, is what the auction raises; the auction card names it the same way.
 	const truthAuction = createFinalizedTruthAuction({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n, finalized: false, hitCap: false })
 	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
-	expect(getStripFigures()).toEqual(['ETH bid: 1.00 ETH / 4.00 ETH', 'Auction ends: in 3d', 'Pool stage: Truth auction'])
+	expect(getStripFigures()).toEqual(['ETH raised: 1.00 ETH / 4.00 ETH', 'Auction ends: in 3d', 'Pool stage: Truth auction'])
 	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('25% of target')
 	expect(document.querySelector('.pool-oracle-status')).toBeNull()
 	// The strip owns the auction deadline, so the next-action row above it does not repeat it.

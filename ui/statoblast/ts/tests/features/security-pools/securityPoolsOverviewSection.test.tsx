@@ -758,13 +758,24 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
 	})
 
-	test('shows no remaining capacity for a pool whose escalation game has started', async () => {
+	test('says minting is paused for a pool whose escalation game has started', async () => {
 		const pool = createNumberedPool(1, { ordinaryEscalationGameStarted: true })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
 		expect(rowText).toContain('/ 5.00 ETH')
-		expect(document.querySelector('.pool-directory-row .pool-capacity-summary .progress-meter-detail')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('0 ETH remaining')
+		expect(rowText).not.toContain('remaining')
+		expect(document.querySelector('.pool-directory-row .pool-capacity-summary .progress-meter-detail')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Minting paused')
+	})
+
+	test('does not call minting paused once a pool that ran an escalation game has finalized or forked', async () => {
+		// The escalation flag stays set after the game, but finalization or a fork closes minting for good.
+		const finalizedPool = createNumberedPool(1, { ordinaryEscalationGameStarted: true, questionOutcome: 'yes' })
+		const migratingPool = createNumberedPool(2, { ordinaryEscalationGameStarted: true, systemState: 'forkMigration' })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [finalizedPool, migratingPool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const captions = [...document.querySelectorAll('.pool-directory-row .pool-capacity-summary .progress-meter-detail')].map(element => element.textContent?.replace(/\s+/g, ' ').trim())
+		expect(captions).toEqual(['0 ETH remaining', '0 ETH remaining'])
 	})
 
 	test('shows no remaining capacity when the complete-set exchange rate is undefined', async () => {

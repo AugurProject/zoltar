@@ -3,25 +3,7 @@ import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TruthAuctionMetrics } from '../../../types/contracts.js'
-
-/** Migration accepts block.timestamp <= forkActivationTime + MIGRATION_TIME, so it closes only after `migrationEndsAt`. */
-export function isMigrationClosed(currentTimestamp: bigint, migrationEndsAt: bigint) {
-	return currentTimestamp > migrationEndsAt
-}
-
-/** UniformPriceDualCapBatchAuction.finalize requires block.timestamp >= auctionStarted + AUCTION_TIME, so the auction has ended at its end time. */
-export function hasTruthAuctionEnded(currentTimestamp: bigint, auctionEndsAt: bigint) {
-	return currentTimestamp >= auctionEndsAt
-}
-
-/** Migration ends at its deadline, or earlier once the outcome's truth auction starts, which ends it at that moment. Undefined while neither time is known. */
-export function getMigrationEnd({ auctionStartedAt, currentTimestamp, migrationEndsAt }: { auctionStartedAt: bigint | undefined; currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	const endedByAuction = auctionStartedAt !== undefined && (migrationEndsAt === undefined || auctionStartedAt < migrationEndsAt)
-	const endsAt = endedByAuction ? auctionStartedAt : migrationEndsAt
-	if (endsAt === undefined) return undefined
-	const ended = currentTimestamp !== undefined && (endedByAuction ? endsAt <= currentTimestamp : isMigrationClosed(currentTimestamp, endsAt))
-	return { endsAt, ended }
-}
+import { hasTruthAuctionEnded, isMigrationClosed } from '../lib/forkAuction.js'
 
 export function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
 	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable

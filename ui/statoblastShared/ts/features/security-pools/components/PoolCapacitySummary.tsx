@@ -21,15 +21,20 @@ export function AmountOfLimit({ amount, limit }: { amount: bigint; limit: bigint
 	)
 }
 
-/** `remainingCapacity` is the mintable remainder from `getPoolRemainingMintCapacity`, which is zero while an escalation game is open or the complete-set exchange rate is undefined, so every caller states the same figure as the pool directory and the Mint action. */
-export function PoolCapacitySummary({ capacity, minted, remainingCapacity, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; remainingCapacity: bigint | undefined; showUnavailableReason?: boolean; showUsage?: boolean }) {
+/**
+ * `remainingCapacity` is the mintable remainder from `getPoolRemainingMintCapacity`, which is zero while an escalation game is open or the complete-set exchange rate is undefined, so every caller states the same figure as the pool directory and the Mint action.
+ * While an escalation game pauses minting, `mintingPaused` names that reason in place of the zero remainder, which would otherwise contradict a low usage.
+ */
+export function PoolCapacitySummary({ capacity, minted, mintingPaused = false, remainingCapacity, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; mintingPaused?: boolean; remainingCapacity: bigint | undefined; showUnavailableReason?: boolean; showUsage?: boolean }) {
 	const value = <AmountOfLimit amount={minted} limit={capacity} />
 	const usedPercent = capacity === undefined ? undefined : formatPercentOfLimit(minted, capacity)
 	const remaining = remainingCapacity ?? 0n
 	const usage =
 		showUsage && usedPercent !== undefined && capacity !== undefined
 			? {
-					detail: (
+					detail: mintingPaused ? (
+						securityPoolCopy.mintingPaused
+					) : (
 						<>
 							<CurrencyValue value={remaining} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero /> {securityPoolCopy.capacityRemaining}
 						</>

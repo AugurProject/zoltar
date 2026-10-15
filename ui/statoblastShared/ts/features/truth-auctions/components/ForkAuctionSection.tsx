@@ -26,7 +26,7 @@ import type { ForkAuctionSectionProps } from '../../types.js'
 import { type DisplayMetric, ForkAuctionOutcomeStage, ForkAuctionMigrationSummaryCard, FORK_MIGRATION_DURATION, ForkWorkflowStageNavigator, renderAddress, renderMetricValue, renderTruthAuctionPriceValue, renderTruthAuctionSettlementSelectionSummary, sameBigIntRecord } from './ForkAuctionPresentation.js'
 import { useForkAuctionSectionState } from '../hooks/useForkAuctionSectionState.js'
 import { renderForkAuctionSectionDisplays } from './ForkAuctionSectionDisplays.js'
-import { getMigrationEnd } from './ForkAuctionPresentationState.js'
+import { getMigrationEnd } from '../lib/forkAuction.js'
 import { poolStripShowsAuction, poolStripShowsMigration } from '../../security-pools/lib/poolStrip.js'
 
 export function ForkAuctionSection(props: ForkAuctionSectionProps) {
@@ -102,7 +102,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const migrationRepDisplay = renderMetricValue(selectedOutcomeMigratedAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
 	const migrationSettlementCollateralDisplay = renderMetricValue(model.forkAuctionDetails?.settlementCollateralAttoEth ?? model.previewPool?.settlementCollateralAttoEth, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
 	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} relativeFirst timestamp={migrationStartedAt} />
-	// Migration ends at its deadline, or earlier once the selected outcome's truth auction starts; a passed end reads as ended, as in the pool header.
+	// A passed migration end reads as ended, as in the pool header.
 	const migrationEnd = (() => {
 		if (model.forkAuctionDetails === undefined) return { display: model.migrationSummaryText, ended: false }
 		const auctionStartedAt = model.hasStartedSelectedTruthAuctionTimeline && model.effectiveTruthAuctionStartedAt !== undefined && model.effectiveTruthAuctionStartedAt > 0n ? model.effectiveTruthAuctionStartedAt : undefined
@@ -155,6 +155,8 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		if (!model.shouldShowTruthAuctionVisualization || model.truthAuctionStatus === undefined) return undefined
 		const hasPendingRefund = model.pendingEthRefundAttoEth !== undefined && model.pendingEthRefundAttoEth > 0n
 		const biddingClosed = isTruthAuctionBiddingClosed(model.truthAuctionStatus, model.effectiveCurrentTimestamp)
+		// While this pool's own auction runs, the pool header shows its ETH raised and deadline, so the card leaves both out.
+		const headerShowsAuction = poolStripShowsAuction(model.lifecycleStateOverride) && model.isViewingOwnAuction
 		const progressDetail = (() => {
 			if (biddingClosed) return undefined
 			return model.truthAuctionStatus.hitCap ? forkAuctionCopy.truthAuctionClearingProgressDetail : forkAuctionCopy.truthAuctionOpenProgressDetail
@@ -164,13 +166,11 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				auctionedUnderwritingLimitAttoEthDisplay={model.selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={model.truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(model.truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared}
-				displayedEthRaisedAttoEth={model.displayedEthRaisedAttoEth}
 				displayedRepSoldAttoRep={model.displayedRepSoldAttoRep}
 				ended={biddingClosed}
-				// The pool header shows the auction deadline while this pool's own auction runs, so the card leaves it out then.
-				endsDisplay={poolStripShowsAuction(model.lifecycleStateOverride) && model.isViewingOwnAuction ? undefined : displays.endsDisplay}
+				endsDisplay={headerShowsAuction ? undefined : displays.endsDisplay}
 				attoEthRaiseCap={model.truthAuctionStatus.attoEthRaiseCap}
-				ethRaisedProgress={model.ethRaisedProgress}
+				ethRaised={headerShowsAuction ? undefined : { attoEth: model.displayedEthRaisedAttoEth, progress: model.ethRaisedProgress }}
 				maxAttoRepBeingSold={model.truthAuctionStatus.maxAttoRepBeingSold}
 				minBidSizeAttoEth={model.truthAuctionStatus.minBidSizeAttoEth}
 				pendingRefundDisplay={model.selectedStage !== 'settlement' && (model.truthAuctionStatus.finalized || hasPendingRefund) ? pendingRefundDisplay : undefined}

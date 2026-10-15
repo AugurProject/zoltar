@@ -1,5 +1,6 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { hasEscalationGame } from '../../markets/lib/trading.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { deriveSecurityPoolLifecycleState, type SecurityPoolLifecycleState } from './securityPoolState.js'
 import type { SecurityPoolReportingStage } from './securityPoolState/types.js'
@@ -47,6 +48,14 @@ export function derivePoolLifecycleStep({ forkSettled = false, hasForkActivity, 
 export function getSkippedLifecycleSteps({ escalationStarted, hasForkActivity, step }: { escalationStarted: boolean; hasForkActivity: boolean; step: PoolLifecycleStep | undefined }): PoolLifecycleStep[] {
 	if (step !== 'settled' || hasForkActivity) return []
 	return escalationStarted ? ['forkMigration', 'truthAuction'] : ['escalation', 'forkMigration', 'truthAuction']
+}
+
+/**
+ * Whether an escalation game pauses an operating pool's minting. The escalation flags stay set after the game, when
+ * finalization or a fork has closed minting for good, so a pool in any other stage is not "paused".
+ */
+export function isMintingPausedByEscalation(pool: Parameters<typeof hasEscalationGame>[0], lifecycleState: SecurityPoolLifecycleState | undefined) {
+	return (lifecycleState === 'operational' || lifecycleState === undefined) && hasEscalationGame(pool)
 }
 
 /** Whether the pool is in a fork stage: forked, migrating, or running its truth auction. */

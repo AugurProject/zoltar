@@ -3933,6 +3933,10 @@ span.rep-price-status.stale,
 		border-inline-start: 0;
 	}
 
+	.pool-status-strip > :first-child:not(.pool-lifecycle) {
+		padding-inline-end: var(--space-3);
+	}
+
 	.pool-status-strip > :nth-child(2):not(.pool-lifecycle) {
 		padding-inline-start: var(--space-3);
 		border-inline-start: 1px solid var(--divider-subtle);
@@ -4140,7 +4144,9 @@ span.rep-price-status.stale,
 	min-width: 0;
 }
 
-.vault-operations-wallet {
+/* A label and its value on one baseline: the wallet REP balance beside the deposit, and the REP/ETH price behind the directory's verdicts. */
+.vault-operations-wallet,
+.vault-directory-price {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: baseline;
@@ -4191,6 +4197,21 @@ span.rep-price-status.stale,
 
 .vault-operations-form .field-inline > input {
 	align-self: start;
+}
+
+/* The input's basis is the whole row, so a shrinking add-target button would wrap its reserved pending label and stand taller than the input; stretched, it shares the input's edges like the Max buttons. */
+.vault-operations-lookup .field-inline > .tx-action {
+	flex: 0 0 auto;
+}
+
+.vault-operations-lookup .tx-action-row {
+	align-items: stretch;
+}
+
+/* Inside a form field the shared `.field span` caption style would shrink and mute the button's label spans. */
+.vault-operations-lookup .tx-action-button span {
+	font-size: inherit;
+	color: inherit;
 }
 
 /* Security pool UX fixes: next-action buttons and vault liquidation reasons. */

@@ -1146,11 +1146,13 @@ describe('ForkAuctionSection', () => {
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
 		expect(truthAuctionCard.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Open')
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
+		// Outside the pool workspace no header shows the auction, so the card keeps its ETH raised.
+		expect(within(truthAuctionCard).getByText('ETH raised')).not.toBeNull()
 		expect(within(truthAuctionCard).queryByText('Pending refund')).toBeNull()
 		expect(within(truthAuctionCard).getByText('The ETH target has not been reached, so there is no clearing price yet. Once it is reached, a single clearing price decides which bids win.')).not.toBeNull()
 	})
 
-	test('leaves the truth auction end to the pool header while the pool workspace shows its own auction', async () => {
+	test('leaves the truth auction end and ETH raised to the pool header while the pool workspace shows its own auction', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1188,6 +1190,8 @@ describe('ForkAuctionSection', () => {
 		expect(within(summary).getByText('Started')).not.toBeNull()
 		expect(within(summary).queryByText('Ends')).toBeNull()
 		expect(within(summary).queryByText('in 6d 23h')).toBeNull()
+		expect(within(summary).queryByText('ETH raised')).toBeNull()
+		expect(within(summary).getByText('REP sold')).not.toBeNull()
 	})
 
 	test('keeps refund withdrawal disabled while loading, then shows the credited amount beside an enabled action', async () => {

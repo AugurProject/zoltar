@@ -100,7 +100,7 @@ export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | '
 }
 
 /** `formatOutcomeWithValue` for a holding whose surroundings already state that redemption is blocked, so the payout leaves that note out. */
-export function formatOutcomeWithConditionalValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket) {
+export function formatOutcomeWithValueWithoutRedemptionNote(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket) {
 	return `${formatOutcomeQuantity(amount, outcome)} (${formatOutcomePayout(amount, outcome, market, 'nearest', { noteRedemption: false })})`
 }
 

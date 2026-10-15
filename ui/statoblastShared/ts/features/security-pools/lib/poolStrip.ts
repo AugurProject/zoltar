@@ -1,3 +1,4 @@
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { TruthAuctionMetrics } from '../../../types/contracts.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
 
@@ -9,14 +10,34 @@ export type PoolForkTimeline = {
 	truthAuction: TruthAuctionMetrics | undefined
 }
 
-/** While the pool is forked or migrating, the strip shows its settlement collateral and migration deadline. */
-export function poolStripShowsMigration(state: SecurityPoolLifecycleState | undefined) {
-	return state === 'poolForked' || state === 'forkMigration'
+/**
+ * Which figures lead the strip: an operating pool's capacity, a forked or migrating pool's settlement collateral and
+ * migration deadline, a running truth auction's progress and end, or an ended pool's outcome. The header renders from this
+ * mapping and the views below it use it to leave out what the strip already shows.
+ */
+export function getPoolStripStage(state: SecurityPoolLifecycleState | undefined) {
+	switch (state) {
+		case 'ended':
+			return 'ended'
+		case 'poolForked':
+		case 'forkMigration':
+			return 'migration'
+		case 'forkTruthAuction':
+			return 'auction'
+		case 'operational':
+		case undefined:
+			return 'operating'
+		default:
+			return assertNever(state)
+	}
 }
 
-/** While the pool runs its truth auction, the strip shows the auction's progress and end. */
+export function poolStripShowsMigration(state: SecurityPoolLifecycleState | undefined) {
+	return getPoolStripStage(state) === 'migration'
+}
+
 export function poolStripShowsAuction(state: SecurityPoolLifecycleState | undefined) {
-	return state === 'forkTruthAuction'
+	return getPoolStripStage(state) === 'auction'
 }
 
 /** The stage deadline the strip shows, if any, so views below the header need not repeat it. */

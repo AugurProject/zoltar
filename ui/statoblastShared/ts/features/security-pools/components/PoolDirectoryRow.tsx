@@ -15,6 +15,7 @@ import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { isMintingPausedByEscalation } from '../lib/poolLifecycle.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
@@ -70,7 +71,7 @@ export function PoolDirectoryRow({
 				</div>
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
-			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} remainingCapacity={remainingCapacity} showUsage />
+			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} mintingPaused={isMintingPausedByEscalation(pool, lifecycleState)} remainingCapacity={remainingCapacity} showUsage />
 			<a
 				className='secondary pool-open-link'
 				href={href}

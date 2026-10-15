@@ -26,6 +26,7 @@ import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
+import { isMintingPausedByEscalation } from '../../security-pools/lib/poolLifecycle.js'
 import {
 	estimateMintCheckpoint,
 	getDefaultShareMigrationTargetOutcomeIndexes,
@@ -44,7 +45,6 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 	getPoolMintingCapacityAttoEth,
-	hasEscalationGame,
 	hasShares,
 	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
 } from '../lib/trading.js'
@@ -110,7 +110,7 @@ export function TradingSection({
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
-	const mintingPausedByEscalation = selectedPool !== undefined && hasEscalationGame(selectedPool)
+	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool, resolvedPoolState.lifecycleState)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
@@ -168,6 +168,8 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
+		// A pool stage that closes minting explains it before any capacity figure, which a stale escalation flag can zero.
+		if (!mintEnabled) return tradingCopy.actionUnavailableReason
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 		if (remainingMintCapacity === 0n) {
@@ -220,7 +222,6 @@ export function TradingSection({
 	const expectedRedemptionPayoutAttoEth = convertAttoSharesToSettlementCollateralAttoEth(winningAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const redeemSharesLauncherBlocker = getTradingRedeemSharesGuardMessage({ accountAddress: accountState.address, hasSelectedPool, isOnActiveAppChain, questionOutcome: selectedPool?.questionOutcome, shareBalances: loadingTradingDetails ? undefined : shareBalances })
 
-	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
@@ -273,7 +274,7 @@ export function TradingSection({
 			)}
 		</>
 	)
-	const mintReady = !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined
+	const mintReady = mintLauncherBlocker === undefined
 	// Minting can never resume once the question has finalized, so its launcher is left out rather than shown disabled; every other action can still apply later and stays with its reason.
 	const tradingLaunchers: ReadinessAction[] = [
 		...(winningOutcome !== undefined
@@ -286,7 +287,7 @@ export function TradingSection({
 						readiness: mintReady ? 'ready' : 'blocked',
 						title: tradingCopy.mintCompleteSets,
 						...(mintReady ? { onAction: () => setActiveModal('mint') } : {}),
-						...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
+						...(mintLauncherBlocker === undefined ? {} : { blocker: mintLauncherBlocker }),
 					} satisfies ReadinessAction,
 				]),
 		{

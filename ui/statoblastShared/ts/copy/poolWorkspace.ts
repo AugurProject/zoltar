@@ -37,7 +37,6 @@ export const lifecycleStepSkipped = 'skipped'
 
 export const formatSkippedLifecycleStep = (label: string) => `${label} (${lifecycleStepSkipped})`
 
-export const ethBid = 'ETH bid'
 export const formatShareOfTarget = (percent: CopyTemplateValue) => `${percent}% of target`
 export const nextActions = 'Next actions'
 export const nothingToDoNow = 'Nothing needs your action on this pool right now.'

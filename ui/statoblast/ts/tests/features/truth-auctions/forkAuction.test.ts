@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView, getForkVaultMigrationRepAttoRep } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView, getForkVaultMigrationRepAttoRep, getMigrationEnd } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import { getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionPresentation.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {
@@ -949,6 +949,17 @@ describe('fork auction contract time boundaries', () => {
 	test('migration stays open through its end timestamp, matching block.timestamp <= forkActivationTime + MIGRATION_TIME', () => {
 		expect(getMigrationStateBadge({ currentTimestamp: 1_000n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('pending')
 		expect(getMigrationStateBadge({ currentTimestamp: 1_001n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('ok')
+	})
+
+	test('migration ends at its deadline, or at a started truth auction when the loaded deadline is unknown or reads later', () => {
+		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_000n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: false })
+		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_001n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: 1_010n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
+		// An auction starts only after migration closes, so a deadline that reads later than the auction start is not shown as upcoming.
+		expect(getMigrationEnd({ auctionStartedAt: 600n, currentTimestamp: 700n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 600n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: 1_010n, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: undefined, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: false })
+		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_010n, migrationEndsAt: undefined })).toBeUndefined()
 	})
 })
 

@@ -876,6 +876,17 @@ void describe('TradingSection', () => {
 		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is paused while the outcome is disputed.')
 	})
 
+	void test('does not call minting paused for a forked pool whose escalation game has ended', async () => {
+		// The escalation flag stays set after the game, but a fork has closed minting for good.
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true, systemState: 'forkMigration', totalPoolHeldAttoRep: 10n ** 18n }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const mintState = getTransactionButtonState(document.body, 'Mint complete sets')
+		expect(mintState.disabled).toBe(true)
+		// The stage, not the zero capacity the stale flag causes, explains why minting is closed.
+		expect(mintState.reason).toBe('This action is unavailable in the current pool state.')
+	})
+
 	void test('shows how many shares of the selected outcome a migration moves and each outcome balance', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection

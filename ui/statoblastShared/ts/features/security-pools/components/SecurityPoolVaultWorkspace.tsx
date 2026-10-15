@@ -14,7 +14,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
-import { getVaultNotLiquidatableReason } from '../lib/liquidation.js'
+import { getVaultLiquidatability, getVaultNotLiquidatableReason } from '../lib/liquidation.js'
 import { getVaultLiquidationLauncherBlocker } from '../lib/liquidationModalGuards.js'
 import { isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -81,8 +81,8 @@ export function SecurityPoolVaultWorkspace({
 	const liquidationReasonIdPrefix = useId()
 	// The launchers check the price the protocol guard uses, so a vault that is healthy on-chain is never offered for liquidation.
 	const protocolRepPerEthPrice = currentPoolOracleManagerDetails !== undefined && isOracleManagerPriceUsable(currentPoolOracleManagerDetails, chainTimestamp) ? currentPoolOracleManagerDetails.lastPrice : undefined
-	const getNotLiquidatableReason = (vault: SecurityPoolVaultSummary | undefined) =>
-		vault === undefined ? undefined : getVaultNotLiquidatableReason({ minLiquidationPriceDistanceBps: currentPoolOracleManagerDetails?.minLiquidationPriceDistanceBps, repPerEthPrice: protocolRepPerEthPrice, statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps, targetVaultSummary: vault })
+	const getLiquidatabilityInput = (vault: SecurityPoolVaultSummary) => ({ minLiquidationPriceDistanceBps: currentPoolOracleManagerDetails?.minLiquidationPriceDistanceBps, repPerEthPrice: protocolRepPerEthPrice, statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps, targetVaultSummary: vault })
+	const getNotLiquidatableReason = (vault: SecurityPoolVaultSummary | undefined) => (vault === undefined ? undefined : getVaultNotLiquidatableReason(getLiquidatabilityInput(vault)))
 	const isWalletVault = (vaultAddress: string) => walletAddress !== undefined && sameCaseInsensitiveText(walletAddress, vaultAddress)
 	const getLiquidationLauncherBlocker = ({ notLiquidatableReason, vaultExistsOnchain, vaultLoaded }: { notLiquidatableReason: string | undefined; vaultExistsOnchain: boolean; vaultLoaded: boolean }) =>
 		getVaultLiquidationLauncherBlocker({ hasWallet: walletAddress !== undefined, isOnActiveAppChain, liquidationEnabled, notLiquidatableReason, vaultExistsOnchain, vaultLoaded, wrongNetworkReason: getWrongNetworkReason() })
@@ -162,7 +162,8 @@ export function SecurityPoolVaultWorkspace({
 							if (selectedPool === undefined) return undefined
 							// The connected wallet's own vault can never be liquidated by it, so its row offers no liquidation.
 							const ownVault = isWalletVault(vault.vaultAddress)
-							const liquidationBlocker = ownVault ? undefined : getLiquidationLauncherBlocker({ notLiquidatableReason: getNotLiquidatableReason(vault), vaultExistsOnchain: true, vaultLoaded: true })
+							const liquidatability = getVaultLiquidatability(getLiquidatabilityInput(vault))
+							const liquidationBlocker = ownVault ? undefined : getLiquidationLauncherBlocker({ notLiquidatableReason: liquidatability.kind === 'blocked' ? liquidatability.reason : undefined, vaultExistsOnchain: true, vaultLoaded: true })
 							const liquidationReasonId = `${liquidationReasonIdPrefix}-${vault.vaultAddress}`
 							return (
 								<>
@@ -179,10 +180,10 @@ export function SecurityPoolVaultWorkspace({
 											{workspaceCopy.openVault}
 										</button>
 										{ownVault ? undefined : (
-											// A liquidation the protocol's price allows is the row's main action; the health badge uses the UI estimate, so it does not decide the emphasis.
+											// Only a liquidation the protocol's price confirms is the row's main action. The health badge uses the UI estimate, and without a usable protocol price the action stays available but secondary.
 											<button
 												aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId}
-												className={liquidationBlocker === undefined ? 'primary' : 'secondary'}
+												className={liquidationBlocker === undefined && liquidatability.kind === 'allowed' ? 'primary' : 'secondary'}
 												disabled={liquidationBlocker !== undefined}
 												type='button'
 												onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}

@@ -13,14 +13,14 @@ type TruthAuctionSummaryCardProps = {
 	auctionedUnderwritingLimitAttoEthDisplay?: ComponentChildren | undefined
 	badge: ComponentChildren
 	clearingPriceDisplay: ComponentChildren
-	displayedEthRaisedAttoEth: bigint
 	displayedRepSoldAttoRep: bigint
 	/** Bidding has closed, so the end time reads in the past tense. */
 	ended: boolean
 	/** Left out while the pool header already shows the auction deadline. */
 	endsDisplay: ComponentChildren | undefined
 	attoEthRaiseCap: bigint
-	ethRaisedProgress: number
+	/** What the auction raises and its share of the target in percent; left out while the pool header already shows it. */
+	ethRaised: { attoEth: bigint; progress: number } | undefined
 	maxAttoRepBeingSold: bigint
 	minBidSizeAttoEth: bigint
 	pendingRefundDisplay: ComponentChildren | undefined
@@ -35,12 +35,11 @@ export function TruthAuctionSummaryCard({
 	auctionedUnderwritingLimitAttoEthDisplay,
 	badge,
 	clearingPriceDisplay,
-	displayedEthRaisedAttoEth,
 	displayedRepSoldAttoRep,
 	ended,
 	endsDisplay,
 	attoEthRaiseCap,
-	ethRaisedProgress,
+	ethRaised,
 	maxAttoRepBeingSold,
 	minBidSizeAttoEth,
 	pendingRefundDisplay,
@@ -54,17 +53,19 @@ export function TruthAuctionSummaryCard({
 		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title={commonCopy.truthAuction} variant='embedded'>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary truth-auction-summary-primary'>
-					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
-						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>{forkAuctionCopy.attoEthRaised}</span>
-							<strong>
-								<CurrencyValue value={displayedEthRaisedAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={attoEthRaiseCap} suffix={commonCopy.eth} />
-							</strong>
+					{ethRaised === undefined ? undefined : (
+						<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
+							<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
+								<span>{forkAuctionCopy.attoEthRaised}</span>
+								<strong>
+									<CurrencyValue value={ethRaised.attoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={attoEthRaiseCap} suffix={commonCopy.eth} />
+								</strong>
+							</div>
+							<div className='truth-auction-progress-track'>
+								<div className='truth-auction-progress-fill is-eth' style={{ width: `${ethRaised.progress}%` }} />
+							</div>
 						</div>
-						<div className='truth-auction-progress-track'>
-							<div className='truth-auction-progress-fill is-eth' style={{ width: `${ethRaisedProgress}%` }} />
-						</div>
-					</div>
+					)}
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
 							<span>{forkAuctionCopy.attoRepSold}</span>

@@ -4,6 +4,8 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
+import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createSecurityVaultProps, createSecurityVaultDetails } from './workflow/builders.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 installTestRouting()
@@ -240,6 +242,61 @@ test('keeps a blocked liquidation secondary even when the UI price reads the vau
 	expect(liquidateButton.classList.contains('secondary')).toBe(true)
 })
 
+test('keeps every liquidation secondary but available while the protocol price is unusable', async () => {
+	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
+	await renderHarness(
+		<SecurityPoolWorkflowSection
+			{...createSecurityPoolWorkflowProps({
+				accountState: createAccountState({ address: getAddress('0x0000000000000000000000000000000000000003') }),
+				// Without a usable oracle price the protocol has no verdict, so neither the healthy nor the underwater vault's liquidation leads its row.
+				poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n }),
+				repPerEthPrice: 10n ** 18n,
+				securityPoolAddress: zeroAddress,
+				securityPools: [
+					createSelectedPool({
+						hasLoadedVaults: true,
+						statoblastSecurityMultiplierBps: 20_000n,
+						vaultCount: 2n,
+						vaults: [createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
+					}),
+				],
+				selectedPoolView: 'vaults',
+			})}
+		/>,
+	)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
+	expect(rows.map(row => row.querySelector('.vault-health')?.textContent)).toEqual(['Underwater', 'Healthy'])
+	const liquidateButtons = within(document.body).getAllByRole('button', { name: 'Liquidate vault' })
+	expect(liquidateButtons).toHaveLength(2)
+	expect(liquidateButtons.map(button => [button.hasAttribute('disabled'), button.classList.contains('secondary')])).toEqual([
+		[false, true],
+		[false, true],
+	])
+})
+
+test('names the price behind the directory verdicts once, above the rows', async () => {
+	// After the OpenOracle price expires the verdicts fall back to Uniswap, so the directory says which price they use.
+	const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle-fallback', uniswapPrice: 3n * 10n ** 18n })
+	await renderHarness(
+		<SelectedPoolRepPriceContext.Provider value={repPrice}>
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					repPerEthPrice: repPrice.price,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool({ hasLoadedVaults: true, statoblastSecurityMultiplierBps: 20_000n, vaultCount: 1n, vaults: [createSecurityVaultDetails({ vaultAddress: otherOwner })] })],
+					selectedPoolView: 'vaults',
+				})}
+			/>
+		</SelectedPoolRepPriceContext.Provider>,
+	)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	expect(document.querySelectorAll('.vault-directory-price')).toHaveLength(1)
+	expect(document.querySelector('.vault-directory-price .rep-price-status-title')?.textContent).toBe('via Uniswap')
+	// The line names its subject, so it reads as the price rather than as the list's freshness.
+	expect(document.querySelector('.vault-directory-price')?.textContent?.startsWith('REP/ETH ')).toBe(true)
+})
+
 test('shows no health verdicts or risk ordering in an ended pool, where liquidation no longer applies', async () => {
 	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
 	await renderHarness(
@@ -265,6 +322,8 @@ test('shows no health verdicts or risk ordering in an ended pool, where liquidat
 	expect(rows).toHaveLength(2)
 	expect(document.querySelector('.vault-position-strip .vault-health')).toBeNull()
 	expect(document.querySelector('.vault-position-strip.is-underwater')).toBeNull()
+	// Without verdicts there is no price basis to name.
+	expect(document.querySelector('.vault-directory-price')).toBeNull()
 	// Rows keep the registry's order rather than leading with the riskiest.
 	expect(rows[0]?.textContent).toContain(otherOwner.slice(-4))
 })

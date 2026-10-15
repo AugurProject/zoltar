@@ -6,7 +6,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { LpHolding, OutcomeHoldingItem } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
 import * as payoutCopy from '../copy/payout.js'
-import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithConditionalValue, shareOutcome } from '../lib/shareValue.js'
+import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithValueWithoutRedemptionNote, shareOutcome } from '../lib/shareValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -87,8 +87,8 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 			{balances.lp === 0n ? undefined : (
 				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
-						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithConditionalValue(yesClaim, shareOutcome.yes, market)}</MetricField>
-						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithConditionalValue(noClaim, shareOutcome.no, market)}</MetricField>
+						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValueWithoutRedemptionNote(yesClaim, shareOutcome.yes, market)}</MetricField>
+						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValueWithoutRedemptionNote(noClaim, shareOutcome.no, market)}</MetricField>
 						<MetricField label={portfolioCopy.claimInsuredByInvalid}>{formatCompleteSetWithValue(coveredSets, market)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>

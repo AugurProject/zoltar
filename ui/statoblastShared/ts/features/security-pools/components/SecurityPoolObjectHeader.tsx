@@ -24,13 +24,14 @@ import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getFinalizedTruthAuctionRaisedAttoEth } from '../../truth-auctions/lib/truthAuctionBook.js'
-import { hasTruthAuctionEnded, isMigrationClosed } from '../../truth-auctions/components/ForkAuctionPresentationState.js'
-import type { PoolForkTimeline } from '../lib/poolStrip.js'
+import { hasTruthAuctionEnded, isMigrationClosed } from '../../truth-auctions/lib/forkAuction.js'
+import { getPoolStripStage, type PoolForkTimeline } from '../lib/poolStrip.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { getPoolRemainingMintCapacity } from '../../markets/lib/trading.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { isMintingPausedByEscalation } from '../lib/poolLifecycle.js'
 import type { MarketDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool, OracleManagerDetails, TruthAuctionMetrics } from '../../../types/contracts.js'
 
@@ -87,15 +88,12 @@ function getTruthAuctionProgressDetail(auction: TruthAuctionMetrics, amountAttoE
 	return percent === undefined ? undefined : copy.formatShareOfTarget(percent)
 }
 
-/**
- * Until the auction finalizes, the ETH it raises depends on the order book, which only the Fork & migration tab loads,
- * so the header shows the ETH bid against the target; a finalized auction shows what it raised.
- */
+/** What the auction raises against its target: the clearing amount, capped at the target, until it finalizes, then what it raised. */
 function TruthAuctionProgressFigure({ auction }: { auction: TruthAuctionMetrics }) {
 	const amountAttoEth = auction.finalized ? getFinalizedTruthAuctionRaisedAttoEth(auction) : auction.accumulatedBidAttoEth
 	return (
 		<div className='pool-meter is-prominent pool-auction-progress'>
-			<ProgressMeter label={auction.finalized ? forkAuctionCopy.attoEthRaised : copy.ethBid} maxValue={auction.attoEthRaiseCap} value={amountAttoEth} valueText={<AmountOfLimit amount={amountAttoEth} limit={auction.attoEthRaiseCap} />} detail={getTruthAuctionProgressDetail(auction, amountAttoEth)} />
+			<ProgressMeter label={forkAuctionCopy.attoEthRaised} maxValue={auction.attoEthRaiseCap} value={amountAttoEth} valueText={<AmountOfLimit amount={amountAttoEth} limit={auction.attoEthRaiseCap} />} detail={getTruthAuctionProgressDetail(auction, amountAttoEth)} />
 		</div>
 	)
 }
@@ -103,7 +101,7 @@ function TruthAuctionProgressFigure({ auction }: { auction: TruthAuctionMetrics 
 /** While the fork details are being read, the auction tile holds its place; without auction metrics, settlement collateral leads instead. */
 function TruthAuctionLeadFigure({ forkTimeline, pool }: { forkTimeline: PoolForkTimeline; pool: ListedSecurityPool }) {
 	if (forkTimeline.truthAuction !== undefined) return <TruthAuctionProgressFigure auction={forkTimeline.truthAuction} />
-	if (forkTimeline.loading) return <PoolStripFigure label={copy.ethBid} value={<LoadingText announce={false} />} />
+	if (forkTimeline.loading) return <PoolStripFigure label={forkAuctionCopy.attoEthRaised} value={<LoadingText announce={false} />} />
 	return <SettlementCollateralFigure pool={pool} />
 }
 
@@ -112,7 +110,8 @@ function TruthAuctionLeadFigure({ forkTimeline, pool }: { forkTimeline: PoolFork
  * forked pool shows its settlement collateral and the migration or auction deadline; an ended pool shows its outcome.
  */
 function PoolStageFigures({ currentTimestamp, forkTimeline, lifecycleState, pool, questionOutcome }: { currentTimestamp: bigint | undefined; forkTimeline: PoolForkTimeline; lifecycleState: SecurityPoolLifecycleState | undefined; pool: ListedSecurityPool; questionOutcome: ReportingOutcomeKey | 'none' | undefined }) {
-	switch (lifecycleState) {
+	const stripStage = getPoolStripStage(lifecycleState)
+	switch (stripStage) {
 		case 'ended':
 			return (
 				<>
@@ -120,26 +119,24 @@ function PoolStageFigures({ currentTimestamp, forkTimeline, lifecycleState, pool
 					<SettlementCollateralFigure pool={pool} />
 				</>
 			)
-		case 'poolForked':
-		case 'forkMigration':
+		case 'migration':
 			return (
 				<>
 					<SettlementCollateralFigure pool={pool} />
 					<PoolDeadlineFigure currentTimestamp={currentTimestamp} hasEnded={isMigrationClosed} labels={{ ended: forkAuctionCopy.migrationEnded, upcoming: forkAuctionCopy.migrationEnds }} loading={forkTimeline.loading} timestamp={forkTimeline.migrationEndsAt} />
 				</>
 			)
-		case 'forkTruthAuction':
+		case 'auction':
 			return (
 				<>
 					<TruthAuctionLeadFigure forkTimeline={forkTimeline} pool={pool} />
 					<PoolDeadlineFigure currentTimestamp={currentTimestamp} hasEnded={hasTruthAuctionEnded} labels={{ ended: forkAuctionCopy.auctionEnded, upcoming: forkAuctionCopy.auctionEnds }} loading={forkTimeline.loading} timestamp={forkTimeline.auctionEndsAt} />
 				</>
 			)
-		case 'operational':
-		case undefined:
-			return <PoolCapacitySummary showUnavailableReason={false} capacity={pool.totalUnderwritingLimitAttoEth} minted={pool.settlementCollateralAttoEth} remainingCapacity={getPoolRemainingMintCapacity(pool)} showUsage />
+		case 'operating':
+			return <PoolCapacitySummary showUnavailableReason={false} capacity={pool.totalUnderwritingLimitAttoEth} minted={pool.settlementCollateralAttoEth} mintingPaused={isMintingPausedByEscalation(pool, lifecycleState)} remainingCapacity={getPoolRemainingMintCapacity(pool)} showUsage />
 		default:
-			return assertNever(lifecycleState)
+			return assertNever(stripStage)
 	}
 }
 

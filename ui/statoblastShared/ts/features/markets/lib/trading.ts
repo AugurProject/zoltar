@@ -22,7 +22,7 @@ export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'You need matching Yes,
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
-/** True while an ordinary or fork-continuation escalation game is open; minting stays closed until the dispute ends. */
+/** True once an ordinary or fork-continuation escalation game has started. The flags stay set after the game, so use `isMintingPausedByEscalation` to tell a paused operating pool from one that finalization or a fork closed. */
 export function hasEscalationGame(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
 	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame
 }

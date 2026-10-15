@@ -1,8 +1,10 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { getVaultHealthPresentation, VaultMetricGrid } from './VaultMetricGrid.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { getVaultSummaryHealth, sortByVaultHealthRisk } from '../lib/vaultHealth.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../../../types/contracts.js'
@@ -37,6 +39,12 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded, render
 			{pool.vaultScanCapped === true ? <UserMessage className='detail' tone='warning' detail={securityPoolCopy.vaultRegistryScanCapped} /> : null}
 			{loadedVaultCount > 0n && showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
 			{pool.vaults.length === 0 ? emptyState : null}
+			{/* The rows' verdicts name their price once, as the selected vault does beside its badge, so a fallback price never changes them unannounced. */}
+			{poolEnded || pool.vaults.length === 0 ? null : (
+				<p className='vault-directory-price'>
+					<span className='metric-label'>{appCopy.repPerEthCompact}</span> <RepPriceStatusLabel />
+				</p>
+			)}
 			{rows.map(({ health, vault }) => {
 				const healthPresentation = getVaultHealthPresentation(health.tier)
 				return (

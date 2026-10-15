@@ -195,23 +195,28 @@ export function getPoolExecutionFailureSentence(errorMessage: string | undefined
 	return detail === undefined || detail === '' ? undefined : ensureSentence(detail)
 }
 
-/** Why the target cannot be liquidated at the given protocol price; undefined when it can, or when no price is known and a queued liquidation decides at execution. */
-export function getVaultNotLiquidatableReason({
-	minLiquidationPriceDistanceBps,
-	repPerEthPrice,
-	statoblastSecurityMultiplierBps,
-	targetVaultSummary,
-}: {
+type VaultLiquidatabilityInput = {
 	minLiquidationPriceDistanceBps?: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint | undefined
 	targetVaultSummary: SecurityPoolVaultSummary
-}) {
-	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice <= 0n || statoblastSecurityMultiplierBps <= 0n) return undefined
+}
+
+export type VaultLiquidatability = { kind: 'allowed' } | { kind: 'blocked'; reason: string } | { kind: 'unknown' }
+
+/** The protocol price's verdict on liquidating the target; `unknown` without a usable price, multiplier, or commitment, when a queued liquidation decides at execution. */
+export function getVaultLiquidatability({ minLiquidationPriceDistanceBps, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary }: VaultLiquidatabilityInput): VaultLiquidatability {
+	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice <= 0n || statoblastSecurityMultiplierBps <= 0n) return { kind: 'unknown' }
 	const underwritingLimitAttoEth = getVaultUnderwritingLimitAttoEth(targetVaultSummary)
-	if (underwritingLimitAttoEth === undefined) return undefined
-	if (underwritingLimitAttoEth === 0n) return liquidationCopy.targetHasNoCommitmentReason
-	return getBadDebtReason(targetVaultSummary, undefined) ?? getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, underwritingLimitAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary })
+	if (underwritingLimitAttoEth === undefined) return { kind: 'unknown' }
+	const reason = underwritingLimitAttoEth === 0n ? liquidationCopy.targetHasNoCommitmentReason : (getBadDebtReason(targetVaultSummary, undefined) ?? getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, underwritingLimitAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary }))
+	return reason === undefined ? { kind: 'allowed' } : { kind: 'blocked', reason }
+}
+
+/** Why the target cannot be liquidated at the given protocol price; undefined when it can, or when no price is known and a queued liquidation decides at execution. */
+export function getVaultNotLiquidatableReason(input: VaultLiquidatabilityInput) {
+	const liquidatability = getVaultLiquidatability(input)
+	return liquidatability.kind === 'blocked' ? liquidatability.reason : undefined
 }
 
 export function getMaxLiquidationAmount({
