@@ -1,5 +1,6 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { TradingShareBalances } from '../../../types/contracts.js'
+import { hasShares } from '../../markets/lib/trading.js'
 import type { PoolLifecycleStep } from './poolLifecycle.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
 import type { SecurityPoolReportingStage } from './securityPoolState/types.js'
@@ -69,10 +70,6 @@ const TONE_ORDER: Record<PoolActionTone, number> = { attention: 0, action: 1, in
 
 function isEnabled(poolState: SecurityPoolStateModel | undefined, action: keyof SecurityPoolStateModel['actions']) {
 	return poolState?.actions[action].enabled === true
-}
-
-function hasShares(shareBalances: TradingShareBalances | undefined) {
-	return shareBalances !== undefined && (shareBalances.yesAttoShares > 0n || shareBalances.noAttoShares > 0n || shareBalances.invalidAttoShares > 0n)
 }
 
 function futureDeadline(deadline: bigint | undefined, now: bigint | undefined) {

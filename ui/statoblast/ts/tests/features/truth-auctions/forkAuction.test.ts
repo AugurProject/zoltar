@@ -395,6 +395,7 @@ void describe('fork auction helpers', () => {
 			selectedBookTick: 3n,
 			tickSummaries,
 			truthAuction: auction,
+			viewerBids: [],
 		})
 
 		expect(depthPoints.map(point => point.tick)).toEqual([3n, 2n, 1n])
@@ -420,10 +421,6 @@ void describe('fork auction helpers', () => {
 			[3n, 0n],
 			[1n, 3n * ONE_UNIT],
 		])
-		expect(depthPoints.every(point => !point.viewerBidAttoEthIsLowerBound)).toBe(true)
-		// While more of the wallet's bids are still to load, each total is only a lower bound.
-		const partial = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: createTruthAuction({ clearingTick: 3n, hitCap: true }), viewerBids: [createBid({ bidIndex: 1n, tick: 1n })], viewerBidsIncomplete: true })
-		expect(partial.map(point => point.viewerBidAttoEthIsLowerBound)).toEqual([true, true])
 	})
 
 	void test('derives provisional truth auction progress from loaded depth', () => {
@@ -965,7 +962,7 @@ describe('live underfunded truth auction reserve', () => {
 
 	test('labels ticks and bids below the reserve instead of counting them as in the book', () => {
 		const tickSummaries = sortTruthAuctionTickSummariesDescending([createTickSummary({ active: true, currentTotalBidAttoEth: ONE_UNIT, submissionCount: 1n, tick: 5n }), createTickSummary({ active: true, currentTotalBidAttoEth: ONE_UNIT, submissionCount: 1n, tick: -5n })])
-		const depthPoints = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: liveAuction })
+		const depthPoints = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: liveAuction, viewerBids: [] })
 		expect(depthPoints.map(point => point.disposition.label)).toEqual(['In book', 'Below reserve'])
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 0n, tick: 0n }), liveAuction).label).toBe('In book')
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 1n, tick: -1n }), liveAuction).label).toBe('Below reserve')

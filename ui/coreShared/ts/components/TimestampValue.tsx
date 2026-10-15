@@ -10,7 +10,7 @@ type TimestampValueProps = {
 	currentTimestamp?: bigint
 	loading?: boolean
 	relative?: boolean
-	/** Leads with the relative time and sets the UTC time quietly beneath it, for narrow columns where the full form would wrap over three lines. */
+	/** Leads with the relative time and sets the UTC time quietly beneath it, for narrow columns where the full form would wrap over three lines. Implies `relative`. */
 	relativeFirst?: boolean
 	timestamp: bigint | undefined
 	undefinedText?: ComponentChildren
@@ -47,16 +47,13 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const localTimestamp = formatLocalTimestamp(timestamp)
 	const localTimeLabel = localTimestamp === undefined ? undefined : commonCopy.formatLocalTimeLabel(localTimestamp)
 
-	if (relativeFirst)
-		return (
-			<time className={`timestamp-value is-relative-first ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
-				<span className='timestamp-value-lead'>{relativeTimestamp}</span> <span className='timestamp-value-absolute'>{absoluteTimestamp}</span>
-				{localTimeLabel === undefined ? undefined : <span className='visually-hidden'> {localTimeLabel}</span>}
-			</time>
-		)
-
-	return (
-		<time className={`timestamp-value ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
+	// Relative-first leads with the relative time and sets UTC beneath it; otherwise UTC leads with the relative time in brackets.
+	const parts = relativeFirst ? (
+		<>
+			<span className='timestamp-value-lead'>{relativeTimestamp}</span> <span className='timestamp-value-absolute'>{absoluteTimestamp}</span>
+		</>
+	) : (
+		<>
 			{absoluteTimestamp}
 			{relative ? (
 				<>
@@ -64,6 +61,11 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 					<span className='timestamp-value-relative'>({relativeTimestamp})</span>
 				</>
 			) : undefined}
+		</>
+	)
+	return (
+		<time className={`timestamp-value${relativeFirst ? ' is-relative-first' : ''} ${className}`} dateTime={dateTime} title={localTimeLabel ?? absoluteTimestamp}>
+			{parts}
 			{localTimeLabel === undefined ? undefined : (
 				<>
 					{' '}

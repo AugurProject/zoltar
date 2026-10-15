@@ -212,6 +212,34 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 	expect(opened).toEqual([unhealthyOwner])
 })
 
+test('keeps a blocked liquidation secondary even when the UI price reads the vault as underwater', async () => {
+	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
+	await renderHarness(
+		<SecurityPoolWorkflowSection
+			{...createSecurityPoolWorkflowProps({
+				// The protocol guard uses the oracle price, at which the vault stays healthy, so the UI estimate's verdict cannot make liquidation the row's main action.
+				poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 16n }),
+				repPerEthPrice: 10n ** 18n,
+				securityPoolAddress: zeroAddress,
+				securityPools: [
+					createSelectedPool({
+						hasLoadedVaults: true,
+						statoblastSecurityMultiplierBps: 20_000n,
+						vaultCount: 1n,
+						vaults: [createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
+					}),
+				],
+				selectedPoolView: 'vaults',
+			})}
+		/>,
+	)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	expect(document.querySelector('.vault-position-strip .vault-health')?.textContent).toBe('Underwater')
+	const liquidateButton = within(document.body).getByRole('button', { name: 'Liquidate vault' })
+	expect(liquidateButton.hasAttribute('disabled')).toBe(true)
+	expect(liquidateButton.classList.contains('secondary')).toBe(true)
+})
+
 test('shows no health verdicts or risk ordering in an ended pool, where liquidation no longer applies', async () => {
 	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
 	await renderHarness(

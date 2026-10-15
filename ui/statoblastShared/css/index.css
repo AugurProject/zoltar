@@ -811,12 +811,15 @@
 	gap: var(--space-1) var(--space-2);
 }
 
-/* A price where the connected wallet has bids carries an accent edge and the amount, so your position on the ladder reads at a glance. */
-.truth-auction-ladder-row.has-viewer-bid {
-	box-shadow:
-		inset 3px 0 0 var(--accent),
-		var(--glow-inset-subtle),
-		var(--shadow-raised);
+/* A price where the connected wallet has bids carries an accent edge and the amount, so your position on the ladder reads at a glance. The edge sits over the row's own shadows and depth bar without shifting its layout. */
+.truth-auction-ladder-row.has-viewer-bid::after {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	width: 3px;
+	background: var(--accent);
+	pointer-events: none;
 }
 
 .truth-auction-ladder-yours {
@@ -1162,7 +1165,7 @@
 }
 
 /*
- * Shares tab: the holdings read as one band (redeemable sets beside the Yes, No, and Invalid balances), and the four share
+ * Shares tab: the holdings read as one band (redeemable sets beside the Yes, No, and Invalid balances), and the share
  * actions sit side by side below it, each column with its purpose, button, and blocker, buttons aligned across columns.
  */
 .trading-workspace-layout {
@@ -1217,7 +1220,7 @@
 	font-size: var(--font-label);
 }
 
-/* Below full desktop width four columns are too narrow for every button label to stay on one line. */
+/* Below full desktop width a column per action is too narrow for every button label to stay on one line. */
 @media (max-width: 80rem) {
 	.trading-workspace-layout:not(.is-single) .vault-action-launcher-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1799,7 +1802,6 @@
 .security-pool-strip,
 .security-pool-strip-stats,
 .vault-detail-hero-secondary,
-.vault-detail-health,
 .trading-holdings-layout,
 .trading-share-callouts {
 	display: grid;
@@ -2096,20 +2098,7 @@
 }
 
 .vault-position-strip-title {
-	display: flex;
-	flex-direction: row;
-	align-items: flex-start;
-	gap: var(--space-2);
-	flex: 1 1 auto;
 	min-width: 0;
-}
-
-.vault-position-title-copy {
-	display: grid;
-	gap: 0;
-	flex: 1 1 auto;
-	min-width: 0;
-	align-self: center;
 }
 
 .security-pool-browse-vault-row-title {
@@ -2124,7 +2113,7 @@
 	flex: 1 1 auto;
 	min-width: 0;
 }
-.vault-position-title-copy .address-value.copyable,
+.vault-position-strip-title .address-value.copyable,
 .security-pool-browse-vault-row-id .address-value.copyable {
 	width: 100%;
 }
@@ -2247,11 +2236,6 @@
 	margin-right: var(--space-2);
 }
 
-.vault-detail-health {
-	grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 0.8fr);
-	align-items: start;
-}
-
 .vault-detail-meta .metric-field {
 	min-width: 0;
 }
@@ -2322,8 +2306,7 @@
 
 @media (max-width: 64rem) {
 	.security-pool-strip,
-	.trading-holdings-layout,
-	.vault-detail-health {
+	.trading-holdings-layout {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
@@ -2397,15 +2380,12 @@
 	background: transparent;
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
+	font-weight: 700;
 	text-align: left;
 	transition:
 		background-color var(--transition-standard),
 		border-color var(--transition-standard),
 		color var(--transition-standard);
-}
-
-.fork-workflow-stage-copy strong {
-	font-weight: 700;
 }
 
 /* Hover and selection match the vault sub-tabs, so a hovered stage never reads as more selected than the open one. */
@@ -2661,7 +2641,6 @@
 	.security-pool-card-progress,
 	.security-pool-strip-stats,
 	.vault-detail-hero-secondary,
-	.vault-detail-health,
 	.trading-holdings-layout,
 	.trading-share-callouts {
 		grid-template-columns: minmax(0, 1fr);
@@ -2711,7 +2690,8 @@
 	font-size: 0.8125rem;
 }
 
-.pool-capacity-summary {
+/* A pool meter (capacity in use, or a truth auction's ETH against its target) reads as a bare bar under its figure. */
+.pool-meter {
 	display: grid;
 	gap: var(--space-2);
 	min-width: 0;
@@ -2758,13 +2738,13 @@ span.rep-price-status.stale,
 	font-weight: 600;
 }
 
-.pool-capacity-summary .progress-meter-header {
+.pool-meter .progress-meter-header {
 	align-items: flex-start;
 	flex-direction: column;
 	gap: var(--space-2);
 }
 
-.pool-capacity-summary .progress-meter-value,
+.pool-meter .progress-meter-value,
 .pool-capacity-unavailable > strong {
 	font-size: 1rem;
 	overflow-wrap: anywhere;
@@ -2820,16 +2800,16 @@ span.rep-price-status.stale,
 	margin-left: calc(var(--space-2) * -1);
 }
 
-/* Browse rows and the pool header lead with open interest against capacity: a taller meter with larger numbers and the used share. */
-.pool-capacity-summary.is-prominent .progress-meter-value {
+/* Browse rows and the pool header lead with a meter: a taller bar with larger numbers and the share used. */
+.pool-meter.is-prominent .progress-meter-value {
 	font-size: var(--font-lg);
 }
 
-.pool-capacity-summary.is-prominent .progress-meter-track {
+.pool-meter.is-prominent .progress-meter-track {
 	height: 0.625rem;
 }
 
-.pool-capacity-summary.is-prominent .progress-meter-footer {
+.pool-meter.is-prominent .progress-meter-footer {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: space-between;
@@ -2949,6 +2929,19 @@ span.rep-price-status.stale,
 	background: none;
 }
 
+/* At the strip's edges (a pool without stage figures leads with it), the oracle tile aligns like any other figure; a warning edge keeps its indent. */
+.pool-status-strip > .pool-oracle-status:first-child {
+	border-inline-start: 0;
+}
+
+.pool-status-strip > .pool-oracle-status:first-child:not(.warning) {
+	padding-inline-start: 0;
+}
+
+.pool-status-strip > .pool-oracle-status:last-child {
+	padding-inline-end: 0;
+}
+
 .pool-status-strip .pool-oracle-status-value {
 	flex-direction: column;
 	gap: var(--space-2);
@@ -2965,7 +2958,7 @@ span.rep-price-status.stale,
 }
 
 /* The three key figures lead each tile at title size; limits and positions stay quieter beside them. */
-.pool-status-strip .pool-capacity-summary .progress-meter-value,
+.pool-status-strip .pool-meter .progress-meter-value,
 .pool-status-strip .pool-oracle-status .oracle-price-value,
 .pool-status-strip .pool-lifecycle-summary-value strong,
 .pool-strip-figure-value {
@@ -3307,7 +3300,7 @@ span.rep-price-status.stale,
 	}
 }
 
-.pool-capacity-summary .progress-meter {
+.pool-meter .progress-meter {
 	padding: 0;
 	border: 0;
 	border-radius: 0;
@@ -3863,15 +3856,9 @@ span.rep-price-status.stale,
 	font-weight: 400;
 }
 
-.pool-action-deadline,
-.pool-action-context {
+.pool-action-deadline {
 	color: var(--muted);
 	font-size: 0.8125rem;
-}
-
-.pool-action-context {
-	flex-basis: 100%;
-	overflow-wrap: anywhere;
 }
 
 .pool-action-control {
@@ -3956,7 +3943,7 @@ span.rep-price-status.stale,
 		border-top: 1px solid var(--divider-subtle);
 	}
 
-	.pool-status-strip .pool-capacity-summary .progress-meter-value,
+	.pool-status-strip .pool-meter .progress-meter-value,
 	.pool-status-strip .pool-oracle-status .oracle-price-value,
 	.pool-strip-figure-value {
 		font-size: var(--font-lg);
@@ -4060,11 +4047,6 @@ span.rep-price-status.stale,
 .selected-vault-address {
 	display: block;
 	min-width: 0;
-}
-
-.selected-vault-address-control {
-	display: inline-flex;
-	max-width: 100%;
 }
 
 .vault-operations-flow {
@@ -4173,7 +4155,7 @@ span.rep-price-status.stale,
 }
 
 /* Directly under the vault card, whose bottom rule already divides them, the form and the preview beside it drop their own top rule. */
-.vault-operations-flow > .vault-operations-layout:first-child > .section-block.embedded {
+.vault-operations-layout.is-below-vault-card > .section-block.embedded {
 	padding-top: 0;
 	border-top: 0;
 }
@@ -4188,7 +4170,7 @@ span.rep-price-status.stale,
 	}
 
 	/* Stacked under the form, the preview keeps the rule that separates it. */
-	.vault-operations-flow > .vault-operations-layout:first-child > .vault-operations-preview {
+	.vault-operations-layout.is-below-vault-card > .vault-operations-preview {
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--divider-subtle);
 	}

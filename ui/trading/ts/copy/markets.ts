@@ -19,7 +19,7 @@ export const marketsCopy = {
 	conditionalPrice: 'Conditional price',
 	formatConditionalPrices: (yesPercent: number, noPercent: number) => `Conditional price: ${formatOutcomePrice(yes, yesPercent)}, ${formatOutcomePrice(no, noPercent)}`,
 	priceUnavailable: 'The conditional price appears once the market has liquidity.',
-	lastOdds: 'Last odds before trading closed',
+	lastConditionalPrices: 'Last conditional prices before trading closed',
 	liquidity,
 	closes: 'Closes',
 	ended: 'Ended',

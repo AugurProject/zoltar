@@ -731,8 +731,6 @@ html:has(.global-transaction-dialog-nonblocking) {
 }
 
 .global-transaction-detail-address {
-	display: inline-flex;
-	max-width: 100%;
 	vertical-align: baseline;
 }
 

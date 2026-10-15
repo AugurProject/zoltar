@@ -57,6 +57,7 @@ describe('TruthAuctionBidsSection', () => {
 					{
 						bidder: walletAddress,
 						bidAmountAttoEth: 2n,
+						isViewer: true,
 						key: 'aggregate:11:1',
 						price: 42n,
 						statusLabel: 'Winning',

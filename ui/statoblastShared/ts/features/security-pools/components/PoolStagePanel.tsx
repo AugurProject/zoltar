@@ -54,8 +54,8 @@ function getActionLabel(item: PoolActionItem) {
 	return copy.actionLabels[item.id]
 }
 
-/** The label, amount, and deadline of one action row; `context` adds a line such as the pool the action belongs to. A deadline the header strip already shows is not repeated. */
-function PoolActionRow({ context, control, currentTimestamp, deadlineShownInStrip, item }: { context?: ComponentChildren; control: ComponentChildren; currentTimestamp: bigint | undefined; deadlineShownInStrip?: bigint | undefined; item: PoolActionItem }) {
+/** The label, amount, and deadline of one action row. A deadline the header strip already shows is not repeated. */
+function PoolActionRow({ control, currentTimestamp, deadlineShownInStrip, item }: { control: ComponentChildren; currentTimestamp: bigint | undefined; deadlineShownInStrip: bigint | undefined; item: PoolActionItem }) {
 	return (
 		<li className={`pool-action-item ${item.tone}`}>
 			<div className='pool-action-copy'>
@@ -67,7 +67,6 @@ function PoolActionRow({ context, control, currentTimestamp, deadlineShownInStri
 						<TimestampValue timestamp={item.deadline} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 					</span>
 				)}
-				{context === undefined ? undefined : <span className='pool-action-context'>{context}</span>}
 			</div>
 			{control === undefined ? undefined : <div className='pool-action-control'>{control}</div>}
 		</li>

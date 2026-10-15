@@ -41,14 +41,16 @@
 	border-radius: inherit;
 	background: var(--outcome-yes);
 }
-/* On the market page the conditional odds are the headline: large labels over a thicker bar, the No label always over the No side. The ticket's preview keeps the compact bar. */
-.market-overview > .probability .probability__labels {
+/* The market page's open conditional odds are its headline: large labels over a thicker bar, the No label always over the No side. */
+.probability--headline .probability__labels {
 	font-size: var(--font-title);
-	font-weight: 600;
 }
-.market-overview > .probability .probability__labels span:last-child {
+.probability--headline .probability__labels span:last-child {
 	margin-inline-start: auto;
 	text-align: end;
+}
+.probability--headline .probability__track {
+	height: 1rem;
 }
 /* Once trading closes the odds are history: a labelled, muted bar at the compact size. */
 .market-odds-closed {
@@ -62,17 +64,14 @@
 	opacity: 0.55;
 }
 @media (max-width: 80rem) {
-	.market-overview > .probability .probability__labels {
+	.probability--headline .probability__labels {
 		font-size: var(--font-lg);
 	}
 }
 @media (max-width: 40rem) {
-	.market-overview > .probability .probability__labels {
+	.probability--headline .probability__labels {
 		font-size: var(--font-body);
 	}
-}
-.market-overview > .probability .probability__track {
-	height: 1rem;
 }
 .probability__marker {
 	position: absolute;
@@ -493,7 +492,6 @@ button.outcome-button--no:hover:not(:disabled) {
 /* A note about the whole position sits under its heading, warning-toned and quiet, before any holding. */
 .market-position .market-position-note {
 	margin: 0;
-	color: var(--warning);
 	font-size: var(--font-label);
 }
 .portfolio-holdings.market-holdings {
@@ -768,8 +766,9 @@ button.outcome-button--no:hover:not(:disabled) {
 	gap: var(--space-1);
 	overflow-wrap: anywhere;
 }
+/* A position's exit value is its headline; the complete-set redemption value beside it is secondary. */
 .portfolio-position-value strong {
-	font-size: var(--font-lg);
+	font-size: var(--font-title);
 	font-weight: 600;
 	line-height: var(--line-height-snug);
 }
@@ -803,16 +802,12 @@ button.outcome-button--no:hover:not(:disabled) {
 	flex-wrap: wrap;
 	gap: var(--space-4) var(--space-5);
 }
-/* A position's exit value is its headline; the complete-set redemption value beside it is secondary. */
-.portfolio-position-value:not(.is-secondary) strong {
-	font-size: var(--font-title);
-}
 .portfolio-position-value.is-secondary strong {
 	font-size: var(--font-body);
 	color: var(--text-secondary);
 }
 /* An unpriced value is a muted dash, so it never reads as a headline figure. */
-.portfolio-position-value.is-unpriced strong,
+.portfolio-position-value strong.is-unpriced,
 .portfolio-summary-grid strong.is-unpriced {
 	color: var(--muted);
 }

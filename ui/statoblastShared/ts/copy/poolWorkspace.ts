@@ -33,14 +33,10 @@ export const lifecycleStepLabels = {
 	truthAuction: commonCopy.truthAuction,
 } as const
 export const lifecycleStepPosition = (step: number, total: number) => `${step.toString()} of ${total.toString()}`
-export const auctionEnds = 'Auction ends'
 export const lifecycleStepSkipped = 'skipped'
 
-export function formatSkippedLifecycleStep(label: string) {
-	return `${label} (${lifecycleStepSkipped})`
-}
+export const formatSkippedLifecycleStep = (label: string) => `${label} (${lifecycleStepSkipped})`
 
-export const auctionEnded = 'Auction ended'
 export const ethBid = 'ETH bid'
 export const formatShareOfTarget = (percent: CopyTemplateValue) => `${percent}% of target`
 export const nextActions = 'Next actions'

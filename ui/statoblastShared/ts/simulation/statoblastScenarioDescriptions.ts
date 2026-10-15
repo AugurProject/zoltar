@@ -1,6 +1,9 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
-export type StatoblastScenario = 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction' | 'finalized-truth-auction' | 'ended-pool-commitment' | 'escalation-in-progress' | 'liquidation-distance' | 'near-minimum-vault'
+// The single scenario list: adding an id here makes the label, description, and seeding lookups fail to compile until it has an entry in each.
+export const STATOBLAST_SCENARIOS = ['security-pool', 'securitypoolx2', 'securitypoolx2-auction', 'finalized-truth-auction', 'ended-pool-commitment', 'escalation-in-progress', 'liquidation-distance', 'near-minimum-vault'] as const
+
+export type StatoblastScenario = (typeof STATOBLAST_SCENARIOS)[number]
 
 export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 	switch (scenario) {

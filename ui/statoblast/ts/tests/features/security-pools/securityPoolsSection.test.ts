@@ -311,7 +311,7 @@ void describe('SecurityPoolsSection', () => {
 			h(
 				SelectedPoolRepPriceContext.Provider,
 				{ value: selectedPoolRepPrice },
-				h(VaultMetricGrid, { claimableFeesAttoEth: 0n, isCurrentlyHealthy: true, repPerEthPrice: selectedPoolRepPrice.price, repPerEthSource: undefined, repPerEthSourceUrl: undefined, selectedPoolStatoblastSecurityMultiplierBps: 20_000n, underwritingLimitAttoEth: 10n ** 18n, vaultAttoRepBacking: 10n ** 18n }),
+				h(VaultMetricGrid, { claimableFeesAttoEth: 0n, healthTier: 'healthy', repPerEthPrice: selectedPoolRepPrice.price, repPerEthSource: undefined, repPerEthSourceUrl: undefined, underwritingLimitAttoEth: 10n ** 18n, vaultAttoRepBacking: 10n ** 18n }),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup

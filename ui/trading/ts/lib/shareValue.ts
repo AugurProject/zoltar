@@ -74,13 +74,13 @@ export function averagePriceBps(amountAttoEth: bigint, longSharesAttoShares: big
 
 type OutcomeValueMarket = ShareValueRate & Partial<Pick<LiveMarket, 'loadError' | 'questionOutcome' | 'systemState' | 'universeForkTime'>>
 
-/** An unresolved market's shares cannot be redeemed once its universe forked or its pool stopped operating; they must migrate first. */
+/** An unresolved market's shares cannot be redeemed once its universe forked (they migrate instead) or while its pool is not operating. */
 export function isUnresolvedRedemptionBlocked(market: OutcomeValueMarket) {
 	if (market.loadError !== undefined || (market.questionOutcome !== undefined && market.questionOutcome !== 3)) return false
 	return (market.universeForkTime !== undefined && market.universeForkTime !== 0n) || (market.systemState !== undefined && market.systemState !== 0)
 }
 
-/** Current payout with its resolution and redemption conditions. A list of holdings passes `noteRedemption: false` and states blocked redemption once for the whole list. */
+/** Current payout with its resolution and redemption conditions. A caller whose surroundings already state that redemption is blocked passes `noteRedemption: false`. */
 export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
 	if (market.loadError !== undefined) return payoutCopy.unavailable
 	if (amount === 0n) return '0 ETH'
@@ -94,9 +94,14 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 	return noteRedemption && isUnresolvedRedemptionBlocked(market) ? `${payout}; ${payoutCopy.redemptionUnavailable}` : payout
 }
 
-/** Display current backing as a conditional payout, never as an executable sale quote. A panel that already says redemption is blocked passes `noteRedemption: false`. */
-export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
-	return `${formatOutcomeQuantity(amount, outcome, digits, rounding)} (${formatOutcomePayout(amount, outcome, market, rounding, { noteRedemption })})`
+/** Display current backing as a conditional payout, never as an executable sale quote. */
+export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest') {
+	return `${formatOutcomeQuantity(amount, outcome, digits, rounding)} (${formatOutcomePayout(amount, outcome, market, rounding)})`
+}
+
+/** `formatOutcomeWithValue` for a holding whose surroundings already state that redemption is blocked, so the payout leaves that note out. */
+export function formatOutcomeWithConditionalValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket) {
+	return `${formatOutcomeQuantity(amount, outcome)} (${formatOutcomePayout(amount, outcome, market, 'nearest', { noteRedemption: false })})`
 }
 
 export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRate & Partial<Pick<LiveMarket, 'loadError'>>, digits = 4, rounding: ShareValueRounding = 'nearest') {

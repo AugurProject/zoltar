@@ -5,6 +5,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection } from '../../security-pools/lib/securityPoolWorkflow.js'
+import { isForkLifecycleState } from '../../security-pools/lib/poolLifecycle.js'
 import { useSelectedAuctionReadState } from './useSelectedAuctionReadState.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import { getForkTypeLabel, getForkWorkflowStageAheadMessage, getPreviewForkTypeLabel, isFullReadClient } from '../components/ForkAuctionPresentation.js'
@@ -72,7 +73,7 @@ export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
 	const systemState = forkAuctionDetails?.systemState ?? previewPool?.systemState
-	const hasEnteredForkLifecycle = lifecycleStateOverride === 'poolForked' || lifecycleStateOverride === 'forkMigration' || lifecycleStateOverride === 'forkTruthAuction'
+	const hasEnteredForkLifecycle = isForkLifecycleState(lifecycleStateOverride)
 	const hasTriggeredFork = hasEnteredForkLifecycle || (universeForkTime !== undefined && universeForkTime > 0n)
 	const forkOutcome = forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome
 	const questionOutcome = forkAuctionDetails?.questionOutcome ?? previewPool?.questionOutcome

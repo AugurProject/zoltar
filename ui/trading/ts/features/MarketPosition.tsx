@@ -38,7 +38,7 @@ export function MarketPosition({ market, holdings, wallet, disabled, ownsBalance
 		<section className='market-position' aria-labelledby='market-position-heading' aria-busy={holdings.balanceState === 'loading'}>
 			<h3 id='market-position-heading'>{marketsCopy.yourPosition}</h3>
 			{/* Blocked redemption applies to every share alike, so it is said once, under the heading, and only to a wallet that holds shares. */}
-			{holdings.balances !== undefined && holdings.balances.yes + holdings.balances.no + holdings.balances.invalid > 0n && isUnresolvedRedemptionBlocked(market) ? <UserMessage className='detail market-position-note' detail={payoutCopy.shareRedemptionUnavailable} /> : undefined}
+			{holdings.balances !== undefined && holdings.balances.yes + holdings.balances.no + holdings.balances.invalid > 0n && isUnresolvedRedemptionBlocked(market) ? <UserMessage className='market-position-note' tone='warning' detail={payoutCopy.redemptionUnavailable} /> : undefined}
 			{/* Without a wallet there is no position to show; the ticket's primary button offers to connect. */}
 			{holdings.balanceState === 'disconnected' && holdings.balances === undefined ? (
 				<UserMessage className='market-position-disconnected' detail={marketsCopy.connectToSeePosition} />

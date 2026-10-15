@@ -1,5 +1,5 @@
 import { getDisplayedLeadingEscalationOutcome, getReportingOutcomeLabel } from './reporting.js'
-import { formatAmount, formatRelativeTimestamp, formatTimestamp, withApproximateMarker, type AmountRounding } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmountDisplay, formatRelativeTimestamp, formatTimestamp, type AmountRounding } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
@@ -29,8 +29,8 @@ export function getViewerPositions<Amount>(details: ActiveReportingDetails, rend
 			const leading = leader === side.key
 			const minimum = getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 			const lead = leading ? copy.winningStatusLead(side.label) : copy.losingStatusLead(side.label)
-			const detail: readonly (string | Amount)[] = leading ? copy.winningStatusDetail(renderAmount(stake), renderAmount(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? undefined : renderAmount(minimum, 'up'), deadline, renderAmount(stake))
-			let positionStatus: readonly (string | Amount)[] = copy.losingPosition(renderAmount(0n))
+			const detail: copy.CopyParts<Amount> = leading ? copy.winningStatusDetail(renderAmount(stake), renderAmount(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? undefined : renderAmount(minimum, 'up'), deadline, renderAmount(stake))
+			let positionStatus: copy.CopyParts<Amount> = [copy.losingPosition]
 			if (details.hasReachedNonDecision || details.systemState !== 'operational') positionStatus = [copy.forkPosition]
 			else if (worth === undefined) positionStatus = [copy.tiedPosition]
 			else if (leading) positionStatus = copy.winningPosition(renderAmount(worth))
@@ -41,7 +41,7 @@ export function getViewerPositions<Amount>(details: ActiveReportingDetails, rend
 
 /** A REP amount as rounded plain text, for sentences outside the page such as a calendar reminder. */
 function formatRoundedRep(attoRep: bigint, rounding: AmountRounding = 'nearest') {
-	return `${withApproximateMarker(formatAmount(attoRep, { rounding }))} ${commonCopy.rep}`
+	return `${formatAmountDisplay(attoRep, { rounding })} ${commonCopy.rep}`
 }
 
 export function getViewerStatusSentence(details: ActiveReportingDetails) {

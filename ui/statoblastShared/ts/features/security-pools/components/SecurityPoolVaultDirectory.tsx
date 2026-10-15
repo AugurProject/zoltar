@@ -4,24 +4,23 @@ import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { getVaultHealthPresentation, VaultMetricGrid } from './VaultMetricGrid.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { getVaultSummaryHealth, sortByVaultHealthRisk, type VaultHealthTier } from '../lib/vaultHealth.js'
+import { getVaultSummaryHealth, sortByVaultHealthRisk } from '../lib/vaultHealth.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 type SecurityPoolVaultDirectoryProps = {
 	emptyState: ComponentChildren
 	pool: ListedSecurityPool | undefined
 	/** After resolution liquidation is closed, so rows carry no health verdict, edge, or risk ordering, as the selected vault drops its verdict. */
-	poolEnded?: boolean
-	renderActions?: (vault: SecurityPoolVaultSummary, healthTier: VaultHealthTier) => ComponentChildren
+	poolEnded: boolean
+	renderActions?: (vault: SecurityPoolVaultSummary) => ComponentChildren
 	renderBadge?: (vault: SecurityPoolVaultSummary) => ComponentChildren
-	renderTitle?: (vault: SecurityPoolVaultSummary) => ComponentChildren
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: 'mock' | 'v3' | 'v4' | 'open-oracle' | undefined
 	repPerEthSourceUrl: string | undefined
 }
 
 /** Each vault is one compact row: its address and health verdict, its figures, then its actions. Riskier vaults come first, so liquidation candidates lead the list. */
-export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded = false, renderActions, renderBadge, renderTitle, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }: SecurityPoolVaultDirectoryProps) {
+export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded, renderActions, renderBadge, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }: SecurityPoolVaultDirectoryProps) {
 	if (pool === undefined) return <>{emptyState}</>
 	const loadedVaultCount = BigInt(pool.vaults.length)
 	const showingPartialDirectory = loadedVaultCount < pool.vaultCount
@@ -44,7 +43,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded = false
 					<div className={`vault-position-strip is-${health.tier}`} key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}>
 						<div className='vault-position-strip-head'>
 							<div className='vault-position-strip-title'>
-								<div className='vault-position-title-copy'>{renderTitle === undefined ? <AddressValue abbreviated address={vault.vaultAddress} /> : renderTitle(vault)}</div>
+								<AddressValue abbreviated address={vault.vaultAddress} />
 							</div>
 							<div className='vault-position-strip-meta'>
 								{healthPresentation.statusLabel === undefined ? undefined : (
@@ -59,18 +58,17 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded = false
 							associatedRepPerCapacityBps={health.associatedRepPerCapacityBps}
 							badDebtAttoEth={vault.badDebtAttoEth}
 							className='workflow-vault-grid'
-							isCurrentlyHealthy={health.tier === 'unknown' ? undefined : health.tier !== 'underwater'}
+							healthTier={health.tier}
 							layout='preview'
 							disputeStakedAttoRep={vault.disputeStakedAttoRep}
 							vaultAttoRepBacking={vault.vaultAttoRepBacking}
 							repPerEthPrice={repPerEthPrice}
 							repPerEthSource={repPerEthSource}
 							repPerEthSourceUrl={repPerEthSourceUrl}
-							selectedPoolStatoblastSecurityMultiplierBps={pool.statoblastSecurityMultiplierBps}
 							underwritingLimitAttoEth={vault.underwritingLimitAttoEth}
 							claimableFeesAttoEth={vault.claimableFeesAttoEth}
 						/>
-						<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault, health.tier)}</div>
+						<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault)}</div>
 					</div>
 				)
 			})}

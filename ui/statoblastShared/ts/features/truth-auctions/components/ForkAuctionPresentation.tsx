@@ -150,12 +150,11 @@ function getForkWorkflowStageClassName({ currentStage, selectedStage, stage }: {
 	const classNames = ['fork-workflow-stage']
 	if (currentStage === stage) classNames.push('is-current')
 	if (selectedStage === stage) classNames.push('is-selected')
-	if (getForkWorkflowStageOrder(stage) < getForkWorkflowStageOrder(currentStage)) classNames.push('is-complete')
 	if (getForkWorkflowStageOrder(stage) > getForkWorkflowStageOrder(currentStage)) classNames.push('is-upcoming')
 	return classNames.join(' ')
 }
 
-/** The fork stages are sub-views of the Fork & migration tab, shown as sub-tabs: the header's stage bar carries the pool's progress, so these mark only the current stage and the one on view. */
+/** The fork stages are sub-views of the Fork & migration tab, shown as sub-tabs: the header's stage bar carries the pool's progress, so these mark only the current stage and the one on view, and dim the stages still ahead. */
 export function ForkWorkflowStageNavigator({ currentStage, onStageChange, selectedStage }: { currentStage: ForkWorkflowSelectionStage; onStageChange: ((stage: ForkWorkflowSelectionStage) => void) | undefined; selectedStage: ForkWorkflowSelectionStage }) {
 	const handleKeyDown = (stage: ForkWorkflowSelectionStage, event: KeyboardEvent) => {
 		const currentStageIndex = FORK_WORKFLOW_NAV_STAGES.indexOf(stage)
@@ -177,29 +176,23 @@ export function ForkWorkflowStageNavigator({ currentStage, onStageChange, select
 	return (
 		<div className='fork-workflow-stage-nav-shell'>
 			<div aria-label={forkAuctionCopy.forkLifecycleStages} className='fork-workflow-stage-nav' role='tablist'>
-				{FORK_WORKFLOW_NAV_STAGES.map(stage => {
-					const stageLabel = getForkWorkflowStageLabel(stage)
-					return (
-						<button
-							key={stage}
-							aria-controls={`fork-workflow-stage-panel-${stage}`}
-							aria-current={currentStage === stage ? 'step' : undefined}
-							aria-label={stageLabel}
-							aria-selected={selectedStage === stage}
-							className={getForkWorkflowStageClassName({ currentStage, selectedStage, stage })}
-							id={`fork-workflow-stage-${stage}`}
-							onClick={() => onStageChange?.(stage)}
-							onKeyDown={event => handleKeyDown(stage, event)}
-							role='tab'
-							tabIndex={selectedStage === stage ? 0 : -1}
-							type='button'
-						>
-							<span className='fork-workflow-stage-copy'>
-								<strong>{stageLabel}</strong>
-							</span>
-						</button>
-					)
-				})}
+				{FORK_WORKFLOW_NAV_STAGES.map(stage => (
+					<button
+						key={stage}
+						aria-controls={`fork-workflow-stage-panel-${stage}`}
+						aria-current={currentStage === stage ? 'step' : undefined}
+						aria-selected={selectedStage === stage}
+						className={getForkWorkflowStageClassName({ currentStage, selectedStage, stage })}
+						id={`fork-workflow-stage-${stage}`}
+						onClick={() => onStageChange?.(stage)}
+						onKeyDown={event => handleKeyDown(stage, event)}
+						role='tab'
+						tabIndex={selectedStage === stage ? 0 : -1}
+						type='button'
+					>
+						{getForkWorkflowStageLabel(stage)}
+					</button>
+				))}
 			</div>
 		</div>
 	)
@@ -222,8 +215,7 @@ export function ForkAuctionMigrationSummaryCard({
 	forkTypeDisplay,
 	migratedRepDisplay,
 	migratedRepLabel,
-	migrationEndsDisplay,
-	migrationEndsLabel,
+	migrationEnd,
 	migrationStartedDisplay,
 	repAtForkDisplay,
 	settlementCollateralDisplay,
@@ -233,9 +225,8 @@ export function ForkAuctionMigrationSummaryCard({
 	forkTypeDisplay: ComponentChildren
 	migratedRepDisplay: ComponentChildren
 	migratedRepLabel: string
-	/** Undefined while the pool header's strip already shows the migration deadline. */
-	migrationEndsDisplay: ComponentChildren | undefined
-	migrationEndsLabel: string
+	/** When migration ends and whether it already has; undefined while the pool header's strip already shows the migration deadline. */
+	migrationEnd: { display: ComponentChildren; ended: boolean } | undefined
 	migrationStartedDisplay: ComponentChildren
 	repAtForkDisplay: ComponentChildren
 	/** Undefined while the pool header's strip already shows the settlement collateral, so the card does not repeat it. */
@@ -256,7 +247,7 @@ export function ForkAuctionMigrationSummaryCard({
 				</div>
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label={forkAuctionCopy.migrationStarted}>{migrationStartedDisplay}</MetricField>
-					{migrationEndsDisplay === undefined ? undefined : <MetricField label={migrationEndsLabel}>{migrationEndsDisplay}</MetricField>}
+					{migrationEnd === undefined ? undefined : <MetricField label={migrationEnd.ended ? forkAuctionCopy.migrationEnded : forkAuctionCopy.migrationEnds}>{migrationEnd.display}</MetricField>}
 					<MetricField label={forkAuctionCopy.forkType}>{forkTypeDisplay}</MetricField>
 				</div>
 			</div>

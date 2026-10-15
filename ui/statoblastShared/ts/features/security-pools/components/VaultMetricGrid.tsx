@@ -9,7 +9,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import type { VaultMetricGridProps } from '../../types.js'
-import { getVaultHealthTier, type VaultHealthTier } from '../lib/vaultHealth.js'
+import type { VaultHealthTier } from '../lib/vaultHealth.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
@@ -70,15 +70,14 @@ export function VaultMetricGrid({
 	className = '',
 	layout = 'grid',
 	disputeStakedAttoRep,
-	isCurrentlyHealthy,
+	healthTier,
 	poolEnded = false,
 	poolHeldRepPerCapacityBps: _poolHeldRepPerCapacityBps,
 	priceValidUntilTimestamp,
 	vaultAttoRepBacking,
-	selectedPoolStatoblastSecurityMultiplierBps,
 	underwritingLimitAttoEth,
 }: VaultMetricGridProps) {
-	const { badgeTone: healthBadgeTone, statusLabel: associatedRepStatusLabel, toneClass: associatedRepToneClass } = getVaultHealthPresentation(getVaultHealthTier({ associatedRepPerCapacityBps, isCurrentlyHealthy, multiplierBps: selectedPoolStatoblastSecurityMultiplierBps }))
+	const { badgeTone: healthBadgeTone, statusLabel: associatedRepStatusLabel, toneClass: associatedRepToneClass } = getVaultHealthPresentation(healthTier)
 
 	// The directory preview is one flat metric row, so every figure shares the grid's label, value size, and baseline.
 	// The backing ratio carries the health tone (the row's badge names the verdict); a zero dispute stake is left out.

@@ -210,6 +210,10 @@
 	color: var(--danger);
 }
 
+.tx-action-notice.warning {
+	color: var(--warning);
+}
+
 .tx-action-feedback {
 	min-block-size: 2.9em;
 	font-size: var(--font-caption);

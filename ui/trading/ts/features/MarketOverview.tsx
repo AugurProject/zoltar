@@ -89,10 +89,10 @@ export function MarketPageHeader({ market, nowSeconds, headingRef, actions }: { 
 /** Open odds lead the column; once the market takes no new risk they are history, so they step down to a labelled, muted bar. */
 function MarketOdds({ tradingClosed, yesTenths }: { tradingClosed: boolean; yesTenths: number | undefined }) {
 	if (yesTenths === undefined) return <UserMessage className='detail' detail={marketsCopy.priceUnavailable} />
-	if (!tradingClosed) return <ProbabilityBar yesPercent={yesTenths / 10} />
+	if (!tradingClosed) return <ProbabilityBar variant='headline' yesPercent={yesTenths / 10} />
 	return (
 		<div className='market-odds-closed'>
-			<span className='metric-label'>{marketsCopy.lastOdds}</span>
+			<span className='metric-label'>{marketsCopy.lastConditionalPrices}</span>
 			<ProbabilityBar yesPercent={yesTenths / 10} />
 		</div>
 	)

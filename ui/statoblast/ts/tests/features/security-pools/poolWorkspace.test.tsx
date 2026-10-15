@@ -433,8 +433,11 @@ test('leads an ended pool with its outcome and settlement collateral instead of 
 	expect(document.querySelector('.pool-object-meta .badge')?.textContent).toBe('Finalized')
 })
 
+const migratingPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' } as const
+const truthAuctionPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkTruthAuction', truthAuctionStartedAt: 1n } as const
+
 test('leads a migrating pool with its settlement collateral and migration deadline, without the unused price', async () => {
-	const forkedPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, settlementCollateralAttoEth: 2n * 10n ** 18n, systemState: 'forkMigration' } as const
+	const forkedPoolState = { ...migratingPoolState, settlementCollateralAttoEth: 2n * 10n ** 18n }
 	await renderPoolPage(
 		createSelectedPool({ ...forkedPoolState, lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n }),
 		{ forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...forkedPoolState, migrationEndsAt: 100n + 2n * 3600n }) }), poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n }) },
@@ -446,22 +449,19 @@ test('leads a migrating pool with its settlement collateral and migration deadli
 })
 
 test('keeps migration open at its exact deadline, since it closes only after it', async () => {
-	const forkedPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' } as const
-	await renderPoolPage(createSelectedPool(forkedPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...forkedPoolState, migrationEndsAt: 100n }) }) }, 100n)
+	await renderPoolPage(createSelectedPool(migratingPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...migratingPoolState, migrationEndsAt: 100n }) }) }, 100n)
 	expect(getStripFigures()).toContain('Migration ends: now')
 })
 
 test('labels a passed migration deadline as ended', async () => {
-	const forkedPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' } as const
-	await renderPoolPage(createSelectedPool(forkedPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...forkedPoolState, migrationEndsAt: 40n }) }) }, 100n)
+	await renderPoolPage(createSelectedPool(migratingPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...migratingPoolState, migrationEndsAt: 40n }) }) }, 100n)
 	expect(getStripFigures()).toContain('Migration ended: 1m ago')
 })
 
 test('leads a pool in its truth auction with the ETH bid against the target and the auction deadline', async () => {
-	const auctionPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkTruthAuction', truthAuctionStartedAt: 1n } as const
 	// Before finalization the raise is not known without the order book, so the header shows the ETH bid against the target.
 	const truthAuction = createFinalizedTruthAuction({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n, finalized: false, hitCap: false })
-	await renderPoolPage(createSelectedPool(auctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...auctionPoolState, truthAuction }) }) }, 100n)
+	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
 	expect(getStripFigures()).toEqual(['ETH bid: 1.00 ETH / 4.00 ETH', 'Auction ends: in 3d', 'Pool stage: Truth auction'])
 	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('25% of target')
 	expect(document.querySelector('.pool-oracle-status')).toBeNull()
@@ -472,9 +472,8 @@ test('leads a pool in its truth auction with the ETH bid against the target and 
 })
 
 test('shows what a finalized truth auction raised', async () => {
-	const auctionPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkTruthAuction', truthAuctionStartedAt: 1n } as const
 	const truthAuction = createFinalizedTruthAuction({ accumulatedBidAttoEth: 9n * 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 4n * 10n ** 18n, auctionEndsAt: 50n })
-	await renderPoolPage(createSelectedPool(auctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...auctionPoolState, truthAuction }) }) }, 100n)
+	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
 	expect(getStripFigures().slice(0, 2)).toEqual(['ETH raised: 4.00 ETH / 4.00 ETH', 'Auction ended: 50s ago'])
 	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('Target reached')
 })

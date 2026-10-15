@@ -7,7 +7,7 @@ import { EscalationReminderLine } from './EscalationReminderLine.js'
 import * as copy from '../../../copy/reporting.js'
 import { isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { escalationExplanationHref, formatReportingDeadline, getViewerPositions } from '../lib/reportingViewerStatus.js'
-import { renderRepAmount } from './RepAmount.js'
+import { RepAmount, renderRepAmount } from './RepAmount.js'
 
 export function ReportingViewerStatus({ details, onTakeLead, disabled }: { details: ActiveReportingDetails; onTakeLead: (side: ReportingOutcomeKey, amount: bigint) => void; disabled: boolean }) {
 	const positions = getViewerPositions(details, renderRepAmount)
@@ -46,7 +46,7 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 			<>
 				{positions.map(position => (
 					<p key={position.side.key}>
-						<strong>{copy.forkViewerStake(position.side.label, renderRepAmount(position.stake))}</strong>
+						<strong>{copy.forkViewerStake(position.side.label, <RepAmount value={position.stake} />)}</strong>
 					</p>
 				))}
 			</>
@@ -78,7 +78,7 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 	return (
 		<SectionBlock className='reporting-viewer-status' title={copy.yourPositions} variant='plain'>
 			{detail}
-			{!forked && tied ? positions.map(position => <p key={position.side.key}>{copy.forkViewerStake(position.side.label, renderRepAmount(position.stake))}</p>) : undefined}
+			{!forked && tied ? positions.map(position => <p key={position.side.key}>{copy.forkViewerStake(position.side.label, <RepAmount value={position.stake} />)}</p>) : undefined}
 			<EscalationReminderLine key={details.securityPoolAddress} details={details} />
 		</SectionBlock>
 	)

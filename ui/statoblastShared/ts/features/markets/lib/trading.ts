@@ -23,7 +23,7 @@ export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavaila
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
 /** True while an ordinary or fork-continuation escalation game is open; minting stays closed until the dispute ends. */
-export function isMintingPausedByEscalation(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
+export function hasEscalationGame(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
 	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame
 }
 
@@ -34,7 +34,7 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 
 /** Use contract-reported backing capacity; unknown capacity or an escalation game keeps minting closed. */
 export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
-	return isMintingPausedByEscalation(pool) ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
+	return hasEscalationGame(pool) ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
 }
 
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
@@ -166,6 +166,11 @@ export function getShareSettlementBalances(shareBalances: TradingShareBalances |
 		no: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.noAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
 		yes: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.yesAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
 	}
+}
+
+/** Whether loaded balances hold any Yes, No, or Invalid shares. */
+export function hasShares(shareBalances: TradingShareBalances | undefined) {
+	return shareBalances !== undefined && (shareBalances.yesAttoShares > 0n || shareBalances.noAttoShares > 0n || shareBalances.invalidAttoShares > 0n)
 }
 
 export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalances | undefined, outcome: ReportingOutcomeKey) {

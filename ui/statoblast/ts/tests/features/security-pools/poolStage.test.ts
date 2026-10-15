@@ -164,6 +164,7 @@ describe('derivePoolViewModel', () => {
 			checkedSecurityPoolAddress: POOL,
 			forkAuctionDetails: undefined,
 			liquidationManagerAddress: undefined,
+			loadingForkAuctionDetails: false,
 			loadingSecurityPools: false,
 			manualPendingOperationId: '',
 			now: 50n,

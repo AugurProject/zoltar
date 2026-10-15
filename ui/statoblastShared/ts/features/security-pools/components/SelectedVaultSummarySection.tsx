@@ -1,10 +1,10 @@
-import { getAssociatedRepPerCapacityBps } from '../lib/vaultHealth.js'
+import { getAssociatedRepPerCapacityBps, getVaultHealthTier } from '../lib/vaultHealth.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useMemo, useRef } from 'preact/hooks'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { useRef } from 'preact/hooks'
+import { AddressValue, FittedAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
@@ -24,13 +24,9 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 /** The full card width is the stable slot, so a shortened address keeps its copy glyph right after the visible text. */
 function VaultCardAddress({ address }: { address: string }) {
 	const slot = useRef<HTMLSpanElement>(null)
-	const control = useRef<HTMLSpanElement>(null)
-	const widthConstraint = useMemo(() => ({ control, slot }), [])
 	return (
 		<span className='selected-vault-address' ref={slot}>
-			<span className='selected-vault-address-control' ref={control}>
-				<AddressValue address={address} widthConstraint={widthConstraint} />
-			</span>
+			<FittedAddressValue address={address} slot={slot} />
 		</span>
 	)
 }
@@ -98,14 +94,13 @@ export function SelectedVaultSummarySection({
 			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'
 			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}
-			isCurrentlyHealthy={currentVaultIsHealthy}
+			healthTier={getVaultHealthTier({ associatedRepPerCapacityBps, isCurrentlyHealthy: currentVaultIsHealthy, multiplierBps: selectedPoolStatoblastSecurityMultiplierBps })}
 			poolEnded={poolEnded}
 			poolHeldRepPerCapacityBps={securityVaultDetails.poolHeldRepPerCapacityBps}
 			vaultAttoRepBacking={securityVaultDetails.vaultAttoRepBacking}
 			repPerEthPrice={repPerEthPrice}
 			repPerEthSource={repPerEthSource}
 			repPerEthSourceUrl={repPerEthSourceUrl}
-			selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 			underwritingLimitAttoEth={underwritingLimitAttoEth}
 			claimableFeesAttoEth={securityVaultDetails.claimableFeesAttoEth}
 		/>

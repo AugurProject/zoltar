@@ -86,7 +86,6 @@ test('a trailing position without a known minimum omits the amount instead of sh
 	// The rendered amount marks its own rounding, so the sentence does not hedge it again with "about".
 	expect(reportingCopy.winningStatusDetail('1 REP', '≈ 1.33 REP').join('')).toBe('Your 1 REP would be worth ≈ 1.33 REP if it ended now.')
 	expect(reportingCopy.winningPosition('≈ 1.33 REP').join('')).toBe('Leading · worth ≈ 1.33 REP if it ended now')
-	expect(reportingCopy.losingPosition('0.00 REP').join('')).toBe('Behind · worth 0.00 REP if it ended now')
 })
 
 test('step progress counts the escalation phases', () => {

@@ -36,9 +36,9 @@ function UnpricedValue() {
 
 export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation }) {
 	return (
-		<div className={valuation.kind === 'unavailable' ? 'portfolio-position-value is-unpriced' : 'portfolio-position-value'}>
+		<div className='portfolio-position-value'>
 			<span className='metric-label'>{portfolioCopy.valueNow}</span>
-			<strong>{valuation.kind === 'unavailable' ? <UnpricedValue /> : formatPortfolioEth(valuation.attoEth)}</strong>
+			<strong className={valuation.kind === 'unavailable' ? 'is-unpriced' : undefined}>{valuation.kind === 'unavailable' ? <UnpricedValue /> : formatPortfolioEth(valuation.attoEth)}</strong>
 			<small className='payout-caption'>{valuationCaption(valuation)}</small>
 		</div>
 	)
@@ -56,7 +56,7 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 	return (
 		<section className='portfolio-summary' aria-label={portfolioCopy.summaryLabel}>
 			<DataGrid className='portfolio-summary-grid'>
-				<MetricField label={portfolioCopy.totalValue} valueClassName={noPricedPosition ? 'is-unpriced' : ''}>
+				<MetricField label={portfolioCopy.totalValue} valueClassName={noPricedPosition ? 'is-unpriced' : undefined}>
 					{noPricedPosition ? <UnpricedValue /> : formatPortfolioEth(overview.totalValueAttoEth)}
 					{totalValueCaptions(overview).map(caption => (
 						<small key={caption} className='payout-caption'>

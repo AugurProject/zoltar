@@ -44,7 +44,8 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 	getPoolMintingCapacityAttoEth,
-	isMintingPausedByEscalation,
+	hasEscalationGame,
+	hasShares,
 	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
 } from '../lib/trading.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -100,7 +101,7 @@ export function TradingSection({
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	// Once balances load and every one is zero, a single line replaces the empty sets figure and three empty bars.
-	const holdsNoShares = shareBalances !== undefined && shareBalances.yesAttoShares === 0n && shareBalances.noAttoShares === 0n && shareBalances.invalidAttoShares === 0n
+	const holdsNoShares = shareBalances !== undefined && !hasShares(shareBalances)
 	const outcomeBacking = (outcome: 'yes' | 'no' | 'invalid') => {
 		if (displayShareBalances === undefined) return undefined
 		return selectedPool?.questionOutcome === 'none' || selectedPool?.questionOutcome === outcome ? displayShareBalances[outcome] : 0n
@@ -109,7 +110,7 @@ export function TradingSection({
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
-	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool)
+	const mintingPausedByEscalation = selectedPool !== undefined && hasEscalationGame(selectedPool)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
@@ -166,7 +167,6 @@ export function TradingSection({
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.questionFinalizedReason
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -273,19 +273,19 @@ export function TradingSection({
 			)}
 		</>
 	)
+	const mintReady = !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined
 	// Minting can never resume once the question has finalized, so its launcher is left out rather than shown disabled; every other action can still apply later and stays with its reason.
-	const questionFinalized = selectedPool !== undefined && selectedPool.questionOutcome !== 'none'
 	const tradingLaunchers: ReadinessAction[] = [
-		...(questionFinalized
+		...(winningOutcome !== undefined
 			? []
 			: [
 					{
 						actionLabel: tradingCopy.mintCompleteSets,
 						description: tradingCopy.completeSetMintDescription,
 						key: 'mint-complete-sets',
-						readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
+						readiness: mintReady ? 'ready' : 'blocked',
 						title: tradingCopy.mintCompleteSets,
-						...(!walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
+						...(mintReady ? { onAction: () => setActiveModal('mint') } : {}),
 						...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
 					} satisfies ReadinessAction,
 				]),

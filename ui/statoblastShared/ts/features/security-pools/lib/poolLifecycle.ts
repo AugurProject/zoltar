@@ -49,6 +49,11 @@ export function getSkippedLifecycleSteps({ escalationStarted, hasForkActivity, s
 	return escalationStarted ? ['forkMigration', 'truthAuction'] : ['escalation', 'forkMigration', 'truthAuction']
 }
 
+/** Whether the pool is in a fork stage: forked, migrating, or running its truth auction. */
+export function isForkLifecycleState(state: SecurityPoolLifecycleState | undefined) {
+	return state === 'poolForked' || state === 'forkMigration' || state === 'forkTruthAuction'
+}
+
 /** The pool tab that holds the stage's main work, used when the pool URL does not name a tab. */
 export function getDefaultPoolTab(step: PoolLifecycleStep | undefined, hasForkActivity: boolean): SelectedPoolView {
 	switch (step) {

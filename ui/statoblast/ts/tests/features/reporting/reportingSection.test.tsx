@@ -2669,7 +2669,6 @@ describe('ReportingSection', () => {
 		expect(document.querySelector('.reporting-viewer-status')?.classList.contains('notice')).toBe(false)
 		expect(within(document.body).queryByRole('button', { name: 'Take the lead' })).toBeNull()
 		expect(text.indexOf('You’re leading on No.')).toBeLessThan(text.indexOf('You’re behind on Yes.'))
-		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('You’re leading on No. Your 2.00 REP would be worth 2.00 REP if it ended now.')
 	})
 	test('ties show no winner, link to the explanation, and label positions Tied', async () => {
 		const details = createReportingDetails()

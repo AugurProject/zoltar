@@ -7,7 +7,6 @@ export const otherwiseZero = '0 ETH otherwise'
 export const unavailable = 'Payout unavailable'
 export const valueUnavailable = 'Value unavailable'
 export const redemptionUnavailable = 'Redemption unavailable'
-export const shareRedemptionUnavailable = 'Share redemption unavailable'
 export const zeroPayout = '0 ETH · lost'
 export const feeProjection = 'Holding fee over next 30 days'
 

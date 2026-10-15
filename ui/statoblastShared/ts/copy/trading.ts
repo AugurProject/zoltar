@@ -27,7 +27,6 @@ export const mintCapacityUnavailable = 'Mint capacity unavailable. Refresh pool 
 export const migrateForkedShares = 'Migrate forked shares'
 export const shareMigrationDescription = 'After this universe forks, carry your shares for one outcome into the child universes you choose.'
 export const migratingShares = 'Migrating shares…'
-export const questionFinalizedReason = 'This question has already finalized.'
 export const mintCompleteSetsAmount = 'ETH to mint with'
 export const completeSetMintDescription = 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this pool.'
 export const mintingCompleteSets = 'Minting complete sets…'

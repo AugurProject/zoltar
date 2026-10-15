@@ -16,14 +16,17 @@ import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { PoolCapacitySummary } from './PoolCapacitySummary.js'
+import { AmountOfLimit, formatPercentOfLimit, PoolCapacitySummary } from './PoolCapacitySummary.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { formatRelativeTimestamp, formatTrimmedUnits, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { getTruthAuctionOverviewProgress } from '../../truth-auctions/lib/truthAuctionBook.js'
+import { getFinalizedTruthAuctionRaisedAttoEth } from '../../truth-auctions/lib/truthAuctionBook.js'
+import { hasTruthAuctionEnded, isMigrationClosed } from '../../truth-auctions/components/ForkAuctionPresentationState.js'
+import type { PoolForkTimeline } from '../lib/poolStrip.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { getPoolRemainingMintCapacity } from '../../markets/lib/trading.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
@@ -47,14 +50,6 @@ type SecurityPoolObjectHeaderProps = {
 	selectedPoolView: string
 }
 
-/** Fork-stage deadlines and auction progress for the strip; each is undefined until the pool's fork details load, and `loading` is true only while that read is in flight. */
-export type PoolForkTimeline = {
-	auctionEndsAt: bigint | undefined
-	loading: boolean
-	migrationEndsAt: bigint | undefined
-	truthAuction: TruthAuctionMetrics | undefined
-}
-
 function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
 	return { ...props.selectedPoolSummaryPool, lastOraclePrice: props.currentPoolOraclePrice ?? props.selectedPoolSummaryPool.lastOraclePrice, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
 }
@@ -74,13 +69,12 @@ function PoolStripFigure({ detail, label, textValue = false, value }: { detail?:
  * details are being read the tile holds its place with a loading value; a deadline that stays unknown, including after
  * a failed read, is left out rather than shown as a placeholder.
  */
-function PoolDeadlineFigure({ currentTimestamp, endsAtDeadline, labels, loading, timestamp }: { currentTimestamp: bigint | undefined; endsAtDeadline: boolean; labels: { ended: string; upcoming: string }; loading: boolean; timestamp: bigint | undefined }) {
-	if ((timestamp === undefined || timestamp === 0n) && loading) return <PoolStripFigure label={labels.upcoming} value={<LoadingText announce={false} />} />
-	if (timestamp === undefined || timestamp === 0n) return undefined
-	const now = currentTimestamp ?? getWallClockTimestamp()
-	// Migration still accepts a call at its deadline and closes only after it; the auction can finalize at its end time.
-	const ended = endsAtDeadline ? timestamp <= now : timestamp < now
-	return <PoolStripFigure label={ended ? labels.ended : labels.upcoming} value={formatRelativeTimestamp(timestamp, now)} detail={<TimestampValue timestamp={timestamp} relative={false} />} />
+function PoolDeadlineFigure({ currentTimestamp, hasEnded, labels, loading, timestamp }: { currentTimestamp: bigint | undefined; hasEnded: (now: bigint, deadline: bigint) => boolean; labels: { ended: string; upcoming: string }; loading: boolean; timestamp: bigint | undefined }) {
+	const chainTimestamp = useChainTimestamp()
+	const known = timestamp !== undefined && timestamp !== 0n
+	if (!known) return loading ? <PoolStripFigure label={labels.upcoming} value={<LoadingText announce={false} />} /> : undefined
+	const now = currentTimestamp ?? chainTimestamp ?? getWallClockTimestamp()
+	return <PoolStripFigure label={hasEnded(now, timestamp) ? labels.ended : labels.upcoming} value={formatRelativeTimestamp(timestamp, now)} detail={<TimestampValue timestamp={timestamp} relative={false} />} />
 }
 
 function SettlementCollateralFigure({ pool }: { pool: ListedSecurityPool }) {
@@ -89,8 +83,8 @@ function SettlementCollateralFigure({ pool }: { pool: ListedSecurityPool }) {
 
 function getTruthAuctionProgressDetail(auction: TruthAuctionMetrics, amountAttoEth: bigint) {
 	if (auction.hitCap) return forkAuctionCopy.targetReached
-	if (auction.attoEthRaiseCap <= 0n) return undefined
-	return copy.formatShareOfTarget(formatTrimmedUnits((amountAttoEth * 1000n) / auction.attoEthRaiseCap, 1))
+	const percent = formatPercentOfLimit(amountAttoEth, auction.attoEthRaiseCap)
+	return percent === undefined ? undefined : copy.formatShareOfTarget(percent)
 }
 
 /**
@@ -98,58 +92,26 @@ function getTruthAuctionProgressDetail(auction: TruthAuctionMetrics, amountAttoE
  * so the header shows the ETH bid against the target; a finalized auction shows what it raised.
  */
 function TruthAuctionProgressFigure({ auction }: { auction: TruthAuctionMetrics }) {
-	const amountAttoEth = auction.finalized ? (getTruthAuctionOverviewProgress(auction, [])?.attoEthRaised ?? auction.attoEthRaised) : auction.accumulatedBidAttoEth
+	const amountAttoEth = auction.finalized ? getFinalizedTruthAuctionRaisedAttoEth(auction) : auction.accumulatedBidAttoEth
 	return (
-		<div className='pool-capacity-summary is-prominent'>
-			<ProgressMeter
-				label={auction.finalized ? forkAuctionCopy.attoEthRaised : copy.ethBid}
-				maxValue={auction.attoEthRaiseCap}
-				value={amountAttoEth}
-				valueText={
-					<>
-						<CurrencyValue value={amountAttoEth} suffix={commonCopy.eth} exactWhenRoundedToZero />{' '}
-						<span className='pool-capacity-limit'>
-							/ <CurrencyValue value={auction.attoEthRaiseCap} suffix={commonCopy.eth} exactWhenRoundedToZero />
-						</span>
-					</>
-				}
-				detail={getTruthAuctionProgressDetail(auction, amountAttoEth)}
-			/>
+		<div className='pool-meter is-prominent pool-auction-progress'>
+			<ProgressMeter label={auction.finalized ? forkAuctionCopy.attoEthRaised : copy.ethBid} maxValue={auction.attoEthRaiseCap} value={amountAttoEth} valueText={<AmountOfLimit amount={amountAttoEth} limit={auction.attoEthRaiseCap} />} detail={getTruthAuctionProgressDetail(auction, amountAttoEth)} />
 		</div>
 	)
 }
 
 /** While the fork details are being read, the auction tile holds its place; without auction metrics, settlement collateral leads instead. */
-function TruthAuctionLeadFigure({ forkTimeline, pool }: { forkTimeline: PoolForkTimeline | undefined; pool: ListedSecurityPool }) {
-	if (forkTimeline?.truthAuction !== undefined) return <TruthAuctionProgressFigure auction={forkTimeline.truthAuction} />
-	if (forkTimeline?.loading === true) return <PoolStripFigure label={copy.ethBid} value={<LoadingText announce={false} />} />
+function TruthAuctionLeadFigure({ forkTimeline, pool }: { forkTimeline: PoolForkTimeline; pool: ListedSecurityPool }) {
+	if (forkTimeline.truthAuction !== undefined) return <TruthAuctionProgressFigure auction={forkTimeline.truthAuction} />
+	if (forkTimeline.loading) return <PoolStripFigure label={copy.ethBid} value={<LoadingText announce={false} />} />
 	return <SettlementCollateralFigure pool={pool} />
-}
-
-/** The stage deadline the strip shows, if any, so the next-action rows above it need not repeat it. */
-export function getPoolStripDeadline(lifecycleState: SecurityPoolLifecycleState | undefined, forkTimeline: PoolForkTimeline | undefined) {
-	if (lifecycleState === 'poolForked' || lifecycleState === 'forkMigration') return forkTimeline?.migrationEndsAt
-	if (lifecycleState === 'forkTruthAuction') return forkTimeline?.auctionEndsAt
-	return undefined
 }
 
 /**
  * The strip's leading figures follow the pool's stage: an operating pool shows collateral in use against capacity; a
  * forked pool shows its settlement collateral and the migration or auction deadline; an ended pool shows its outcome.
  */
-function PoolStageFigures({
-	currentTimestamp,
-	forkTimeline,
-	lifecycleState,
-	pool,
-	questionOutcome,
-}: {
-	currentTimestamp: bigint | undefined
-	forkTimeline: PoolForkTimeline | undefined
-	lifecycleState: SecurityPoolLifecycleState | undefined
-	pool: ListedSecurityPool
-	questionOutcome: ReportingOutcomeKey | 'none' | undefined
-}) {
+function PoolStageFigures({ currentTimestamp, forkTimeline, lifecycleState, pool, questionOutcome }: { currentTimestamp: bigint | undefined; forkTimeline: PoolForkTimeline; lifecycleState: SecurityPoolLifecycleState | undefined; pool: ListedSecurityPool; questionOutcome: ReportingOutcomeKey | 'none' | undefined }) {
 	switch (lifecycleState) {
 		case 'ended':
 			return (
@@ -163,14 +125,14 @@ function PoolStageFigures({
 			return (
 				<>
 					<SettlementCollateralFigure pool={pool} />
-					<PoolDeadlineFigure currentTimestamp={currentTimestamp} endsAtDeadline={false} labels={{ ended: forkAuctionCopy.migrationEnded, upcoming: forkAuctionCopy.migrationEnds }} loading={forkTimeline?.loading === true} timestamp={getPoolStripDeadline(lifecycleState, forkTimeline)} />
+					<PoolDeadlineFigure currentTimestamp={currentTimestamp} hasEnded={isMigrationClosed} labels={{ ended: forkAuctionCopy.migrationEnded, upcoming: forkAuctionCopy.migrationEnds }} loading={forkTimeline.loading} timestamp={forkTimeline.migrationEndsAt} />
 				</>
 			)
 		case 'forkTruthAuction':
 			return (
 				<>
 					<TruthAuctionLeadFigure forkTimeline={forkTimeline} pool={pool} />
-					<PoolDeadlineFigure currentTimestamp={currentTimestamp} endsAtDeadline labels={{ ended: copy.auctionEnded, upcoming: copy.auctionEnds }} loading={forkTimeline?.loading === true} timestamp={getPoolStripDeadline(lifecycleState, forkTimeline)} />
+					<PoolDeadlineFigure currentTimestamp={currentTimestamp} hasEnded={hasTruthAuctionEnded} labels={{ ended: forkAuctionCopy.auctionEnded, upcoming: forkAuctionCopy.auctionEnds }} loading={forkTimeline.loading} timestamp={forkTimeline.auctionEndsAt} />
 				</>
 			)
 		case 'operational':
@@ -185,11 +147,11 @@ function PoolStageFigures({
  * The pool's identity with its next actions beside it, then one strip of the figures that decide what can happen next:
  * the stage's leading figures (see `PoolStageFigures`), the OpenOracle price while a pool action reads it, and the lifecycle stage.
  */
-export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & { actions?: ComponentChildren; forkTimeline?: PoolForkTimeline | undefined; lifecycle?: ComponentChildren; oracleStatus?: ComponentChildren; showStageFigures?: boolean }) {
-	const { actions, currentTimestamp, forkTimeline, freshness, lifecycle, marketDetails, oracleStatus, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome, showStageFigures = true } = props
+export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & { actions?: ComponentChildren; forkTimeline: PoolForkTimeline; lifecycle?: ComponentChildren; oracleStatus?: ComponentChildren; showStageFigures: boolean }) {
+	const { actions, currentTimestamp, forkTimeline, freshness, lifecycle, marketDetails, oracleStatus, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome, showStageFigures } = props
 	const summaryPool = getSummaryPool(props)
-	// An ended pool's strip leads with its outcome, so the badge says only that it finalized instead of repeating the outcome.
-	const badgeQuestionOutcome = selectedPoolLifecycleState === 'ended' ? undefined : selectedPoolQuestionOutcome
+	// An ended pool's strip leads with its outcome, so the badge names the outcome only when the strip's figures are hidden.
+	const badgeQuestionOutcome = showStageFigures ? undefined : selectedPoolQuestionOutcome
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(badgeQuestionOutcome === undefined ? {} : { questionOutcome: badgeQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>

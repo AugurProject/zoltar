@@ -19,7 +19,7 @@ import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../..
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { POOLS_ROUTE_HASH, parsePoolsRouteHash, writePoolsLocationSearch } from '../../../lib/statoblastLocation.js'
-import { getPoolStripDeadline, SecurityPoolObjectHeader, SecurityPoolObjectHeaderSkeleton, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
+import { SecurityPoolObjectHeader, SecurityPoolObjectHeaderSkeleton, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
 import { PoolSelectionControl } from './PoolSelectionControl.js'
 import { PoolOracleStatusRow, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
 import { PoolActionCard, PoolLifecycleStepper } from './PoolStagePanel.js'
@@ -221,7 +221,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		<PoolActionCard
 			currentTimestamp={currentTimestamp}
 			currentView={view === 'vaults' && vaultView !== 'selected-vault' ? undefined : view}
-			deadlineShownInStrip={objectHeaderProps === undefined ? undefined : getPoolStripDeadline(model.selectedPoolLifecycleState, model.forkTimeline)}
+			deadlineShownInStrip={objectHeaderProps === undefined ? undefined : model.stripDeadline}
 			items={model.actionItems}
 			onChange={nextView => (nextView === 'vaults' ? openMyVault() : onSelectedPoolViewChange(nextView))}
 		/>

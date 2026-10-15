@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
-import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { ForkAuctionFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { createSelectedPool } from '../security-pools/workflow/builders.js'
@@ -43,6 +43,30 @@ export function createForkChildPool(overrides: Partial<ListedSecurityPool> = {})
 		universeId: 11n,
 		...overrides,
 	})
+}
+
+/** An open truth auction that has raised 1 ETH of its 100 ETH cap, with no clearing price yet. */
+export function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
+	return {
+		accumulatedBidAttoEth: 1n * 10n ** 18n,
+		auctionEndsAt: 400n,
+		clearingPrice: undefined,
+		clearingTick: undefined,
+		bidAtClearingTickAttoEth: 0n,
+		attoEthRaiseCap: 100n * 10n ** 18n,
+		attoEthRaised: 1n * 10n ** 18n,
+		finalized: false,
+		hitCap: false,
+		maxAttoRepBeingSold: 100n * 10n ** 18n,
+		minBidSizeAttoEth: 1n * 10n ** 18n,
+		attoRepPurchasableAtBid: 1n * 10n ** 18n,
+		timeRemaining: 150n,
+		totalAttoRepPurchased: 0n,
+		underfunded: false,
+		underfundedThreshold: undefined,
+		underfundedWinningAttoEth: 0n,
+		...overrides,
+	}
 }
 
 /** Fork-auction section props with no-op callbacks, no pending action, and the empty parent-pool form. */

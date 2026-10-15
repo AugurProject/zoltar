@@ -36,13 +36,15 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 	const commitmentId = useId()
 	const lookupId = useId()
 	const lookupReasonId = useId()
+	// Embedded before resolution, the form sits directly under the vault card, which already describes it.
+	const belowVaultCard = embedded && !model.resolved
 	const executionWindowId = useId()
 	const fieldsDisabled = model.busy
 	const operationalFieldsDisabled = fieldsDisabled || model.resolved === true
 	const priceActions = model.input === undefined ? 0 : countVaultPriceActions(model.input)
 	const fresh = model.quote?.validPrice ?? model.manager?.isPriceValid ?? false
 	const lookupDisabled = fieldsDisabled || model.lookupAddress.trim() === ''
-	const lookupReason = lookupDisabled && !model.busy ? copy.enterTarget : undefined
+	const lookupReason = !model.busy && model.lookupAddress.trim() === '' ? copy.enterTarget : undefined
 	// Wallet REP left after the oracle REP funding; unknown only until the wallet balance loads.
 	const depositMaximum = model.balance === undefined ? undefined : model.balance - (model.quote?.funding?.requiredRepAttoRep ?? 0n)
 	// The action limit matters only once the draft nears it, so the note appears then rather than on every visit.
@@ -91,7 +93,7 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 	return (
 		<div className='vault-operations-flow'>
 			{/* Beside the vault card the section title and preview already say what the form does; after resolution the description explains the remaining steps. */}
-			{embedded && !model.resolved ? undefined : <p className='detail'>{model.resolved ? copy.resolvedDescription : copy.description}</p>}
+			{belowVaultCard ? undefined : <p className='detail'>{model.resolved ? copy.resolvedDescription : copy.description}</p>}
 			{embedded ? undefined : (
 				<MetricGrid>
 					<MetricField label={liquidationCopy.receiverVault}>{parameters.accountAddress === undefined ? commonCopy.metricUnavailablePlaceholder : <AddressValue address={parameters.accountAddress} />}</MetricField>
@@ -112,10 +114,10 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 				/>
 			)}
 
-			<div className='vault-operations-layout'>
+			<div className={belowVaultCard ? 'vault-operations-layout is-below-vault-card' : 'vault-operations-layout'}>
 				<SectionBlock title={copy.title} variant={embedded ? 'embedded' : 'surface'} className='vault-operations-form'>
 					<WorkflowSubsection title={copy.myVault}>
-						{/* The wallet balance sits with the deposit it funds rather than in a row of its own above the form. */}
+						{/* The wallet balance sits with the deposit it funds. */}
 						<p className='vault-operations-wallet'>
 							<span className='metric-label'>{copy.walletBalance}</span> <CurrencyValue value={model.balance} notation='compact' suffix={commonCopy.rep} />
 						</p>

@@ -959,11 +959,11 @@ productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?
 	const { openSeededPool } = createWorkflowActions(driver)
 	const readVaultCommitment = async (vaultAddress: string) =>
 		await driver.evaluate(
-			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-title-copy')?.textContent?.toLowerCase().includes(${JSON.stringify(vaultAddress.toLowerCase())})); return [...(row?.querySelectorAll('.vault-preview-strip > div') ?? [])].find(metric => metric.querySelector('.metric-label')?.textContent?.trim() === 'Commitment limit')?.querySelector('.currency-value')?.getAttribute('title') })()`,
+			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-strip-title')?.textContent?.toLowerCase().includes(${JSON.stringify(vaultAddress.toLowerCase())})); return [...(row?.querySelectorAll('.vault-preview-strip > div') ?? [])].find(metric => metric.querySelector('.metric-label')?.textContent?.trim() === 'Commitment limit')?.querySelector('.currency-value')?.getAttribute('title') })()`,
 		)
 	const openLiquidationReview = async (targetVault: string) => {
 		const opened = await driver.evaluate(
-			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-title-copy')?.textContent?.toLowerCase().includes(${JSON.stringify(targetVault.toLowerCase())})); const button = [...(row?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Liquidate vault'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
+			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-strip-title')?.textContent?.toLowerCase().includes(${JSON.stringify(targetVault.toLowerCase())})); const button = [...(row?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Liquidate vault'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
 		)
 		expect(opened).toBe(true)
 		await driver.waitForBodyText('Commitment to transfer')

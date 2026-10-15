@@ -1,11 +1,11 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
-import type { ComponentChildren, RefObject } from 'preact'
-import { useMemo, useRef } from 'preact/hooks'
+import type { ComponentChildren } from 'preact'
+import { useRef } from 'preact/hooks'
 import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
-import { AddressValue } from './AddressValue.js'
+import { AddressValue, FittedAddressValue } from './AddressValue.js'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { buildAddressExplorerUrl } from '../wallet/networkProfile.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
@@ -46,23 +46,13 @@ function splitEmbeddedAddresses(value: string) {
 		.map(segment => ({ isAddress: /^0x[0-9a-fA-F]{40}$/.test(segment), segment }))
 }
 
-function TransactionDetailAddress({ address, slot }: { address: string; slot: RefObject<HTMLElement> }) {
-	const control = useRef<HTMLSpanElement>(null)
-	const widthConstraint = useMemo(() => ({ slot, control }), [slot, control])
-	return (
-		<span className='global-transaction-detail-address' ref={control}>
-			<AddressValue address={address} widthConstraint={widthConstraint} />
-		</span>
-	)
-}
-
 function TransactionDetailText({ value }: { value: string }) {
 	const slot = useRef<HTMLSpanElement>(null)
 	const segments = splitEmbeddedAddresses(value)
 	if (!segments.some(({ isAddress }) => isAddress)) return <>{value}</>
 	return (
 		<span className='global-transaction-detail-text' ref={slot}>
-			{segments.map(({ isAddress, segment }, index) => (isAddress ? <TransactionDetailAddress key={index} address={segment} slot={slot} /> : <span key={index}>{segment}</span>))}
+			{segments.map(({ isAddress, segment }, index) => (isAddress ? <FittedAddressValue key={index} address={segment} className='global-transaction-detail-address' slot={slot} /> : <span key={index}>{segment}</span>))}
 		</span>
 	)
 }

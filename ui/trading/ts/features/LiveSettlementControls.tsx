@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyInputBalance, formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
-import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeWithValue } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeWithConditionalValue } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
@@ -180,7 +180,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		operationOption('migrate-shares', settlementCopy.forkMigrationAction, workflowLocked || !forked || winningOutcome !== undefined, forkedResolvedReason ?? (forked ? undefined : settlementCopy.universeNotForkedReason)),
 	]
 	// Shown before the action once there is a balance to move and a branch to move it to.
-	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market, 4, 'nearest', { noteRedemption: false }) : undefined
+	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithConditionalValue(sourceBalance, sourceOutcome, market) : undefined
 	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
 	// Max fills a readable ETH amount: six decimals, rounded down so it never exceeds what the sets redeem for.
 	const maxRedeemAttoEth = redeemableAttoEth === undefined || redeemableAttoEth < MAX_FILL_STEP_ATTO_ETH ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % MAX_FILL_STEP_ATTO_ETH)

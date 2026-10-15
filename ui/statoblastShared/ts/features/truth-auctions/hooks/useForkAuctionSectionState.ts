@@ -185,7 +185,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		tickSummaries: activeTickSummaries,
 		truthAuction: truthAuctionStatus,
 		viewerBids: truthAuctionBookData.viewerBids,
-		viewerBidsIncomplete: hasMoreViewerBids,
 	})
 	const liveBidGuidance = getTruthAuctionLiveBidGuidance(truthAuctionStatus, enteredBidTick)
 	const selectBidPriceTick = (tick: bigint) => {

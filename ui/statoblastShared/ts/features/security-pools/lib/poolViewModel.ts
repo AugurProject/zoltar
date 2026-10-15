@@ -12,12 +12,13 @@ import type { ForkAuctionDetails, ReportingDetails, SecurityPoolVaultSummary, Se
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
-import { AUCTION_TIME_SECONDS } from '../../truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import type { RequestPriceReview } from '../components/SecurityPoolOracleSections.js'
 import { buildSelectedPoolSummaryPool } from '../components/SecurityPoolWorkflowPresentation.js'
 import { derivePoolActionItems, type PoolAccountVault } from './poolActions.js'
-import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkWorkflowPrimary } from './poolLifecycle.js'
+import { getTruthAuctionEndsAt } from '../../../protocol/truthAuctionTiming.js'
+import { getPoolStripDeadline, type PoolForkTimeline } from './poolStrip.js'
+import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkLifecycleState, isForkWorkflowPrimary } from './poolLifecycle.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, deriveVaultAdmissionClosed, evaluateSecurityPoolState } from './securityPoolState.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -43,7 +44,7 @@ export type PoolViewModelInput = Pick<
 > & {
 	forkAuctionDetails: ForkAuctionDetails | undefined
 	/** Whether a fork-details read is in flight; the header's deadline tiles show a loading value only then. */
-	loadingForkAuctionDetails?: boolean
+	loadingForkAuctionDetails: boolean
 	manualPendingOperationId: string
 	/** The chain clock; the loaded reporting or fork details supply a time when it is unknown. */
 	now: bigint | undefined
@@ -141,7 +142,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		reportingOpen: reportingReady === true || selectedPool?.ordinaryEscalationGameStarted === true,
 		reportingStage: selectedPoolReportingStage,
 	})
-	// A pool that settled without a fork never passed the fork stages, and one whose question was never disputed never escalated.
+	// A pool that settled without a fork never passed the fork stages, and one whose question was never disputed never escalated; a fork-continuation game implies fork activity, so only the ordinary game counts here.
 	const skippedLifecycleSteps = getSkippedLifecycleSteps({ escalationStarted: selectedPool?.ordinaryEscalationGameStarted === true, hasForkActivity: selectedPoolHasActualForkActivity, step: lifecycleStep })
 	// The default tab comes from registry data alone, so it does not jump when reporting or fork details arrive later.
 	const listedStep = selectedPool === undefined ? undefined : deriveListedPoolLifecycleStep(selectedPool, currentTimestamp).step
@@ -182,13 +183,14 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	// After resolution, and while the pool itself is forked, no pool action reads the oracle price, so an expired price is neither a warning nor a reason to request one.
 	// The lifecycle state decides this because reporting details are not loaded on every pool view.
 	const poolEnded = selectedPoolLifecycleState === 'ended'
-	const oraclePriceUnused = poolEnded || selectedPoolLifecycleState === 'poolForked' || selectedPoolLifecycleState === 'forkMigration' || selectedPoolLifecycleState === 'forkTruthAuction'
+	const oraclePriceUnused = poolEnded || isForkLifecycleState(selectedPoolLifecycleState)
 	// The pool page's price row offers a new request only when the price is unusable and requesting one is allowed in this stage.
 	const needsPrice = !oraclePriceUnused && !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
 	const accountPoolVault = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const accountVault = selectedVaultIsOwnedByAccount && hasLoadedCurrentVault ? toAccountVault(selectedVaultDetails) : toAccountVault(accountPoolVault)
 	const truthAuctionStartedAt = currentForkAuctionDetails?.truthAuctionStartedAt ?? selectedPool?.truthAuctionStartedAt ?? 0n
-	const auctionEndsAt = currentForkAuctionDetails?.truthAuction?.auctionEndsAt ?? (truthAuctionStartedAt > 0n ? truthAuctionStartedAt + AUCTION_TIME_SECONDS : undefined)
+	const auctionEndsAt = currentForkAuctionDetails?.truthAuction?.auctionEndsAt ?? getTruthAuctionEndsAt(truthAuctionStartedAt)
+	const forkTimeline: PoolForkTimeline = { auctionEndsAt, loading: currentForkAuctionDetails === undefined && input.loadingForkAuctionDetails, migrationEndsAt: currentForkAuctionDetails?.migrationEndsAt, truthAuction: currentForkAuctionDetails?.truthAuction }
 	const poolActionItems =
 		selectedPool === undefined
 			? []
@@ -247,7 +249,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		effectiveSelectedPool,
 		executePendingOperationGuardMessage: getOperationGuardMessage(resolvedPendingOperationId),
 		stagedOperationGuardMessages: new Map(stagedOperations.map(operation => [operation.operationId, getOperationGuardMessage(operation.operationId)])),
-		forkTimeline: { auctionEndsAt, loading: currentForkAuctionDetails === undefined && input.loadingForkAuctionDetails === true, migrationEndsAt: currentForkAuctionDetails?.migrationEndsAt, truthAuction: currentForkAuctionDetails?.truthAuction },
+		forkTimeline,
+		stripDeadline: getPoolStripDeadline(selectedPoolLifecycleState, forkTimeline),
 		forkWorkflowDisabled: isForkWorkflowDisabled(selectedPoolState, selectedPoolHasForkActivity),
 		forkWorkflowPrimary: isForkWorkflowPrimary(lifecycleStep, selectedPoolHasForkActivity),
 		hasLoadedCurrentVault,

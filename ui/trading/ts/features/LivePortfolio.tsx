@@ -3,10 +3,10 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import * as availabilityCopy from '../copy/availability.js'
 import type { ComponentChildren } from 'preact'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { LpHolding, OutcomeHolding } from './OutcomeHolding.js'
+import { LpHolding, OutcomeHoldingItem } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
 import * as payoutCopy from '../copy/payout.js'
-import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
+import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithConditionalValue, shareOutcome } from '../lib/shareValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -34,27 +34,24 @@ function LockedCaption({ balances, outcome }: { balances: LiveBalances; outcome:
 	return lockedMigratedBalance(balances, outcome) === 0n ? null : <small className='payout-caption holding-locked'>{marketsCopy.lockedAfterMigration}</small>
 }
 
-/** A row's holdings; when redemption is blocked, the row's value caption already says the shares must migrate, so no holding repeats it. */
+/** A row's holdings; when redemption is blocked, the row's value caption already says why (migrate after a fork, or the pool is inactive), so no holding repeats it. */
 function PortfolioHoldings({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
 	return (
 		<ul className='portfolio-holdings'>
 			{balances.yes === 0n ? undefined : (
-				<li className='portfolio-holding-yes'>
-					<OutcomeHolding amount={balances.yes} outcome={shareOutcome.yes} market={market} noteRedemption={false} />
+				<OutcomeHoldingItem amount={balances.yes} outcome={shareOutcome.yes} market={market} noteRedemption={false}>
 					<LockedCaption balances={balances} outcome={shareOutcome.yes} />
-				</li>
+				</OutcomeHoldingItem>
 			)}
 			{balances.no === 0n ? undefined : (
-				<li className='portfolio-holding-no'>
-					<OutcomeHolding amount={balances.no} outcome={shareOutcome.no} market={market} noteRedemption={false} />
+				<OutcomeHoldingItem amount={balances.no} outcome={shareOutcome.no} market={market} noteRedemption={false}>
 					<LockedCaption balances={balances} outcome={shareOutcome.no} />
-				</li>
+				</OutcomeHoldingItem>
 			)}
 			{balances.invalid === 0n ? undefined : (
-				<li>
-					<OutcomeHolding amount={balances.invalid} outcome={shareOutcome.invalid} market={market} noteRedemption={false} />
+				<OutcomeHoldingItem amount={balances.invalid} outcome={shareOutcome.invalid} market={market} noteRedemption={false}>
 					<LockedCaption balances={balances} outcome={shareOutcome.invalid} />
-				</li>
+				</OutcomeHoldingItem>
 			)}
 			{balances.lp === 0n ? undefined : <li>{<LpHolding amount={balances.lp} market={market} rounding='down' />}</li>}
 		</ul>
@@ -90,8 +87,8 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 			{balances.lp === 0n ? undefined : (
 				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
-						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValue(yesClaim, shareOutcome.yes, market, 4, 'nearest', { noteRedemption: false })}</MetricField>
-						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValue(noClaim, shareOutcome.no, market, 4, 'nearest', { noteRedemption: false })}</MetricField>
+						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithConditionalValue(yesClaim, shareOutcome.yes, market)}</MetricField>
+						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithConditionalValue(noClaim, shareOutcome.no, market)}</MetricField>
 						<MetricField label={portfolioCopy.claimInsuredByInvalid}>{formatCompleteSetWithValue(coveredSets, market)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>

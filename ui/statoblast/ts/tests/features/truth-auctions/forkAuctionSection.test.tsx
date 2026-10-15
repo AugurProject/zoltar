@@ -22,7 +22,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
-import { createForkAuctionForm, createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
+import { createForkAuctionForm, createForkAuctionSectionProps, createForkChildPool, createTruthAuctionMetrics, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
 	return {
@@ -235,17 +235,12 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('View stage')).toBeNull()
 		expect(documentQueries.queryByText('Current stage')).toBeNull()
 		expect(documentQueries.queryByText('This step becomes active once migration is underway.')).toBeNull()
-		// Sub-tabs carry no stage glyphs, so a check mark never suggests an upcoming stage is done.
-		expect(forkTriggeredTab.querySelector('.fork-workflow-stage-icon')).toBeNull()
 		expect(migrationTab.className.includes('is-selected')).toBe(true)
-		expect(migrationTab.className.includes('is-complete')).toBe(true)
 		expect(migrationTab.getAttribute('aria-selected')).toBe('true')
 		expect(auctionTab.getAttribute('aria-current')).toBe('step')
 		expect(auctionTab.className.includes('is-current')).toBe(true)
 		expect(settlementTab.className.includes('is-upcoming')).toBe(true)
 		expect(documentQueries.queryByRole('tab', { name: 'New Security pools' })).toBeNull()
-		// The header's stage bar carries progress, so the sub-tabs have no arrows between them.
-		expect(document.body.querySelectorAll('.fork-workflow-stage-separator')).toHaveLength(0)
 
 		fireEvent.click(settlementTab)
 		expect(onSelectedStageViewChange).toHaveBeenLastCalledWith('settlement')
@@ -1174,25 +1169,7 @@ describe('ForkAuctionSection', () => {
 						questionOutcome: 'yes',
 						securityPoolAddress: currentChildPool.securityPoolAddress,
 						systemState: 'forkTruthAuction',
-						truthAuction: {
-							accumulatedBidAttoEth: 0n,
-							auctionEndsAt: 604_801n,
-							clearingPrice: 1n,
-							clearingTick: 0n,
-							bidAtClearingTickAttoEth: 0n,
-							attoEthRaiseCap: 1n,
-							attoEthRaised: 0n,
-							finalized: false,
-							hitCap: false,
-							maxAttoRepBeingSold: 1n,
-							minBidSizeAttoEth: 1n,
-							attoRepPurchasableAtBid: undefined,
-							timeRemaining: 604_796n,
-							totalAttoRepPurchased: 0n,
-							underfunded: false,
-							underfundedThreshold: undefined,
-							underfundedWinningAttoEth: 0n,
-						},
+						truthAuction: createTruthAuctionMetrics({ auctionEndsAt: 604_801n, timeRemaining: 604_796n }),
 						truthAuctionAddress: currentChildPool.truthAuctionAddress,
 						truthAuctionStartedAt: 1n,
 						universeId: currentChildPool.universeId,

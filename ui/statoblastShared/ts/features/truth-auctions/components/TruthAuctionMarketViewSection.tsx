@@ -12,6 +12,8 @@ import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined
 	hasMoreTickSummaries: boolean
+	/** More of the wallet's bids exist than are loaded, so each price's total of your bids is only a lower bound. */
+	hasMoreViewerBids: boolean
 	loadingTruthAuctionBook: boolean
 	maxTickAttoEth: bigint
 	onLoadNextTickPage: () => void
@@ -26,7 +28,7 @@ function clampPercentage(value: bigint, maxValue: bigint) {
 	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
 }
 
-export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
+export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, hasMoreViewerBids, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
 		<SectionBlock variant='embedded'>
 			{truthAuctionBookError === undefined ? undefined : <UserMessage className='detail truth-auction-book-error' tone='error' detail={truthAuctionBookError} />}
@@ -66,7 +68,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.yourBidPrice}</span> : undefined}
 												{point.viewerBidAttoEth > 0n ? (
 													<span className='truth-auction-ladder-yours'>
-														{point.viewerBidAttoEthIsLowerBound ? forkAuctionCopy.yourBidsAtPriceAtLeast : forkAuctionCopy.yourBidsAtPrice} <CurrencyValue value={point.viewerBidAttoEth} suffix={commonCopy.eth} />
+														{hasMoreViewerBids ? forkAuctionCopy.yourBidsAtPriceAtLeast : forkAuctionCopy.yourBidsAtPrice} <CurrencyValue value={point.viewerBidAttoEth} suffix={commonCopy.eth} />
 													</span>
 												) : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>

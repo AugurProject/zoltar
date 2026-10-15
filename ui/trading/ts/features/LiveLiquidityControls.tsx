@@ -23,7 +23,7 @@ import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
 import { resolveLiquidityAvailability } from './live/actionAvailability.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
-import { LpHolding, OutcomeHolding } from './OutcomeHolding.js'
+import { LpHolding, OutcomeHoldingItem } from './OutcomeHolding.js'
 import { MINIMUM_LIQUIDITY, outcomeSharesValueAttoEth, type LiquidityPreview } from './live/liquidityEstimate.js'
 import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
@@ -164,12 +164,8 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 					<p className='detail'>{liquidityCopy.youReceive}</p>
 					{preview.operation === 'remove' ? (
 						<ul className='portfolio-holdings'>
-							<li className='portfolio-holding-yes'>
-								<OutcomeHolding amount={preview.yesOut} outcome={shareOutcome.yes} market={market} rounding='nearest' />
-							</li>
-							<li className='portfolio-holding-no'>
-								<OutcomeHolding amount={preview.noOut} outcome={shareOutcome.no} market={market} rounding='nearest' />
-							</li>
+							<OutcomeHoldingItem amount={preview.yesOut} outcome={shareOutcome.yes} market={market} rounding='nearest' />
+							<OutcomeHoldingItem amount={preview.noOut} outcome={shareOutcome.no} market={market} rounding='nearest' />
 						</ul>
 					) : (
 						<>
@@ -182,19 +178,9 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 								/>
 							</strong>
 							<ul className='portfolio-holdings'>
-								<li>
-									<OutcomeHolding amount={preview.invalidReturned} outcome={shareOutcome.invalid} market={market} rounding='nearest' />
-								</li>
-								{preview.yesReturned === 0n ? undefined : (
-									<li className='portfolio-holding-yes'>
-										<OutcomeHolding amount={preview.yesReturned} outcome={shareOutcome.yes} market={market} rounding='nearest' />
-									</li>
-								)}
-								{preview.noReturned === 0n ? undefined : (
-									<li className='portfolio-holding-no'>
-										<OutcomeHolding amount={preview.noReturned} outcome={shareOutcome.no} market={market} rounding='nearest' />
-									</li>
-								)}
+								<OutcomeHoldingItem amount={preview.invalidReturned} outcome={shareOutcome.invalid} market={market} rounding='nearest' />
+								{preview.yesReturned === 0n ? undefined : <OutcomeHoldingItem amount={preview.yesReturned} outcome={shareOutcome.yes} market={market} rounding='nearest' />}
+								{preview.noReturned === 0n ? undefined : <OutcomeHoldingItem amount={preview.noReturned} outcome={shareOutcome.no} market={market} rounding='nearest' />}
 							</ul>
 						</>
 					)}

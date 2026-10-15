@@ -37,10 +37,8 @@ export type TruthAuctionDepthPoint = {
 	isSelected: boolean
 	isPreviewTick: boolean
 	submissionCount: bigint
-	/** The connected wallet's live bids at this price, so the ladder shows where your money sits. */
+	/** The connected wallet's loaded live bids at this price, so the ladder shows where your money sits. */
 	viewerBidAttoEth: bigint
-	/** True while some of the wallet's bids are not loaded yet, so `viewerBidAttoEth` is only a lower bound. */
-	viewerBidAttoEthIsLowerBound: boolean
 }
 
 type TruthAuctionBidSettlementEstimate = {
@@ -310,19 +308,19 @@ export function buildTruthAuctionDepthPoints({
 	selectedBookTick,
 	tickSummaries,
 	truthAuction,
-	viewerBids = [],
-	viewerBidsIncomplete = false,
+	viewerBids,
 }: {
 	enteredBidTick: bigint | undefined
 	selectedBookTick: bigint | undefined
 	tickSummaries: TruthAuctionTickSummary[]
 	truthAuction: TruthAuctionMetrics | undefined
-	viewerBids?: readonly TruthAuctionBidView[]
-	/** More of the wallet's bids exist than are loaded. */
-	viewerBidsIncomplete?: boolean
+	viewerBids: readonly TruthAuctionBidView[]
 }): TruthAuctionDepthPoint[] {
 	let cumulativeBidAttoEth = 0n
-	const viewerBidAttoEthAtTick = (tick: bigint) => viewerBids.reduce((total, bid) => (bid.tick === tick && !bid.refunded ? total + bid.bidAmountAttoEth : total), 0n)
+	const viewerBidAttoEthByTick = new Map<bigint, bigint>()
+	for (const bid of viewerBids) {
+		if (!bid.refunded) viewerBidAttoEthByTick.set(bid.tick, (viewerBidAttoEthByTick.get(bid.tick) ?? 0n) + bid.bidAmountAttoEth)
+	}
 
 	return tickSummaries
 		.filter(tickSummary => tickSummary.active || tickSummary.currentTotalBidAttoEth > 0n)
@@ -337,17 +335,21 @@ export function buildTruthAuctionDepthPoints({
 				isSelected: selectedBookTick === tickSummary.tick,
 				isPreviewTick: enteredBidTick !== undefined && enteredBidTick === tickSummary.tick,
 				submissionCount: tickSummary.submissionCount,
-				viewerBidAttoEth: viewerBidAttoEthAtTick(tickSummary.tick),
-				viewerBidAttoEthIsLowerBound: viewerBidsIncomplete,
+				viewerBidAttoEth: viewerBidAttoEthByTick.get(tickSummary.tick) ?? 0n,
 			}
 		})
+}
+
+/** The ETH a finalized auction raised: only the winning bids when it ended underfunded. */
+export function getFinalizedTruthAuctionRaisedAttoEth(truthAuction: TruthAuctionMetrics) {
+	return truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised
 }
 
 export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetrics | undefined, tickSummaries: TruthAuctionTickSummary[]) {
 	if (truthAuction === undefined) return undefined
 	if (truthAuction.finalized) {
 		return {
-			attoEthRaised: truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised,
+			attoEthRaised: getFinalizedTruthAuctionRaisedAttoEth(truthAuction),
 			attoRepSold: truthAuction.totalAttoRepPurchased,
 		}
 	}

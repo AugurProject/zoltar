@@ -158,7 +158,7 @@ export function SecurityPoolVaultWorkspace({
 						emptyState={browseEmptyState}
 						pool={selectedPool}
 						poolEnded={poolState?.lifecycleState === 'ended'}
-						renderActions={(vault, healthTier) => {
+						renderActions={vault => {
 							if (selectedPool === undefined) return undefined
 							// The connected wallet's own vault can never be liquidated by it, so its row offers no liquidation.
 							const ownVault = isWalletVault(vault.vaultAddress)
@@ -179,10 +179,10 @@ export function SecurityPoolVaultWorkspace({
 											{workspaceCopy.openVault}
 										</button>
 										{ownVault ? undefined : (
-											// An underwater vault's liquidation is the row's main action.
+											// A liquidation the protocol's price allows is the row's main action; the health badge uses the UI estimate, so it does not decide the emphasis.
 											<button
 												aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId}
-												className={healthTier === 'underwater' ? 'primary' : 'secondary'}
+												className={liquidationBlocker === undefined ? 'primary' : 'secondary'}
 												disabled={liquidationBlocker !== undefined}
 												type='button'
 												onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}

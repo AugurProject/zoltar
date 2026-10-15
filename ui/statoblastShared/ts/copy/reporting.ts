@@ -1,3 +1,9 @@
+/**
+ * A sentence with REP amounts, as its parts with each amount in place, so the UI can render each one rounded with the exact
+ * value on hover and plain text can join rounded strings. Each amount carries its own REP unit.
+ */
+export type CopyParts<Amount> = readonly (string | Amount)[]
+
 export const timeoutResolutionDetail = 'Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals.'
 export const escalationMetrics = 'Escalation metrics'
 export const loadingEscalationDeposits = 'Loading escalation deposits…'
@@ -80,8 +86,8 @@ export const forkProgressHelp = 'A fork needs two sides at this threshold, so pr
 export const bindingCapitalHelp = 'The second-largest side balance; exceed it to hold the lead.'
 const minimumPresetLabels = { fork: 'Fill side & trigger fork', lead: 'Min to lead', start: 'Minimum first report' } as const
 /** The minimum preset fills the minimum first report before the game starts, the smallest lead afterwards, or, when no lead is possible, the amount that triggers the fork. */
-export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, amount?: Amount): readonly (string | Amount)[] => (amount === undefined ? [minimumPresetLabels[kind]] : [minimumPresetLabels[kind], ' (', amount, ')'])
-export const rewardPreset = <Amount>(amount?: Amount): readonly (string | Amount)[] => (amount === undefined ? ['Max reward'] : ['Max reward (', amount, ')'])
+export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, amount?: Amount): CopyParts<Amount> => (amount === undefined ? [minimumPresetLabels[kind]] : [minimumPresetLabels[kind], ' (', amount, ')'])
+export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Max reward'] : ['Max reward (', amount, ')'])
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const approveAmountLabel = (amount: string) => `Approve ${amount} REP`
@@ -90,7 +96,7 @@ export const loadingPriceReport = 'Loading price report…'
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const continuationFundingHelp = 'Your wallet REP first enters your vault in this pool, then funds your report.'
-export const continuationMinimumDeposit = <Amount>(deposit: Amount, remainder: Amount) => ['This pool requires a ', deposit, ' deposit for this report. Your vault will hold ', remainder, ' afterward.'] as const
+export const continuationMinimumDeposit = <Amount>(deposit: Amount, remainder: Amount): CopyParts<Amount> => ['This pool requires a ', deposit, ' deposit for this report. Your vault will hold ', remainder, ' afterward.']
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
@@ -125,10 +131,9 @@ export const clearingDeposits = (outcome: string) => `Clearing ${outcome} deposi
 export const progressToForkUnavailable = 'Progress to fork: —'
 
 export const winningStatusLead = (side: string) => `You’re leading on ${side}.`
-// Sentences with REP amounts return their parts with each amount in place, so the UI can render it rounded with the exact value on hover; each amount carries its own REP unit.
-export const winningStatusDetail = <Amount>(stake: Amount, worth: Amount) => ['Your ', stake, ' would be worth ', worth, ' if it ended now.'] as const
+export const winningStatusDetail = <Amount>(stake: Amount, worth: Amount): CopyParts<Amount> => ['Your ', stake, ' would be worth ', worth, ' if it ended now.']
 export const losingStatusLead = (side: string) => `You’re behind on ${side}.`
-export const losingStatusDetail = <Amount>(minimum: Amount | undefined, deadline: string, stake: Amount) => [...(minimum === undefined ? ['Report more on this side'] : ['Add at least ', minimum]), ` before ${deadline} or your `, stake, ' is lost.'] as const
+export const losingStatusDetail = <Amount>(minimum: Amount | undefined, deadline: string, stake: Amount): CopyParts<Amount> => [...(minimum === undefined ? ['Report more on this side'] : ['Add at least ', minimum]), ` before ${deadline} or your `, stake, ' is lost.']
 export const takeTheLead = 'Take the lead'
 export const tieStatusLead = 'No side leads right now.'
 export const tieStatusDetail = (deadline: string) => `If this stays tied at ${deadline}, no side wins (`
@@ -146,17 +151,17 @@ export const explainerForkLead = 'If two sides both reach the '
 export const formatExplainerForkThresholdSeparator = (threshold: string) => ` (${threshold} REP), the game stops and a `
 export const explainerForkTail = ' can be triggered. Your REP then follows the outcome you backed through Fork & migration.'
 export const fullExplanation = 'Read the full explanation'
-export const winningPosition = <Amount>(worth: Amount) => ['Leading · worth ', worth, ' if it ended now'] as const
-export const losingPosition = <Amount>(worth: Amount) => ['Behind · worth ', worth, ' if it ended now'] as const
+export const winningPosition = <Amount>(worth: Amount): CopyParts<Amount> => ['Leading · worth ', worth, ' if it ended now']
+export const losingPosition = 'Behind · worth 0.00 REP if it ended now'
 export const tiedPosition = 'Tied'
 export const forkPosition = 'Continue in Fork & migration'
 export const responseWindowEnds = 'Response window ends'
 export const attritionStarts = 'Attrition starts'
 export const dismissDeadlineNotice = 'Dismiss response window notice'
 
-export const resultClaim = <Amount>(amount: Amount) => [' You can claim ', amount, '.'] as const
+export const resultClaim = <Amount>(amount: Amount): CopyParts<Amount> => [' You can claim ', amount, '.']
 
-export const forkViewerStake = <Amount>(side: string, stake: Amount) => ['You have ', stake, ` on ${side}.`] as const
+export const forkViewerStake = <Amount>(side: string, stake: Amount): CopyParts<Amount> => ['You have ', stake, ` on ${side}.`]
 
 export const updateReminder = 'Update your reminder (.ics)'
 export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'
@@ -174,7 +179,7 @@ export const forkTriggerConfirmation = 'I understand this report ends escalation
 export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
 export const reportingRepApprovalRequired = 'Approve REP for this security pool before reporting.'
 export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.'
-export const maxBelowForkHint = <Amount>(amount: Amount) => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the fork warning to fill the side.'] as const
+export const maxBelowForkHint = <Amount>(amount: Amount): CopyParts<Amount> => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the fork warning to fill the side.']
 export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter an amount to fill the side and trigger the fork.'
 export const reportAndTriggerForkLabel = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount} REP`
 export const reportingAndTriggeringFork = (outcome: string, amount: string) => `Reporting ${outcome} & triggering fork · ${amount} REP…`

@@ -8,6 +8,8 @@ import type { SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import { isSelectedPoolForkWorkflowView, type SelectedPoolView, shouldReloadSelectedPoolDetails } from '../lib/securityPoolWorkflow.js'
 import type { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
+import { isForkLifecycleState } from '../lib/poolLifecycle.js'
+import { hasEscalationGame } from '../../markets/lib/trading.js'
 
 type UseSelectedPoolRefreshEffectsParameters = {
 	currentTimestamp: bigint | undefined
@@ -154,7 +156,7 @@ export function useSelectedPoolRefreshEffects({
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
 	}, [loadingPoolOracleManager, onLoadPoolOracleManager, securityPoolOverviewResult, securityVault.securityVaultResult, selectedPoolManagerAddress])
 	// Once an escalation has started, the reporting stage decides whether the pool is forked, which the header reflects on every tab.
-	const selectedPoolEscalationStarted = selectedPool?.ordinaryEscalationGameStarted === true || selectedPool?.hasForkContinuationEscalationGame === true
+	const selectedPoolEscalationStarted = selectedPool !== undefined && hasEscalationGame(selectedPool)
 	useEffect(() => {
 		const shouldAutoloadReportingForFork = view === 'fork-workflow'
 		const shouldAutoloadReportingForCurrentView = view === 'reporting' || shouldAutoloadReportingForFork || selectedPoolEscalationStarted
@@ -195,7 +197,7 @@ export function useSelectedPoolRefreshEffects({
 	])
 	// A forked pool's header shows its migration or auction deadline on every tab, so its fork details load whatever the view.
 	// The derived lifecycle decides, as the header does: a parent pool in a forked universe is forked while its registry state is still operational.
-	const selectedPoolInForkStage = selectedPoolLifecycleState === 'poolForked' || selectedPoolLifecycleState === 'forkMigration' || selectedPoolLifecycleState === 'forkTruthAuction'
+	const selectedPoolInForkStage = isForkLifecycleState(selectedPoolLifecycleState)
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
 		if ((!isSelectedPoolForkWorkflowView(view) && !selectedPoolInForkStage) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {

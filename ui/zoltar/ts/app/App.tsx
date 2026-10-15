@@ -28,7 +28,7 @@ import { ZoltarWorkspaceProvider, type ZoltarWorkspace } from '@zoltar/ui-zoltar
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
 import { isInvalidZoltarRoute } from './lib/routeValidation.js'
-import { getZoltarTabLabel, getZoltarTabView, getZoltarViewHref, showsUniverseForkedNotice, type ZoltarTabView } from './lib/zoltarNavigation.js'
+import { getZoltarTabLabel, getZoltarTabView, getZoltarViewHref, isUniverseForkedNoticeVisible, type ZoltarTabView } from './lib/zoltarNavigation.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 
 export function App() {
@@ -149,7 +149,7 @@ export function App() {
 								migrateRepHref={activeRoute === 'zoltar' && activeZoltarView === 'migrate' ? undefined : getZoltarViewHref('migrate')}
 								onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 								universeForkTime={zoltarUniverse?.forkTime}
-								showUniverseForkedNotice={showsUniverseForkedNotice({ route: activeRoute, universeHasForked: zoltarUniverse?.hasForked === true, zoltarView: activeZoltarView })}
+								showUniverseForkedNotice={isUniverseForkedNoticeVisible({ route: activeRoute, universeHasForked: zoltarUniverse?.hasForked === true, zoltarView: activeZoltarView })}
 								universePresentation={universePresentation}
 								universeControl={<UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={getZoltarViewHref('universes')} universe={zoltarUniverse} />}
 								universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}

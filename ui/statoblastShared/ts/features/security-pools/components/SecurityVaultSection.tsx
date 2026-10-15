@@ -25,7 +25,7 @@ import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
-import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
+import { isVaultCurrentlyHealthy } from '../lib/vaultHealth.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import {
 	buildVaultReadinessActions,
@@ -153,17 +153,7 @@ export function SecurityVaultSection({
 	const poolEnded = poolState?.lifecycleState === 'ended'
 	const commitmentChangeIsDirect = poolEnded
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
-	const currentVaultIsHealthy =
-		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || repPerEthPrice === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
-			? undefined
-			: isVaultHealthyAtFactor({
-					disputeStakedAttoRep: currentSelectedVaultDetails.disputeStakedAttoRep,
-					healthFactorBps: 10_000n,
-					underwritingLimitAttoEth: currentSelectedVaultDetails.underwritingLimitAttoEth,
-					poolHeldVaultRepBackingAttoRep: currentSelectedVaultDetails.vaultAttoRepBacking,
-					poolSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
-					repPerEthPrice,
-				})
+	const currentVaultIsHealthy = currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined ? undefined : isVaultCurrentlyHealthy({ multiplierBps: selectedPoolStatoblastSecurityMultiplierBps, repPerEthPrice, vault: currentSelectedVaultDetails })
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const walletRepShortfallAttoRep = balanceShortage(depositAmount, walletRepBalanceAttoRep)
 	const minimumVaultRepDepositAttoRep = currentSelectedVaultDetails?.minimumVaultRepDepositAttoRep
