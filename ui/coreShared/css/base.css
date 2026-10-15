@@ -930,11 +930,6 @@ button.quiet:disabled {
 	text-transform: inherit;
 	color: inherit;
 	white-space: inherit;
-	opacity: 0.72;
-}
-
-button .loading-value {
-	opacity: 1;
 }
 
 .currency-value-wrap {
