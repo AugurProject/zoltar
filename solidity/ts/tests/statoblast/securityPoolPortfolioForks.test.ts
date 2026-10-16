@@ -23,7 +23,7 @@ import { unit, maximumQuestionHorizonSeconds } from './securityPoolPortfolioFixt
 import { useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
 
 describe('Statoblast: portfolio fork isolation', () => {
-	const { fixture, deposit, mint, sync, claim } = useAggregatePortfolioFixture()
+	const { fixture, deposit, mint, claim } = useAggregatePortfolioFixture()
 	const forkA = async () => {
 		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(fixture.owner(), fixture.base.genesisUniverse, fixture.base.questionId)
@@ -55,7 +55,6 @@ describe('Statoblast: portfolio fork isolation', () => {
 		}
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		await forkA()
-		await sync()
 		for (const positionId of [1n, 2n]) {
 			await claim(positionId)
 			await claim(positionId, other().account.address)

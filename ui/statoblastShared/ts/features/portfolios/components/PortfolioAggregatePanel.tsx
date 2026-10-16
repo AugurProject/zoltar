@@ -1,4 +1,5 @@
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { useId } from 'preact/hooks'
 import { toHex } from '@zoltar/core-shared/evm/ethereum'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -8,6 +9,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { buildPoolsRouteHash } from '../../../lib/statoblastLocation.js'
@@ -16,8 +18,15 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
 
+function allocationStatus(allocation: Model['allocations'][number]) {
+	if (allocation.remainingShares === 0n) return copy.positionClaimed
+	return allocation.reusable ? copy.reusablePosition : copy.historicalPosition
+}
+
 export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'> }) {
 	const snapshot = model.snapshot
+	const questionSelectId = useId()
+	const selectedQuestion = snapshot?.questions.find(questionId => String(questionId) === model.questionInput || toHex(questionId) === model.questionInput)
 	return (
 		<>
 			<SectionBlock title={copy.sharedFund} description={copy.sharedFundHint}>
@@ -26,11 +35,8 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 					<MetricField label={copy.poolAssets} loading={model.loading}>
 						<CurrencyValue value={snapshot?.assetsAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={copy.availableBacking} loading={model.loading}>
-						<CurrencyValue value={snapshot?.availableAttoRep} suffix={commonCopy.rep} />
-					</MetricField>
 					<MetricField label={copy.backedCapacity} loading={model.loading}>
-						<CurrencyValue value={snapshot?.backedCapacityAttoEth} suffix={commonCopy.eth} />
+						<CurrencyValue value={snapshot?.reserveCapacityAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 					<MetricField label={copy.yourFundShares} loading={model.loading}>
 						<CurrencyValue value={snapshot?.shares} />
@@ -68,6 +74,18 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				<PortfolioButton model={actions} action='depositPortfolioRep' label={copy.depositPoolRep} pendingLabel={copy.depositingPoolRep} reason={model.depositReason} onClick={model.deposit} />
 			</SectionBlock>
 			<SectionBlock title={copy.mint} description={copy.mintHint}>
+				<div className='field'>
+					<label htmlFor={questionSelectId}>{copy.registeredQuestions}</label>
+					<select id={questionSelectId} value={selectedQuestion === undefined ? '' : toHex(selectedQuestion)} disabled={actions.busy !== undefined || model.loading} onChange={event => model.setQuestionInput(event.currentTarget.value)}>
+						<option value=''>{copy.chooseRegisteredQuestion}</option>
+						{snapshot?.questions.map(questionId => (
+							<option key={String(questionId)} value={toHex(questionId)}>
+								{toHex(questionId)}
+							</option>
+						))}
+					</select>
+				</div>
+				<PaginationControls hasPreviousPage={(snapshot?.questionStart ?? 0n) > 0n} hasNextPage={snapshot !== undefined && snapshot.questionStart + 64n < snapshot.questionCount} loading={model.loading} onPreviousPage={model.previousQuestionPage} onNextPage={model.nextQuestionPage} />
 				<PortfolioInput label={copy.questionId} value={model.questionInput} onChange={model.setQuestionInput} disabled={actions.busy !== undefined} />
 				{model.position === undefined ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: model.position.pool, tab: 'vaults' })}>{copy.openPrice}</a>}
 				<MetricGrid>
@@ -93,21 +111,26 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				</MetricGrid>
 				<PortfolioButton model={actions} action='withdrawPortfolioFund' label={copy.withdrawFund} pendingLabel={copy.withdrawingFund} reason={model.withdrawalReason} onClick={model.withdraw} />
 			</SectionBlock>
-			<SectionBlock title={copy.maturedClaims} description={copy.maturedClaimsHint}>
-				<PortfolioButton model={actions} action='syncPortfolioFund' label={copy.syncFund} pendingLabel={copy.syncingFund} reason={model.claimReason} onClick={model.sync} />
-				<UserMessage detail={copy.syncFundHint} />
-				{model.claims.length === 0 ? (
-					<EmptyState title={copy.noMaturedClaims} />
+			<SectionBlock title={copy.allocationPositions} description={copy.allocationPositionsHint}>
+				{model.allocations.length === 0 ? (
+					<EmptyState title={copy.noAllocationPositions} />
 				) : (
-					model.claims.map(claim => (
+					model.allocations.map(claim => (
 						<div className='workflow-subsection' key={String(claim.positionId)}>
 							<MetricGrid>
-								<MetricField label={copy.archivePosition}>{String(claim.positionId)}</MetricField>
+								<MetricField label={copy.allocationPosition}>{String(claim.positionId)}</MetricField>
 								<MetricField label={copy.questionId}>
 									<code>{toHex(claim.questionId)}</code>
 								</MetricField>
+								<MetricField label={copy.allocationStatus}>
+									<Badge tone={claim.reusable ? 'ok' : 'muted'}>{allocationStatus(claim)}</Badge>
+								</MetricField>
 							</MetricGrid>
-							<PortfolioButton model={actions} action={`claimPortfolioPosition:${claim.positionId}`} label={copy.claimQuestion} pendingLabel={copy.claimingQuestion} reason={model.claimReason} onClick={() => model.claimPosition(claim.positionId)} />
+							{claim.remainingShares === 0n ? undefined : <UserMessage detail={claim.reusable ? copy.reusablePositionHint : copy.historicalPositionHint} />}
+							<div className='actions'>
+								<PortfolioButton model={actions} action={`rebalancePortfolioPosition:${claim.positionId}`} label={copy.rebalancePosition} pendingLabel={copy.rebalancingPosition} reason={claim.rebalanceReason} onClick={() => model.rebalancePosition(claim.positionId)} />
+								<PortfolioButton model={actions} action={`claimPortfolioPosition:${claim.positionId}`} label={copy.claimQuestion} pendingLabel={copy.claimingQuestion} reason={claim.claimReason} onClick={() => model.claimPosition(claim.positionId)} />
+							</div>
 						</div>
 					))
 				)}

@@ -1,0 +1,338 @@
+import { describe, expect, test } from 'bun:test'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
+import { ReputationToken_ReputationToken as repArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../../types/contractArtifact'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { DAY } from '../../testSupport/simulator/utils/constants'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getSecurityVault, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
+import { aggregatePortfolioAbi, useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
+import { unit } from './securityPoolPortfolioFixture'
+
+describe('Statoblast: lazy allocation custody and selective maintenance', () => {
+	const { fixture, deposit, withdraw, shares, mint, assets, fees, quote, claim, custody, position, positionCount, ownerPositionShares, reusable, rebalance } = useAggregatePortfolioFixture()
+	const pool = () => fixture.base.securityPoolAddresses.securityPool
+	const prepare = async () => {
+		await deposit()
+		await fixture.refreshPrice(fixture.base.questionId)
+		await mint()
+	}
+
+	test('a dust deposit and full withdrawal cannot disable historical custody reuse for any question', async () => {
+		await prepare()
+		await mint(100n * unit, fixture.secondQuestionId)
+		const firstCustody = await custody()
+		const secondCustody = await custody(2n)
+		await deposit(1n, fixture.other())
+		await withdraw(await shares(fixture.other().account.address), fixture.other())
+		const reserve = await assets()
+		expect(await shares(fixture.other().account.address)).toBe(0n)
+		expect(await reusable()).toBe(true)
+		expect(await reusable(2n)).toBe(true)
+		expect(await ownerPositionShares(1n, fixture.other().account.address)).toBe(0n)
+		expect(await ownerPositionShares(2n, fixture.other().account.address)).toBe(0n)
+		await redeemCompleteSet(fixture.other(), pool(), 100n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await rebalance()
+		const recovered = await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), firstCustody)
+		expect(recovered).toBeGreaterThan(0n)
+		expect(await assets()).toBe(reserve)
+		await mint()
+		expect(await positionCount()).toBe(2n)
+		expect(await custody()).toBe(firstCustody)
+		expect(await custody(2n)).toBe(secondCustody)
+		expect(await reusable(2n)).toBe(true)
+		expect(await assets()).toBe(reserve)
+		expect(await fixture.repClaim(pool(), firstCustody)).toBe(recovered)
+	})
+
+	test('repeated tiny mints reuse one custody and do not repeatedly pay its native deposit floor', async () => {
+		await deposit()
+		await fixture.refreshPrice(fixture.base.questionId)
+		const amount = 1_000_000_000n
+		const [initialBacking] = await quote(amount)
+		await mint(amount)
+		const firstCustody = await custody()
+		const afterFirst = await assets()
+		for (let index = 0; index < 8; index++) {
+			expect((await quote(amount))[0]).toBe(0n)
+			await mint(amount)
+		}
+		expect(await positionCount()).toBe(1n)
+		expect(await custody()).toBe(firstCustody)
+		expect(await reusable()).toBe(true)
+		expect(await assets()).toBe(afterFirst)
+		expect(await fixture.repClaim(pool(), firstCustody)).toBe(initialBacking)
+		expect((await getSecurityVault(fixture.owner(), pool(), firstCustody)).underwritingLimitAttoEth).toBeGreaterThan(8n * amount)
+	})
+
+	test('one atto of surplus that rounds to zero native proceeds cannot block maintenance or minting', async () => {
+		await prepare()
+		const source = await custody()
+		await fixture.transferRep(pool(), 44n)
+		const factory = getInfraContractAddresses().securityPoolFactory
+		await fixture.base.mockWindow.impersonateAccount(factory)
+		await fixture.base.mockWindow.setBalance(factory, unit)
+		const factoryClient = createWriteClient(fixture.base.mockWindow, BigInt(factory))
+		// Keep exactly 100 ETH collateral while isolating the donated atto from time-based native fees.
+		await writeContractAndWait(factoryClient, () => factoryClient.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'setStartingParams', args: [unit, 100n * unit] }))
+		expect(await fixture.repClaim(pool(), source)).toBe(240n * unit + 1n)
+		const reserve = await assets()
+		await rebalance()
+		expect(await assets()).toBe(reserve)
+		expect(await fixture.repClaim(pool(), source)).toBe(240n * unit + 1n)
+		const [, reservationFee] = await quote(unit)
+		await mint(unit, fixture.base.questionId, reservationFee)
+		expect(await positionCount()).toBe(1n)
+		expect((await getSecurityVault(fixture.owner(), pool(), source)).underwritingLimitAttoEth).toBe(101n * unit)
+	})
+
+	test('claiming seals only that allocation and later mints cannot change already delivered backing', async () => {
+		await prepare()
+		await mint(100n * unit, fixture.secondQuestionId)
+		const version = await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'ownershipVersion' })
+		await expect(claim(1n, fixture.other().account.address)).rejects.toThrow('No allocation position')
+		expect(await reusable()).toBe(true)
+		const before = await position()
+		await expect(claim(1n, fixture.owner().account.address, fixture.other())).rejects.toThrow('Only owner can claim reusable position')
+		expect(await position()).toEqual(before)
+		expect(await reusable()).toBe(true)
+		await claim()
+		const delivered = await getSecurityVault(fixture.owner(), pool(), fixture.vault)
+		expect(await reusable()).toBe(false)
+		expect(await reusable(2n)).toBe(true)
+		expect(await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'ownershipVersion' })).toBe(version)
+		await mint()
+		expect(await positionCount()).toBe(3n)
+		expect(await getSecurityVault(fixture.owner(), pool(), fixture.vault)).toEqual(delivered)
+		expect(await custody(3n)).not.toBe(await custody())
+		expect(await ownerPositionShares(3n)).toBe(5_000n * unit)
+	})
+
+	test('historical allocation recovery cannot enrich a later reserve depositor', async () => {
+		await prepare()
+		const source = await custody()
+		const allocatedRep = await fixture.repClaim(pool(), source)
+		const beforeFees = await fees()
+		await fixture.base.mockWindow.advanceTime(DAY)
+		await deposit(await assets(), fixture.other())
+		const reserve = await assets()
+		await redeemCompleteSet(fixture.other(), pool(), 100n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await rebalance()
+		expect(await reusable()).toBe(true)
+		expect(await assets()).toBe(reserve)
+		expect(await fixture.repClaim(pool(), source)).toBe(0n)
+		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), source)).toBe(allocatedRep)
+		expect(await fixture.owner().getBalance({ address: source })).toBeGreaterThan(0n)
+		expect(await fees()).toBe(beforeFees)
+		expect(await fees(fixture.other().account.address)).toBe(0n)
+		await expect(claim(1n, fixture.owner().account.address, fixture.other())).rejects.toThrow('Only owner can claim reusable position')
+		await claim()
+		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), fixture.vault)).toBe(allocatedRep)
+		expect(await fixture.owner().getBalance({ address: fixture.vault })).toBeGreaterThan(0n)
+		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), source)).toBe(0n)
+		expect(await fixture.owner().getBalance({ address: source })).toBe(0n)
+		expect(await assets()).toBe(reserve)
+	})
+
+	test('historical cash and reservation fees can be reused without involving later reserve owners', async () => {
+		await prepare()
+		await mint(100n * unit, fixture.secondQuestionId)
+		const source = await custody()
+		const allocatedRep = await fixture.repClaim(pool(), source)
+		const originalFees = await fees()
+		await deposit(await assets(), fixture.other())
+		const reserve = await assets()
+		await redeemCompleteSet(fixture.other(), pool(), 100n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		// Quote before maintenance: projected release must select the same historical cohort as execution.
+		const [requiredBacking, reservationFee, available] = await quote()
+		expect(requiredBacking).toBe(allocatedRep)
+		expect(available).toBe(allocatedRep)
+		const before = await getSecurityVault(fixture.owner(), pool(), source)
+		await expect(mint(100n * unit, fixture.base.questionId, reservationFee - 1n)).rejects.toThrow('Reservation fee exceeds budget')
+		expect(await getSecurityVault(fixture.owner(), pool(), source)).toEqual(before)
+		expect(await assets()).toBe(reserve)
+		await mint(100n * unit, fixture.base.questionId, reservationFee)
+		expect(await positionCount()).toBe(2n)
+		expect(await assets()).toBe(reserve)
+		expect(await fixture.repClaim(pool(), source)).toBe(allocatedRep)
+		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), source)).toBe(0n)
+		expect(await fixture.owner().getBalance({ address: source })).toBeGreaterThanOrEqual(reservationFee)
+		expect(await ownerPositionShares()).toBe(5_000n * unit)
+		expect(await ownerPositionShares(1n, fixture.other().account.address)).toBe(0n)
+		expect(await fees()).toBe(originalFees)
+		expect(await fees(fixture.other().account.address)).toBe(0n)
+		expect(await reusable(2n)).toBe(true)
+	})
+
+	test('an exhausted reserve can reuse its historical allocation without new reserve shareholders', async () => {
+		await deposit(240n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await mint()
+		expect(await assets()).toBe(0n)
+		expect(await shares()).toBe(0n)
+		await redeemCompleteSet(fixture.other(), pool(), 100n * unit)
+		const [requiredBacking, reservationFee, available] = await quote()
+		expect(requiredBacking).toBe(240n * unit)
+		expect(available).toBe(requiredBacking)
+		await mint(100n * unit, fixture.base.questionId, reservationFee)
+		expect(await positionCount()).toBe(1n)
+		expect(await assets()).toBe(0n)
+		expect(await shares()).toBe(0n)
+		expect(await ownerPositionShares()).toBe(240n * unit)
+		expect(await fixture.repClaim(pool(), await custody())).toBe(requiredBacking)
+		expect(await fixture.owner().getBalance({ address: await custody() })).toBeGreaterThanOrEqual(reservationFee)
+	})
+
+	test('insufficient historical cash selects a fresh cohort after projected commitment release', async () => {
+		await prepare()
+		await mint(100n * unit, fixture.secondQuestionId)
+		const source = await custody()
+		const originalBacking = await fixture.repClaim(pool(), source)
+		await deposit(await assets(), fixture.other())
+		const reserve = await assets()
+		await redeemCompleteSet(fixture.other(), pool(), 50n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		const [requiredBacking, reservationFee, available] = await quote(200n * unit)
+		expect(requiredBacking).toBe(2n * originalBacking)
+		expect(available).toBe(reserve)
+		await mint(200n * unit, fixture.base.questionId, reservationFee)
+		expect(await positionCount()).toBe(3n)
+		expect(await assets()).toBe(reserve - requiredBacking)
+		expect(await fixture.repClaim(pool(), await custody(3n))).toBe(requiredBacking)
+		const retainedBacking = await fixture.repClaim(pool(), source)
+		const historicalCash = await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), source)
+		// Native fee accrual slightly reduces remaining collateral between redemption and maintenance.
+		expect(retainedBacking).toBeGreaterThan(0n)
+		expect(historicalCash).toBeGreaterThanOrEqual(originalBacking / 2n)
+		expect(retainedBacking + historicalCash).toBe(originalBacking)
+		expect(await ownerPositionShares(1n, fixture.other().account.address)).toBe(0n)
+		expect(await ownerPositionShares(3n)).toBe(await ownerPositionShares(3n, fixture.other().account.address))
+		expect(await reusable()).toBe(false)
+		expect(await reusable(2n)).toBe(true)
+		expect(await reusable(3n)).toBe(true)
+		await claim(1n, fixture.owner().account.address, fixture.other())
+		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), fixture.vault)).toBe(historicalCash)
+		expect(await reusable(3n)).toBe(true)
+	})
+
+	test('permissionless late native fee redemption stays with its original cohort', async () => {
+		await prepare()
+		const source = await custody()
+		const upfrontFees = await fees()
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'redeemFees', args: [source] }))
+		const archivedFees = await fixture.owner().getBalance({ address: source })
+		expect(archivedFees).toBeGreaterThan(0n)
+		await deposit(5_000n * unit, fixture.other())
+		expect(await fees()).toBe(upfrontFees)
+		expect(await fees(fixture.other().account.address)).toBe(0n)
+		expect(await ownerPositionShares(1n, fixture.other().account.address)).toBe(0n)
+		await claim()
+		expect(await fixture.owner().getBalance({ address: fixture.vault })).toBeGreaterThanOrEqual(archivedFees)
+		expect(await fixture.owner().getBalance({ address: source })).toBe(0n)
+	})
+
+	test('historical backing loss cannot dilute recapitalization or erase the old native obligation', async () => {
+		await deposit(240n * unit)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await mint()
+		const source = await custody()
+		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
+		const nativePosition = await getSecurityVault(fixture.owner(), pool(), source)
+		const totalUnits = await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'totalRepBackingUnits' })
+		const oneAttoClaimBacking = (totalUnits + nativePosition.repBackingUnits - 1n) / nativePosition.repBackingUnits
+		const held = await getERC20Balance(fixture.owner(), rep, pool())
+		await fixture.base.mockWindow.impersonateAccount(pool())
+		await fixture.base.mockWindow.setBalance(pool(), 1_000n * unit)
+		const poolClient = createWriteClient(fixture.base.mockWindow, BigInt(pool()))
+		await writeContractAndWait(poolClient, () => poolClient.writeContract({ abi: repArtifact.abi, address: rep, functionName: 'transfer', args: [fixture.other().account.address, held - oneAttoClaimBacking] }))
+		expect(await fixture.repClaim(pool(), source)).toBe(1n)
+		expect(await assets()).toBe(0n)
+		await deposit(5_000n * unit, fixture.other())
+		expect(await assets()).toBe(5_000n * unit)
+		expect(await ownerPositionShares(1n, fixture.other().account.address)).toBe(0n)
+		await claim()
+		expect(await fixture.repClaim(pool(), fixture.vault)).toBe(1n)
+		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).underwritingLimitAttoEth).toBeGreaterThan(0n)
+	})
+
+	test('precision-exhausted idle residue stays with allocation owners while a new reserve can open', async () => {
+		await deposit(240n * unit + 1n)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await mint()
+		const source = await custody()
+		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
+		expect(await assets()).toBe(0n)
+		expect(await getERC20Balance(fixture.owner(), rep, source)).toBe(1n)
+		expect(await ownerPositionShares()).toBe(240n * unit + 1n)
+		await deposit(1_000n * unit, fixture.other())
+		expect(await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'balanceOf', args: [fixture.other().account.address] })).toBe(1_000n * unit)
+		expect(await assets()).toBe(1_000n * unit)
+		expect(await ownerPositionShares(1n, fixture.other().account.address)).toBe(0n)
+		await claim()
+		expect(await getERC20Balance(fixture.owner(), rep, fixture.vault)).toBe(1n)
+		expect(await fixture.repClaim(pool(), fixture.vault)).toBe(240n * unit)
+	})
+
+	test('a small reserve with enough share precision remains available to its current owners', async () => {
+		const residue = 10_000_000_000n
+		await deposit(240n * unit + residue)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await mint()
+		expect(await assets()).toBe(residue)
+		expect(await reusable()).toBe(true)
+		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), await custody())).toBe(0n)
+	})
+
+	test('sixty-four allocation histories neither retire live positions nor add a global transaction scan', async () => {
+		await fixture.refreshPrice(fixture.base.questionId)
+		const [backingPerQuestion] = await quote(unit)
+		const funding = 64n * backingPerQuestion + 1_000n * unit
+		await deposit(funding)
+		await fixture.createVault(fixture.other())
+		await mint(unit)
+		const firstCustody = await custody()
+		const firstPosition = await getSecurityVault(fixture.owner(), pool(), firstCustody)
+		const gas = async (action: () => ReturnType<typeof mint>) => {
+			const snapshot = await fixture.base.mockWindow.anvilSnapshot()
+			try {
+				const hash = await action()
+				return (await fixture.owner().waitForTransactionReceipt({ hash })).gasUsed
+			} finally {
+				await fixture.base.mockWindow.anvilRevert(snapshot)
+			}
+		}
+		const measure = async () => ({ deposit: await gas(() => deposit(10n * unit, fixture.other())), mint: await gas(() => mint(unit)), claim: await gas(() => claim()) })
+		const small = await measure()
+		for (let index = 1; index < 64; index++) {
+			if (index % 16 === 0) await fixture.refreshPrice(fixture.base.questionId)
+			const question = makeQuestion('Lazy allocation history ' + index, fixture.base.questionData.endTime)
+			await createQuestion(fixture.owner(), question, fixture.base.outcomes)
+			const questionId = getQuestionId(question, fixture.base.outcomes)
+			await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'addQuestion', args: [questionId] }))
+			await mint(unit, questionId)
+			if (index === 16) {
+				expect(await positionCount()).toBe(17n)
+				expect(await reusable()).toBe(true)
+			}
+		}
+		await fixture.refreshPrice(fixture.base.questionId)
+		const large = await measure()
+		for (const operation of ['deposit', 'mint', 'claim'] as const) {
+			// Allow storage-value and fee-settlement branch differences, not one native call per history.
+			expect(large[operation]).toBeLessThanOrEqual(small[operation] + 30_000n)
+		}
+		expect(await positionCount()).toBe(64n)
+		expect(await custody()).toBe(firstCustody)
+		expect(await getSecurityVault(fixture.owner(), pool(), firstCustody)).toEqual(firstPosition)
+		expect(await reusable()).toBe(true)
+		expect((await position(64n))[2]).toBe(funding)
+		expect(await ownerPositionShares(64n)).toBe(funding)
+		expect((await position())[2]).toBe(funding)
+	})
+})

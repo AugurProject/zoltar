@@ -6,7 +6,7 @@ import {
 	buildPortfolioFundWithdrawalRequest,
 	buildPortfolioClaimFeesRequest,
 	buildPortfolioPositionClaimRequest,
-	buildPortfolioSyncRequest,
+	buildPortfolioPositionRebalanceRequest,
 	buildPortfolioMintRequest,
 	loadPortfolioAggregateSnapshot,
 	loadPortfolioMintQuote,
@@ -51,6 +51,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const generation = useRef(0)
 	const draftScope = useRef<{ backend: typeof backend; portfolio: Address; owner: Address } | undefined>(undefined)
 	const page = useSignal(0n)
+	const questionPage = useSignal(0n)
 	const depositAmount = useSignal('')
 	const depositMinimum = useSignal('')
 	const depositMinimumEdited = useSignal(false)
@@ -67,7 +68,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const snapshot = loaded.value?.backend === backend && loaded.value.account === account && loaded.value.snapshot.portfolio === selection?.portfolio && loaded.value.snapshot.owner === selection.owner ? loaded.value.snapshot : undefined
 	const read = async () => {
 		if (selection === undefined) throw new Error(copy.enterPortfolio)
-		return loadPortfolioAggregateSnapshot({ client: portfolioReadClient(backend.createReadClient()), portfolio: selection.portfolio, owner: selection.owner, positionStart: page.value * 64n })
+		return loadPortfolioAggregateSnapshot({ client: portfolioReadClient(backend.createReadClient()), portfolio: selection.portfolio, owner: selection.owner, positionStart: page.value * 64n, questionStart: questionPage.value * 64n })
 	}
 	const refresh = async () => {
 		if (!enabled || selection === undefined) return
@@ -98,13 +99,14 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		return () => {
 			generation.current += 1
 		}
-	}, [backend, enabled, selection?.portfolio, selection?.owner, page.value, account])
+	}, [backend, enabled, selection?.portfolio, selection?.owner, page.value, questionPage.value, account])
 	useEffect(() => {
 		if (selection === undefined) return
 		const previous = draftScope.current
 		draftScope.current = { backend, portfolio: selection.portfolio, owner: selection.owner }
 		if (previous === undefined || (previous.backend === backend && previous.portfolio === selection.portfolio && previous.owner === selection.owner)) return
 		page.value = 0n
+		questionPage.value = 0n
 		depositAmount.value = ''
 		depositMinimum.value = ''
 		depositMinimumEdited.value = false
@@ -193,7 +195,8 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		ownerReason ??
 		(withdrawalAmount === undefined || withdrawalAmount === 0n ? copy.positiveFundShares : undefined) ??
 		(snapshot !== undefined && withdrawalAmount !== undefined && withdrawalAmount > snapshot.shares ? copy.insufficientFundShares : undefined) ??
-		(idleMinimum === undefined ? copy.withdrawalMinimumInvalid : undefined)
+		(idleMinimum === undefined ? copy.withdrawalMinimumInvalid : undefined) ??
+		(snapshot !== undefined && withdrawalAmount !== undefined && idleMinimum !== undefined && snapshot.totalShares > 0n && idleMinimum > (snapshot.reserveAttoRep * withdrawalAmount) / snapshot.totalShares ? copy.withdrawalMinimumTooHigh : undefined)
 	const quote = currentQuote?.quote
 	let mintReason = walletReason ?? stateReason
 	if (mintReason === undefined) {
@@ -222,6 +225,18 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const assertOwner = () => {
 		if (ownerReason !== undefined) throw new Error(ownerReason)
 		return requireSnapshot()
+	}
+	const rebalanceReason = (selected: PortfolioAggregateSnapshot, allocation: PortfolioAggregateSnapshot['positions'][number]) => {
+		if (allocation.remainingShares === 0n) return copy.positionClaimed
+		if (selected.forkTime > 0n) return copy.forkPosition
+		if (allocation.questionEndTime <= selected.timestamp) return copy.endedPosition
+		if (!allocation.operational) return copy.inactivePosition
+		return undefined
+	}
+	const allocationClaimReason = (selected: PortfolioAggregateSnapshot, allocation: PortfolioAggregateSnapshot['positions'][number]) => {
+		if (allocation.ownerShares === 0n) return copy.noPositionClaim
+		if (allocation.reusable && selected.forkTime === 0n && allocation.questionEndTime > selected.timestamp && account?.toLowerCase() !== selected.owner.toLowerCase()) return copy.livePositionOwnerRequired
+		return undefined
 	}
 	return {
 		snapshot,
@@ -281,7 +296,9 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 					...buildPortfolioFundWithdrawalRequest({ owner: selected.owner, portfolio: selected.portfolio, shares: withdrawalAmount, minimumIdleAttoRep: idleMinimum }),
 					reviewDescription: copy.withdrawFundReview(formatEther(withdrawalAmount), formatEther(idleMinimum)),
 					validateBeforeSubmit: async () => {
-						if ((await read()).shares < withdrawalAmount) throw new Error(copy.insufficientFundShares)
+						const latest = await read()
+						if (latest.shares < withdrawalAmount) throw new Error(copy.insufficientFundShares)
+						if (latest.totalShares === 0n || (latest.reserveAttoRep * withdrawalAmount) / latest.totalShares < idleMinimum) throw new Error(copy.withdrawalMinimumTooHigh)
 					},
 				}
 			}),
@@ -332,25 +349,60 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 					},
 				}
 			}),
-		claims: snapshot?.positions.filter(item => item.ownerShares > 0n) ?? [],
+		allocations: snapshot?.positions.map(allocation => ({ ...allocation, claimReason: walletReason ?? stateReason ?? allocationClaimReason(snapshot, allocation), rebalanceReason: walletReason ?? stateReason ?? rebalanceReason(snapshot, allocation) })) ?? [],
 		claimReason: walletReason ?? stateReason,
-		sync: () =>
-			run('syncPortfolioFund', copy.syncFund, () => {
+		rebalancePosition: (positionId: bigint) =>
+			run(`rebalancePortfolioPosition:${positionId}`, copy.rebalancePosition, () => {
 				const selected = requireSnapshot()
 				if (account === undefined) throw new Error(copy.connect)
-				return { ...buildPortfolioSyncRequest({ processor: account, portfolio: selected.portfolio }), reviewDescription: copy.syncFundHint }
+				const allocation = selected.positions.find(item => item.positionId === positionId)
+				if (allocation === undefined) throw new Error(copy.positionUnavailable)
+				const reason = rebalanceReason(selected, allocation)
+				if (reason !== undefined) throw new Error(reason)
+				return {
+					...buildPortfolioPositionRebalanceRequest({ processor: account, portfolio: selected.portfolio, positionId }),
+					reviewDescription: copy.rebalancePositionReview(allocation.reusable),
+					validateBeforeSubmit: async () => {
+						const latest = await read()
+						const current = latest.positions.find(item => item.positionId === positionId)
+						if (current === undefined) throw new Error(copy.positionUnavailable)
+						const unavailable = rebalanceReason(latest, current)
+						if (unavailable !== undefined) throw new Error(unavailable)
+						if (current.reusable !== allocation.reusable) throw new Error(copy.positionOwnershipChanged)
+					},
+				}
 			}),
 		claimPosition: (positionId: bigint) =>
 			run(`claimPortfolioPosition:${positionId}`, copy.claimQuestion, () => {
 				const selected = requireSnapshot()
 				if (account === undefined) throw new Error(copy.connect)
-				return { ...buildPortfolioPositionClaimRequest({ processor: account, portfolio: selected.portfolio, positionId, owner: selected.owner }), reviewDescription: copy.claimQuestionReview(selected.owner) }
+				const allocation = selected.positions.find(item => item.positionId === positionId)
+				if (allocation === undefined) throw new Error(copy.positionUnavailable)
+				const reason = allocationClaimReason(selected, allocation)
+				if (reason !== undefined) throw new Error(reason)
+				return {
+					...buildPortfolioPositionClaimRequest({ processor: account, portfolio: selected.portfolio, positionId, owner: selected.owner }),
+					reviewDescription: copy.claimQuestionReview(selected.owner),
+					validateBeforeSubmit: async () => {
+						const latest = await read()
+						const current = latest.positions.find(item => item.positionId === positionId)
+						if (current === undefined) throw new Error(copy.positionUnavailable)
+						const unavailable = allocationClaimReason(latest, current)
+						if (unavailable !== undefined) throw new Error(unavailable)
+					},
+				}
 			}),
 		previousPage: () => {
 			if (page.value > 0n) page.value -= 1n
 		},
 		nextPage: () => {
 			if (snapshot !== undefined && (page.value + 1n) * 64n < snapshot.positionCount) page.value += 1n
+		},
+		previousQuestionPage: () => {
+			if (questionPage.value > 0n) questionPage.value -= 1n
+		},
+		nextQuestionPage: () => {
+			if (snapshot !== undefined && (questionPage.value + 1n) * 64n < snapshot.questionCount) questionPage.value += 1n
 		},
 	}
 }

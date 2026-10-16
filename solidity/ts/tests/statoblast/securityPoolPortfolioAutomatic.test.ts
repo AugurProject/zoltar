@@ -14,7 +14,7 @@ import { aggregatePortfolioAbi, useAggregatePortfolioFixture } from './securityP
 import { unit } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: automatic aggregate underwriting', () => {
-	const { fixture, deposit, mint, assets, fees, shares } = useAggregatePortfolioFixture()
+	const { fixture, deposit, mint, assets, fees, shares, custody, rebalance, positionCount } = useAggregatePortfolioFixture()
 	const pool = () => fixture.base.securityPoolAddresses.securityPool
 	const prepare = async () => {
 		await deposit()
@@ -24,13 +24,13 @@ describe('Statoblast: automatic aggregate underwriting', () => {
 	test('paid mint reserves aggregate backing and delivers every outcome without naming an underwriter', async () => {
 		await prepare()
 		await mint()
-		const position = await getSecurityVault(fixture.owner(), pool(), fixture.portfolio)
+		const position = await getSecurityVault(fixture.owner(), pool(), await custody())
 		expect(position.underwritingLimitAttoEth).toBe(100n * unit)
 		expect(position.repBackingUnits).toBeGreaterThan(0n)
 		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).repBackingUnits).toBe(0n)
 		expect(await balanceOfShares(fixture.owner(), fixture.base.securityPoolAddresses.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)).toEqual([100n * unit, 100n * unit, 100n * unit])
 		expect(await balanceOfShares(fixture.owner(), fixture.base.securityPoolAddresses.shareToken, fixture.base.genesisUniverse, fixture.portfolio)).toEqual([0n, 0n, 0n])
-		expect(await assets()).toBe(5_000n * unit)
+		expect((await assets()) + (await fixture.repClaim(pool(), await custody()))).toBe(5_000n * unit)
 	})
 
 	test('two questions consume one reserve and cannot each spend its whole capacity', async () => {
@@ -41,24 +41,27 @@ describe('Statoblast: automatic aggregate underwriting', () => {
 		const before = await assets()
 		await expect(mint(100n * unit)).rejects.toThrow()
 		expect(await assets()).toBe(before)
-		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
+		for (const [index, question] of [fixture.base.questionId, fixture.secondQuestionId].entries()) {
 			const address = fixture.poolFor(question).securityPool
-			const commitment = (await getSecurityVault(fixture.owner(), address, fixture.portfolio)).underwritingLimitAttoEth
+			const commitment = (await getSecurityVault(fixture.owner(), address, await custody(BigInt(index + 1)))).underwritingLimitAttoEth
 			expect(commitment).toBe(await fixture.owner().readContract({ abi: poolArtifact.abi, address, functionName: 'settlementCollateralAttoEth' }))
 			expect(commitment).toBeGreaterThan(99n * unit)
 			expect(commitment).toBeLessThanOrEqual(100n * unit)
 		}
 	})
 
-	test('released backing from one question funds another without another deposit or route', async () => {
+	test('selected open-position recovery releases backing for another question without a new deposit', async () => {
 		await deposit(300n * unit)
 		await fixture.refreshPrice(fixture.base.questionId)
 		await mint()
 		await redeemCompleteSet(fixture.other(), pool(), 100n * unit)
-		await mint(100n * unit, fixture.secondQuestionId)
-		expect((await getSecurityVault(fixture.owner(), pool(), fixture.portfolio)).underwritingLimitAttoEth).toBe(0n)
-		expect((await getSecurityVault(fixture.owner(), fixture.poolFor(fixture.secondQuestionId).securityPool, fixture.portfolio)).underwritingLimitAttoEth).toBe(100n * unit)
+		await expect(mint(100n * unit, fixture.secondQuestionId)).rejects.toThrow('Insufficient aggregate backing')
+		await rebalance()
 		expect(await assets()).toBe(300n * unit)
+		await mint(100n * unit, fixture.secondQuestionId)
+		expect((await getSecurityVault(fixture.owner(), pool(), await custody())).underwritingLimitAttoEth).toBe(0n)
+		expect((await getSecurityVault(fixture.owner(), fixture.poolFor(fixture.secondQuestionId).securityPool, await custody(2n))).underwritingLimitAttoEth).toBe(100n * unit)
+		expect(await assets()).toBe(60n * unit)
 	})
 
 	test('registration alone never consumes the aggregate reserve', async () => {
@@ -87,6 +90,7 @@ describe('Statoblast: automatic aggregate underwriting', () => {
 		await expect(mint(100n * unit, fixture.base.questionId, 10n * unit, failure === 'share minimum' ? 101n * unit : 0n, recipient)).rejects.toThrow()
 		expect(await assets()).toBe(5_000n * unit)
 		expect(await fees()).toBe(0n)
+		expect(await positionCount()).toBe(0n)
 		expect((await getSecurityVault(fixture.owner(), pool(), fixture.portfolio)).repBackingUnits).toBe(0n)
 		expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'settlementCollateralAttoEth' })).toBe(0n)
 	})

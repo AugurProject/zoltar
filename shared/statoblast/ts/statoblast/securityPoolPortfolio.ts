@@ -210,7 +210,7 @@ export function exportPortfolioTransaction(parameters: { chainId: number; reques
 export { loadPortfolioSnapshot, type PortfolioReadClient, type PortfolioSnapshot, type PortfolioPosition } from './securityPoolPortfolioRead.js'
 export { planPortfolioAllocations } from './securityPoolPortfolioPlanning.js'
 export { resolvePortfolioOperationStatus, type PortfolioOperationStatus } from './securityPoolPortfolioStatus.js'
-export { buildPortfolioDepositRequest, buildPortfolioFundWithdrawalRequest, buildPortfolioClaimFeesRequest, buildPortfolioPositionClaimRequest, buildPortfolioSyncRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote, type PortfolioAggregateSnapshot } from './securityPoolPortfolioAggregate.js'
+export { buildPortfolioDepositRequest, buildPortfolioFundWithdrawalRequest, buildPortfolioClaimFeesRequest, buildPortfolioPositionClaimRequest, buildPortfolioPositionRebalanceRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote, type PortfolioAggregateSnapshot } from './securityPoolPortfolioAggregate.js'
 export {
 	buildPortfolioMintRequest,
 	buildPortfolioWithdrawalRequest,

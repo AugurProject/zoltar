@@ -21,12 +21,15 @@ const token = getAddress('0x0000000000000000000000000000000000000055')
 const unit = 10n ** 18n
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 
-async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => Promise<void>; withoutSelection?: boolean; questionEndTime?: bigint; resolved?: boolean; systemState?: number; forkTime?: bigint } = {}) {
+async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => Promise<void>; withoutSelection?: boolean; questionEndTime?: bigint; resolved?: boolean; systemState?: number; forkTime?: bigint; account?: typeof owner; reusable?: boolean; positionCount?: bigint; questionCount?: bigint } = {}) {
 	let allowance = 0n
 	let fee = 10n ** 15n
 	let wallet = 100n * unit
 	let walletEth = 100n * unit
 	let forkTime = options.forkTime ?? 0n
+	let reusable = options.reusable ?? true
+	let claimShares = 10n * unit
+	const account = options.account ?? owner
 	const requests: PortfolioTransaction[] = []
 	const reads: { name: string; args: readonly unknown[] | undefined }[] = []
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
@@ -57,18 +60,25 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 					return 200n * unit
 				case 'claimableFees':
 					return 0n
-				case 'getAggregateState':
-					return [200n * unit, 30n * unit, 40n * unit, 10n * unit, 20n * unit]
-				case 'getActiveQuestions':
-					return [51n]
-				case 'frozenPositionCount':
-					return 2n
-				case 'getFrozenPositionIds':
-					return [50n, 51n]
-				case 'frozenPositions':
+				case 'statoblastSecurityMultiplierBps':
+					return 10_500n
+				case 'lastPrice':
+					return 8n * unit
+				case 'questionCount':
+					return options.questionCount ?? 1n
+				case 'positionCount':
+					return options.positionCount ?? 2n
+				case 'getQuestions': {
+					const [start, count] = request.args ?? []
+					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected page bounds')
+					return Array.from({ length: Number(count) }, (_, index) => start + BigInt(index) + 51n)
+				}
+				case 'positions':
 					return [request.args?.[0], 100n * unit, 100n * unit, pool]
+				case 'isReusablePosition':
+					return request.args?.[0] === 1n && reusable
 				case 'getOwnerPositionShares':
-					return request.args?.[0] === 50n ? 10n * unit : 0n
+					return request.args?.[0] === 1n ? claimShares : 0n
 				case 'questionOriginIds':
 					return request.args?.[0] === 99n ? zeroHash : `0x${'1'.repeat(64)}`
 				case 'getPool':
@@ -106,14 +116,14 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 			}
 		}),
 	}))
-	installActiveEnvironmentForTesting({ ...createFakeBackend({ accountAddress: owner }), createReadClient: () => client })
+	installActiveEnvironmentForTesting({ ...createFakeBackend({ accountAddress: account }), createReadClient: () => client })
 	const actions: Parameters<typeof usePortfolioAggregate>[1] = {
 		runPortfolioAction: async (_action, _label, build) => {
 			requests.push(await build())
 		},
 	}
 	const selection: Parameters<typeof usePortfolioAggregate>[0]['selection'] = options.withoutSelection ? undefined : { portfolio, owner, vault: zeroAddress, originUniverseId: 0n }
-	const hook = lifecycle.trackRendered(await renderHookWithProps(({ selection }: { selection: Parameters<typeof usePortfolioAggregate>[0]['selection'] }) => usePortfolioAggregate({ selection, refresh: async () => undefined }, actions, owner, true), { selection }))
+	const hook = lifecycle.trackRendered(await renderHookWithProps(({ selection }: { selection: Parameters<typeof usePortfolioAggregate>[0]['selection'] }) => usePortfolioAggregate({ selection, refresh: async () => undefined }, actions, account, true), { selection }))
 	if (!options.withoutSelection) await waitFor(() => expect(hook.state().snapshot).toBeDefined())
 	return {
 		hook,
@@ -133,6 +143,12 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 		},
 		setForkTime: (value: bigint) => {
 			forkTime = value
+		},
+		setReusable: (value: boolean) => {
+			reusable = value
+		},
+		setClaimShares: (value: bigint) => {
+			claimShares = value
 		},
 	}
 }
@@ -260,10 +276,10 @@ test('an obsolete quote failure cannot overwrite a changed question and recovery
 	await waitFor(() => expect(hook.state().mintReason).toContain('Register'))
 	await act(async () => pending.resolve())
 	expect(hook.state().quoteError).toBeUndefined()
-	await act(async () => await hook.state().claimPosition(50n))
+	await act(async () => await hook.state().claimPosition(1n))
 	const request = requests[0]
 	if (request === undefined) throw new Error('Expected recovery')
-	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([50n, owner])
+	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([1n, owner])
 })
 
 test('pool controls keep approval, deposit and mint actions visible without owner routing inputs', async () => {
@@ -273,6 +289,96 @@ test('pool controls keep approval, deposit and mint actions visible without owne
 	expect(text).toContain('Deposit REP and commit capacity')
 	expect(text).toContain('Approve REP')
 	expect(text).toContain('Mint portfolio complete sets')
-	expect(text).toContain('Leave shared underwriting')
+	expect(text).toContain('Withdraw reserve REP')
+	expect(text).toContain('Allocation positions')
+	expect(text).toContain('Rebalance allocation')
+	expect(text).not.toContain('Update pool accounting')
 	expect(text).not.toContain('Contributing vault')
+})
+
+test('allocation maintenance selects one position, explains owner custody and rechecks continued reuse', async () => {
+	const { hook, requests, setReusable } = await renderAggregate()
+	expect(hook.state().allocations[0]).toMatchObject({ reusable: true, claimReason: undefined, rebalanceReason: undefined })
+	expect(hook.state().allocations[1]?.claimReason).toContain('No unclaimed ownership')
+	await act(async () => await hook.state().rebalancePosition(1n))
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected rebalance')
+	expect(decodeFunctionData({ abi: parseAbi(['function rebalancePosition(uint256)']), data: request.data }).args).toEqual([1n])
+	expect(request.reviewDescription).toContain('reserve only while ownership still matches')
+	expect(request.reviewDescription).toContain('reuse on the same question')
+	setReusable(false)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('reuse changed')
+	await act(async () => await hook.state().refresh())
+	await act(async () => await hook.state().rebalancePosition(1n))
+	expect(requests[1]?.reviewDescription).toContain('stay with its recorded owners')
+	expect(requests).toHaveLength(2)
+})
+
+test.each([{ questionEndTime: 999n }, { forkTime: 10n }, { systemState: 1 }])('unavailable native maintenance leaves allocation claiming available', async options => {
+	const { hook, requests } = await renderAggregate(options)
+	expect(hook.state().allocations[0]?.rebalanceReason).toContain('claim the position')
+	expect(hook.state().allocations[0]?.claimReason).toBeUndefined()
+	await act(async () => await hook.state().claimPosition(1n))
+	expect(requests).toHaveLength(1)
+})
+
+test('claiming a reusable allocation remains owner-bound and rechecks an already claimed share', async () => {
+	const { hook, requests, setClaimShares } = await renderAggregate()
+	await act(async () => await hook.state().claimPosition(1n))
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected allocation claim')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([1n, owner])
+	expect(request.reviewDescription).toContain('closes only this allocation')
+	setClaimShares(0n)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('No unclaimed ownership')
+	await act(async () => await hook.state().refresh())
+	expect(hook.state().allocations[0]?.claimReason).toContain('No unclaimed ownership')
+})
+
+test('reserve withdrawal checks its idle-only minimum and preserves allocation claims', async () => {
+	const { hook, requests } = await renderAggregate()
+	await act(() => {
+		hook.state().setWithdrawalShares('10')
+		hook.state().setWithdrawalMinimum('21')
+	})
+	expect(hook.state().withdrawalReason).toContain('exceeds your current reserve')
+	await act(() => hook.state().setWithdrawalMinimum('20'))
+	await act(async () => await hook.state().withdraw())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected reserve withdrawal')
+	expect(decodeFunctionData({ abi: parseAbi(['function withdraw(uint256,uint256)']), data: request.data }).args).toEqual([10n * unit, 20n * unit])
+	expect(request.reviewDescription).toContain('allocation claims remain yours')
+	expect(hook.state().allocations[0]?.ownerShares).toBe(10n * unit)
+})
+
+test('outsiders cannot close live reusable allocations but can deliver closed allocation claims to their owner', async () => {
+	const { hook, requests, setReusable } = await renderAggregate({ account: token })
+	expect(hook.state().allocations[0]?.claimReason).toContain('Only the recorded owner')
+	await expect(hook.state().claimPosition(1n)).rejects.toThrow('Only the recorded owner')
+	expect(requests).toHaveLength(0)
+	setReusable(false)
+	await act(async () => await hook.state().refresh())
+	expect(hook.state().allocations[0]?.claimReason).toBeUndefined()
+	await act(async () => await hook.state().claimPosition(1n))
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected closed allocation claim')
+	expect(request.account).toBe(token)
+	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([1n, owner])
+})
+
+test('position and registered-question pages advance independently while keeping deposit drafts', async () => {
+	const { hook, reads } = await renderAggregate({ positionCount: 130n, questionCount: 130n })
+	expect(hook.state().snapshot?.positions).toHaveLength(64)
+	expect(hook.state().snapshot?.questions).toHaveLength(64)
+	await act(() => {
+		hook.state().setDepositAmount('10')
+		hook.state().nextPage()
+	})
+	await waitFor(() => expect(hook.state().snapshot?.positionStart).toBe(64n))
+	expect(hook.state().snapshot?.questionStart).toBe(0n)
+	await act(() => hook.state().nextQuestionPage())
+	await waitFor(() => expect(hook.state().snapshot?.questionStart).toBe(64n))
+	expect(hook.state().snapshot?.positionStart).toBe(64n)
+	expect(hook.state().depositAmount).toBe('10')
+	expect(reads.filter(read => read.name === 'getQuestions').every(read => read.args?.[1] === 64n)).toBe(true)
 })

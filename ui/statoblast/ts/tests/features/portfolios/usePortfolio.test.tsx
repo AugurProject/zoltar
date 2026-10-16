@@ -7,7 +7,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createMockLoaderClient, createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
 import { usePortfolioAutomatic } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioAutomatic.js'
 import { vaultArtifact, type PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
@@ -17,6 +17,7 @@ import { planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/s
 import { renderHookWithProps } from '../../support/renderHook.js'
 
 const deployer = getAddress('0x00000000000000000000000000000000000000d1')
+const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const manager = getAddress('0x0000000000000000000000000000000000000022')
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${manager}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
@@ -26,8 +27,12 @@ async function renderDeferredPortfolio() {
 	let reads = 0
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getChainId: async () => (++reads === 1 ? await firstChainId.promise : 1),
-		getCode: async ({ address }: { address: Address }) => (address === deployer ? getSecurityPoolPortfolioVaultDeployerRuntimeCode() : getSecurityPoolPortfolioRuntimeCode()),
+		getCode: async ({ address }: { address: Address }) => {
+			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
+			return address === deployer ? getSecurityPoolPortfolioVaultDeployerRuntimeCode() : getSecurityPoolPortfolioRuntimeCode()
+		},
 		...createMockReadClient(async request => {
+			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'portfolio') return manager
 			if (request.functionName === 'factory') return getInfraContractAddresses().securityPoolFactory
@@ -95,6 +100,7 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getChainId: async () => 1,
 		getCode: async ({ address }: { address: Address }) => {
+			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 			if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
 			if (address === manager) return getSecurityPoolPortfolioRuntimeCode()
 			return getSecurityPoolPortfolioVaultRuntimeCode()
@@ -110,6 +116,8 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 			readContract: async ({ address, functionName, args = [] }) => {
 				queries.push({ functionName, args })
 				switch (functionName) {
+					case 'quoteHelper':
+						return quoteHelper
 					case 'vaultDeployer':
 						return deployer
 					case 'factory':

@@ -5,7 +5,7 @@ const abi = parseAbi([
 	'function deposit(uint256 amountAttoRep,uint256 minimumShares) returns (uint256)',
 	'function withdraw(uint256 shares,uint256 minimumIdleAttoRep) returns (uint256)',
 	'function claimFees()',
-	'function sync()',
+	'function rebalancePosition(uint256 positionId)',
 	'function claimPosition(uint256 positionId,address owner)',
 	'function balanceOf(address owner) view returns (uint256)',
 	'function totalSupply() view returns (uint256)',
@@ -18,11 +18,17 @@ const abi = parseAbi([
 	'function securityPool() view returns (address)',
 	'function zoltar() view returns (address)',
 	'function getForkTime(uint248 universeId) view returns (uint256)',
-	'function frozenPositionCount() view returns (uint256)',
-	'function getFrozenPositionIds(uint256 start,uint256 count) view returns (uint256[])',
-	'function getAggregateState() view returns (uint256 backingAttoRep,uint256 idleAttoRep,uint256 availableAttoRep,uint256 underwritingLimitAttoEth,uint256 backedCapacityAttoEth)',
-	'function getActiveQuestions() view returns (uint256[])',
-	'function frozenPositions(uint256 positionId) view returns (uint256 questionId,uint256 totalShares,uint256 remainingShares,address custody)',
+	'function positionCount() view returns (uint256)',
+	'function statoblastSecurityMultiplierBps() view returns (uint256)',
+	'function lastPrice() view returns (uint256)',
+	'function positions(uint256 positionId) view returns (uint256 questionId,uint256 totalShares,uint256 remainingShares,address custody)',
+	'function isReusablePosition(uint256 positionId) view returns (bool)',
+	'function questionCount() view returns (uint256)',
+	'function getQuestions(uint256 start,uint256 count) view returns (uint256[])',
+	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
+	'function questionData() view returns (address)',
+	'function getQuestionEndDate(uint256 questionId) view returns (uint256)',
+	'function systemState() view returns (uint8)',
 	'function getOwnerPositionShares(uint256 positionId,address owner) view returns (uint256)',
 	'function quoteMint(uint256 questionId,uint256 mintAttoEth) view returns (uint256 depositAttoRep,uint256 reservationFeeAttoEth,uint256 availableAttoRep)',
 	'function allowance(address owner,address spender) view returns (uint256)',
@@ -65,11 +71,11 @@ export function buildPortfolioClaimFeesRequest(parameters: { owner: Address; por
 	return request(parameters.owner, parameters.portfolio, 'claimFees')
 }
 
-export function buildPortfolioSyncRequest(parameters: { processor: Address; portfolio: Address }) {
-	return request(parameters.processor, parameters.portfolio, 'sync')
+export function buildPortfolioPositionRebalanceRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint }) {
+	return request(parameters.processor, parameters.portfolio, 'rebalancePosition', [uint(parameters.positionId, 'Position id')])
 }
 
-/** Permissionless materialization pays only the selected owner's canonical recovery vault. */
+/** Live reusable allocations require the entitled owner; closed, ended or forked claims may be processed by anyone for that owner. */
 export function buildPortfolioPositionClaimRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint; owner: Address }) {
 	return request(parameters.processor, parameters.portfolio, 'claimPosition', [uint(parameters.positionId, 'Position id'), address(parameters.owner)])
 }
@@ -91,23 +97,23 @@ export type PortfolioAggregateSnapshot = {
 	claimableFeesAttoEth: bigint
 	walletAttoRep: bigint
 	allowanceAttoRep: bigint
-	backingAttoRep: bigint
-	idleAttoRep: bigint
-	availableAttoRep: bigint
-	underwritingLimitAttoEth: bigint
-	backedCapacityAttoEth: bigint
-	activeQuestions: bigint[]
+	reserveAttoRep: bigint
+	reserveCapacityAttoEth: bigint
+	questionCount: bigint
+	questionStart: bigint
+	questions: bigint[]
 	positionCount: bigint
 	positionStart: bigint
-	positions: { positionId: bigint; questionId: bigint; custody: Address; ownerShares: bigint }[]
+	positions: { positionId: bigint; questionId: bigint; custody: Address; ownerShares: bigint; remainingShares: bigint; reusable: boolean; questionEndTime: bigint; operational: boolean }[]
 }
 
-/** Every balance, capacity, and matured claim is anchored to the same mined block. */
-export async function loadPortfolioAggregateSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; positionStart?: bigint }): Promise<PortfolioAggregateSnapshot> {
+/** Reserve balances and bounded allocation/question pages share one mined block. */
+export async function loadPortfolioAggregateSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; positionStart?: bigint; questionStart?: bigint }): Promise<PortfolioAggregateSnapshot> {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio)
 	const owner = address(parameters.owner)
 	const positionStart = uint(parameters.positionStart ?? 0n, 'Position page start')
+	const questionStart = uint(parameters.questionStart ?? 0n, 'Question page start')
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
 	const { number: blockNumber, hash: blockHash, timestamp } = block
 	if (blockNumber === undefined || blockHash === undefined) throw new Error('Portfolio snapshot requires a mined block.')
@@ -119,14 +125,15 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		read(portfolio, 'totalSupply'),
 		read(portfolio, 'totalAssets'),
 		read(portfolio, 'claimableFees', [owner]),
-		read(portfolio, 'getAggregateState'),
-		read(portfolio, 'getActiveQuestions'),
-		read(portfolio, 'frozenPositionCount'),
+		read(portfolio, 'statoblastSecurityMultiplierBps'),
+		read(portfolio, 'positionCount'),
+		read(portfolio, 'questionCount'),
 	])
 	const originUniverseId = uint(values[0], 'Universe id')
 	// The shared feed exists before any question is registered. Its configuration
 	// coordinator identifies the seed pool even when genesis REP is an external token.
 	const feed = address(await read(portfolio, 'priceFeed', [originUniverseId]))
+	const price = uint(await read(feed, 'lastPrice'), 'REP price')
 	const coordinator = address(await read(feed, 'configCoordinator'))
 	const seedPool = address(await read(coordinator, 'securityPool'))
 	const zoltar = address(await read(seedPool, 'zoltar'))
@@ -136,21 +143,38 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const totalShares = uint(values[3], 'Total fund shares')
 	const assetsAttoRep = uint(values[4], 'Fund assets')
 	const claimableFeesAttoEth = uint(values[5], 'Claimable fees')
-	const state = tuple(values[6], 5).map(value => uint(value, 'Aggregate state'))
-	const [backingAttoRep, idleAttoRep, availableAttoRep, underwritingLimitAttoEth, backedCapacityAttoEth] = state
-	if (backingAttoRep === undefined || idleAttoRep === undefined || availableAttoRep === undefined || underwritingLimitAttoEth === undefined || backedCapacityAttoEth === undefined) throw new Error('Incomplete aggregate state.')
-	if (!Array.isArray(values[7]) || values[7].length > 16) throw new Error('Invalid active question list.')
-	const activeQuestions = values[7].map(value => uint(value, 'Active question id'))
-	const positionCount = uint(values[8], 'Position count')
+	const multiplier = uint(values[6], 'Security multiplier')
+	const reserveAttoRep = assetsAttoRep
+	const reserveCapacityAttoEth = price === 0n ? 0n : (((reserveAttoRep * 10n ** 18n) / price) * 100_000_000n) / ((multiplier > 10_500n ? multiplier : 10_500n) * 12_000n)
+	const positionCount = uint(values[7], 'Position count')
+	const questionCount = uint(values[8], 'Question count')
 	if (positionStart > positionCount) throw new Error('Position page is out of bounds.')
+	if (questionStart > questionCount) throw new Error('Question page is out of bounds.')
 	const count = positionCount - positionStart < 64n ? positionCount - positionStart : 64n
-	const [wallet, allowance, page] = await Promise.all([read(repToken, 'balanceOf', [owner]), read(repToken, 'allowance', [owner, portfolio]), read(portfolio, 'getFrozenPositionIds', [positionStart, count])])
+	const questionPageCount = questionCount - questionStart < 64n ? questionCount - questionStart : 64n
+	const [wallet, allowance, questionPage] = await Promise.all([read(repToken, 'balanceOf', [owner]), read(repToken, 'allowance', [owner, portfolio]), read(portfolio, 'getQuestions', [questionStart, questionPageCount])])
+	const questions = tuple(questionPage, Number(questionPageCount)).map(value => uint(value, 'Question id'))
+	const questionStates = new Map<bigint, Promise<{ questionEndTime: bigint; operational: boolean }>>()
+	const questionState = (questionId: bigint) => {
+		const existing = questionStates.get(questionId)
+		if (existing !== undefined) return existing
+		const pending = (async () => {
+			const pool = address(await read(portfolio, 'getPool', [questionId, originUniverseId]))
+			const [data, state] = await Promise.all([read(pool, 'questionData'), read(pool, 'systemState')])
+			if (typeof state !== 'bigint' && (typeof state !== 'number' || !Number.isInteger(state))) throw new Error('Invalid question state.')
+			return { questionEndTime: uint(await read(address(data), 'getQuestionEndDate', [questionId]), 'Question end'), operational: state === 0n || state === 0 }
+		})()
+		questionStates.set(questionId, pending)
+		return pending
+	}
 	const positions = await Promise.all(
-		tuple(page, Number(count)).map(async value => {
-			const positionId = uint(value, 'Position id')
-			const [frozen, ownerShares] = await Promise.all([read(portfolio, 'frozenPositions', [positionId]), read(portfolio, 'getOwnerPositionShares', [positionId, owner])])
-			const position = tuple(frozen, 4)
-			return { positionId, questionId: uint(position[0], 'Question id'), custody: address(position[3]), ownerShares: uint(ownerShares, 'Position claim') }
+		Array.from({ length: Number(count) }, async (_, index) => {
+			const positionId = positionStart + BigInt(index) + 1n
+			const [allocation, ownerShares, reusable] = await Promise.all([read(portfolio, 'positions', [positionId]), read(portfolio, 'getOwnerPositionShares', [positionId, owner]), read(portfolio, 'isReusablePosition', [positionId])])
+			const position = tuple(allocation, 4)
+			if (typeof reusable !== 'boolean') throw new Error('Invalid position reuse state.')
+			const questionId = uint(position[0], 'Question id')
+			return { positionId, questionId, custody: address(position[3]), ownerShares: uint(ownerShares, 'Position claim'), remainingShares: uint(position[2], 'Remaining position shares'), reusable, ...(await questionState(questionId)) }
 		}),
 	)
 	const [latestBlock, latestChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
@@ -172,12 +196,11 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		claimableFeesAttoEth,
 		walletAttoRep: uint(wallet, 'Wallet REP'),
 		allowanceAttoRep: uint(allowance, 'REP allowance'),
-		backingAttoRep,
-		idleAttoRep,
-		availableAttoRep,
-		underwritingLimitAttoEth,
-		backedCapacityAttoEth,
-		activeQuestions,
+		reserveAttoRep,
+		reserveCapacityAttoEth,
+		questionCount,
+		questionStart,
+		questions,
 		positionCount,
 		positionStart,
 		positions,

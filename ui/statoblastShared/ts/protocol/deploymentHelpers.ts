@@ -9,6 +9,7 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
+	statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote,
 	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault,
 	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
@@ -58,6 +59,7 @@ export const {
 export const getSecurityPoolPortfolioByteCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.bytecode.object)
 
 export const getSecurityPoolPortfolioRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.deployedBytecode.object)
+export const getSecurityPoolPortfolioQuoteRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioVaultRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioVaultDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.deployedBytecode.object)
 

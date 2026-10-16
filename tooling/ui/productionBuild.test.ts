@@ -503,6 +503,7 @@ test(
 			const section = title => [...document.querySelectorAll('section')].find(node => node.querySelector('h3')?.textContent === title);
 			const balances = section(${JSON.stringify(portfolioCopy.snapshot)});
 			const fund = section(${JSON.stringify(portfolioCopy.sharedFund)});
+			const allocations = section(${JSON.stringify(portfolioCopy.allocationPositions)});
 			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
 			const questionsByPool = new Map(${JSON.stringify(seededPools.map(pool => [pool.securityPool.toLowerCase(), String(pool.questionId)]))});
 			const poolLinks = [...balances.querySelectorAll('a')].filter(link => link.textContent === ${JSON.stringify(portfolioCopy.pool)});
@@ -512,9 +513,10 @@ test(
 				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
 				owner: input(${JSON.stringify(portfolioCopy.owner)})?.toLowerCase(),
 				fundRep: amounts(fund, ${JSON.stringify(portfolioCopy.poolAssets)}),
-				availableRep: amounts(fund, ${JSON.stringify(portfolioCopy.availableBacking)}),
 				fundShares: amounts(fund, ${JSON.stringify(portfolioCopy.yourFundShares)}),
 				ownerRepClaim: amounts(fund, ${JSON.stringify(portfolioCopy.yourCurrentRep)}),
+				allocationPositions: allocations.querySelectorAll('.workflow-subsection').length,
+				claimableAllocations: [...allocations.querySelectorAll('button')].filter(button => button.textContent === ${JSON.stringify(portfolioCopy.claimQuestion)} && !button.disabled).length,
 				idle: amounts(balances, ${JSON.stringify(portfolioCopy.idle)}),
 				backing: amounts(balances, ${JSON.stringify(portfolioCopy.allocated)}),
 				commitments: amounts(balances, ${JSON.stringify(portfolioCopy.commitment)}),
@@ -525,10 +527,11 @@ test(
 				).toEqual({
 					managerLoaded: true,
 					owner: '0x00000000000000000000000000000000000000a1',
-					fundRep: ['5000REP'],
-					availableRep: ['4820REP'],
+					fundRep: ['4820REP'],
 					fundShares: ['5000'],
-					ownerRepClaim: ['5000REP'],
+					ownerRepClaim: ['4820REP'],
+					allocationPositions: 2,
+					claimableAllocations: 2,
 					idle: ['0REP'],
 					backing: ['0REP', '0REP'],
 					commitments: ['0ETH', '0ETH'],

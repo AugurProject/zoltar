@@ -2,17 +2,19 @@ import { expect, mock, test } from 'bun:test'
 import { createPublicClient, custom, decodeFunctionData, encodeEventTopics, getAddress, isHex, parseAbi, zeroAddress, zeroHash, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { asWriteClient, createMockWriteClient, createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { portfolioContractRequest, sendPortfolioTransaction, vaultArtifact, loadPortfolioOwnerVault, discoverSimulationPortfolio, capturePortfolioBatchReview, portfolioPolicyReviewRequest, type loadPortfolioPolicy } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { planPortfolioAllocations, type PortfolioSnapshot, type PortfolioPosition } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 
 const deployer = getAddress('0x00000000000000000000000000000000000000d1')
+const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const vault = getAddress('0x0000000000000000000000000000000000000022')
 type Policy = Awaited<ReturnType<typeof loadPortfolioPolicy>>
 
 function fixtureRuntime(address: Address, vaultRuntime = getSecurityPoolPortfolioVaultRuntimeCode()) {
+	if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 	if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
 	if (address === owner) return getSecurityPoolPortfolioRuntimeCode()
 	return vaultRuntime
@@ -246,6 +248,7 @@ test('rejects an imported manager that spoofs vault ownership with different run
 test('rejects the expected manager bytecode when its immutable factory is not the configured factory', async () => {
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'vaultOf') return vault
 			if (request.functionName === 'factory') return owner
@@ -256,10 +259,34 @@ test('rejects the expected manager bytecode when its immutable factory is not th
 	await expect(loadPortfolioOwnerVault(client, vault, owner)).rejects.toThrow('unrecognized pool factory')
 })
 
+test.each(['missing', 'wrong'] as const)('rejects an imported manager with %s quote helper runtime', async fault => {
+	const client = {
+		...createMockReadClient(async request => {
+			if (request.functionName === 'quoteHelper') return quoteHelper
+			if (request.functionName === 'vaultDeployer') return deployer
+			if (request.functionName === 'vaultOf') return zeroAddress
+			if (request.functionName === 'originUniverseId') return 0n
+			if (request.functionName === 'factory') return getInfraContractAddresses().securityPoolFactory
+			if (request.functionName === 'portfolio') return owner
+			throw new Error('Unexpected portfolio read')
+		}),
+		getCode: async ({ address }: { address: Address }) => {
+			if (address !== quoteHelper) return fixtureRuntime(address)
+			if (fault === 'missing') return undefined
+			const expected = getSecurityPoolPortfolioQuoteRuntimeCode()
+			const malicious = `0x${expected.slice(2, 4) === '00' ? '01' : '00'}${expected.slice(4)}`
+			if (!isHex(malicious)) throw new Error('Expected hexadecimal helper runtime')
+			return malicious
+		},
+	}
+	await expect(loadPortfolioOwnerVault(client, owner, owner)).rejects.toThrow('Unrecognized portfolio quote helper runtime code')
+})
+
 for (const fault of ['runtime', 'portfolio binding'] as const) {
 	test(`rejects an imported manager with a vault deployer ${fault} mismatch`, async () => {
 		const client = {
 			...createMockReadClient(async request => {
+				if (request.functionName === 'quoteHelper') return quoteHelper
 				if (request.functionName === 'vaultDeployer') return deployer
 				if (request.functionName === 'vaultOf') return zeroAddress
 				if (request.functionName === 'originUniverseId') return 0n
@@ -268,6 +295,7 @@ for (const fault of ['runtime', 'portfolio binding'] as const) {
 				throw new Error('Unexpected portfolio read')
 			}),
 			getCode: async ({ address }: { address: Address }) => {
+				if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 				if (address === owner) return getSecurityPoolPortfolioRuntimeCode()
 				return fault === 'runtime' ? '0x00' : getSecurityPoolPortfolioVaultDeployerRuntimeCode()
 			},
@@ -278,6 +306,7 @@ for (const fault of ['runtime', 'portfolio binding'] as const) {
 
 test('rejects spoofed vault code and owner claims after verifying the manager', async () => {
 	const readContract = createMockReadClient(async request => {
+		if (request.functionName === 'quoteHelper') return quoteHelper
 		if (request.functionName === 'vaultDeployer') return deployer
 		if (request.functionName === 'vaultOf') return vault
 		if (request.functionName === 'predictVaultAddress') return vault
@@ -302,6 +331,7 @@ test('rejects a vault with inconsistent repeated immutable values even when gett
 	if (!isHex(malicious)) throw new Error('Expected hexadecimal malicious runtime')
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'vaultOf') return vault
 			if (request.functionName === 'predictVaultAddress') return vault
@@ -318,6 +348,7 @@ test('rejects a vault with inconsistent repeated immutable values even when gett
 test('rejects a vault clone at a noncanonical address despite matching code and owner getters', async () => {
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'vaultOf') return vault
 			if (request.functionName === 'predictVaultAddress') return owner
@@ -343,6 +374,7 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 	const spoof = getAddress('0x0000000000000000000000000000000000000044')
 	const queried: { fromBlock: bigint; args: { owner: Address } }[] = []
 	const getCode = mock(async ({ address }: { address: Address }) => {
+		if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 		if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
 		if (address === manager) return getSecurityPoolPortfolioRuntimeCode()
 		if (address === vault) return getSecurityPoolPortfolioVaultRuntimeCode()
@@ -350,6 +382,7 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 	})
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'vaultOf' || request.functionName === 'predictVaultAddress') return vault
 			if (request.functionName === 'originUniverseId') return 0n
@@ -370,6 +403,7 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 	expect(queried[0]?.fromBlock).toBe(0n)
 	expect(getCode).toHaveBeenCalledWith({ address: spoof })
 	expect(getCode).toHaveBeenCalledWith({ address: vault })
+	expect(getCode).toHaveBeenCalledWith({ address: quoteHelper })
 })
 
 test('does not perform global portfolio log scans on production backends', async () => {

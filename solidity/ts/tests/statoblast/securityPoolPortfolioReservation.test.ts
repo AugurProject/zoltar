@@ -1,17 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { redeemCompleteSet, setUnderwritingLimit } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { balanceOfShares, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { aggregatePortfolioAbi, useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
 import { unit } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: aggregate reservation compensation', () => {
-	const { fixture, deposit, quote, mint, fees, shares, assets, sync } = useAggregatePortfolioFixture()
+	const { fixture, deposit, quote, mint, fees, shares, assets, custody } = useAggregatePortfolioFixture()
 	const pool = () => fixture.base.securityPoolAddresses.securityPool
 	const eth = (address: Address) => getETHBalance(fixture.owner(), address)
 	const idle = () => getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), fixture.portfolio)
@@ -20,6 +21,37 @@ describe('Statoblast: aggregate reservation compensation', () => {
 		await fixture.refreshPrice(fixture.base.questionId)
 	}
 	const claimFees = (owner = fixture.owner()) => writeContractAndWait(owner, () => owner.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimFees' }))
+
+	test('an exact reservation fee quote includes pending native fee accrual rounding', async () => {
+		await prepare()
+		await mint(101n * unit + 3n)
+		await fixture.base.mockWindow.advanceTime(2n)
+		const amount = unit + 42n
+		const [, reservationFee] = await quote(amount)
+		await mint(amount, fixture.base.questionId, reservationFee)
+		const supply = await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'shareTokenSupplyAttoShares' })
+		expect(supply).toBeGreaterThan(101n * unit + 3n)
+		expect(await balanceOfShares(fixture.owner(), fixture.base.securityPoolAddresses.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)).toEqual([supply, supply, supply])
+	})
+
+	test('an exact reservation fee quote covers native withdrawal rounding after a backing donation', async () => {
+		await manipulatePriceOracleAndPerformOperation(fixture.owner(), fixture.base.mockWindow, fixture.base.securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, fixture.owner().account.address, 5_000n * unit, unit)
+		await prepare()
+		await mint()
+		await fixture.transferRep(pool(), 9_301n * unit)
+		const factory = getInfraContractAddresses().securityPoolFactory
+		await fixture.base.mockWindow.impersonateAccount(factory)
+		await fixture.base.mockWindow.setBalance(factory, unit)
+		const factoryClient = createWriteClient(fixture.base.mockWindow, BigInt(factory))
+		// Isolate the unit-conversion boundary from time-based fees using the factory's production initializer.
+		await writeContractAndWait(factoryClient, () => factoryClient.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'setStartingParams', args: [unit, 74n * unit + 3n] }))
+		const [, reservationFee] = await quote(37n * unit)
+		expect(reservationFee).toBeGreaterThan(0n)
+		await mint(37n * unit, fixture.base.questionId, reservationFee)
+		const supply = await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'shareTokenSupplyAttoShares' })
+		expect(supply).toBeGreaterThan(100n * unit)
+		expect(await balanceOfShares(fixture.owner(), fixture.base.securityPoolAddresses.shareToken, fixture.base.genesisUniverse, fixture.other().account.address)).toEqual([supply, supply, supply])
+	})
 
 	test('dust buyers pay for reserved capital and insufficient fee budgets revert atomically', async () => {
 		await prepare()
@@ -34,17 +66,19 @@ describe('Statoblast: aggregate reservation compensation', () => {
 		expect(await fees()).toBe(fee)
 	})
 
-	test('separate questions compensate newly reserved capital without changing aggregate NAV', async () => {
+	test('separate questions compensate reserved capital and subtract only that backing from reserve NAV', async () => {
 		await prepare()
 		let totalFees = 0n
-		for (const questionId of [fixture.base.questionId, fixture.secondQuestionId]) {
+		let totalBacking = 0n
+		for (const [index, questionId] of [fixture.base.questionId, fixture.secondQuestionId].entries()) {
 			const [backing, fee] = await quote(1_000_000_000n, questionId)
 			await mint(1_000_000_000n, questionId, fee)
-			expect(await fixture.repClaim(fixture.poolFor(questionId).securityPool, fixture.portfolio)).toBe(backing)
+			expect(await fixture.repClaim(fixture.poolFor(questionId).securityPool, await custody(BigInt(index + 1)))).toBe(backing)
 			totalFees += fee
+			totalBacking += backing
 		}
 		expect(await fees()).toBeGreaterThanOrEqual(totalFees)
-		expect(await assets()).toBe(5_000n * unit)
+		expect(await assets()).toBe(5_000n * unit - totalBacking)
 	})
 
 	test('fee budgets and forced ETH never become settlement collateral or buyer refunds', async () => {
@@ -75,7 +109,7 @@ describe('Statoblast: aggregate reservation compensation', () => {
 		await prepare()
 		await mint()
 		const earned = await fees()
-		await deposit(5_000n * unit, fixture.other())
+		await deposit(await assets(), fixture.other())
 		expect(await fees(fixture.other().account.address)).toBe(0n)
 		expect(await fees()).toBeGreaterThanOrEqual(earned)
 		const [, fee] = await quote(100n * unit, fixture.secondQuestionId)
@@ -84,13 +118,17 @@ describe('Statoblast: aggregate reservation compensation', () => {
 		expect(await fees()).toBeGreaterThan(await fees(fixture.other().account.address))
 	})
 
-	test('permissionless native fee redemption credits current pool owners', async () => {
+	test('permissionless native fee redemption remains with the original allocation owners', async () => {
 		await prepare()
 		await mint()
 		const before = await fees()
+		const source = await custody()
 		await fixture.base.mockWindow.advanceTime(3_600n)
-		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'redeemFees', args: [fixture.portfolio] }))
-		expect(await fees()).toBeGreaterThan(before)
+		await deposit(await assets(), fixture.other())
+		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'redeemFees', args: [source] }))
+		expect(await eth(source)).toBeGreaterThan(0n)
+		expect(await fees()).toBe(before)
+		expect(await fees(fixture.other().account.address)).toBe(0n)
 	})
 
 	test('price-induced capital top-ups are compensated and cannot exceed a buyer fee budget', async () => {
@@ -125,7 +163,6 @@ describe('Statoblast: aggregate reservation compensation', () => {
 	test('owners collect only their earned ETH without changing pool shares or REP exposure', async () => {
 		await prepare()
 		await mint()
-		await sync()
 		const balance = await shares()
 		const reserve = await assets()
 		await expect(claimFees(fixture.other())).rejects.toThrow('No fees available')

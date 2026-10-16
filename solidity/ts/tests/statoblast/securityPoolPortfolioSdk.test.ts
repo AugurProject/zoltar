@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDeploymentRequest, buildPortfolioDepositRequest, buildPortfolioMintRequest, buildPortfolioSyncRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote, loadPortfolioSnapshot, planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { buildPortfolioDeploymentRequest, buildPortfolioDepositRequest, buildPortfolioMintRequest, buildPortfolioPositionRebalanceRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote, loadPortfolioSnapshot, planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -27,16 +27,16 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 		if (portfolio === null || portfolio === undefined) throw new Error('Portfolio deployment address missing')
 		expect(await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'questionCount' })).toBe(0n)
 		const empty = await loadPortfolioAggregateSnapshot({ client, portfolio, owner: client.account.address })
-		expect(empty).toMatchObject({ originUniverseId: fixture.base.genesisUniverse, forkTime: 0n, repToken: getRepTokenAddress(fixture.base.genesisUniverse), shares: 0n, totalShares: 0n, assetsAttoRep: 0n, allowanceAttoRep: 0n, positionCount: 0n, positionStart: 0n, positions: [], activeQuestions: [] })
+		expect(empty).toMatchObject({ originUniverseId: fixture.base.genesisUniverse, forkTime: 0n, repToken: getRepTokenAddress(fixture.base.genesisUniverse), shares: 0n, totalShares: 0n, assetsAttoRep: 0n, allowanceAttoRep: 0n, positionCount: 0n, positionStart: 0n, positions: [], questionCount: 0n, questions: [] })
 		expect(empty.walletAttoRep).toBeGreaterThan(100n * unit)
 		await approveToken(client, empty.repToken, portfolio)
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner: client.account.address, portfolio, amountAttoRep: 100n * unit, minimumShares: 100n * unit })))
 		const funded = await loadPortfolioAggregateSnapshot({ client, portfolio, owner: client.account.address })
-		expect(funded).toMatchObject({ shares: 100n * unit, totalShares: 100n * unit, assetsAttoRep: 100n * unit, ownerAssetsAttoRep: 100n * unit, idleAttoRep: 100n * unit, availableAttoRep: 100n * unit, positionCount: 0n, positions: [], activeQuestions: [] })
+		expect(funded).toMatchObject({ shares: 100n * unit, totalShares: 100n * unit, assetsAttoRep: 100n * unit, ownerAssetsAttoRep: 100n * unit, reserveAttoRep: 100n * unit, positionCount: 0n, positions: [], questionCount: 0n, questions: [] })
 		expect((await client.getBlock({ blockNumber: funded.blockNumber })).hash).toBe(funded.blockHash)
 	})
 
-	test('aggregate SDK decodes live quotes and archived owner claims from the contract ABI', async () => {
+	test('aggregate SDK decodes reserve quotes, allocation claims and selected maintenance from the contract ABI', async () => {
 		const client = fixture.owner()
 		const owner = client.account.address
 		const portfolio = fixture.portfolio
@@ -48,13 +48,14 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 		expect(quote.depositAttoRep).toBeGreaterThan(0n)
 		expect(quote.availableAttoRep).toBe(5_000n * unit)
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio, recipient: owner, questionId: fixture.base.questionId, mintAttoEth: 100n * unit, maximumReservationFeeAttoEth: quote.reservationFeeAttoEth, minimumShares: 0n })))
-		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioSyncRequest({ processor: owner, portfolio })))
-		const archived = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
-		expect(archived.positionCount).toBe(1n)
-		expect(archived.positions).toHaveLength(1)
-		expect(archived.positions[0]).toMatchObject({ positionId: 1n, questionId: fixture.base.questionId, ownerShares: 5_000n * unit })
-		expect(archived.activeQuestions).toEqual([])
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioPositionRebalanceRequest({ processor: owner, portfolio, positionId: 1n })))
+		const allocated = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
+		expect(allocated.positionCount).toBe(1n)
+		expect(allocated.positions).toHaveLength(1)
+		expect(allocated.positions[0]).toMatchObject({ positionId: 1n, questionId: fixture.base.questionId, ownerShares: 5_000n * unit, reusable: true })
+		expect(allocated.assetsAttoRep).toBe(allocated.reserveAttoRep)
+		expect(allocated.assetsAttoRep).toBeLessThan(5_000n * unit)
+		expect(allocated.questions).toEqual([fixture.base.questionId, fixture.secondQuestionId])
 	})
 
 	test('a pinned snapshot decodes real pool accounting and its buffered plan executes with matching balances', async () => {
