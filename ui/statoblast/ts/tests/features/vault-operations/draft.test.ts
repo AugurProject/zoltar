@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsPrice } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/draft.js'
+import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsReportPrice } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/draft.js'
 
 import { getMaxLiquidationAmount } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 import { validateVaultOperations } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
@@ -56,17 +56,25 @@ describe('pool vault operation draft', () => {
 describe('vault operation execution price refresh', () => {
 	test('uses the settled price after a stale proposal becomes irrelevant', () => {
 		const settled = 3n * 10n ** 18n
-		expect(getVaultOperationsPrice('500', settled, false)).toBe(500n * 10n ** 18n)
-		const executionPrice = getVaultOperationsPrice('500', settled, true)
+		expect(getVaultOperationsReportPrice('500', settled, false)).toBe(500n * 10n ** 18n)
+		const executionPrice = getVaultOperationsReportPrice('500', settled, true)
 		expect(executionPrice).toBe(settled)
 		const targetVaultSummary = { vaultAddress: getAddress(target), vaultAttoRepBacking: 10_000n * 10n ** 18n, underwritingLimitAttoEth: 40n * 10n ** 18n, disputeStakedAttoRep: 0n, claimableFeesAttoEth: 0n }
-		expect(getMaxLiquidationAmount({ targetVaultSummary, statoblastSecurityMultiplierBps: 10_000n, repPerEthPrice: getVaultOperationsPrice('500', settled, false) })).toBeGreaterThan(0n)
+		expect(getMaxLiquidationAmount({ targetVaultSummary, statoblastSecurityMultiplierBps: 10_000n, repPerEthPrice: getVaultOperationsReportPrice('500', settled, false) })).toBeGreaterThan(0n)
 		expect(getMaxLiquidationAmount({ targetVaultSummary, statoblastSecurityMultiplierBps: 10_000n, repPerEthPrice: executionPrice })).toBe(0n)
 	})
 
 	test('ignores an invalid hidden proposal after the cache becomes fresh', () => {
 		const settled = 3n * 10n ** 18n
-		expect(() => getVaultOperationsPrice('invalid', settled, false)).toThrow()
-		expect(getVaultOperationsPrice('invalid', settled, true)).toBe(settled)
+		expect(() => getVaultOperationsReportPrice('invalid', settled, false)).toThrow()
+		expect(getVaultOperationsReportPrice('invalid', settled, true)).toBe(settled)
+	})
+
+	test('never proposes the stale cached price for a blank initial report price', () => {
+		const cached = 3n * 10n ** 18n
+		expect(getVaultOperationsReportPrice('', cached, false)).toBe(0n)
+		expect(getVaultOperationsReportPrice('  ', cached, false)).toBe(0n)
+		expect(getVaultOperationsReportPrice('500', cached, false)).toBe(500n * 10n ** 18n)
+		expect(getVaultOperationsReportPrice('', cached, true)).toBe(cached)
 	})
 })

@@ -526,10 +526,15 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		if (typeof universe !== 'string') throw new Error('Pool route universe was not available')
 		const pool = pools.find(pool => pool.universeId === BigInt(universe) && (kind === 'origin' ? pool.parent === zeroAddress : pool.parent !== zeroAddress && pool.truthAuction !== zeroAddress))
 		if (pool === undefined) throw new Error(`Seeded ${kind} pool was not found`)
-		expect(await driver.evaluate("document.querySelector('.discovery-control') === null")).toBe(true)
 		await driver.setInputByLabel('Search or paste a pool address', pool.securityPool)
-		await driver.waitForButtonEnabled('Open pool at this address')
-		await driver.clickButton('Open pool at this address')
+		// Browse loads the first registry page on entry, so the seeded pool may already be listed; otherwise its pasted address opens directly.
+		const openFromBrowse = `(() => { if (document.querySelector('.local-browse-bar .loading-value') !== null) return false; const address = ${JSON.stringify(pool.securityPool.toLowerCase())}; const row = [...document.querySelectorAll('a[aria-label^="Open pool:"]')].find(link => link.getAttribute('aria-label')?.toLowerCase().includes(address)); const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === 'Open pool at this address' && !candidate.disabled); const target = row ?? button; if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`
+		let openedFromBrowse = false
+		for (let attempt = 0; attempt < 600 && !openedFromBrowse; attempt += 1) {
+			openedFromBrowse = (await driver.evaluate(openFromBrowse)) === true
+			if (!openedFromBrowse) await Bun.sleep(50)
+		}
+		expect(openedFromBrowse).toBe(true)
 		await driver.waitForBodyText('All pools')
 		await driver.waitForBodyWithoutText('Loading vault details…')
 		let favorited = false
@@ -566,13 +571,16 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 async function prepareVaultDeposit(driver: ProductionBrowserDriver, amount: string) {
 	await driver.waitForBodyText('Vault operations')
 	await driver.setInputByLabel('REP deposit amount (optional)', amount)
-	await driver.waitForButtonEnabled('Review vault operations')
-	await driver.clickButton('Review vault operations')
+	// The REP approval is an inline prerequisite under Funding and approvals; Review stays disabled until it confirms.
 	for (let attempt = 0; attempt < 600; attempt += 1) {
 		const ready = await driver.evaluate(
-			`(() => { const actions = document.querySelector('.transaction-step-actions'); const buttons = [...(actions?.querySelectorAll('button') ?? [])]; if (buttons.some(button => button.textContent?.trim() === 'Submit vault operations' && !button.disabled)) return true; const approval = buttons.find(button => button.textContent?.trim().startsWith('Approve ') && !button.disabled); if (approval instanceof HTMLButtonElement) approval.click(); return false })()`,
+			`(() => { const review = [...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Review vault operations'); if (review instanceof HTMLButtonElement && !review.disabled) return true; const approval = [...document.querySelectorAll('.vault-operations-prerequisites button')].find(button => button.textContent?.trim().startsWith('Approve ') && !button.disabled); if (approval instanceof HTMLButtonElement) approval.click(); return false })()`,
 		)
-		if (ready === true) return
+		if (ready === true) {
+			await driver.clickButton('Review vault operations')
+			await driver.waitForButtonEnabled('Submit vault operations')
+			return
+		}
 		await Bun.sleep(50)
 	}
 	throw new Error(`Vault deposit approval did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
@@ -734,11 +742,12 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
 		// Labels and titles group the integer digits with no-break spaces like other displayed amounts, while the input keeps the plain value.
 		const displayedAmount = amount.replace(/^\d+/, whole => whole.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0'))
-		const approvalLabel = `Approve ${displayedAmount} REP`
 		const reportLabel = triggersFork ? `Report ${outcome} & trigger fork · ${displayedAmount} REP…` : `Report ${outcome} · ${displayedAmount} REP…`
 		const reportedTitle = `Reported ${displayedAmount} REP on ${outcome}`
-		const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)
-		if (approvalRequired === true) {
+		// The shared approval control names its amount compactly (for example `Approve 225k REP`), so read the enabled approval button's own label.
+		const enabledApprovalLabel = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => !candidate.disabled && candidate.querySelector('.approval-button-label') !== null); return button === undefined ? '' : ${browserButtonNameExpression} })()`)
+		const approvalLabel = typeof enabledApprovalLabel === 'string' ? enabledApprovalLabel : ''
+		if (approvalLabel !== '') {
 			const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
 			const mobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_MOBILE_SCREENSHOT']
 			const captureQaScreenshots = (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') || (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '')
@@ -755,7 +764,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 				await driver.resize({ height: 900, width: 1440 })
 			}
 			await driver.clickButton(approvalLabel)
-			await completeTransactionReview(`Approved ${displayedAmount} REP`)
+			await completeTransactionReview()
 			await driver.waitForButtonEnabled(reportLabel)
 			const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
 			const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']

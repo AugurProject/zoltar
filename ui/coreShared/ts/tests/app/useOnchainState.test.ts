@@ -240,7 +240,7 @@ void describe('useOnchainState', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	function OnchainStateHarness() {
-		const { connectWallet, errorMessage } = useOnchainState({}, fakeOnchainStateDependencies)
+		const { connectWallet, errorMessage, walletActionMessage } = useOnchainState({}, fakeOnchainStateDependencies)
 
 		return h('div', {}, [
 			h(
@@ -254,6 +254,7 @@ void describe('useOnchainState', () => {
 				'Connect wallet',
 			),
 			h('output', { 'aria-label': 'Error message' }, errorMessage ?? ''),
+			h('output', { 'aria-label': 'Wallet message' }, walletActionMessage ?? ''),
 		])
 	}
 
@@ -265,7 +266,7 @@ void describe('useOnchainState', () => {
 		},
 	})
 
-	void test('surfaces an explicit error when connect wallet is clicked without a wallet installed', async () => {
+	void test('explains a missing wallet beside the wallet controls when connect is requested without one', async () => {
 		installActiveEnvironmentForTesting({
 			...createFakeBackend({ hasWallet: false }),
 			isBootstrapped: false,
@@ -281,6 +282,7 @@ void describe('useOnchainState', () => {
 			fireEvent.click(connectButton)
 		})
 
-		expect(documentQueries.getByLabelText('Error message').textContent).toBe('No wallet detected. Install or enable a wallet to continue.')
+		expect(documentQueries.getByLabelText('Wallet message').textContent).toBe('No browser wallet found. Install or enable one to connect.')
+		expect(documentQueries.getByLabelText('Error message').textContent).toBe('')
 	})
 })

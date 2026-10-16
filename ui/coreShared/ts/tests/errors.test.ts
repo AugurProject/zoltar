@@ -25,6 +25,16 @@ void describe('error helpers', () => {
 		expect(formatWriteErrorMessage(new Error('Internal JSON-RPC error.'), 'Failed to create question')).toBe('Transaction failed while attempting to create question. Reason: The wallet RPC returned an internal error. Try again; if it repeats, check the network in the wallet.')
 	})
 
+	void test('replaces raw RPC transport failures with a retry hint', () => {
+		const rpcUnavailable = 'The network RPC is busy or unavailable. Try again shortly.'
+		const rateLimited = new RpcError('HTTP 429 while calling eth_call', { code: 429, shortMessage: 'HTTP 429 while calling eth_call' })
+		expect(getErrorMessage(rateLimited, 'Failed to load pools')).toBe(`Failed to load pools. Reason: ${rpcUnavailable}`)
+		expect(getErrorMessage(new Error('Could not read the vault.', { cause: new RpcError('HTTP 503 while calling eth_getLogs') }), 'Failed to load vault')).toBe(`Failed to load vault. Reason: ${rpcUnavailable}`)
+		expect(getErrorMessage(new RpcError('Malformed JSON-RPC response while calling eth_blockNumber'), 'Failed to load block')).toBe(`Failed to load block. Reason: ${rpcUnavailable}`)
+		expect(formatWriteErrorMessage(rateLimited, 'Failed to create question')).toBe(`Transaction failed while attempting to create question. Reason: ${rpcUnavailable}`)
+		expect(getErrorMessage(new RpcError('HTTP 404 while calling eth_call'), 'Failed to load pools')).toBe('Failed to load pools. Reason: HTTP 404 while calling eth_call.')
+	})
+
 	void test('shows an application check that stopped an action before sending as written', () => {
 		const guard = createUserFacingError('Wallet network changed. Switch to Sepolia and try again.')
 		expect(formatWriteErrorMessage(guard, 'Failed to create question')).toBe('Wallet network changed. Switch to Sepolia and try again.')
@@ -32,7 +42,7 @@ void describe('error helpers', () => {
 	})
 
 	void test('marks user-rejected wallet errors as closeable', () => {
-		expect(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.')).toBe('Rejected in wallet.')
+		expect(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.')).toBe('Canceled in wallet.')
 		expect(isCloseableErrorMessage(getErrorMessage(new Error('User rejected the request.'), 'Couldn’t deploy SecurityPoolUtils.'))).toBe(true)
 		expect(isCloseableErrorMessage('Wallet connection failed: User denied account authorization')).toBe(true)
 	})
@@ -43,9 +53,9 @@ void describe('error helpers', () => {
 
 	void test('recognizes structured wallet rejection codes through causes without relying on message text', () => {
 		for (const error of [{ code: 4001, message: 'Request declined' }, Object.assign(new Error('Request declined'), { code: '4001' }), new Error('Provider failed', { cause: { code: 4001 } })]) {
-			expect(getErrorMessage(error, 'Connection failed')).toBe('Rejected in wallet.')
-			expect(formatWriteErrorMessage(error, 'Failed to submit')).toBe('Rejected in wallet.')
-			expect(formatRefreshErrorMessage(error, 'Refresh failed')).toBe('Rejected in wallet.')
+			expect(getErrorMessage(error, 'Connection failed')).toBe('Canceled in wallet.')
+			expect(formatWriteErrorMessage(error, 'Failed to submit')).toBe('Canceled in wallet.')
+			expect(formatRefreshErrorMessage(error, 'Refresh failed')).toBe('Canceled in wallet.')
 		}
 		const cycle = new Error('RPC unavailable')
 		cycle.cause = cycle

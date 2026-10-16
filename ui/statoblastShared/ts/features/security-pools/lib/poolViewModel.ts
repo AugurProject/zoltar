@@ -206,6 +206,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
 	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
 	const requestPriceOpenGuardMessage = requestPriceTransactionValueAttoEth === undefined ? securityPoolCopy.loadingOracleDetails : requestPriceGuardMessage
+	// The open request dialog sends the live oracle fee, so its balance check uses that fee rather than the one it opened with.
+	const requestPriceConfirmationCostAttoEth = input.requestPriceReview === undefined ? undefined : (requestPriceTransactionValueAttoEth ?? input.requestPriceReview.requestValueAttoEth)
 	const requestPriceOpenWalletBlocker = requestPriceTransactionValueAttoEth === undefined ? undefined : walletBlocker
 	// A pool from another universe keeps its workspace hidden, and an ended pool hides its unused price, but a pending report stays reachable from its price row.
 	const hasPendingPoolReport = (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n
@@ -262,7 +264,7 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		reportingOracleGuardMessage,
 		reportingReady,
 		requestPriceConfirmationWalletBlocker: walletBlocker,
-		requestPriceConfirmationGuardMessage: getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, bufferRequiredEthCost: false, hasLoadedSelectedPool: input.requestPriceReview !== undefined, requiredCostAttoEth: input.requestPriceReview?.requestValueAttoEth }),
+		requestPriceConfirmationGuardMessage: getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, bufferRequiredEthCost: false, hasLoadedSelectedPool: input.requestPriceReview !== undefined, requiredCostAttoEth: requestPriceConfirmationCostAttoEth }),
 		requestPriceGuardMessage,
 		requestPriceOpenGuardMessage,
 		requestPriceOpenWalletBlocker,

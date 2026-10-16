@@ -26,12 +26,8 @@ export function tryParseStatoblastSecurityMultiplierBpsInput(value: string) {
 
 export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
-		depositAmount: '',
-		targetHealthFactor: '2',
-		repWithdrawAmount: '',
 		selectedVaultOwner: '',
 		securityPoolAddress: '',
-		stagedOperationTimeoutMinutes: '5',
 	}
 }
 

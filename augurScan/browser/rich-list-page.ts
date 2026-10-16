@@ -25,6 +25,12 @@ export interface RichListPageDeps {
 
 const richBalance = (value: string | number | undefined, symbol: string) => exactUnit(value ?? '0', 18, symbol)
 
+/** The ranking the URL asks for; a URL without a known `sort` means the default ranking, the first option. */
+export const richListSort = (pageUrl: URL, sortOptions: readonly string[]): string => {
+	const requested = pageUrl.searchParams.get('sort')
+	return requested !== null && sortOptions.includes(requested) ? requested : (sortOptions[0] ?? '')
+}
+
 export const renderRichListPage = (deps: RichListPageDeps) => {
 	const { lookup: $, pageUrl, richListItems, richListTotal, selectedChainId, isDemo, setLiveRecord, element, protocolAddressLink, nativeSymbol, number, counted, openAccountTransactions, canonicalRefreshRequired } = deps
 	const richFieldLabel = (label: string) => element('span', 'sr-only rich-field-label', label)
@@ -119,7 +125,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 				element('span', 'rich-position-kind', 'Vault position'),
 				element('strong', '', position.questionTitle ?? 'Vault position'),
 				element('span', '', `REP backing units ${exactUnit(position.repBackingUnits, 18, '')}`),
-				element('span', '', `Underwriting commitment ${exactUnit(position.underwritingLimitAttoEth, 18, 'ETH')}`),
+				element('span', '', `Underwriting commitment ${exactUnit(position.underwritingLimitAttoEth, 18, itemNativeSymbol)}`),
 				element('span', '', `Claimable fees ${exactUnit(position.claimableFeesAttoEth, 18, itemNativeSymbol)} · block #${number(position.blockNumber)}`),
 				link,
 			)

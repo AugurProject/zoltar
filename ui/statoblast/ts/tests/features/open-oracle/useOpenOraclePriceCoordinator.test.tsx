@@ -125,4 +125,49 @@ describe('useOpenOraclePriceCoordinator', () => {
 		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)
 		expect(requireHookState(hookState).poolPriceOracleResult?.action).toBe('requestPrice')
 	})
+
+	test('fails before any wallet step when the oracle fee rose above the reviewed fee, and exposes the new fee for the retry', async () => {
+		const requestOraclePrice = mock(async () => ({ action: 'requestPrice' as const, hash: TRANSACTION_HASH }))
+		const loadCoordinatorInitialReportFundingRequirement = mock(async () => {
+			throw new Error('loadCoordinatorInitialReportFundingRequirement should not be called after the fee rose')
+		})
+		const dependencies: UseOpenOraclePriceCoordinatorDependencies<TestWriteClient> = {
+			createConnectedReadClient: () => ({ getBalance: async () => 100n }),
+			createWalletWriteClient: () => ({ kind: 'price-oracle-write-client' }),
+			executeOracleManagerStagedOperation: async () => {
+				throw new Error('executeOracleManagerStagedOperation should not be called in this test')
+			},
+			loadCoordinatorInitialReportFundingRequirement,
+			loadOracleManagerDetails: async () => createOracleManagerDetails({ isPriceValid: false, managerAddress: MANAGER_ADDRESS, pendingReportId: 0n, requestPriceCostAttoEth: 13n }),
+			requestOraclePrice,
+		}
+		let hookState: UseOpenOraclePriceCoordinatorState | undefined
+		function Harness() {
+			hookState = useOpenOraclePriceCoordinator(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionCanceled: () => undefined,
+					onTransactionFailed: () => undefined,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).requestPoolPrice(MANAGER_ADDRESS, POOL_ADDRESS, 12n, 0n, 10n ** 18n)
+		})
+
+		expect(requestOraclePrice).not.toHaveBeenCalled()
+		expect(loadCoordinatorInitialReportFundingRequirement).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).poolOracleManagerDetails?.requestPriceCostAttoEth).toBe(13n)
+		expect(requireHookState(hookState).poolOracleFeedback?.status).toMatchObject({ tone: 'error' })
+	})
 })

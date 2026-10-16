@@ -3,7 +3,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
@@ -28,7 +28,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 }
 
 function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteContentProps> = {}): SecurityPoolsOverviewRouteContentProps {
-	return { activeUniverseId: 1n, currentTimestamp: undefined, securityPools: [], ...overrides }
+	return { activeUniverseId: 1n, currentTimestamp: undefined, discovery: { contextKey: 'test', error: undefined, loading: false, onLoadPage: async () => undefined, page: undefined }, securityPools: [], ...overrides }
 }
 
 function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps> = {}): SecurityPoolRouteContentProps {
@@ -131,11 +131,24 @@ void describe('SecurityPoolsSection', () => {
 		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
 	})
 
-	void test('opens the browse view with only favorites and no discovery controls', async () => {
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
+	void test('opens the browse view by loading the first page of the pool registry', async () => {
+		const requestedPages: number[] = []
+		const overview = createOverviewProps({
+			discovery: {
+				contextKey: 'test',
+				error: undefined,
+				loading: false,
+				onLoadPage: async pageIndex => {
+					requestedPages.push(pageIndex)
+				},
+				page: undefined,
+			},
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ overview })))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).getByText('Favorites (0)')).not.toBeNull()
-		expect(within(document.body).queryByRole('button', { name: /Discover|Downloaded/ })).toBeNull()
+		await waitFor(() => expect(requestedPages).toEqual([0]))
+		expect(within(document.body).getByRole('button', { name: 'Downloaded (0)' }).getAttribute('aria-pressed')).toBe('true')
+		expect(within(document.body).getByRole('button', { name: 'Favorites (0)' })).not.toBeNull()
 	})
 
 	void test('opens a created pool through the single pool navigation and returns to browse without a refresh', async () => {

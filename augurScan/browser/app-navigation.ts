@@ -1,5 +1,5 @@
 import type { ScannerContext } from './app-context.ts'
-import type { HistoryRangeElements } from './app-dom.ts'
+import { lookup, type HistoryRangeElements } from './app-dom.ts'
 import { reconcileRouteNetwork, type NetworkControls } from './app-network.ts'
 import { focusNewRoute, hydrateVisibleRoute, invalidateRouteRequests, loadVisibleRoute, refocusLoadedRoute, restoreOperationsRoute, restoreRouteDeepLink, stashOperationsRoute, syncVisibleRoute } from './app-routing.ts'
 import type { ScannerViews } from './app-views.ts'
@@ -101,8 +101,10 @@ export const bindNavigation = (context: ScannerContext, deps: NavigationDeps): v
 		})
 	}
 
+	// The narrow-screen picker opens a view only when submitted, so browsing its options never navigates.
 	const { operationsRouteSelect } = context.elements
-	operationsRouteSelect.addEventListener('change', () => {
+	lookup('#operations-route-form').addEventListener('submit', event => {
+		event.preventDefault()
 		navigate(navigationTarget(new URL(operationsRouteSelect.value, location.origin), new URL(location.href)))
 	})
 

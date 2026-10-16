@@ -115,7 +115,7 @@ export type QueuedVaultOperationState = {
 
 export type SecurityVaultActionResult = ActionResult & {
 	queuedOperationState?: QueuedVaultOperationState
-	action: 'setVaultUnderwritingLimit' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
+	action: 'setVaultUnderwritingLimit' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -262,6 +262,17 @@ export type ListedSecurityPool = {
 	vaults: SecurityPoolVaultSummary[]
 }
 
+/** One page of the security pool factory registry. */
+export type SecurityPoolRegistryPage = {
+	pageIndex: number
+	pageSize: number
+	poolCount: bigint
+	pools: ListedSecurityPool[]
+}
+
+/** A registry page tagged with the discovery request that asked for it. */
+export type SecurityPoolDiscoveryPage = SecurityPoolRegistryPage & { requestKey: string }
+
 export type SecurityPoolVaultSummary = {
 	badDebtAttoEth?: bigint
 	openInterestAttoEth?: bigint
@@ -351,6 +362,18 @@ type EscalationMigrationEntitlementStatus = {
 	totalCurrentAttoRep: bigint
 }
 
+/** Pool and vault state that bounds the REP `SecurityPool.depositToEscalationGame` moves out of the viewer's vault. */
+export type VaultReportingLimits = {
+	minimumVaultRepDepositAttoRep: bigint
+	repPerEthPrice: bigint
+	statoblastSecurityMultiplierBps: bigint
+	totalPoolHeldAttoRep: bigint
+	totalRepBackingUnits: bigint
+	totalUnderwritingLimitAttoEth: bigint
+	underwritingLimitAttoEth: bigint
+	vaultRepBackingUnits: bigint
+}
+
 type ReportingDetailsBase = {
 	walletVaultFunding?: { vaultRepBackingUnits: bigint; totalRepBackingUnits: bigint; totalPoolHeldRepAttoRep: bigint } | undefined
 	minimumVaultRepDepositAttoRep?: bigint | undefined
@@ -373,6 +396,7 @@ type ReportingDetailsBase = {
 	viewerVaultExists: boolean
 	viewerVaultDisputeStakedAttoRep: bigint | undefined
 	viewerVaultRepBackingAttoRep: bigint | undefined
+	viewerVaultReportingLimits?: VaultReportingLimits | undefined
 	viewerWalletRepAllowanceAttoRep?: bigint | undefined
 	viewerWalletRepBalanceAttoRep?: bigint | undefined
 	viewerWalletRepTokenAddress?: Address | undefined
@@ -415,6 +439,8 @@ export type TruthAuctionMetrics = {
 	bidAtClearingTickAttoEth: bigint
 	attoEthRaiseCap: bigint
 	attoEthRaised: bigint
+	/** UniformPriceDualCapBatchAuction.previewFinalization() under the current bids: the ETH finalization would raise and the REP it would sell, over every price level. */
+	finalizationPreview: { attoEthRaised: bigint; attoRepSold: bigint }
 	finalized: boolean
 	hitCap: boolean
 	maxAttoRepBeingSold: bigint

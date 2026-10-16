@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { formatLocalAndUtcTimestamp, formatTimeZoneLabel } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionTimeZone.js'
+import { formatLocalAndUtcTimestamp, formatQuestionTimeZoneLabel, formatTimeZoneLabel } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionTimeZone.js'
 import { describe, expect, test } from 'bun:test'
 
 // 2026-10-01 06:00:00 UTC (Helsinki summer time) and 2026-12-31 21:30:00 UTC (Helsinki winter time).
@@ -22,6 +22,17 @@ describe('questionTimeZone', () => {
 		const date = new Date(Number(SUMMER_TIMESTAMP) * 1000)
 		expect(formatTimeZoneLabel('UTC', date)).toBe('UTC')
 		expect(formatTimeZoneLabel('Etc/UTC', date)).toBe('UTC')
+	})
+
+	test('labels the time inputs with the offset at the chosen times instead of today', () => {
+		const summerNow = new Date(Number(SUMMER_TIMESTAMP) * 1000)
+		// A winter end time chosen in summer uses the winter offset.
+		expect(formatQuestionTimeZoneLabel('Europe/Helsinki', { endTimestamp: WINTER_TIMESTAMP, now: summerNow, startTimestamp: undefined })).toBe('Europe/Helsinki, UTC+2')
+		expect(formatQuestionTimeZoneLabel('Europe/Helsinki', { endTimestamp: undefined, now: summerNow, startTimestamp: WINTER_TIMESTAMP })).toBe('Europe/Helsinki, UTC+2')
+		expect(formatQuestionTimeZoneLabel('Europe/Helsinki', { endTimestamp: undefined, now: summerNow, startTimestamp: undefined })).toBe('Europe/Helsinki, UTC+3')
+		// A start and end across a daylight saving change name both offsets.
+		expect(formatQuestionTimeZoneLabel('Europe/Helsinki', { endTimestamp: WINTER_TIMESTAMP, now: summerNow, startTimestamp: SUMMER_TIMESTAMP })).toBe('Europe/Helsinki, UTC+3 at start, UTC+2 at end')
+		expect(formatQuestionTimeZoneLabel('UTC', { endTimestamp: WINTER_TIMESTAMP, now: summerNow, startTimestamp: SUMMER_TIMESTAMP })).toBe('UTC')
 	})
 
 	test('formats one instant in the local zone and in UTC', () => {

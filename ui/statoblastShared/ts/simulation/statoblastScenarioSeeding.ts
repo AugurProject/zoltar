@@ -77,6 +77,8 @@ export async function createSeededSecurityPool({ createWriteClient, currentTimes
 		initialReportPriorityFeeAttoEthPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 		questionId,
 		statoblastSecurityMultiplierBps: STATOBLAST_SECURITY_MULTIPLIER_BPS,
+		// Seeded scenarios run before any fork, in the genesis universe.
+		universeId: 0n,
 	})
 
 	return {

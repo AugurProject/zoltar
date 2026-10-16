@@ -12,7 +12,7 @@ type ScannerApi = (path: string, options?: { signal?: AbortSignal }) => Promise<
 interface ScannerLinks {
 	requestRouteRefresh: (count?: number, force?: boolean) => Promise<boolean>
 	refreshCanonicalViews: (title: string, detail: string) => Promise<boolean>
-	resetSelectedNetworkContext: () => void
+	resetSelectedNetworkContext: (options: { readonly keepBlockNumbers: boolean }) => void
 	navigateInPlace: (url: URL, replace?: boolean) => Promise<void>
 	richListItems: () => RichListRecord[]
 	addressProfile: () => RichListRecord | undefined

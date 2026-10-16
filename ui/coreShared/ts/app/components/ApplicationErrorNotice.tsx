@@ -24,29 +24,32 @@ export function ApplicationErrorNotice({ errorMessage, onRetry }: ApplicationErr
 		}
 	}
 
+	// The same frame and main landmark as the app and its static loading placeholder, so mounting the notice replaces the placeholder.
 	return (
-		<main>
-			<UserMessage
-				placement='page'
-				tone='error'
-				announcement='assertive'
-				detail={
-					<>
-						<h1>{appCopy.applicationErrorTitle}</h1>
-						<p>{errorMessage}</p>
-					</>
-				}
-				actions={
-					<>
-						<button type='button' disabled={retryInProgress} onClick={retry}>
-							{retryInProgress ? commonCopy.retrying : commonCopy.retry}
-						</button>
-						<button type='button' className='secondary' onClick={() => window.location.reload()}>
-							{appCopy.reloadApplication}
-						</button>
-					</>
-				}
-			/>
-		</main>
+		<div className='app-frame'>
+			<main>
+				<UserMessage
+					placement='page'
+					tone='error'
+					announcement='assertive'
+					detail={
+						<>
+							<h1>{appCopy.applicationErrorTitle}</h1>
+							<p>{errorMessage}</p>
+						</>
+					}
+					actions={
+						<>
+							<button type='button' disabled={retryInProgress} onClick={retry}>
+								{retryInProgress ? commonCopy.retrying : commonCopy.retry}
+							</button>
+							<button type='button' className='secondary' onClick={() => window.location.reload()}>
+								{appCopy.reloadApplication}
+							</button>
+						</>
+					}
+				/>
+			</main>
+		</div>
 	)
 }

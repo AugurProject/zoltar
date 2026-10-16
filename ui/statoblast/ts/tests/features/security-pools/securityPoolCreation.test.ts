@@ -2,11 +2,14 @@
 
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { createSecurityPool, getOriginSecurityPoolAddress } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { createSecurityPool, getOriginSecurityPoolAddress, originSecurityPoolExists } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { DAY, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
+import { deployChild, forkUniverse, getZoltarAddress } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
+import { approveToken, getChildUniverseId } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
+import { QuestionOutcome } from '../../../../../../solidity/ts/testSupport/simulator/types/types'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -21,7 +24,7 @@ describe('security pool creation helper', () => {
 	test('creates a binary question and pool with one atomic transaction', async () => {
 		const questionData = { title: 'Atomic question', description: '', startTime: 0n, endTime: (await anvil.getMockWindow().getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
-		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(anvil.walletAddress), questionId, 20_000n, 10_000_000_000n)).toBeUndefined()
+		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(anvil.walletAddress), questionId, 20_000n, 10_000_000_000n, 0n)).toBeUndefined()
 		const submittedHashes: string[] = []
 		const preparedPreviews: TransactionRequestPreview[] = []
 		const result = await createSecurityPool(
@@ -30,6 +33,7 @@ describe('security pool creation helper', () => {
 				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId,
 				statoblastSecurityMultiplierBps: 20_000n,
+				universeId: 0n,
 			},
 			questionData,
 			{ description: 'Pool parameters are fixed at deployment.', title: 'Create question and security pool' },
@@ -42,14 +46,37 @@ describe('security pool creation helper', () => {
 		expect(result.questionCreatedAt).toBeGreaterThan(0n)
 		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
 		expect(result.securityPoolAddress).toBe(getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n).securityPool)
-		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(anvil.walletAddress), questionId, 20_000n, 10_000_000_000n)).toBe(result.securityPoolAddress)
+		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(anvil.walletAddress), questionId, 20_000n, 10_000_000_000n, 0n)).toBe(result.securityPoolAddress)
+	})
+
+	test('creates the origin pool in the active child universe', async () => {
+		const client = anvil.getClient()
+		const mockWindow = anvil.getMockWindow()
+		const forkQuestionData = { title: 'Child universe fork source', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const forkQuestionId = getQuestionId(forkQuestionData, ['Yes', 'No'])
+		await createQuestion(client, forkQuestionData, ['Yes', 'No'])
+		await mockWindow.setTime(forkQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, 0n, forkQuestionId)
+		await deployChild(client, 0n, BigInt(QuestionOutcome.Yes))
+		const universeId = getChildUniverseId(0n, QuestionOutcome.Yes)
+		const questionData = { title: 'Child universe pool', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionId = getQuestionId(questionData, ['Yes', 'No'])
+		const walletClient = createWalletWriteClient(anvil.walletAddress)
+		const result = await createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n, universeId }, questionData)
+		expect(result.universeId).toBe(universeId)
+		expect(result.securityPoolAddress).toBe(getSecurityPoolAddresses(zeroAddress, universeId, questionId, 20_000n, universeId).securityPool)
+		expect(await originSecurityPoolExists(walletClient, questionId, 20_000n, 10_000_000_000n, universeId)).toBe(true)
+		expect(await originSecurityPoolExists(walletClient, questionId, 20_000n, 10_000_000_000n, 0n)).toBe(false)
+		expect(await getOriginSecurityPoolAddress(walletClient, questionId, 20_000n, 10_000_000_000n, universeId)).toBe(result.securityPoolAddress)
+		expect(await getOriginSecurityPoolAddress(walletClient, questionId, 20_000n, 10_000_000_000n, 0n)).toBeUndefined()
 	})
 
 	test('rolls back question creation when the pool deployment fails', async () => {
 		const questionData = { title: 'Atomic rollback', description: '', startTime: 0n, endTime: (await anvil.getMockWindow().getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
 		const walletClient = createWalletWriteClient(anvil.walletAddress)
-		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 10_000n }, questionData)).rejects.toThrow('Security pool deployment would revert: Multiplier must exceed 10001 BPS')
+		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 10_000n, universeId: 0n }, questionData)).rejects.toThrow('Security pool deployment would revert: Multiplier must exceed 10001 BPS')
 		const createdAt = await walletClient.readContract({ address: getInfraContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'questionCreatedTimestamp', args: [questionId] })
 		expect(createdAt).toBe(0n)
 	})
@@ -60,7 +87,7 @@ describe('security pool creation helper', () => {
 		await createQuestion(anvil.getClient(), questionData, ['Yes', 'No'])
 		const submittedHashes: string[] = []
 		const walletClient = createWalletWriteClient(anvil.walletAddress, { onTransactionSubmitted: hash => submittedHashes.push(hash) })
-		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n }, questionData)).rejects.toThrow('Question creation would revert: Question already exists and cannot be created twice')
+		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n, universeId: 0n }, questionData)).rejects.toThrow('Question creation would revert: Question already exists and cannot be created twice')
 		expect(submittedHashes).toEqual([])
 	})
 
@@ -84,6 +111,7 @@ describe('security pool creation helper', () => {
 			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId,
 			statoblastSecurityMultiplierBps: 20_000n,
+			universeId: 0n,
 		})
 
 		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n)
@@ -133,6 +161,7 @@ describe('security pool creation helper', () => {
 				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId: 123n,
 				statoblastSecurityMultiplierBps: 20_000n,
+				universeId: 0n,
 			},
 			undefined,
 			{ description: 'Pool parameters are fixed at deployment.', title: 'Create security pool' },

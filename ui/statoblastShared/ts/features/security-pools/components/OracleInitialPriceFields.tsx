@@ -27,6 +27,7 @@ export function OracleInitialPriceFields({
 	disabled,
 	fieldId,
 	managerAddress,
+	referencePrice,
 	fetchPrice = fetchInitialPrice,
 }: {
 	value: OracleInitialPriceInput
@@ -34,6 +35,8 @@ export function OracleInitialPriceFields({
 	disabled: boolean
 	fieldId: string
 	managerAddress: Address | undefined
+	/** Last known REP per ETH price used to warn about an implausible or inverted entry. */
+	referencePrice?: bigint | undefined
 	fetchPrice?: typeof fetchInitialPrice
 }) {
 	const [fetching, setFetching] = useState(false)
@@ -78,6 +81,7 @@ export function OracleInitialPriceFields({
 				fetchDisabled={managerAddress === undefined}
 				fetching={fetching}
 				queryStage={queryStage}
+				referencePrice={referencePrice}
 				error={quoteError ?? (value.price === '' ? undefined : parseOracleInitialPrice(value).error)}
 				onFetch={() => void fetchQuote()}
 				onInput={price => {

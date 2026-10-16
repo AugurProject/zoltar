@@ -145,6 +145,63 @@ describe('settlement panel', () => {
 		}
 	})
 
+	test('Max redeems every complete set exactly, so no unredeemable remainder is left behind', async () => {
+		const completeSets = 1_234_567_890_123_456_789n
+		const submitted: bigint[] = []
+		const rendered = await renderPanel(closedMarket, { invalid: completeSets, yes: completeSets, no: completeSets }, 100n, DEFAULT_TRADE_SETTINGS, {
+			services: {
+				...services,
+				submit: async (_client, _configuration, _account, quote) => {
+					if (quote.operation === 'redeem-complete-set') submitted.push(quote.amount)
+					throw new Error('Stop before the wallet')
+				},
+			},
+		})
+		try {
+			await act(() => buttonByLabel('Max').click())
+			// The field shows a readable amount; the redemption still covers every complete set held.
+			expect(amountInput().value).toBe('1.234567')
+			await act(async () => {
+				buttonByLabel('Redeem complete sets').click()
+				await Bun.sleep(10)
+			})
+			expect(submitted).toEqual([completeSets])
+			// Typing an amount replaces the Max selection with the typed value.
+			await act(() => {
+				amountInput().value = '1'
+				amountInput().dispatchEvent(new Event('input', { bubbles: true }))
+			})
+			await act(async () => {
+				buttonByLabel('Redeem complete sets').click()
+				await Bun.sleep(10)
+			})
+			expect(submitted).toEqual([completeSets, 10n ** 18n])
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('explains an amount that cannot be read instead of a precision limit', async () => {
+		const rendered = await renderPanel(closedMarket, { invalid: 2n * 10n ** 18n, yes: 2n * 10n ** 18n, no: 2n * 10n ** 18n })
+		try {
+			for (const [typed, message] of [
+				['abc', 'Enter a number, such as 1.5.'],
+				// Repeated separators are rejected in every locale; the message names the separators the locale accepts.
+				['1.2.3', 'as the decimal separator, without thousands separators.'],
+				['-1', 'Enter an amount greater than 0.'],
+			] as const) {
+				await act(() => {
+					amountInput().value = typed
+					amountInput().dispatchEvent(new Event('input', { bubbles: true }))
+				})
+				expect(describedText(amountInput())).toContain(message)
+				expect(buttonByLabel('Redeem complete sets').disabled).toBe(true)
+			}
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('enables winning redemption from loaded balances without wallet requests', async () => {
 		const rendered = await renderPanel({ ...closedMarket, questionOutcome: 1 }, { invalid: 0n, yes: 10n ** 18n, no: 0n })
 		try {

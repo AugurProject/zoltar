@@ -1,4 +1,4 @@
-import { getAddress, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { defineChain, getAddress, mainnet, sepolia, type Address, type Chain, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { PROXY_DEPLOYER_RUNTIME_CODE, tradingDeploymentData } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -14,6 +14,16 @@ export type CoreDeployment = Readonly<{
 	securityPoolFactory: Address
 	zoltar: Address
 }>
+
+/**
+ * The wallet network a core deployment runs on, so a wallet that does not know the chain can add it before switching.
+ * Public chains keep their own parameters; any other chain is described by the deployment and the RPC it is read through.
+ */
+export function coreDeploymentChain(core: Pick<CoreDeployment, 'chainId' | 'chainName'>, rpcUrl: string): Chain {
+	const publicChain = [mainnet, sepolia].find(chain => chain.id === core.chainId)
+	if (publicChain !== undefined) return publicChain
+	return defineChain({ id: core.chainId, name: core.chainName, nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' }, rpcUrls: { default: { http: [rpcUrl] } } })
+}
 
 type TradingDeploymentStepId = 'factory' | 'router'
 

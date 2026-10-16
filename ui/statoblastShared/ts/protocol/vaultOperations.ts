@@ -9,6 +9,7 @@ import { fundCoordinatorInitialReport, loadOracleManagerQueueOperationEthValue, 
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { StagedOracleExecutionResult, StagedOracleQueuedResult } from '../types/contracts.js'
 import { getVaultOperationsRevertReason } from './vaultOperationsErrors.js'
+import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { isSecurityPoolEscalationResolved, setUnderwritingLimit } from './securityVault.js'
 import * as copy from '../copy/vaultOperations.js'
 
@@ -68,6 +69,45 @@ export async function quoteVaultOperations(client: ReadClient, pool: Address, ow
 	const requiredRep = input.depositAttoRep + (funding?.requiredRepAttoRep ?? 0n)
 	if (balance < requiredRep) throw new Error(copy.insufficientRep)
 	return { managerAddress, repToken, balance, currentBacking, resolved, validPrice, pendingReportId, needsReport, funding, requiredRep }
+}
+
+export type VaultOperationsQuote = Awaited<ReturnType<typeof quoteVaultOperations>>
+
+export type VaultOperationsApprovalKind = 'deposit' | 'reportWeth' | 'reportRep'
+
+type VaultOperationsApprovalPrerequisite = {
+	kind: VaultOperationsApprovalKind
+	tokenAddress: Address
+	spender: Address
+	requiredAmount: bigint
+	recommendedAmount: bigint | undefined
+	approvedAmount: bigint
+}
+
+export type VaultOperationsPrerequisites = {
+	/** ETH to wrap before the initial report can be funded: `0n` when the wallet holds enough WETH, undefined when no report is needed. */
+	wrapAttoEth: bigint | undefined
+	approvals: VaultOperationsApprovalPrerequisite[]
+}
+
+/**
+ * Reads, without writing, the wrap and approvals that `submitVaultOperations` funds before the bundle: the REP deposit
+ * approval for the pool and, when an initial report is needed, the WETH and REP the coordinator draws, with the same
+ * required amounts and approval limits as `fundCoordinatorInitialReport`.
+ */
+export async function loadVaultOperationsPrerequisites(client: ReadClient, pool: Address, owner: Address, input: VaultOperationsInput, quote: VaultOperationsQuote): Promise<VaultOperationsPrerequisites> {
+	const required: Omit<VaultOperationsApprovalPrerequisite, 'approvedAmount'>[] = []
+	if (!quote.resolved && input.depositAttoRep > 0n) required.push({ kind: 'deposit', tokenAddress: quote.repToken, spender: pool, requiredAmount: input.depositAttoRep, recommendedAmount: undefined })
+	let wrapAttoEth: bigint | undefined
+	if (quote.needsReport && quote.funding !== undefined) {
+		const { funding } = quote
+		const expectedWeth = funding.requestedInitialAttoWeth > funding.minimumToken1ReportAttoEth ? funding.requestedInitialAttoWeth : funding.minimumToken1ReportAttoEth
+		wrapAttoEth = funding.currentWethBalanceAttoEth < expectedWeth ? funding.wethShortfallAttoEth : 0n
+		required.push({ kind: 'reportWeth', tokenAddress: getWethAddress(), spender: quote.managerAddress, requiredAmount: expectedWeth, recommendedAmount: funding.maximumInitialAttoWeth })
+		required.push({ kind: 'reportRep', tokenAddress: funding.reputationTokenAddress, spender: quote.managerAddress, requiredAmount: funding.requiredRepAttoRep, recommendedAmount: funding.initialReportAmount2 })
+	}
+	const approvals = await Promise.all(required.map(async approval => ({ ...approval, approvedAmount: await client.readContract({ address: approval.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [owner, approval.spender] }) })))
+	return { wrapAttoEth, approvals }
 }
 
 export async function submitVaultOperations(client: WriteClient, pool: Address, input: VaultOperationsInput, proposedPrice: bigint): Promise<VaultOperationsResult> {

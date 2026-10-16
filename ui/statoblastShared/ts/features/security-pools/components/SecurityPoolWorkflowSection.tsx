@@ -3,7 +3,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ReportingOracleBlocker } from '../../reporting/components/ReportingOracleBlocker.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useState } from 'preact/hooks'
+import { useMemo, useState } from 'preact/hooks'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
@@ -148,7 +148,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		currentForkAuctionDetails: model.currentForkAuctionDetails,
 		currentPoolOracleManagerDetails,
 		currentPoolOracleManagerError: model.currentPoolOracleManagerError,
-		currentPoolOraclePriceUsable: model.currentPoolOraclePriceUsable,
 		currentReportingDetails,
 		forkAuction,
 		hasLoadedCurrentVault: model.hasLoadedCurrentVault,
@@ -174,9 +173,11 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		selectedPoolState: model.selectedPoolState,
 		shouldRefreshSelectedPoolReporting: model.shouldRefreshSelectedPoolReporting,
 		showSelectedPoolWorkflowDetails,
-		stagedOperations: model.stagedOperations,
 		view,
 	})
+	// The oracle fee follows the base fee, so the open request dialog reads the live fee rather than the one it opened with.
+	const requestPriceTransactionValueAttoEth = model.requestPriceTransactionValueAttoEth
+	const liveRequestPriceReview = useMemo(() => (requestPriceReview === undefined || requestPriceTransactionValueAttoEth === undefined ? requestPriceReview : { ...requestPriceReview, requestValueAttoEth: requestPriceTransactionValueAttoEth }), [requestPriceReview, requestPriceTransactionValueAttoEth])
 	const openRequestPriceReview = () => {
 		if (loadedSelectedPool !== undefined && model.requestPriceTransactionValueAttoEth !== undefined) setRequestPriceReview(createRequestPriceReview(loadedSelectedPool, model.requestPriceTransactionValueAttoEth))
 	}
@@ -227,13 +228,15 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				contextKey={`${props.vaultOperationsContextKey}:${accountState.chainId}:${loadedSelectedPool.securityPoolAddress}:${accountState.address ?? ''}`}
 				networkReady={model.isOnActiveAppChain}
 				embedded
+				uiRepPerEthPrice={repPerEthPrice}
 				onViewStagedOperations={operationId => {
 					setManualPendingOperationId(operationId.toString())
 					onSelectedPoolViewChange('staged-operations')
 				}}
 				onPoolChanged={totalCommitment => {
 					onRefreshSelectedPoolData(loadedSelectedPool.securityPoolAddress, totalCommitment)
-					if (accountState.address !== undefined) securityVault.onLoadSecurityVault(accountState.address)
+					// A reported pool commitment only updates the pool summary; the vault reloads after this wallet's own operations.
+					if (totalCommitment === undefined && accountState.address !== undefined) securityVault.onLoadSecurityVault(accountState.address)
 				}}
 			/>
 		)
@@ -299,7 +302,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								isOnActiveAppChain={model.isOnActiveAppChain}
 								liquidationEnabled={selectedPoolStateModel.actions.queueLiquidation.enabled}
 								onOpenLiquidationModal={onOpenLiquidationModal}
-								onSelectedPoolViewChange={onSelectedPoolViewChange}
 								vaultOperations={vaultOperations}
 								poolState={selectedPoolStateModel}
 								repPerEthPrice={repPerEthPrice}
@@ -428,7 +430,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				onClose={() => setRequestPriceReview(undefined)}
 				onConfirm={(review, signal) => onRequestPoolPrice(review.managerAddress, review.securityPoolAddress, review.requestValueAttoEth, review.universeId, review.proposedRepPerEthPrice, signal)}
 				pending={poolOracleActiveAction === 'requestPrice'}
-				review={requestPriceReview}
+				review={liveRequestPriceReview}
 			/>
 			<SelectedPoolLiquidationModal {...props} currentPoolOracleManagerDetails={currentPoolOracleManagerDetails} isOnActiveAppChain={model.isOnActiveAppChain} liquidationPoolOracleManagerError={model.liquidationPoolOracleManagerError} poolState={selectedPoolStateModel} selectedPool={selectedPool} />
 		</RouteWorkflowPanel>

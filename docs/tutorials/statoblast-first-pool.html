@@ -41,8 +41,8 @@
 				<h2>Back the pool with REP</h2>
 				<ol>
 					<li>On the pool page, open <strong>Vaults</strong> and select <strong>My vault</strong>. The <strong>Vault operations</strong> form is shown there.</li>
-					<li>Enter <code>1000</code> in <strong>REP deposit amount (optional)</strong>, select <strong>Review vault operations</strong>, then <strong>Approve 1k REP</strong> and confirm the approval.</li>
-					<li>Select <strong>Submit vault operations</strong> and confirm. The panel shows <strong>REP deposit confirmed</strong>; your vault is now created.</li>
+					<li>Enter <code>1000</code> in <strong>REP deposit amount (optional)</strong>. Under <strong>Funding and approvals</strong>, select <strong>Approve 1k REP</strong> and confirm the approval.</li>
+					<li>Select <strong>Review vault operations</strong>, then <strong>Submit vault operations</strong>, and confirm. The panel shows <strong>REP deposit confirmed</strong>; your vault is now created.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-deposit-rep" aria-labelledby="fig-statoblast-deposit-rep-caption">
 					<a class="screenshot-link" href="../assets/screenshots/statoblast/deposit-rep.png"><img width="768" height="471" src="../assets/screenshots/statoblast/deposit-rep.png" alt="The vault operations review with the REP approval completed and Submit vault operations ready to deposit 1,000 REP." loading="lazy" /></a>
@@ -55,13 +55,13 @@
 				<ol>
 					<li>Stay in <strong>My vault</strong>.</li>
 					<li>Enter <code>3</code> in <strong>Initial report price</strong>. On a live network, <strong>Fetch from Uniswap</strong> fills in a market price; the simulator has no Uniswap pricing.</li>
-					<li>Enter <code>10</code> in <strong>Commitment limit</strong>. Select <strong>Review vault operations</strong> to review the transaction and its funding requirements.</li>
+					<li>Enter <code>10</code> in <strong>Commitment limit</strong>. At 3 REP per ETH and a security multiplier of 2, 1,000 REP backs about 166 ETH, so 10 ETH leaves the vault healthy. <strong>Funding and approvals</strong> then lists what the price report needs.</li>
 					<li>Approve WETH and REP with their separate buttons. Each approval has an editable amount; use the suggested amounts for this tutorial.</li>
-					<li>Select <strong>Submit vault operations</strong>, shown with the ETH amount to send, and confirm that transaction. It funds a new price report and stages your change; the panel shows <strong>Vault operations queued · awaiting oracle settlement</strong>.</li>
+					<li>Select <strong>Review vault operations</strong>, then <strong>Submit vault operations</strong>, shown with the ETH amount to send, and confirm that transaction. It funds a new price report and stages your change; the panel shows <strong>Vault operations queued · awaiting oracle settlement</strong>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-statoblast-set-commitment" aria-labelledby="fig-statoblast-set-commitment-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/set-commitment.png"><img width="768" height="732" src="../assets/screenshots/statoblast/set-commitment.png" alt="The vault operations review with separate WETH and REP approval steps before submitting the commitment change." loading="lazy" /></a>
-					<figcaption id="fig-statoblast-set-commitment-caption"><span class="figure-label">The vault operations review.</span> At 3 REP per ETH and a security multiplier of 2, 1,000 REP backs about 166 ETH, so 10 ETH leaves the vault healthy.</figcaption>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/set-commitment.png"><img width="755" height="973" src="../assets/screenshots/statoblast/set-commitment.png" alt="The Funding and approvals section with a disabled vault deposit approval, a disabled Wrap ETH into WETH step, and separate WETH and REP approval buttons for the oracle report." loading="lazy" /></a>
+					<figcaption id="fig-statoblast-set-commitment-caption"><span class="figure-label">Funding and approvals.</span> The deposit needs no new approval; the price report needs its own WETH and REP approvals.</figcaption>
 				</figure>
 			</section>
 			<section id="settle">

@@ -3,7 +3,7 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
-import { deployTradingStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
+import { coreDeploymentChain, deployTradingStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { getActiveInjectedProvider, type InjectedEthereum } from '../protocol/injected.js'
 import { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { createTradingWalletClient, validateRpcChainId } from '../protocol/live.js'
@@ -36,7 +36,7 @@ export const defaultTradingDeploymentSetupServices: TradingDeploymentSetupServic
 		if (provider === undefined) throw new Error(deploymentCopy.walletNotFound)
 		let currentChainId = await readInjectedChainIdNumber(provider)
 		if (currentChainId !== plan.core.chainId) {
-			await switchInjectedChain(provider, plan.core.chainId)
+			await switchInjectedChain(provider, plan.core.chainId, coreDeploymentChain(plan.core, plan.core.defaultRpcUrl))
 			currentChainId = await readInjectedChainIdNumber(provider)
 		}
 		if (currentChainId !== plan.core.chainId) throw new Error(deploymentCopy.walletMustUseNetwork(plan.core.chainName))

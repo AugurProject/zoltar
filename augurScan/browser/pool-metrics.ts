@@ -15,7 +15,7 @@ export const annualFeeText = (value: unknown): string => {
 	return fee === undefined ? 'Unavailable' : exactUnit(fee, 6, '%')
 }
 
-export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [string, string]> => {
+export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> => {
 	const used = atomic(state['settlementCollateralAttoEth'])
 	const capacity = atomic(state['currentMintingCapacityAttoEth'])
 	const backing = atomic(state['totalPoolHeldAttoRep'])
@@ -24,8 +24,8 @@ export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>): Re
 	const display = (value: bigint | undefined, decimals: number, unit: string) => (value === undefined ? 'Unavailable' : exactUnit(value, decimals, unit))
 	return [
 		['Annual open-interest fee', annualFeeText(state['currentRetentionRate'])],
-		['Open interest', display(used, 18, 'ETH')],
-		['Minting capacity', display(capacity, 18, 'ETH')],
+		['Open interest', display(used, 18, nativeSymbol)],
+		['Minting capacity', display(capacity, 18, nativeSymbol)],
 		['Capacity used', display(used === undefined || capacity === undefined || capacity === 0n ? undefined : (used * 10_000n) / capacity, 2, '%')],
 		['Pool-held REP', display(backing, 18, 'REP')],
 		['REP per committed ETH', display(backing === undefined || ownership === undefined || ownership === 0n ? undefined : (backing * 10_000n) / ownership, 4, 'REP/ETH')],

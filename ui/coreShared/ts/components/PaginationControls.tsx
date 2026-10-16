@@ -2,6 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { LoadingText } from './LoadingText.js'
+import { useFocusRetainingDisabled } from '../hooks/useFocusRetainingDisabled.js'
 
 type PaginationControlsProps = {
 	hasNextPage?: boolean
@@ -19,6 +20,16 @@ type PaginationControlsProps = {
 
 type PaginationControl = 'previous' | 'next' | 'loadMore'
 
+/** A pager button that keeps keyboard focus while its own load runs or after it reaches the end of the list. */
+function PaginationButton({ busy, children, disabled, onClick }: { busy: boolean; children: ComponentChildren; disabled: boolean; onClick: () => void }) {
+	const { buttonProps, guardClick } = useFocusRetainingDisabled(disabled)
+	return (
+		<button className='secondary' type='button' aria-busy={busy} {...buttonProps} onClick={guardClick(onClick)}>
+			{children}
+		</button>
+	)
+}
+
 export function PaginationControls({ hasNextPage = false, hasPreviousPage = false, loading = false, loadMoreLabel = commonCopy.loadMore, nextLabel = commonCopy.nextPage, onLoadMore, onNextPage, onPreviousPage, previousLabel = commonCopy.previousPage, summary }: PaginationControlsProps) {
 	// The pressed control shows the pending state, so a load in flight never looks like the end of the list.
 	const [pressedControl, setPressedControl] = useState<PaginationControl | undefined>(undefined)
@@ -33,7 +44,8 @@ export function PaginationControls({ hasNextPage = false, hasPreviousPage = fals
 	if (!hasLoadMore && !hasNextPage && !hasPreviousPage && !loading) return undefined
 
 	// The spinner is silent: the summary status announces the page that arrives.
-	const renderLabel = (control: PaginationControl, label: ComponentChildren) => (loading && pressedControl === control ? <LoadingText announce={false}>{label}</LoadingText> : label)
+	const isPressed = (control: PaginationControl) => loading && pressedControl === control
+	const renderLabel = (control: PaginationControl, label: ComponentChildren) => (isPressed(control) ? <LoadingText announce={false}>{label}</LoadingText> : label)
 	const press = (control: PaginationControl, action: () => void) => () => {
 		setPressedControl(control)
 		action()
@@ -47,19 +59,19 @@ export function PaginationControls({ hasNextPage = false, hasPreviousPage = fals
 				</span>
 			)}
 			{onPreviousPage === undefined ? undefined : (
-				<button className='secondary' type='button' onClick={press('previous', onPreviousPage)} disabled={!hasPreviousPage || loading}>
+				<PaginationButton busy={isPressed('previous')} disabled={!hasPreviousPage || loading} onClick={press('previous', onPreviousPage)}>
 					{renderLabel('previous', previousLabel)}
-				</button>
+				</PaginationButton>
 			)}
 			{onNextPage === undefined ? undefined : (
-				<button className='secondary' type='button' onClick={press('next', onNextPage)} disabled={!hasNextPage || loading}>
+				<PaginationButton busy={isPressed('next')} disabled={!hasNextPage || loading} onClick={press('next', onNextPage)}>
 					{renderLabel('next', nextLabel)}
-				</button>
+				</PaginationButton>
 			)}
 			{onLoadMore === undefined ? undefined : (
-				<button className='secondary' type='button' onClick={press('loadMore', onLoadMore)} disabled={!hasLoadMore || !hasNextPage || loading}>
+				<PaginationButton busy={isPressed('loadMore')} disabled={!hasLoadMore || !hasNextPage || loading} onClick={press('loadMore', onLoadMore)}>
 					{renderLabel('loadMore', loadMoreLabel)}
-				</button>
+				</PaginationButton>
 			)}
 		</div>
 	)

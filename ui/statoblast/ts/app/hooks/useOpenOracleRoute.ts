@@ -33,10 +33,11 @@ export function useOpenOracleRoute({
 	const openOraclePriceCoordinator = useOpenOraclePriceCoordinator(walletScopedHookConfig)
 	const { loadPoolOracleManager, poolOracleManagerDetails } = openOraclePriceCoordinator
 	const onReportSettled = useSettledPoolOracleManagerRefresh(poolOracleManagerDetails?.managerAddress, loadPoolOracleManager)
-	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
+	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance, wrapDisputeWeth } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: (route === 'open-oracle' || route === 'pools') && canReadOnchainData,
 		onReportSettled,
+		walletEthBalanceAttoEth: accountState.ethBalanceAttoEth,
 	})
 	const openOracleViews: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']
 	const derivedOpenOracleView = resolveFirstMatchingValue<OpenOracleView>([[urlOpenOracleReportId !== '' || openOracleForm.reportId !== '', 'selected-report']], 'browse')
@@ -69,6 +70,7 @@ export function useOpenOracleRoute({
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),
 		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
+		onWrapDisputeWeth: () => void wrapDisputeWeth(),
 		openOracleForm,
 	}
 	return {

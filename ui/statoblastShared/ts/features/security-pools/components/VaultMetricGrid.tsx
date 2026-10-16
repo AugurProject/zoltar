@@ -8,6 +8,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import type { VaultMetricGridProps } from '../../types.js'
+import { getVaultHealthPresentation, getVaultHealthStatus } from '../lib/vaultHealth.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
 	return (
@@ -44,11 +45,12 @@ function PriceValidUntilMetric({ timestamp }: { timestamp: bigint }) {
 	)
 }
 
+const VAULT_HEALTH_TONE_CLASSES = { healthy: 'metric-value-success', nearMinimum: 'metric-value-warning', underwater: 'metric-value-danger' } as const
+
 function getAssociatedRepHealth({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
-	if (isCurrentlyHealthy === false) return { statusLabel: securityPoolCopy.vaultHealthUnderwater, toneClass: 'metric-value-danger' }
-	if (isCurrentlyHealthy !== true) return { statusLabel: undefined, toneClass: undefined }
-	if (associatedRepPerCapacityBps !== undefined && selectedPoolStatoblastSecurityMultiplierBps !== undefined && associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return { statusLabel: securityPoolCopy.vaultHealthNearMinimum, toneClass: 'metric-value-warning' }
-	return { statusLabel: securityPoolCopy.vaultHealthHealthy, toneClass: 'metric-value-success' }
+	const status = getVaultHealthStatus({ associatedRepPerCapacityBps, isCurrentlyHealthy, statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps })
+	if (status === 'unknown') return { statusLabel: undefined, toneClass: undefined }
+	return { statusLabel: getVaultHealthPresentation(status).label, toneClass: VAULT_HEALTH_TONE_CLASSES[status] }
 }
 
 export function VaultMetricGrid({

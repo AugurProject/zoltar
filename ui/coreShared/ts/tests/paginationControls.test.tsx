@@ -49,3 +49,34 @@ test('does not show a pending state in a control that was not pressed', async ()
 	expect(document.querySelector('.loading-value')).toBeNull()
 	expect((within(document.body).getByRole('button', { name: 'Show more' }) as HTMLButtonElement).disabled).toBe(true)
 })
+
+test('keeps keyboard focus on a control that disables itself while its page loads and after the last page arrives', async () => {
+	let nextCalls = 0
+	const props = { hasPreviousPage: true, onNextPage: () => (nextCalls += 1), onPreviousPage: () => undefined }
+	const rendered = await renderIntoDocument(<PaginationControls {...props} hasNextPage summary='Page 1 of 2' />)
+	cleanup = rendered.cleanup
+	const next = within(document.body).getByRole('button', { name: 'Next page' })
+	if (!(next instanceof HTMLButtonElement)) throw new Error('Expected a button')
+	await act(() => next.focus())
+	await act(() => fireEvent.click(next))
+	expect(nextCalls).toBe(1)
+
+	await act(() => render(<PaginationControls {...props} hasNextPage loading summary='Page 1 of 2' />, rendered.container))
+	expect(document.activeElement).toBe(next)
+	expect(next.disabled).toBe(false)
+	expect(next.getAttribute('aria-disabled')).toBe('true')
+	expect(next.getAttribute('aria-busy')).toBe('true')
+	await act(() => fireEvent.click(next))
+	expect(nextCalls).toBe(1)
+
+	await act(() => render(<PaginationControls {...props} hasNextPage={false} summary='Page 2 of 2' />, rendered.container))
+	expect(document.activeElement).toBe(next)
+	expect(next.getAttribute('aria-disabled')).toBe('true')
+	expect(next.getAttribute('aria-busy')).toBe('false')
+	await act(() => fireEvent.click(next))
+	expect(nextCalls).toBe(1)
+	// Once focus moves on, the unavailable control leaves the tab order again.
+	await act(() => next.blur())
+	expect(next.disabled).toBe(true)
+	expect(next.hasAttribute('aria-disabled')).toBe(false)
+})

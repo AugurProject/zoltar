@@ -18,18 +18,6 @@ export async function depositRepToVaultToSecurityPool(client: WriteClient, secur
 		hash,
 	} satisfies SecurityVaultActionResult
 }
-export async function updateSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
-	const hash = await writeContractAndWait(client, () => ({
-		address: securityPoolAddress,
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		functionName: 'updateVaultFees',
-		args: [vaultAddress],
-	}))
-	return {
-		action: 'updateVaultFees',
-		hash,
-	} satisfies SecurityVaultActionResult
-}
 export async function redeemSecurityVaultFees(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,

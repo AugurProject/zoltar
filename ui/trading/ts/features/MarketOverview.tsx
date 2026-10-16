@@ -10,13 +10,14 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { MarketResolution } from '../components/MarketResolution.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { liveCopy } from '../copy/live.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { marketsCopy } from '../copy/markets.js'
-import { marketYesTenths } from '../lib/marketListing.js'
+import { marketPriceState, marketYesTenths } from '../lib/marketListing.js'
 import type { LiveMarket } from '../protocol/live.js'
 import { formatMarketLiquidity } from './MarketCard.js'
 import { marketStatusLabel, marketStatusTone } from './marketStatus.js'
@@ -86,14 +87,22 @@ export function MarketPageHeader({ market, nowSeconds, headingRef, actions }: { 
 	)
 }
 
-/** The market page's reading column: conditional odds, the facts that decide a trade, the wallet's position, the question's own description, and contracts. */
-export function MarketOverview({ market, position }: { market: LiveMarket; position: ComponentChildren }) {
+/** The price, or the outcome that replaced it once the question resolved; a market that stopped trading shows its last price, muted. */
+function MarketPrice({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
+	const priceState = marketPriceState(market, nowSeconds)
+	if (priceState.kind === 'resolved') return <MarketResolution outcome={priceState.outcome} />
 	const yesTenths = marketYesTenths(market)
+	if (yesTenths === undefined) return <UserMessage className='detail' detail={marketsCopy.priceUnavailable} />
+	return <ProbabilityBar yesPercent={yesTenths / 10} last={priceState.kind === 'last'} />
+}
+
+/** The market page's reading column: conditional odds, the facts that decide a trade, the wallet's position, the question's own description, and contracts. */
+export function MarketOverview({ market, nowSeconds, position }: { market: LiveMarket; nowSeconds: bigint; position: ComponentChildren }) {
 	const description = market.description.trim()
 	const liquidity = formatMarketLiquidity(market)
 	return (
 		<div className='market-overview'>
-			{yesTenths === undefined ? <UserMessage className='detail' detail={marketsCopy.priceUnavailable} /> : <ProbabilityBar yesPercent={yesTenths / 10} />}
+			<MarketPrice market={market} nowSeconds={nowSeconds} />
 			<DataGrid className='market-facts'>
 				<MetricField label={liveCopy.questionEnd}>
 					<TimestampValue timestamp={market.endTime} relative={false} />

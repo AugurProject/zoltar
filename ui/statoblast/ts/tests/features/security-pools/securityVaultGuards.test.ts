@@ -2,130 +2,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
-import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRedeemRepGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
+import { getVaultExecutePendingOperationGuardMessage, getVaultRedeemRepGuardMessage, getVaultRequestPriceGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
 describe('security vault guards', () => {
-	test('uses the loaded pool backing minimum inclusively, including fractional ratios', () => {
-		expect(getTargetHealthFactorGuardMessage('2.4999', 25_000n)).toBe('Target backing ratio must be at least 2.5×.')
-		expect(getTargetHealthFactorGuardMessage('2.5', 25_000n)).toBeUndefined()
-		expect(getTargetHealthFactorGuardMessage('3', 25_000n)).toBeUndefined()
-	})
-
-	test('blocks deposit until deterministic deposit prerequisites are met', () => {
-		expect(
-			getVaultDepositGuardMessage({
-				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-				approvalSatisfied: true,
-				depositAmount: 1n,
-				isDepositBelowMinimum: false,
-				walletRepShortfallAttoRep: undefined,
-			}),
-		).toBeUndefined()
-
-		expect(
-			getVaultDepositGuardMessage({
-				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-				approvalSatisfied: false,
-				depositAmount: 0n,
-				isDepositBelowMinimum: false,
-				walletRepShortfallAttoRep: undefined,
-			}),
-		).toBeUndefined()
-
-		expect(
-			getVaultDepositGuardMessage({
-				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-				approvalSatisfied: false,
-				depositAmount: 1n,
-				isDepositBelowMinimum: false,
-				walletRepShortfallAttoRep: undefined,
-			}),
-		).toBe('Approve enough REP before depositing.')
-
-		expect(
-			getVaultDepositGuardMessage({
-				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-				approvalSatisfied: true,
-				depositAmount: 3n * 10n ** 18n,
-				isDepositBelowMinimum: false,
-				walletRepShortfallAttoRep: 2n * 10n ** 18n,
-			}),
-		).toBe('Insufficient REP balance. Deposit amount exceeds your wallet balance by 2\u00a0REP.')
-
-		expect(
-			getVaultDepositGuardMessage({
-				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-				approvalSatisfied: true,
-				depositAmount: 3n * 10n ** 18n,
-				isDepositBelowMinimum: false,
-				walletRepShortfallAttoRep: undefined,
-			}),
-		).toBeUndefined()
-	})
-
-	test('blocks positive deposits until the deposit target factor is valid', () => {
-		const guard = (targetHealthFactor: string) =>
-			getVaultDepositGuardMessage({
-				minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-				approvalSatisfied: true,
-				depositAmount: 1n,
-				isDepositBelowMinimum: false,
-				targetHealthFactor,
-				walletRepShortfallAttoRep: undefined,
-			})
-
-		expect(guard('')).toBe('Target backing ratio must be a number with up to four decimal places.')
-		expect(guard('abc')).toBe('Target backing ratio must be a number with up to four decimal places.')
-		expect(guard('0.9999')).toBe('Target backing ratio must be at least 1×.')
-		expect(guard('1.25')).toBeUndefined()
-	})
-
-	test('blocks REP withdrawal while escalation deposits remain unsettled', () => {
-		expect(
-			getVaultWithdrawGuardMessage({
-				disputeStakedAttoRep: 1n,
-				requiredCostAttoEth: undefined,
-				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 1n,
-				withdrawableRepAmountAttoRep: 1n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBe('Settle escalation deposits before withdrawing REP.')
-
-		expect(
-			getVaultWithdrawGuardMessage({
-				requiredCostAttoEth: undefined,
-				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 1n,
-				withdrawableRepAmountAttoRep: 1n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBeUndefined()
-
-		expect(
-			getVaultWithdrawGuardMessage({
-				requiredCostAttoEth: undefined,
-				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 0n,
-				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBeUndefined()
-
-		expect(
-			getVaultWithdrawGuardMessage({
-				requiredCostAttoEth: undefined,
-				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 10_000n * 10n ** 18n,
-				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBe('Reduce the withdrawal to 2\u00a0500\u00a0REP or less.')
-	})
-
 	test('blocks approval and oracle manager actions until required state is loaded', () => {
 		expect(
 			getVaultRequestPriceGuardMessage({
@@ -217,17 +98,6 @@ describe('security vault guards', () => {
 				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
 		).toBe('Need 7\u00a0more\u00a0ETH in this wallet to request a new price.')
-
-		expect(
-			getVaultWithdrawGuardMessage({
-				bufferRequiredEthCost: true,
-				requiredCostAttoEth: 10n * ATTO_ETH_PER_ETH,
-				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 1n * ATTO_ETH_PER_ETH,
-				withdrawableRepAmountAttoRep: 5n * ATTO_ETH_PER_ETH,
-				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
-			}),
-		).toBe('Need 7\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
 	})
 
 	test('blocks REP redemption until the commitment is exited', () => {
@@ -235,41 +105,5 @@ describe('security vault guards', () => {
 		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: 0n, redeemableRepAmountAttoRep: 5n, underwritingLimitAttoEth: 1n })).toBe('Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.')
 		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: 0n, redeemableRepAmountAttoRep: 5n, underwritingLimitAttoEth: 0n })).toBeUndefined()
 		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: 1n, redeemableRepAmountAttoRep: 5n, underwritingLimitAttoEth: 1n })).toBe('Settle escalation deposits before redeeming REP.')
-	})
-
-	test('blocks a withdrawal when no price can bound the REP a commitment locks', () => {
-		expect(
-			getVaultWithdrawGuardMessage({
-				requiredCostAttoEth: undefined,
-				stagedOperationTimeoutMinutes: 5n,
-				withdrawAmount: 1n,
-				withdrawableRepAmountAttoRep: undefined,
-				walletBalanceAttoEth: 1n,
-			}),
-		).toBe('A REP price is needed to estimate how much REP your commitment keeps locked. Request a new oracle price or lower the commitment limit first.')
-	})
-
-	test('explains a deposit that the minimum rejects only through rounding or an existing low vault', () => {
-		const base = { approvalSatisfied: true, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH, walletRepShortfallAttoRep: undefined }
-		expect(getVaultDepositGuardMessage({ ...base, depositAmount: 10n * ATTO_ETH_PER_ETH })).toBe('Pool rounding would credit this vault slightly less than the 10\u00a0REP minimum. Deposit a little more.')
-		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: 4n * ATTO_ETH_PER_ETH, depositAmount: ATTO_ETH_PER_ETH })).toBe('This vault must hold at least 10\u00a0REP after the deposit. Deposit more REP.')
-	})
-})
-
-describe('vault deposit minimum availability', () => {
-	test('explains the first-deposit minimum before an amount or approval is supplied', () => {
-		const base = { approvalSatisfied: false, currentVaultRepBackingAttoRep: 0n, depositAmount: 0n, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: 110n * ATTO_ETH_PER_ETH, walletRepShortfallAttoRep: undefined }
-		expect(getVaultDepositGuardMessage(base)).toBe('New vaults require at least 110\u00a0REP in the first deposit.')
-		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: ATTO_ETH_PER_ETH })).toBeUndefined()
-		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: undefined })).toBeUndefined()
-		expect(getVaultDepositGuardMessage({ ...base, depositAmount: undefined })).toBe('Enter a valid REP deposit amount.')
-		expect(getVaultDepositGuardMessage({ ...base, depositAmount: -ATTO_ETH_PER_ETH })).toBeUndefined()
-		expect(getVaultDepositGuardMessage({ ...base, minimumVaultRepDepositAttoRep: 0n })).toBeUndefined()
-		expect(getVaultDepositGuardMessage({ ...base, minimumVaultRepDepositAttoRep: undefined })).toBe(securityPoolCopy.vaultMinimumLoading)
-	})
-
-	// SecurityPool derives its minimum from theoretical supply when unconfigured, so an unloaded minimum must not be guessed.
-	test('blocks a deposit while the pool minimum vault REP is unknown', () => {
-		expect(getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount: 5n * ATTO_ETH_PER_ETH, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: undefined, walletRepShortfallAttoRep: undefined })).toBe(securityPoolCopy.vaultMinimumLoading)
 	})
 })

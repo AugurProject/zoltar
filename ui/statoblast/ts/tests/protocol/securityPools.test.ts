@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolLineage, loadSecurityPoolChildren } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadAllSecurityPools, loadSecurityPoolLineage, loadSecurityPoolChildren, loadSecurityPoolPage } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -105,6 +105,20 @@ function createPoolLoaderClient({
 			const functionName = getContractFunctionName(firstContract)
 			if (functionName === 'settlementCollateralAttoEth') return poolRead(getRequiredAddress(firstContract, 'address'))
 			if (functionName === 'questions') return [questionTuple, 1n]
+			if (functionName === 'updateVaultFees') {
+				// The loader checkpoints each vault's fees right before reading it, in one batch with failures allowed.
+				const securityVaultsHandler = multicall['securityVaults']
+				if (securityVaultsHandler === undefined) throw new Error('Unexpected multicall contract: securityVaults')
+				const vaultData = securityVaultsHandler(
+					request.contracts.filter((_contract, index) => index % 2 === 1),
+					request,
+				)
+				if (!Array.isArray(vaultData)) throw new Error('Expected one securityVaults tuple per vault')
+				return vaultData.flatMap(result => [
+					{ result: undefined, status: 'success' },
+					{ result, status: 'success' },
+				])
+			}
 			const handler = multicall[functionName]
 			if (handler === undefined) throw new Error(`Unexpected multicall contract: ${functionName}`)
 			return handler(request.contracts, request)
@@ -175,41 +189,6 @@ describe('securityPools protocol client', () => {
 		await loadSecurityPoolLineage(client, securityPoolAddress, undefined, index)
 		await loadSecurityPoolLineage(client, securityPoolAddress, undefined, index)
 		expect(ranges).toHaveLength(1)
-	})
-
-	test('revalidates ordinary vault admission against latest chain time while keeping genuine continuations open', async () => {
-		let currentTimestamp = 100n
-		let escalationGame = zeroAddress
-		let forkContinuation = false
-		const questionDataAddress = getAddress('0x00000000000000000000000000000000000000d1')
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
-			readContract: async request => {
-				if (request.functionName === 'getCurrentMintingCapacityAttoEth') return 0n
-				switch (request.functionName) {
-					case 'escalationGame':
-						return escalationGame
-					case 'forkContinuation':
-						return forkContinuation
-					case 'questionData':
-						return questionDataAddress
-					case 'questionId':
-						return 1n
-					case 'getQuestionEndDate':
-						return 100n
-					default:
-						throw new Error(`Unexpected readContract function: ${request.functionName}`)
-				}
-			},
-		})
-
-		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
-		currentTimestamp = 101n
-		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
-		escalationGame = escalationGameAddress
-		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(true)
-		forkContinuation = true
-		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(false)
 	})
 
 	test('rejects selected child deployments when their discovery anchor is replaced', async () => {
@@ -526,6 +505,40 @@ describe('securityPools protocol client', () => {
 		expect(pool.hasLoadedVaults).toBe(true)
 		expect(pool.vaultCount).toBe(0n)
 		expect(pool.vaults).toEqual([])
+	})
+
+	test('loadSecurityPoolPage reads one registry page, newest deployment first, without vault positions', async () => {
+		const deployedAddresses = [1, 2, 3].map(index => getAddress(`0x${(0xd0 + index).toString(16).padStart(40, '0')}`))
+		const deployments = deployedAddresses.map(address => createDeployment(address))
+		const rangeReads: [bigint, bigint][] = []
+		const client = createPoolLoaderClient({
+			deployments,
+			read: {
+				getVaults: () => {
+					throw new Error('Registry pages must not load vault positions')
+				},
+				securityPoolDeploymentsRange: request => {
+					const [startIndex, count] = request.args ?? []
+					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected registry range args')
+					rangeReads.push([startIndex, count])
+					return deployments.slice(bigintToSafeNumber(startIndex, 'Start index'), bigintToSafeNumber(startIndex + count, 'End index'))
+				},
+			},
+		})
+
+		const firstPage = await loadSecurityPoolPage(client, 0, 2)
+		const secondPage = await loadSecurityPoolPage(client, 1, 2)
+		const pastLastPage = await loadSecurityPoolPage(client, 2, 2)
+
+		expect(firstPage.pools.map(pool => pool.securityPoolAddress)).toEqual([deployedAddresses[2], deployedAddresses[1]])
+		expect(secondPage.pools.map(pool => pool.securityPoolAddress)).toEqual([deployedAddresses[0]])
+		expect(pastLastPage.pools).toEqual([])
+		expect([firstPage.poolCount, secondPage.poolCount, pastLastPage.poolCount]).toEqual([3n, 3n, 3n])
+		expect(rangeReads).toEqual([
+			[1n, 2n],
+			[0n, 1n],
+		])
+		expect(firstPage.pools.every(pool => pool.vaults.length === 0)).toBe(true)
 	})
 
 	test('loadAllSecurityPools defers vault detail loading for unselected pools in selected mode', async () => {

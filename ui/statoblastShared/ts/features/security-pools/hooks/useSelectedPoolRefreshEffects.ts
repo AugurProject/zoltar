@@ -3,7 +3,7 @@ import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { type Address, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ForkAuctionDetails, ListedSecurityPool, OpenOracleActionResult, OracleManagerDetails, ReportingDetails, SecurityPoolOverviewActionResult, StagedOracleOperation } from '../../../types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, OpenOracleActionResult, OracleManagerDetails, ReportingDetails, SecurityPoolOverviewActionResult } from '../../../types/contracts.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import { isSelectedPoolForkWorkflowView, type SelectedPoolView, shouldReloadSelectedPoolDetails } from '../lib/securityPoolWorkflow.js'
 import type { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
@@ -13,7 +13,6 @@ type UseSelectedPoolRefreshEffectsParameters = {
 	currentForkAuctionDetails: ForkAuctionDetails | undefined
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	currentPoolOracleManagerError: string | undefined
-	currentPoolOraclePriceUsable: boolean | undefined
 	currentReportingDetails: ReportingDetails | undefined
 	forkAuction: SecurityPoolWorkflowRouteContentProps['forkAuction']
 	hasLoadedCurrentVault: boolean
@@ -39,7 +38,6 @@ type UseSelectedPoolRefreshEffectsParameters = {
 	selectedPoolState: SecurityPoolSystemState | undefined
 	shouldRefreshSelectedPoolReporting: boolean
 	showSelectedPoolWorkflowDetails: boolean
-	stagedOperations: StagedOracleOperation[]
 	view: SelectedPoolView
 }
 
@@ -52,7 +50,6 @@ export function useSelectedPoolRefreshEffects({
 	currentForkAuctionDetails,
 	currentPoolOracleManagerDetails,
 	currentPoolOracleManagerError,
-	currentPoolOraclePriceUsable,
 	currentReportingDetails,
 	forkAuction,
 	hasLoadedCurrentVault,
@@ -78,7 +75,6 @@ export function useSelectedPoolRefreshEffects({
 	selectedPoolState,
 	shouldRefreshSelectedPoolReporting,
 	showSelectedPoolWorkflowDetails,
-	stagedOperations,
 	view,
 }: UseSelectedPoolRefreshEffectsParameters) {
 	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
@@ -86,10 +82,8 @@ export function useSelectedPoolRefreshEffects({
 	const lastForkAuctionAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingAutoLoadKey = useRef<string | undefined>(undefined)
 	const lastReportingOutcomeRefreshHash = useRef<string | undefined>(undefined)
-	const lastVaultStatusRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedViewRefreshManager = useRef<Address | undefined>(undefined)
 	const lastQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
-	const lastImmediateQueuedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastForkAuctionOutcomeRefreshHash = useRef<string | undefined>(undefined)
@@ -136,12 +130,7 @@ export function useSelectedPoolRefreshEffects({
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
-		const queuedOperationHash = (() => {
-			if (securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'setVaultUnderwritingLimit') return securityVault.securityVaultResult.hash
-			if (securityPoolOverviewResult?.action === 'queueLiquidation') return securityPoolOverviewResult.hash
-
-			return undefined
-		})()
+		const queuedOperationHash = securityPoolOverviewResult?.action === 'queueLiquidation' ? securityPoolOverviewResult.hash : undefined
 		if (queuedOperationHash === undefined) {
 			lastQueuedOperationRefreshHash.current = undefined
 			return
@@ -149,7 +138,7 @@ export function useSelectedPoolRefreshEffects({
 		if (lastQueuedOperationRefreshHash.current === queuedOperationHash) return
 		lastQueuedOperationRefreshHash.current = queuedOperationHash
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
-	}, [loadingPoolOracleManager, onLoadPoolOracleManager, securityPoolOverviewResult, securityVault.securityVaultResult, selectedPoolManagerAddress])
+	}, [loadingPoolOracleManager, onLoadPoolOracleManager, securityPoolOverviewResult, selectedPoolManagerAddress])
 	useEffect(() => {
 		const shouldAutoloadReportingForFork = view === 'fork-workflow'
 		const shouldAutoloadReportingForCurrentView = view === 'reporting' || shouldAutoloadReportingForFork
@@ -252,45 +241,6 @@ export function useSelectedPoolRefreshEffects({
 			void reporting.onLoadReporting()
 		}
 	}, [forkAuction.forkAuctionResult, forkAuction.onLoadForkAuction, hasLoadedCurrentVault, onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.onLoadSecurityVault, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails])
-	useEffect(() => {
-		const vaultStatusRefreshHash = securityVault.securityVaultResult?.action === 'depositRepToVault' || securityVault.securityVaultResult?.action === 'redeemRepFromVault' ? securityVault.securityVaultResult.hash : undefined
-		if (vaultStatusRefreshHash === undefined) {
-			lastVaultStatusRefreshHash.current = undefined
-			return
-		}
-		if (lastVaultStatusRefreshHash.current === vaultStatusRefreshHash) return
-		lastVaultStatusRefreshHash.current = vaultStatusRefreshHash
-		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if (shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
-	}, [onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting])
-	useEffect(() => {
-		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'setVaultUnderwritingLimit' ? securityVault.securityVaultResult.hash : undefined
-		if (queuedOperationHash === undefined) {
-			lastImmediateQueuedOperationRefreshHash.current = undefined
-			return
-		}
-		if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return
-		if (stagedOperations.some(operation => operation.operationId === securityVault.securityVaultResult?.queuedOperation?.operationId) || currentPoolOraclePriceUsable !== true) return
-		if (lastImmediateQueuedOperationRefreshHash.current === queuedOperationHash) return
-		lastImmediateQueuedOperationRefreshHash.current = queuedOperationHash
-		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if ((securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'setVaultUnderwritingLimit') && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
-		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
-	}, [
-		currentPoolOracleManagerDetails,
-		currentPoolOraclePriceUsable,
-		hasLoadedCurrentVault,
-		loadingPoolOracleManager,
-		onRefreshSelectedPoolData,
-		stagedOperations,
-		reporting.onLoadReporting,
-		securityVault.onLoadSecurityVault,
-		securityVault.securityVaultResult,
-		selectedPool?.securityPoolAddress,
-		shouldRefreshSelectedPoolReporting,
-		showSelectedPoolWorkflowDetails,
-		view,
-	])
 	useEffect(() => {
 		const liquidationRefreshKey = securityPoolOverviewResult?.action !== 'queueLiquidation' || liquidationNoticeState === undefined || liquidationNoticeState === 'submitted' ? undefined : `${securityPoolOverviewResult.hash}:${liquidationNoticeState}`
 		if (liquidationRefreshKey === undefined) {

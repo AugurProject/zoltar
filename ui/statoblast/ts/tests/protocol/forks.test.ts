@@ -213,13 +213,24 @@ describe('forks protocol client', () => {
 		const forkActivationTime = 1_000n
 		const client = createForkDetailsClient({
 			poolRead: [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, forkActivationTime], 4n, [0n, 0n, 0n]],
-			computeClearing: [[false, 0n, 0n, 0n], 1n, 0n, false, 1n, 1n, 0n, false, 0n, 0n, 0n],
+			computeClearing: [[false, 0n, 0n, 0n], 1n, 0n, false, 1n, 1n, 0n, false, 0n, 0n, 0n, [0n, 0n]],
 		})
 
 		const details = await loadForkAuctionDetails(client, securityPoolAddress)
 
 		expect(details.truthAuctionStartedAt).toBe(1n)
 		expect(details.migrationEndsAt).toBe(forkActivationTime + 4_838_400n)
+	})
+
+	test('loadForkAuctionDetails reads the live finalization preview, which covers every price level', async () => {
+		const client = createForkDetailsClient({
+			poolRead: [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 0n],
+			computeClearing: [[false, 0n, 0n, 0n], 10n * 10n ** 18n, 0n, false, 8n * 10n ** 18n, 1n, 0n, false, 0n, 0n, 0n, [4n * 10n ** 18n, 8n * 10n ** 18n]],
+		})
+
+		const details = await loadForkAuctionDetails(client, securityPoolAddress)
+
+		expect(details.truthAuction?.finalizationPreview).toEqual({ attoEthRaised: 4n * 10n ** 18n, attoRepSold: 8n * 10n ** 18n })
 	})
 
 	describe('finalized underfunded truth auctions', () => {
@@ -234,7 +245,7 @@ describe('forks protocol client', () => {
 			const finalizedClearingTick = 12n
 			const syntheticThreshold = 7n * 10n ** 17n
 			const underfundedWinningAttoEth = 9n * 10n ** 18n
-			const truthAuction = await loadTruthAuction([[false, 99n, underfundedWinningAttoEth, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 12n * 10n ** 18n, true, syntheticThreshold, underfundedWinningAttoEth, finalizedClearingTick])
+			const truthAuction = await loadTruthAuction([[false, 99n, underfundedWinningAttoEth, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 12n * 10n ** 18n, true, syntheticThreshold, underfundedWinningAttoEth, finalizedClearingTick, [underfundedWinningAttoEth, 12n * 10n ** 18n]])
 
 			expect(truthAuction.finalized).toBe(true)
 			expect(truthAuction.underfunded).toBe(true)
@@ -246,7 +257,7 @@ describe('forks protocol client', () => {
 
 		test('loadForkAuctionDetails hides the synthetic clearing price when a finalized underfunded auction has no winning prefix', async () => {
 			const noWinningPrefixThreshold = 2n * 10n ** 18n
-			const truthAuction = await loadTruthAuction([[false, 0n, 0n, 0n], 20n * 10n ** 18n, 0n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 0n, true, noWinningPrefixThreshold, 0n, 0n])
+			const truthAuction = await loadTruthAuction([[false, 0n, 0n, 0n], 20n * 10n ** 18n, 0n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 0n, true, noWinningPrefixThreshold, 0n, 0n, [0n, 0n]])
 
 			expect(truthAuction.finalized).toBe(true)
 			expect(truthAuction.underfunded).toBe(true)

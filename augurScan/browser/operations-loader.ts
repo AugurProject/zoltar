@@ -15,8 +15,10 @@ interface OperationsLoaderDeps {
 	operationsCatalogSection: () => OperationsCatalogSection | undefined
 	operationsDetailRouteKey: (route: OperationsDetailRoute) => string
 	data: ReturnType<typeof createOperationsData>
-	renderOperations: (response: OperationsResponse, context?: OperationsRenderContext) => void
-	renderOperationsDetailPage: (response: OperationsResponse, route: OperationsDetailRoute, context?: OperationsRenderContext) => void
+	renderOperations: (response: OperationsResponse, context?: OperationsRenderContext, live?: boolean) => void
+	renderOperationsDetailPage: (response: OperationsResponse, route: OperationsDetailRoute, context?: OperationsRenderContext, live?: boolean) => void
+	/** Identifies everything a response would render, so an unchanged live refresh can keep the rendered nodes. */
+	renderSignature: (response: OperationsResponse) => string
 	renderRetryStatus: (status: HTMLElement, message: string, retry: () => undefined | Promise<unknown>) => void
 }
 
@@ -25,6 +27,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 	const { loadOperationsCatalog, loadOperationsRiskCatalog, loadOperationsDetail } = deps.data
 	const $ = deps.lookup
 	const decodeOperationsResponse = decodeOperationsResponseValue
+	let renderedSignature: string | undefined
 	const loadOperations = async ({
 		live = false,
 		catalogTargetCount,
@@ -82,8 +85,16 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					}
 					const response = await loadResponse()
 					if (requestVersion !== operationsState.requestVersion) return false
-					if (detailRoute === undefined) renderOperations(response, preservedContext)
-					else renderOperationsDetailPage(response, detailRoute, preservedContext)
+					const signature = deps.renderSignature(response)
+					if (live && preservedContext === undefined && signature === renderedSignature && content.childElementCount > 0) {
+						// Unchanged evidence keeps its nodes, so typed filters, open disclosures, and focus survive the refresh.
+						content.setAttribute('aria-busy', 'false')
+						status.hidden = true
+						return true
+					}
+					if (detailRoute === undefined) renderOperations(response, preservedContext, live)
+					else renderOperationsDetailPage(response, detailRoute, preservedContext, live)
+					renderedSignature = signature
 					return true
 				} catch (error) {
 					if (requestVersion !== operationsState.requestVersion) return false
@@ -97,6 +108,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					// The click event must not reach loadOperations, whose only parameter is its options object.
 					renderRetryStatus(status, operationsFailureMessage(false, error instanceof Error ? error.status : undefined, detail), () => loadOperations())
 					content.replaceChildren()
+					renderedSignature = undefined
 					content.setAttribute('aria-busy', 'false')
 					return false
 				}

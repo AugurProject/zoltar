@@ -146,6 +146,9 @@ function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAct
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, wallet: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const stepReason = step.phase === 'upcoming' ? blockedReason : status
 								const retryReason = retry === undefined ? undefined : (retry.availability.reason ?? copy.notCompleted)
+								// Plans derive unnamed approvals from an oracle report's token funding; a named one, such as a vault deposit, can unlock
+								// any step, so its shortfall hint uses neutral wording.
+								const approvalActionLabel = step.approval?.purpose === undefined ? copy.fundReport : copy.continuing
 								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
@@ -155,7 +158,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAct
 												compact
 												completedLabel={completedLabel}
 												showRequirementNotice={false}
-												actionLabel={copy.fundReport}
+												actionLabel={approvalActionLabel}
 												allowanceError={undefined}
 												allowanceLoading={false}
 												approvedAmount={step.approval.approvedAmount}

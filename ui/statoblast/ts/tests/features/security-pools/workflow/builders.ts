@@ -103,6 +103,8 @@ export function createActiveReportingDetails(overrides: Partial<ActiveReportingD
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 2n,
 		viewerVaultRepBackingAttoRep: 12_000n,
+		// No commitments or vault minimum, so the whole vault backing can be reported.
+		viewerVaultReportingLimits: { minimumVaultRepDepositAttoRep: 0n, repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, totalPoolHeldAttoRep: 12_000n, totalRepBackingUnits: 12_000n, totalUnderwritingLimitAttoEth: 0n, underwritingLimitAttoEth: 0n, vaultRepBackingUnits: 12_000n },
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
 		...overrides,
@@ -118,6 +120,7 @@ export function createFinalizedTruthAuction(overrides: Partial<TruthAuctionMetri
 		bidAtClearingTickAttoEth: 0n,
 		attoEthRaiseCap: 1n,
 		attoEthRaised: 0n,
+		finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 		finalized: true,
 		hitCap: true,
 		maxAttoRepBeingSold: 1n,
@@ -137,9 +140,6 @@ type SecurityVaultForm = SecurityVaultRouteContentProps['securityVaultForm']
 // Form for the connected account's own vault in the zero-address pool.
 export function createSecurityVaultForm(overrides: Partial<SecurityVaultForm> = {}): SecurityVaultForm {
 	return {
-		depositAmount: '',
-		repWithdrawAmount: '',
-		targetHealthFactor: '',
 		securityPoolAddress: zeroAddress,
 		selectedVaultOwner: zeroAddress,
 		...overrides,
@@ -150,34 +150,18 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 	return {
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
-		onApproveRep: () => undefined,
-		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
-		onRedeemFees: () => undefined,
-		onRedeemRepFromVault: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
-		onSetVaultUnderwritingLimit: () => undefined,
-		onWithdrawRep: () => undefined,
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
 		securityPoolVaults: undefined,
-		securityVaultActiveAction: undefined,
 		securityVaultDetails: undefined,
 		securityVaultError: undefined,
 		securityVaultForm: createSecurityVaultForm({ securityPoolAddress: '', selectedVaultOwner: '' }),
 		securityVaultMissing: false,
-		securityVaultRepApproval: {
-			error: undefined,
-			loading: false,
-			value: 0n,
-		},
-		walletRepBalanceAttoRep: undefined,
-		securityVaultResult: undefined,
 		selectedPoolStatoblastSecurityMultiplierBps: undefined,
 		...overrides,
-		walletRepBalanceError: overrides.walletRepBalanceError,
-		walletRepBalanceLoading: overrides.walletRepBalanceLoading ?? false,
 	}
 }
 

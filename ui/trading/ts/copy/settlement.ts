@@ -79,7 +79,7 @@ export function formatWinningRedemptionGuidance(outcome: 'INVALID' | 'YES' | 'NO
 export const settlementTransaction = 'Settlement transaction'
 export const transactionFailed = 'Settlement transaction failed.'
 export const estimateHeading = 'Redemption estimate'
-export { invalidEthAmount, minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
+export { minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const redeemCompleteSetsAction = 'Redeem complete sets'
 
 export function migrationAction(count: number) {

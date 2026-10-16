@@ -49,6 +49,12 @@
 	background: var(--text);
 	box-shadow: 0 0 0 1px var(--shadow-color-strong);
 }
+/* The caption says what the prices are conditional on. */
+.probability__caption {
+	margin-bottom: var(--space-1);
+	color: var(--muted);
+	font-size: var(--font-label);
+}
 
 /* Outcome picker: the selected side carries its outcome colour so YES and NO stay distinguishable at a glance. */
 .outcome-picker .view-tab.active[id$="-yes-tab"] {
@@ -157,6 +163,16 @@
 .trade-estimate-note {
 	margin: 0;
 	color: var(--muted);
+}
+/* A headline value keeps its figure in the value face; what it pays reads as prose on its own line under it. */
+.trade-estimate-value-detail {
+	display: block;
+	margin-top: var(--space-1);
+	color: var(--text-secondary);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 400;
+	line-height: var(--line-height-body);
 }
 .trade-estimate-notes {
 	display: grid;
@@ -393,6 +409,43 @@
 .market-odds__fill {
 	height: 100%;
 	background: var(--outcome-yes);
+}
+
+/* A market that stopped trading keeps its last price in view, muted so it does not read as a live quote. */
+.market-odds--last .market-odds__yes,
+.market-odds--last .market-odds__no,
+.probability--last .probability__labels span {
+	color: var(--muted);
+}
+.market-odds--last .market-odds__track,
+.probability--last .probability__track {
+	background: color-mix(in srgb, var(--outcome-no) 18%, var(--surface-raised));
+}
+.market-odds--last .market-odds__fill,
+.probability--last .probability__yes {
+	background: color-mix(in srgb, var(--outcome-yes) 40%, var(--surface-raised));
+}
+
+/* A resolved market shows its outcome where the price was; the outcome name carries its colour and its label. */
+.market-resolution {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+	margin: 0;
+	font-size: var(--font-label);
+}
+.market-resolution__label {
+	color: var(--muted);
+}
+.market-resolution strong {
+	font-family: var(--font-family-mono);
+}
+.market-resolution--yes strong {
+	color: var(--outcome-yes);
+}
+.market-resolution--no strong {
+	color: var(--outcome-no);
 }
 
 /* Outcome buttons carry their outcome colour as border and text; the label names the outcome, so colour is not the only cue. */

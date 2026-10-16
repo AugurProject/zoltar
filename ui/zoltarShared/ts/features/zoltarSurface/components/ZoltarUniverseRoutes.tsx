@@ -63,7 +63,7 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 
 /** Mounts the existing fork workflow for an unforked universe. */
 export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
-	const { accountState, environmentRefreshKey, operations, universeState } = useZoltarWorkspace()
+	const { accountState, environmentRefreshKey, onForkQuestionIdChange, operations, universeState } = useZoltarWorkspace()
 	const forkQuestionId = operations.zoltarForkQuestionId.trim()
 	const lookup = useRef(operations.loadZoltarQuestion)
 	lookup.current = operations.loadZoltarQuestion
@@ -90,7 +90,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 						onForkZoltar={() => void operations.forkZoltar()}
 						onRetryZoltarForkAccess={() => void operations.loadZoltarForkAccess()}
 						onRetryZoltarQuestion={forkQuestionId === '' ? undefined : () => void operations.loadZoltarQuestion(forkQuestionId)}
-						onZoltarForkQuestionIdChange={operations.setZoltarForkQuestionId}
+						onZoltarForkQuestionIdChange={onForkQuestionIdChange}
 						zoltarForkActiveAction={operations.zoltarForkActiveAction}
 						zoltarForkApproval={operations.zoltarForkApproval}
 						zoltarForkError={operations.zoltarForkError}

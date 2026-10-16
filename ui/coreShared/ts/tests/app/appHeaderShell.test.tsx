@@ -1,9 +1,14 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, mock, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
 import { ProtocolAppFrame } from '../../app/components/ProtocolAppFrame.js'
+import { mountApp } from '../../app/appRoot.js'
 import type { SimulationController } from '../../simulation/controller.js'
 
 import { fireEvent, waitFor, within } from '../testUtils/queries'
@@ -222,18 +227,55 @@ describe('AppHeaderShell', () => {
 })
 
 describe('ProtocolAppFrame', () => {
-	test('keeps the header first, notices below it, and the page heading at the start of the content', async () => {
+	test("replaces every app's static loading placeholder when the application frame mounts", async () => {
+		// The placeholder must share the frame's root element so the first render reuses it instead of leaving "Loading…" on the page.
+		const repositoryRoot = join(import.meta.dir, '..', '..', '..', '..', '..')
+		for (const page of ['ui/zoltar/index.html', 'ui/statoblast/index.html', 'ui/trading/index.html', 'tooling/ui/index.production.html']) {
+			const placeholder = /<body[^>]*>[\s\S]*?(<div class="app-frame">[\s\S]*?<\/div>)/.exec(readFileSync(join(repositoryRoot, page), 'utf8'))?.[1]
+			if (placeholder === undefined) throw new Error(`Missing the loading placeholder in ${page}`)
+			const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
+			try {
+				document.body.innerHTML = placeholder
+				await act(async () => {
+					await mountApp({
+						initialize: async () => undefined,
+						root: () => (
+							<ProtocolAppFrame accountAddress={undefined} currentBlockNumber={undefined} currentTimestamp={undefined} header={<div>Header</div>} heading={<h1>Page</h1>} notices={undefined} routeContentDisabled={false} transactionRouteKey='zoltar'>
+								<p>Content</p>
+							</ProtocolAppFrame>
+						),
+					})
+				})
+				expect(document.querySelectorAll('.app-frame')).toHaveLength(1)
+				expect(document.querySelectorAll('main')).toHaveLength(1)
+				expect(document.body.textContent).not.toMatch(/Loading/)
+				expect(document.body.textContent).toContain('Content')
+			} finally {
+				await act(() => render(null, document.body))
+				domEnvironment.cleanup()
+			}
+		}
+	})
+
+	test('puts the chrome in the banner landmark, notices below it, and the page heading at the start of the main content', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
 		const rendered = await renderIntoDocument(
-			<ProtocolAppFrame accountAddress={undefined} currentBlockNumber={undefined} currentTimestamp={undefined} header={<header id='frame-header'>Header</header>} heading={<h1 id='frame-heading'>Page</h1>} notices={<div id='frame-notices'>Notices</div>} routeContentDisabled={false} transactionRouteKey='zoltar'>
+			<ProtocolAppFrame accountAddress={undefined} currentBlockNumber={undefined} currentTimestamp={undefined} header={<div id='frame-header'>Header</div>} heading={<h1 id='frame-heading'>Page</h1>} notices={<div id='frame-notices'>Notices</div>} routeContentDisabled={false} transactionRouteKey='zoltar'>
 				<p id='frame-content'>Content</p>
 			</ProtocolAppFrame>,
 		)
 		try {
-			const main = rendered.container.querySelector('main')
-			if (main === null) throw new Error('Expected the main landmark')
+			const banners = rendered.container.querySelectorAll('header')
+			const mains = rendered.container.querySelectorAll('main')
+			const banner = banners[0]
+			const main = mains[0]
+			if (banners.length !== 1 || mains.length !== 1 || banner === undefined || main === undefined) throw new Error('Expected one banner and one main landmark')
+			// The chrome is a top-level header (the banner landmark) beside main, never nested inside it.
+			expect(banner.parentElement).toBe(main.parentElement)
+			expect(banner.nextElementSibling).toBe(main)
+			expect(Array.from(banner.children, child => child.id)).toEqual(['frame-header'])
 			// A notice appearing or clearing must not move the header's controls, so notices follow the header.
-			expect(Array.from(main.children, child => child.id)).toEqual(['frame-header', 'frame-notices', 'app-content'])
+			expect(Array.from(main.children, child => child.id)).toEqual(['frame-notices', 'app-content'])
 			// Focus moved to the heading on a page change continues into the content with the next Tab.
 			const appContent = document.getElementById('app-content')
 			expect(appContent?.firstElementChild?.id).toBe('frame-heading')

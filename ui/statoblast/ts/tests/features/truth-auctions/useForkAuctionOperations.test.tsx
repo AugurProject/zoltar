@@ -64,6 +64,7 @@ function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {})
 		bidAtClearingTickAttoEth: 0n,
 		attoEthRaiseCap: 100n * 10n ** 18n,
 		attoEthRaised: 1n * 10n ** 18n,
+		finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 		finalized: false,
 		hitCap: false,
 		maxAttoRepBeingSold: 100n * 10n ** 18n,

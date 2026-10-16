@@ -249,13 +249,6 @@ test('Trading keeps the shared shell, route header, section, field, and button s
 		expect(css).not.toContain(selector)
 })
 
-test('Trading keeps the initial loading fallback visible until the environment settles', async () => {
-	const source = await Bun.file(new URL('../../index.ts', import.meta.url)).text()
-	expect(source.indexOf('await initializeTradingActiveEnvironment()')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
-	expect(source.indexOf('} finally {')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
-	expect(source).toContain('initialize: initializeTradingForMount')
-})
-
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
 	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/market')
 	const configuration: DeploymentConfiguration = {

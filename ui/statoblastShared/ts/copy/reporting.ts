@@ -84,7 +84,6 @@ export const minimumPreset = (kind: keyof typeof minimumPresetLabels, amount?: s
 export const rewardPreset = (amount?: string) => `Max reward${amount === undefined ? '' : ` (${amount} REP)`}`
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
-export const approveAmountLabel = (amount: string) => `Approve ${amount} REP`
 export const paidFromVault = 'Paid from: pool vault REP (no approval needed)'
 export const loadingPriceReport = 'Loading price report…'
 export const paidFromWallet = 'Paid from: wallet REP'
@@ -108,13 +107,15 @@ export const priceExpired = (windowSeconds: bigint) => `Pool price expired. Repo
 export const priceRequested = (countdown: string) => `Price requested. Ready to settle in ${countdown}.`
 export const priceReportReady = (id: bigint) => `Price report #${id} is ready.`
 export const settlingPriceReport = (id: bigint) => `Settling report #${id}…`
+export const priceRequestAlreadyPending = 'A price request is already pending.'
+export const noPriceReportToSettle = 'No price report to settle yet.'
+export const priceReportNotReady = 'The price report is not ready to settle yet.'
 export const priceUpdated = (time: string) => `Price updated. Valid until ${time}.`
 
 export const reportedAmount = (outcome: string, amount: string) => `Reported ${amount} REP on ${outcome}`
 export const approvedAmount = (amount: string) => `Approved ${amount} REP`
 
 export const reportingAmount = (outcome: string, amount: string) => `Reporting ${outcome} · ${amount} REP…`
-export const approvingAmount = (amount: string) => `Approving ${amount} REP…`
 
 export const claimedDeposits = (outcome: string, amount: string) => `Claimed ${amount} REP from ${outcome}`
 export const clearedDeposits = (outcome: string) => `Cleared ${outcome} deposits (worth 0 REP)`
@@ -172,6 +173,8 @@ export const forkTriggerWarning = (outcome: string, threshold: string) => `Anoth
 export const forkTriggerConfirmation = 'I understand this report ends escalation and leads to a universe fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
 export const reportingRepApprovalRequired = 'Approve REP for this security pool before reporting.'
+export const reportingApprovalAction = 'reporting'
+export const reportAmountRequired = 'Enter a report amount.'
 export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.'
 export const maxBelowForkHint = (amount: string) => `Max stops at ${amount} REP, just below the non-decision threshold. Confirm the fork warning to fill the side.`
 export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter an amount to fill the side and trigger the fork.'
@@ -185,4 +188,4 @@ export const depositDeadlinePreview = (deadline: string, extension: string, unch
 
 export const dismissReminderUpdate = 'Dismiss'
 
-export const responseWindowEndsTooSoon = 'The response window ends too soon. Wait for the result before settling deposits.'
+export const responseWindowEndsTooSoon = 'The response window ends too soon to report. Wait for the result.'

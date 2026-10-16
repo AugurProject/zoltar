@@ -27,12 +27,26 @@ describe('Zoltar App route validation', () => {
 		},
 	})
 
-	async function renderAppForRoute({ hash, route, zoltarView }: { hash: string; route: 'deploy' | 'not-found' | 'zoltar'; zoltarView: string }) {
+	const statusNoticeProps: Record<string, unknown>[] = []
+
+	async function renderAppForRoute({ hash, route, zoltarUniverseError, zoltarView }: { hash: string; route: 'deploy' | 'not-found' | 'zoltar'; zoltarUniverseError?: string; zoltarView: string }) {
 		window.location.hash = hash
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppHeaderShell.js', () => ({ AppHeaderShell: ({ overview }: { overview: unknown }) => <div>{overview}</div> }))
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppPageHeading.js', () => ({ AppPageHeading: () => <div>heading</div> }))
-		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppStatusNotices.js', () => ({ AppStatusNotices: () => <div>notices</div> }))
-		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js', () => ({ ProtocolAppFrame: ({ children }: { children: unknown }) => <div>{children}</div> }))
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/AppStatusNotices.js', () => ({
+			AppStatusNotices: (props: Record<string, unknown>) => {
+				statusNoticeProps.push(props)
+				return <div>notices</div>
+			},
+		}))
+		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js', () => ({
+			ProtocolAppFrame: ({ children, notices }: { children: unknown; notices: unknown }) => (
+				<div>
+					{notices}
+					{children}
+				</div>
+			),
+		}))
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/RouteSubNavigation.js', () => ({ RouteSubNavigation: () => <div>subnav</div> }))
 		await moduleMocks.mockModule('../../app/components/AppRouteContent.js', () => ({ AppRouteContent: ({ route: activeRoute }: { route: string }) => <div>{`route:${activeRoute}`}</div> }))
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/app/components/OverviewPanels.js', () => ({ OverviewPanels: () => <div>overview</div> }))
@@ -99,7 +113,6 @@ describe('Zoltar App route validation', () => {
 				questionResult: undefined,
 				resetQuestion: () => undefined,
 				setQuestionForm: () => undefined,
-				setZoltarForkQuestionId: () => undefined,
 				setZoltarMigrationForm: () => undefined,
 				zoltarChildUniverseError: undefined,
 				zoltarChildUniversePendingOutcomeIndex: undefined,
@@ -123,15 +136,17 @@ describe('Zoltar App route validation', () => {
 				zoltarQuestions: [],
 				zoltarQuestionsError: undefined,
 				zoltarUniverse: undefined,
-				zoltarUniverseError: undefined,
+				zoltarUniverseError,
 				zoltarUniverseMissing: false,
 			}),
 		}))
 		await moduleMocks.mockModule('../../app/hooks/useZoltarUrlState.js', () => ({
 			useZoltarUrlState: () => ({
 				activeUniverseId: 0n,
+				forkQuestionId: '',
 				replaceZoltarView: () => undefined,
 				setActiveUniverseId: () => undefined,
+				setForkQuestionId: () => undefined,
 				setZoltarView: () => undefined,
 				zoltarView,
 			}),
@@ -173,6 +188,15 @@ describe('Zoltar App route validation', () => {
 			cleanupRenderedComponent = undefined
 			mock.restore()
 		}
+	})
+
+	test('leaves a universe read failure to the views that need the universe instead of adding a page banner with a second Retry', async () => {
+		statusNoticeProps.length = 0
+		await renderAppForRoute({ hash: '#/zoltar?zoltarView=questions', route: 'zoltar', zoltarUniverseError: 'Failed to load Zoltar universe.', zoltarView: 'questions' })
+		const lastNoticeProps = statusNoticeProps.at(-1)
+		expect(lastNoticeProps).toBeDefined()
+		expect(lastNoticeProps?.['zoltarUniverseError']).toBeUndefined()
+		expect(lastNoticeProps?.['onRetryZoltarUniverse']).toBeUndefined()
 	})
 
 	test('keeps valid zoltar views on the zoltar route', async () => {

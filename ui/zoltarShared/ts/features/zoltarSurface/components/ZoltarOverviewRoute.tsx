@@ -107,7 +107,7 @@ function ZoltarOverviewView({ currentTimestamp, loadingRepBalance, model, ...act
 						{model.status === 'missing' || model.status === 'unavailable' ? undefined : (
 							<>
 								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
-								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model, loadingRepBalance)}</MetricField>
+								<MetricField label={zoltarCopy.walletRep}>{renderRepBalance(model, loadingRepBalance)}</MetricField>
 								<MetricField label={zoltarCopy.migrationStatus}>{renderMigrationStatus(model)}</MetricField>
 							</>
 						)}

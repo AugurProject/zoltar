@@ -121,12 +121,20 @@
 	border-top: 1px solid var(--divider-subtle);
 }
 
-/* Wide containers put the preview beside the editor and keep it in view while the form scrolls. */
+/* Wide containers put the preview beside the editor and keep it in view while the form scrolls. The two-column form is not a single-column form, so it uses the container width instead of --form-max. */
 @container (min-width: 56rem) {
 	.question-create-form {
 		grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr);
 		align-items: start;
 		column-gap: var(--space-5);
+		max-width: none;
+	}
+
+	/* The type cards share one row beside the preview instead of wrapping two and one. */
+	.question-create-form .question-type-option-list {
+		grid-auto-columns: minmax(0, 1fr);
+		grid-auto-flow: column;
+		grid-template-columns: none;
 	}
 
 	/* Input blocks fill the first column in order; the preview spans every row beside them. */
@@ -150,6 +158,29 @@
 	.question-create-form.has-extra-fields .question-create-preview {
 		grid-row: 1 / span 3;
 	}
+}
+
+/* In an action row the reason wraps onto its own line under the buttons, so "Use for fork" stays beside the other actions. */
+.actions > .question-fork-handoff {
+	display: contents;
+}
+
+.actions > .question-fork-handoff > .question-fork-handoff-reason {
+	order: 1;
+	flex-basis: 100%;
+}
+
+/* The existing question's fork action is set apart from its details, like the created question's actions. */
+.existing-question-actions {
+	margin-top: var(--space-3);
+}
+
+/* "Use for fork" keeps its place while a question cannot fork yet; the reason sits directly under the button. */
+.question-fork-handoff {
+	display: inline-grid;
+	justify-items: start;
+	gap: var(--space-1);
+	max-width: 18rem;
 }
 
 .question-type-options {

@@ -5,9 +5,17 @@
 }
 
 .app-settings-price-oracle {
+	display: grid;
+	gap: var(--space-2);
 	margin-top: var(--space-4);
+	margin-bottom: var(--space-3);
 	padding-top: var(--space-4);
 	border-top: 1px solid var(--border-strong);
+}
+
+/* The label names only the select, so the group keeps the spacing the settings menu gives a wrapping label. */
+.app-settings-menu .app-settings-price-oracle > label {
+	margin-bottom: 0;
 }
 
 .app-settings-price-oracle small {
@@ -1003,22 +1011,7 @@
 	margin-block: var(--space-2);
 }
 
-.reporting-wallet-action-row {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	align-items: start;
-	width: min(100%, 28rem);
-}
-
-.reporting-wallet-action-row > .tx-action {
-	min-width: 0;
-}
-
 @media (max-width: 40rem) {
-	.reporting-shared-action-region .reporting-wallet-action-row {
-		grid-template-columns: minmax(0, 1fr);
-		width: 100%;
-	}
 	.reporting-shared-action-region .tx-action-group,
 	.reporting-shared-action-region .tx-action-group > .actions,
 	.reporting-settlement-section .tx-action-group,
@@ -2022,6 +2015,14 @@
 .vault-position-strip-meta {
 	line-height: var(--line-height-tight);
 	font-size: var(--font-label);
+}
+
+/* The health chip and any selection badge sit side by side and wrap under the address on narrow rows. */
+.vault-position-strip-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
 }
 
 .vault-position-strip-actions {
@@ -3971,6 +3972,20 @@ span.rep-price-status.stale,
 	grid-template-columns: minmax(0, 1fr);
 	display: grid;
 	gap: var(--space-3);
+}
+
+/* Each funding group (vault deposit, oracle report) stacks its transactions under a label-styled title. */
+.vault-operations-prerequisite {
+	display: grid;
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.vault-operations-prerequisite-title {
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--font-label);
+	font-weight: 600;
 }
 
 @media (max-width: 64rem) {

@@ -1,11 +1,13 @@
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { VaultOperationsInput } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { loadSecurityVaultDetails, loadSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
 import { getCoordinatorInitialReportPrice, loadOracleManagerDetails, loadQueuedVaultOperationState, loadOracleManagerQueueOperationEthValue } from '../../../protocol/oracleCoordinator.js'
 import { isSecurityPoolEscalationResolved, redeemSecurityVaultFees, redeemRepFromVaultFromSecurityPool } from '../../../protocol/securityVault.js'
-import { hasPendingVaultCommitment, quoteVaultOperations, submitVaultOperations, type VaultOperationsResult } from '../../../protocol/vaultOperations.js'
+import { hasPendingVaultCommitment, loadVaultOperationsPrerequisites, quoteVaultOperations, submitVaultOperations, type VaultOperationsQuote, type VaultOperationsResult } from '../../../protocol/vaultOperations.js'
+import { wrapWeth } from '../../../protocol/openOracle.js'
 
 export const vaultOperationsDependencies = {
 	fetchPrice: async (manager: Address) => await getCoordinatorInitialReportPrice(createConnectedReadClient(), manager),
@@ -22,6 +24,9 @@ export const vaultOperationsDependencies = {
 	loadStatus: async (manager: Address, result: VaultOperationsResult) => await loadQueuedVaultOperationState(createConnectedReadClient(), manager, result),
 	loadCommitmentPending: async (manager: Address, owner: Address) => await hasPendingVaultCommitment(createConnectedReadClient(), manager, owner),
 	quote: async (pool: Address, owner: Address, input: VaultOperationsInput, price: bigint) => await quoteVaultOperations(createConnectedReadClient(), pool, owner, input, price),
+	loadPrerequisites: async (pool: Address, owner: Address, input: VaultOperationsInput, quote: VaultOperationsQuote) => await loadVaultOperationsPrerequisites(createConnectedReadClient(), pool, owner, input, quote),
+	approve: async (owner: Address, token: Address, spender: Address, amount: bigint, callbacks: Parameters<typeof createWalletWriteClient>[1]): Promise<{ hash: Hash }> => await approveErc20(createWalletWriteClient(owner, callbacks), token, spender, amount, 'approve'),
+	wrap: async (owner: Address, amountAttoEth: bigint, callbacks: Parameters<typeof createWalletWriteClient>[1]): Promise<{ hash: Hash }> => await wrapWeth(createWalletWriteClient(owner, callbacks), amountAttoEth),
 	queueCost: async (owner: Address, manager: Address) => await loadOracleManagerQueueOperationEthValue(createWalletWriteClient(owner), manager),
 	submit: async (owner: Address, pool: Address, input: VaultOperationsInput, price: bigint, callbacks: Parameters<typeof createWalletWriteClient>[1]) => await submitVaultOperations(createWalletWriteClient(owner, callbacks), pool, input, price),
 }

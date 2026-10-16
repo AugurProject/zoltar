@@ -1,11 +1,12 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
-import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatCompleteSetWithValue, formatLpWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
+import { formatCurrencyInputBalance, formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core-shared/forms/amountInput.js'
+import { formatCompleteSetWithValue, formatLpQuantity, formatLpWithValue, formatOutcomeQuantity, formatOutcomeWithValue, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
+import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import { marketNewRiskBlocker, marketSettlementPath, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
@@ -21,12 +22,15 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
-import { resolveLiquidityAvailability } from './live/actionAvailability.js'
+import { liquidityShortfallReason, resolveLiquidityAvailability } from './live/actionAvailability.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { LpHolding } from './OutcomeHolding.js'
 import { MINIMUM_LIQUIDITY, outcomeSharesValueAttoEth, type LiquidityPreview } from './live/liquidityEstimate.js'
+import type { liquiditySlippageBounds } from '../protocol/liquidity.js'
 import { operationOption } from './live/operationOption.js'
 import { OperationSwitcher } from './OperationSwitcher.js'
+
+type LiquidityBounds = ReturnType<typeof liquiditySlippageBounds>
 
 export type LiveLiquidityServices = Readonly<{
 	submitFreshLiquidity: typeof submitFreshLiquidity
@@ -41,6 +45,7 @@ export function LiveLiquidityControls({
 	balanceError,
 	networkMismatchReason,
 	walletEthAttoEth,
+	walletEthStatus,
 	wallet,
 	nowSeconds,
 	retryBalances,
@@ -50,6 +55,8 @@ export function LiveLiquidityControls({
 }: LiveWorkflowPanelProps &
 	Readonly<{
 		walletEthAttoEth: bigint | undefined
+		/** The wallet ETH read behind `walletEthAttoEth`; a deposit waits for it instead of skipping the funds check. */
+		walletEthStatus: WalletSummaryState['status']
 		nowSeconds: bigint
 		services?: LiveLiquidityServices
 		/** Called with the pool once this panel's own transaction that created its market confirms. */
@@ -57,11 +64,15 @@ export function LiveLiquidityControls({
 	}>) {
 	const { market, balanceState, account, walletClient, settings } = context
 	const controller = useLiquidityWorkflowController({ ...context, nowSeconds, services, onMarketCreated })
-	const { operation, amount, probability, parsed, conditionalBps, estimate, previewBlocker, transaction, selectOperation, updateAmount, updateProbability, submit } = controller
+	const { operation, amount, probability, parsed, conditionalBps, estimate, bounds, previewBlocker, transaction, selectOperation, updateAmount, updateProbability, submit } = controller
 	const { state, workflowLocked } = transaction
 	const closedForAdding = !liquidityOperationAvailable('add', market, nowSeconds)
 	const newRiskBlocker = marketNewRiskBlocker(market, nowSeconds)
 	const walletConnected = account !== undefined && walletClient !== undefined
+	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
+	const amountDecimals = operation === 'remove' ? SHARE_QUANTITY_DECIMALS : 18
+	// A typed amount that cannot be read says what is wrong with it: a stray separator, too many decimals, or not a number.
+	const amountFormatError = getAmountInputErrorMessage(validateAmountInput(amount, { decimals: amountDecimals }), { decimals: amountDecimals })
 	const availability = resolveLiquidityAvailability({
 		walletConnected,
 		networkMismatchReason,
@@ -71,7 +82,9 @@ export function LiveLiquidityControls({
 		marketClosed: closedForAdding,
 		newRiskBlocker,
 		requestedAmount: parsed,
+		amountError: amountFormatError,
 		walletEthAttoEth,
+		walletEthStatus,
 		lpBalance: balances?.lp,
 		initializePriceValid: conditionalBps !== undefined,
 		workflowLocked,
@@ -86,20 +99,15 @@ export function LiveLiquidityControls({
 	// Without a trading pool the first deposit also creates the market, in the same transaction.
 	if (operation === 'initialize') actionLabel = market.pair === undefined ? liquidityCopy.createMarketAndAddLiquidityAction : liquidityCopy.initializeLiquidityAction
 	else if (operation === 'remove') actionLabel = liquidityCopy.removeLiquidityAction
-	const availableAmount = operation === 'remove' ? balances?.lp : walletEthAttoEth
-	const amountError = (() => {
-		if (amount.trim() === '') return undefined
-		if (parsed === undefined) return operation === 'remove' ? liquidityCopy.invalidLpAmount : liquidityCopy.invalidEthAmount
-		// A zero is marked invalid, so it also says why.
-		if (parsed <= 0n) return availabilityCopy.amountPositiveReason
-		if (availableAmount !== undefined && parsed > availableAmount) return operation === 'remove' ? availabilityCopy.insufficientLpReason : availabilityCopy.insufficientEthReason
-		return undefined
-	})()
+	// A zero is marked invalid with its reason too; an amount the wallet cannot fund says so at the field as well as the action.
+	const amountError = amount.trim() === '' ? undefined : (amountFormatError ?? liquidityShortfallReason(operation, parsed, walletEthAttoEth, balances?.lp))
 	// Creating or adding to a closed market cannot happen, so its inputs rest disabled beside the action's reason.
 	const inputsDisabled = workflowLocked || (operation !== 'remove' && closedForAdding)
 	let amountHint: string | undefined
 	if (operation === 'remove' && balances !== undefined) amountHint = workflowCopy.formatHolding(formatLpWithValue(balances.lp, market, 4, 'down'))
 	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = workflowCopy.formatWalletBalance(formatEthAmount(formatTrimmedUnits(walletEthAttoEth)))
+	// Max removes the exact LP balance, so a full withdrawal never leaves a rounding remainder behind.
+	const removableLp = operation === 'remove' && balances !== undefined && balances.lp > 0n ? balances.lp : undefined
 	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n
 	// An initialized pool can never be initialized again, so the option is removed rather than disabled.
 	const operationOptions = [
@@ -123,6 +131,13 @@ export function LiveLiquidityControls({
 					inputMode='decimal'
 					adornment={operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth}
 					hint={amountHint}
+					action={
+						removableLp === undefined ? undefined : (
+							<button type='button' className='secondary' disabled={inputsDisabled} onClick={() => updateAmount(formatCurrencyInputBalance(removableLp, SHARE_QUANTITY_DECIMALS))}>
+								{liquidityCopy.max}
+							</button>
+						)
+					}
 					error={amountError}
 					onInput={event => updateAmount(event.currentTarget.value)}
 				/>
@@ -134,7 +149,9 @@ export function LiveLiquidityControls({
 			) : null}
 			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market)) : liquidityCopy.additionGuidance} />
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={availability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submit()}>
-				{estimate === undefined ? null : <LiquidityPreviewSection preview={estimate} market={market} connected={walletConnected} protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />}
+				{estimate === undefined || bounds === undefined ? null : (
+					<LiquidityPreviewSection preview={estimate} bounds={bounds} market={market} connected={walletConnected} protection={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />
+				)}
 			</QuotedTransactionPanel>
 		</div>
 	)
@@ -145,8 +162,8 @@ function addOptionReason(initialized: boolean, newRiskBlocker: string | undefine
 	return newRiskBlocker
 }
 
-/** What the operation gives and returns, computed from the loaded pool state. */
-function LiquidityPreviewSection({ preview, market, connected, protection }: { preview: LiquidityPreview; market: LiveMarket; connected: boolean; protection: string }) {
+/** What the operation gives and returns, computed from the loaded pool state, and the minimum the transaction signs for. */
+function LiquidityPreviewSection({ preview, bounds, market, connected, protection }: { preview: LiquidityPreview; bounds: LiquidityBounds; market: LiveMarket; connected: boolean; protection: string }) {
 	let estimateNote = connected ? liquidityCopy.localEstimateNote : liquidityCopy.estimateNote
 	if (preview.operation === 'initialize') estimateNote = connected ? liquidityCopy.initializeLocalEstimateNote : liquidityCopy.initializeEstimateNote
 	const removalValue = preview.operation === 'remove' ? outcomeSharesValueAttoEth(market, preview.yesOut, preview.noOut) : undefined
@@ -154,7 +171,7 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 		<section className='trade-estimate' aria-label={liquidityCopy.estimateHeading}>
 			<div className='exchange-preview'>
 				<div>
-					<p className='detail'>{liquidityCopy.youProvide}</p>
+					<p className='detail'>{preview.operation === 'remove' ? liquidityCopy.youRemove : liquidityCopy.youProvide}</p>
 					<strong className='decision-amount'>{preview.operation === 'remove' ? <LpHolding amount={preview.amount} market={market} /> : formatValueWithUnit(formatRoundedUnits(preview.amount), workflowCopy.eth)}</strong>
 				</div>
 				<span className='exchange-arrow' aria-hidden='true'>
@@ -187,6 +204,17 @@ function LiquidityPreviewSection({ preview, market, connected, protection }: { p
 				</div>
 			</div>
 			{removalValue === undefined ? null : <p className='detail'>{liquidityCopy.approximateRemovalValue(formatRoundedUnits(removalValue))}</p>}
+			<DataGrid dense>
+				<MetricField label={liquidityCopy.minimumReceived}>
+					{preview.operation === 'remove' ? (
+						<>
+							{formatOutcomeQuantity(bounds.minimumYes, shareOutcome.yes, 4, 'down')} / {formatOutcomeQuantity(bounds.minimumNo, shareOutcome.no, 4, 'down')}
+						</>
+					) : (
+						formatLpQuantity(bounds.minimumLiquidity, 4, 'down')
+					)}
+				</MetricField>
+			</DataGrid>
 			{preview.operation === 'remove' ? null : (
 				<ReadOnlyDetailAccordion title={liquidityCopy.previewDetails}>
 					<DataGrid dense>

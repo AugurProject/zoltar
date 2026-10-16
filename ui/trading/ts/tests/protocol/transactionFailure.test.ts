@@ -33,7 +33,7 @@ describe('transaction failure explanations', () => {
 	})
 
 	test('explains wallet cancellations and missing gas funds', () => {
-		expect(describeTransactionFailure(Object.assign(new Error('User rejected the request.'), { code: 4001 }), 'Trade failed')).toBe('Rejected in wallet. Nothing was sent. Press the button again when ready.')
+		expect(describeTransactionFailure(Object.assign(new Error('User rejected the request.'), { code: 4001 }), 'Trade failed')).toBe('Canceled in wallet. Nothing was sent. Press the button again when ready.')
 		expect(describeTransactionFailure(new Error('insufficient funds for gas * price + value'), 'Trade failed')).toBe('Your wallet does not have enough ETH for this amount plus gas. Lower the amount or add ETH to your wallet.')
 	})
 

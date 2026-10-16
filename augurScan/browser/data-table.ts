@@ -1,6 +1,9 @@
-export interface DataColumn<T> {
+export interface CsvColumn<T> {
 	readonly label: string
 	readonly value: (row: T) => string
+}
+
+export interface DataColumn<T> extends CsvColumn<T> {
 	readonly sort?: string
 	readonly href?: (row: T) => string
 }
@@ -10,7 +13,14 @@ const csvCell = (value: string): string => {
 	return `"${safe.replaceAll('"', '""')}"`
 }
 
-export const renderDataTable = <T>(container: HTMLElement, options: { readonly caption: string; readonly captionVisuallyHidden?: boolean; readonly rows: readonly T[]; readonly columns: readonly DataColumn<T>[]; readonly currentSort?: string; readonly onSort?: (sort: string) => void }): void => {
+/** @internal Exported for export-format unit tests. */
+export const dataTableCsv = <T>(columns: readonly CsvColumn<T>[], rows: readonly T[]): string => [columns.map(column => csvCell(column.label)).join(','), ...rows.map(row => columns.map(column => csvCell(column.value(row))).join(','))].join('\r\n')
+
+/** Renders a sortable table with a CSV export; `csvColumns` exports raw values in place of the displayed ones. */
+export const renderDataTable = <T>(
+	container: HTMLElement,
+	options: { readonly caption: string; readonly captionVisuallyHidden?: boolean; readonly rows: readonly T[]; readonly columns: readonly DataColumn<T>[]; readonly csvColumns?: readonly CsvColumn<T>[]; readonly currentSort?: string; readonly onSort?: (sort: string) => void },
+): void => {
 	const wrapper = document.createElement('div')
 	wrapper.className = 'data-table-shell'
 	const toolbar = document.createElement('div')
@@ -21,7 +31,7 @@ export const renderDataTable = <T>(container: HTMLElement, options: { readonly c
 	exportButton.textContent = 'Export loaded rows CSV'
 	exportButton.disabled = options.rows.length === 0
 	exportButton.addEventListener('click', () => {
-		const csv = [options.columns.map(column => csvCell(column.label)).join(','), ...options.rows.map(row => options.columns.map(column => csvCell(column.value(row))).join(','))].join('\r\n')
+		const csv = dataTableCsv(options.csvColumns ?? options.columns, options.rows)
 		const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
 		const anchor = document.createElement('a')
 		anchor.href = url

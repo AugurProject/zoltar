@@ -137,6 +137,43 @@ void describe('market creation helpers', () => {
 		expect(duplicateOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcomes must be unique.')
 	})
 
+	test('categorical validation rejects outcomes that collide with Binary questions, the implicit Invalid outcome, or each other ignoring case', () => {
+		const categoricalForm = (categoricalOutcomes: string[]): MarketFormState => ({
+			answerUnit: '',
+			categoricalOutcomes,
+			description: 'test categorical description',
+			endTime: '2000',
+			marketType: 'categorical',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'test categorical question',
+			startTime: '1000',
+		})
+		// Yes and No hash to the same question ID as a Binary question, which reads back as Binary.
+		for (const outcomes of [
+			['Yes', 'No'],
+			['No', ' Yes '],
+		]) {
+			const yesNo = validateMarketForm(categoricalForm(outcomes))
+			expect(yesNo.isValid).toBe(false)
+			expect(yesNo.fieldErrors.categoricalOutcomes).toBe('Yes and No outcomes make a Binary question. Choose Binary.')
+			expect(() => createMarketParameters(categoricalForm(outcomes))).toThrow('Yes and No outcomes make a Binary question')
+		}
+		for (const outcomes of [
+			['Alpha', 'Invalid'],
+			['Alpha', ' invalid'],
+		]) {
+			const reserved = validateMarketForm(categoricalForm(outcomes))
+			expect(reserved.isValid).toBe(false)
+			expect(reserved.fieldErrors.categoricalOutcomes).toBe('Invalid is added to every question. Use another outcome name.')
+		}
+		const caseDuplicates = validateMarketForm(categoricalForm(['Alpha', 'alpha', 'Beta']))
+		expect(caseDuplicates.isValid).toBe(false)
+		expect(caseDuplicates.fieldErrors.categoricalOutcomes).toBe('Outcomes must be unique.')
+		expect(validateMarketForm(categoricalForm(['Yes', 'No', 'Maybe'])).isValid).toBe(true)
+	})
+
 	test('validation requires a formatted scalarStart time', () => {
 		const validation = validateMarketForm({
 			answerUnit: '',
@@ -215,7 +252,7 @@ void describe('market creation helpers', () => {
 		expect(
 			validateMarketForm({
 				answerUnit: '',
-				categoricalOutcomes: ['Yes', 'No'],
+				categoricalOutcomes: ['Alpha', 'Beta'],
 				description: 'test categorical description',
 				endTime: '1000',
 				marketType: 'categorical',
@@ -459,7 +496,7 @@ void describe('market creation helpers', () => {
 				marketId: '0x2a',
 				statoblastSecurityMultiplierBps: '2',
 			}),
-		).toThrow('Initial report priority fee must be greater than 0')
+		).toThrow('Initial report priority fee must be greater than 0\u00a0nanoETH per gas.')
 	})
 
 	test('security pool creation rejects multipliers the origin factory cannot accept', () => {

@@ -2,7 +2,8 @@ import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortS
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import * as marketTypeCopy from '@zoltar/ui-core-shared/copy/marketType.js'
-import { appendInvalidOutcomeLabelIfMissing } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
+import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '@zoltar/ui-core-shared/lib/outcomeLabels.js'
+import { normalizeCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -62,17 +63,30 @@ function getRequiredCategoricalOutcomeMessage(missingOutcomeLabels: string[]) {
 	if (missingOutcomeLabels.length === 1) return `${missingOutcomeLabels[0]} is required.`
 	return `${missingOutcomeLabels.join(' and ')} are required.`
 }
+function getBinaryOutcomeLabels() {
+	return [commonCopy.yes, commonCopy.no]
+}
+function getTypedCategoricalOutcomeLabels(form: MarketFormState) {
+	return form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
+}
 function getCategoricalOutcomeLabels(form: MarketFormState) {
 	const missingRequiredOutcomeLabels = getMissingRequiredCategoricalOutcomeLabels(form)
 	if (missingRequiredOutcomeLabels.length > 0) throw new Error(getRequiredCategoricalOutcomeMessage(missingRequiredOutcomeLabels))
-	const outcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-	if (new Set(outcomeLabels).size !== outcomeLabels.length) throw new Error('Outcomes must be unique.')
-	return sortStringArrayByKeccak(outcomeLabels)
+	const outcomeLabels = getTypedCategoricalOutcomeLabels(form)
+	// Every question already has an Invalid outcome, so a user-named one would be a second, indistinguishable Invalid.
+	if (outcomeLabels.some(isInvalidOutcomeLabel)) throw new Error(marketCopy.invalidOutcomeReservedError)
+	// Labels that differ only in case read as the same outcome.
+	if (new Set(outcomeLabels.map(normalizeCaseInsensitiveText)).size !== outcomeLabels.length) throw new Error('Outcomes must be unique.')
+	const sortedOutcomeLabels = sortStringArrayByKeccak(outcomeLabels)
+	// The question ID hashes only the question data and outcome labels, so exactly Yes and No is the Binary question with the same inputs, and reads back as Binary.
+	const binaryOutcomeLabels = getBinaryOutcomeLabels()
+	if (sortedOutcomeLabels.length === binaryOutcomeLabels.length && sortedOutcomeLabels.every((label, index) => label === binaryOutcomeLabels[index])) throw new Error(marketCopy.yesNoOutcomesMakeBinaryError)
+	return sortedOutcomeLabels
 }
 function getOutcomeLabels(form: MarketFormState) {
 	switch (form.marketType) {
 		case 'binary':
-			return [commonCopy.yes, commonCopy.no]
+			return getBinaryOutcomeLabels()
 		case 'categorical':
 			return getCategoricalOutcomeLabels(form)
 		case 'scalar':
@@ -203,19 +217,14 @@ export function createQuestionParameters(form: MarketFormState) {
 	}
 }
 
-/** Outcome chips for the draft preview, matching how the created question lists its outcomes. */
-export function getDraftOutcomeLabels(questionForm: MarketFormState, categoricalOutcomesError: string | undefined) {
+/** Outcome chips for the draft preview: the typed outcomes plus the implicit Invalid outcome. */
+export function getDraftOutcomeLabels(questionForm: MarketFormState) {
 	switch (questionForm.marketType) {
 		case 'binary':
 			return appendInvalidOutcomeLabelIfMissing(getMarketCreationOutcomeLabels(questionForm))
-		case 'categorical': {
-			if (categoricalOutcomesError === undefined) {
-				return appendInvalidOutcomeLabelIfMissing(getMarketCreationOutcomeLabels(questionForm))
-			}
-
-			const normalizedOutcomes = questionForm.categoricalOutcomes.map(outcome => outcome.trim()).filter(outcome => outcome !== '')
-			return appendInvalidOutcomeLabelIfMissing(normalizedOutcomes)
-		}
+		case 'categorical':
+			// Typed order keeps each chip in place while the user types; only the submitted parameters use the onchain order.
+			return appendInvalidOutcomeLabelIfMissing(getTypedCategoricalOutcomeLabels(questionForm))
 		case 'scalar':
 			// The created question's display names its scalar outcome the same way.
 			return [marketTypeCopy.scalar, commonCopy.invalid]

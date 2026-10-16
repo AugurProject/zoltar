@@ -13,12 +13,8 @@ export type SecurityPoolFormState = {
 }
 
 export type SecurityVaultFormState = {
-	depositAmount: string
-	targetHealthFactor: string
-	repWithdrawAmount: string
 	selectedVaultOwner: string
 	securityPoolAddress: string
-	stagedOperationTimeoutMinutes?: string
 }
 
 export type TradingFormState = {

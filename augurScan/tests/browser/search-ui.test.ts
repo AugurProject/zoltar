@@ -32,8 +32,11 @@ test('Escape discards search results from an in-flight request', async () => {
 		completeSearch({ items: [{ type: 'block', label: 'Block #1', href: '/block/1?chainId=1' }] })
 		await Bun.sleep(0)
 		expect(results.querySelector('a')).toBeNull()
-		browser.document.dispatchEvent(new browser.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		const escape = new browser.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		browser.document.dispatchEvent(escape)
 		await Bun.sleep(0)
+		// The search consumes the key, so an open log drawer does not also close.
+		expect(escape.defaultPrevented).toBe(true)
 		expect(results.hidden).toBe(true)
 		expect(results.childElementCount).toBe(0)
 		expect(input.value).toBe('')

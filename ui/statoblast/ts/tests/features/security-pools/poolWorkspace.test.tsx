@@ -16,6 +16,7 @@ import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/sec
 import { createAccountState, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { addOpenOracleBountyBuffer } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
 installStatoblastRouting()
 const { renderLoadedPool, renderWorkflow, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
@@ -204,6 +205,24 @@ test('requests a new price straight from the pool oracle row', async () => {
 	expect(row?.classList.contains('warning')).toBe(true)
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price…' })))
 	expect(opened.length > 0).toBe(true)
+})
+
+test('gives the open price request dialog the live oracle fee rather than the fee it opened with', async () => {
+	const requestValues: bigint[] = []
+	const managerWithCost = (requestPriceCostAttoEth: bigint) => createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n, requestPriceCostAttoEth })
+	const overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {
+		accountState: createAccountState({ address: '0x0000000000000000000000000000000000000001', ethBalanceAttoEth: 10n ** 21n }),
+		poolOracleManagerDetails: managerWithCost(10n),
+		RequestPriceModal: ({ review }) => {
+			if (review !== undefined) requestValues.push(review.requestValueAttoEth)
+			return null
+		},
+	}
+	const rendered = await renderLoadedPool(overrides)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price…' })))
+	expect(requestValues.at(-1)).toBe(addOpenOracleBountyBuffer(10n))
+	await rendered.rerender(createLoadedPoolProps({ ...overrides, poolOracleManagerDetails: managerWithCost(20n) }))
+	expect(requestValues.at(-1)).toBe(addOpenOracleBountyBuffer(20n))
 })
 
 test('shows the stage, marks the open tab row, and offers controls that leave it', async () => {

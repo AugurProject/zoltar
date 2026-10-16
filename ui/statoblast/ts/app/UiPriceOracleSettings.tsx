@@ -27,6 +27,7 @@ export function readUiPriceOracle(storage?: Pick<Storage, 'getItem'>): UiPriceOr
 }
 
 export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { priceOracle: UiPriceOracle; onPriceOracleChange: (value: UiPriceOracle) => void }) {
+	const selectId = useId()
 	const scopeId = useId()
 	const descriptionId = useId()
 	const errorId = useId()
@@ -47,10 +48,14 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 	}
 
 	return (
-		<label className='app-settings-price-oracle'>
-			<span>{appCopy.uiPriceOracle}</span>
+		// Only the label names the select; the scope, the selected source, and any save error describe it.
+		<div className='app-settings-price-oracle'>
+			<label htmlFor={selectId}>
+				<span>{appCopy.uiPriceOracle}</span>
+			</label>
 			<UserMessage placement='field' as='span' id={scopeId} detail={appCopy.uiPriceOracleScope} />
 			<select
+				id={selectId}
 				aria-describedby={[scopeId, descriptionId, error === undefined ? undefined : errorId].filter(value => value !== undefined).join(' ')}
 				value={priceOracle}
 				onChange={event => {
@@ -64,6 +69,6 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 			</select>
 			<UserMessage placement='field' as='span' id={descriptionId} detail={priceOracleDescriptions[priceOracle]} />
 			{error === undefined ? undefined : <UserMessage placement='field' as='span' id={errorId} tone='error' announcement='assertive' detail={error} />}
-		</label>
+		</div>
 	)
 }

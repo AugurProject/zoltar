@@ -14,6 +14,7 @@ const readyLiquidity: LiquidityAvailabilityInputs = {
 	marketClosed: false,
 	requestedAmount: eth,
 	walletEthAttoEth: 5n * eth,
+	walletEthStatus: 'ready',
 	lpBalance: 2n * shares,
 	initializePriceValid: true,
 	workflowLocked: false,
@@ -49,6 +50,25 @@ describe('liquidity action availability', () => {
 		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: 3n * shares }).reason).toBe(copy.insufficientLpReason)
 		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: 2n * shares }).disabled).toBeFalse()
 		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: 3n * shares, lpBalance: undefined }).disabled).toBeFalse()
+	})
+
+	test('keeps ETH back for gas when adding or creating, but not when removing', () => {
+		const gasReserve = 'Leave 0.01 ETH in the wallet for gas.'
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, requestedAmount: 5n * eth - 10n ** 15n }).reason).toBe(gasReserve)
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'initialize', requestedAmount: 5n * eth }).reason).toBe(gasReserve)
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, requestedAmount: 5n * eth - 10n ** 16n }).disabled).toBeFalse()
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: 2n * shares, walletEthAttoEth: 0n }).disabled).toBeFalse()
+	})
+
+	test('waits for an unknown ETH balance before an addition instead of skipping the funds check', () => {
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, walletEthAttoEth: undefined, walletEthStatus: 'loading' })).toEqual({ disabled: true, loading: true, reason: copy.balancesLoadingReason })
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'initialize', walletEthAttoEth: undefined, walletEthStatus: 'error' })).toEqual({ disabled: true, reason: copy.balancesUnavailableReason })
+		// Removing liquidity spends LP tokens, not ETH, so an unknown ETH balance does not block it.
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, operation: 'remove', requestedAmount: shares, walletEthAttoEth: undefined, walletEthStatus: 'error' }).disabled).toBeFalse()
+	})
+
+	test('states why a typed amount cannot be read instead of asking for an amount', () => {
+		expect(resolveLiquidityAvailability({ ...readyLiquidity, requestedAmount: undefined, amountError: 'Enter a number, such as 1.5.' }).reason).toBe('Enter a number, such as 1.5.')
 	})
 
 	test('closed markets block additions but not removals', () => {

@@ -482,6 +482,8 @@ export interface LoadOptions {
 export interface DetailOptions {
 	live?: boolean
 	canonicalRecovery?: boolean
+	/** Scrolls the opened drawer into view, as for a deep link opened after the route scrolled to the top. */
+	reveal?: boolean
 	contextVersion?: number
 }
 

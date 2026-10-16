@@ -113,6 +113,7 @@ function createStartedChildAuctionDetails(securityPoolAddress: Address, truthAuc
 			bidAtClearingTickAttoEth: 0n,
 			attoEthRaiseCap: 1n,
 			attoEthRaised: 0n,
+			finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 			finalized: false,
 			hitCap: false,
 			maxAttoRepBeingSold: 1n,

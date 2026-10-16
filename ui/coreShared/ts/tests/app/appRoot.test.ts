@@ -59,6 +59,43 @@ test('shows an initialization error and retries once even when retry is clicked 
 	}
 })
 
+test('replaces the static loading placeholder with the initialization error instead of leaving both on the page', async () => {
+	// The same placeholder markup ships in every app's index.html.
+	document.body.innerHTML = '<div class="app-frame"><main>Loading…</main></div>'
+	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+	try {
+		await act(async () => {
+			await mountApp({ initialize: async () => Promise.reject(new Error('Read RPC unavailable')), root: () => createElement('p', {}, 'Application ready') })
+		})
+		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
+		expect(document.querySelectorAll('main')).toHaveLength(1)
+		expect(document.querySelectorAll('.app-frame')).toHaveLength(1)
+		expect(document.body.textContent).not.toContain('Loading…')
+	} finally {
+		errorLog.mockRestore()
+	}
+})
+
+test('keeps the initialization error and its Retry when a retry fails again', async () => {
+	document.body.innerHTML = '<div class="app-frame"><main>Loading…</main></div>'
+	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
+	try {
+		await act(async () => {
+			await mountApp({ initialize: async () => Promise.reject(new Error('Read RPC unavailable')), root: () => createElement('p', {}, 'Application ready') })
+		})
+		await act(async () => {
+			within(document.body).getByRole('button', { name: 'Retry' }).click()
+			await Promise.resolve()
+		})
+		await act(async () => await Promise.resolve())
+		expect(within(document.body).getByRole('alert').textContent).toContain('Read RPC unavailable')
+		expect(within(document.body).getByRole('button', { name: 'Retry' })).not.toBeNull()
+		expect(document.querySelectorAll('main')).toHaveLength(1)
+	} finally {
+		errorLog.mockRestore()
+	}
+})
+
 test('renders the same recoverable notice if constructing the root fails', async () => {
 	const errorLog = spyOn(console, 'error').mockImplementation(() => undefined)
 	try {

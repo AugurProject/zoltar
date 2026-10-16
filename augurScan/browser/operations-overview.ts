@@ -5,8 +5,10 @@ import { isRecord, operationRecords, operationsCatalogRecords, operationsRiskPag
 import { compareCanonicalEventPosition } from './canonical-pagination.ts'
 import { evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationReasonLabel, timelineEntityTypeLabel, timelineOccurrenceFields } from './history-evidence.ts'
 import { operationsForkChildCount, operationsRiskPresentation, operationsRouteFreshness } from './operations-presentation.ts'
-import { exactUnit, percentFromBps } from './format.ts'
+import { exactUnit, percentFromBps, utcDateTime } from './format.ts'
+import { nativeSymbolFor } from './network-freshness.ts'
 import type { createOperationsComponents } from './operations-components.ts'
+import { captureViewState, replaceChildrenKeeping, restoreViewState } from './view-state.ts'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -18,7 +20,6 @@ export interface OperationsOverviewDeps {
 	readonly requiredChainId: () => string
 	readonly element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K]
 	readonly number: (value: string | number | bigint | null | undefined) => string
-	readonly exactTimestamp: (value: string | number | Date | null | undefined) => string
 	readonly operationNumber: (value: unknown) => string
 	readonly operationCounted: (value: unknown, singular: string, plural?: string) => string
 	readonly operationsHref: (pathname: string) => string
@@ -42,7 +43,7 @@ export interface OperationsOverviewDeps {
 	readonly components: Components
 }
 
-export const renderOperationsOverview = (deps: OperationsOverviewDeps, response: OperationsResponse, preservedContext?: OperationsRenderContext) => {
+export const renderOperationsOverview = (deps: OperationsOverviewDeps, response: OperationsResponse, preservedContext?: OperationsRenderContext, live = false) => {
 	const {
 		lookup: $,
 		captureContext: captureOperationsRenderContext,
@@ -51,7 +52,6 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		requiredChainId,
 		element,
 		number,
-		exactTimestamp,
 		operationNumber,
 		operationCounted,
 		operationsHref,
@@ -64,6 +64,8 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const { operationCard, operationRow, exactEvidenceRow, operationsPanel } = deps.components
 	const content = $('#operations-content')
 	const renderContext = preservedContext ?? captureOperationsRenderContext()
+	// A live re-render reopens disclosures and refocuses the control the reader was using; a filter form for the same URL stays mounted with its typed values.
+	const viewState = live ? captureViewState(content) : undefined
 	const { asOf, data } = response
 	const selected = location.pathname.split('/')[2] ?? 'overview'
 	const reports = operationsCatalogRecords('reports', data['reports'])
@@ -93,7 +95,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		operationCard('Latest block', `#${number(typeof asOf['blockNumber'] === 'string' ? asOf['blockNumber'] : undefined)}`, shortIdentifier(String(asOf['blockHash'] ?? 'Unavailable'))),
 		operationCard('Observed head', `#${number(typeof asOf['observedHead'] === 'string' ? asOf['observedHead'] : undefined)}`),
 		operationCard('Block lag', number(typeof asOf['lagBlocks'] === 'string' ? asOf['lagBlocks'] : undefined), String(asOf['phase'] ?? 'Unavailable')),
-		operationCard('Block timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : exactTimestamp(Number(asOf['blockTimestamp']) * 1_000).replace('.000Z', 'Z')),
+		operationCard('Block timestamp', asOf['blockTimestamp'] === undefined ? 'Unavailable' : utcDateTime(Number(asOf['blockTimestamp']) * 1_000)),
 	)
 	const metrics = element('div', 'operations-metrics')
 	const settleableShown = reports.filter(item => isRecord(item['lifecycle']) && item['lifecycle']['state'] === 'Settleable').length
@@ -176,12 +178,13 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		)
 	})
 	const riskRows = [...poolRiskRows, ...vaultRiskRows]
+	const nativeSymbol = nativeSymbolFor(requiredChainId())
 	const approvalRows = approvals.map(item => operationRow(String(item['event_name'] ?? 'Liquidation approval'), approvalTransitionSummary(item), String(item['approval_identity'] ?? item['receiver_vault'] ?? ''), item['block_number']))
-	const liquidationRows = recentLiquidations.map(item => operationRow('Vault liquidation', semanticSummary(item), String(item['entity_identity'] ?? item['source_contract'] ?? ''), item['block_number']))
+	const liquidationRows = recentLiquidations.map(item => operationRow('Vault liquidation', semanticSummary(item, nativeSymbol), String(item['entity_identity'] ?? item['source_contract'] ?? ''), item['block_number']))
 	const tradingRows = trading.map(item =>
 		operationRow(
 			String(item['question_title'] ?? 'Augur AMM market'),
-			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%')} YES`} · ${exactUnit(String(item['eth_volume_24h_atto_eth'] ?? '0'), 18, 'ETH')} 24-hour volume · ${exactUnit(String(item['eth_volume_atto_eth'] ?? '0'), 18, 'ETH')} all-time volume · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
+			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%')} YES`} · ${exactUnit(String(item['eth_volume_24h_atto_eth'] ?? '0'), 18, nativeSymbol)} 24-hour volume · ${exactUnit(String(item['eth_volume_atto_eth'] ?? '0'), 18, nativeSymbol)} all-time volume · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
 			String(item['pair_address'] ?? ''),
 			item['price_block_number'],
 			operationsHref(`/operations/trading/${encodeURIComponent(String(item['pair_address'] ?? ''))}`),
@@ -194,7 +197,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			...timelineOccurrenceFields(item),
 			['Evidence status code', rawEvidenceStatus],
 			['Invalidation reason code', item['invalidation_reason']],
-			['Transition', semanticSummary(item)],
+			['Transition', semanticSummary(item, nativeSymbol)],
 			['Related entities', Array.isArray(item['related_entities']) ? item['related_entities'].join(' · ') : undefined],
 		])
 		const path = timelineEntityPath(item)
@@ -295,7 +298,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 				}),
 				operationsPanel(
 					'Recent reverted transactions',
-					operationRecords(coverage['reverted']).map(item => operationRow('Reverted protocol transaction', `${exactUnit(String(item['value']), 18, 'ETH')} attempted value`, String(item['to_address'] ?? ''), item['block_number'], operationsHref(`/tx/${item['hash']}`))),
+					operationRecords(coverage['reverted']).map(item => operationRow('Reverted protocol transaction', `${exactUnit(String(item['value']), 18, nativeSymbol)} attempted value`, String(item['to_address'] ?? ''), item['block_number'], operationsHref(`/tx/${item['hash']}`))),
 					'No indexed reverted transactions.',
 					{ label: 'Latest 100 selected reverted transactions.' },
 				),
@@ -343,7 +346,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	])
 	const fees = isRecord(data['feeEconomics']) ? data['feeEconomics'] : {}
 	const panels = sectionPanels.get(selected)?.() ?? [
-		operationsPanel('Protocol fee accrual', [operationRow('Accrued vault fees', fees['accrued_atto_eth'] == null ? 'Unavailable' : exactUnit(String(fees['accrued_atto_eth']), 18, 'ETH'), undefined, undefined)], '', {
+		operationsPanel('Protocol fee accrual', [operationRow('Accrued vault fees', fees['accrued_atto_eth'] == null ? 'Unavailable' : exactUnit(String(fees['accrued_atto_eth']), 18, nativeSymbol), undefined, undefined)], '', {
 			label: `Indexed accrual checkpoints across ${String(fees['pools'] ?? 'unknown')} pools; ${String(fees['missing_baselines'] ?? 'unknown')} missing opening checkpoints. This is accrued vault revenue, before claims.`,
 		}),
 		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), `No reports need attention among ${number(reports.length)} shown.`),
@@ -441,11 +444,12 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		completeStatus.setAttribute('aria-live', 'polite')
 		grid.append(completeStatus)
 	}
-	if (selected === 'overview') content.replaceChildren(...(historical ? [freshness] : []), metrics, grid)
+	if (selected === 'overview') replaceChildrenKeeping(content, [...(historical ? [freshness] : []), metrics, grid])
 	else {
-		content.replaceChildren(...(asOf['historical'] === true || asOf['phase'] === 'historical' ? [element('p', 'operations-route-freshness', operationsRouteFreshness(asOf, connection.classList.contains('live')))] : []), ...operationsSectionFilters(selected), grid)
+		replaceChildrenKeeping(content, [...(asOf['historical'] === true || asOf['phase'] === 'historical' ? [element('p', 'operations-route-freshness', operationsRouteFreshness(asOf, connection.classList.contains('live')))] : []), ...operationsSectionFilters(selected), grid])
 	}
 	content.setAttribute('aria-busy', 'false')
 	$('#operations-status').hidden = true
+	if (viewState !== undefined) restoreViewState(content, viewState)
 	restoreOperationsRenderContext(renderContext)
 }

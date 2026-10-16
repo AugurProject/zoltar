@@ -25,7 +25,7 @@ function checkWallet(hasWallet: boolean, connectedAddress: typeof accountAddress
 }
 
 test('asks to install a wallet when none is available, and to connect when one is', () => {
-	expect(checkWallet(false, undefined)).toEqual({ allowed: false, message: 'Install or enable a wallet to continue.' })
+	expect(checkWallet(false, undefined)).toEqual({ allowed: false, message: 'No browser wallet found. Install or enable one to connect.' })
 	expect(checkWallet(true, undefined)).toEqual({ allowed: false, message: 'Connect wallet to continue.' })
 	expect(checkWallet(true, accountAddress)).toEqual({ allowed: true, message: undefined })
 })

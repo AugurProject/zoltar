@@ -12,12 +12,12 @@ const label = (key: string): string => {
 	return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
 }
 
-const valueText = (key: string, value: unknown): string => {
+const valueText = (key: string, value: unknown, nativeSymbol: string): string => {
 	if (value === undefined || value === null) return 'Unavailable'
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-	if (Array.isArray(value)) return value.map(item => valueText(key, item)).join(', ')
+	if (Array.isArray(value)) return value.map(item => valueText(key, item, nativeSymbol)).join(', ')
 	if (isRecord(value))
-		return semanticFields(value)
+		return semanticFields(value, nativeSymbol)
 			.map(([name, text]) => `${name}: ${text}`)
 			.join(' · ')
 	const text = String(value)
@@ -26,7 +26,7 @@ const valueText = (key: string, value: unknown): string => {
 		if (/^(activationTime|endTimestamp|nonDecisionTimestamp)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
 		const unitKey = key.replaceAll('_', '')
 		if (/attoRep/i.test(unitKey)) return exactUnit(text, 18, 'REP')
-		if (/attoEth/i.test(unitKey) || key === 'wad') return exactUnit(text, 18, 'ETH')
+		if (/attoEth/i.test(unitKey) || key === 'wad') return exactUnit(text, 18, nativeSymbol)
 		if (/shares/i.test(unitKey)) return exactUnit(text, 18, 'shares')
 		if (/^feeIndex$/i.test(unitKey)) return exactUnit(text, 18, 'ratio')
 		if (/bps$/i.test(unitKey)) return percentFromBps(text)
@@ -35,17 +35,18 @@ const valueText = (key: string, value: unknown): string => {
 	return text
 }
 
-export const semanticFields = (data: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [string, string]> =>
+/** Labels and formats decoded fields; attoETH amounts are in the chain's native currency, `nativeSymbol`. */
+export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): ReadonlyArray<readonly [string, string]> =>
 	Object.entries(data).flatMap(([key, value]) => {
 		if (/^(current|initial)?retentionrate$/i.test(key.replaceAll('_', ''))) return [[key.toLowerCase().startsWith('initial') ? 'Initial annual open-interest fee' : 'Annual open-interest fee', annualFeeText(value)] as const]
-		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance)])
-		return [[label(key), valueText(key, value)] as const]
+		if (key === 'outcomeBalancesAttoRep' && Array.isArray(value)) return value.map((balance, index): readonly [string, string] => [`${outcomes[index] ?? index} balance`, valueText('amountAttoRep', balance, nativeSymbol)])
+		return [[label(key), valueText(key, value, nativeSymbol)] as const]
 	})
 
-export const semanticSummary = (record: Readonly<Record<string, unknown>>): string => {
+export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => {
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result']
 	return isRecord(data)
-		? semanticFields(data)
+		? semanticFields(data, nativeSymbol)
 				.map(([name, value]) => `${name}: ${value}`)
 				.join(' · ') || 'No payload fields'
 		: 'Payload unavailable'

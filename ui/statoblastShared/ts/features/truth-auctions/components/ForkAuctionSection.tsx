@@ -84,10 +84,11 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			return prunedSelections
 		})
 	}, [model.importedForkSettlementSides])
+	// The pool's migration window opens when the pool itself forks, which can be later than the universe fork, and closes MIGRATION_TIME after that
+	// (SecurityPoolForkerVaultMigrationBase). Without the pool's own fork time, the universe fork and the truth auction start bound the window instead.
 	const migrationStartedAt = (() => {
-		if (model.universeForkTime !== undefined && model.universeForkTime > 0n) return model.universeForkTime
 		if (model.forkAuctionDetails?.migrationEndsAt !== undefined) return model.forkAuctionDetails.migrationEndsAt - FORK_MIGRATION_DURATION
-		return undefined
+		return model.universeForkTime !== undefined && model.universeForkTime > 0n ? model.universeForkTime : undefined
 	})()
 	const migrationRepAtForkDisplay = model.forkAuctionDetails === undefined ? model.forkOnlyFallbackText : <CurrencyValue value={model.forkAuctionDetails.auctionableAttoRepAtFork} suffix={commonCopy.rep} />
 	// Vault migrations credit the selected outcome's child pool, so the parent pool's own migrated amount stays zero while REP moves.
@@ -102,12 +103,9 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
 	const migrationEndsDisplay = (() => {
 		if (model.forkAuctionDetails === undefined) return model.migrationSummaryText
-		if (model.hasStartedSelectedTruthAuctionTimeline && model.effectiveTruthAuctionStartedAt !== undefined && model.effectiveTruthAuctionStartedAt > 0n) {
-			return <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={model.effectiveTruthAuctionStartedAt} />
-		}
-		if (model.forkAuctionDetails.migrationEndsAt === undefined) return forkAuctionCopy.notStarted
-
-		return <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={model.forkAuctionDetails.migrationEndsAt} />
+		const migrationEndsAt = model.forkAuctionDetails.migrationEndsAt ?? (model.effectiveTruthAuctionStartedAt !== undefined && model.effectiveTruthAuctionStartedAt > 0n ? model.effectiveTruthAuctionStartedAt : undefined)
+		if (migrationEndsAt === undefined) return forkAuctionCopy.notStarted
+		return <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={migrationEndsAt} />
 	})()
 	const truthAuctionStateBadgeElement = <Badge tone={model.truthAuctionStateBadge.tone}>{model.truthAuctionStateBadge.label}</Badge>
 	const pendingRefundDisplay = (() => {
@@ -305,7 +303,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const truthAuctionSettlementSection =
 		!model.shouldShowTruthAuctionVisualization || model.truthAuctionStatus === undefined ? undefined : (
 			<Fragment>
-				{model.hasSettleableBids ? <ForkAuctionSettlementActionSection actionButton={settlementActionButton} description={model.settlementActionDescription} selectionSummary={settlementSelectionSummary} title={model.settlementActionLabel} /> : undefined}
+				<ForkAuctionSettlementActionSection actionButton={settlementActionButton} description={model.settlementActionDescription} selectionSummary={settlementSelectionSummary} title={model.settlementActionLabel} />
 				{withdrawRefundSection}
 			</Fragment>
 		)
@@ -354,7 +352,6 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		if (model.selectedStage === 'migration')
 			return (
 				<ForkAuctionMigrationStage
-					accountConnected={model.accountState.address !== undefined}
 					activeReportingDetails={model.activeReportingDetails}
 					claimParentDepositsGuardMessage={model.claimSelectedParentEscalationDepositsGuardMessage}
 					claimSelectionDisabled={model.forkAuctionActiveAction === 'claimParentEscalationDeposits'}
@@ -408,6 +405,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				startTruthAuctionSection={startTruthAuctionSection}
 				submitBidSection={submitBidSection}
 				truthAuctionEndedNotice={displays.truthAuctionEndedNotice}
+				truthAuctionFinalizeSection={displays.truthAuctionFinalizeSection}
 				truthAuctionHero={truthAuctionHero}
 				truthAuctionMarketViewSection={truthAuctionMarketViewSection}
 				truthAuctionSettlementSection={truthAuctionSettlementSection}

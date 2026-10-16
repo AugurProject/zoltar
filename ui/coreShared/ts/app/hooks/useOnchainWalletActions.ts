@@ -2,15 +2,25 @@ import { batch, useSignal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 
 import type { ChainBackend } from '../../wallet/chainBackend.js'
+import * as appCopy from '../../copy/app.js'
+import * as userMessagesCopy from '../../copy/userMessages.js'
 import { getErrorMessage, isWalletRejection } from '../../lib/errors.js'
 
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
 
 import { beginWalletAction, createWalletManagementActions } from './walletManagementActions.js'
 
-export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, onError }: { activeEnvironmentNonce: number; refreshState: () => Promise<void>; onError: (message: string | undefined) => void }) {
+/**
+ * Connect, switch, change, and disconnect requests. A failure is the outcome of the user's own wallet request, so it is kept
+ * as a dismissible message for the header's wallet controls instead of a page-level application error.
+ */
+export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState }: { activeEnvironmentNonce: number; refreshState: () => Promise<void> }) {
 	const isConnectingWallet = useSignal(false)
 	const isManagingWallet = useSignal(false)
+	const walletActionMessage = useSignal<string | undefined>(undefined)
+	const setWalletActionMessage = (message: string | undefined) => {
+		walletActionMessage.value = message
+	}
 	const renderedBackend = getActiveBackend()
 	const walletActionContextRef = useRef({ activeEnvironmentNonce, backend: renderedBackend })
 	const connectWalletGenerationRef = useRef(0)
@@ -24,12 +34,14 @@ export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, 
 		batch(() => {
 			isConnectingWallet.value = false
 			isManagingWallet.value = false
+			walletActionMessage.value = undefined
 		})
 	}, [activeEnvironmentNonce, renderedBackend])
 	const connectWallet = async () => {
 		const backend = getActiveBackend()
+		// The header disables Connect without a wallet; another caller still gets the same reason.
 		if (!backend.hasWallet()) {
-			onError('No wallet detected. Install or enable a wallet to continue.')
+			setWalletActionMessage(userMessagesCopy.walletInstallationRequired)
 			return
 		}
 		if (isConnectingWallet.value) return
@@ -37,7 +49,7 @@ export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, 
 		try {
 			batch(() => {
 				isConnectingWallet.value = true
-				onError(undefined)
+				walletActionMessage.value = undefined
 			})
 			await backend.requestAccounts()
 			if (!isCurrentAction()) return
@@ -46,7 +58,7 @@ export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, 
 			if (!isCurrentAction()) return
 			// Declining the wallet prompt is the user's choice, not an application error.
 			if (isWalletRejection(error)) return
-			onError(getErrorMessage(error, 'Wallet connection failed'))
+			setWalletActionMessage(getErrorMessage(error, appCopy.walletConnectionFailed))
 		} finally {
 			if (isCurrentAction()) isConnectingWallet.value = false
 		}
@@ -58,7 +70,7 @@ export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, 
 		try {
 			batch(() => {
 				isManagingWallet.value = true
-				onError(undefined)
+				walletActionMessage.value = undefined
 			})
 			await action(backend)
 			if (!isCurrentAction()) return
@@ -66,7 +78,7 @@ export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, 
 		} catch (error) {
 			if (!isCurrentAction()) return
 			if (isWalletRejection(error)) return
-			onError(getErrorMessage(error, fallbackMessage))
+			setWalletActionMessage(getErrorMessage(error, fallbackMessage))
 		} finally {
 			if (isCurrentAction()) isManagingWallet.value = false
 		}
@@ -76,6 +88,8 @@ export function useOnchainWalletActions({ activeEnvironmentNonce, refreshState, 
 	return {
 		isConnectingWallet: isConnectingWallet.value,
 		isManagingWallet: isManagingWallet.value,
+		walletActionMessage: walletActionMessage.value,
+		dismissWalletActionMessage: () => setWalletActionMessage(undefined),
 		connectWallet,
 		changeWallet,
 		disconnectWallet,

@@ -34,6 +34,7 @@ export function QuotedTransactionPanel({
 	receiptWarning,
 	error,
 	walletStep,
+	announceMessage = true,
 	onSubmit,
 	children,
 }: {
@@ -47,6 +48,8 @@ export function QuotedTransactionPanel({
 	error: string | undefined
 	/** Present when the wallet must be connected or switched before the action can run. */
 	walletStep?: WalletStep | undefined
+	/** False while the message only says the estimate is catching up with typing, so screen readers are not told on every pause. */
+	announceMessage?: boolean
 	onSubmit(): void
 	children?: ComponentChildren
 }) {
@@ -65,7 +68,7 @@ export function QuotedTransactionPanel({
 				<ErrorNotice message={receiptWarning} />
 				<ErrorNotice message={error} />
 				{/* The spinner belongs to a blocked action that is waiting; once a transaction runs or confirms, its status line speaks instead. */}
-				<TransactionActionGroup loading={walletStep === undefined && (phase === 'idle' || phase === 'error') && availability.loading === true} message={groupMessage}>
+				<TransactionActionGroup announce={announceMessage} loading={walletStep === undefined && (phase === 'idle' || phase === 'error') && availability.loading === true} message={groupMessage}>
 					{walletStep === undefined ? (
 						<TransactionActionButton availability={availability} idleLabel={actionLabel} pending={transactionInFlight(phase)} pendingLabel={transactionPendingLabel(phase)} onClick={onSubmit} />
 					) : (

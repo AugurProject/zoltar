@@ -5,19 +5,21 @@ import * as marketCopy from '../../../copy/market.js'
 import { QuestionCreateSection } from '../../questions/components/QuestionCreateSection.js'
 import { QuestionsView } from './QuestionsView.js'
 import { useZoltarWorkspace } from './ZoltarWorkspace.js'
+import { getForkHandoff } from '../lib/zoltarViewModels.js'
+import { useExistingQuestionCheck } from '../../questions/hooks/useExistingQuestionCheck.js'
 
 /** Global question registry; choosing a question for a fork opens the Fork route with it selected. */
 export function ZoltarQuestionsRoute() {
-	const { environmentRefreshKey, onViewChange, operations } = useZoltarWorkspace()
+	const { currentTimestamp, environmentRefreshKey, onForkQuestionIdChange, onViewChange, operations, universeError, universeState } = useZoltarWorkspace()
 	return (
 		<QuestionsView
+			currentTimestamp={currentTimestamp}
+			forkHandoff={getForkHandoff({ universe: operations.zoltarUniverse, universeError, universeState })}
 			zoltarQuestionsFreshness={operations.zoltarQuestionsFreshness}
-			canFork={operations.zoltarUniverse !== undefined}
-			hasForked={operations.zoltarUniverse?.hasForked === true}
 			loadingZoltarQuestions={operations.loadingZoltarQuestions}
 			onActiveViewChange={onViewChange}
 			onLoadZoltarQuestionPage={operations.loadZoltarQuestionPage}
-			onZoltarForkQuestionIdChange={operations.setZoltarForkQuestionId}
+			onZoltarForkQuestionIdChange={onForkQuestionIdChange}
 			requestContextKey={environmentRefreshKey}
 			zoltarQuestionPage={operations.zoltarQuestionPage}
 			zoltarQuestionsError={operations.zoltarQuestionsError}
@@ -26,14 +28,19 @@ export function ZoltarQuestionsRoute() {
 }
 
 export function ZoltarCreateQuestionRoute() {
-	const { accountState, onViewChange, operations } = useZoltarWorkspace()
+	const { accountState, environmentRefreshKey, onForkQuestionIdChange, onViewChange, operations, universeError, universeState } = useZoltarWorkspace()
+	const forkHandoff = getForkHandoff({ universe: operations.zoltarUniverse, universeError, universeState })
+	// The contract rejects a second question with the same ID, so the draft's ID is looked up before Create.
+	const existingQuestionCheck = useExistingQuestionCheck({ enabled: operations.questionResult === undefined && !operations.questionCreating, environmentRefreshKey, form: operations.questionForm })
 	return (
 		<>
 			<RouteHeader description={marketCopy.createQuestionDescription} title={commonCopy.createQuestion} />
 			<QuestionCreateSection
 				accountAddress={accountState.address}
-				canUseForFork={operations.zoltarUniverse !== undefined}
-				hasForked={operations.zoltarUniverse?.hasForked === true}
+				canUseForFork={forkHandoff.kind !== 'omitted'}
+				existingQuestionCheck={existingQuestionCheck}
+				forkUnavailableReason={forkHandoff.kind === 'offered' ? forkHandoff.universeReason : undefined}
+				hasForked={forkHandoff.kind === 'forked'}
 				isOnActiveAppChain={isActiveAppChain(accountState.chainId)}
 				loadingZoltarQuestions={operations.loadingZoltarQuestions}
 				questionCreating={operations.questionCreating}
@@ -44,7 +51,7 @@ export function ZoltarCreateQuestionRoute() {
 				onOpenForkTab={() => onViewChange('fork')}
 				onQuestionFormChange={update => operations.setQuestionForm(current => ({ ...current, ...update }))}
 				onResetQuestion={operations.resetQuestion}
-				onUseQuestionForFork={operations.setZoltarForkQuestionId}
+				onUseQuestionForFork={onForkQuestionIdChange}
 				zoltarQuestions={operations.zoltarQuestions}
 			/>
 		</>

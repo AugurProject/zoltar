@@ -103,15 +103,23 @@ select {
 	min-width: 0;
 }
 .global-network {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 	align-self: start;
 	min-width: 0;
 }
 .global-network select {
+	flex: 1 1 auto;
 	width: 100%;
 	max-width: 16rem;
 	min-width: 0;
 	height: var(--control-height);
 	font-size: 0.8125rem;
+}
+.global-network button {
+	flex: 0 0 auto;
+	width: auto;
 }
 .product-nav {
 	grid-column: 1 / 3;
@@ -635,6 +643,36 @@ a.operations-row:focus-visible {
 .operations-row code {
 	max-width: 20rem;
 	overflow-wrap: anywhere;
+}
+/* Outranks `.operations-row span`, which would put the control on its own muted line. */
+.operations-row .identifier-copy,
+.identifier-copy {
+	display: inline-flex;
+	margin: 0 0 0 0.5rem;
+	vertical-align: middle;
+}
+.identifier-copy-button {
+	min-height: 36px;
+	padding: 0.2rem 0.6rem;
+	border: 1px solid var(--line-interactive);
+	border-radius: var(--radius-compact);
+	color: var(--text);
+	background: var(--panel);
+	font-size: 0.8125rem;
+	white-space: nowrap;
+}
+.identifier-copy-button:hover {
+	border-color: var(--cyan);
+}
+.operations-detail-identity-part {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.5rem;
+	margin-top: 0.35rem;
+}
+.operations-detail-identity-part .identifier-copy {
+	margin-left: 0;
 }
 .operations-risk-protocol {
 	border-left: 3px solid var(--cyan);
@@ -1430,6 +1468,7 @@ button[aria-busy="true"]:disabled {
 
 .feed-shell {
 	position: relative;
+	container: activity-feed / inline-size;
 	overflow-x: auto;
 	border: 1px solid var(--line);
 	border-radius: 10px;
@@ -1486,6 +1525,26 @@ button[aria-busy="true"]:disabled {
 	background: color-mix(in srgb, var(--cyan) 4%, #0d141c);
 	box-shadow: inset 3px 0 var(--cyan);
 }
+/* A deep-linked log whose row is not loaded is shown above the feed instead of under its row. */
+.event-detail-drawer[data-placement="pinned"] {
+	margin-bottom: 0.75rem;
+	border-top: 1px solid var(--line);
+	border-radius: 10px;
+}
+/* A drawer under its row closes from that row; only a pinned drawer, which has no row, shows its own Close control. */
+.event-detail-bar {
+	display: none;
+}
+.event-detail-drawer[data-placement="pinned"] .event-detail-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 0.75rem;
+}
+.event-detail-bar .eyebrow {
+	margin-bottom: 0;
+}
 .event-detail-content .detail-grid {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1533,7 +1592,7 @@ button[aria-busy="true"]:disabled {
 	gap: 0.55rem;
 	font: 0.8125rem / 1 var(--mono);
 }
-.chain-block > :first-child {
+.chain-block > .activity-target {
 	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
@@ -1555,7 +1614,7 @@ button[aria-busy="true"]:disabled {
 	white-space: normal;
 	overflow: visible;
 }
-.cell-time > span:first-child {
+.cell-time > .activity-time-value {
 	white-space: nowrap;
 }
 .activity-age {
@@ -1596,6 +1655,66 @@ button[aria-busy="true"]:disabled {
 	background: transparent;
 	color: #a9eee9;
 	font: 650 0.8125rem / 1 var(--mono);
+}
+/* Narrower than the seven-column table, each row becomes labelled fields on two lines instead of scrolling sideways. Precedes the phone card layout, which overrides it. */
+@container activity-feed (max-width: 1181px) {
+	.feed-header {
+		display: none;
+	}
+
+	.log-row {
+		min-width: 0;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		align-items: start;
+		gap: 0.65rem 1rem;
+		padding: 0.75rem 0.85rem;
+	}
+
+	.log-row > .cell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
+		gap: 0.25rem;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	.log-row > .chain-block {
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: start;
+	}
+
+	/* The block link keeps its full-height target, but its number lines up with the other values under their labels. */
+	.log-row > .chain-block > .activity-target {
+		align-items: flex-start;
+	}
+
+	.log-row > .chain-block > .activity-field-label {
+		grid-column: 1 / -1;
+	}
+
+	.log-row .cell-time > .activity-time-value {
+		white-space: normal;
+	}
+
+	.activity-field-label {
+		position: static;
+		width: auto;
+		height: auto;
+		margin: 0;
+		overflow: visible;
+		clip: auto;
+		clip-path: none;
+		white-space: normal;
+		color: var(--muted);
+		font: 650 0.8125rem / 1.2 var(--mono);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.log-row .activity-summary-text {
+		padding: 0;
+	}
 }
 .feed-state {
 	position: sticky;
@@ -1857,6 +1976,20 @@ dialog::backdrop {
 	gap: 0.8rem;
 }
 .contract-row strong {
+	font-size: 0.8125rem;
+}
+.contract-row-title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.6rem;
+	min-width: 0;
+}
+.contract-provenance {
+	padding: 0.1rem 0.5rem;
+	border-radius: 999px;
+	color: var(--muted);
+	background: var(--panel-2);
 	font-size: 0.8125rem;
 }
 .contract-row code {
@@ -2616,7 +2749,7 @@ dialog::backdrop {
 }
 
 .operations-nav-group > span,
-.operations-route-selector > span {
+.operations-route-selector > label {
 	padding: 0 0.55rem 0.25rem;
 	color: var(--muted);
 	font-size: 0.8125rem;
@@ -2671,8 +2804,23 @@ dialog::backdrop {
 		margin-bottom: 1rem;
 	}
 
-	.operations-route-selector > span {
+	.operations-route-selector > label {
 		padding-left: 0;
+	}
+
+	.operations-route-controls {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.operations-route-controls select {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.operations-route-controls button {
+		flex: 0 0 auto;
+		width: auto;
 	}
 
 	main {
@@ -2747,45 +2895,8 @@ dialog::backdrop {
 		white-space: normal;
 	}
 
-	.log-row .cell-time > span:first-child {
+	.log-row .cell-time > .activity-time-value {
 		white-space: normal;
-	}
-
-	.log-row > .cell::before {
-		color: var(--muted);
-		font-family: inherit;
-		font-size: 0.8125rem;
-		font-weight: 650;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-	}
-
-	.log-row > .chain-block::before {
-		content: "Block";
-	}
-
-	.log-row > .cell-time::before {
-		content: "Timestamp";
-	}
-
-	.log-row > .cell:nth-child(3)::before {
-		content: "Contract";
-	}
-
-	.log-row > .event-name::before {
-		content: "Event";
-	}
-
-	.log-row > .cell-function::before {
-		content: "Function";
-	}
-
-	.log-row > .cell-tx::before {
-		content: "Transaction";
-	}
-
-	.log-row > .cell-origin::before {
-		content: "Origin";
 	}
 
 	.event-name {
@@ -3075,6 +3186,7 @@ dialog,
 	.state-retry,
 	.icon-button,
 	.row-open-cue,
+	.identifier-copy,
 	.back-link {
 		display: none !important;
 	}

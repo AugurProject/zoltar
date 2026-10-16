@@ -325,17 +325,34 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		})
 	}
 
-	const { connectWallet, changeWallet, disconnectWallet, switchNetwork, isConnectingWallet, isManagingWallet } = useOnchainWalletActions({
+	const { connectWallet, changeWallet, disconnectWallet, dismissWalletActionMessage, switchNetwork, isConnectingWallet, isManagingWallet, walletActionMessage } = useOnchainWalletActions({
 		activeEnvironmentNonce,
 		refreshState,
-		onError: message => {
-			errorMessage.value = message
-		},
 	})
 
 	useEffect(() => {
 		void refreshState()
 	}, [activeEnvironmentNonce])
+
+	// A wallet extension can inject its provider after the page loads, which would otherwise leave Connect disabled until a
+	// reload. Recheck when a wallet announces itself (MetaMask's `ethereum#initialized`, EIP-6963) or the page regains focus.
+	const walletMissing = !hasInjectedWallet.value
+	useEffect(() => {
+		if (!walletMissing) return
+		const recheck = () => {
+			if (!getActiveBackend().hasWallet()) return
+			hasInjectedWallet.value = true
+			// The new provider may already hold an authorized account.
+			void refreshState()
+		}
+		const windowEvents = ['ethereum#initialized', 'eip6963:announceProvider', 'focus']
+		for (const event of windowEvents) window.addEventListener(event, recheck)
+		document.addEventListener('visibilitychange', recheck)
+		return () => {
+			for (const event of windowEvents) window.removeEventListener(event, recheck)
+			document.removeEventListener('visibilitychange', recheck)
+		}
+	}, [walletMissing])
 
 	useEffect(() => {
 		const backend = getActiveBackend()
@@ -378,6 +395,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		}
 	}, [activeEnvironmentNonce])
 
+	// Wallet and backend subscriptions; a provider injected after the page loaded is subscribed once it appears.
 	useEffect(() => {
 		const backend = getActiveBackend()
 		const unsubscribeState = backend.subscribe?.(() => {
@@ -415,7 +433,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			unsubscribeAccounts()
 			unsubscribeState?.()
 		}
-	}, [activeEnvironmentNonce, enableChainClock])
+	}, [activeEnvironmentNonce, enableChainClock, walletMissing])
 
 	useWalletBalanceRefresh({ accountState, activeEnvironmentNonce, balanceErrors: { eth: ethBalanceAttoEthError, weth: wethBalanceAttoEthError }, balanceReadGeneration: balanceReadGenerationRef, dependencies, walletStateLoad })
 	useReadBackendRecovery({
@@ -453,9 +471,11 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
 		isRefreshing: walletStateLoad.isLoading.value,
 		applicationDeploymentComplete: applicationDeploymentComplete.value,
+		walletActionMessage,
 		walletBootstrapComplete: walletBootstrapComplete.value,
 		changeWallet,
 		connectWallet,
+		dismissWalletActionMessage,
 		refreshState,
 		/** Validates the read RPC again now, for a notice's retry action. */
 		retryReadBackend: () => refreshState(),

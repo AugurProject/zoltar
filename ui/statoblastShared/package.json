@@ -121,6 +121,10 @@
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolsOverview.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolsOverview.js"
 		},
+		"./features/security-pools/hooks/useSecurityPoolDiscovery.js": {
+			"bun": "./ts/features/security-pools/hooks/useSecurityPoolDiscovery.ts",
+			"default": "./js/features/security-pools/hooks/useSecurityPoolDiscovery.js"
+		},
 		"./features/security-pools/hooks/useSecurityVaultOperations.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityVaultOperations.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityVaultOperations.js"
@@ -361,6 +365,10 @@
 			"bun": "./ts/features/open-oracle/lib/oracleRequestEth.ts",
 			"default": "./js/features/open-oracle/lib/oracleRequestEth.js"
 		},
+		"./features/open-oracle/lib/initialPriceReference.js": {
+			"bun": "./ts/features/open-oracle/lib/initialPriceReference.ts",
+			"default": "./js/features/open-oracle/lib/initialPriceReference.js"
+		},
 		"./features/oracleTypes.js": {
 			"bun": "./ts/features/oracleTypes.ts",
 			"default": "./js/features/oracleTypes.js"
@@ -404,6 +412,14 @@
 		"./features/reporting/lib/reportingGuards.js": {
 			"bun": "./ts/features/reporting/lib/reportingGuards.ts",
 			"default": "./js/features/reporting/lib/reportingGuards.js"
+		},
+		"./protocol/oracleRequestFunding.js": {
+			"bun": "./ts/protocol/oracleRequestFunding.ts",
+			"default": "./js/protocol/oracleRequestFunding.js"
+		},
+		"./features/reporting/lib/reportingMaxContribution.js": {
+			"bun": "./ts/features/reporting/lib/reportingMaxContribution.ts",
+			"default": "./js/features/reporting/lib/reportingMaxContribution.js"
 		},
 		"./features/reportingTransactionPresentations.js": {
 			"bun": "./ts/features/reportingTransactionPresentations.tsx",
@@ -525,13 +541,13 @@
 			"bun": "./ts/features/security-pools/components/SecurityPoolVaultWorkspace.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolVaultWorkspace.js"
 		},
+		"./features/security-pools/components/OracleOperationActions.js": {
+			"bun": "./ts/features/security-pools/components/OracleOperationActions.tsx",
+			"default": "./js/features/security-pools/components/OracleOperationActions.js"
+		},
 		"./features/security-pools/components/VaultMetricGrid.js": {
 			"bun": "./ts/features/security-pools/components/VaultMetricGrid.tsx",
 			"default": "./js/features/security-pools/components/VaultMetricGrid.js"
-		},
-		"./features/security-pools/components/VaultQueuedOperationStatusCard.js": {
-			"bun": "./ts/features/security-pools/components/VaultQueuedOperationStatusCard.tsx",
-			"default": "./js/features/security-pools/components/VaultQueuedOperationStatusCard.js"
 		},
 		"./features/truth-auctions/components/ForkAuctionActionSections.js": {
 			"bun": "./ts/features/truth-auctions/components/ForkAuctionActionSections.tsx",
@@ -560,10 +576,6 @@
 		"./features/universes/components/ShareMigrationTargetsSection.js": {
 			"bun": "./ts/features/universes/components/ShareMigrationTargetsSection.tsx",
 			"default": "./js/features/universes/components/ShareMigrationTargetsSection.js"
-		},
-		"./features/security-pools/lib/securityVaultAvailability.js": {
-			"bun": "./ts/features/security-pools/lib/securityVaultAvailability.ts",
-			"default": "./js/features/security-pools/lib/securityVaultAvailability.js"
 		},
 		"./features/security-pools/lib/liquidationModalGuards.js": {
 			"bun": "./ts/features/security-pools/lib/liquidationModalGuards.ts",
@@ -629,10 +641,6 @@
 			"bun": "./ts/features/vault-operations/lib/targets.ts",
 			"default": "./js/features/vault-operations/lib/targets.js"
 		},
-		"./features/security-pools/lib/securityVaultActionTitles.js": {
-			"bun": "./ts/features/security-pools/lib/securityVaultActionTitles.ts",
-			"default": "./js/features/security-pools/lib/securityVaultActionTitles.js"
-		},
 		"./features/open-oracle/components/OpenOraclePriceInput.js": {
 			"bun": "./ts/features/open-oracle/components/OpenOraclePriceInput.tsx",
 			"default": "./js/features/open-oracle/components/OpenOraclePriceInput.js"
@@ -648,10 +656,6 @@
 		"./features/open-oracle/components/RequestPriceModal.js": {
 			"bun": "./ts/features/open-oracle/components/RequestPriceModal.tsx",
 			"default": "./js/features/open-oracle/components/RequestPriceModal.js"
-		},
-		"./features/security-pools/components/VaultBackingFactorForm.js": {
-			"bun": "./ts/features/security-pools/components/VaultBackingFactorForm.tsx",
-			"default": "./js/features/security-pools/components/VaultBackingFactorForm.js"
 		}
 	},
 	"version": "1.0.0"

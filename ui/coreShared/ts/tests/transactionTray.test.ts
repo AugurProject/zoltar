@@ -452,11 +452,11 @@ describe('transactionTray', () => {
 
 	test('ends a request quietly when the user declines the wallet prompt', () => {
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question', failedTitle: 'Question creation' })
-		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Rejected in wallet.' })
+		const failed = markTransactionFailed(requested, { kind: 'rejected', message: 'Canceled in wallet.' })
 
 		// No red failed panel for a deliberate cancel; nothing was sent.
 		expect(failed.active).toBeUndefined()
-		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Rejected in wallet.' }, hash: undefined })
+		expect(failed.entries[0]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'rejected', message: 'Canceled in wallet.' }, hash: undefined })
 		expect(markTransactionFinished(failed, 'transaction-request-1').entries).toEqual([])
 	})
 

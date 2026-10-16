@@ -7,6 +7,7 @@ import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@z
 import { createOpenOracleReportInstance, loadOpenOracleWithdrawableBalances, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance, wrapWeth as wrapUiWeth } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation, queueSecurityPoolLiquidation, requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { formatCeilingAmountDisplay } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import {
 	addOpenOracleBountyBuffer,
@@ -208,6 +209,8 @@ function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof der
 		token2Balance: 1_000n,
 		token2BalanceError: undefined,
 		token2Decimals: 0,
+		walletEthBalanceAttoEth: undefined,
+		wethAddress: undefined,
 		...overrides,
 	})
 }
@@ -1625,5 +1628,30 @@ describe('OpenOracle helpers', () => {
 
 		const endBalance = await loadErc20Balance(uiReadClient, WETH_ADDRESS, walletAddress)
 		expect(endBalance - startBalance).toEqual(wrapAmount)
+	})
+})
+
+describe('OpenOracle dispute WETH wrap step', () => {
+	const wethAddress = getAddress(WETH_ADDRESS)
+
+	test('applies only when a report token is WETH and is sized to the WETH the wallet lacks', () => {
+		const required = createDisputeSubmissionPreview().token2ContributionAmount
+		if (required === undefined || required === 0n) throw new Error('Expected the dispute to pay WETH')
+		expect(createDisputeSubmissionPreview().wethWrap).toBeUndefined()
+		expect(createDisputeSubmissionPreview({ walletEthBalanceAttoEth: 0n, wethAddress }).wethWrap).toEqual({ amountAttoEth: 0n, blockMessage: { kind: 'visible', message: 'Not needed. Your WETH covers this dispute.' } })
+
+		const short = createDisputeSubmissionPreview({ token2Balance: 0n, walletEthBalanceAttoEth: required, wethAddress })
+		expect(short.wethWrap).toEqual({ amountAttoEth: required, blockMessage: undefined })
+		expect(short.blockMessage?.message).toBe(`Wrap ${formatCeilingAmountDisplay(required)} ETH to WETH first.`)
+
+		const ethShort = createDisputeSubmissionPreview({ token2Balance: 0n, walletEthBalanceAttoEth: required - 1n, wethAddress })
+		expect(ethShort.wethWrap?.blockMessage?.message).toStartWith('Insufficient ETH to wrap.')
+		expect(ethShort.blockMessage?.message).toStartWith('Insufficient WETH balance for this dispute.')
+	})
+
+	test('stays disabled with a reason until the amounts and balances are known', () => {
+		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '', walletEthBalanceAttoEth: 0n, wethAddress }).wethWrap?.blockMessage).toEqual({ kind: 'visible', message: 'Enter valid dispute amounts before wrapping ETH.' })
+		expect(createDisputeSubmissionPreview({ token2Balance: undefined, walletEthBalanceAttoEth: 0n, wethAddress }).wethWrap?.blockMessage).toEqual({ kind: 'hidden-loading', message: 'Loading current WETH balance…' })
+		expect(createDisputeSubmissionPreview({ token2Balance: 0n, walletEthBalanceAttoEth: undefined, wethAddress }).wethWrap?.blockMessage).toEqual({ kind: 'hidden-loading', message: 'Loading ETH balance…' })
 	})
 })

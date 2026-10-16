@@ -1,15 +1,18 @@
 import { poolSummaryMetrics } from './pool-metrics.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { semanticFields } from './semantic-evidence.ts'
+import { identifierCopyButton } from './identifier-copy.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { isRecord, operationRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { compareCanonicalEventPosition, summarizeHistoryCollections } from './canonical-pagination.ts'
 import { operationsDetailEvidencePanelVisible, operationsDetailHeaderPresentation, operationsDetailSummaryPresentation, operationsRiskPresentation } from './operations-presentation.ts'
 import { exactUnit } from './format.ts'
+import { nativeSymbolFor } from './network-freshness.ts'
 import { renderCandleContent } from './operations-candles.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
+import { captureViewState, restoreViewState } from './view-state.ts'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -33,6 +36,8 @@ export interface OperationsDetailDeps {
 	readonly pageUrl: URL
 	readonly demoRiskHistoryAutoLoadConsumed: boolean
 	readonly consumeDemoRiskHistoryAutoLoad: () => void
+	/** Records a tab switch in the address bar; the tab's panels are already rendered, so no data is reloaded. */
+	readonly selectTab: (destination: URL) => void
 	readonly setDetailState: (state: { readonly chainId: string; readonly routeKey: string; readonly items: readonly JsonRecord[]; readonly decisionItems: readonly JsonRecord[]; readonly activityItems: readonly JsonRecord[]; readonly riskHistoryOffset: number }) => void
 	readonly requiredChainId: () => string
 	readonly operationsDetailRouteKey: (route: OperationsDetailRoute) => string
@@ -53,7 +58,24 @@ export interface OperationsDetailDeps {
 
 const detailPageRecord = (data: JsonRecord, key: string): JsonRecord => (isRecord(data[key]) ? data[key] : {})
 
-export const renderOperationsDetail = (deps: OperationsDetailDeps, response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext) => {
+// Overview holds current state, History keeps timelines with their pagers, and Evidence holds canonical records and proofs.
+type DetailTab = 'overview' | 'history' | 'evidence'
+
+/** Shows the panels of the requested detail tab and marks its link current; a tab without panels falls back to Overview. */
+export const showOperationsDetailTab = (content: ParentNode, requested: string | null): void => {
+	const links = [...content.querySelectorAll<HTMLAnchorElement>('.entity-detail-tabs a[data-detail-tab]')]
+	if (links.length === 0) return
+	const active = links.some(link => link.dataset['detailTab'] === requested) ? requested : 'overview'
+	for (const link of links) {
+		if (link.dataset['detailTab'] === active) link.setAttribute('aria-current', 'page')
+		else link.removeAttribute('aria-current')
+	}
+	for (const group of content.querySelectorAll<HTMLElement>('.operations-grid > [data-detail-tab]')) group.hidden = group.dataset['detailTab'] !== active
+}
+
+const isPlainPrimaryClick = (event: MouseEvent): boolean => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+
+export const renderOperationsDetail = (deps: OperationsDetailDeps, response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext, live = false) => {
 	const {
 		lookup: $,
 		captureContext: captureOperationsRenderContext,
@@ -81,6 +103,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const { operationCard, operationRow, operationsPanel } = deps.components
 	const content = $('#operations-content')
 	const renderContext = preservedContext ?? captureOperationsRenderContext()
+	// A live re-render reopens disclosures and refocuses the control the reader was using.
+	const viewState = live ? captureViewState(content) : undefined
 	const data = response.data
 	const asOf = response.asOf
 	const header = element('section', 'operations-detail-header')
@@ -94,7 +118,14 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const title = element('h2', '', route.kind === 'report' ? `OpenOracle report ${route.identity[1]}` : `${route.kind[0]?.toUpperCase()}${route.kind.slice(1)} ${shortIdentifier(titleIdentity ?? '')}`)
 	header.append(back, title)
 	const identity = element('details', 'operations-detail-identity')
-	identity.append(element('summary', '', 'Full identity'), element('code', '', route.identity.join(' · ')))
+	identity.append(
+		element('summary', '', 'Full identity'),
+		...route.identity.map(part => {
+			const line = element('div', 'operations-detail-identity-part')
+			line.append(element('code', '', part), identifierCopyButton(part))
+			return line
+		}),
+	)
 	header.append(identity)
 	if (historical) header.append(element('p', 'operations-route-freshness', headerPresentation.freshness))
 
@@ -110,13 +141,12 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		snapshotReadStatus: snapshot?.['read_status'],
 	})
 	if (summaryPresentation.label !== 'Evidence state' || summaryPresentation.value !== 'Event-derived') summary.append(operationCard(summaryPresentation.label, summaryPresentation.value))
+	const nativeSymbol = nativeSymbolFor(requiredChainId())
 	if (route.kind === 'pool') {
 		const state = data['read_status'] === 'success' && isRecord(data['read_result']) ? data['read_result'] : {}
-		for (const [label, value] of poolSummaryMetrics(state)) summary.append(operationCard(label, value))
+		for (const [label, value] of poolSummaryMetrics(state, nativeSymbol)) summary.append(operationCard(label, value))
 	}
 
-	// Overview holds current state, History keeps timelines with their pagers, and Evidence holds canonical records and proofs.
-	type DetailTab = 'overview' | 'history' | 'evidence'
 	const panels: { tab: DetailTab; node: HTMLElement }[] = []
 	const addPanel = (tab: DetailTab, node: HTMLElement) => panels.push({ tab, node })
 	let loadedRiskHistoryOffset = 0
@@ -141,7 +171,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'Current-state snapshot',
 				[
 					operationRow('Tagged block read', String(snapshot['read_status']), String(snapshot['entity_identity'] ?? ''), snapshot['block_number']),
-					...semanticFields(isRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}).map(([label, value]) => operationRow(label, value, undefined, undefined)),
+					...semanticFields(isRecord(snapshot['read_result']) ? Object.fromEntries(Object.entries(snapshot['read_result']).filter(([key]) => key !== 'claimEvidence')) : {}, nativeSymbol).map(([label, value]) => operationRow(label, value, undefined, undefined)),
 					rawEvidence(snapshot),
 				],
 				'Snapshot unavailable',
@@ -173,7 +203,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			'overview',
 			operationsPanel(
 				headerPresentation.riskPanelTitle,
-				[protocolStateRow, scannerAssessmentRow, ...semanticFields({ ...(isRecord(data['read_result']) ? data['read_result'] : {}), ...(isRecord(data['risk']) ? data['risk'] : {}) }).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])), rawEvidence(data)],
+				[protocolStateRow, scannerAssessmentRow, ...semanticFields({ ...(isRecord(data['read_result']) ? data['read_result'] : {}), ...(isRecord(data['risk']) ? data['risk'] : {}) }, nativeSymbol).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])), rawEvidence(data)],
 				'Risk state unavailable',
 			),
 		)
@@ -196,8 +226,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No trading observations are available.',
 			),
 		)
-		addPanel('overview', operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits' }))
-		const activityPanel = tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref })
+		addPanel('overview', operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted, nativeSymbol }), '', { label: 'Router enters and exits' }))
+		const activityPanel = tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref, nativeSymbol })
 		if (activityPage['hasMore'] === true && typeof activityPage['nextCursor'] === 'string') {
 			const more = element('button', 'secondary compact', 'Show older market activity')
 			more.type = 'button'
@@ -364,7 +394,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			if (isDemo && pageUrl.searchParams.get('riskHistoryAutoLoad') === '1' && !demoRiskHistoryAutoLoadConsumed) {
 				deps.consumeDemoRiskHistoryAutoLoad()
 				window.setTimeout(() => {
-					if (loadMore.isConnected) {
+					if (loadMore.isConnected && loadMore.closest('[hidden]') === null) {
 						loadMore.focus({ preventScroll: true })
 						loadMore.click()
 					}
@@ -388,7 +418,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
-		const demandRows = demand.map(point => operationRow(`Tick ${String(point['tick'])}`, `${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, 'ETH')} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, 'ETH')}`, String(point['tick']), undefined))
+		const demandRows = demand.map(point => operationRow(`Tick ${String(point['tick'])}`, `${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, nativeSymbol)} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, nativeSymbol)}`, String(point['tick']), undefined))
 		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
 	const branches = operationRecords(data['branches'])
@@ -497,11 +527,23 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			else target.searchParams.set('tab', key)
 			const anchor = element('a', '', label)
 			anchor.href = `${target.pathname}${target.search}`
+			anchor.dataset['detailTab'] = key
 			if (key === activeTab) anchor.setAttribute('aria-current', 'page')
+			// Every tab's panels are already rendered, so switching only changes which group is shown.
+			anchor.addEventListener('click', event => {
+				if (!isPlainPrimaryClick(event)) return
+				event.preventDefault()
+				deps.selectTab(new URL(anchor.href))
+				showOperationsDetailTab(content, key)
+			})
 			tabs.append(anchor)
+			const grouped = panels.filter(panel => panel.tab === key).map(panel => panel.node)
+			for (const node of grouped.length > 0 ? grouped : [element('p', 'state-placeholder', `No ${key} records are available.`)]) {
+				node.dataset['detailTab'] = key
+				node.hidden = key !== activeTab
+				grid.append(node)
+			}
 		}
-		const grouped = panels.filter(panel => panel.tab === activeTab).map(panel => panel.node)
-		grid.append(...(grouped.length > 0 ? grouped : [element('p', 'state-placeholder', `No ${activeTab} records are available.`)]))
 		content.replaceChildren(header, tabs, ...(summary.childElementCount === 0 ? [] : [summary]), grid)
 	} else {
 		grid.append(...panels.map(panel => panel.node))
@@ -509,5 +551,6 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	}
 	content.setAttribute('aria-busy', 'false')
 	$('#operations-status').hidden = true
+	if (viewState !== undefined) restoreViewState(content, viewState)
 	restoreOperationsRenderContext(renderContext)
 }

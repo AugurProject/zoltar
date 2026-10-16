@@ -6,12 +6,12 @@ import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '../contractArtifact.js'
 import { requireForkDataView } from './forkData.js'
 import { getForkMigrationEndsAt } from './forkMigrationTiming.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState } from '../types/contracts.js'
+import type { EscalationDeposit, EscalationSide, ReportingActionResult, ReportingDetails, ReportingSettlementState, VaultReportingLimits } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -129,6 +129,21 @@ async function loadViewerReportingWalletState(client: ReadClient, fundingAddress
 	return { viewerWalletRepAllowanceAttoRep, viewerWalletRepBalanceAttoRep, viewerWalletRepTokenAddress }
 }
 
+async function loadVaultReportingPoolLimits(client: ReadClient, securityPoolAddress: Address) {
+	const abi = statoblast_SecurityPool_SecurityPool.abi
+	const [minimumVaultRepDepositAttoRep, managerAddress, statoblastSecurityMultiplierBps, totalPoolHeldAttoRep, totalRepBackingUnits, totalUnderwritingLimitAttoEth] = await Promise.all([
+		client.readContract({ abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi, functionName: 'openOraclePriceCoordinator', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi, functionName: 'totalUnderwritingLimitAttoEth', address: securityPoolAddress, args: [] }),
+	])
+	// The pool checks coverage at the coordinator's last price.
+	const repPerEthPrice = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastPrice', address: managerAddress, args: [] })
+	return { minimumVaultRepDepositAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps, totalPoolHeldAttoRep, totalRepBackingUnits, totalUnderwritingLimitAttoEth }
+}
+
 async function loadViewerReportingVaultState(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined) {
 	if (accountAddress === undefined)
 		return {
@@ -138,8 +153,9 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 			viewerVaultExists: false,
 			viewerVaultDisputeStakedAttoRep: undefined,
 			viewerVaultRepBackingAttoRep: undefined,
+			viewerVaultReportingLimits: undefined,
 		}
-	const [viewerVaultTuple, escalationMigrationEntitlementTuple] = await Promise.all([
+	const [viewerVaultTuple, escalationMigrationEntitlementTuple, poolLimits] = await Promise.all([
 		client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'securityVaults',
@@ -152,6 +168,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress, accountAddress],
 		}),
+		loadVaultReportingPoolLimits(client, securityPoolAddress),
 	])
 	const [entitlementInitialized, entitlementTotalCurrentRep, materializedByOutcome] = escalationMigrationEntitlementTuple
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
@@ -182,6 +199,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 			})
 	const viewerVaultExists = viewerRepBackingUnits !== 0n || viewerUnderwritingLimitAttoEth !== 0n || viewerClaimableFeesAttoEth !== 0n || viewerFeeIndex !== 0n || viewerVaultDisputeStakedAttoRep !== 0n
 	const viewerPoolHeldVaultRepBackingAttoRep = viewerVaultRepBackingAttoRep
+	const viewerVaultReportingLimits: VaultReportingLimits = { ...poolLimits, underwritingLimitAttoEth: viewerUnderwritingLimitAttoEth, vaultRepBackingUnits: viewerRepBackingUnits }
 	return {
 		viewerRepBackingUnits,
 		viewerPoolHeldVaultRepBackingAttoRep,
@@ -197,6 +215,7 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 		viewerVaultExists,
 		viewerVaultDisputeStakedAttoRep,
 		viewerVaultRepBackingAttoRep,
+		viewerVaultReportingLimits,
 	}
 }
 

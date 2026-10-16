@@ -617,7 +617,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 @media (max-width: 64rem) {
-	main {
+	.app-frame {
 		padding: 1rem 0.85rem 3rem;
 	}
 
@@ -683,7 +683,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 }
 
 @media (max-width: 40rem) {
-	main {
+	.app-frame {
 		padding: 0.75rem 0.65rem 2.5rem;
 	}
 
@@ -1023,6 +1023,13 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	padding: 0 var(--space-3);
 }
 
+/* Connect's unavailable reason sits under the one-row top bar, aligned with the account control at its right edge. */
+.wallet-connection-reason {
+	margin: 0;
+	padding: 0 var(--space-3);
+	text-align: end;
+}
+
 /* Section views: a segmented control above the route content that wraps rather than scrolling sideways. */
 .route-subnav-shell {
 	display: flex;
@@ -1231,7 +1238,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 /* Tablets and phones: the primary navigation becomes a fixed bottom tab bar, so the top bar keeps brand, universe, account, and settings. */
 @media (max-width: 64rem) {
-	main {
+	.app-frame {
 		padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 	}
 

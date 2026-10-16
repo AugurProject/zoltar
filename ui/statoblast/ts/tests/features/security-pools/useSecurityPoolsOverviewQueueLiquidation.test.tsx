@@ -402,7 +402,8 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			const { queueSecurityPoolLiquidation, state } = await renderUnderfundedHook(100n, { currentRepBalanceAttoRep: balance, initialReportAmount2: 10n })
 
 			expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(balance === 5n ? 1 : 0)
-			expect(state().liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(5n)
+			// A blocked attempt keeps the preflight's exact requirement; a sent liquidation spent that funding, so the preview reloads for the next attempt.
+			expect(state().liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(balance === 5n ? undefined : 5n)
 		})
 	})
 
@@ -487,6 +488,78 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		})
 
 		expect(state().liquidationApprovalDetails?.params.nonce).toBe(2n)
+	})
+
+	test('re-reads the approval quota, receiver, target, and funding after a successful liquidation', async () => {
+		const approvalId = `0x${'33'.repeat(32)}` as const
+		let approvalReads = 0
+		const loadLiquidationApproval = mock(async (): Promise<LiquidationApprovalDetails> => {
+			approvalReads += 1
+			return {
+				registryAddress: zeroAddress,
+				params: {
+					securityPool: zeroAddress,
+					receiverVault: SECOND_WALLET_ADDRESS,
+					operator: WALLET_ADDRESS,
+					targetVault: zeroAddress,
+					maxCumulativeDebtAttoEth: 10n * 10n ** 18n,
+					maxDebtPerLiquidationAttoEth: 10n * 10n ** 18n,
+					minPostLiquidationHealthFactorBps: 10_000n,
+					validAfter: 0n,
+					validUntil: 2_000_000_000n,
+					nonce: 1n,
+				},
+				// The registry reserves the executed liquidation, so the second read reports the reduced quota.
+				availableDebtAttoEth: (approvalReads === 1 ? 10n : 9n) * 10n ** 18n,
+				reservedDebtAttoEth: 0n,
+				consumedDebtAttoEth: 0n,
+				minimumValidNonce: 0n,
+				revoked: false,
+			}
+		})
+		const loadSecurityPoolVaultSummary = mock(async (_securityPoolAddress: Address, vaultAddress: Address) => ({ claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 1n, vaultAddress, vaultAttoRepBacking: 1n }))
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadLiquidationApproval,
+				loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
+				loadSecurityPoolVaultSummary,
+				queueSecurityPoolLiquidation: mock(async () => ({ action: 'queueLiquidation' as const, hash: '0x04' as const, securityPoolAddress: zeroAddress, stagedExecution: { operation: 'liquidation' as const, operationId: 4n, success: true } })),
+			}),
+		)
+		await fillLiquidationForm(state)
+		await act(async () => {
+			state().setLiquidationReceiverVault(SECOND_WALLET_ADDRESS)
+			state().setLiquidationApprovalId(approvalId)
+			await state().loadLiquidationApproval()
+			await state().loadLiquidationReceiverVaultSummary()
+			await state().loadLiquidationTargetVaultSummary()
+			await state().loadLiquidationFundingPreview(zeroAddress)
+		})
+		expect(state().liquidationApprovalDetails?.availableDebtAttoEth).toBe(10n * 10n ** 18n)
+		expect(state().liquidationReceiverVaultSummaryResolved).toBe(true)
+		expect(state().liquidationTargetVaultSummary).toBeDefined()
+		expect(state().liquidationFundingPreview).toBeDefined()
+
+		await act(async () => {
+			await state().queueLiquidation(zeroAddress, zeroAddress)
+		})
+		expect(state().securityPoolOverviewResult?.stagedExecution?.success).toBe(true)
+		// A direct execution keeps the dialog open, so every read it consumed is dropped and loads again for the next attempt.
+		expect(state().liquidationModalOpen).toBe(true)
+		expect(state().liquidationApprovalDetails).toBeUndefined()
+		expect(state().liquidationApprovalError).toBeUndefined()
+		expect(state().loadingLiquidationApproval).toBe(false)
+		expect(state().liquidationReceiverVaultSummaryResolved).toBe(false)
+		expect(state().liquidationReceiverVaultSummary).toBeUndefined()
+		expect(state().liquidationTargetVaultSummary).toBeUndefined()
+		expect(state().liquidationFundingPreview).toBeUndefined()
+		expect(state().liquidationFundingPreviewError).toBeUndefined()
+
+		await act(async () => {
+			await state().loadLiquidationApproval()
+		})
+		expect(approvalReads).toBe(2)
+		expect(state().liquidationApprovalDetails?.availableDebtAttoEth).toBe(9n * 10n ** 18n)
 	})
 
 	test('loads delegated receiver vault state independently from the operator vault', async () => {
