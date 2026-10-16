@@ -19,6 +19,7 @@ function createSimulationController(): SimulationController {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
+		bootstrapWarning: undefined,
 		blockCountSinceReset: 0n,
 		currentScenario: 'baseline',
 		currentTimestamp: 1n,

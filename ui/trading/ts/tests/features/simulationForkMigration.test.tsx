@@ -21,6 +21,7 @@ function forkedScenarioConfiguration(backend: SimulationBackend) {
 	const addresses = getInfraContractAddresses(backend.profile)
 	const plan = getTradingDeploymentPlan(
 		{
+			genesisOutcome: 'yes',
 			chainId: backend.profile.chain.id,
 			chainName: backend.profile.displayName,
 			defaultRpcUrl: 'http://127.0.0.1/',

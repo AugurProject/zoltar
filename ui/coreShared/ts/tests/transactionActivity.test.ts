@@ -21,6 +21,7 @@ import {
 import { createTransactionScope, mergeTransactionScopes, securityPoolTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 import { hasPendingTransactionActivity, stopTrackingTransactionActivity, setTransactionActivityOwner, recordTransactionSettled, recordTransactionSubmitted, transactionActivity } from '../transactions/transactionActivityStore.js'
 
 installDomTestLifecycle()
@@ -37,7 +38,8 @@ function entry(index: number, status: TransactionActivityEntry['status'] = 'conf
 describe('transaction scopes', () => {
 	test('normalizes object ids and overlaps only on shared keys', () => {
 		expect(securityPoolTransactionScope(' 0xABC ')).toEqual(['security-pool:0xabc'])
-		expect(universeTransactionScope(255n)).toEqual(['universe:0xff'])
+		expect(universeTransactionScope(255n, ' 0xABC ')).toEqual(['universe:0xabc:0xff'])
+		expect(universeTransactionScope(undefined, '0xABC')).toEqual([])
 		expect(createTransactionScope('market', undefined)).toEqual([])
 		expect(createTransactionScope('market', '  ')).toEqual([])
 		expect(mergeTransactionScopes(['a'], undefined, ['a', 'b'])).toEqual(['a', 'b'])
@@ -180,6 +182,31 @@ describe('transaction activity store', () => {
 	afterEach(() => {
 		resetActiveEnvironmentForTesting()
 		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+	})
+
+	test('restores shared wallet history without locking another genesis deployment universe zero', () => {
+		const yes = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'yes')
+		const no = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no')
+		const account = '0x00000000000000000000000000000000000000a1'
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		setTransactionActivityOwner(account)
+		const yesScope = universeTransactionScope(0n, yes.genesisRepTokenAddress)
+		recordTransactionSubmitted({ hash: hashOf(1), scope: yesScope, title: 'Fork Yes root' })
+		const yesStorageKey = transactionActivity.value.storageKey
+		expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+
+		// Reload into No on the same account and chain: the wallet list remains shared.
+		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: no }))
+		setTransactionActivityOwner(account)
+		expect(transactionActivity.value.storageKey).toBe(yesStorageKey)
+		expect(transactionActivity.value.entries.map(item => item.title)).toEqual(['Fork Yes root'])
+		expect(hasPendingTransactionActivity(universeTransactionScope(0n, no.genesisRepTokenAddress))).toBeFalse()
+		expect(hasPendingTransactionActivity(yesScope)).toBeTrue()
+
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		setTransactionActivityOwner(account)
+		expect(hasPendingTransactionActivity(universeTransactionScope(0n, yes.genesisRepTokenAddress))).toBeTrue()
 	})
 
 	test('keeps one row when a broadcast is replaced and releases a dismissed pending lock', () => {

@@ -33,7 +33,6 @@ export const migrationContinue = 'Continue'
 export const selectOutcomesDetail = 'Select every child universe that should receive your REP.'
 export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
-export const formatOpenChildUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
 export const openChildUniverse = 'Open child universe'
 export const outcomeSelectionRequired = 'Select at least one outcome.'
 

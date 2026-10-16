@@ -19,6 +19,8 @@ import { getOpenOracleSelectedReportActionMode } from '@zoltar/ui-statoblast-sha
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { createOpenOracleReportInstance, loadOpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getRepAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
@@ -236,7 +238,9 @@ describe.serial('OpenOracleSection integration', () => {
 			await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
 			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 			Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
-			resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+			resetActiveEnvironment = installActiveEnvironmentForTesting(
+				createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)), chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }),
+			)
 			uiReadClient = createConnectedReadClient()
 		},
 		afterTest: async () => {
@@ -246,6 +250,12 @@ describe.serial('OpenOracleSection integration', () => {
 			resetActiveEnvironment = undefined
 			resetActiveEnvironmentForTesting()
 		},
+	})
+
+	test('reads the deployed genesis REP balance using the active profile', async () => {
+		const expectedBalance = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), walletAddress)
+		expect(expectedBalance).toBeGreaterThan(0n)
+		expect(await loadErc20Balance(uiReadClient, getRepAddress(), walletAddress)).toBe(expectedBalance)
 	})
 
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {

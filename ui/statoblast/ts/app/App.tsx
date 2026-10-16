@@ -123,7 +123,7 @@ export function App() {
 			repUsdcSource,
 			repUsdcSourceUrl,
 		},
-		universeControl: <UniverseSwitcher includeRelatedUniverses={includeRelatedUniverses} activeUniverseId={activeUniverseId} browseHref={buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools'))} universe={zoltarUniverse} />,
+		universeControl: <UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools'))} universe={zoltarUniverse} />,
 		universePresentation: getStatoblastUniversePresentation({ canReadOnchainData, ...marketCreation }),
 		showWethBalance: true,
 	}

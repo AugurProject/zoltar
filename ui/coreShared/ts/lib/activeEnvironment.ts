@@ -1,7 +1,9 @@
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { getErrorMessage } from './errors.js'
-import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, getDefaultNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
+import { formatSavedStateGenesisMismatchDetail } from '../copy/simulation.js'
+import { getGenesisNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getDefaultNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
+import { readGenesisOutcomeFromLocation } from '../navigation/genesisNavigation.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
@@ -85,15 +87,18 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	initializeActiveEnvironmentGeneration += 1
 	const requestGeneration = initializeActiveEnvironmentGeneration
 	const previousSimulationController = activeSimulationController
+	const genesisOutcome = readGenesisOutcomeFromLocation({ hash: location.hash ?? '', search: location.search })
+	const selectGenesis = (profile: NetworkProfile) => (genesisOutcome === undefined ? profile : getGenesisNetworkProfile(profile, genesisOutcome))
 
 	if (!shouldUseSimulationLocation(location)) {
 		const createBackend = dependencies.createInjectedBackend ?? createInjectedBackend
 		const requestedNetwork = readLocationParams(location).get(NETWORK_QUERY_PARAM)
-		let profile = requestedNetwork === null ? undefined : getPublicNetworkProfile(requestedNetwork)
-		let injectedBackend = createBackend({ profile: profile ?? getDefaultNetworkProfile() })
+		let profile = requestedNetwork === null ? undefined : selectGenesis(getPublicNetworkProfile(requestedNetwork))
+		let injectedBackend = createBackend({ profile: profile ?? selectGenesis(getDefaultNetworkProfile()) })
 		if (profile === undefined) {
 			try {
-				profile = getPublicNetworkProfileForChainId(await injectedBackend.getChainId())
+				const discoveredProfile = getPublicNetworkProfileForChainId(await injectedBackend.getChainId())
+				profile = discoveredProfile === undefined ? undefined : selectGenesis(discoveredProfile)
 			} catch (error) {
 				void error
 				// A missing, locked, or unavailable wallet leaves the configured public default in place.
@@ -116,16 +121,20 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 	}
 
 	const savedStateId = getSimulationStateId(location)
-	let initialBootstrapError: string | undefined = undefined
+	let initialBootstrapWarning: string | undefined = undefined
 	let savedState = undefined
 	if (savedStateId !== undefined) {
 		try {
 			savedState = getSavedSimulationStateEnvelope(savedStateId)
+			if (savedState !== undefined && (savedState.genesisOutcome ?? 'yes') !== (genesisOutcome ?? 'yes')) {
+				initialBootstrapWarning = formatSavedStateGenesisMismatchDetail(savedState.name, savedState.genesisOutcome ?? 'yes')
+				savedState = undefined
+			}
 		} catch (error) {
-			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')} Falling back to the baseline scenario.`
+			initialBootstrapWarning = `Saved simulation state "${savedStateId}" could not be loaded. ${getErrorMessage(error, 'The saved state is invalid')} Falling back to the baseline scenario.`
 		}
-		if (savedState === undefined && initialBootstrapError === undefined) {
-			initialBootstrapError = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`
+		if (savedState === undefined && initialBootstrapWarning === undefined) {
+			initialBootstrapWarning = `Saved simulation state "${savedStateId}" could not be loaded. Falling back to the baseline scenario.`
 		}
 	}
 	const createSimulationBackendImpl = dependencies.createSimulationBackend ?? createSimulationBackend
@@ -135,13 +144,15 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		savedStateId !== undefined && savedState !== undefined
 			? await createSimulationBackendImpl({
 					appId: simulationAppId,
+					...(genesisOutcome === undefined ? {} : { genesisOutcome }),
 					savedState,
 					savedStateId,
 					walletMode,
 				})
 			: await createSimulationBackendImpl({
 					appId: simulationAppId,
-					...(initialBootstrapError === undefined ? {} : { initialBootstrapError }),
+					...(genesisOutcome === undefined ? {} : { genesisOutcome }),
+					...(initialBootstrapWarning === undefined ? {} : { initialBootstrapWarning }),
 					scenario: savedStateId === undefined ? getSimulationScenario(location) : 'baseline',
 					walletMode,
 				})

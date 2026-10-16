@@ -14,6 +14,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
+import { getGenesisUniverseHref } from '../navigation/genesisNavigation.js'
 
 type UniverseBrowserProps = {
 	/** Actions that apply to the browsed universe, such as Fork or Migrate. Only pass actions that currently apply. */
@@ -29,6 +30,17 @@ type UniverseBrowserProps = {
 	universe: ZoltarUniverseSummary
 }
 
+type UniverseBrowserViewProps = {
+	name: string
+	hasForked: boolean
+	forkTime?: bigint
+	lineage?: ComponentChildren
+	actions?: ComponentChildren
+	details?: ComponentChildren
+	navigation?: ComponentChildren
+	children?: ComponentChildren
+}
+
 function getChildBadge(childUniverse: ZoltarChildUniverseSummary, activeUniverseId: bigint): { label: string; tone: BadgeTone } {
 	if (childUniverse.universeId === activeUniverseId) return { label: commonCopy.selected, tone: 'warning' }
 	if (!childUniverse.exists) return { label: commonCopy.notDeployed, tone: 'muted' }
@@ -40,6 +52,16 @@ function resolveLineage(universe: ZoltarUniverseSummary): readonly UniverseLinea
 	const lineage = universe.lineage
 	if (lineage !== undefined && lineage.length > 0) return lineage
 	return [{ outcomeLabel: undefined, universeId: universe.universeId }]
+}
+
+function ParentUniverseLink({ universe }: { universe: ZoltarUniverseSummary }) {
+	if (universe.universeId !== 0n) return <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />
+	const parent = new URL(getGenesisUniverseHref(undefined, true))
+	return (
+		<a className='universe-link universe-parent-link' href={`${parent.pathname}${parent.search}${parent.hash}`}>
+			{universeCopy.augurUniverse}
+		</a>
+	)
 }
 
 function UniverseLineageTrail({ lineage }: { lineage: readonly UniverseLineageStep[] }) {
@@ -100,47 +122,68 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 	)
 }
 
-/**
- * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
- * universes its fork created. Opening the parent or a child changes the shared `universe` query parameter.
- */
-export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe, includeRelatedUniverses = universe.relatedUniversesLoaded !== false }: UniverseBrowserProps) {
-	const lineage = includeRelatedUniverses ? resolveLineage(universe) : [{ outcomeLabel: universe.outcomeLabel, universeId: universe.universeId }]
-	// The heading names this generation; ancestry belongs in the optional trail.
-	const universeName = formatUniverseViewLabel(universe, universe.universeId, false)
+/** Shared presentation for historical and live universes; callers supply only their known facts and child navigation. */
+export function UniverseBrowserView({ name, hasForked, forkTime, lineage, actions, details, navigation, children }: UniverseBrowserViewProps) {
 	return (
 		<div className='route-view-flow universe-browser'>
 			<SectionBlock variant='plain'>
 				<div className='decision-summary'>
-					<UniverseLineageTrail lineage={lineage} />
+					{lineage}
 					<div className='decision-heading'>
-						<h3>{universeName}</h3>
-						<Badge tone={universe.hasForked ? 'warning' : 'ok'}>{universe.hasForked ? commonCopy.forked : commonCopy.operational}</Badge>
+						<h3>{name}</h3>
+						<Badge tone={hasForked ? 'warning' : 'ok'}>{hasForked ? commonCopy.forked : commonCopy.operational}</Badge>
 					</div>
-					{universe.hasForked && universe.forkTime > 0n ? (
+					{hasForked && forkTime !== undefined && forkTime > 0n ? (
 						<p className='detail'>
-							{commonCopy.forked} <TimestampValue timestamp={universe.forkTime} />
+							{commonCopy.forked} <TimestampValue timestamp={forkTime} />
 						</p>
 					) : undefined}
 					{actions === undefined ? undefined : <div className='actions'>{actions}</div>}
+					{details}
+				</div>
+			</SectionBlock>
+			{navigation}
+			{children}
+		</div>
+	)
+}
+
+/**
+ * Browses a live universe and its lineage. Ordinary parent and child links change the `universe` query parameter;
+ * a canonical root's parent returns to the historical Augur universe before choosing a deployment.
+ */
+export function UniverseBrowser({ actions, activeUniverseId, children, navigation, renderChildSummary, universe, includeRelatedUniverses = universe.relatedUniversesLoaded !== false }: UniverseBrowserProps) {
+	const lineage = includeRelatedUniverses ? resolveLineage(universe) : [{ outcomeLabel: universe.outcomeLabel, universeId: universe.universeId }]
+	return (
+		<UniverseBrowserView
+			name={formatUniverseViewLabel(universe, universe.universeId, false)}
+			hasForked={universe.hasForked}
+			forkTime={universe.forkTime}
+			lineage={<UniverseLineageTrail lineage={lineage} />}
+			actions={actions}
+			details={
+				<>
 					{children}
 					<MetricGrid columns={2}>
 						<MetricField label={universeCopy.universeId}>
 							<span className='universe-id-value'>{formatUniverseIdHex(universe.universeId)}</span>
 						</MetricField>
-						<MetricField label={universeCopy.parentUniverse}>{universe.universeId === 0n ? commonCopy.none : <UniverseLink className='universe-parent-link' universeId={universe.parentUniverseId} />}</MetricField>
+						<MetricField label={universeCopy.parentUniverse}>
+							<ParentUniverseLink universe={universe} />
+						</MetricField>
 						<MetricField label={universeCopy.repSupply}>
 							<CurrencyValue value={universe.totalTheoreticalSupplyAttoRep} suffix={universe.reputationTokenSymbol ?? commonCopy.rep} />
 						</MetricField>
 					</MetricGrid>
-				</div>
-			</SectionBlock>
-			{navigation}
+				</>
+			}
+			navigation={navigation}
+		>
 			{!includeRelatedUniverses ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
 				</SectionBlock>
 			)}
-		</div>
+		</UniverseBrowserView>
 	)
 }

@@ -14,7 +14,7 @@
 				<header>
 					<p class="kicker">How-to guide</p>
 					<h1>Prepare a protocol release</h1>
-					<p>Follow this guide before tagging a Zoltar and Statoblast release. It lists the checks that must pass before the tag and, for Sepolia and deterministic testnets, the genesis <a href="../reference/glossary.html#rep">REP</a> review that determines every deterministic address there. Mainnet uses the existing REPv2 token and deploys no genesis REP.</p>
+					<p>Follow this guide before tagging a Zoltar and Statoblast release. It lists the checks that must pass before the tag and, for Sepolia and deterministic testnets, the genesis <a href="../reference/glossary.html#rep">REP</a> allocation review. Mainnet uses Augur V2's existing REP Yes and REP No tokens and deploys no genesis REP tokens.</p>
 				</header>
 				<section id="immutable-protocol-release-posture">
 					<h2>Know what a release cannot do</h2>
@@ -23,10 +23,7 @@
 				<section id="launch-release-checklist">
 					<h2>Run the release checklist</h2>
 					<ol>
-						<li>
-							From a fresh dependency install (<code>bun install --frozen-lockfile</code>), run <code>bun run check:mainnet-deployment:generated</code>. It fails when either generated deployment manifest is stale. If so, regenerate both manifests with <code>bun ./tooling/contracts/check-mainnet-deployment.mts --write</code>, which only rewrites <a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a> and <a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a
-							>; review the diff, then rerun the check.
-						</li>
+						<li>From a fresh dependency install (<code>bun install --frozen-lockfile</code>), run <code>bun run check:mainnet-deployment:generated</code>. It fails when any of the four generated deployment manifests is stale. If so, regenerate them with <code>bun ./tooling/contracts/check-mainnet-deployment.mts --write</code>. Review the Yes manifests for <a href="../mainnet-deployment-addresses.json">mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a>, and the No manifests for <a href="../mainnet-no-deployment-addresses.json">mainnet</a> and <a href="../sepolia-no-deployment-addresses.json">Sepolia</a>, then rerun the check.</li>
 						<li>Run <code>bun run ui:build:prod</code>. It repeats the manifest check, so it fails if a manifest is still stale.</li>
 						<li>
 							Confirm the build used the pinned compiler configuration in <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/compile.ts"><code>solidity/ts/compile.ts</code></a
@@ -49,7 +46,7 @@
 				</section>
 				<section id="genesis-rep-deployment">
 					<h2>Review genesis REP allocations (Sepolia and deterministic testnets)</h2>
-					<p>Sepolia genesis REP allocations are canonical source data in <a href="https://github.com/AugurProject/zoltar/blob/main/shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The constructor of <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> rejects an empty list, a zero address, a repeated holder, a zero balance, and a total above the cap.</p>
+					<p>Sepolia genesis REP allocations are canonical source data in <a href="https://github.com/AugurProject/zoltar/blob/main/shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a>. Each of the Yes and No tokens mints the same allocations. The configured 11 million REP mint cap per token is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The constructor of <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a> rejects an empty list, a zero address, a repeated holder, a zero balance, and a total above the cap.</p>
 					<p>There is no administrator, post-deployment mint, allocation correction, or recovery entrypoint, so fix an incorrect allocation in the source list before deployment and then regenerate the deterministic manifests. Because constructor arguments are part of CREATE2 init code, any allocation change produces a new genesis REP address and new addresses for every deployment step whose constructor wiring depends on it. Never continue a deployment from a manifest generated for a different allocation list.</p>
 				</section>
 			</article>

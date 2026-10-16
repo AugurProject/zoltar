@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
-import { getDownloadedStorageKey, resetLocalEntityStoreForTesting, serializeStoredValue, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { getDownloadedStorageKey, readFavoriteEntries, resetLocalEntityStoreForTesting, serializeStoredValue, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
@@ -24,6 +27,41 @@ function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveM
 }
 
 describe('favorite markets', () => {
+	test('isolates saved root zero markets by genesis deployment while retaining both lists', () => {
+		const dom = installDomEnvironment()
+		resetLocalEntityStoreForTesting()
+		const yes = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'yes')
+		const no = getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no')
+		const restore = installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+		const savedMarkets = () => {
+			const scope = getLocalEntityScope('trading', 'market')
+			return selectFavoriteMarkets(marketDownloadStore.read(scope), readFavoriteEntries(scope), '0')
+		}
+		try {
+			const yesMarket = createMarket(1, { universeId: 0n })
+			const yesScope = getLocalEntityScope('trading', 'market')
+			marketDownloadStore.record(yesScope, [{ data: yesMarket, id: yesMarket.pool }])
+			setEntityFavorite(yesScope, yesMarket.pool, true)
+			expect(savedMarkets()).toEqual([yesMarket])
+
+			installActiveEnvironmentForTesting(createFakeBackend({ profile: no }))
+			expect(savedMarkets()).toEqual([])
+			const noMarket = createMarket(2, { universeId: 0n })
+			const noScope = getLocalEntityScope('trading', 'market')
+			marketDownloadStore.record(noScope, [{ data: noMarket, id: noMarket.pool }])
+			setEntityFavorite(noScope, noMarket.pool, true)
+			expect(savedMarkets()).toEqual([noMarket])
+
+			installActiveEnvironmentForTesting(createFakeBackend({ profile: yes }))
+			expect(savedMarkets()).toEqual([yesMarket])
+			expect(marketDownloadStore.read(noScope).map(entry => entry.data)).toEqual([noMarket])
+		} finally {
+			restore()
+			resetLocalEntityStoreForTesting()
+			dom.cleanup()
+		}
+	})
+
 	test('round-trips a cached market through storage, including optional fields', () => {
 		const dom = installDomEnvironment()
 		resetLocalEntityStoreForTesting()

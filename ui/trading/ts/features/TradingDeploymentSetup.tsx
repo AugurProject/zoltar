@@ -16,7 +16,7 @@ import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as appCopy from '../copy/app.js'
 import * as deploymentCopy from '../copy/deployment.js'
 import { deployContractsGuideHref } from '../lib/docsLinks.js'
-import { deploymentProgress, PlaceholderDeployAction, tradingDeploymentScope } from './tradingDeploymentPresentation.js'
+import { deploymentProgress, PlaceholderDeployAction } from './tradingDeploymentPresentation.js'
 
 import { useTradingDeploymentSetup, type TradingDeploymentSetupOptions } from './useTradingDeploymentSetup.js'
 
@@ -62,7 +62,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 								// Every contract keeps its own deploy action in place; a deployed one stays, disabled, and says so.
 								action: (
 									<TransactionActionButton
-										scope={tradingDeploymentScope}
+										scope={actions.scope}
 										availability={availability}
 										disabledReasonElementId={externalReasonId}
 										idleLabel={deploymentCopy.formatDeployStep(step.label)}

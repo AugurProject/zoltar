@@ -122,9 +122,9 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getAllByText('This universe is not deployed.')).toHaveLength(1)
-		expect(documentQueries.getAllByRole('button', { name: 'Go to Genesis universe' })).toHaveLength(1)
-		expect(documentQueries.queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Go to Genesis universe' }))
+		expect(documentQueries.getAllByRole('button', { name: 'Go to root universe' })).toHaveLength(1)
+		expect(documentQueries.queryByText('Go to root universe', { selector: 'p' })).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Go to root universe' }))
 		expect(onGoToGenesisUniverse).toHaveBeenCalledTimes(1)
 	})
 
@@ -504,8 +504,8 @@ describe('OverviewPanels', () => {
 		const readGroups = () => [...document.body.querySelectorAll('.account-menu-metrics .overview-metric-group')].map(group => group.getAttribute('aria-label'))
 
 		await renderOverviewPanels({ walletBootstrapComplete: false })
-		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
-		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Genesis (0x0)')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Augur v2 › Yes (0x0)')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Augur v2 › Yes (0x0)')
 		expect(document.body.querySelector('.header-toolbar-controls .wallet-button')?.textContent).toBe('Connect wallet')
 		await cleanupRenderedComponent?.()
 

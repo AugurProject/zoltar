@@ -16,6 +16,16 @@ type OverviewHeaderPanelProps = {
 	settingsMenu?: ComponentChildren
 }
 
+/** Shared application identity, available before the active chain backend starts. */
+export function ApplicationBrand({ applicationTitle }: { applicationTitle: string }) {
+	return (
+		<>
+			<img src='./favicon.svg' alt='' width='28' height='28' />
+			<span className='application-brand-name'>{applicationTitle}</span>
+		</>
+	)
+}
+
 /**
  * The top bar every application renders under the simulation strip: brand, primary navigation, universe and
  * account controls, and settings on one row, followed by any notices. Applications supply the slot contents so
@@ -24,18 +34,7 @@ type OverviewHeaderPanelProps = {
 export function OverviewHeaderPanel({ applicationTitle, badges, controls, footer, navigation, notices, settingsMenu }: OverviewHeaderPanelProps) {
 	return (
 		<>
-			<HeaderToolbar
-				brand={
-					<>
-						<img src='./favicon.svg' alt='' width='28' height='28' />
-						<span className='application-brand-name'>{applicationTitle}</span>
-					</>
-				}
-				badges={badges}
-				controls={controls}
-				navigation={navigation}
-				settings={settingsMenu}
-			/>
+			<HeaderToolbar brand={<ApplicationBrand applicationTitle={applicationTitle} />} badges={badges} controls={controls} navigation={navigation} settings={settingsMenu} />
 			<MainnetDisabledNotice />
 			{notices}
 			{footer}

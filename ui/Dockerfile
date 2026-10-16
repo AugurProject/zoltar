@@ -54,6 +54,8 @@ RUN mkdir -p /source/ui/coreShared/ts && bun ./tooling/contracts/build-app-contr
 # Common UI build inputs.
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
+COPY ./docs/mainnet-no-deployment-addresses.json /source/docs/mainnet-no-deployment-addresses.json
+COPY ./docs/sepolia-no-deployment-addresses.json /source/docs/sepolia-no-deployment-addresses.json
 COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/

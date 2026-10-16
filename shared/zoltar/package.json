@@ -4,6 +4,11 @@
 	"version": "1.0.0",
 	"type": "module",
 	"exports": {
+		"./deployment/genesisUniverses": {
+			"types": "./ts/deployment/genesisUniverses.ts",
+			"bun": "./ts/deployment/genesisUniverses.ts",
+			"default": "./js/deployment/genesisUniverses.js"
+		},
 		"./constants": {
 			"types": "./ts/constants.ts",
 			"bun": "./ts/constants.ts",

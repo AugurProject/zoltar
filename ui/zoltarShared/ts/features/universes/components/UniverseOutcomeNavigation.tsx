@@ -1,12 +1,11 @@
 import { describeUniverseReadError } from '../lib/universeReadError.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { OutcomeUniverseList } from './OutcomeUniverseList.js'
+import { ForkUniverseNavigation } from '@zoltar/ui-core-shared/components/ForkUniverseNavigation.js'
+import { OutcomeUniverseList } from '@zoltar/ui-core-shared/components/OutcomeUniverseList.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { useEffect, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
@@ -66,47 +65,34 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 		}
 	}, [address, backend, loadPage, refresh, retry, start, universeId])
 	return (
-		<SectionBlock
-			title={
-				<span className='universe-outcome-heading'>
-					{commonCopy.childUniverses}
-					<span aria-hidden={!loading || page === undefined} className={loading && page !== undefined ? undefined : 'universe-outcome-status-idle'}>
-						<Badge tone='loading'>{commonCopy.loading}</Badge>
-					</span>
-				</span>
-			}
-			variant='plain'
-			busy={loading}
-		>
-			<div className='form-grid'>
-				{page?.title === undefined || page.title === '' ? undefined : <p className='detail'>{copy.formatForkQuestion(page.title)}</p>}
-				{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChildUniverses, detailIsLoading: true }} /> : undefined}
-				{page?.scalarQuestion === undefined ? (
-					<OutcomeUniverseList
-						emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
-						notDeployedDetail={copy.childNotDeployedDetail}
-						outcomes={(page?.choices ?? []).map(candidate => ({
-							...candidate,
-							disabled: loading || !candidate.exists,
-							onSelect: () => {
-								if (candidate.exists) navigateToUniverse(candidate.universeId)
-							},
-						}))}
-					/>
-				) : (
-					<ScalarUniverseOutcomePicker address={address} universeId={universeId} question={page.scalarQuestion} loadOutcome={loadOutcome} />
-				)}
-
-				<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />
-				<PaginationControls
-					summary={start === 0n && page?.hasNextPage !== true ? undefined : copy.formatOutcomePage(Number(start / UNIVERSE_OUTCOME_PAGE_SIZE) + 1)}
-					loading={loading}
-					hasPreviousPage={start > 0n}
-					hasNextPage={current?.error === undefined && (page?.hasNextPage ?? false)}
-					onPreviousPage={() => setStart(current => (current >= UNIVERSE_OUTCOME_PAGE_SIZE ? current - UNIVERSE_OUTCOME_PAGE_SIZE : 0n))}
-					onNextPage={() => setStart(current => current + UNIVERSE_OUTCOME_PAGE_SIZE)}
+		<ForkUniverseNavigation question={page?.title} loading={loading} hasOutcomes={page !== undefined}>
+			{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChildUniverses, detailIsLoading: true }} /> : undefined}
+			{page?.scalarQuestion === undefined ? (
+				<OutcomeUniverseList
+					emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
+					notDeployedDetail={copy.childNotDeployedDetail}
+					outcomes={(page?.choices ?? []).map(candidate => ({
+						...candidate,
+						key: candidate.universeId.toString(),
+						disabled: loading || !candidate.exists,
+						onSelect: () => {
+							if (candidate.exists) navigateToUniverse(candidate.universeId)
+						},
+					}))}
 				/>
-			</div>
-		</SectionBlock>
+			) : (
+				<ScalarUniverseOutcomePicker address={address} universeId={universeId} question={page.scalarQuestion} loadOutcome={loadOutcome} />
+			)}
+
+			<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />
+			<PaginationControls
+				summary={start === 0n && page?.hasNextPage !== true ? undefined : copy.formatOutcomePage(Number(start / UNIVERSE_OUTCOME_PAGE_SIZE) + 1)}
+				loading={loading}
+				hasPreviousPage={start > 0n}
+				hasNextPage={current?.error === undefined && (page?.hasNextPage ?? false)}
+				onPreviousPage={() => setStart(current => (current >= UNIVERSE_OUTCOME_PAGE_SIZE ? current - UNIVERSE_OUTCOME_PAGE_SIZE : 0n))}
+				onNextPage={() => setStart(current => current + UNIVERSE_OUTCOME_PAGE_SIZE)}
+			/>
+		</ForkUniverseNavigation>
 	)
 }

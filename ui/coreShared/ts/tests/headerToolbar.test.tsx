@@ -1,7 +1,9 @@
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { HeaderMetricGroup } from '../components/HeaderMetricStrip.js'
 import { HeaderToolbar } from '../components/HeaderToolbar.js'
+import { LoadingText } from '../components/LoadingText.js'
 import { ToolbarField } from '../components/ToolbarField.js'
 import { WalletChip, WalletChipLabel, WalletChipPlaceholder } from '../components/WalletChip.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -25,7 +27,47 @@ describe('header toolbar primitives', () => {
 		expect(toolbar?.querySelector('.header-toolbar-brand > h2.application-brand')?.textContent).toBe('Zoltar')
 		expect(toolbar?.querySelector('.header-toolbar-brand > .environment-badge-row .badge')?.textContent).toBe('Simulation')
 		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-label')?.textContent).toBe('Universe')
+		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-label')?.classList.contains('visually-hidden')).toBe(false)
 		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-value')?.textContent).toBe('Genesis')
+	})
+
+	test('keeps the universe caption accessible for loading, unavailable, and plain values', async () => {
+		const style = document.createElement('style')
+		style.textContent = [readFileSync(new URL('../../css/base.css', import.meta.url), 'utf8'), readFileSync(new URL('../../css/controls-and-responsive.css', import.meta.url), 'utf8')].join('\n')
+		document.head.appendChild(style)
+		try {
+			for (const value of [<LoadingText announce={false} />, <span>Unavailable</span>, <span title='Genesis'>Genesis</span>]) {
+				const rendered = await renderIntoDocument(
+					<HeaderToolbar
+						brand='Trading'
+						controls={
+							<ToolbarField className='universe' hideLabel label='Universe'>
+								{value}
+							</ToolbarField>
+						}
+					/>,
+				)
+				try {
+					const caption = rendered.container.querySelector('.toolbar-field.universe .toolbar-field-label')
+					if (!(caption instanceof HTMLElement)) throw new Error('Expected the universe caption')
+					expect(caption.textContent).toBe('Universe')
+					expect(caption.classList.contains('visually-hidden')).toBe(true)
+					const captionStyle = getComputedStyle(caption)
+					expect(captionStyle.position).toBe('absolute')
+					expect(captionStyle.width).toBe('1px')
+					expect(captionStyle.height).toBe('1px')
+					expect(captionStyle.overflow).toBe('hidden')
+					expect(captionStyle.display).not.toBe('none')
+					expect(captionStyle.visibility).not.toBe('hidden')
+					expect(caption.hasAttribute('aria-hidden')).toBe(false)
+					expect(caption.hasAttribute('hidden')).toBe(false)
+				} finally {
+					await rendered.cleanup()
+				}
+			}
+		} finally {
+			style.remove()
+		}
 	})
 
 	test('provides responsive account text in the wallet chip while copying the full address', async () => {

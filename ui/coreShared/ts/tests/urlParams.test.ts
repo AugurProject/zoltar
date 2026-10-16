@@ -2,9 +2,17 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../navigation/openOracleUrlParams.js'
-import { hasInvalidUniverseQueryParam, readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, updateSearchParams, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../navigation/urlParams.js'
+import { hasInvalidUniverseQueryParam, readGenesisQueryParam, readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, updateSearchParams, writeGenesisQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../navigation/urlParams.js'
 
 void describe('url params', () => {
+	void test('accepts only Yes and No canonical genesis choices independently of fork universe IDs', () => {
+		expect(readGenesisQueryParam('?genesis=yes&universe=12')).toBe('yes')
+		expect(readGenesisQueryParam('?genesis=no&universe=0')).toBe('no')
+		for (const value of ['', 'invalid', 'repv2', '0', 'YES']) expect(readGenesisQueryParam(`?genesis=${value}`)).toBeUndefined()
+		expect(readGenesisQueryParam('?universe=0')).toBeUndefined()
+		expect(writeGenesisQueryParam('?universe=12', 'no')).toBe('?universe=12&genesis=no')
+		expect(writeGenesisQueryParam('?genesis=yes&universe=12', undefined)).toBe('?universe=12')
+	})
 	void test('reads a universe query param', () => {
 		expect(readUniverseQueryParam('?universe=12')).toBe(12n)
 		expect(readUniverseQueryParam('?universe=invalid')).toBe(undefined)
