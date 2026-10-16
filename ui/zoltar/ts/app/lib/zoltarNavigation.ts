@@ -5,6 +5,7 @@ import { readUniverseQueryParam, writeUniverseQueryParam, writeZoltarViewQueryPa
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ZoltarRoute } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ZOLTAR_TAB_VIEWS } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
 import { zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
 
@@ -35,4 +36,9 @@ export function getZoltarTabLabel(view: ZoltarTabView) {
 export function getZoltarViewHref(view: ZoltarView) {
 	const search = getRouteHashSearch()
 	return buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(writeUniverseQueryParam(search, readUniverseQueryParam(search)), view))
+}
+
+/** The app-wide fork notice shows on every page of a forked universe except the Overview, whose status and next step already state the fork. */
+export function isUniverseForkedNoticeVisible({ route, universeHasForked, zoltarView }: { route: ZoltarRoute; universeHasForked: boolean; zoltarView: ZoltarView }) {
+	return universeHasForked && !(route === 'zoltar' && zoltarView === 'overview')
 }

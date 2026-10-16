@@ -5,7 +5,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, normalizeText, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -144,13 +144,10 @@ describe('SecurityPoolsOverviewSection', () => {
 	})
 
 	function getSecurityPoolCard(headingText: string): HTMLElement {
-		const normalizedHeadingText = headingText.trim().replace(/\s+/g, ' ')
+		const normalizedHeadingText = normalizeText(headingText)
 		const titleHeading = within(document.body)
 			.getAllByRole('heading')
-			.find(node => {
-				const normalizedNodeText = (node.textContent ?? '').replace(/\s+/g, ' ').trim()
-				return normalizedNodeText.includes(normalizedHeadingText)
-			})
+			.find(node => normalizeText(node.textContent ?? '').includes(normalizedHeadingText))
 		if (titleHeading === undefined) {
 			throw new Error(`Expected security pool card heading for "${headingText}"`)
 		}
@@ -198,8 +195,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ 80.00 ETH')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('/ ≈ 13.33 ETH')
+		expect(normalizeText(card.textContent ?? '')).toContain('/ 80.00 ETH')
+		expect(normalizeText(card.textContent ?? '')).not.toContain('/ ≈ 13.33 ETH')
 	})
 
 	test('shows standing commitments when the oracle has never reported', async () => {
@@ -208,8 +205,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Oracle price unavailable')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ 5.00 ETH')
+		expect(normalizeText(card.textContent ?? '')).toContain('Oracle price unavailable')
+		expect(normalizeText(card.textContent ?? '')).toContain('/ 5.00 ETH')
 	})
 
 	test('shows exact small ETH values in browse cards instead of approximate zero', async () => {
@@ -221,7 +218,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const cardText = (getSecurityPoolCard('Will this resolve?').textContent ?? '').replace(/\s+/g, ' ')
+		const cardText = normalizeText(getSecurityPoolCard('Will this resolve?').textContent ?? '')
 		expect(cardText).toContain('0.001 ETH')
 		expect(cardText).not.toContain('≈ 0.00 ETH')
 	})
@@ -661,6 +658,11 @@ describe('SecurityPoolsOverviewSection', () => {
 		return [...document.querySelectorAll('.pool-directory-row h3')].map(heading => heading.textContent)
 	}
 
+	// The caption under each row's capacity meter, such as its remaining capacity.
+	function getCapacityCaptions() {
+		return [...document.querySelectorAll('.pool-directory-row .pool-capacity-summary .progress-meter-detail')].map(caption => normalizeText(caption.textContent ?? ''))
+	}
+
 	async function selectOption(label: string, value: string) {
 		const select = within(document.body).getByLabelText(label)
 		if (!(select instanceof window.HTMLSelectElement)) throw new Error(`Expected ${label} select`)
@@ -743,7 +745,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 1n * 10n ** 18n, mintingCapacityAttoEth: 4n * 10n ** 18n, totalUnderwritingLimitAttoEth: 4n * 10n ** 18n })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
+		const rowText = normalizeText(document.querySelector('.pool-directory-row .pool-capacity-summary')?.textContent ?? '')
 		expect(rowText).toContain('25% used')
 		expect(rowText).toContain('3.00 ETH remaining')
 	})
@@ -789,21 +791,30 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
 	})
 
-	test('shows no remaining capacity for a pool whose escalation game has started', async () => {
+	test('says minting is paused for a pool whose escalation game has started', async () => {
 		const pool = createNumberedPool(1, { ordinaryEscalationGameStarted: true })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
+		const rowText = normalizeText(document.querySelector('.pool-directory-row .pool-capacity-summary')?.textContent ?? '')
 		expect(rowText).toContain('/ 5.00 ETH')
-		expect(rowText).toContain('0 ETH remaining')
+		expect(rowText).not.toContain('remaining')
+		expect(getCapacityCaptions()[0]).toBe('Minting paused')
+	})
+
+	test('does not call minting paused once a pool that ran an escalation game has finalized or forked', async () => {
+		// The escalation flag stays set after the game, but finalization or a fork closes minting for good.
+		const finalizedPool = createNumberedPool(1, { ordinaryEscalationGameStarted: true, questionOutcome: 'yes' })
+		const migratingPool = createNumberedPool(2, { ordinaryEscalationGameStarted: true, systemState: 'forkMigration' })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [finalizedPool, migratingPool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(getCapacityCaptions()).toEqual(['0 ETH remaining', '0 ETH remaining'])
 	})
 
 	test('shows no remaining capacity when the complete-set exchange rate is undefined', async () => {
 		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n, totalUnderwritingLimitAttoEth: 8n * 10n ** 18n })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
-		expect(rowText).toContain('0 ETH remaining')
+		expect(getCapacityCaptions()[0]).toBe('0 ETH remaining')
 	})
 
 	test('offers to open a pasted address that is downloaded but not listed in the active collection', async () => {

@@ -144,16 +144,27 @@ describe('live portfolio scope', () => {
 		] as const) {
 			const rendered = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, questionOutcome, systemState }} />)
 			expect(rendered.container.textContent).toContain('1 Yes')
-			expect(rendered.container.textContent).toContain(expected)
-			expect(rendered.container.textContent).toContain('1 Yes (')
+			// The payout is its own caption line, so it carries no brackets, and nothing else renders beside the quantity.
+			expect(rendered.container.querySelector('.payout-caption')?.textContent).toContain(expected)
+			expect(rendered.container.textContent).toBe(`1 Yes ${rendered.container.querySelector('.payout-caption')?.textContent?.trim() ?? ''}`)
+			expect(rendered.container.textContent).not.toContain('(')
 			await rendered.cleanup()
 		}
+		// A forked, unresolved market notes blocked redemption on a lone holding; a list that says it once omits it per holding.
+		const forkedMarket = { ...valuedMarket, questionOutcome: 3, systemState: 0, universeForkTime: 1n }
+		const lone = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={forkedMarket} />)
+		expect(lone.container.textContent).toContain('0.9842 ETH if the question resolves Yes; Redemption unavailable')
+		await lone.cleanup()
+		const listed = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={forkedMarket} noteRedemption={false} />)
+		expect(listed.container.textContent).toContain('0.9842 ETH if the question resolves Yes')
+		expect(listed.container.textContent).not.toContain('Redemption unavailable')
+		await listed.cleanup()
 		const unavailable = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, loadError: 'RPC failed' }} />)
 		expect(unavailable.container.textContent).toContain('Payout unavailable')
 		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
 		await unavailable.cleanup()
 		const zero = await renderIntoDocument(<OutcomeHolding amount={0n} outcome='YES' market={valuedMarket} />)
-		expect(zero.container.textContent).toBe('0 Yes (0 ETH)')
+		expect(zero.container.textContent).toBe('0 Yes 0 ETH')
 		await zero.cleanup()
 	})
 

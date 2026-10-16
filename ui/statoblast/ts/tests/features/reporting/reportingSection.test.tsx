@@ -1,5 +1,5 @@
 import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
-import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
+import { formatReportingDeadline, getViewerStatusSentence } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -406,6 +406,9 @@ describe('ReportingSection', () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ questionOutcome: 'yes', parentWithdrawalEnabled: true, settlementState: 'resolved' }) })))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('Resolved as Yes. You can claim')
+		// The claim renders through the shared amount component: rounded on screen, exact on hover.
+		expect(document.body.textContent).toContain('You can claim 2.20 REP.')
+		expect(document.querySelector('.reporting-result .currency-value')?.getAttribute('title')).toBe('2.2 REP')
 		expect(document.body.textContent).toContain('Winner')
 		expect(document.body.textContent).not.toContain('Amount needed to hold the lead')
 		expect(document.body.querySelector('.escalation-sides-legend-marker')).toBeNull()
@@ -445,12 +448,13 @@ describe('ReportingSection', () => {
 				fireEvent.click(queries.getByRole('button', { name: 'Max' }))
 			})
 			expect(amountInput().value).toBe('7.999999999999999999')
-			expect(document.body.textContent).toContain('Max stops at 7.999999999999999999 REP, just below the non-decision threshold.')
+			// The cap reads rounded down, so typing the shown figure stays below the threshold; hovering shows the exact cap.
+			expect(document.body.textContent).toContain('Max stops at ≈ 7.99 REP(exact 7.999999999999999999 REP), just below the non-decision threshold.')
 			expect(document.querySelector('.reporting-fork-trigger-warning')).toBeNull()
 			expect(reportingButtonLabel('No')).toBe('Report No · 7.999999999999999999 REP…')
 			// No can never lead Yes at the threshold, so the minimum preset is not a "Min to lead".
 			expect(queries.queryByRole('button', { name: /^Min to lead/ })).toBeNull()
-			expect(queries.getByRole('button', { name: 'Fill side & trigger fork (8 REP)' })).not.toBeNull()
+			expect(queries.getByRole('button', { name: 'Fill side & trigger fork (8.00 REP)' })).not.toBeNull()
 			const maxReward = requireButton(queries.getByRole('button', { name: /^Max reward/ }))
 			expect(maxReward.disabled).toBe(true)
 			expect(maxReward.title).toBe('Max reward is unavailable because matching the other side would trigger the universe fork.')
@@ -461,7 +465,7 @@ describe('ReportingSection', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
 			await act(() => {
-				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (8 REP)' }))
+				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (8.00 REP)' }))
 			})
 			expect(amountInput().value).toBe('8')
 			const warning = document.querySelector('.reporting-fork-trigger-warning')
@@ -504,7 +508,7 @@ describe('ReportingSection', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
 			await act(() => {
-				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (225 000 REP)' }))
+				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (225 000.00 REP)' }))
 			})
 			expect(amountInput().value).toBe('225000')
 			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225\u00a0000 REP')
@@ -930,7 +934,7 @@ describe('ReportingSection', () => {
 			/>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('15 REP deposit for this report. Your vault will hold 10 REP afterward.')
+		expect(document.body.textContent).toContain('This pool requires a 15.00 REP deposit for this report. Your vault will hold 10.00 REP afterward.')
 		expect(
 			within(document.body)
 				.getByRole('button', { name: /Approve 15 REP/ })
@@ -1026,7 +1030,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(within(document.body).queryByRole('button', { name: /Settle|Claim|Clear/ })).toBeNull()
-		expect(document.body.textContent).toContain('Behind · worth 0 REP if it ended now')
+		expect(document.body.textContent).toContain('Behind · worth 0.00 REP if it ended now')
 	})
 
 	test('keeps finalized withdrawals enabled in withdraw-only mode after escalation closes', async () => {
@@ -1166,7 +1170,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(within(document.body).queryByRole('button', { name: /Settle|Claim|Clear/ })).toBeNull()
-		expect(document.body.textContent).toContain('Behind · worth 0 REP if it ended now')
+		expect(document.body.textContent).toContain('Behind · worth 0.00 REP if it ended now')
 	})
 
 	test('shows the report submission pending label while the report action is in flight', async () => {
@@ -1345,7 +1349,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 		expect(within(document.body).queryByRole('button', { name: /Settle|Claim|Clear/ })).toBeNull()
-		expect(document.body.textContent).toContain('Behind · worth 0 REP if it ended now')
+		expect(document.body.textContent).toContain('Behind · worth 0.00 REP if it ended now')
 	})
 
 	test('shows the finalized outcome in the resolved banner', async () => {
@@ -1439,7 +1443,7 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Fork')
 		expect(document.body.textContent).not.toContain('Check back before')
 		expect(getEscalationMetricsSection().textContent).not.toContain('Response window ends')
-		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('You have 1 REP on Yes.')
+		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('You have 1.00 REP on Yes.')
 		const forkTriggeredReason = 'Escalation ended without a decision, so this question can only resolve through a universe fork. Trigger it unless someone else already has; until then, all escalation deposits stay locked. Triggering is permanent.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
@@ -1806,8 +1810,11 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const queries = within(document.body)
+		// The preset reads rounded up, keeps the exact amount on hover, and fills in the exact amount.
+		const minimumPreset = queries.getByRole('button', { name: /^Min to lead \(≈ 1\.11 REP/ })
+		expect(minimumPreset.querySelector('.currency-value')?.getAttribute('title')).toBe('1.100000000000000001 REP')
 		await act(() => {
-			fireEvent.click(queries.getByRole('button', { name: 'Min to lead (1.100000000000000001 REP)' }))
+			fireEvent.click(minimumPreset)
 		})
 		const amountInput = queries.getByRole('textbox', { name: /^Report amount/ })
 		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Contribution input is unavailable')
@@ -1823,7 +1830,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Max reward (7 REP)' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Max reward (7.00 REP)' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -1921,7 +1928,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Minimum first report (3 REP)' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Minimum first report (3.00 REP)' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -2621,7 +2628,13 @@ describe('ReportingSection', () => {
 			const rendered = await renderIntoDocument(h(ReportingSectionHarness, { initialProps: createProps({ reportingDetails: details }) }))
 			cleanupRenderedComponent = rendered.cleanup
 			const status = document.querySelector('.reporting-viewer-status')
-			expect(status?.textContent).toContain(winning ? 'You’re leading on Yes. Your 1 REP would be worth about 1 REP if it ended now.' : `You’re behind on Yes. Add at least 7.000000000000000001 REP before ${formatReportingDeadline(300n, 150n)} or your 1 REP is lost.`)
+			if (winning) expect(status?.textContent).toContain('You’re leading on Yes. Your 1.00 REP would be worth 1.00 REP if it ended now.')
+			else {
+				// The minimum reads rounded up, so adding the shown figure takes the lead; hovering shows the exact amount that Take the lead fills in.
+				expect(status?.textContent).toContain('You’re behind on Yes. Add at least ≈ 7.01 REP')
+				expect(status?.textContent).toContain(`before ${formatReportingDeadline(300n, 150n)} or your 1.00 REP is lost.`)
+				expect(status?.querySelector('.currency-value')?.getAttribute('title')).toBe('7.000000000000000001 REP')
+			}
 			expect(status?.classList.contains('notice')).toBe(false)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? 'You’re leading on Yes.' : 'You’re behind on Yes.')
 			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. Any new report can extend the response window (up to 7 weeks after the game starts).`)
@@ -2640,17 +2653,22 @@ describe('ReportingSection', () => {
 			}
 		})
 	}
+	test('writes the calendar reminder status with rounded REP amounts', () => {
+		const details = createReportingDetails({ bindingCapital: 0n })
+		details.sides = details.sides.map(side => ({ ...side, balance: side.key === 'no' ? rep(8n) : rep(1n) }))
+		expect(getViewerStatusSentence(details)).toBe(`You’re behind on Yes. Add at least ≈ 7.01 REP before ${formatReportingDeadline(300n, 150n)} or your 1.00 REP is lost.`)
+	})
+
 	test('orders multi-side positions with the winner first and includes imported stake', async () => {
 		const details = createReportingDetails({ bindingCapital: 0n })
 		details.sides = details.sides.map(side => (side.key === 'no' ? { ...side, importedUserDeposits: [{ amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(2n), parentDepositIndex: 0n, depositor: zeroAddress }] } : side))
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
 		const text = document.querySelector('.reporting-viewer-status')?.textContent ?? ''
-		expect(text).toContain('You’re leading on No. Your 2 REP would be worth about 2 REP if it ended now.')
+		expect(text).toContain('You’re leading on No. Your 2.00 REP would be worth 2.00 REP if it ended now.')
 		expect(document.querySelector('.reporting-viewer-status')?.classList.contains('notice')).toBe(false)
 		expect(within(document.body).queryByRole('button', { name: 'Take the lead' })).toBeNull()
 		expect(text.indexOf('You’re leading on No.')).toBeLessThan(text.indexOf('You’re behind on Yes.'))
-		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('You’re leading on No. Your 2 REP would be worth about 2 REP if it ended now.')
 	})
 	test('ties show no winner, link to the explanation, and label positions Tied', async () => {
 		const details = createReportingDetails()

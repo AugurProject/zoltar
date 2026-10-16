@@ -210,6 +210,10 @@
 	color: var(--danger);
 }
 
+.tx-action-notice.warning {
+	color: var(--warning);
+}
+
 .tx-action-feedback {
 	min-block-size: 2.9em;
 	font-size: var(--font-caption);
@@ -354,44 +358,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 .universe-browser {
 	gap: var(--space-5);
-}
-
-.section-mode-switch,
-.security-pools-header-switch {
-	display: inline-flex;
-	flex-wrap: nowrap;
-	gap: 0.18rem;
-	max-width: 100%;
-	padding: 0.16rem;
-	border: 1px solid var(--divider-subtle);
-	border-radius: calc(var(--radius-control) + 0.25rem);
-	background: var(--surface-row);
-	box-shadow: inset 0 1px 0 var(--color-white-04);
-	overflow-x: auto;
-}
-
-.section-mode-switch.view-tabs.subroute .view-tab,
-.security-pools-header-switch.view-tabs.subroute .view-tab {
-	padding: 0.42rem 0.66rem;
-	border-color: transparent;
-	background: transparent;
-	font-size: var(--font-caption);
-	font-weight: 700;
-	letter-spacing: 0.01em;
-	white-space: nowrap;
-}
-
-.section-mode-switch.view-tabs.subroute .view-tab:hover:not(:disabled),
-.security-pools-header-switch.view-tabs.subroute .view-tab:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent) 6%, transparent);
-	border-color: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-
-.section-mode-switch.view-tabs.subroute .view-tab.active,
-.security-pools-header-switch.view-tabs.subroute .view-tab.active {
-	background: var(--accent-soft);
-	border-color: var(--border-active);
-	box-shadow: inset 0 0 0 1px var(--accent-faint);
 }
 
 /* Narrow screens stack the pool header title above two columns of headline items. */

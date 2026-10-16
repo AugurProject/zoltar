@@ -1,5 +1,6 @@
-export const childPoolMissing = 'Child security pool missing'
-export const childPoolReady = 'Child security pool ready'
+/** Whether the child universe already has the security pool a migration batch lands in. */
+export const childPoolMissing = 'No pool yet'
+export const childPoolReady = 'Pool ready'
 export const scalarForkQuestion = 'Scalar fork question'
 export const categoricalForkQuestion = 'Categorical fork question'
 /** A child universe that already holds this share's whole balance; migrating there again would move nothing. */

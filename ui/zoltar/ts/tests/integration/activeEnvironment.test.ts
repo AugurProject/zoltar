@@ -11,7 +11,7 @@ import { createSimulationBackend } from '@zoltar/ui-core-shared/simulation/tevmB
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { parseSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/tests/simulation/savedStateStorage.js'
 
@@ -498,7 +498,7 @@ void describe('simulation backend', () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
 		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
 		await warmBaselineBackend.setTransactionDelayMilliseconds(0)
-	}, 180_000)
+	}, simulationSetupTimeoutMs)
 
 	beforeEach(async () => {
 		await resetSelectedAccountAndTransactionDelay(coldBaselineBackend)

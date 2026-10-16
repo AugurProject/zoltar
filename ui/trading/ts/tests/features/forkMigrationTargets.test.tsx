@@ -126,10 +126,10 @@ describe('fork migration target selection', () => {
 		const rendered = await renderIntoDocument(<ForkMigrationTargets context={context} selectedTargets={[missingTarget]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Child security pool missing')
+		expect(rendered.container.textContent).toContain('No pool yet')
 		expect(rendered.container.textContent).not.toContain('will be created')
 		// A list that only holds selected targets does not repeat a Selected badge on every row.
-		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['Child security pool missing'])
+		expect(Array.from(rendered.container.querySelectorAll('.fork-target-selection .badge'), badge => badge.textContent)).toEqual(['No pool yet'])
 	})
 
 	test('selects labeled categorical targets independently from source INVALID, YES, and NO shares', async () => {
@@ -174,7 +174,7 @@ describe('fork migration target selection', () => {
 		expect(redRow?.textContent).toContain('This share is already migrated to this child universe.')
 		const blueButton = buttonByText(rendered.container, 'Blue')
 		expect(blueButton.disabled).toBe(false)
-		expect(blueButton.closest('.migration-outcome-row')?.textContent).toContain('Child security pool ready')
+		expect(blueButton.closest('.migration-outcome-row')?.textContent).toContain('Pool ready')
 		const link = Array.from(rendered.container.querySelectorAll('.fork-migrated-list a')).find(anchor => anchor.textContent === 'Open in Red universe')
 		if (link === undefined) throw new Error('Missing child universe link')
 		expect(link.getAttribute('href')).toContain(`#/market/${childPool}`)
@@ -192,7 +192,7 @@ describe('fork migration target selection', () => {
 		await input(inputByLabel(rendered.container, 'Select scalar target'), '25')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBe(true)
 		expect(rendered.container.textContent).toContain('This share is already migrated to this child universe.')
-		expect(rendered.container.textContent).not.toContain('Child security pool missing')
+		expect(rendered.container.textContent).not.toContain('No pool yet')
 	})
 
 	test('treats a balance that grew after migrating as not yet migrated there', async () => {

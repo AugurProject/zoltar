@@ -319,6 +319,20 @@ describe('vault operations lifecycle', () => {
 		expect(max.disabled).toBe(true)
 	})
 
+	test('panel states why target lookup is disabled under the whole lookup row', async () => {
+		const rendered = await mountPanel(dependencies())
+		const queries = within(rendered.container)
+		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		const input = queries.getByLabelText('Find target by address')
+		const add = queries.getByRole<HTMLButtonElement>('button', { name: 'Add target' })
+		const reasonId = add.getAttribute('aria-describedby')
+		expect(add.disabled).toBe(true)
+		expect(reasonId).not.toBeNull()
+		expect(document.getElementById(reasonId ?? '')?.textContent).toBe('Enter a vault address.')
+		expect(input.getAttribute('aria-describedby')).toContain(reasonId ?? '')
+		expect(add.closest('.tx-action')?.textContent).not.toContain('Enter a vault address.')
+	})
+
 	test('panel previews entered amounts in standard notation', async () => {
 		const rendered = await mountPanel(dependencies())
 		const queries = within(rendered.container)

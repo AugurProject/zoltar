@@ -31,7 +31,7 @@ export function SecurityPoolLink({ ariaLabel, children, className, disabled = fa
 			}}
 			title={securityPoolAddress}
 		>
-			{children ?? <ReadOnlyAddressValue address={securityPoolAddress} responsiveAbbreviation />}
+			{children ?? <ReadOnlyAddressValue address={securityPoolAddress} />}
 		</a>
 	)
 }

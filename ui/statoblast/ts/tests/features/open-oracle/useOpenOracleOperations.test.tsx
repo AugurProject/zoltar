@@ -4,6 +4,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -457,20 +458,19 @@ describe('useOpenOracleOperations', () => {
 		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		await withFakeClock(async clock => {
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(renderedComponent.cleanup)
 
-		await act(async () => {
-			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			expect(requireHookState(hookState).openOracleDisputeSubmission?.inputBlockMessage?.message).toBe('This report is not ready to dispute.')
+
+			// The hook re-renders shortly after the one-second dispute delay ends.
+			await clock.advance(1100)
+			expect(requireHookState(hookState).openOracleDisputeSubmission?.inputBlockMessage?.message).not.toBe('This report is not ready to dispute.')
 		})
-		expect(requireHookState(hookState).openOracleDisputeSubmission?.inputBlockMessage?.message).toBe('This report is not ready to dispute.')
-
-		await waitFor(
-			() => {
-				expect(requireHookState(hookState).openOracleDisputeSubmission?.inputBlockMessage?.message).not.toBe('This report is not ready to dispute.')
-			},
-			{ timeout: 3000 },
-		)
 	})
 
 	test('approval preflight blocks a report that settled after it was loaded', async () => {

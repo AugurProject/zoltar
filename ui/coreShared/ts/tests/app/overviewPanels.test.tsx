@@ -69,7 +69,7 @@ describe('OverviewPanels', () => {
 			onGoToGenesisUniverse: () => undefined,
 			onSwitchNetwork: () => undefined,
 			universeForkTime: undefined,
-			universeHasForked: false,
+			showUniverseForkedNotice: false,
 			universePresentation: undefined,
 			universeRepBalanceAttoRep: undefined,
 			walletBootstrapComplete: true,
@@ -346,7 +346,7 @@ describe('OverviewPanels', () => {
 		{ name: 'a disconnected wallet', overrides: {} },
 		{ name: 'an account without REP in the forked universe', overrides: { accountState: connectedAccount, universeRepBalanceAttoRep: 0n } },
 	])('reports the fork without a migration prompt for $name', async ({ overrides }) => {
-		const documentQueries = await renderOverviewPanels({ ...overrides, migrateRepHref: '#/zoltar?zoltarView=migrate', universeForkTime: 123n, universeHasForked: true })
+		const documentQueries = await renderOverviewPanels({ ...overrides, migrateRepHref: '#/zoltar?zoltarView=migrate', universeForkTime: 123n, showUniverseForkedNotice: true })
 
 		expect(documentQueries.getByText(/This universe forked on/)).toBeDefined()
 		expect(document.body.textContent).not.toContain('Migrate your REP to a child universe.')
@@ -358,7 +358,7 @@ describe('OverviewPanels', () => {
 			migrateRepHref: '#/zoltar?zoltarView=migrate',
 			accountState: connectedAccount,
 			universeForkTime: 123n,
-			universeHasForked: true,
+			showUniverseForkedNotice: true,
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 
@@ -377,7 +377,7 @@ describe('OverviewPanels', () => {
 		backend.getChainId = async () => '0x1'
 		const restore = installActiveEnvironmentForTesting(backend)
 		try {
-			await renderOverviewPanels({ universeHasForked: true })
+			await renderOverviewPanels({ showUniverseForkedNotice: true })
 			await waitFor(() => expect(document.body.querySelector('.mainnet-disabled-notice')).not.toBeNull())
 			const toolbar = document.body.querySelector('.header-toolbar')
 			const mainnet = document.body.querySelector('.mainnet-disabled-notice')
@@ -393,7 +393,7 @@ describe('OverviewPanels', () => {
 
 	test('does not render a redundant forked badge in the toolbar badge slot', async () => {
 		await renderOverviewPanels({
-			universeHasForked: true,
+			showUniverseForkedNotice: true,
 		})
 
 		const brand = document.body.querySelector('.header-toolbar-brand')

@@ -9,14 +9,13 @@ import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/featur
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
-import { createActiveReportingDetails, createEscalationSides, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createMarketDetails, createReportingForm, createReportingProps, createSecurityPoolWorkflowProps, createSelectedPool } from './builders.js'
+import { createActiveReportingDetails, createEscalationSides, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createMarketDetails, createReportingForm, createReportingProps, createSecurityPoolWorkflowProps, createSelectedPool, forkedPoolState, truthAuctionPoolState } from './builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
 installTestRouting()
 describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 	const { renderWorkflow, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
 	const endedMarket = () => createMarketDetails({ endTime: 2n })
-	const forkedPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'poolForked' } as const
 	const createForkedPoolProps = (selectedPoolAddress: Address = zeroAddress) =>
 		createSecurityPoolWorkflowProps({
 			checkedSecurityPoolAddress: selectedPoolAddress,
@@ -25,15 +24,14 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			securityPools: [createSelectedPool({ ...forkedPoolState, securityPoolAddress: selectedPoolAddress })],
 			selectedPoolView: 'fork-auction',
 		})
+	// A fork whose auction has settled: the pool is operational again in the outcome's universe.
+	const settledForkPoolState = { ...forkedPoolState, systemState: 'operational', truthAuctionStartedAt: 1n } as const
 	const createSettledForkAuctionProps = (overrides: Partial<ForkAuctionDetails> = {}) =>
 		createForkAuctionProps({
 			forkAuctionDetails: createForkAuctionDetails({
 				claimingAvailable: false,
-				forkOutcome: 'yes',
-				migratedAttoRep: 1n,
-				systemState: 'operational',
+				...settledForkPoolState,
 				truthAuction: createFinalizedTruthAuction(),
-				truthAuctionStartedAt: 1n,
 				...overrides,
 			}),
 		})
@@ -99,7 +97,6 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 		test('defaults the fork workflow to the current stage on first render', async () => {
 			const selectedViews: string[] = []
-			const truthAuctionPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, securityPoolAddress: zeroAddress, systemState: 'forkTruthAuction', truthAuctionStartedAt: 1n } as const
 			await renderWorkflow(
 				createSecurityPoolWorkflowProps({
 					checkedSecurityPoolAddress: zeroAddress,
@@ -149,7 +146,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			await rerender({
 				...baseProps,
 				forkAuction: createSettledForkAuctionProps({ securityPoolAddress: zeroAddress }),
-				securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, securityPoolAddress: zeroAddress, systemState: 'operational', truthAuctionStartedAt: 1n })],
+				securityPools: [createSelectedPool({ ...settledForkPoolState, securityPoolAddress: zeroAddress })],
 				selectedPoolView: 'fork-workflow',
 			})
 
@@ -200,7 +197,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 				checkedSecurityPoolAddress: zeroAddress,
 				forkAuction: createForkAuctionProps(),
 				securityPoolAddress: zeroAddress,
-				securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, securityPoolAddress: zeroAddress, systemState: 'operational', truthAuctionStartedAt: 1n })],
+				securityPools: [createSelectedPool({ ...settledForkPoolState, securityPoolAddress: zeroAddress })],
 				selectedPoolView: 'fork-workflow',
 			})
 			const { rerender } = await renderWorkflow(baseProps)

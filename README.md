@@ -123,7 +123,7 @@ Simulation mode details:
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
 - Every app supports `simScenario=baseline` and `simScenario=deployed`. The other seeded scenarios are app-specific:
   - Zoltar: `two-questions` and `forked-categorical`
-  - Statoblast: `security-pool`, `securitypoolx2`, `securitypoolx2-auction`, `ended-pool-commitment`, and `liquidation-distance`
+  - Statoblast: `security-pool`, `securitypoolx2`, `securitypoolx2-auction`, `finalized-truth-auction`, `ended-pool-commitment`, `escalation-in-progress`, `liquidation-distance`, and `near-minimum-vault`
   - Trading: `trading-funded` and `trading-forked`
 - The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
 

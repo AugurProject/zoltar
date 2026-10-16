@@ -16,6 +16,7 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
+import { createFinalizedTruthAuction } from '../security-pools/workflow/builders.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
@@ -60,7 +61,7 @@ await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/features/truth-auctio
 const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
-	return {
+	return createFinalizedTruthAuction({
 		accumulatedBidAttoEth: 0n,
 		auctionEndsAt: 604_801n,
 		clearingPrice: TRUTH_AUCTION_PRICE_PRECISION,
@@ -68,18 +69,10 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		bidAtClearingTickAttoEth: ONE_UNIT + HALF_UNIT,
 		attoEthRaiseCap: 10n * ONE_UNIT,
 		attoEthRaised: 4n * ONE_UNIT,
-		finalized: true,
-		hitCap: true,
 		maxAttoRepBeingSold: 4n * ONE_UNIT,
-		minBidSizeAttoEth: ONE_UNIT,
-		attoRepPurchasableAtBid: undefined,
-		timeRemaining: 0n,
 		totalAttoRepPurchased: 4n * ONE_UNIT,
-		underfunded: false,
-		underfundedThreshold: undefined,
-		underfundedWinningAttoEth: 0n,
 		...overrides,
-	}
+	})
 }
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {

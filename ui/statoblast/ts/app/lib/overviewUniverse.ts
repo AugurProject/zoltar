@@ -16,7 +16,7 @@ export function getStatoblastOverviewUniverse({ loadingZoltarForkAccess, zoltarF
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
 		migrateRepHref: migrationActive ? undefined : buildRouteHref('#/pools/migrate', getTopLevelRouteSearch('pools')),
 		universeForkTime: zoltarUniverse?.forkTime,
-		universeHasForked: zoltarUniverse?.hasForked,
+		showUniverseForkedNotice: zoltarUniverse?.hasForked,
 		universeRepBalanceAttoRep: zoltarForkRepBalanceAttoRep,
 	}
 }

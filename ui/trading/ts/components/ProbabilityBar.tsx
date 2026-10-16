@@ -6,13 +6,16 @@ function roundedProbabilityLabels(yesPercent: number) {
 	return { yes: roundedYes.toFixed(1), no: (100 - roundedYes).toFixed(1) }
 }
 
-/** The conditional YES / NO split; with `beforePercent` it previews a trade: the fill shows the price after it and the marker the price before. */
-export function ProbabilityBar({ yesPercent, beforePercent }: { yesPercent: number; beforePercent?: number | undefined }) {
+/**
+ * The conditional YES / NO split; with `beforePercent` it previews a trade: the fill shows the price after it and the marker the price before.
+ * The `headline` variant is the market page's leading figure: large labels over a thicker bar.
+ */
+export function ProbabilityBar({ yesPercent, beforePercent, variant }: { yesPercent: number; beforePercent?: number | undefined; variant?: 'headline' | undefined }) {
 	const labels = roundedProbabilityLabels(yesPercent)
 	const before = beforePercent === undefined ? undefined : roundedProbabilityLabels(beforePercent)
 	const moved = before !== undefined && before.yes !== labels.yes
 	return (
-		<figure className={`probability${moved ? ' probability--preview' : ''}`} aria-label={moved ? probabilityCopy.conditionalYesMoveLabel(before.yes, labels.yes) : probabilityCopy.conditionalYesPriceLabel(labels.yes)}>
+		<figure className={['probability', moved ? 'probability--preview' : '', variant === 'headline' ? 'probability--headline' : ''].filter(Boolean).join(' ')} aria-label={moved ? probabilityCopy.conditionalYesMoveLabel(before.yes, labels.yes) : probabilityCopy.conditionalYesPriceLabel(labels.yes)}>
 			<div className='probability__labels'>
 				<span>{moved ? probabilityCopy.probabilityMoveLabel(shareOutcome.yes, before.yes, labels.yes) : probabilityCopy.probabilityLabel(shareOutcome.yes, labels.yes)}</span>
 				<span>{moved ? probabilityCopy.probabilityMoveLabel(shareOutcome.no, before.no, labels.no) : probabilityCopy.probabilityLabel(shareOutcome.no, labels.no)}</span>

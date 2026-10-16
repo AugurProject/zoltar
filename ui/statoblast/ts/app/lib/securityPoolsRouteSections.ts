@@ -37,8 +37,6 @@ export function buildSecurityVaultSectionProps(vault: VaultSource, shared: Secti
 		},
 		onWithdrawRep: vault.withdrawRep,
 		repPerEthPrice: shared.repPerEthPrice,
-		repPerEthSource: shared.repPerEthSource,
-		repPerEthSourceUrl: shared.repPerEthSourceUrl,
 		securityPoolVaults: selectedPool?.vaults,
 		securityVaultActiveAction: vault.securityVaultActiveAction,
 		securityVaultDetails: vault.securityVaultDetails,

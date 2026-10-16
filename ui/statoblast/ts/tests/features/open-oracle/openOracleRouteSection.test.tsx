@@ -9,6 +9,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -743,27 +744,29 @@ describe('OpenOracleSection route create view', () => {
 
 	for (const settled of [false, true]) {
 		test(`updates price expiry while viewing a ${settled ? 'settled' : 'pending'} report`, async () => {
-			const rendered = await renderIntoDocument(
-				h(
-					OpenOracleSection,
-					createOpenOracleSectionProps({
-						activeView: 'selected-report',
-						openOracleReportDetails: createOpenOracleReportDetails({
-							currentReporter: '0x3000000000000000000000000000000000000000',
-							currentTime: 459n,
-							reportTimestamp: 100n,
-							settlementTime: 60n,
-							coordinatorPriceValidUntilTimestamp: 460n,
-							isDistributed: settled,
-							settlementTimestamp: settled ? 200n : 0n,
+			await withFakeClock(async clock => {
+				const rendered = await renderIntoDocument(
+					h(
+						OpenOracleSection,
+						createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							openOracleReportDetails: createOpenOracleReportDetails({
+								currentReporter: '0x3000000000000000000000000000000000000000',
+								currentTime: 459n,
+								reportTimestamp: 100n,
+								settlementTime: 60n,
+								coordinatorPriceValidUntilTimestamp: 460n,
+								isDistributed: settled,
+								settlementTimestamp: settled ? 200n : 0n,
+							}),
 						}),
-					}),
-				),
-			)
-			cleanupRenderedComponent = rendered.cleanup
-			expect(within(document.body).queryByText('Price expired')).toBeNull()
-			await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-			expect(within(document.body).getByText('Price expired')).not.toBeNull()
+					),
+				)
+				cleanupRenderedComponent = rendered.cleanup
+				expect(within(document.body).queryByText('Price expired')).toBeNull()
+				await clock.advance(1000)
+				expect(within(document.body).getByText('Price expired')).not.toBeNull()
+			})
 		})
 	}
 
@@ -1215,22 +1218,24 @@ describe('OpenOracleSection route create view', () => {
 	})
 
 	test('automatically disables the dispute launcher when its submission reserve starts', async () => {
-		cleanupRenderedComponent = (
-			await renderIntoDocument(
-				<OpenOracleSection
-					{...createOpenOracleSectionProps({
-						activeView: 'selected-report',
-						openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 100n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 61n, timeType: true }),
-					})}
-				/>,
-			)
-		).cleanup
-		const page = within(document.body)
-		expectTransactionButtonEnabled(document.body, 'Dispute & swap')
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expectTransactionButtonDisabled(document.body, 'Dispute & swap')
-		expect(getDescriptionTexts(page.getByRole('button', { name: 'Dispute & swap' })).join(' ')).toContain('Dispute window ends too soon')
-		expectTransactionButtonDisabled(document.body, 'Settle report')
+		await withFakeClock(async clock => {
+			cleanupRenderedComponent = (
+				await renderIntoDocument(
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 100n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 61n, timeType: true }),
+						})}
+					/>,
+				)
+			).cleanup
+			const page = within(document.body)
+			expectTransactionButtonEnabled(document.body, 'Dispute & swap')
+			await clock.advance(1000)
+			expectTransactionButtonDisabled(document.body, 'Dispute & swap')
+			expect(getDescriptionTexts(page.getByRole('button', { name: 'Dispute & swap' })).join(' ')).toContain('Dispute window ends too soon')
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+		})
 	})
 
 	test('uses the exact shared live settlement timestamp to switch a selected report into settle mode', async () => {
@@ -1260,152 +1265,162 @@ describe('OpenOracleSection route create view', () => {
 	})
 
 	test('counts down to settlement and enables the report action at zero', async () => {
-		const reloads: string[] = []
-		const settle = mock(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={100n}>
-				<OpenOracleSection
-					{...createOpenOracleSectionProps({
-						activeView: 'selected-report',
-						onLoadOracleReport: () => reloads.push('report'),
-						onSettleReport: settle,
-						openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
-						openOracleReportDetails: createOpenOracleReportDetails({
-							currentReporter: '0x3000000000000000000000000000000000000000',
-							currentTime: 100n,
-							disputeDelay: 0n,
-							reportTimestamp: 100n,
-							settlementTime: 2n,
-							timeType: true,
-						}),
-						openOracleReportLookupState: 'ready',
-					})}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const page = within(document.body)
-		expect(page.getByText('Can settle in 2s')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle report')
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.getByText('Can settle in 1s')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle report')
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.queryByText('Can settle in 1s')).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Settle report')
-		expect(reloads).toContain('report')
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
-		expect(page.queryByRole('dialog')).toBeNull()
-		expect(settle).toHaveBeenCalledTimes(1)
+		await withFakeClock(async clock => {
+			const reloads: string[] = []
+			const settle = mock(() => undefined)
+			const renderedComponent = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={100n}>
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							onLoadOracleReport: () => reloads.push('report'),
+							onSettleReport: settle,
+							openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
+							openOracleReportDetails: createOpenOracleReportDetails({
+								currentReporter: '0x3000000000000000000000000000000000000000',
+								currentTime: 100n,
+								disputeDelay: 0n,
+								reportTimestamp: 100n,
+								settlementTime: 2n,
+								timeType: true,
+							}),
+							openOracleReportLookupState: 'ready',
+						})}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+			const page = within(document.body)
+			expect(page.getByText('Can settle in 2s')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+			await clock.advance(1000)
+			expect(page.getByText('Can settle in 1s')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+			await clock.advance(1000)
+			expect(page.queryByText('Can settle in 1s')).toBeNull()
+			expectTransactionButtonEnabled(document.body, 'Settle report')
+			expect(reloads).toContain('report')
+			await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
+			expect(page.queryByRole('dialog')).toBeNull()
+			expect(settle).toHaveBeenCalledTimes(1)
+		})
 	})
 
 	test('starts a new settlement countdown when the deadline refresh finds a dispute', async () => {
-		function ReportHarness() {
-			const [report, setReport] = useState(
-				createOpenOracleReportDetails({
-					currentReporter: '0x3000000000000000000000000000000000000000',
-					currentTime: 100n,
-					disputeDelay: 0n,
-					reportTimestamp: 100n,
-					settlementTime: 1n,
-					timeType: true,
-				}),
-			)
-			return (
-				<OpenOracleSection
-					{...createOpenOracleSectionProps({
-						activeView: 'selected-report',
-						onLoadOracleReport: () => setReport(current => ({ ...current, currentTime: 101n, disputeOccurred: true, reportTimestamp: 101n, settlementTime: 60n })),
-						openOracleReportDetails: report,
-						openOracleReportLookupState: 'ready',
-					})}
-				/>
-			)
-		}
-		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
-		const page = within(document.body)
-		expect(page.getByText('Can settle in 1s')).not.toBeNull()
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.getByText('Can settle in 1m 0s')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle report')
+		await withFakeClock(async clock => {
+			function ReportHarness() {
+				const [report, setReport] = useState(
+					createOpenOracleReportDetails({
+						currentReporter: '0x3000000000000000000000000000000000000000',
+						currentTime: 100n,
+						disputeDelay: 0n,
+						reportTimestamp: 100n,
+						settlementTime: 1n,
+						timeType: true,
+					}),
+				)
+				return (
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							onLoadOracleReport: () => setReport(current => ({ ...current, currentTime: 101n, disputeOccurred: true, reportTimestamp: 101n, settlementTime: 60n })),
+							openOracleReportDetails: report,
+							openOracleReportLookupState: 'ready',
+						})}
+					/>
+				)
+			}
+			cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
+			const page = within(document.body)
+			expect(page.getByText('Can settle in 1s')).not.toBeNull()
+			await clock.advance(1000)
+			expect(page.getByText('Can settle in 1m 0s')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+		})
 	})
 
 	test('refreshes a report when chain time jumps directly to its deadline', async () => {
-		const reloads: string[] = []
-		function ReportHarness() {
-			const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 100n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
-			return (
-				<ChainTimestampContext.Provider value={160n}>
+		await withFakeClock(async clock => {
+			const reloads: string[] = []
+			function ReportHarness() {
+				const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 100n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
+				return (
+					<ChainTimestampContext.Provider value={160n}>
+						<OpenOracleSection
+							{...createOpenOracleSectionProps({
+								activeView: 'selected-report',
+								onLoadOracleReport: () => {
+									reloads.push('report')
+									setReport(current => ({ ...current, currentTime: 160n, disputeOccurred: true, reportTimestamp: 160n, settlementTime: 60n }))
+								},
+								openOracleReportDetails: report,
+								openOracleReportLookupState: 'ready',
+							})}
+						/>
+					</ChainTimestampContext.Provider>
+				)
+			}
+			cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
+			await clock.advance(1000)
+			expect(reloads).toContain('report')
+			expect(within(document.body).getByText('Can settle in 1m 0s')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+		})
+	})
+
+	test('refreshes an overdue report once without polling away action errors', async () => {
+		await withFakeClock(async clock => {
+			const reloads: string[] = []
+			function ReportHarness() {
+				const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 160n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
+				return (
 					<OpenOracleSection
 						{...createOpenOracleSectionProps({
 							activeView: 'selected-report',
 							onLoadOracleReport: () => {
 								reloads.push('report')
-								setReport(current => ({ ...current, currentTime: 160n, disputeOccurred: true, reportTimestamp: 160n, settlementTime: 60n }))
+								setReport(current => ({ ...current, currentTime: current.currentTime + 1n }))
 							},
 							openOracleReportDetails: report,
 							openOracleReportLookupState: 'ready',
 						})}
 					/>
-				</ChainTimestampContext.Provider>
-			)
-		}
-		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(reloads).toContain('report')
-		expect(within(document.body).getByText('Can settle in 1m 0s')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle report')
-	})
-
-	test('refreshes an overdue report once without polling away action errors', async () => {
-		const reloads: string[] = []
-		function ReportHarness() {
-			const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 160n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
-			return (
-				<OpenOracleSection
-					{...createOpenOracleSectionProps({
-						activeView: 'selected-report',
-						onLoadOracleReport: () => {
-							reloads.push('report')
-							setReport(current => ({ ...current, currentTime: current.currentTime + 1n }))
-						},
-						openOracleReportDetails: report,
-						openOracleReportLookupState: 'ready',
-					})}
-				/>
-			)
-		}
-		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
-		expect(reloads).toEqual(['report'])
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 5500)))
-		expect(reloads).toEqual(['report'])
+				)
+			}
+			cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
+			await clock.advance(400)
+			expect(reloads).toEqual(['report'])
+			await clock.advance(5500)
+			expect(reloads).toEqual(['report'])
+		})
 	})
 
 	test('keeps the settlement countdown moving above one hour', async () => {
-		cleanupRenderedComponent = (
-			await renderIntoDocument(
-				<OpenOracleSection
-					{...createOpenOracleSectionProps({
-						activeView: 'selected-report',
-						openOracleReportDetails: createOpenOracleReportDetails({
-							currentReporter: '0x3000000000000000000000000000000000000000',
-							currentTime: 100n,
-							disputeDelay: 0n,
-							reportTimestamp: 100n,
-							settlementTime: 3602n,
-							timeType: true,
-						}),
-					})}
-				/>,
-			)
-		).cleanup
-		const page = within(document.body)
-		expect(page.getByText('Can settle in 1h 0m 2s')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle report')
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
-		expect(page.getByText('Can settle in 1h 0m 1s')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle report')
+		await withFakeClock(async clock => {
+			cleanupRenderedComponent = (
+				await renderIntoDocument(
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							activeView: 'selected-report',
+							openOracleReportDetails: createOpenOracleReportDetails({
+								currentReporter: '0x3000000000000000000000000000000000000000',
+								currentTime: 100n,
+								disputeDelay: 0n,
+								reportTimestamp: 100n,
+								settlementTime: 3602n,
+								timeType: true,
+							}),
+						})}
+					/>,
+				)
+			).cleanup
+			const page = within(document.body)
+			expect(page.getByText('Can settle in 1h 0m 2s')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+			await clock.advance(1000)
+			expect(page.getByText('Can settle in 1h 0m 1s')).not.toBeNull()
+			expectTransactionButtonDisabled(document.body, 'Settle report')
+		})
 	})
 
 	test('uses the exact shared live settlement block to switch a selected report into settle mode', async () => {

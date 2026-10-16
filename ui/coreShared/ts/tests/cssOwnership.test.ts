@@ -67,9 +67,9 @@ test('feature stylesheets own their product rules and load after the shared shee
 	const shared = ['base.css', 'simulation-banner.css', 'protocol-surfaces.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css'].map(readStylesheet).join('\n')
 	for (const selector of ['.truth-auction-', '.escalation-side', '.security-pool-strip', '.vault-workspace', '.question-draft-preview', '.deployment-contract-details']) expect(shared).not.toContain(`\n${selector}`)
 	// Narrow-viewport overrides for feature grids must follow their base rules, so they live in the owning sheet rather than the earlier-loaded shared sheet.
-	for (const selector of ['.security-pool-strip-stats', '.vault-preview-side-metrics', '.vault-detail-hero', '.trading-share-callouts', '.escalation-metrics', '.fork-summary-grid', '.categorical-outcome-row', '.question-preview-meta', '.question-draft-preview-meta'])
+	for (const selector of ['.security-pool-strip-stats', '.vault-preview-side-metrics', '.vault-detail-hero', '.vault-detail-stage', '.trading-share-callouts', '.escalation-metrics', '.fork-summary-grid', '.categorical-outcome-row', '.question-preview-meta', '.question-draft-preview-meta'])
 		expect(shared).not.toMatch(new RegExp(`\\n\\t?${selector.replaceAll('.', '\\.')}[,\\s{]`))
-	for (const selector of ['.escalation-metrics', '.security-pool-strip-stats', '.vault-detail-hero']) expect(statoblast.lastIndexOf(`\t${selector},`)).toBeGreaterThan(statoblast.indexOf(`${selector} {`))
+	for (const selector of ['.escalation-metrics', '.security-pool-strip-stats', '.vault-detail-stage']) expect(statoblast.lastIndexOf(`\t${selector},`)).toBeGreaterThan(statoblast.indexOf(`${selector} {`))
 	expect(zoltar.lastIndexOf('\t.categorical-outcome-row')).toBeGreaterThan(zoltar.indexOf('.categorical-outcome-row {'))
 	expect(zoltarQuestions.lastIndexOf('\t.question-preview-meta')).toBeGreaterThan(zoltarQuestions.indexOf('.question-preview-meta {'))
 	expect(readStylesheet('simulation-banner.css')).toContain('.simulation-banner {')

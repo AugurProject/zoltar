@@ -27,7 +27,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton =
 			wallet.account !== undefined ? (
-				<WalletConnectionControl disabled={actions.busy} ariaLabel={appCopy.disconnectWalletLabel(wallet.account)} title={appCopy.disconnectWallet} onClick={actions.disconnectWallet} label={<ReadOnlyAddressValue address={wallet.account} responsiveAbbreviation />} />
+				<WalletConnectionControl disabled={actions.busy} ariaLabel={appCopy.disconnectWalletLabel(wallet.account)} title={appCopy.disconnectWallet} onClick={actions.disconnectWallet} label={<ReadOnlyAddressValue address={wallet.account} />} />
 			) : (
 				<WalletConnectionControl disabled={!wallet.canConnect} pending={wallet.connecting} onClick={() => void actions.connectWallet()} pendingLabel={appCopy.connectingWallet} label={appCopy.connectWallet} />
 			)
@@ -48,7 +48,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 					<DataGrid dense>
 						<MetricField label={deploymentCopy.deployingTo}>{network.core.chainName}</MetricField>
 						<MetricField label={deploymentCopy.securityPoolFactory}>
-							<ReadOnlyAddressValue address={network.core.securityPoolFactory} responsiveAbbreviation />
+							<ReadOnlyAddressValue address={network.core.securityPoolFactory} />
 						</MetricField>
 					</DataGrid>
 				)}

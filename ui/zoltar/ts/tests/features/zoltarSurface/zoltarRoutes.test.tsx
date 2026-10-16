@@ -337,7 +337,7 @@ describe('ZoltarRoutes', () => {
 		const { queries, viewChanges } = await renderRoute('overview', createUniverse())
 		expect(queries.getByRole('heading', { name: 'Overview' })).toBeTruthy()
 		expect(queries.getByText('Alpha')).toBeTruthy()
-		expect(queries.getByText('This universe forked. Migrate your REP into the child universes you back.')).toBeTruthy()
+		expect(queries.getByText('Migrate your REP into the child universes you back.')).toBeTruthy()
 		expect(queries.getByText('Open, no deadline')).toBeTruthy()
 		const nextStep = document.body.querySelector('.zoltar-next-step')
 		if (!(nextStep instanceof HTMLElement)) throw new Error('Expected the next step')

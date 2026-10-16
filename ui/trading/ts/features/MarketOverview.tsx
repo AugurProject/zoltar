@@ -17,7 +17,7 @@ import { liveCopy } from '../copy/live.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { marketsCopy } from '../copy/markets.js'
 import { marketYesTenths } from '../lib/marketListing.js'
-import type { LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import { formatMarketLiquidity } from './MarketCard.js'
 import { marketStatusLabel, marketStatusTone } from './marketStatus.js'
 
@@ -54,9 +54,9 @@ export function MarketContracts({ market }: { market: LiveMarket }) {
 				<MetricField label={liveCopy.securityPool}>
 					<TradingSecurityPoolLink value={market.pool} />
 				</MetricField>
-				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation />}</MetricField>
+				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} />}</MetricField>
 				<MetricField label={marketsCopy.shareToken}>
-					<ReadOnlyAddressValue address={market.shareToken} responsiveAbbreviation />
+					<ReadOnlyAddressValue address={market.shareToken} />
 				</MetricField>
 			</DataGrid>
 		</ReadOnlyDetailAccordion>
@@ -86,14 +86,27 @@ export function MarketPageHeader({ market, nowSeconds, headingRef, actions }: { 
 	)
 }
 
+/** Open odds lead the column; once the market takes no new risk they are history, so they step down to a labelled, muted bar. */
+function MarketOdds({ tradingClosed, yesTenths }: { tradingClosed: boolean; yesTenths: number | undefined }) {
+	if (yesTenths === undefined) return <UserMessage className='detail' detail={marketsCopy.priceUnavailable} />
+	if (!tradingClosed) return <ProbabilityBar variant='headline' yesPercent={yesTenths / 10} />
+	return (
+		<div className='market-odds-closed'>
+			<span className='metric-label'>{marketsCopy.lastConditionalPrices}</span>
+			<ProbabilityBar yesPercent={yesTenths / 10} />
+		</div>
+	)
+}
+
 /** The market page's reading column: conditional odds, the facts that decide a trade, the wallet's position, the question's own description, and contracts. */
-export function MarketOverview({ market, position }: { market: LiveMarket; position: ComponentChildren }) {
+export function MarketOverview({ market, nowSeconds, position }: { market: LiveMarket; nowSeconds: bigint; position: ComponentChildren }) {
 	const yesTenths = marketYesTenths(market)
+	const tradingClosed = !marketAcceptsNewRisk(market, nowSeconds)
 	const description = market.description.trim()
 	const liquidity = formatMarketLiquidity(market)
 	return (
 		<div className='market-overview'>
-			{yesTenths === undefined ? <UserMessage className='detail' detail={marketsCopy.priceUnavailable} /> : <ProbabilityBar yesPercent={yesTenths / 10} />}
+			<MarketOdds yesTenths={yesTenths} tradingClosed={tradingClosed} />
 			<DataGrid className='market-facts'>
 				<MetricField label={liveCopy.questionEnd}>
 					<TimestampValue timestamp={market.endTime} relative={false} />
