@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
@@ -311,23 +312,27 @@ test('shows no remaining capacity in the header when the complete-set exchange r
 })
 
 test('shows the pending report countdown in selected pool price fields', async () => {
-	await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(154n) }, 100n)
-	expect(document.body.textContent).toContain('Available in 54s')
-	expect(document.body.textContent).not.toContain('Unavailable ↻')
-	const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
-		.filter(label => label.textContent === 'OpenOracle price')
-		.map(label => label.nextElementSibling?.textContent?.trim())
-	// Pool details omit the price while the page's price row already shows it.
-	expect(shownOraclePrices).toEqual(['Available in 54s↻'])
-	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
-	expect(document.body.textContent).toContain('Available in 53s')
+	await withFakeClock(async clock => {
+		await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(154n) }, 100n)
+		expect(document.body.textContent).toContain('Available in 54s')
+		expect(document.body.textContent).not.toContain('Unavailable ↻')
+		const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
+			.filter(label => label.textContent === 'OpenOracle price')
+			.map(label => label.nextElementSibling?.textContent?.trim())
+		// Pool details omit the price while the page's price row already shows it.
+		expect(shownOraclePrices).toEqual(['Available in 54s↻'])
+		await clock.advance(1000)
+		expect(document.body.textContent).toContain('Available in 53s')
+	})
 })
 
 test('keeps the pending price countdown moving above one hour', async () => {
-	await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(3702n) }, 100n)
-	expect(document.body.textContent).toContain('Available in 1h 0m 2s')
-	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
-	expect(document.body.textContent).toContain('Available in 1h 0m 1s')
+	await withFakeClock(async clock => {
+		await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(3702n) }, 100n)
+		expect(document.body.textContent).toContain('Available in 1h 0m 2s')
+		await clock.advance(1000)
+		expect(document.body.textContent).toContain('Available in 1h 0m 1s')
+	})
 })
 
 test('keeps the prior price expiry visible while a new report is pending', async () => {

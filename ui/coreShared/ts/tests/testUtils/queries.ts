@@ -341,8 +341,9 @@ export const fireEvent = {
 	},
 }
 
+/** Retries `callback` until it stops throwing. The generous limit only delays reporting a real failure; it keeps a starved test process from failing early. */
 export async function waitFor<T>(callback: () => T, options?: { timeout?: number; interval?: number }): Promise<T> {
-	const timeout = options?.timeout ?? 1000
+	const timeout = options?.timeout ?? 5000
 	const interval = options?.interval ?? 50
 	const start = Date.now()
 	while (true) {

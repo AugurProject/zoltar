@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -47,7 +47,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		backend = await createBootstrappedSimulationBackendWithRetry(FORKED_TRADING_SIMULATION_SCENARIO, 1, 'trading')
 		await backend.setTransactionDelayMilliseconds(0)
 		await backend.setQueryDelayMilliseconds(0)
-	}, 300_000)
+	}, simulationSetupTimeoutMs)
 
 	afterAll(async () => {
 		if (backend !== undefined) await backend.dispose()
@@ -118,11 +118,11 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			expect(operationButton('Migrate').disabled).toBe(false)
 			expect(operationButton('Migrate').getAttribute('aria-pressed')).toBe('true')
 			expect(operationButton('Redeem sets').disabled).toBe(true)
-			await waitFor(() => expect(document.body.textContent).toContain('Will this resolve?'), { timeout: 10_000 })
+			await waitFor(() => expect(document.body.textContent).toContain('Will this resolve?'), simulationWaitOptions)
 			const yesTarget = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Yes') === true && candidate.closest('[aria-label="Settlement operation"]') === null && candidate.closest('.enum-dropdown') === null)
 			if (!(yesTarget instanceof HTMLButtonElement)) throw new Error('Missing Yes fork target')
 			await act(() => yesTarget.click())
-			await waitFor(() => expect(document.body.textContent).toContain('Migrates your entire balance'), { timeout: 10_000 })
+			await waitFor(() => expect(document.body.textContent).toContain('Migrates your entire balance'), simulationWaitOptions)
 			const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
 			if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
 			expect(acknowledgment.checked).toBe(false)
@@ -130,14 +130,14 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 			expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
 			await act(() => acknowledgment.click())
 			// The action also waits for the migration quote, which can land just after the acknowledgment.
-			await waitFor(() => expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(false), { timeout: 10_000 })
+			await waitFor(() => expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(false), simulationWaitOptions)
 			await act(() => buttonByLabel('Migrate to 1 child universe').click())
-			await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.'), { timeout: 20_000 })
+			await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.'), simulationWaitOptions)
 			expect(refreshes).toBeGreaterThan(0)
 		} finally {
 			await rendered.cleanup()
 			restore()
 			dom.cleanup()
 		}
-	}, 60_000)
+	}, 180_000)
 })

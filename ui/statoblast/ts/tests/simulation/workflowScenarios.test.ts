@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { isLiquidationBeyondMinPriceDistance, isVaultHealthyAtFactor } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 import { getVaultSummaryHealth } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/vaultHealth.js'
 import { getVaultRedeemRepGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
@@ -46,7 +46,7 @@ void describe('production workflow simulation scenarios', () => {
 		escalationBackend = nextEscalationBackend
 		liquidationDistanceBackend = nextLiquidationDistanceBackend
 		nearMinimumBackend = nextNearMinimumBackend
-	}, 240_000)
+	}, simulationSetupTimeoutMs)
 
 	afterAll(async () => {
 		if (endedPoolBackend !== undefined) await endedPoolBackend.dispose()
@@ -144,7 +144,7 @@ void describe('finalized truth auction simulation scenario', () => {
 
 	beforeAll(async () => {
 		finalizedAuctionBackend = await createBootstrappedSimulationBackendWithRetry('finalized-truth-auction', 1, 'statoblast')
-	}, 240_000)
+	}, simulationSetupTimeoutMs)
 
 	afterAll(async () => {
 		if (finalizedAuctionBackend !== undefined) await finalizedAuctionBackend.dispose()
