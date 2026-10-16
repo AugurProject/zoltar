@@ -7,7 +7,7 @@ import { Fragment } from 'preact'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
 import type { useForkAuctionSectionState } from '../hooks/useForkAuctionSectionState.js'
-import { createForkAuctionActionRenderer, ForkAuctionEndedNotice, ForkAuctionOutcomePoolNotice } from './ForkAuctionActionSections.js'
+import { createForkAuctionActionRenderer, ForkAuctionEndedNotice, ForkAuctionFinalizeSection, ForkAuctionOutcomePoolNotice } from './ForkAuctionActionSections.js'
 import { ForkAuctionMigrationBalances } from './ForkAuctionMigrationStage.js'
 import { renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 
@@ -70,8 +70,8 @@ export function renderForkAuctionSectionDisplays(model: ForkAuctionSectionModel)
 		renderSelectedOutcomeChildPoolLink,
 		renderSelectedOutcomeChildPoolNotice,
 		renderStageActionButton,
-		startedDisplay: model.startedDisplay.kind === 'text' ? model.startedDisplay.text : <TimestampValue timestamp={model.startedDisplay.timestamp} />,
-		truthAuctionEndedNotice:
-			truthAuctionStatus === undefined ? undefined : <ForkAuctionEndedNotice actionButton={finalizeTruthAuctionAction} currentTimestamp={model.effectiveCurrentTimestamp} finalized={truthAuctionStatus.finalized} onOpenSettlement={model.openSettlementStage} truthAuctionEndsAt={model.truthAuctionEndsAt} />,
+		startedDisplay: model.startedDisplay.kind === 'text' ? model.startedDisplay.text : <TimestampValue {...currentTimestampProps} timestamp={model.startedDisplay.timestamp} />,
+		truthAuctionEndedNotice: truthAuctionStatus === undefined ? undefined : <ForkAuctionEndedNotice currentTimestamp={model.effectiveCurrentTimestamp} finalized={truthAuctionStatus.finalized} onOpenSettlement={model.openSettlementStage} truthAuctionEndsAt={model.truthAuctionEndsAt} />,
+		truthAuctionFinalizeSection: truthAuctionStatus === undefined ? undefined : <ForkAuctionFinalizeSection actionButton={finalizeTruthAuctionAction} />,
 	}
 }

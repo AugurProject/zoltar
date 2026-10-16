@@ -3,6 +3,8 @@ import { tryParseBigIntInput } from '../forms/integerInput.js'
 const UNIVERSE_QUERY_PARAM = 'universe'
 const SECURITY_POOL_QUESTION_ID_QUERY_PARAM = 'questionId'
 const ZOLTAR_VIEW_QUERY_PARAM = 'zoltarView'
+/** Universe IDs are `uint248` in every contract, so a larger value can never resolve to a universe. */
+const UNIVERSE_ID_LIMIT = 1n << 248n
 
 export function readStringQueryParam(search: string, key: string) {
 	const value = new URLSearchParams(search).get(key)
@@ -37,10 +39,10 @@ export function readUniverseQueryParam(search: string) {
 	const value = readStringQueryParam(search, UNIVERSE_QUERY_PARAM)
 	if (value === undefined) return undefined
 	const universeId = tryParseBigIntInput(value)
-	return universeId !== undefined && universeId >= 0n && universeId < 1n << 256n ? universeId : undefined
+	return universeId !== undefined && universeId >= 0n && universeId < UNIVERSE_ID_LIMIT ? universeId : undefined
 }
 
-/** True when `universe` is present but is not a non-negative integer, which `readUniverseQueryParam` would otherwise ignore. */
+/** True when `universe` is present but is not a non-negative `uint248` integer, which `readUniverseQueryParam` would otherwise ignore. */
 export function hasInvalidUniverseQueryParam(search: string) {
 	if (!new URLSearchParams(search).has(UNIVERSE_QUERY_PARAM)) return false
 	return readUniverseQueryParam(search) === undefined

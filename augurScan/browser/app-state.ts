@@ -4,6 +4,7 @@ import { createActivityRouteState, type ActivityRouteState } from './activity-ro
 import { createCanonicalState, type CanonicalState } from './canonical-state.ts'
 import { createForegroundRefreshGate, type RefreshGate } from './live-refresh.ts'
 import { createNetworkRenderState, type NetworkRenderState } from './network-render.ts'
+import { appliedNetwork } from './network-selection.ts'
 import { createOperationsRouteState, type OperationsRouteState } from './operations-state.ts'
 import { classifyRoute, type ScannerRoute } from './routes.ts'
 import { createScannerLiveState, type ScannerLiveState } from './scanner-live-state.ts'
@@ -79,7 +80,8 @@ export const createScannerState = (pageUrl: URL, isDemo: boolean): ScannerState 
 	}
 }
 
-export const selectedChainId = (state: Pick<ScannerState, 'initialChainId'>, globalNetworkFilter: HTMLSelectElement): string => (globalNetworkFilter.dataset['restored'] === 'true' ? globalNetworkFilter.value : state.initialChainId)
+/** The applied network; before network status arrives, the chain the page was opened with. */
+export const selectedChainId = (state: Pick<ScannerState, 'initialChainId'>, globalNetworkFilter: HTMLSelectElement): string => appliedNetwork(globalNetworkFilter) ?? state.initialChainId
 
 export const requireChainId = (chainId: string): string => {
 	if (chainId === '') throw new Error('Waiting for network status before loading this view')

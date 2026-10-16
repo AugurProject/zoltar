@@ -8,7 +8,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { TradeSettingsPanel } from '../components/TradeSettingsPanel.js'
 import { formatRoundedUnits } from '../lib/format.js'
-import { averagePriceBps, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
+import { averagePriceBps, formatCompleteSetWithValue, formatOutcomePayout, formatOutcomeQuantity, shareOutcome } from '../lib/shareValue.js'
 import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -54,6 +54,21 @@ function formatEstimateEth(amountAttoEth: bigint) {
 	return formatEthAmount(formatRoundedUnits(amountAttoEth, 18, ESTIMATE_DIGITS))
 }
 
+/** What the estimate says a trade receives, for the ticket's screen-reader announcement. */
+export function estimateAnnouncement(estimate: TradeEstimate) {
+	return ticketCopy.formatEstimateAnnouncement(estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.quote.totalLongShares, estimate.side, ESTIMATE_DIGITS) : formatEstimateEth(estimate.receiveAttoEth))
+}
+
+/** A review value whose figure stays in the value face, with what it pays on a quieter line of prose under it. */
+function ValueWithPayout({ quantity, payout }: { quantity: string; payout: string }) {
+	return (
+		<>
+			{quantity}
+			<span className='trade-estimate-value-detail'>{payout}</span>
+		</>
+	)
+}
+
 /**
  * The gain or loss a winning buy leaves against the ETH paid, with the same figure as a return on that ETH. It uses the
  * digits of the payout shown beside the shares received, so the two reconcile.
@@ -71,8 +86,9 @@ function formatFeeEth(feeAttoEth: bigint) {
 
 /**
  * The live estimate. Always visible: how the trade moves the odds, what it costs and returns, its average price, the
- * worst case the slippage setting allows, the holding it leaves, and what a buy pays and gains if its outcome wins.
- * Price impact joins them once it is worth a caution. Fees, share mechanics, and the slippage setting sit behind disclosures.
+ * worst case the slippage setting allows (the least a buy receives; the least ETH and the most shares a sale settles
+ * for), the holding it leaves, and what a buy pays and gains if its outcome wins. Price impact joins them once it is
+ * worth a caution. Fees, share mechanics, and the slippage setting sit behind disclosures.
  */
 export function TradeEstimatePanel({
 	estimate,
@@ -101,14 +117,18 @@ export function TradeEstimatePanel({
 	const opposite = side === 'YES' ? 'NO' : 'YES'
 	// A buy also keeps Invalid shares, which pay if the question resolves Invalid, so the headline states what each resolution pays.
 	const entryInvalid = estimate.kind === 'entry' ? estimate.quote.invalidInsurance : 0n
+	// A sale's own ETH figure is what it pays, so its share rows name quantities only; a conditional payout beside them would read as a second price.
 	const primary =
 		estimate.kind === 'entry'
 			? [
-					{ label: ticketCopy.youReceiveEstimate, value: `${formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS)} · ${entryInvalid === 0n ? payoutCopy.otherwiseZero : payoutCopy.formatShortConditionalPayout(formatEthAmount('0'), opposite)}` },
-					...(entryInvalid === 0n ? [] : [{ label: ticketCopy.invalidInsurance, value: formatOutcomeWithValue(entryInvalid, shareOutcome.invalid, market) }]),
+					{
+						label: ticketCopy.youReceiveEstimate,
+						value: <ValueWithPayout quantity={formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS)} payout={`${formatOutcomePayout(quote.totalLongShares, side, market)} · ${entryInvalid === 0n ? payoutCopy.otherwiseZero : payoutCopy.formatShortConditionalPayout(formatEthAmount('0'), opposite)}`} />,
+					},
+					...(entryInvalid === 0n ? [] : [{ label: ticketCopy.invalidInsurance, value: <ValueWithPayout quantity={formatOutcomeQuantity(entryInvalid, shareOutcome.invalid)} payout={formatOutcomePayout(entryInvalid, shareOutcome.invalid, market)} /> }]),
 				]
 			: [
-					{ label: ticketCopy.youSellEstimate, value: formatOutcomeWithValue(quote.totalLongShares, side, market, ESTIMATE_DIGITS) },
+					{ label: ticketCopy.youSellEstimate, value: formatOutcomeQuantity(quote.totalLongShares, side, ESTIMATE_DIGITS) },
 					{ label: ticketCopy.youReceiveEstimate, value: formatEstimateEth(estimate.receiveAttoEth) },
 				]
 	const average = averagePriceBps(estimate.kind === 'entry' ? estimate.payAttoEth : estimate.receiveAttoEth, quote.totalLongShares, market)
@@ -120,7 +140,8 @@ export function TradeEstimatePanel({
 		...(impactTier === 'low' ? [impactRow] : []),
 		{ label: ticketCopy.tradingFee, value: ticketCopy.formatTradingFeeValue(formatScaledPercentage(market.feeBps, 2), formatFeeEth(poolFeeAttoEth(estimate, market))) },
 		{ label: ticketCopy.completeSets, value: formatCompleteSetWithValue(quote.completeSetShares, market) },
-		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeWithValue(estimate.quote.oppositeSharesSwapped, opposite, market) } : { label: ticketCopy.swapped(side), value: formatOutcomeWithValue(estimate.quote.longSharesSwapped, side, market) },
+		// Swapped shares pass through the pool and are never held, so they have no payout to state.
+		estimate.kind === 'entry' ? { label: ticketCopy.swapped(opposite), value: formatOutcomeQuantity(estimate.quote.oppositeSharesSwapped, opposite) } : { label: ticketCopy.swapped(side), value: formatOutcomeQuantity(estimate.quote.longSharesSwapped, side) },
 	]
 	return (
 		<section className='trade-estimate' aria-label={ticketCopy.estimateHeading}>
@@ -132,11 +153,13 @@ export function TradeEstimatePanel({
 				details={[
 					{ label: ticketCopy.averagePrice, value: average === undefined ? commonCopy.metricUnavailablePlaceholder : formatScaledPercentage(average, 2) },
 					...(estimate.kind === 'entry' ? [{ label: ticketCopy.formatProfitIfResolves(side), value: formatProfit(buyReturn(estimate, market)) }] : []),
-					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeWithValue(estimate.minimumLongShares, side, market, ESTIMATE_DIGITS, 'down') : formatEthAmount(formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)) },
+					{ label: ticketCopy.minimumReceived, value: estimate.kind === 'entry' ? formatOutcomeQuantity(estimate.minimumLongShares, side, ESTIMATE_DIGITS, 'down') : formatEthAmount(formatTrimmedUnits(estimate.minimumAttoEth, 18, ESTIMATE_DIGITS)) },
+					// The most shares the wallet signs over for a sale; the router refunds what the trade does not use.
+					...(estimate.kind === 'exit' ? [{ label: ticketCopy.maximumSold, value: formatOutcomeQuantity(estimate.maximumLongShares, side, ESTIMATE_DIGITS) }] : []),
 					// A sale spends Invalid shares, so what it uses stays in view; the Invalid a buy adds is a detail.
-					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeWithValue(estimate.quote.invalidRequired, shareOutcome.invalid, market) }] : []),
+					...(estimate.kind === 'exit' ? [{ label: ticketCopy.invalidUsed, value: formatOutcomeQuantity(estimate.quote.invalidRequired, shareOutcome.invalid) }] : []),
 					...(impactTier === 'low' ? [] : [impactRow]),
-					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.formatHoldingAfter(side), value: formatOutcomeWithValue(holdingAfter, side, market) }]),
+					...(holdingAfter === undefined ? [] : [{ label: ticketCopy.formatHoldingAfter(side), value: formatOutcomeQuantity(holdingAfter, side) }]),
 				]}
 			/>
 			<p className='visually-hidden' role='status'>

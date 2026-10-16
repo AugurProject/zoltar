@@ -1,12 +1,13 @@
 import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
-import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { ReputationToken_ReputationToken } from '@zoltar/ui-core-shared/contractArtifact.js'
 
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 
 import { requireSecurityVaultTupleArray } from './helpers.js'
 
@@ -17,46 +18,6 @@ const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
 async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityPoolAddress: Address) {
 	const code = await client.getCode({ address: securityPoolAddress })
 	return code !== undefined && code !== '0x'
-}
-
-export async function isSecurityPoolVaultAdmissionClosed(client: Pick<ReadClient, 'getBlock' | 'readContract'>, securityPoolAddress: Address) {
-	const [escalationGame, questionData, questionId] = await Promise.all([
-		client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddress,
-			functionName: 'escalationGame',
-			args: [],
-		}),
-		client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddress,
-			functionName: 'questionData',
-			args: [],
-		}),
-		client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddress,
-			functionName: 'questionId',
-			args: [],
-		}),
-	])
-	const [questionEndTime, block] = await Promise.all([
-		client.readContract({
-			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-			address: questionData,
-			functionName: 'getQuestionEndDate',
-			args: [questionId],
-		}),
-		client.getBlock(),
-	])
-	if (block.timestamp < questionEndTime) return false
-	if (sameAddress(escalationGame, zeroAddress)) return true
-	return !(await client.readContract({
-		abi: statoblast_EscalationGame_EscalationGame.abi,
-		address: escalationGame,
-		functionName: 'forkContinuation',
-		args: [],
-	}))
 }
 
 export async function getSecurityPoolVaultCount(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, blockNumber?: bigint) {
@@ -104,6 +65,27 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'r
 	})
 }
 
+/**
+ * Reads each vault after a simulated `updateVaultFees` checkpoint. The stored claimable fees only grow when that vault is
+ * checkpointed, while `redeemFees` checkpoints first, so this returns what a redemption pays at this block. The batch is
+ * one Multicall3 `aggregate3` call, which runs its calls in order, so each read sees its own checkpoint; it is never sent.
+ */
+async function loadCheckpointedSecurityVaults(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address, vaultAddresses: readonly Address[], blockNumber: bigint) {
+	if (vaultAddresses.length === 0) return []
+	const contracts: ContractFunctionParameters[] = vaultAddresses.flatMap(vaultAddress => [
+		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'updateVaultFees', address: securityPoolAddress, args: [vaultAddress] },
+		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] },
+	])
+	// A checkpoint that cannot run leaves the stored vault state, which is still the correct lower bound.
+	const results = await client.multicall({ allowFailure: true, blockNumber, contracts, multicallAddress: getMulticall3Address() })
+	const vaultData = results.flatMap((entry, index) => {
+		if (index % 2 === 0) return []
+		if (entry.status !== 'success') throw entry.error
+		return [entry.result]
+	})
+	return requireSecurityVaultTupleArray(vaultData, 'security vault tuple')
+}
+
 function hasCurrentSecurityVaultState(vaultData: readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]) {
 	const [repBackingUnits, underwritingLimitAttoEth, claimableFeesAttoEth] = vaultData
 	return repBackingUnits > 0n || underwritingLimitAttoEth > 0n || claimableFeesAttoEth > 0n
@@ -146,12 +128,6 @@ export async function loadSecurityPoolVaultSummaries(
 	// in-flight read, nothing awaits them, so mark the rejection handled; the summary reads still receive it.
 	poolRepBackingTotalsPromise.catch(() => undefined)
 	const loadCurrentVaultSummaries = async (vaultAddresses: Address[]) => {
-		const securityVaultSummaryContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'securityVaults',
-			address: securityPoolAddress,
-			args: [vaultAddress],
-		}))
 		const vaultOpenInterestContracts: ContractFunctionParameters[] = vaultAddresses.map(vaultAddress => ({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getVaultOpenInterestAttoEth',
@@ -165,7 +141,7 @@ export async function loadSecurityPoolVaultSummaries(
 			args: [vaultAddress],
 		}))
 		const [vaultData, vaultOpenInterest, vaultBadDebt, [totalPoolHeldRepBalanceAttoRep, totalRepBackingUnits], escalationVaultData] = await Promise.all([
-			readRequiredMulticall(client, securityVaultSummaryContracts, blockNumber).then(result => requireSecurityVaultTupleArray(result, 'security vault tuple')),
+			loadCheckpointedSecurityVaults(client, securityPoolAddress, vaultAddresses, blockNumber),
 			readRequiredMulticall(client, vaultOpenInterestContracts, blockNumber),
 			readRequiredMulticall(client, vaultBadDebtContracts, blockNumber),
 			poolRepBackingTotalsPromise,
@@ -293,7 +269,11 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalUnderwritingLimitAttoEth', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [], blockNumber }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
+		loadCheckpointedSecurityVaults(client, securityPoolAddress, [vaultAddress], blockNumber).then(values => {
+			const value = values[0]
+			if (value === undefined) throw new Error('Unexpected vault data response')
+			return value
+		}),
 		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress], blockNumber).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress], blockNumber }),

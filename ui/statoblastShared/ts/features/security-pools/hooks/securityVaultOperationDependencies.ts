@@ -1,26 +1,7 @@
 import type { UseSecurityVaultOperationsDependencies } from './useSecurityVaultOperations.js'
-import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
-import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
-import { loadCoordinatorInitialReportFundingRequirement, loadQueuedVaultOperationState, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
-import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
-import { depositRepToVaultToSecurityPool, isSecurityPoolEscalationResolved, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, setUnderwritingLimit, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
 
 export const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsDependencies = {
-	approveErc20: async (client, tokenAddress, spenderAddress, amount, action) => await approveErc20(client, tokenAddress, spenderAddress, amount, action),
-	createConnectedReadClient: () => createConnectedReadClient(),
-	createWalletWriteClient,
-	depositRepToVaultToSecurityPool: async (client, securityPoolAddress, amount, targetHealthFactorBps) => await depositRepToVaultToSecurityPool(client, securityPoolAddress, amount, targetHealthFactorBps),
-	isSecurityPoolVaultAdmissionClosed: async securityPoolAddress => await isSecurityPoolVaultAdmissionClosed(createConnectedReadClient(), securityPoolAddress),
-	isSecurityPoolEscalationResolved: async securityPoolAddress => await isSecurityPoolEscalationResolved(createConnectedReadClient(), securityPoolAddress),
-	loadCoordinatorInitialReportFundingRequirement,
-	loadErc20Balance: async (tokenAddress, accountAddress) => await loadErc20Balance(createConnectedReadClient(), tokenAddress, accountAddress),
-	loadQueuedVaultOperationState: async (managerAddress, result) => await loadQueuedVaultOperationState(createConnectedReadClient(), managerAddress, result),
-	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 	loadSecurityVaultDetails: async (securityPoolAddress, vaultAddress) => await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress),
-	queueOracleManagerOperation,
-	redeemRepFromVaultFromSecurityPool: async (client, securityPoolAddress, vaultAddress) => await redeemRepFromVaultFromSecurityPool(client, securityPoolAddress, vaultAddress),
-	redeemSecurityVaultFees: async (client, securityPoolAddress, vaultAddress) => await redeemSecurityVaultFees(client, securityPoolAddress, vaultAddress),
-	setUnderwritingLimit: async (client, securityPoolAddress, limitAttoEth) => await setUnderwritingLimit(client, securityPoolAddress, limitAttoEth),
-	updateSecurityVaultFees: async (client, securityPoolAddress, vaultAddress) => await updateSecurityVaultFees(client, securityPoolAddress, vaultAddress),
 }

@@ -1,4 +1,5 @@
 import * as appCopy from '../copy/app.js'
+import * as userMessagesCopy from '../copy/userMessages.js'
 import * as commonCopy from '../copy/common.js'
 import { createContext } from 'preact'
 import { useContext, useLayoutEffect, useRef } from 'preact/hooks'
@@ -9,6 +10,8 @@ import { LoadingText } from './LoadingText.js'
 
 /** The application's wallet session controls, shared with the header so blocked actions can offer the same connect and switch fixes. */
 export type WalletActions = {
+	/** False when the browser exposes no wallet, so a connect fix could never succeed and the action keeps its text reason. */
+	hasInjectedWallet?: boolean | undefined
 	isConnectingWallet: boolean
 	isManagingWallet: boolean
 	onConnect: () => void
@@ -19,6 +22,17 @@ const WalletActionsContext = createContext<WalletActions | undefined>(undefined)
 
 export function WalletActionsProvider({ children, walletActions }: { children: ComponentChildren; walletActions: WalletActions | undefined }) {
 	return <WalletActionsContext.Provider value={walletActions}>{children}</WalletActionsContext.Provider>
+}
+
+/** Whether the browser exposes a wallet; undefined outside the application frame, where no wallet session is known. */
+export function useHasInjectedWallet() {
+	return useContext(WalletActionsContext)?.hasInjectedWallet
+}
+
+/** The reason a disconnected-wallet action shows when the browser exposes no wallet, since connecting cannot fix it there. */
+export function useNoInjectedWalletReason(availability: ActionAvailability | undefined) {
+	const walletActions = useContext(WalletActionsContext)
+	return getActionAvailabilityReason(availability)?.kind === 'wallet-disconnected' && walletActions?.hasInjectedWallet === false ? userMessagesCopy.walletInstallationRequired : undefined
 }
 
 function getWalletActionFixLabel(blocker: WalletActionBlocker) {
@@ -33,7 +47,8 @@ function getWalletActionFixLabel(blocker: WalletActionBlocker) {
 export function useWalletActionFix({ actionButtonRef, actionDisabled, availability }: { actionButtonRef: RefObject<HTMLButtonElement>; actionDisabled: boolean; availability: ActionAvailability | undefined }) {
 	const walletActions = useContext(WalletActionsContext)
 	const availabilityReason = getActionAvailabilityReason(availability)
-	const blocker = walletActions === undefined || availabilityReason === undefined || availabilityReason.kind === 'other' ? undefined : availabilityReason
+	const connectUnavailable = availabilityReason?.kind === 'wallet-disconnected' && walletActions?.hasInjectedWallet === false
+	const blocker = walletActions === undefined || availabilityReason === undefined || availabilityReason.kind === 'other' || connectUnavailable ? undefined : availabilityReason
 	const fixButtonRef = useRef<HTMLButtonElement>(null)
 	const restoreFocus = useRef(false)
 	const pending = walletActions !== undefined && blocker !== undefined && (blocker.kind === 'wallet-disconnected' ? walletActions.isConnectingWallet || walletActions.isManagingWallet : walletActions.isManagingWallet)

@@ -205,6 +205,69 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x02'])
 	})
 
+	void test('loads a liquidation target outside the pool vault preview on demand and retries after a failed read', async () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const targetVault = getAddress('0x00000000000000000000000000000000000000d3')
+		const otherTargetVault = getAddress('0x00000000000000000000000000000000000000d4')
+		let reads = 0
+		const loadSecurityPoolVaultSummary = mock(async (_securityPoolAddress: Address, vaultAddress: Address) => {
+			reads += 1
+			if (reads === 1) throw new Error('Vault read failed')
+			return { claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 7n, vaultAddress, vaultAttoRepBacking: 9n }
+		})
+		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolVaultSummary }))
+		await act(() => {
+			state().openLiquidationModal(managerAddress, securityPoolAddress, targetVault)
+		})
+		expect(state().liquidationTargetVaultSummary).toBeUndefined()
+
+		await act(async () => {
+			await state().loadLiquidationTargetVaultSummary()
+		})
+		expect(loadSecurityPoolVaultSummary).toHaveBeenLastCalledWith(securityPoolAddress, targetVault)
+		expect(state().liquidationTargetVaultSummary).toBeUndefined()
+		expect(state().liquidationTargetVaultSummaryError).toBe('Failed to load the target vault. Reason: Vault read failed.')
+
+		await act(async () => {
+			await state().loadLiquidationTargetVaultSummary()
+		})
+		expect(state().liquidationTargetVaultSummaryError).toBeUndefined()
+		expect(state().liquidationTargetVaultSummary).toEqual({ claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 7n, vaultAddress: targetVault, vaultAttoRepBacking: 9n })
+
+		// Another target never shows the previous target's figures.
+		await act(() => {
+			state().openLiquidationModal(managerAddress, securityPoolAddress, otherTargetVault)
+		})
+		expect(state().liquidationTargetVaultSummary).toBeUndefined()
+		expect(state().liquidationTargetVaultSummaryError).toBeUndefined()
+	})
+
+	void test('opens every liquidation target with an empty amount instead of the previous entry', async () => {
+		const managerAddress = getAddress('0x00000000000000000000000000000000000000e1')
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000e2')
+		const firstTarget = getAddress('0x00000000000000000000000000000000000000e3')
+		const secondTarget = getAddress('0x00000000000000000000000000000000000000e4')
+		const { state } = await renderHook(createSecurityPoolsOverviewDependencies())
+		await act(() => {
+			state().openLiquidationModal(managerAddress, securityPoolAddress, firstTarget)
+			state().setLiquidationAmount('3')
+		})
+		await act(() => {
+			state().openLiquidationModal(managerAddress, securityPoolAddress, secondTarget)
+		})
+		expect(state().liquidationDebtEthAmount).toBe('0')
+
+		await act(() => {
+			state().setLiquidationAmount('2')
+			state().closeLiquidationModal()
+		})
+		await act(() => {
+			state().openLiquidationModal(managerAddress, securityPoolAddress, secondTarget)
+		})
+		expect(state().liquidationDebtEthAmount).toBe('0')
+	})
+
 	describe('queueLiquidation with a pending wallet balance read', () => {
 		// Starts a two-minute, one-ETH liquidation whose preflight waits on the wallet ETH balance.
 		const startLiquidationAwaitingBalance = async (queueSecurityPoolLiquidation: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>['queueSecurityPoolLiquidation'], managerAddress: Address, securityPoolAddress: Address, targetVault: Address) => {

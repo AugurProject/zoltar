@@ -40,6 +40,7 @@ import { MarketTicketPanel } from './MarketTicketPanel.js'
 import { marketViewHref, readMarketViewParam, readTicketParam, replaceRouteHashSearch, writeMarketViewParam, writeTicketParam } from '../lib/routeState.js'
 import { liveCopy } from '../copy/live.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
+import { useMarketRegistry } from './live/useMarketRegistry.js'
 import { useDownloadedEntities, useFavorites, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { getRememberableMarket, marketDownloadStore, selectFavoriteMarkets, selectMarketCacheUpdates } from '../lib/favoriteMarkets.js'
 
@@ -113,7 +114,7 @@ export function LiveTrading({
 		settings: tradeSettings,
 		services: controllerServices,
 	})
-	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
+	const { account, walletClient, walletEthAttoEth, walletEthStatus, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness: freshness, nowSeconds, refresh, refreshFromControl, refreshLocked, marketPage } = discovery
 	const { mode, side, setMode, setSide } = position
@@ -142,24 +143,33 @@ export function LiveTrading({
 	// Trade and settlement share the `#/market/<address>` hash, so a closed market's chosen view lives in its `view` parameter; liquidity is its own hash.
 	const [closedMarketView, setClosedMarketView] = useState<'trade' | 'settlement'>('settlement')
 	useEffect(() => setClosedMarketView(readMarketViewParam(parseRouteHash(window.location.hash).search) ?? 'settlement'), [routePool])
+	const marketOpen = selected !== undefined && marketAcceptsNewRisk(selected, nowSeconds)
+	// A market that stops trading while its own trade is in flight or just settled keeps the ticket on screen, so that trade's status and hash stay in view.
+	// The view switches during render: an effect would first commit the Settlement view, unmounting the ticket and dropping its focus.
+	const [observedMarket, setObservedMarket] = useState({ pool: selected?.pool, open: marketOpen })
+	if (observedMarket.pool !== selected?.pool || observedMarket.open !== marketOpen) {
+		setObservedMarket({ pool: selected?.pool, open: marketOpen })
+		if (observedMarket.pool === selected?.pool && observedMarket.open && !marketOpen && position.state !== 'idle') setClosedMarketView('trade')
+	}
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
 	const favoriteMarketIds = useFavorites('trading', 'market')
 	const favoritePoolIds = useFavorites('trading', 'pool')
 	const downloadedPools = useDownloadedEntities('trading', 'pool', marketDownloadStore)
 	const downloadedMarkets = useDownloadedEntities('trading', 'market', marketDownloadStore)
-	// Lists show saved favorites; opening a pool reads and remembers its current summary.
+	// Market lists page through the registry with saved favorites first; the pool list shows saved favorites. Opening a pool reads and remembers its current summary.
 	const listsMarkets = tradingListKindFor(route) === 'markets'
+	const marketRegistry = useMarketRegistry({ active: listsMarkets, configuration, selectedUniverseId, services: controllerServices })
 	// A successfully opened pool is saved for creation; pools with a pair also become market favorites.
 	const rememberedMarket = routePool === undefined ? undefined : getRememberableMarket(selected)
 	const rememberedPool = routePool !== undefined && selected?.loadError === undefined ? selected : undefined
 	useRememberOpenedEntity('trading', 'pool', marketDownloadStore, rememberedPool?.pool, rememberedPool)
 	useRememberOpenedEntity('trading', 'market', marketDownloadStore, rememberedMarket?.pool, rememberedMarket)
 	const recordedMarkets = useRef(new Map<string, LiveMarket>())
-	const marketCacheUpdates = selectMarketCacheUpdates(listedMarkets, recordedMarkets.current, favoriteMarketIds.entries)
+	// A workflow can revoke partial discovery, and a registry page fills in as it loads; persist only completed lists.
+	const marketCacheUpdates = selectMarketCacheUpdates([...(discoveryState === 'ready' ? listedMarkets : []), ...(marketRegistry.status === 'ready' ? marketRegistry.markets : [])], recordedMarkets.current, favoriteMarketIds.entries)
 	useEffect(() => {
-		// A workflow can revoke partial discovery; persist only the completed list.
-		if (discoveryState !== 'ready' || marketCacheUpdates.length === 0) return
+		if (marketCacheUpdates.length === 0) return
 		for (const update of marketCacheUpdates) recordedMarkets.current.set(update.id, update.data)
 		downloadedMarkets.record(marketCacheUpdates)
 	})
@@ -212,6 +222,7 @@ export function LiveTrading({
 		networkMismatchReason,
 		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : coreAppCopy.formatSwitchToNetwork(configuration.chainName),
 		walletEthAttoEth,
+		walletEthState: walletEthStatus,
 		connect,
 	}
 	const ticketHoldings = { balances: selectedBalances, balanceState: selectedBalanceState, balanceError, retry: retryBalances }
@@ -268,6 +279,7 @@ export function LiveTrading({
 					lookupRoute={route}
 					fetchedAtByPool={new Map((listsMarkets ? downloadedMarkets.entries : downloadedPools.entries).map(entry => [entry.id, entry.fetchedAt]))}
 					markets={selectFavoriteMarkets(listsMarkets ? downloadedMarkets.entries : downloadedPools.entries, listsMarkets ? favoriteMarketIds.entries : favoritePoolIds.entries, selectedUniverseId).filter(market => (listsMarkets ? market.pair !== undefined : market.pair === undefined))}
+					registry={listsMarkets ? marketRegistry : undefined}
 					discoveryState={discoveryState}
 					discoveryError={discoveryError}
 					workflowLocked={refreshLocked}
@@ -343,7 +355,6 @@ export function LiveTrading({
 	const routePresentation = liveWorkflowRoutePresentation(workflowRoute)
 	// Navigation stays free while a transaction is pending; only the market it touches keeps its ticket locked until it settles.
 	const ticketLocked = marketWorkflowLocked || isMarketTransactionPending(selected?.pool)
-	const marketOpen = selected !== undefined && marketAcceptsNewRisk(selected, nowSeconds)
 	let activeView: MarketWorkspaceView = marketOpen ? 'trade' : closedMarketView
 	if (workflowRoute === 'liquidity') activeView = 'liquidity'
 	const viewTabId = (view: MarketWorkspaceView) => `market-workspace-${view}-tab`
@@ -410,7 +421,9 @@ export function LiveTrading({
 						nowSeconds,
 						externallyLocked: ticketLocked,
 						// An explicit background workflow refresh supersedes any block poll already in flight.
-						refresh: options => refresh(configuration, marketPage.start, 'liquidity', { ...options, ownerMarket: selected.pool, explicit: options?.background === true }),
+						refresh: async options => {
+							await refresh(configuration, marketPage.start, 'liquidity', { ...options, ownerMarket: selected.pool, explicit: options?.background === true })
+						},
 						onKnownReceipt: refreshWalletSummaryAfterReceipt,
 						executeWithCurrentWalletContext,
 						createGuardedWalletWrite,
@@ -424,6 +437,7 @@ export function LiveTrading({
 								<LiveLiquidityControls
 									{...workflowPanelProps}
 									walletEthAttoEth={walletEthAttoEth}
+									walletEthStatus={walletEthStatus}
 									nowSeconds={nowSeconds}
 									services={liquidityServices}
 									onMarketCreated={pool => {
@@ -437,7 +451,7 @@ export function LiveTrading({
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? <LiveSettlementControls {...workflowPanelProps} services={settlementServices} /> : null}
-								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
+								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} walletEthStatus={walletEthStatus} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 								{activeView === 'trade' && selectedPairInitialized ? (
 									<LivePositionControls
@@ -459,7 +473,7 @@ export function LiveTrading({
 						<div key={selected.pool} className='market-layout'>
 							<MarketTicketPanel>{ticket}</MarketTicketPanel>
 							<SectionBlock className='market-layout__main' variant='plain'>
-								<MarketOverview market={selected} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
+								<MarketOverview market={selected} nowSeconds={nowSeconds} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
 							</SectionBlock>
 						</div>
 					)

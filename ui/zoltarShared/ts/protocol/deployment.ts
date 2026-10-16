@@ -526,6 +526,7 @@ export async function loadErc20Balance(client: ReadClient, tokenAddress: Address
 	return typeof balance === 'bigint' ? balance : BigInt(balance)
 }
 
+/** @internal Tests read allowances with this; the UI reads them with the action that needs them. */
 export async function loadErc20Allowance(client: ReadClient, tokenAddress: Address, ownerAddress: Address, spenderAddress: Address): Promise<bigint> {
 	const allowance = await client.readContract({
 		abi: ABIS.mainnet.erc20,

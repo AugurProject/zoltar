@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
+import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
+import { resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/protocol/oracleRequestFunding.js'
 import type { OracleManagerDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { createOracleManagerDetails as createBaseOracleManagerDetails } from '../security-pools/workflow/builders.js'
 

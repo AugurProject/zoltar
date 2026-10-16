@@ -28,14 +28,16 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 
 export type RequestPriceReview = {
 	proposedRepPerEthPrice?: bigint | undefined
+	/** Last settled REP per ETH price; the price field warns when a typed price is far from it or inverted. */
+	referenceRepPerEthPrice?: bigint | undefined
 	requestValueAttoEth: bigint
 	managerAddress: Address
 	securityPoolAddress: Address
 	universeId: bigint
 }
 
-export function createRequestPriceReview(pool: Pick<ListedSecurityPool, 'managerAddress' | 'securityPoolAddress' | 'universeId'>, requestValueAttoEth: bigint): RequestPriceReview {
-	return { requestValueAttoEth, managerAddress: pool.managerAddress, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }
+export function createRequestPriceReview(pool: Pick<ListedSecurityPool, 'lastOraclePrice' | 'managerAddress' | 'securityPoolAddress' | 'universeId'>, requestValueAttoEth: bigint): RequestPriceReview {
+	return { requestValueAttoEth, managerAddress: pool.managerAddress, referenceRepPerEthPrice: pool.lastOraclePrice, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }
 }
 
 export const PRICE_ORACLE_HEADING_ID = 'selected-pool-price-oracle-heading'
@@ -63,12 +65,13 @@ export type RequestPriceModalProps = {
 export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, confirmationWalletBlocker, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceErrorId = useId()
 	const [initialPrice, setInitialPrice] = useState<OracleInitialPriceInput>({ price: '' })
-	useLayoutEffect(() => setInitialPrice({ price: '' }), [review])
+	// The review carries the live oracle fee, so only opening the dialog for a pool clears the typed price.
+	useLayoutEffect(() => setInitialPrice({ price: '' }), [review === undefined, review?.managerAddress, review?.securityPoolAddress, review?.universeId])
 	const { proposedRepPerEthPrice, error: manualPriceError } = parseOracleInitialPrice(initialPrice)
 	const manualPriceErrorShown = initialPrice.price !== '' && manualPriceError !== undefined
 	return (
 		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPrice}>
-			<OracleInitialPriceFields managerAddress={review?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={pending} fieldId={manualPriceErrorId} />
+			<OracleInitialPriceFields managerAddress={review?.managerAddress} referencePrice={review?.referenceRepPerEthPrice} value={initialPrice} onChange={setInitialPrice} disabled={pending} fieldId={manualPriceErrorId} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
 					disabledReasonElementId={confirmationGuardMessage === undefined && manualPriceErrorShown ? `${manualPriceErrorId}-error` : undefined}

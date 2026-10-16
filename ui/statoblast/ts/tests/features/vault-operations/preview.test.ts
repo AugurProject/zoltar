@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { previewVaultOperations } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/preview.js'
-import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsPrice } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/draft.js'
+import { emptyVaultOperationsDraft, parseVaultOperationsDraft, getVaultOperationsReportPrice } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/draft.js'
 import { getVaultOperationsTargetState } from '@zoltar/ui-statoblast-shared/features/vault-operations/lib/targets.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
 import * as vaultOperationsCopy from '@zoltar/ui-statoblast-shared/copy/vaultOperations.js'
@@ -41,12 +41,21 @@ describe('vault bundle preview guards', () => {
 		const withdrawing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), withdraw: '1' }, owner)
 		expect(() => previewVaultOperations(pool, receiver, [], withdrawing, unit)).toThrow('withdrawal')
 	})
+	test('estimates without coverage checks only while the execution price is unknown', () => {
+		const receiver = { ...owned, vaultAttoRepBacking: 100n * unit, underwritingLimitAttoEth: 50n * unit, minimumVaultRepDepositAttoRep: unit }
+		const changing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), commitment: '100' }, owner)
+		const withdrawing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), withdraw: '1' }, owner)
+		expect(previewVaultOperations(pool, receiver, [], changing, unit, undefined, false).commitment).toBe(100n * unit)
+		expect(previewVaultOperations(pool, receiver, [], withdrawing, unit, undefined, false).backing).toBe(99n * unit)
+		expect(() => previewVaultOperations(pool, receiver, [], changing, unit, undefined, true)).toThrow('Deposit more REP')
+		expect(() => previewVaultOperations(pool, receiver, [], withdrawing, unit, undefined, true)).toThrow('withdrawal')
+	})
 	test('rejects withdrawals while escalation deposits remain unsettled', () => {
 		const withdrawing = parseVaultOperationsDraft({ ...emptyVaultOperationsDraft(), withdraw: '1' }, owner)
 		expect(() => previewVaultOperations(pool, { ...owned, disputeStakedAttoRep: unit }, [], withdrawing, unit)).toThrow('Settle escalation deposits')
 	})
 	test('uses a field label rather than an instruction for malformed proposed prices', () => {
-		expect(() => getVaultOperationsPrice('invalid', unit, false)).toThrow('Initial report price must be a decimal number')
+		expect(() => getVaultOperationsReportPrice('invalid', unit, false)).toThrow('Initial report price must be a decimal number')
 	})
 })
 

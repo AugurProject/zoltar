@@ -32,6 +32,8 @@ export function parseVaultOperationsDraft(draft: VaultOperationsDraft, owner: Ad
 	return input
 }
 
-export function getVaultOperationsPrice(proposedPrice: string, cachedPrice: bigint, isPriceValid: boolean) {
-	return isPriceValid || proposedPrice.trim() === '' ? cachedPrice : parseRepAmountInput(proposedPrice, copy.initialPrice)
+/** The price the bundle submits: the fresh oracle price, or the typed initial report proposal. A blank proposal while the price is stale is `0n`, so the stale cached price is never proposed as the initial report. */
+export function getVaultOperationsReportPrice(proposedPrice: string, cachedPrice: bigint, isPriceValid: boolean) {
+	if (isPriceValid) return cachedPrice
+	return proposedPrice.trim() === '' ? 0n : parseRepAmountInput(proposedPrice, copy.initialPrice)
 }

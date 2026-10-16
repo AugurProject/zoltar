@@ -4,7 +4,7 @@ import { Badge } from './Badge.js'
 import type { BadgeTone } from '../types/components.js'
 
 export type DeploymentStepRow = {
-	/** The deploy control for the row; omitted once the contract is deployed. */
+	/** The deploy control for the row; a deployed contract keeps it, disabled and labelled with the result. */
 	action?: ComponentChildren
 	address: string
 	badge?: { label: string; tone: BadgeTone } | undefined

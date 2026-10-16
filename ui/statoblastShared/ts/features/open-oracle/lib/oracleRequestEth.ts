@@ -1,9 +1,9 @@
 import * as statoblastAppCopy from '../../../copy/app.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
-import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from '../../../protocol/oracleRequestFunding.js'
+import { getOracleOperationTimingGuard } from '../../../protocol/oracleRequestFunding.js'
 
-export { getOracleOperationTimingGuard, resolveOracleOperationEthFunding }
+export { getOracleOperationTimingGuard }
 
 function getBufferedOracleRequestEthValue(requestPriceCostAttoEth: bigint | undefined) {
 	if (requestPriceCostAttoEth === undefined) return undefined

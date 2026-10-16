@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 import type { SecurityPoolVaultSummary, QueuedVaultOperationState } from '../../../types/contracts.js'
-import type { VaultOperationsResult } from '../../../protocol/vaultOperations.js'
+import type { VaultOperationsApprovalKind, VaultOperationsResult } from '../../../protocol/vaultOperations.js'
 import { emptyVaultOperationsDraft } from '../lib/draft.js'
 
 function createSession() {
@@ -12,7 +12,7 @@ function createSession() {
 		targets: signal<SecurityPoolVaultSummary[]>([]),
 		status: signal<QueuedVaultOperationState | undefined>(undefined),
 		busy: signal(false),
-		busyAction: signal<'bundle' | 'fees' | 'redeem' | undefined>(undefined),
+		busyAction: signal<'bundle' | 'fees' | 'redeem' | 'wrap' | VaultOperationsApprovalKind | undefined>(undefined),
 		revision: signal(0),
 		presentedTerminal: false,
 	}

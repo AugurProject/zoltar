@@ -79,27 +79,29 @@ export function ReportingOracleBlocker({
 	let status = copy.priceRequested(remaining === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(remaining))
 	if (ready) status = copy.priceReportReady(pendingId)
 	if (pendingId === 0n) status = copy.priceExpired(getOraclePriceValidityWindowSeconds())
+	// Request and settle stay in place, in that order, through expiry, a pending request, and a ready report; the step that does not apply now says why.
+	const requestAvailability = pendingId > 0n ? { disabled: true, reason: copy.priceRequestAlreadyPending } : withWalletBlocker({ disabled: requestReason !== undefined, reason: requestReason }, requestWalletBlocker)
+	const settleAvailability = (() => {
+		if (pendingId === 0n) return { disabled: true, reason: copy.noPriceReportToSettle }
+		if (!ready) return { disabled: true, reason: copy.priceReportNotReady }
+		return withWalletGuardFirst({ disabled: oracle !== undefined && availability?.canAct !== true, reason: oracle === undefined ? undefined : (availability?.message ?? (report === undefined ? copy.loadingPriceReport : undefined)) }, wallet ?? { blocked: false, reason: undefined, walletBlocker: undefined })
+	})()
 
 	return (
 		<>
 			{blocked ? (
 				<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
 					<p>{status}</p>
-					{pendingId === 0n ? (
-						<TransactionActionButton idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequest} availability={withWalletBlocker({ disabled: requestReason !== undefined, reason: requestReason }, requestWalletBlocker)} />
-					) : undefined}
-					{pendingId > 0n && ready ? (
+					<div className='actions'>
+						<TransactionActionButton idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequest} availability={requestAvailability} />
 						<TransactionActionButton
-							idleLabel={openOracleCopy.settleReportTitle(pendingId)}
+							idleLabel={pendingId > 0n ? openOracleCopy.settleReportTitle(pendingId) : openOracleCopy.settleReport}
 							pendingLabel={copy.settlingPriceReport(pendingId)}
 							pending={pending}
 							onClick={() => (oracle === undefined ? onViewReport(pendingId) : oracle.onSettleReport())}
-							availability={withWalletGuardFirst(
-								{ disabled: oracle !== undefined && availability?.canAct !== true, reason: oracle === undefined ? undefined : (availability?.message ?? (report === undefined ? copy.loadingPriceReport : undefined)) },
-								wallet ?? { blocked: false, reason: undefined, walletBlocker: undefined },
-							)}
+							availability={settleAvailability}
 						/>
-					) : undefined}
+					</div>
 				</WarningSurface>
 			) : undefined}
 			{!blocked && updated && manager?.priceValidUntilTimestamp !== undefined ? <UserMessage tone='success' announcement='polite' detail={copy.priceUpdated(formatTimestamp(manager.priceValidUntilTimestamp))} /> : undefined}

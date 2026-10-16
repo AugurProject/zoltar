@@ -208,7 +208,7 @@ describe('MarketCreateQuestionSection', () => {
 		)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
+		expect(documentQueries.getByText('This question will be created already ended.')).not.toBeNull()
 		const createButton = documentQueries.getByRole('button', { name: 'Create question' }) as HTMLButtonElement
 		expect(createButton.disabled).toBe(false)
 		expect((documentQueries.getByLabelText('Scalar min') as HTMLInputElement).value).toBe(scalarForm.scalarMin)
@@ -241,23 +241,26 @@ describe('MarketCreateQuestionSection', () => {
 			marketType: 'binary',
 		}
 
-		await renderSection({
-			marketForm,
-			marketResult,
-			onOpenForkTab: () => {
-				openForkTabCount += 1
+		await renderSection(
+			{
+				marketForm,
+				marketResult,
+				onOpenForkTab: () => {
+					openForkTabCount += 1
+				},
+				onResetMarket: () => {
+					resetCount += 1
+				},
+				onUseQuestionForFork: () => {
+					useForForkCount += 1
+				},
+				onUseQuestionForPool: questionId => {
+					useForPoolQuestionId = questionId
+				},
+				zoltarQuestions: [question],
 			},
-			onResetMarket: () => {
-				resetCount += 1
-			},
-			onUseQuestionForFork: () => {
-				useForForkCount += 1
-			},
-			onUseQuestionForPool: questionId => {
-				useForPoolQuestionId = questionId
-			},
-			zoltarQuestions: [question],
-		})
+			question.endTime,
+		)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: question.title })).not.toBeNull()
@@ -326,14 +329,16 @@ describe('MarketCreateQuestionSection', () => {
 		expect(getDescribedText(outcome2)).toBe('Outcome 1 is required.')
 	})
 
-	test('uses canonical categorical outcome ordering in the draft preview', async () => {
+	test('keeps typed categorical outcome order in the draft preview while submitting the canonical order', async () => {
 		const marketForm = createMarketForm({
 			categoricalOutcomes: ['Cherry', 'Apple', 'Banana'],
 			marketType: 'categorical',
 		})
 		await renderSection({ marketForm })
 
-		expect(getDraftPreviewOutcomeLabels()).toEqual([...createMarketParameters(marketForm).outcomeLabels, 'Invalid'])
+		// Chips stay where the user typed them; only the submitted outcome labels use the contract hash order.
+		expect(getDraftPreviewOutcomeLabels()).toEqual(['Cherry', 'Apple', 'Banana', 'Invalid'])
+		expect([...createMarketParameters(marketForm).outcomeLabels].sort()).toEqual(['Apple', 'Banana', 'Cherry'])
 	})
 
 	test('does not duplicate invalid in the categorical draft preview when the user already entered it', async () => {
@@ -344,8 +349,10 @@ describe('MarketCreateQuestionSection', () => {
 		await renderSection({ marketForm })
 
 		const renderedOutcomeLabels = getDraftPreviewOutcomeLabels()
-		expect(renderedOutcomeLabels).toEqual(createMarketParameters(marketForm).outcomeLabels)
+		expect(renderedOutcomeLabels).toEqual(['Yes', 'Invalid', 'No'])
 		expect(renderedOutcomeLabels.filter(label => label.toLowerCase() === 'invalid')).toHaveLength(1)
+		// Every question already has Invalid, so the form rejects it as an outcome name.
+		expect(() => createMarketParameters(marketForm)).toThrow('Invalid is added to every question')
 	})
 
 	test('renders a user-entered lowercase invalid outcome as the single warning chip in the draft preview', async () => {

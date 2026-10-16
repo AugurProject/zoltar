@@ -25,7 +25,7 @@ For production configuration, backups, upgrades, restore checks, integrity revie
 
 ## Explore the data
 
-The network selector in the header controls Activity, **Operations**, **System state**, **Contracts**, and **Rich list**. Its selection is stored in the `chainId` query parameter. Point-in-time pool and vault risk views also accept `atBlock` for a retained canonical block.
+The network selector in the header controls Activity, **Operations**, **System state**, **Contracts**, and **Rich list**; choose a network and select **Switch** to apply it. Its selection is stored in the `chainId` query parameter. Point-in-time pool and vault risk views also accept `atBlock` for a retained canonical block. Switching networks drops `atBlock` and the block range (`fromBlock`, `toBlock`), because block numbers belong to one chain.
 
 Useful Operations routes include:
 

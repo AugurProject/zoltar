@@ -4,6 +4,7 @@ import { createOracleManagerDetails } from '../security-pools/workflow/builders.
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { within, fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { SecurityPoolRequestPriceModal } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
@@ -19,7 +20,7 @@ installDomTestLifecycle({
 })
 
 for (const state of ['expired', 'pending', 'ready', 'valid']) {
-	test(`shows the ${state} oracle recovery step with only its available action`, async () => {
+	test(`keeps request and settle in place for the ${state} oracle recovery step, enabling only its available action`, async () => {
 		let requested = 0
 		let viewed: bigint | undefined
 		let refreshed = 0
@@ -43,13 +44,18 @@ for (const state of ['expired', 'pending', 'ready', 'valid']) {
 		if (state === 'expired') {
 			// The default test network is Sepolia, whose price window is 1 hour.
 			expect(rendered.container.textContent).toContain('Pool price expired. Reports need a price newer than 1 hour.')
+			expect(queries.getAllByRole('button').map(button => button.textContent)).toEqual(['Request new price…', 'Settle report'])
+			expect(getTransactionButtonState(rendered.container, 'Settle report')).toEqual({ disabled: true, reason: 'No price report to settle yet.' })
 			fireEvent.click(queries.getByRole('button', { name: 'Request new price…' }))
 			expect(requested).toBe(1)
 		} else if (state === 'pending') {
 			expect(rendered.container.textContent).toContain('Price requested. Ready to settle in 1m 40s.')
-			expect(queries.queryByRole('button')).toBeNull()
+			expect(getTransactionButtonState(rendered.container, 'Request new price…')).toEqual({ disabled: true, reason: 'A price request is already pending.' })
+			expect(getTransactionButtonState(rendered.container, 'Settle report #7')).toEqual({ disabled: true, reason: 'The price report is not ready to settle yet.' })
 		} else if (state === 'ready') {
 			expect(rendered.container.textContent).toContain('Price report #7 is ready.')
+			expect(queries.getAllByRole('button').map(button => button.textContent)).toEqual(['Request new price…', 'Settle report #7'])
+			expect(getTransactionButtonState(rendered.container, 'Request new price…')).toEqual({ disabled: true, reason: 'A price request is already pending.' })
 			fireEvent.click(queries.getByRole('button', { name: 'Settle report #7' }))
 			expect(viewed).toBe(7n)
 			expect(refreshed).toBe(1)

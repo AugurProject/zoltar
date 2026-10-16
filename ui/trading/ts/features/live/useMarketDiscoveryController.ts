@@ -100,7 +100,8 @@ export function useMarketDiscoveryController({
 	 * Explicit refreshes reset transient workflow state and show the discovery loading state. Background refreshes
 	 * keep the last successful result visible; trade estimates recompute from the refreshed reserves. Neither touches
 	 * loaded balances directly: the balance effects revalidate them from the refreshed market objects and keep the
-	 * previous values visible until the new reads resolve.
+	 * previous values visible until the new reads resolve. Resolves true only when this refresh committed fresh market
+	 * data; a skipped, held, superseded, or failed refresh resolves false (failures are reported on screen, not thrown).
 	 */
 	// Trades keep running after navigation, one per market; only the route showing a market with its own running trade
 	// waits for it. Other routes (lists, portfolio, other markets) keep refreshing. A liquidity or settlement lock only
@@ -110,16 +111,16 @@ export function useMarketDiscoveryController({
 	const positionLockOnScreen = () => routePoolRef.current !== undefined && transaction.isPositionLocked(routePoolRef.current)
 	const refreshHeldByWorkflow = () => transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen()
 
-	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: RefreshOptions = {}) {
-		if (nextConfiguration === undefined) return
+	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: RefreshOptions = {}): Promise<boolean> {
+		if (nextConfiguration === undefined) return false
 		const background = options.background === true
 		// A trade's own refresh passes its market's lock; landing on another market's route, it waits like any other refresh.
 		const ownerMarketOnScreen = () => options.ownerMarket === undefined || transactionMarketKey(options.ownerMarket) === transactionMarketKey(routePoolRef.current)
 		// A route change always shows its own data; a pending transaction keeps its captured context and stays in the activity list.
 		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, positionLockOnScreen(), transaction.liquidityWorkflowLockedRef.current, ownerMarketOnScreen())
 		// Such a refresh would only supersede that market's own reads; its trade refreshes the route when it finishes.
-		if (owner === 'position' && !ownerMarketOnScreen() && refreshHeldByWorkflow()) return
-		if (background && options.explicit !== true && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
+		if (owner === 'position' && !ownerMarketOnScreen() && refreshHeldByWorkflow()) return false
+		if (background && options.explicit !== true && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return false
 		const request = discoveryRequests.begin()
 		if (!background) foregroundDiscovery.current = { request, args: [nextConfiguration, requestedStart, owner, options] }
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
@@ -180,11 +181,11 @@ export function useMarketDiscoveryController({
 			const discovered = await discover(nextConfiguration, () => discoveryRequests.isCurrent(request), onProgress).finally(() => {
 				acceptingProgress = false
 			})
-			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
+			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return false
 			if (!commitAllowed()) {
 				restorePartialProgress()
 				market.setDiscoveryState('ready')
-				return
+				return false
 			}
 			market.setDiscoveryRows(partialSnapshot.current !== undefined || (market.discoveryRows !== undefined && requestedStart === market.marketPage.start) ? discovered.markets : undefined)
 			partialSnapshot.current = undefined
@@ -194,12 +195,13 @@ export function useMarketDiscoveryController({
 			market.setDiscoveryError(undefined)
 			market.setDiscoveryState('ready')
 			market.setFreshness({ refreshing: false, updatedAt: Date.now() })
+			return true
 		} catch (error) {
-			if (!discoveryRequests.isCurrent(request)) return
+			if (!discoveryRequests.isCurrent(request)) return false
 			if (!commitAllowed()) {
 				restorePartialProgress()
 				market.setDiscoveryState('ready')
-				return
+				return false
 			}
 			const detail = publicErrorMessage(error, liveCopy.discoveryFailureLead(route))
 			market.setDiscoveryError(detail)
@@ -207,10 +209,10 @@ export function useMarketDiscoveryController({
 				market.setMarkets([])
 				market.setDiscoveryRows(undefined)
 				market.setDiscoveryState('not-found')
-				return
+				return false
 			}
 			market.setDiscoveryState('error')
-			if (background) return
+			if (background) return false
 			if (route === 'portfolio') {
 				portfolio.setPortfolioBalanceState('error')
 				portfolio.setPortfolioBalanceError(liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), detail))
@@ -219,6 +221,7 @@ export function useMarketDiscoveryController({
 				portfolio.setBalanceState('error')
 				portfolio.setBalanceError('The market could not be refreshed, so wallet balances were not reloaded.')
 			}
+			return false
 		} finally {
 			if (foregroundDiscovery.current?.request === request) foregroundDiscovery.current = undefined
 			if (backgroundDiscovery.current === request) {

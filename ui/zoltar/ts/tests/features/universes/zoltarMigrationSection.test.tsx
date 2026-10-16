@@ -109,6 +109,7 @@ describe('ZoltarMigrationSection', () => {
 		const forkRequirement = queries.getByText('This universe must fork before REP can be migrated.')
 		expect(document.body.textContent?.split('This universe must fork before REP can be migrated.').length).toBe(2)
 		expect(queries.getByRole('button', { name: 'Continue' }).getAttribute('aria-describedby')).toBe(forkRequirement.id)
+		expect(queries.getByRole('button', { name: 'Migrate REP' }).getAttribute('aria-describedby')).toBe(forkRequirement.id)
 		expect(queries.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		for (const button of document.querySelectorAll<HTMLButtonElement>('.migration-wizard button')) {
 			expect(button.disabled).toBe(true)
@@ -175,6 +176,18 @@ describe('ZoltarMigrationSection', () => {
 		expect(updates).toEqual([{ outcomeIndexes: [1n, 2n] }])
 		queries.getByRole('button', { name: 'Deploy No universe' }).click()
 		expect(deployed).toEqual([2n])
+	})
+
+	test('explains that migrating deploys missing universes and gives disabled Deploy buttons one shared reason', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ accountAddress: undefined })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Migrating deploys any that are missing, so deploying first is optional.')
+		expectTransactionButtonDisabled(document.body, 'Deploy No universe', 'Connect a wallet before deploying a child universe.')
+		expect(document.body.textContent?.split('Connect a wallet before deploying a child universe.').length).toBe(2)
+		const otherChild = { ...noChild, outcomeIndex: 0n, outcomeLabel: 'Invalid', universeId: 4n }
+		await act(() => render(h(ZoltarMigrationSection, createProps({ pendingChildUniverseOutcomeIndex: 2n, zoltarUniverse: createUniverse({ childUniverses: [otherChild, yesChild, noChild] }) })), rendered.container))
+		expectTransactionButtonDisabled(document.body, 'Deploy Invalid universe', 'Wait for the pending universe deployment.')
+		expect(within(document.body).getByRole('button', { name: 'Deploying universe…' }).getAttribute('aria-describedby')).toBeNull()
 	})
 
 	test('uses the scalar picker for deployed, undeployed and Invalid outcomes without listing ticks', async () => {
@@ -393,9 +406,33 @@ describe('ZoltarMigrationSection', () => {
 			within(navigation)
 				.getAllByRole('button')
 				.map(button => button.textContent),
-		).toEqual(['Back', 'Migrate REP'])
+		).toEqual(['Back', 'Continue', 'Migrate REP'])
+		expect(within(document.body).getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(true)
 		within(document.body).getByRole('button', { name: 'Migrate REP' }).click()
 		expect(preparations).toEqual([7n * ATTO_REP])
+	})
+
+	test('keeps Migrate REP in its own slot on every step and never sends from Continue', async () => {
+		const preparations: bigint[] = []
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarMigrationForm: createForm({ amount: '', outcomeIndexes: [] }), onMigrateInternalRep: amount => preparations.push(amount) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const navigationButtons = () => {
+			const navigation = document.body.querySelector<HTMLElement>('.migration-wizard-nav')
+			if (navigation === null) throw new Error('Missing wizard navigation')
+			return within(navigation)
+				.getAllByRole('button')
+				.map(button => button.textContent)
+		}
+		expect(navigationButtons()).toEqual(['Continue', 'Migrate REP'])
+		expectTransactionButtonDisabled(document.body, 'Migrate REP', 'Select at least one outcome.')
+		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarMigrationForm: createForm({ amount: '' }), onMigrateInternalRep: amount => preparations.push(amount) })), rendered.container))
+		expectTransactionButtonDisabled(document.body, 'Migrate REP', 'Migrate from the Review step.')
+		await act(() => within(document.body).getByRole('button', { name: 'Continue' }).click())
+		expect(getCurrentStepTitle()).toBe('Amount')
+		expect(navigationButtons()).toEqual(['Back', 'Continue', 'Migrate REP'])
+		expectTransactionButtonDisabled(document.body, 'Continue', 'Enter an amount to migrate.')
+		expectTransactionButtonDisabled(document.body, 'Migrate REP', 'Enter an amount to migrate.')
+		expect(preparations).toEqual([])
 	})
 
 	test.each([
@@ -517,6 +554,28 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('All your REP here is migrated')
 		expect(document.body.querySelector('.migration-wizard')).toBeNull()
+	})
+
+	test('keeps the scalar picker after the migration balance went to one value, since other values can still receive it', async () => {
+		const question = createMarketDetails({ marketType: 'scalar', outcomeLabels: [], numTicks: 20n, displayValueMax: 100n * ATTO_REP, answerUnit: '°C' })
+		const index = getScalarOutcomeIndex(question, 10n)
+		const child = { ...yesChild, outcomeIndex: index, outcomeLabel: '50 °C' }
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarForkRepBalanceAttoRep: 0n,
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 10n * ATTO_REP },
+					zoltarMigrationChildSplitAmountsAttoRep: { '2': 10n * ATTO_REP },
+					zoltarMigrationForm: createForm({ outcomeIndexes: [index] }),
+					zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).not.toContain('All your REP here is migrated')
+		expect(document.body.querySelector('.migration-wizard')).toBeTruthy()
+		expect(within(document.body).getByRole('slider', { name: 'Select outcome' })).toBeTruthy()
 	})
 
 	test('offers wallet import only for outcome REP the account holds', async () => {

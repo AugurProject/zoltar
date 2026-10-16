@@ -68,6 +68,7 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		bidAtClearingTickAttoEth: ONE_UNIT + HALF_UNIT,
 		attoEthRaiseCap: 10n * ONE_UNIT,
 		attoEthRaised: 4n * ONE_UNIT,
+		finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 		finalized: true,
 		hitCap: true,
 		maxAttoRepBeingSold: 4n * ONE_UNIT,

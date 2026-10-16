@@ -356,6 +356,7 @@ export function ForkAuctionOutcomeStage({
 	startTruthAuctionSection,
 	submitBidSection,
 	truthAuctionEndedNotice,
+	truthAuctionFinalizeSection,
 	truthAuctionHero,
 	truthAuctionMarketViewSection,
 	truthAuctionSettlementSection,
@@ -381,6 +382,8 @@ export function ForkAuctionOutcomeStage({
 	startTruthAuctionSection: ComponentChildren
 	submitBidSection: ComponentChildren
 	truthAuctionEndedNotice: ComponentChildren
+	/** Finalize stays in place across the auction and settlement stages, before the bids and settlement that depend on it. */
+	truthAuctionFinalizeSection: ComponentChildren
 	truthAuctionHero: ComponentChildren
 	truthAuctionMarketViewSection: ComponentChildren
 	truthAuctionSettlementSection: ComponentChildren
@@ -405,6 +408,7 @@ export function ForkAuctionOutcomeStage({
 								{submitBidSection}
 							</>
 						)}
+						{truthAuctionFinalizeSection}
 						{viewerTruthAuctionBidsSection}
 						{auctionWideBidsSection}
 					</>
@@ -439,6 +443,7 @@ export function ForkAuctionOutcomeStage({
 					{auctionWideBidsStatusSection}
 				</>
 			)}
+			{truthAuctionFinalizeSection}
 			{truthAuctionSettlementSection}
 			{importedForkSettlementSection}
 			{showChildSecurityPools ? renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurityPools, renderSelectedOutcomeChildPoolNotice }) : undefined}

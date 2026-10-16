@@ -45,6 +45,7 @@ function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): Truth
 		bidAtClearingTickAttoEth: 0n,
 		attoEthRaiseCap: 100n * 10n ** 18n,
 		attoEthRaised: 0n,
+		finalizationPreview: { attoEthRaised: 0n, attoRepSold: 0n },
 		finalized: false,
 		hitCap: false,
 		maxAttoRepBeingSold: 0n,
@@ -405,7 +406,7 @@ void describe('fork auction helpers', () => {
 		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])
 	})
 
-	void test('derives provisional truth auction progress from loaded depth', () => {
+	void test('uses the contract finalization preview, not the loaded depth, for a live auction that reached its cap', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
@@ -413,53 +414,15 @@ void describe('fork auction helpers', () => {
 				clearingTick: 10n,
 				bidAtClearingTickAttoEth: 4n * ethUnit,
 				attoEthRaiseCap: 10n * ethUnit,
+				finalizationPreview: { attoEthRaised: 10n * ethUnit, attoRepSold: 10n * ethUnit },
 				hitCap: true,
 				maxAttoRepBeingSold: 100n * ethUnit,
 			}),
-			[
-				createTickSummary({ active: true, currentTotalBidAttoEth: 8n * ethUnit, price: 2n * TRUTH_AUCTION_PRICE_PRECISION, tick: 12n }),
-				createTickSummary({ active: true, currentTotalBidAttoEth: 6n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 10n }),
-				createTickSummary({ active: true, currentTotalBidAttoEth: 5n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 8n }),
-			],
 		)
 
 		expect(progress).toEqual({
 			attoEthRaised: 10n * ethUnit,
 			attoRepSold: 10n * ethUnit,
-		})
-	})
-
-	void test('does not count below-reserve bids as underfunded sales', () => {
-		const ethUnit = 10n ** 18n
-		const progress = getTruthAuctionOverviewProgress(
-			createTruthAuction({
-				attoEthRaiseCap: 100n * ethUnit,
-				hitCap: false,
-				maxAttoRepBeingSold: 4n * ethUnit,
-			}),
-			[createTickSummary({ active: true, currentTotalBidAttoEth: 16n * ethUnit, price: 5n * 10n ** 18n, tick: 12n })],
-		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 0n,
-			attoRepSold: 0n,
-		})
-	})
-
-	void test('derives zero provisional progress when no underfunded winning prefix exists', () => {
-		const ethUnit = 10n ** 18n
-		const progress = getTruthAuctionOverviewProgress(
-			createTruthAuction({
-				attoEthRaiseCap: 100n * ethUnit,
-				hitCap: false,
-				maxAttoRepBeingSold: 10n * ethUnit,
-			}),
-			[createTickSummary({ active: true, currentTotalBidAttoEth: 11n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 0n })],
-		)
-
-		expect(progress).toEqual({
-			attoEthRaised: 0n,
-			attoRepSold: 0n,
 		})
 	})
 
@@ -474,7 +437,6 @@ void describe('fork auction helpers', () => {
 				underfunded: true,
 				underfundedWinningAttoEth: 4n * ethUnit,
 			}),
-			[],
 		)
 
 		expect(progress).toEqual({
@@ -494,7 +456,6 @@ void describe('fork auction helpers', () => {
 				underfunded: true,
 				underfundedWinningAttoEth: 0n,
 			}),
-			[],
 		)
 
 		expect(progress).toEqual({
@@ -945,6 +906,22 @@ describe('live underfunded truth auction reserve', () => {
 		expect(depthPoints.map(point => point.disposition.label)).toEqual(['In book', 'Below reserve'])
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 0n, tick: 0n }), liveAuction).label).toBe('In book')
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 1n, tick: -1n }), liveAuction).label).toBe('Below reserve')
+	})
+
+	// UniformPriceDualCapBatchAuction._computeBidFill: when the cap is missed, bids at or above the reserve share the whole REP sale cap pro rata to the winning ETH, and the rest are refunded.
+	const previewedAuction = createTruthAuction({ attoEthRaiseCap: 10n * ONE_UNIT, finalizationPreview: { attoEthRaised: 4n * ONE_UNIT, attoRepSold: 10n * ONE_UNIT }, hitCap: false, maxAttoRepBeingSold: 10n * ONE_UNIT })
+
+	test('estimates a full refund for a live bid below the reserve', () => {
+		expect(getTruthAuctionBidSettlementEstimate(createBid({ bidIndex: 0n, tick: -1n }), previewedAuction)).toEqual({ purchasedRepAmountAttoRep: 0n, refundedBidAmountAttoEth: ONE_UNIT, usedBidAmountAttoEth: 0n })
+	})
+
+	test('estimates a live bid at or above the reserve as a share of the whole REP sale cap', () => {
+		expect(getTruthAuctionBidSettlementEstimate(createBid({ bidIndex: 0n, tick: 0n }), previewedAuction)).toEqual({ purchasedRepAmountAttoRep: 25n * 10n ** 17n, refundedBidAmountAttoEth: 0n, usedBidAmountAttoEth: ONE_UNIT })
+		expect(getTruthAuctionBidSettlementEstimate(createBid({ bidIndex: 0n, tick: 5n }), previewedAuction).purchasedRepAmountAttoRep).toBe(25n * 10n ** 17n)
+	})
+
+	test('totals the live auction from the contract finalization preview, including price levels beyond the loaded pages', () => {
+		expect(getTruthAuctionOverviewProgress(previewedAuction)).toEqual({ attoEthRaised: 4n * ONE_UNIT, attoRepSold: 10n * ONE_UNIT })
 	})
 })
 

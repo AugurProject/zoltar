@@ -26,10 +26,24 @@ export type LiquidityApproval = Readonly<{
 	expectedNoDeposit: bigint
 }>
 
+type LiquidityExpectation = Pick<LiquidityApproval, 'expectedLiquidity' | 'expectedYes' | 'expectedNo' | 'expectedYesDeposit' | 'expectedNoDeposit'>
+
+/** The bounds a liquidity transaction signs, from the previewed amounts and the slippage setting; the preview shows these same figures. */
+export function liquiditySlippageBounds(expected: LiquidityExpectation, slippageBps: bigint) {
+	return {
+		minimumLiquidity: minimumAfterSlippage(expected.expectedLiquidity, slippageBps),
+		maximumYesDeposit: maximumAfterSlippage(expected.expectedYesDeposit, slippageBps),
+		maximumNoDeposit: maximumAfterSlippage(expected.expectedNoDeposit, slippageBps),
+		minimumYes: minimumAfterSlippage(expected.expectedYes, slippageBps),
+		minimumNo: minimumAfterSlippage(expected.expectedNo, slippageBps),
+	}
+}
+
 export async function submitFreshLiquidity(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: LiquidityApproval, guardedWrite: GuardedWalletWrite) {
 	const refreshed = await simulateLiquidity(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps, quote.deadline, quote.slippageBps)
+	const bounds = liquiditySlippageBounds(quote, quote.slippageBps)
 	if (quote.operation === 'initialize') {
-		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
+		const minimumLiquidity = retainApprovedMinimum(bounds.minimumLiquidity, refreshed.expectedLiquidity, 'LP tokens')
 		const initializedPairAddress = quote.market.pair
 		return initializedPairAddress === undefined
 			? await guardedWrite(async () => {
@@ -45,10 +59,10 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 	if (pairAddress === undefined) throw new Error('The trading pool disappeared while the transaction was checked')
 	if (quote.operation === 'add') {
 		if (refreshed.operation !== 'add') throw new Error('Liquidity operation changed during revalidation')
-		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
+		const minimumLiquidity = retainApprovedMinimum(bounds.minimumLiquidity, refreshed.expectedLiquidity, 'LP tokens')
 		// Bound the deposit mix too: a swap toward even odds raises both the minority-side deposit and the minted LP.
-		const maximumYes = retainApprovedMaximum(maximumAfterSlippage(quote.expectedYesDeposit, quote.slippageBps), refreshed.expectedYesDeposit, 'YES deposit')
-		const maximumNo = retainApprovedMaximum(maximumAfterSlippage(quote.expectedNoDeposit, quote.slippageBps), refreshed.expectedNoDeposit, 'NO deposit')
+		const maximumYes = retainApprovedMaximum(bounds.maximumYesDeposit, refreshed.expectedYesDeposit, 'YES deposit')
+		const maximumNo = retainApprovedMaximum(bounds.maximumNoDeposit, refreshed.expectedNoDeposit, 'NO deposit')
 		const block = await latestBlockIdentity(client)
 		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
 		const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, quote.amount, maximumYes, maximumNo, refreshed.deadline, refreshed.result)
@@ -58,7 +72,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 			return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
 		})
 	}
-	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes, quote.slippageBps), refreshed.expectedYes, 'YES')
-	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo, quote.slippageBps), refreshed.expectedNo, 'NO')
+	const minimumYes = retainApprovedMinimum(bounds.minimumYes, refreshed.expectedYes, 'YES')
+	const minimumNo = retainApprovedMinimum(bounds.minimumNo, refreshed.expectedNo, 'NO')
 	return await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, refreshed.deadline] }))
 }

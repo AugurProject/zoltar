@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, settleOracleReport, withdrawOpenOracleBalance } from '../../../protocol/openOracle.js'
+import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, settleOracleReport, withdrawOpenOracleBalance, wrapWeth } from '../../../protocol/openOracle.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
@@ -11,6 +11,8 @@ import type { OpenOracleRawReadResult, OpenOracleReadClient } from '../lib/openO
 export type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
 	onReportSettled?: () => Promise<void> | void
+	/** The connected wallet's ETH, which the dispute's wrap step can convert to WETH. */
+	walletEthBalanceAttoEth?: bigint | undefined
 }
 export type OpenOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
 export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProductionWriteClient> = {
@@ -24,6 +26,7 @@ export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProduct
 	readOptionalMulticall: (contracts: readonly unknown[]) => Promise<readonly OpenOracleRawReadResult[]>
 	settleOracleReport: (client: TWriteClient, openOracleAddress: Address, reportId: bigint) => Promise<OpenOracleActionResult>
 	withdrawOpenOracleBalance: (client: TWriteClient, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address) => Promise<OpenOracleActionResult>
+	wrapWeth: (client: TWriteClient, amountAttoEth: bigint) => Promise<OpenOracleActionResult>
 }
 
 export const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDependencies = {
@@ -43,4 +46,5 @@ export const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperations
 	readOptionalMulticall: async contracts => await readOptionalMulticall(createConnectedReadClient(), contracts),
 	settleOracleReport: async (client, openOracleAddress, reportId) => await settleOracleReport(client, openOracleAddress, reportId),
 	withdrawOpenOracleBalance: async (client, openOracleAddress, token, amount, recipient) => await withdrawOpenOracleBalance(client, openOracleAddress, token, amount, recipient),
+	wrapWeth: async (client, amountAttoEth) => await wrapWeth(client, amountAttoEth),
 }

@@ -67,7 +67,7 @@ export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResu
 	return buildPresentation({
 		hash: result.hash,
 		rows: [{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> }],
-		title: result.action === 'approveForkRep' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted,
+		title: result.action === 'approveForkRep' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForked,
 		tone: 'success',
 		universeId: result.universeId,
 	})

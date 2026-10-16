@@ -38,6 +38,8 @@ type UseZoltarForkParameters = TransactionLifecycleParameters &
 		ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 		refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>
 		shouldAutoLoadForkAccess: boolean
+		/** The question chosen to fork this universe; the application keeps it in the URL. */
+		zoltarForkQuestionId: string
 		zoltarUniverse: ZoltarUniverseSummary | undefined
 	}
 
@@ -126,6 +128,7 @@ export function useZoltarFork(
 		refreshState,
 		refreshZoltarUniverse,
 		shouldAutoLoadForkAccess,
+		zoltarForkQuestionId,
 		zoltarUniverse,
 	}: UseZoltarForkParameters,
 	dependencies: UseZoltarForkDependencies = defaultUseZoltarForkDependencies,
@@ -136,9 +139,6 @@ export function useZoltarFork(
 	const completedForkAccessScopeGeneration = useSignal<number | undefined>(undefined)
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
-	const forkQuestionScopeKey = `${environmentRefreshKey}:${activeUniverseId.toString()}`
-	const forkQuestionSelection = useSignal({ questionId: '', scopeKey: forkQuestionScopeKey })
-	const zoltarForkQuestionId = forkQuestionSelection.value.scopeKey === forkQuestionScopeKey ? forkQuestionSelection.value.questionId : ''
 	const zoltarForkResult = useSignal<ZoltarForkActionResult | undefined>(undefined)
 	const zoltarForkApproval = useSignal<TokenApprovalState>({
 		error: undefined,
@@ -159,7 +159,7 @@ export function useZoltarFork(
 	const loadedForkAccessScopeGeneration = useRef<number | undefined>(undefined)
 	const resolveActionResultName = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'approveForkRep' : 'forkZoltar')
 	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar)
-	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted)
+	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForked)
 	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approval failed' : 'Universe fork failed')
 
 	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = currentUniverseRef.current) => {
@@ -381,8 +381,5 @@ export function useZoltarFork(
 		zoltarMigrationChildSplitAmountsAttoRep: hasCurrentForkAccess ? zoltarMigrationChildSplitAmountsAttoRep.value : {},
 		zoltarMigrationChildRepBalancesAttoRep: hasCurrentForkAccess ? zoltarMigrationChildRepBalancesAttoRep.value : {},
 		zoltarMigrationPreparedRepBalanceAttoRep: hasCurrentForkAccess ? zoltarMigrationPreparedRepBalanceAttoRep.value : undefined,
-		setZoltarForkQuestionId: (questionId: string) => {
-			forkQuestionSelection.value = { questionId, scopeKey: forkQuestionScopeKey }
-		},
 	}
 }

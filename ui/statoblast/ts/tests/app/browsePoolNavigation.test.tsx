@@ -46,6 +46,7 @@ function createOverviewProps(activeUniverseId: bigint): SecurityPoolsOverviewRou
 	return {
 		activeUniverseId,
 		currentTimestamp: undefined,
+		discovery: { contextKey: 'test', error: undefined, loading: false, onLoadPage: async () => undefined, page: undefined },
 		securityPools: [],
 	}
 }

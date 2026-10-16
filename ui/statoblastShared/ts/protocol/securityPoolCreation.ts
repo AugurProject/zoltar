@@ -54,14 +54,15 @@ function getQuestionCreatedAtFromReceipt(receipt: TransactionReceipt, questionId
 	throw new Error('Question creation transaction succeeded without a QuestionCreated event')
 }
 
-function getOriginSecurityPoolId(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, 0n]))
+/** Mirrors `SecurityPoolFactory.getOriginId`: an origin pool belongs to the universe it is deployed in. */
+function getOriginSecurityPoolId(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint, universeId: bigint) {
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, universeId]))
 }
 
-function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
+function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint, universeId: bigint) {
 	return getCreate2Address({
 		from: getInfraContractAddresses().shareTokenFactory,
-		salt: getOriginSecurityPoolId(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas),
+		salt: getOriginSecurityPoolId(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, universeId),
 		bytecode: encodeDeployData({
 			abi: statoblast_tokens_ShareToken_ShareToken.abi,
 			bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
@@ -115,6 +116,7 @@ export async function createSecurityPool(
 		initialReportPriorityFeeAttoEthPerGas: bigint
 		questionId: bigint
 		statoblastSecurityMultiplierBps: bigint
+		universeId: bigint
 	},
 	questionData?: QuestionData,
 	review?: SecurityPoolCreationReview,
@@ -125,7 +127,7 @@ export async function createSecurityPool(
 		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		contractLabel: 'SecurityPoolFactory',
 		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
+		args: [parameters.universeId, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
 	} as const
 	// The review labels name the whole action so the wallet review does not fall back to the Multicall3 function name.
 	const reviewLabels = review === undefined ? {} : { ...(review.description === undefined ? {} : { reviewDescription: review.description }), reviewTitle: review.title }
@@ -160,18 +162,18 @@ export async function createSecurityPool(
 		questionId: formatQuestionIdHex(parameters.questionId),
 		securityPoolAddress: getSecurityPoolAddressFromReceipt(receipt),
 		statoblastSecurityMultiplierBps: parameters.statoblastSecurityMultiplierBps,
-		universeId: 0n,
+		universeId: parameters.universeId,
 	} satisfies SecurityPoolCreationResult & { questionCreatedAt?: bigint }
 }
 
-export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
-	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
+export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint, universeId: bigint) {
+	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, universeId)
 	const code = await client.getCode({ address: shareTokenAddress })
 	return code !== undefined && code !== '0x'
 }
 
-export async function getOriginSecurityPoolAddress(client: Pick<ReadClient, 'readContract'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint): Promise<Address | undefined> {
-	const originId = getOriginSecurityPoolId(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
-	const address = await client.readContract({ abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'getSecurityPool', args: [originId, 0n] })
+export async function getOriginSecurityPoolAddress(client: Pick<ReadClient, 'readContract'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint, universeId: bigint): Promise<Address | undefined> {
+	const originId = getOriginSecurityPoolId(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, universeId)
+	const address = await client.readContract({ abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'getSecurityPool', args: [originId, universeId] })
 	return address === zeroAddress ? undefined : address
 }

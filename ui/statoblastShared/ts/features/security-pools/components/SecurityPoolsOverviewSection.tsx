@@ -3,14 +3,17 @@ import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useState } from 'preact/hooks'
+import { useMemo, useState } from 'preact/hooks'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { LocalBrowseSearchField } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
-import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
-import { buildLocalBrowseEntries, normalizeLocalSearchText } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
+import { LocalBrowseBar, LocalBrowseSearchField, LocalCollectionEmptyState } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
+import { useLocalBrowseDirectory } from '@zoltar/ui-core-shared/hooks/useLocalBrowseDirectory.js'
+import type { DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
+import { normalizeLocalSearchText } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
-import { derivePoolBrowseRows, filterPoolBrowseRows, securityPoolDownloadStore, sortPoolBrowseRows, type PoolSortKey, type PoolStateFilter } from '../lib/poolBrowse.js'
+import { derivePoolBrowseRows, filterPoolBrowseRows, SECURITY_POOL_PAGE_SIZE, securityPoolDownloadStore, sortPoolBrowseRows, toCachedSecurityPool, type PoolSortKey, type PoolStateFilter } from '../lib/poolBrowse.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
 
 const STATE_FILTER_OPTIONS: readonly PoolStateFilter[] = ['all', 'operational', 'ended', 'forkMigration', 'forkTruthAuction']
@@ -31,8 +34,8 @@ function parseOption<TValue extends string>(options: readonly TValue[], value: s
 	return options.find(option => option === value)
 }
 
-/** The pool directory shows only favorites saved in this browser. */
-export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange, activeUniverseId, currentTimestamp, onSelectSecurityPool }: SecurityPoolsOverviewSectionProps) {
+/** Pools discovered from the factory registry (the first page loads on entry) and favorites saved in this browser, searchable together. */
+export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange, activeUniverseId, currentTimestamp, discovery: poolDiscovery, onCreatePool, onSelectSecurityPool }: SecurityPoolsOverviewSectionProps) {
 	const [localStateFilter, setLocalStateFilter] = useState<PoolStateFilter>('all')
 	const [localSortKey, setLocalSortKey] = useState<PoolSortKey>('recent')
 	const [localSearchText, setLocalSearchText] = useState('')
@@ -42,11 +45,25 @@ export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange,
 	const setStateFilter = (value: PoolStateFilter) => (onBrowseStateChange === undefined ? setLocalStateFilter(value) : onBrowseStateChange({ stateFilter: value }))
 	const setSortKey = (value: PoolSortKey) => (onBrowseStateChange === undefined ? setLocalSortKey(value) : onBrowseStateChange({ sortKey: value }))
 	const setSearchText = (value: string) => (onBrowseStateChange === undefined ? setLocalSearchText(value) : onBrowseStateChange({ searchText: value }))
-	const favorites = useFavorites('statoblast', 'pool')
-	const downloaded = useDownloadedEntities('statoblast', 'pool', securityPoolDownloadStore)
-	const entries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
+	const receivedPage = useMemo((): DiscoveredPage<ListedSecurityPool> | undefined => {
+		const page = poolDiscovery.page
+		if (page === undefined) return undefined
+		return { items: page.pools, pageIndex: page.pageIndex, pageSize: page.pageSize, requestKey: page.requestKey, totalCount: page.poolCount }
+	}, [poolDiscovery.page])
+	const directory = useLocalBrowseDirectory({
+		app: 'statoblast',
+		contextKey: poolDiscovery.contextKey,
+		externalLoading: poolDiscovery.loading,
+		kind: 'pool',
+		loadPage: (pageIndex, requestKey) => poolDiscovery.onLoadPage(pageIndex, SECURITY_POOL_PAGE_SIZE, requestKey),
+		pageSize: SECURITY_POOL_PAGE_SIZE,
+		receivedPage,
+		store: securityPoolDownloadStore,
+		toDownloadedItem: pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress }),
+	})
+	const { discovery, downloaded } = directory
 	const normalizedSearchText = normalizeLocalSearchText(searchText)
-	const rows = derivePoolBrowseRows(entries)
+	const rows = derivePoolBrowseRows(directory.entries)
 	const universeRows = rows.filter(row => row.pool.universeId === activeUniverseId)
 	const visibleRows = sortPoolBrowseRows(filterPoolBrowseRows(rows, { activeUniverseId, normalizedSearchText, stateFilter }), sortKey, currentTimestamp)
 	const otherUniverseCount = rows.length - universeRows.length
@@ -62,8 +79,40 @@ export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange,
 			</button>
 		)
 
+	const loadError = poolDiscovery.error ?? (discovery.loadFailed ? securityPoolCopy.poolPageLoadError : undefined)
 	const content = (() => {
-		if (rows.length === 0) return <EmptyState title={securityPoolCopy.noFavoritePools} detail={securityPoolCopy.noFavoritePoolsDetail} actions={openSearchedAddress} />
+		// While a registry page loads, or after it failed, the bar and the retry notice explain an empty download list; a pasted address can still open.
+		if (rows.length === 0 && directory.collection === 'downloaded' && (discovery.loading || loadError !== undefined)) return openSearchedAddress === undefined ? undefined : <div className='actions'>{openSearchedAddress}</div>
+		if (rows.length === 0)
+			return (
+				<LocalCollectionEmptyState
+					action={openSearchedAddress}
+					copy={{
+						downloadedEmpty: securityPoolCopy.noDownloadedPools,
+						favoritesEmpty: securityPoolCopy.noFavoritePools,
+						favoritesEmptyDetail: securityPoolCopy.noFavoritePoolsDetail,
+						favoritesEmptyWithDownloadsDetail: securityPoolCopy.noFavoritePoolsWithDownloadsDetail,
+						showDownloaded: securityPoolCopy.showDownloadedPools,
+					}}
+					directory={directory}
+					registryEmpty={
+						<EmptyState
+							title={securityPoolCopy.noSecurityPools}
+							detail={securityPoolCopy.noSecurityPoolsDetail}
+							actions={
+								<>
+									{openSearchedAddress}
+									{onCreatePool === undefined ? undefined : (
+										<button className={openSearchedAddress === undefined ? 'primary' : 'secondary'} type='button' onClick={onCreatePool}>
+											{commonCopy.createPool}
+										</button>
+									)}
+								</>
+							}
+						/>
+					}
+				/>
+			)
 		if (visibleRows.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} actions={openSearchedAddress} />
 		return (
 			<div className='comparison-record-list'>
@@ -82,7 +131,8 @@ export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange,
 
 	return (
 		<SectionBlock density='compact' variant='plain'>
-			<p className='detail'>{favoritesCopy.formatCollectionTab(favoritesCopy.favorites, entries.length)}</p>
+			<LocalBrowseBar directory={directory} nounPlural={securityPoolCopy.poolCountPlural} />
+			<RetryableNotice disabled={discovery.loading} message={loadError} onRetry={discovery.retry} retryLabel={discovery.loading ? commonCopy.retrying : commonCopy.retry} />
 			<div className='filter-toolbar pool-browse-toolbar'>
 				<LocalBrowseSearchField label={securityPoolCopy.searchPools} onChange={setSearchText} placeholder={securityPoolCopy.poolSearchPlaceholder} value={searchText} />
 				<label className='field'>

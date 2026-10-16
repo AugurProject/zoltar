@@ -94,7 +94,6 @@ export function ForkAuctionMigrationBalances({
 }
 
 export function ForkAuctionMigrationStage({
-	accountConnected,
 	activeReportingDetails,
 	claimParentDepositsGuardMessage,
 	claimSelectionDisabled,
@@ -126,7 +125,6 @@ export function ForkAuctionMigrationStage({
 	selectedParentEscalationClaimDepositIndexes,
 	selectedStageAheadMessage,
 }: {
-	accountConnected: boolean
 	activeReportingDetails: ActiveReportingDetails | undefined
 	claimParentDepositsGuardMessage: string | undefined
 	claimSelectionDisabled: boolean
@@ -158,6 +156,7 @@ export function ForkAuctionMigrationStage({
 	selectedParentEscalationClaimDepositIndexes: bigint[]
 	selectedStageAheadMessage: string | undefined
 }) {
+	// The actions stay in place without a wallet or after the window closes, disabled with the reason, so the workflow keeps its shape.
 	const unresolvedMigrationDetail = getUnresolvedMigrationDetail({ activeReportingDetails, hasStoredEscalationMigrationEntitlement, hasUnresolvedMigrationDeposits, isMigrationExpired, loadingReportingDetails })
 	// Each blocked action states its reason under the button once, so a section detail that repeats it is left out.
 	const unresolvedMigrationDetailRepeatsReason = !isMigrationExpired && unresolvedMigrationDetail === migrateUnresolvedGuardMessage
@@ -184,76 +183,33 @@ export function ForkAuctionMigrationStage({
 			{migrationSummaryCard}
 			<SectionBlock title={forkAuctionCopy.yourMigrationBalances} variant='embedded' description={forkAuctionCopy.parentWalletBalancesDescription}>
 				{migrationBalancesContent}
-				{!accountConnected ? undefined : (
-					<>
-						{hasUnresolvedMigrationState ? (
-							<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.clearUnresolvedParentEscalationDepositAccounting} variant='embedded'>
-								{unresolvedMigrationDetailRepeatsReason ? undefined : (
-									<UserMessage
-										className='detail'
-										loading={!isMigrationExpired && loadingReportingDetails}
-										detail={unresolvedMigrationDetail}
-										expandableDetail={unresolvedMigrationDetail === forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail ? { label: commonCopy.technicalDetails, content: forkAuctionCopy.unresolvedEscalationMigrationTechnicalDetail } : undefined}
-									/>
-								)}
-								{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
-									? undefined
-									: activeReportingDetails.sides.map(side => (
-											<div className='field' key={side.key}>
-												<span>{side.label}</span>
-												{side.userDeposits.length === 0 ? (
-													<UserMessage className='detail' detail={forkAuctionCopy.formatNoUnresolvedDeposits(side.label)} />
-												) : (
-													<EscalationDepositSelectionList
-														selectable={false}
-														items={side.userDeposits.map(deposit => ({
-															deposit,
-															details: [
-																<>
-																	{forkAuctionCopy.initiallyDepositedLead}
-																	<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
-																</>,
-															],
-															secondaryDetails: [
-																<>
-																	{forkAuctionCopy.entryDepthLead}
-																	<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
-																</>,
-															],
-														}))}
-														onSelectionChange={() => undefined}
-														selectedDepositIndexes={side.userDeposits.map(deposit => deposit.depositIndex)}
-													/>
-												)}
-											</div>
-										))}
-								{isMigrationExpired ? undefined : <div className='actions'>{migrateUnresolvedAction}</div>}
-							</SectionBlock>
-						) : (
-							<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.claimResolvedParentEscalationDeposits} variant='embedded'>
-								<UserMessage className='detail' detail={forkAuctionCopy.resolvedParentDepositClaimDetail} />
-								{!loadingReportingDetails && reportingDetails?.status === 'active' && hasSelectedParentEscalationClaimDeposits ? (
-									<div className='field'>
-										<span>{forkAuctionCopy.chooseParentDepositsToClaim}</span>
-										<EscalationDepositSelectionList
-											disabled={claimSelectionDisabled}
-											items={selectedParentEscalationClaimDeposits.map(deposit => {
-												const claimAmount = getEscalationDepositClaimAmount(reportingDetails, selectedOutcome, deposit)
-												return {
+				{hasUnresolvedMigrationState ? (
+					<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.clearUnresolvedParentEscalationDepositAccounting} variant='embedded'>
+						{unresolvedMigrationDetailRepeatsReason ? undefined : (
+							<UserMessage
+								className='detail'
+								loading={!isMigrationExpired && loadingReportingDetails}
+								detail={unresolvedMigrationDetail}
+								expandableDetail={unresolvedMigrationDetail === forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail ? { label: commonCopy.technicalDetails, content: forkAuctionCopy.unresolvedEscalationMigrationTechnicalDetail } : undefined}
+							/>
+						)}
+						{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
+							? undefined
+							: activeReportingDetails.sides.map(side => (
+									<div className='field' key={side.key}>
+										<span>{side.label}</span>
+										{side.userDeposits.length === 0 ? (
+											<UserMessage className='detail' detail={forkAuctionCopy.formatNoUnresolvedDeposits(side.label)} />
+										) : (
+											<EscalationDepositSelectionList
+												selectable={false}
+												items={side.userDeposits.map(deposit => ({
 													deposit,
 													details: [
 														<>
 															{forkAuctionCopy.initiallyDepositedLead}
 															<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
 														</>,
-														claimAmount === undefined ? (
-															forkAuctionCopy.worthNowPendingClaimFinalization
-														) : (
-															<>
-																{forkAuctionCopy.worthNowLead}
-																<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
-															</>
-														),
 													],
 													secondaryDetails: [
 														<>
@@ -261,27 +217,66 @@ export function ForkAuctionMigrationStage({
 															<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
 														</>,
 													],
-												}
-											})}
-											onSelectionChange={onParentDepositSelectionChange}
-											selectedDepositIndexes={selectedParentEscalationClaimDepositIndexes}
-										/>
+												}))}
+												onSelectionChange={() => undefined}
+												selectedDepositIndexes={side.userDeposits.map(deposit => deposit.depositIndex)}
+											/>
+										)}
 									</div>
-								) : undefined}
-								<div className='actions'>{claimParentDepositsAction}</div>
-							</SectionBlock>
-						)}
-						<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migratePoolToUniverse} variant='embedded'>
-							<UserMessage className='detail' detail={forkAuctionCopy.poolRepMigrationDetail} />
-							{loadingSelectedOutcomeMigrationSeedStatus ? undefined : <RetryableNotice message={selectedOutcomeMigrationSeedStatusError} onRetry={retrySelectedOutcomeMigrationSeedStatus} retryLabel={forkAuctionCopy.retryPoolRepReadiness} />}
-							<div className='actions'>{migratePoolAction}</div>
-						</SectionBlock>
-						<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateVaultTitle} variant='embedded'>
-							<UserMessage className='detail' tone='warning' detail={forkAuctionCopy.formatVaultMigrationDetail(selectedOutcomeLabel)} expandableDetail={{ label: commonCopy.technicalDetails, content: forkAuctionCopy.vaultMigrationTechnicalDetail }} />
-							<div className='actions'>{migrateVaultAction}</div>
-						</SectionBlock>
-					</>
+								))}
+						<div className='actions'>{migrateUnresolvedAction}</div>
+					</SectionBlock>
+				) : (
+					<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.claimResolvedParentEscalationDeposits} variant='embedded'>
+						<UserMessage className='detail' detail={forkAuctionCopy.resolvedParentDepositClaimDetail} />
+						{!loadingReportingDetails && reportingDetails?.status === 'active' && hasSelectedParentEscalationClaimDeposits ? (
+							<div className='field'>
+								<span>{forkAuctionCopy.chooseParentDepositsToClaim}</span>
+								<EscalationDepositSelectionList
+									disabled={claimSelectionDisabled}
+									items={selectedParentEscalationClaimDeposits.map(deposit => {
+										const claimAmount = getEscalationDepositClaimAmount(reportingDetails, selectedOutcome, deposit)
+										return {
+											deposit,
+											details: [
+												<>
+													{forkAuctionCopy.initiallyDepositedLead}
+													<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
+												</>,
+												claimAmount === undefined ? (
+													forkAuctionCopy.worthNowPendingClaimFinalization
+												) : (
+													<>
+														{forkAuctionCopy.worthNowLead}
+														<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
+													</>
+												),
+											],
+											secondaryDetails: [
+												<>
+													{forkAuctionCopy.entryDepthLead}
+													<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
+												</>,
+											],
+										}
+									})}
+									onSelectionChange={onParentDepositSelectionChange}
+									selectedDepositIndexes={selectedParentEscalationClaimDepositIndexes}
+								/>
+							</div>
+						) : undefined}
+						<div className='actions'>{claimParentDepositsAction}</div>
+					</SectionBlock>
 				)}
+				<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migratePoolToUniverse} variant='embedded'>
+					<UserMessage className='detail' detail={forkAuctionCopy.poolRepMigrationDetail} />
+					{loadingSelectedOutcomeMigrationSeedStatus ? undefined : <RetryableNotice message={selectedOutcomeMigrationSeedStatusError} onRetry={retrySelectedOutcomeMigrationSeedStatus} retryLabel={forkAuctionCopy.retryPoolRepReadiness} />}
+					<div className='actions'>{migratePoolAction}</div>
+				</SectionBlock>
+				<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateVaultTitle} variant='embedded'>
+					<UserMessage className='detail' tone='warning' detail={forkAuctionCopy.formatVaultMigrationDetail(selectedOutcomeLabel)} expandableDetail={{ label: commonCopy.technicalDetails, content: forkAuctionCopy.vaultMigrationTechnicalDetail }} />
+					<div className='actions'>{migrateVaultAction}</div>
+				</SectionBlock>
 			</SectionBlock>
 		</fieldset>
 	)

@@ -17,8 +17,8 @@
 	justify-self: start;
 }
 
-/* Narrow-viewport collapse for grids this sheet owns; kept after the base rules so the override wins at equal specificity. */
-@media (max-width: 64rem) {
+/* The outcome input and its Remove button share a row until the create form itself is too narrow for both; the form container, not the viewport, decides. Kept after the base rule so the override wins at equal specificity. */
+@container (max-width: 20rem) {
 	.categorical-outcome-row {
 		grid-template-columns: 1fr;
 	}

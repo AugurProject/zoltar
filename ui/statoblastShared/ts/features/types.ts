@@ -14,9 +14,9 @@ import type {
 	OracleManagerDetails,
 	ReportingDetails,
 	SecurityPoolCreationResult,
+	SecurityPoolDiscoveryPage,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
-	SecurityVaultActionResult,
 	SecurityVaultDetails,
 	TradingActionResult,
 	TradingDetails,
@@ -26,7 +26,6 @@ import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPo
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
-import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { ReportingRouteContentProps } from './oracleTypes.js'
 import type { UiRepPriceSource } from './security-pools/lib/repPriceSource.js'
 import type { VaultMigrationReviewAmounts } from '../protocol/forks.js'
@@ -121,13 +120,18 @@ type LiquidationModalStateProps = {
 	liquidationReceiverVaultSummary?: SecurityPoolVaultSummary | undefined
 	liquidationReceiverVaultSummaryError?: string | undefined
 	liquidationReceiverVaultSummaryResolved?: boolean | undefined
+	/** A target outside the pool's vault preview, read on demand by the liquidation dialog. */
+	liquidationTargetVaultSummary?: SecurityPoolVaultSummary | undefined
+	liquidationTargetVaultSummaryError?: string | undefined
 	loadingLiquidationApproval?: boolean | undefined
 	loadingLiquidationReceiverVaultSummary?: boolean | undefined
+	loadingLiquidationTargetVaultSummary?: boolean | undefined
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationReceiverVaultChange?: ((value: string) => void) | undefined
 	onLiquidationApprovalIdChange?: ((value: string) => void) | undefined
 	onLoadLiquidationApproval?: (() => void) | undefined
 	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
+	onLoadLiquidationTargetVaultSummary?: (() => void) | undefined
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address, proposedRepPerEthPrice?: bigint) => void) | undefined
@@ -136,11 +140,23 @@ type LiquidationModalStateProps = {
 	uiPriceOracle?: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle | undefined
 }
 
+/** Paged reads of the pool factory registry; the Browse pools view loads the first page on entry. */
+export type SecurityPoolDiscoveryProps = {
+	/** Changing it (network, environment, or read readiness) restarts discovery from the first page. */
+	contextKey: string
+	error: string | undefined
+	loading: boolean
+	onLoadPage: (pageIndex: number, pageSize: number, requestKey: string) => Promise<void>
+	page: SecurityPoolDiscoveryPage | undefined
+}
+
 type SecurityPoolsOverviewRouteContentProps = {
 	browseState?: PoolBrowseState | undefined
 	onBrowseStateChange?: ((update: Partial<PoolBrowseState>) => void) | undefined
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
+	discovery: SecurityPoolDiscoveryProps
+	onCreatePool?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
 	securityPools: ListedSecurityPool[]
 }
@@ -207,46 +223,19 @@ export type SecurityPoolsSectionProps = {
 export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
-	onApproveRep: (amount?: bigint) => void
-	onSetVaultUnderwritingLimit: (factor: string, proposedRepPerEthPrice?: bigint) => void | Promise<void>
-	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
-	onRedeemFees: () => void
-	onRedeemRepFromVault: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onWithdrawRep: (proposedRepPerEthPrice?: bigint) => void | Promise<void>
-	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined
 	securityVaultForm: SecurityVaultFormState
 	securityVaultMissing: boolean
-	securityVaultRepApproval: TokenApprovalState
-	walletRepBalanceAttoRep: bigint | undefined
-	walletRepBalanceError: string | undefined
-	walletRepBalanceLoading: boolean
-	securityVaultQueuedOperations?: readonly SecurityVaultActionResult[]
-	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
 } & RepPerEthPriceProps
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
-	compactLayout?: boolean
 	extraReadinessActions?: Omit<ReadinessAction, 'title'>[]
-	modalFirst?: boolean
-	onViewPriceOracle?: () => void
-	showIndividualActions?: boolean
-	onViewStagedOperations?: () => void
-	oracleManagerDetails?: OracleManagerDetails | undefined
 	poolState?: SecurityPoolStateModel | undefined
-	selectedPoolTotalPoolHeldAttoRep?: bigint | undefined
-	selectedPoolTotalUnderwritingLimitAttoEth?: bigint | undefined
-	selectedMarketTitle?: string | undefined
-	autoLoadVault?: boolean
-	showLookupSection?: boolean
-	showSummarySection?: boolean
-	showSecurityPoolAddressInput?: boolean
-	showHeader?: boolean
 }
 
 export type TradingRouteContentProps = {

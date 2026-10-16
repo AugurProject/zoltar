@@ -1,143 +1,49 @@
-import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { defaultUseSecurityVaultOperationsDependencies } from './securityVaultOperationDependencies.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { useErc20AllowanceLoader, useErc20BalanceLoader } from '@zoltar/ui-core-shared/hooks/useErc20Loader.js'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
-import { loadCoordinatorInitialReportFundingRequirement, loadQueuedVaultOperationState, loadOracleManagerDetails } from '../../../protocol/oracleCoordinator.js'
-import { getPendingTitle, getSuccessTitle, getFailureTitle } from '../lib/securityVaultActionTitles.js'
-import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
-import { useQueuedVaultOperationState } from './useQueuedVaultOperationState.js'
-import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
-import { parseEthAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.js'
-import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
-import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, getSecurityVaultActionRepAmount, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
-import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { getVaultRedeemRepGuardMessage } from '../lib/securityVaultGuards.js'
-import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
+import { getSelectedVaultOwner } from '../lib/securityVault.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
-import type { SecurityVaultFormState, WriteOperationsParameters } from '../../../types/app.js'
-import type { SecurityVaultActionResult, SecurityVaultDetails } from '../../../types/contracts.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import type { SecurityVaultFormState } from '../../../types/app.js'
+import type { SecurityVaultDetails } from '../../../types/contracts.js'
 
-type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
+type UseSecurityVaultOperationsParameters = {
+	accountAddress: Address | undefined
 	enabled: boolean
 	selectedSecurityPoolAddress?: string
 }
 
-type SecurityVaultReadClient = {
-	getBalance: (parameters: { address: Address }) => Promise<bigint>
-}
-
-type SecurityVaultProductionWriteClient = ReturnType<typeof createWalletWriteClient>
-
-type SecurityVaultQueueResult = Pick<SecurityVaultActionResult, 'hash' | 'queuedOperation' | 'stagedExecution'>
-
-export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultProductionWriteClient> = {
-	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveRep') => Promise<SecurityVaultActionResult>
-	createConnectedReadClient: () => SecurityVaultReadClient
-	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
-	depositRepToVaultToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) => Promise<SecurityVaultActionResult>
-	isSecurityPoolVaultAdmissionClosed: (securityPoolAddress: Address) => Promise<boolean>
-	isSecurityPoolEscalationResolved: (securityPoolAddress: Address) => Promise<boolean>
-	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
-	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
-	loadQueuedVaultOperationState: (managerAddress: Address, result: SecurityVaultActionResult) => Promise<Awaited<ReturnType<typeof loadQueuedVaultOperationState>>>
-	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
+export type UseSecurityVaultOperationsDependencies = {
 	loadSecurityVaultDetails: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultDetails | undefined>
-	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep' | 'setVaultUnderwritingLimit', targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint) => Promise<SecurityVaultQueueResult>
-	redeemRepFromVaultFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
-	redeemSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
-	setUnderwritingLimit: (client: TWriteClient, securityPoolAddress: Address, limitAttoEth: bigint) => Promise<SecurityVaultActionResult>
-	updateSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 }
 
-type SecurityVaultActionSnapshot = {
-	effectiveSecurityPoolAddressInput: string | undefined
-	effectiveVaultSelectionKey: string
-	form: SecurityVaultFormState
-	repTokenSymbol?: string | undefined
-	universeId?: bigint | undefined
-}
-
-function useSecurityVaultOperationsWithDependencies<TWriteClient>(
-	{ accountAddress, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedSecurityPoolAddress }: UseSecurityVaultOperationsParameters,
-	dependencies: UseSecurityVaultOperationsDependencies<TWriteClient>,
-) {
+/** Selects and loads one vault of the selected pool; vault transactions go through the vault operations panel. */
+function useSecurityVaultOperationsWithDependencies({ accountAddress, enabled, selectedSecurityPoolAddress }: UseSecurityVaultOperationsParameters, dependencies: UseSecurityVaultOperationsDependencies) {
 	const securityVaultLoad = useLoadController()
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultMissing = useSignal(false)
 	const securityVaultError = useSignal<string | undefined>(undefined)
 	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
-	const repBalanceLoader = useErc20BalanceLoader(loadErc20Balance)
-	const repAllowanceLoader = useErc20AllowanceLoader(loadErc20Allowance)
-	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
-	const securityVaultFeedback = useSignal<ActionFeedback<SecurityVaultActionResult['action']> | undefined>(undefined)
-	const securityVaultResult = useSignal<SecurityVaultActionResult | undefined>(undefined)
 	const nextSecurityVaultLoad = useRequestGuard()
 	const lastEffectiveVaultSelectionKey = useRef<string | undefined>(undefined)
+	// The selection the latest load asked for, so a selection that becomes readable again can be reloaded.
+	const lastRequestedVaultSelectionKey = useRef<string | undefined>(undefined)
 	const effectiveSelectedVaultOwner = getSelectedVaultOwner(securityVaultForm.value.selectedVaultOwner, accountAddress)
 	const effectiveSecurityPoolAddressInput = selectedSecurityPoolAddress?.trim() === '' || selectedSecurityPoolAddress === undefined ? securityVaultForm.value.securityPoolAddress : selectedSecurityPoolAddress
 	const effectiveVaultSelectionKey = `${normalizeAddress(effectiveSecurityPoolAddressInput) ?? ''}:${normalizeAddress(effectiveSelectedVaultOwner) ?? ''}`
-	const currentVaultSelectionKeyRef = useRef(effectiveVaultSelectionKey)
-	currentVaultSelectionKeyRef.current = effectiveVaultSelectionKey
-	const clearRepLoaders = () => {
-		repBalanceLoader.invalidate()
-		repBalanceLoader.signal.value = { error: undefined, loading: false, value: undefined }
-		repAllowanceLoader.invalidate()
-		repAllowanceLoader.signal.value = {
-			error: undefined,
-			loading: false,
-			value: undefined,
-		}
-	}
-	const clearSelectedVaultState = () => {
-		securityVaultDetails.value = undefined
-		securityVaultMissing.value = false
-		securityVaultError.value = undefined
-		securityVaultResult.value = undefined
-		clearRepLoaders()
-	}
-	const isVaultSelectionCurrent = (selectionKey: string) => currentVaultSelectionKeyRef.current === selectionKey
 
 	const resolveSelectedVaultOwner = () => {
 		const selectedVaultOwner = requireDefined(getSelectedVaultOwner(securityVaultForm.value.selectedVaultOwner, accountAddress), 'Enter a vault owner address or connect a wallet before selecting a security vault')
 		return parseAddressInput(selectedVaultOwner, 'Selected vault owner address')
 	}
-	const createVaultActionSnapshot = (): SecurityVaultActionSnapshot => ({
-		effectiveSecurityPoolAddressInput,
-		effectiveVaultSelectionKey,
-		form: { ...securityVaultForm.value },
-		repTokenSymbol: securityVaultDetails.value?.repTokenSymbol,
-		universeId: securityVaultDetails.value?.universeId,
-	})
-	const isVaultActionSnapshotCurrent = (snapshot: SecurityVaultActionSnapshot) => snapshot.effectiveVaultSelectionKey === lastEffectiveVaultSelectionKey.current
-	const resolveSelectedVaultOwnerFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
-		const selectedVaultOwner = requireDefined(getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress), 'Enter a vault owner address or connect a wallet before selecting a security vault')
-		return parseAddressInput(selectedVaultOwner, 'Selected vault owner address')
-	}
-	const resolveSecurityVaultPoolAddressFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => parseAddressInput(requireDefined(snapshot.effectiveSecurityPoolAddressInput, 'Security pool address is required'), 'Security pool address')
 	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
-	const resolveStagedOperationValidForSecondsFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
-		const timeoutMinutes = parseBigIntInput(snapshot.form.stagedOperationTimeoutMinutes ?? '', securityPoolCopy.executionWindow)
-		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error(securityPoolCopy.executionWindowRangeError)
-		const timeoutSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
-		if (timeoutSeconds === undefined) throw new Error(securityPoolCopy.executionWindowRangeError)
-		return timeoutSeconds
-	}
 
 	useEffect(() => {
 		if (!enabled) {
@@ -146,8 +52,13 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		}
 		if (lastEffectiveVaultSelectionKey.current === effectiveVaultSelectionKey) return
 		void nextSecurityVaultLoad()
-		clearSelectedVaultState()
+		securityVaultDetails.value = undefined
+		securityVaultMissing.value = false
+		securityVaultError.value = undefined
 		lastEffectiveVaultSelectionKey.current = effectiveVaultSelectionKey
+		// Reads pause briefly (for example while a confirmed transaction is revalidated), which cancels any load in flight.
+		// When the same vault becomes readable again, nothing else reloads it, so reload it here.
+		if (lastRequestedVaultSelectionKey.current === effectiveVaultSelectionKey) void loadSecurityVault()
 	}, [effectiveVaultSelectionKey, enabled])
 
 	// The owner follows the wallet while it is empty or still names the previously connected wallet; a typed-in owner stays.
@@ -165,72 +76,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		}
 	}, [accountAddress])
 
-	const reloadSecurityVaultRepBalance = async (repToken: Address, vaultAddress: Address) => repBalanceLoader.reload(repToken, vaultAddress)
-
-	const reloadSecurityVaultRepAllowance = async (repToken: Address, vaultAddress: Address, securityPoolAddress: Address) => repAllowanceLoader.reload(repToken, vaultAddress, securityPoolAddress)
-
-	const reloadSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address, isCurrentSelection?: () => boolean) => {
-		const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
-		if (isCurrentSelection !== undefined && !isCurrentSelection()) return undefined
-		securityVaultDetails.value = details
-		securityVaultMissing.value = details === undefined
-		return details
-	}
-
-	/** Reloads the vault details and, while the selection still matches, the vault's REP balance and optionally its REP allowance. */
-	const reloadSecurityVaultRepState = async (securityPoolAddress: Address, vaultAddress: Address, isCurrentSelection: () => boolean, includeAllowance = false) => {
-		const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-		if (details === undefined || !isCurrentSelection()) return
-		await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
-		if (!includeAllowance || !isCurrentSelection()) return
-		await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
-	}
-
-	const createVaultWriteClient = (vaultAddress: Address, context: WriteActionContext) => dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
-
-	const matchesLoadedSecurityVault = (details: SecurityVaultDetails | undefined, securityPoolAddress: Address, vaultAddress: Address) => details !== undefined && sameAddress(details.securityPoolAddress, securityPoolAddress) && sameAddress(details.vaultAddress, vaultAddress)
-
-	const refreshVaultFees = async (vaultAddress: Address, securityPoolAddress: Address, context: WriteActionContext) => {
-		await dependencies.updateSecurityVaultFees(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
-	}
-
-	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined, proposedRepPerEthPrice?: bigint) => {
-		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress, proposedRepPerEthPrice)
-		if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.requiredRepAttoRep) {
-			throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingRequirement.requiredRepAttoRep - fundingRequirement.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
-		}
-		const requiredEthWithWrap = addOpenOracleBountyBuffer(requiredCostAttoEth) + fundingRequirement.wethShortfallAttoEth
-		if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < requiredEthWithWrap) {
-			throw new Error(`Need ${formatAdditionalCurrencyBalance(requiredEthWithWrap - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and ${actionLabel}.`)
-		}
-	}
-
-	const loadExistingSecurityVaultDetails = async (securityPoolAddress: Address, vaultAddress: Address, missingPoolMessage: string, isCurrentSelection?: () => boolean) => {
-		const details = matchesLoadedSecurityVault(securityVaultDetails.value, securityPoolAddress, vaultAddress) ? securityVaultDetails.value : await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
-		if (isCurrentSelection !== undefined && !isCurrentSelection()) return undefined
-		if (details !== undefined) return details
-
-		securityVaultDetails.value = undefined
-		securityVaultMissing.value = true
-		clearRepLoaders()
-		securityVaultError.value = missingPoolMessage
-		return undefined
-	}
-
-	const queuedOperations = useQueuedVaultOperationState({
-		enabled,
-		selectionKey: effectiveVaultSelectionKey,
-		loadState: dependencies.loadQueuedVaultOperationState,
-		onFinalized: async () => {
-			const details = securityVaultDetails.value
-			if (details === undefined) return
-			const selectionKey = currentVaultSelectionKeyRef.current
-			await reloadSecurityVaultDetails(details.securityPoolAddress, details.vaultAddress, () => isVaultSelectionCurrent(selectionKey)).catch(error => {
-				if (isVaultSelectionCurrent(selectionKey)) securityVaultError.value = getErrorMessage(error, 'Failed to refresh the vault.')
-			})
-		},
-	})
-
 	const loadSecurityVault = async (vaultAddressInput?: string) => {
 		const isCurrent = nextSecurityVaultLoad()
 		await securityVaultLoad.run({
@@ -241,6 +86,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			load: async () => {
 				const securityPoolAddress = resolveSecurityVaultPoolAddress()
 				const vaultAddress = vaultAddressInput?.trim() === '' || vaultAddressInput === undefined ? resolveSelectedVaultOwner() : parseAddressInput(vaultAddressInput, 'Selected vault owner address')
+				lastRequestedVaultSelectionKey.current = `${normalizeAddress(securityPoolAddress) ?? ''}:${normalizeAddress(vaultAddress) ?? ''}`
 				if (vaultAddressInput !== undefined)
 					securityVaultForm.value = {
 						...securityVaultForm.value,
@@ -250,17 +96,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrent()) return undefined
 				securityVaultDetails.value = details
 				securityVaultMissing.value = details === undefined
-				if (details === undefined) {
-					clearRepLoaders()
-					return undefined
-				}
-				if (sameAddress(vaultAddress, accountAddress)) {
-					await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
-					await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
-				} else {
-					clearRepLoaders()
-				}
-				await queuedOperations.reconcile(details.managerAddress)
 				return details
 			},
 			onSuccess: () => undefined,
@@ -268,326 +103,24 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrent()) return
 				securityVaultDetails.value = undefined
 				securityVaultMissing.value = false
-				clearRepLoaders()
 				securityVaultError.value = getErrorMessage(error, 'Failed to load the vault.')
 			},
 		})
 	}
 
-	const runVaultAction = async (
-		actionName: SecurityVaultActionResult['action'],
-		snapshot: SecurityVaultActionSnapshot,
-		action: (ethereumAddress: Address, securityPoolAddress: Address, isCurrentSelection: () => boolean, context: WriteActionContext) => Promise<SecurityVaultActionResult | undefined>,
-		errorFallback: string,
-		onSuccess?: (result: SecurityVaultActionResult, securityPoolAddress: Address, walletAddress: Address, isCurrentSelection: () => boolean) => Promise<void> | void,
-	) => {
-		const actionSelectionKey = effectiveVaultSelectionKey
-		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
-		const transactionContext = {
-			repAmountAttoRep: getSecurityVaultActionRepAmount(actionName, snapshot.form),
-			repTokenSymbol: snapshot.repTokenSymbol,
-			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
-			universeId: snapshot.universeId,
-			vaultAddress: getSelectedVaultOwner(snapshot.form.selectedVaultOwner, accountAddress),
-		}
-		let securityPoolAddress: Address | undefined
-		try {
-			securityVaultActiveAction.value = actionName
-			securityVaultFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
-			await runWriteAction(
-				{
-					...buildWriteActionConfig(
-						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
-						securityVaultError,
-						commonCopy.formatConnectWalletBefore('operating a security vault'),
-						createSecurityVaultTransactionIntent(actionName, transactionContext),
-					),
-					onRefreshError: (message, hash) => {
-						if (!isVaultActionSnapshotCurrent(snapshot)) return
-						securityVaultFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
-						const result = securityVaultResult.value
-						if (result !== undefined) onTransactionPresented(createSecurityVaultWarningPresentation(result, message, transactionContext))
-					},
-					onWriteCanceled: () => {
-						securityVaultFeedback.value = undefined
-					},
-					onWriteError: message => {
-						if (!isVaultActionSnapshotCurrent(snapshot)) return
-						securityVaultError.value = message
-						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
-					},
-					refreshState: async () => {
-						await refreshWalletStateOnly(refreshState)
-					},
-				},
-				async (walletAddress, context) => {
-					securityPoolAddress = resolveSecurityVaultPoolAddressFromSnapshot(snapshot)
-					if (securityVaultMissing.value) throw new Error('This security pool does not exist.')
-					const selectedVaultOwner = resolveSelectedVaultOwnerFromSnapshot(snapshot)
-					if (!sameAddress(selectedVaultOwner, walletAddress)) throw new Error('The selected vault is read-only.')
-					securityVaultError.value = undefined
-					securityVaultResult.value = undefined
-					return await action(
-						selectedVaultOwner,
-						securityPoolAddress,
-						() => {
-							context.assertActive()
-							return isCurrentSelection()
-						},
-						context,
-					)
-				},
-				errorFallback,
-				async (result, walletAddress) => {
-					if (!isVaultActionSnapshotCurrent(snapshot)) return
-					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
-					securityVaultResult.value = result
-					if (result.stagedExecution?.success === false) {
-						const message = result.stagedExecution.errorMessage ?? securityPoolCopy.stagedOperationFailedDetail
-						securityVaultError.value = message
-						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
-						onTransactionPresented(createSecurityVaultWarningPresentation(result, message, transactionContext))
-						return
-					}
-					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName, result.stagedExecution?.success === true), result.hash)
-					onTransactionPresented(createSecurityVaultSuccessPresentation(result, transactionContext))
-					if (!isCurrentSelection()) return
-					await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress, isCurrentSelection)
-				},
-			)
-		} finally {
-			securityVaultActiveAction.value = undefined
-		}
-	}
-
-	const approveRep = async (amount?: bigint) => {
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'approveRep',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'This security pool does not exist.', isCurrentSelection)
-				if (details === undefined) return undefined
-				const approvalAmount = amount ?? parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
-				const vaultAdmissionClosed = await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)
-				if (!isCurrentSelection()) return undefined
-				if (vaultAdmissionClosed) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
-				return await dependencies.approveErc20(createVaultWriteClient(vaultAddress, context), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
-			},
-			'Failed to approve REP.',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-				if (details === undefined) return
-				if (!isCurrentSelection()) return
-				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
-			},
-		)
-	}
-
-	const depositRepToVault = async () => {
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'depositRepToVault',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const depositAmount = parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
-				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero.')
-				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-				if (details === undefined) return undefined
-				const targetHealthFactorBps = details.statoblastSecurityMultiplierBps ?? 10_000n
-				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
-				if (!isCurrentSelection()) return undefined
-				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
-				if (currentRepBalanceAttoRep < depositAmount) throw new Error(securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(depositAmount - currentRepBalanceAttoRep)))
-				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
-				if (!isCurrentSelection()) return undefined
-				return await dependencies.depositRepToVaultToSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, depositAmount, targetHealthFactorBps)
-			},
-			'Failed to deposit REP.',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection, true),
-		)
-	}
-
-	const prepareVaultOracleOperation = async (details: SecurityVaultDetails, vaultAddress: Address, context: WriteActionContext, proposedRepPerEthPrice?: bigint) => {
-		const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
-		context.assertActive()
-		const funding = resolveOracleOperationEthFunding({ managerDetails })
-		const writeClient = createVaultWriteClient(vaultAddress, context)
-		const walletBalanceAttoEth = funding?.costAttoEth !== undefined && funding.costAttoEth > 0n ? await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress }) : undefined
-		if (funding?.costAttoEth !== undefined && funding.costAttoEth > 0n) {
-			await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this vault operation', walletBalanceAttoEth, proposedRepPerEthPrice)
-		}
-		return { managerDetails, funding, walletBalanceAttoEth, writeClient }
-	}
-
-	const adjustBackingFactor = async (value: string, proposedRepPerEthPrice?: bigint) => {
-		if (securityVaultActiveAction.value !== undefined) return
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'setVaultUnderwritingLimit',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const factor = parseEthAmountInput(value, securityPoolCopy.commitmentLimit)
-				if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
-				const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
-				if (!isCurrentSelection()) return undefined
-				const guard = getVaultBackingFactorAdjustmentGuard(details, factor)
-				if (guard !== undefined) throw new Error(guard)
-				if (details === undefined) throw new Error('Refresh vault details.')
-				// The price coordinator rejects staged operations once the question resolves, while the pool still accepts a
-				// direct commitment reduction. REP redemption needs a zero commitment, so this is the vault's only way out.
-				const escalationResolved = await dependencies.isSecurityPoolEscalationResolved(securityPoolAddress)
-				if (!isCurrentSelection()) return undefined
-				if (escalationResolved) {
-					if (factor > details.underwritingLimitAttoEth) throw new Error(securityPoolCopy.commitmentIncreaseAfterResolutionError)
-					return await dependencies.setUnderwritingLimit(createVaultWriteClient(vaultAddress, context), securityPoolAddress, factor)
-				}
-				if (factor > details.underwritingLimitAttoEth && (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress))) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
-				if (!isCurrentSelection()) return undefined
-				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context, proposedRepPerEthPrice)
-				if (!isCurrentSelection()) return undefined
-				const coverageGuard = getVaultBackingFactorAdjustmentGuard(details, factor, managerDetails?.isPriceValid ? managerDetails.lastPrice : undefined, details.statoblastSecurityMultiplierBps)
-				if (coverageGuard !== undefined) throw new Error(coverageGuard)
-				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setVaultUnderwritingLimit', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n, proposedRepPerEthPrice)
-				return queuedOperations.track(details.managerAddress, { ...result, action: 'setVaultUnderwritingLimit' })
-			},
-			'Failed to change the commitment limit.',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-			},
-		)
-	}
-
-	const redeemFees = async () => {
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'redeemFees',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				if (!isCurrentSelection()) return undefined
-				await refreshVaultFees(vaultAddress, securityPoolAddress, context)
-				if (!isCurrentSelection()) return undefined
-				return await dependencies.redeemSecurityVaultFees(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
-			},
-			'Failed to claim fees.',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-			},
-		)
-	}
-
-	const redeemRepFromVault = async () => {
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'redeemRepFromVault',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'This security pool does not exist.', isCurrentSelection)
-				if (details === undefined) return undefined
-				if (!isCurrentSelection()) return undefined
-				const redeemGuard = getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: details.disputeStakedAttoRep, redeemableRepAmountAttoRep: details.vaultAttoRepBacking, underwritingLimitAttoEth: details.underwritingLimitAttoEth })
-				if (redeemGuard !== undefined) throw new Error(redeemGuard)
-				return await dependencies.redeemRepFromVaultFromSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
-			},
-			'Failed to redeem REP.',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection),
-		)
-	}
-
-	const withdrawRep = async (proposedRepPerEthPrice?: bigint) => {
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'queueWithdrawRep',
-			snapshot,
-			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
-				if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
-				const amount = parseRepAmountInput(snapshot.form.repWithdrawAmount, 'REP withdraw amount')
-				if (amount <= 0n) throw new Error('REP withdrawal amount must be greater than zero.')
-
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'This security pool does not exist.', isCurrentSelection)
-				if (details === undefined) return undefined
-				const { funding, walletBalanceAttoEth, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context, proposedRepPerEthPrice)
-				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({
-					actionLabel: 'queue this REP withdrawal',
-					includeBuffer: funding?.includeBuffer === true,
-					requiredCostAttoEth: funding?.costAttoEth,
-					walletBalanceAttoEth,
-				})
-				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
-				if (!isCurrentSelection()) return undefined
-				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot), proposedRepPerEthPrice)
-				return queuedOperations.track(details.managerAddress, { ...result, action: 'queueWithdrawRep' })
-			},
-			'Failed to withdraw REP.',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection),
-		)
-	}
-
-	useEffect(() => {
-		if (!enabled) return
-		const selectedVaultOwner = securityVaultForm.value.selectedVaultOwner.trim()
-		if (accountAddress === undefined || selectedVaultOwner === '') {
-			clearRepLoaders()
-			return
-		}
-
-		if (
-			!doesLoadedSecurityVaultMatchSelection({
-				accountAddress,
-				securityPoolAddress: securityVaultForm.value.securityPoolAddress,
-				securityVaultDetails: securityVaultDetails.value,
-				selectedVaultOwner,
-			}) ||
-			!sameAddress(selectedVaultOwner, accountAddress)
-		) {
-			clearRepLoaders()
-			return
-		}
-
-		const currentSecurityVaultDetails = securityVaultDetails.value
-		if (currentSecurityVaultDetails === undefined) {
-			clearRepLoaders()
-			return
-		}
-
-		void reloadSecurityVaultRepBalance(currentSecurityVaultDetails.repToken, accountAddress).catch(error => {
-			if (!isRecoverableContractReadError(error)) throw error
-		})
-		void reloadSecurityVaultRepAllowance(currentSecurityVaultDetails.repToken, accountAddress, currentSecurityVaultDetails.securityPoolAddress).catch(error => {
-			if (!isRecoverableContractReadError(error)) throw error
-		})
-	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultOwner])
-
 	return {
-		adjustBackingFactor,
-		approveRep,
-		depositRepToVault,
 		loadSecurityVault,
 		loadingSecurityVault: securityVaultLoad.isLoading.value,
-		redeemFees,
-		redeemRepFromVault,
-		securityVaultActiveAction: securityVaultActiveAction.value,
-		securityVaultFeedback: securityVaultFeedback.value,
-		withdrawRep,
-		securityVaultRepApproval: repAllowanceLoader.signal.value,
 		securityVaultDetails: securityVaultDetails.value,
 		securityVaultError: securityVaultError.value,
 		securityVaultForm: securityVaultForm.value,
 		securityVaultMissing: lastEffectiveVaultSelectionKey.current === effectiveVaultSelectionKey && securityVaultMissing.value,
-		walletRepBalanceAttoRep: repBalanceLoader.signal.value.value,
-		walletRepBalanceError: repBalanceLoader.signal.value.error,
-		walletRepBalanceLoading: repBalanceLoader.signal.value.loading,
-		securityVaultQueuedOperations: queuedOperations.operations,
-		securityVaultResult: queuedOperations.operations.find(result => result.hash === securityVaultResult.value?.hash) ?? securityVaultResult.value,
 		setSecurityVaultForm: (updater: (current: SecurityVaultFormState) => SecurityVaultFormState) => {
 			updateSecurityVaultForm(updater)
 		},
 	}
 }
 
-export function useSecurityVaultOperations(parameters: UseSecurityVaultOperationsParameters): ReturnType<typeof useSecurityVaultOperationsWithDependencies<SecurityVaultProductionWriteClient>>
-export function useSecurityVaultOperations<TWriteClient>(parameters: UseSecurityVaultOperationsParameters, dependencies: UseSecurityVaultOperationsDependencies<TWriteClient>): ReturnType<typeof useSecurityVaultOperationsWithDependencies<TWriteClient>>
-export function useSecurityVaultOperations<TWriteClient>(parameters: UseSecurityVaultOperationsParameters, dependencies?: UseSecurityVaultOperationsDependencies<TWriteClient>) {
-	if (dependencies === undefined) return useSecurityVaultOperationsWithDependencies(parameters, defaultUseSecurityVaultOperationsDependencies)
+export function useSecurityVaultOperations(parameters: UseSecurityVaultOperationsParameters, dependencies: UseSecurityVaultOperationsDependencies = defaultUseSecurityVaultOperationsDependencies) {
 	return useSecurityVaultOperationsWithDependencies(parameters, dependencies)
 }

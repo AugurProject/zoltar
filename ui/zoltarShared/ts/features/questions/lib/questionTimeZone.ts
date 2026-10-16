@@ -1,3 +1,5 @@
+import * as marketCopy from '../../../copy/market.js'
+
 const MILLISECONDS_PER_SECOND = 1000n
 // ECMAScript Date supports +/- 8.64e15 ms around the epoch.
 const MAX_DATE_TIMESTAMP_SECONDS = 8_640_000_000_000n
@@ -69,11 +71,30 @@ function formatUtcOffset(offsetMinutes: number) {
 	return `UTC${sign}${hours}${minutes === 0 ? '' : `:${pad(minutes)}`}`
 }
 
-/** Labels a zone with its offset at the given instant, e.g. `Europe/Helsinki, UTC+3`, or just `UTC`. */
+/**
+ * @internal Exported for unit tests; the UI uses `formatQuestionTimeZoneLabel`.
+ * Labels a zone with its offset at the given instant, e.g. `Europe/Helsinki, UTC+3`, or just `UTC`.
+ */
 export function formatTimeZoneLabel(timeZone: string, date: Date) {
 	const offset = formatUtcOffset(getTimeZoneOffsetMinutes(date, timeZone))
 	if (timeZone === 'UTC' || timeZone === 'Etc/UTC') return offset
 	return `${timeZone}, ${offset}`
+}
+
+/**
+ * Labels the zone the time inputs use with the offset in effect at the chosen times, not today's offset. A blank input
+ * falls back to the other one, then to `now`; when the start and end fall on different offsets (across a daylight saving
+ * change), both are named.
+ */
+export function formatQuestionTimeZoneLabel(timeZone: string, { endTimestamp, now, startTimestamp }: { endTimestamp: bigint | undefined; now: Date; startTimestamp: bigint | undefined }) {
+	const start = startTimestamp === undefined ? undefined : toDate(startTimestamp)
+	const end = endTimestamp === undefined ? undefined : toDate(endTimestamp)
+	if (start !== undefined && end !== undefined) {
+		const startOffset = formatUtcOffset(getTimeZoneOffsetMinutes(start, timeZone))
+		const endOffset = formatUtcOffset(getTimeZoneOffsetMinutes(end, timeZone))
+		if (startOffset !== endOffset) return `${timeZone}, ${marketCopy.formatStartAndEndUtcOffsets(startOffset, endOffset)}`
+	}
+	return formatTimeZoneLabel(timeZone, end ?? start ?? now)
 }
 
 /** Formats one instant as wall-clock time in `timeZone` and in UTC, with the zone's label at that instant. */

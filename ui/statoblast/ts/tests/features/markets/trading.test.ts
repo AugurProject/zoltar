@@ -152,6 +152,30 @@ void describe('trading helpers', () => {
 		expect(getTradingMintGuardMessage({ ...mintGuardInput, ethBalanceAttoEth: TOKEN_PRECISION, mintAmountInput: '0.99' })).toBeUndefined()
 	})
 
+	void test('names a missing mint or redeem amount instead of disabling without a reason', () => {
+		const mintGuardInput = {
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			settlementCollateralAttoEth: 0n,
+			ethBalanceAttoEth: TOKEN_PRECISION,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			shareTokenSupplyAttoShares: 0n,
+			totalPoolHeldAttoRep: 0n,
+			mintingCapacityAttoEth: 5n * TOKEN_PRECISION,
+		} as const
+		for (const mintAmountInput of ['', ' ', '0']) expect(getTradingMintGuardMessage({ ...mintGuardInput, mintAmountInput })).toBe('Enter a mint amount.')
+		const redeemGuardInput = {
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			settlementCollateralAttoEth: 10n * TOKEN_PRECISION,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingDetails: false,
+			shareBalances: { invalidAttoShares: TOKEN_PRECISION, noAttoShares: TOKEN_PRECISION, yesAttoShares: TOKEN_PRECISION },
+			shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
+		} as const
+		for (const redeemAmountInput of ['', '0']) expect(getTradingRedeemCompleteSetGuardMessage({ ...redeemGuardInput, redeemAmountInput })).toBe('Enter a redeem amount.')
+	})
+
 	void test('explains that an escalation game pauses minting before reporting capacity', () => {
 		expect(
 			getTradingMintGuardMessage({

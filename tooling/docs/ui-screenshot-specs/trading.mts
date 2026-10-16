@@ -5,7 +5,7 @@ const seededPool = '0x5e4EDB416494DbB62DD8C76E849aDee8e3c44d49'
 const openSeededPool: readonly UiScreenshotStep[] = [{ fill: 'Search markets', value: seededPool }, { click: 'Open security pool' }, { waitForText: 'Question end' }]
 const openFirstMarket: readonly UiScreenshotStep[] = openSeededPool
 const openSeededPoolForCreation: readonly UiScreenshotStep[] = [{ fill: 'Search security pools', value: seededPool }, { click: 'Open security pool' }, { waitForText: 'Question end' }]
-const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [...openSeededPoolForCreation, { waitForText: 'Conditional Yes price' }, { fill: 'Amount', value: '0.01' }, { fill: 'Conditional Yes price', value: '70' }, { waitForText: 'You receive ≈' }, { waitForEnabled: 'Create market and add liquidity' }]
+const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [...openSeededPoolForCreation, { waitForText: 'Yes price if not Invalid' }, { fill: 'Amount', value: '0.01' }, { fill: 'Yes price if not Invalid', value: '70' }, { waitForText: 'You receive ≈' }, { waitForEnabled: 'Create market and add liquidity' }]
 const travelOneYear: readonly UiScreenshotStep[] = [{ click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+1 year' }, { waitForEnabled: '+1 year' }, { click: 'Hide details' }]
 // The trade panel scrolls inside the viewport, so panel shots use a taller window.
 const tradePanel: UiScreenshotCrop = { selector: '.market-ticket__panel' }
@@ -18,10 +18,10 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		id: 'markets',
 		app: 'trading',
 		scenario: 'trading-funded',
-		steps: [...openSeededPool, { click: '← All markets' }, { waitForText: 'Conditional price' }],
-		expectText: ['Markets', 'Conditional price', 'TRADING OPEN'],
+		steps: [...openSeededPool, { click: '← All markets' }, { waitForText: 'Price if not Invalid' }],
+		expectText: ['Markets', 'Price if not Invalid', 'TRADING OPEN'],
 		viewport: pageViewport,
-		crop: { selector: '.entity-card', containing: 'Conditional price' },
+		crop: { selector: '.entity-card', containing: 'Price if not Invalid' },
 		usedBy: ['tutorials/trading-first-trade.html'],
 	},
 	{
@@ -39,7 +39,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'trading',
 		scenario: 'trading-funded',
 		steps: [...openFirstMarket, { click: 'Sell' }, { waitForText: 'Shares to sell' }, { fill: 'Shares to sell', value: '0.001' }, { waitForEnabled: 'Sell Yes' }],
-		expectText: ['Shares to sell', 'Max', 'Average price', 'Invalid used', 'Minimum received', 'Sell Yes'],
+		expectText: ['Shares to sell', 'You hold 0.005 Yes', 'Max', 'Average price', '48.68%', 'Invalid used', 'Minimum received', 'Maximum sold', '2.48%', 'Sell Yes'],
 		viewport: tallViewport,
 		crop: tradePanel,
 		usedBy: ['tutorials/trading-first-trade.html', 'how-to/trading-exit-a-position.html'],
@@ -92,9 +92,9 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		scenario: 'deployed',
 		route: '#/create-market',
 		steps: initializeAtSeventyPercent,
-		expectText: ['MARKET NOT CREATED', 'Create market', 'Amount', 'Conditional Yes price', 'You provide', 'You receive ≈', 'Create market and add liquidity'],
+		expectText: ['MARKET NOT CREATED', 'Create market', 'Amount', 'Yes price if not Invalid', 'You provide', 'You receive ≈', 'Create market and add liquidity'],
 		viewport: pageViewport,
-		crop: { selector: '.section-block', containing: 'Conditional Yes price' },
+		crop: { selector: '.section-block', containing: 'Yes price if not Invalid' },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{

@@ -59,8 +59,8 @@ describe('useStatoblastUrlState', () => {
 		return () => requireState(hookState)
 	}
 
-	test('recovers from oversized universe URLs and renders the maximum uint256 identity', async () => {
-		const overflow = 1n << 256n
+	test('recovers from oversized universe URLs and renders the maximum uint248 identity', async () => {
+		const overflow = 1n << 248n
 		const maximum = overflow - 1n
 		window.history.replaceState({}, '', `/?universe=${overflow}#/pools?universe=0x${overflow.toString(16)}`)
 		let hookState: UseUrlStateState | undefined

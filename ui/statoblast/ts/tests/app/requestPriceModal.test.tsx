@@ -431,6 +431,46 @@ test.each(['edit', 'button'] as const)('allows another price request after a fai
 	}
 })
 
+test('keeps a prepared request when only the live oracle fee changes, and retries with the fee current at the retry', async () => {
+	const dom = installDomEnvironment()
+	const requestValues: bigint[] = []
+	let failNext = false
+	const onConfirm = async (request: RequestPriceReview, signal?: AbortSignal) => {
+		requestValues.push(request.requestValueAttoEth)
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([{ ...step, ethValueAttoEth: request.requestValueAttoEth, title: 'Request new price' }])
+		if (!failNext) return
+		controller.startWithoutReview(0)
+		controller.failed({ kind: 'error', message: 'The oracle fee increased. Review the request again before sending.' })
+	}
+	const rendered = await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		expect(requestValues).toEqual([12n])
+		// A new block moves the fee; the prepared request stays in place instead of preparing again.
+		await act(() => render(<RequestPriceModal {...props} review={{ ...review, requestValueAttoEth: 13n }} onConfirm={onConfirm} />, rendered.container))
+		await settle()
+		expect(requestValues).toEqual([12n])
+		// Editing the price starts a new attempt, which sends the fee current at that moment.
+		failNext = true
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } }))
+		await settle()
+		expect(requestValues).toEqual([12n, 13n])
+		await act(() => render(<RequestPriceModal {...props} review={{ ...review, requestValueAttoEth: 15n }} onConfirm={onConfirm} />, rendered.container))
+		await settle()
+		expect(requestValues).toEqual([12n, 13n])
+		failNext = false
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Retry' })))
+		await settle()
+		expect(requestValues).toEqual([12n, 13n, 15n])
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price request after %s during delayed receipt diagnostics', async action => {
 	const dom = installDomEnvironment()
 	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: review.managerAddress }))

@@ -13,7 +13,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
-import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
 import { getVaultNotLiquidatableReason } from '../lib/liquidation.js'
 import { getVaultLiquidationLauncherBlocker } from '../lib/liquidationModalGuards.js'
 import { isOracleManagerPriceUsable } from '../lib/securityVault.js'
@@ -32,7 +32,6 @@ export function SecurityPoolVaultWorkspace({
 	isOnActiveAppChain,
 	liquidationEnabled,
 	onOpenLiquidationModal,
-	onSelectedPoolViewChange,
 	vaultOperations,
 	poolState,
 	repPerEthPrice,
@@ -52,11 +51,10 @@ export function SecurityPoolVaultWorkspace({
 	walletAddress,
 }: {
 	browseEmptyState: ComponentChildren
-	currentPoolOracleManagerDetails: ComponentProps<typeof SecurityVaultSection>['oracleManagerDetails']
+	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	isOnActiveAppChain: boolean
 	liquidationEnabled: boolean
 	onOpenLiquidationModal: SecurityPoolWorkflowRouteContentProps['onOpenLiquidationModal']
-	onSelectedPoolViewChange: SecurityPoolWorkflowRouteContentProps['onSelectedPoolViewChange']
 	vaultOperations: ComponentChildren
 	poolState: PoolState
 	repPerEthPrice: SecurityPoolWorkflowRouteContentProps['repPerEthPrice']
@@ -157,6 +155,7 @@ export function SecurityPoolVaultWorkspace({
 					<SecurityPoolVaultDirectory
 						emptyState={browseEmptyState}
 						pool={selectedPool}
+						poolEnded={poolState?.lifecycleState === 'ended'}
 						renderActions={vault => {
 							if (selectedPool === undefined) return undefined
 							// The connected wallet's own vault can never be liquidated by it, so its row offers no liquidation.
@@ -167,6 +166,7 @@ export function SecurityPoolVaultWorkspace({
 								<>
 									<div className='actions'>
 										<button
+											aria-label={workspaceCopy.formatOpenVaultLabel(vault.vaultAddress)}
 											className='secondary'
 											type='button'
 											onClick={() => {
@@ -178,7 +178,14 @@ export function SecurityPoolVaultWorkspace({
 											{workspaceCopy.openVault}
 										</button>
 										{ownVault ? undefined : (
-											<button aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId} className='secondary' disabled={liquidationBlocker !== undefined} type='button' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}>
+											<button
+												aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId}
+												aria-label={liquidationCopy.formatLiquidateVaultLabel(vault.vaultAddress)}
+												className='secondary'
+												disabled={liquidationBlocker !== undefined}
+												type='button'
+												onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}
+											>
 												{liquidationCopy.liquidateVault}
 											</button>
 										)}
@@ -197,7 +204,6 @@ export function SecurityPoolVaultWorkspace({
 			{showVaultDetails ? (
 				<SecurityVaultSection
 					{...securityVault}
-					compactLayout
 					extraReadinessActions={
 						// The owned vault never offers liquidation, so its launcher is removed rather than shown disabled.
 						selectedVaultIsOwnedByAccount
@@ -205,7 +211,8 @@ export function SecurityPoolVaultWorkspace({
 							: [
 									(() => {
 										const blocker = getLiquidationLauncherBlocker({
-											notLiquidatableReason: getNotLiquidatableReason(selectedVaultDetails === undefined ? undefined : selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, selectedVaultDetails.vaultAddress))),
+											// A vault outside the pool's vault preview is checked against its own loaded details.
+											notLiquidatableReason: getNotLiquidatableReason(selectedVaultDetails === undefined ? undefined : (selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, selectedVaultDetails.vaultAddress)) ?? selectedVaultDetails)),
 											vaultExistsOnchain: selectedVaultExistsOnchain,
 											vaultLoaded: selectedVaultDetails !== undefined,
 										})
@@ -220,19 +227,7 @@ export function SecurityPoolVaultWorkspace({
 									})(),
 								]
 					}
-					autoLoadVault
-					modalFirst
-					onViewPriceOracle={() => onSelectedPoolViewChange('price-oracle')}
-					showIndividualActions={vaultOperations === undefined}
-					onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
-					oracleManagerDetails={currentPoolOracleManagerDetails}
 					poolState={poolState}
-					selectedPoolTotalPoolHeldAttoRep={selectedPool?.totalPoolHeldAttoRep}
-					selectedPoolTotalUnderwritingLimitAttoEth={selectedPool?.totalUnderwritingLimitAttoEth}
-					selectedMarketTitle={selectedPool?.marketDetails.title}
-					showHeader={false}
-					showLookupSection={false}
-					showSecurityPoolAddressInput={false}
 				/>
 			) : undefined}
 			{vaultView === 'selected-vault' ? vaultOperations : undefined}

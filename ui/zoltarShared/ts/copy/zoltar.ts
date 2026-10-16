@@ -6,11 +6,12 @@ export const migrateRep = 'Migrate REP'
 export const alreadyForkedReason = 'This universe has already forked.'
 export const forkQuestionRequiredReason = 'Select a valid fork question to continue.'
 export const forkQuestionTimeLoadingReason = 'Loading chain time…'
+export const questionNotEndedForkReason = 'Only an ended question can fork a universe.'
 export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relativeEndTime: CopyTemplateValue) => `The selected question must end before the universe can fork. It ends ${endTime} (${relativeEndTime}).`
 export const forkEconomicsUnavailableReason = 'Fork burn terms could not be loaded.'
 export const forkRepInsufficientReason = 'Insufficient REP to meet the fork threshold.'
 export const forkRepApprovalRequiredReason = 'Approve enough REP to continue.'
-export const formatForkConfirmation = (permanentBurn: CopyTemplateValue) => `I understand forking permanently burns ${permanentBurn} REP and cannot be undone.`
+export const formatForkConfirmation = (permanentBurn: CopyTemplateValue, migrationCredit: CopyTemplateValue) => `I understand forking permanently burns ${permanentBurn} REP, moves ${migrationCredit} REP to my migration balance, and cannot be undone.`
 export const forkConfirmationUnknownBurn = 'I understand forking permanently burns REP and cannot be undone.'
 export const forkConfirmationRequired = 'Confirm that forking is permanent to continue.'
 export const forkingActionLabel = 'forking the universe'
@@ -18,6 +19,7 @@ export const forkQuestionId = 'Fork question ID'
 export const forkSubmissionPending = 'Forking universe…'
 export const migrationChildUniversesEmpty = 'No child universes available.'
 export const permanentRepBurn = 'Permanent REP burn'
+export const forkMigrationCredit = 'Credited to migration balance'
 
 export const migrationIntro = 'Migrating burns REP in this universe and gives you the same amount of REP in each child universe you select. It cannot be undone.'
 export const migrationProgress = 'Migration steps'
@@ -30,7 +32,7 @@ export const migrationStepToDo = 'To do'
 export const migrationBack = 'Back'
 export const migrationContinue = 'Continue'
 
-export const selectOutcomesDetail = 'Select every child universe that should receive your REP.'
+export const selectOutcomesDetail = 'Select every child universe that should receive your REP. Migrating deploys any that are missing, so deploying first is optional.'
 export const outcomeHeldRep = 'You hold'
 export const outcomeAlreadyMigrated = 'Already migrated'
 export const formatOpenChildUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
@@ -40,6 +42,7 @@ export const outcomeSelectionRequired = 'Select at least one outcome.'
 export const migrationAmountLabel = 'Amount to migrate'
 export const formatUseAllRep = (amount: CopyTemplateValue) => `Use all ${amount}\u00a0REP`
 export const migrationAmountInvalid = 'Enter a valid REP amount.'
+export const migrationAmountRequired = 'Enter an amount to migrate.'
 export const formatMigrationAmountExceeded = (maxAmount: CopyTemplateValue) => `You can migrate at most ${maxAmount}\u00a0REP to these outcomes.`
 export const migrationFromBalance = 'From your migration balance'
 export const migrationFromWallet = 'Burned from your wallet'
@@ -57,6 +60,7 @@ export const formatMigrationSummary = (amount: CopyTemplateValue, outcomes: Copy
 export const migrationIrreversible = 'Burned REP cannot be returned to this universe.'
 export const migrationMintsPerOutcome = 'Every selected child universe mints the full amount to your wallet.'
 export const migratingRepPending = 'Migrating REP…'
+export const migrationReviewRequired = 'Migrate from the Review step.'
 export const migrationCompleteTitle = 'All your REP here is migrated'
 export const migrationCompleteDetail = 'Every child universe has received your full migration balance.'
 export const addChildRepToWalletTitle = 'Add child-universe REP to your wallet'
@@ -73,7 +77,6 @@ export const modelFork = 'Any ended question can fork a universe, once, into one
 export const modelMigrate = 'REP holders migrate their REP into the child universes they back; each child universe has its own REP.'
 export const forkStatus = 'Fork'
 export const notForked = 'Not forked'
-export const universeRep = 'REP in this universe'
 export const migrationStatus = 'Migration'
 export const migrationAfterFork = 'Only after a fork'
 export const migrationNoDeadline = 'Open, no deadline'
@@ -106,3 +109,4 @@ export const forkRepBalanceUnavailableShortReason = 'REP balance could not be lo
 export const selectedOutcomes = 'Selected outcomes'
 export const formatRemoveOutcome = (outcome: CopyTemplateValue) => `Remove ${outcome}`
 export const formatDeployChildUniverse = (outcome: CopyTemplateValue) => `Deploy ${outcome} universe`
+export const childDeploymentPendingReason = 'Wait for the pending universe deployment.'

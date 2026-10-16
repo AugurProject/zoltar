@@ -3,7 +3,7 @@ import { TransactionFundingActionsPlaceholder } from '@zoltar/ui-core-shared/com
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionCopy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { usePreparedOracleOperation } from '../hooks/usePreparedOracleOperation.js'
@@ -44,6 +44,9 @@ export function OracleOperationActions({
 }) {
 	const review = prepared.workflow ?? prepared.retainedWorkflow
 	const fundingApplies = requiresReportFunding || review?.steps.some(step => step.approval !== undefined) === true
+	// Until its steps are prepared, a queued operation names what it waits for: the caller's reason, a failed preparation to retry, or the preparation itself.
+	const unpreparedReason = prepared.retryAvailable ? securityPoolCopy.oracleOperationPreparationFailed : securityPoolCopy.oracleOperationPreparing
+	const actionReason = reason ?? (directExecution ? undefined : unpreparedReason)
 	return (
 		<>
 			<ErrorNotice message={prepared.error} />
@@ -74,7 +77,7 @@ export function OracleOperationActions({
 									onClick={() => {
 										if (directExecution && !disabled && !busy && reason === undefined) void onExecute()
 									}}
-									availability={withWalletBlocker({ disabled: disabled || !directExecution || busy || reason !== undefined, reason: reason ?? (!directExecution ? transactionCopy.prerequisitesRequired : undefined) }, walletBlocker)}
+									availability={withWalletBlocker({ disabled: disabled || !directExecution || busy || reason !== undefined, loading: reason === undefined && !directExecution && !prepared.retryAvailable, reason: actionReason }, walletBlocker)}
 								/>
 								{onCancel === undefined ? undefined : (
 									<div className='actions transaction-step-close'>

@@ -127,6 +127,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', false)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -161,6 +162,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				newQuestionForm: { answerUnit: '', categoricalOutcomes: ['', ''], description: 'Question', endTime: '1735689600', marketType: 'binary', scalarIncrement: '', scalarMax: '', scalarMin: '', startTime: '', title: 'Will this happen?' },
@@ -192,6 +194,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				newQuestionForm: { answerUnit: '', categoricalOutcomes: ['', ''], description: 'Question', endTime: '1735689600', marketType: 'binary', scalarIncrement: '', scalarMax: '', scalarMin: '', startTime: '', title: 'Will this happen?' },
@@ -222,6 +225,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -255,6 +259,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -295,6 +300,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -346,6 +352,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -388,6 +395,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -430,6 +438,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -485,6 +494,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -544,6 +554,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('proxyDeployer', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -586,6 +597,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', false), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -622,8 +634,8 @@ describe('useSecurityPoolCreation', () => {
 	})
 
 	test('createPool succeeds and refreshes state when all preconditions pass', async () => {
-		const submittedParameters: Array<{ initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }> = []
-		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }) => {
+		const submittedParameters: Array<{ initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint; universeId: bigint }> = []
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint; universeId: bigint }) => {
 			submittedParameters.push(parameters)
 			client.onTransactionSubmitted?.('0xabc')
 			return {
@@ -632,12 +644,13 @@ describe('useSecurityPoolCreation', () => {
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
 				statoblastSecurityMultiplierBps: 20_000n,
-				universeId: 0n,
+				universeId: parameters.universeId,
 			} as SecurityPoolCreationResult
 		})
+		const originSecurityPoolExists = mock(async () => false)
 		await setupContractMocks({
 			loadMarketDetails: mock(async () => createMarketDetails({ questionId: '0x0b' })),
-			originSecurityPoolExists: mock(async () => false),
+			originSecurityPoolExists,
 			createSecurityPool,
 		})
 
@@ -652,6 +665,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 7n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -689,7 +703,10 @@ describe('useSecurityPoolCreation', () => {
 		expect(requireState(state).securityPoolCreationFeedback?.status.hash).toBe('0xabc')
 		expect(onTransactionHashes).toEqual(['0xabc'])
 		expect(refreshCalls).toBe(1)
-		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
+		// Origin pools are created in, and checked for duplicates in, the active universe.
+		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n, universeId: 7n }])
+		expect(originSecurityPoolExists.mock.calls.at(-1)?.slice(1)).toEqual([11n, 20_000n, 10_000_000_000n, 7n])
+		expect(requireState(state).securityPoolResult?.universeId).toBe(7n)
 		expect(createSecurityPool.mock.calls[0]?.[2]).toBeUndefined()
 		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ title: 'Create security pool' })
 	})
@@ -705,6 +722,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -749,6 +767,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -771,7 +790,7 @@ describe('useSecurityPoolCreation', () => {
 			})
 
 			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
-			expect(requireState(state).securityPoolError).toBe('Rejected in wallet.')
+			expect(requireState(state).securityPoolError).toBe('Canceled in wallet.')
 			const reviewSignal = requireState(state).securityPoolReviewAbortSignal
 			expect(requireState(state).securityPoolReviewAbortSignal).toBeUndefined()
 			expect(embeddedTransactionSteps.value).toBeUndefined()
@@ -813,6 +832,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -875,6 +895,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: false,
 				onTransactionFinished: () => undefined,
@@ -940,6 +961,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: false,
 				onTransactionFinished: () => undefined,
@@ -1003,6 +1025,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionPresented: () => undefined,
@@ -1078,6 +1101,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,
@@ -1157,6 +1181,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionPresented: () => undefined,
@@ -1233,6 +1258,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionPresented: () => undefined,
@@ -1324,6 +1350,7 @@ describe('useSecurityPoolCreation', () => {
 			useSecurityPoolCreation,
 			{
 				accountAddress: zeroAddress,
+				activeUniverseId: 0n,
 				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
 				enabled: true,
 				onTransactionFinished: () => undefined,

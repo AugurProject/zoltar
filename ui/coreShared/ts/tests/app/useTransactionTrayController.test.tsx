@@ -178,7 +178,7 @@ describe('useTransactionTrayController', () => {
 				if (outcome === 'confirmed') {
 					controller.onTransactionSubmitted(depositHash)
 					controller.onTransactionPresented({ hash: depositHash, title: 'REP deposited', tone: 'success' })
-				} else controller.onTransactionFailed('Rejected in wallet.', { kind: 'rejected', requestKey })
+				} else controller.onTransactionFailed('Canceled in wallet.', { kind: 'rejected', requestKey })
 				controller.onTransactionFinished(requestKey)
 			})
 

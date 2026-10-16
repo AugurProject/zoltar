@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { formatSecurityPoolPageSummary, getPoolStateFilter, getPoolStateLabel, getSecurityPoolStatusBadgeLabel, getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, getPoolStateFilter, getPoolStateLabel, getSecurityPoolStatusBadgeLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolLabels.js'
 
 void describe('security pool lifecycle label', () => {
 	void test('derives fork-aware status badge labels', () => {
@@ -19,17 +19,6 @@ void describe('security pool lifecycle label', () => {
 		for (const lifecycleState of ['operational', 'ended', 'poolForked', 'forkMigration', 'forkTruthAuction'] as const) expect(getPoolStateLabel(getPoolStateFilter(lifecycleState))).toBe(getSecurityPoolStatusBadgeLabel({ hasForkActivity: false, lifecycleState }))
 		expect(getPoolStateFilter('poolForked')).toBe('forkMigration')
 		expect(getPoolStateLabel('ended')).toBe('Finalized')
-	})
-
-	void test('selects vault launcher blocker copy outside the copy layer', () => {
-		expect(getVaultLauncherWalletReason('claim-fees', 'withdraw')).toBe('Connect a wallet before claiming fees.')
-		expect(getVaultLauncherWalletReason('deposit-rep', 'withdraw')).toBe('Connect a wallet before depositing REP.')
-		expect(getVaultLauncherWalletReason('rep-exit', 'redeem')).toBe('Connect a wallet before redeeming REP.')
-		expect(getVaultLauncherWalletReason('rep-exit', 'withdraw')).toBe('Connect a wallet before withdrawing REP.')
-		expect(getVaultLauncherVaultOwnerReason('claim-fees', 'withdraw')).toBe('Select your own vault to claim fees.')
-		expect(getVaultLauncherVaultOwnerReason('deposit-rep', 'withdraw')).toBe('Select your own vault to deposit REP.')
-		expect(getVaultLauncherVaultOwnerReason('rep-exit', 'redeem')).toBe('Select your own vault to redeem REP.')
-		expect(getVaultLauncherVaultOwnerReason('rep-exit', 'withdraw')).toBe('Select your own vault to withdraw REP.')
 	})
 
 	void test('selects count grammar outside the copy layer', () => {

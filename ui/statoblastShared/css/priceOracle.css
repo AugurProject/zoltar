@@ -40,6 +40,13 @@
 	gap: var(--space-4);
 }
 
+/* A price warning sits directly under its field, like the field's own error and hint. */
+.initial-price-input {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
 .price-request-estimate-prompt {
 	min-block-size: 1lh;
 	margin: 0;

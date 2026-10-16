@@ -27,7 +27,12 @@ import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { QuestionDraftPreview } from './QuestionDraftPreview.js'
 import { QuestionTypeOptions } from './QuestionTypeOptions.js'
-import { formatTimeZoneLabel, getBrowserTimeZone } from '../lib/questionTimeZone.js'
+import { UseForForkAction } from './UseForForkAction.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import type { ExistingQuestionCheck } from '../hooks/useExistingQuestionCheck.js'
+import { getForkQuestionTimingReason } from '../lib/questionForkHandoff.js'
+import { formatQuestionTimeZoneLabel, getBrowserTimeZone } from '../lib/questionTimeZone.js'
+import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 
 const MARKET_TYPES: readonly MarketFormState['marketType'][] = ['binary', 'categorical', 'scalar']
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
@@ -35,6 +40,10 @@ type QuestionCreateSectionProps = {
 	allowedMarketTypes?: readonly MarketFormState['marketType'][]
 	accountAddress: Address | undefined
 	canUseForFork: boolean
+	/** The lookup of the question this draft would create; an existing question blocks Create, since the contract rejects duplicates. */
+	existingQuestionCheck?: ExistingQuestionCheck | undefined
+	/** Why the selected universe cannot take a fork question right now, such as unreadable universe details. */
+	forkUnavailableReason?: string | undefined
 	formDisabled?: boolean
 	hasForked: boolean
 	isOnActiveAppChain: boolean
@@ -75,6 +84,8 @@ export function QuestionCreateSection({
 	allowedMarketTypes = ['binary', 'categorical', 'scalar'],
 	accountAddress,
 	canUseForFork,
+	existingQuestionCheck,
+	forkUnavailableReason,
 	formDisabled = false,
 	hasForked,
 	isOnActiveAppChain,
@@ -105,8 +116,15 @@ export function QuestionCreateSection({
 	const scalarInputsValid = questionFormValidation.fieldErrors.scalarIncrement === undefined && questionFormValidation.fieldErrors.scalarMax === undefined && questionFormValidation.fieldErrors.scalarMin === undefined
 	const scalarCreatePreviewDetails = getScalarCreatePreviewDetails(questionForm, scalarInputsValid)
 	const selectedQuestionTitle = selectedQuestionDetails === undefined ? commonCopy.question : getQuestionTitle(selectedQuestionDetails)
-	const draftOutcomeItems = getDraftOutcomeLabels(questionForm, questionFormValidation.fieldErrors.categoricalOutcomes).map((outcome, outcomeIndex) => ({
-		key: `${outcomeIndex}-${outcome}`,
+	// Only an ended question can fork, so the created question's end time decides; while its details load, that is the reason.
+	const useForForkReason = (() => {
+		if (forkUnavailableReason !== undefined) return forkUnavailableReason
+		if (selectedQuestionDetails === undefined) return loadingZoltarQuestions ? commonCopy.questionDetailsLoadingLabel : marketCopy.questionDetailsUnavailable
+		return getForkQuestionTimingReason(selectedQuestionDetails.endTime, currentTimestamp)
+	})()
+	// Index keys keep each chip mounted while its outcome is edited.
+	const draftOutcomeItems = getDraftOutcomeLabels(questionForm).map((outcome, outcomeIndex) => ({
+		key: outcomeIndex.toString(),
 		label: outcome,
 		tone: isInvalidOutcomeLabel(outcome) ? ('warning' as const) : ('default' as const),
 	}))
@@ -121,20 +139,26 @@ export function QuestionCreateSection({
 	const timingRelationshipErrorId = 'market-create-timing-error'
 	const timeZoneHelpId = 'market-create-time-zone'
 	const timingDescribedBy = timingRelationshipError === undefined ? timeZoneHelpId : `${timingRelationshipErrorId} ${timeZoneHelpId}`
-	const timeZoneLabel = formatTimeZoneLabel(timeZone, new Date())
-	const canCreateQuestion = accountAddress !== undefined && isOnActiveAppChain && !questionCreating && questionFormValidation.isValid
+	const timeZoneLabel = formatQuestionTimeZoneLabel(timeZone, { endTimestamp: questionForm.endTime.trim() === '' ? undefined : tryParseTimestampInput(questionForm.endTime), now: new Date(), startTimestamp: questionForm.startTime.trim() === '' ? undefined : tryParseTimestampInput(questionForm.startTime) })
+	const existingQuestion = existingQuestionCheck?.status === 'existing' ? existingQuestionCheck.question : undefined
+	const checkingExistingQuestion = existingQuestionCheck?.status === 'checking'
+	const canCreateQuestion = accountAddress !== undefined && isOnActiveAppChain && !questionCreating && questionFormValidation.isValid && existingQuestion === undefined && !checkingExistingQuestion
+	const createQuestionReason = (() => {
+		if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		if (!questionFormValidation.isValid) return questionFormValidation.notice
+		if (existingQuestion !== undefined) return marketCopy.questionAlreadyExistsReason
+		if (checkingExistingQuestion) return marketCopy.checkingExistingQuestion
+		return undefined
+	})()
 	const submitAction =
 		submitActionOverride === undefined
 			? {
 					availability: withActiveAppChainWalletBlocker(
 						{
 							disabled: !canCreateQuestion,
-							reason: (() => {
-								if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-								if (!isOnActiveAppChain) return getWrongNetworkReason()
-								if (questionFormValidation.isValid) return undefined
-								return questionFormValidation.notice
-							})(),
+							loading: createQuestionReason === marketCopy.checkingExistingQuestion,
+							reason: createQuestionReason,
 						},
 						{ accountAddress, isOnActiveAppChain },
 					),
@@ -144,6 +168,8 @@ export function QuestionCreateSection({
 					pendingLabel: marketCopy.createQuestionPendingLabel,
 				}
 			: submitActionOverride
+	// The submitted draft stays visible but locked until its transaction settles, so the confirmed question matches what is shown.
+	const editorDisabled = formDisabled || submitAction.pending
 	const showEndedQuestionWarning = questionFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(questionForm, currentTimestamp)
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined || scalarCreatePreviewTick.trim() === '') return
@@ -175,18 +201,16 @@ export function QuestionCreateSection({
 					actions={
 						<div className='actions'>
 							{canUseForFork ? (
-								<button
-									aria-label={hasForked ? marketCopy.formatUniverseAlreadyForkedLabel(selectedQuestionTitle, questionResult.questionId) : marketCopy.formatUseForForkLabel(selectedQuestionTitle, questionResult.questionId)}
-									className='secondary'
-									disabled={hasForked}
-									onClick={() => {
-										if (hasForked) return
+								<UseForForkAction
+									hasForked={hasForked}
+									onUse={() => {
 										onUseQuestionForFork(questionResult.questionId)
 										onOpenForkTab()
 									}}
-								>
-									{hasForked ? marketCopy.universeAlreadyForked : marketCopy.useForFork}
-								</button>
+									questionId={questionResult.questionId}
+									questionTitle={selectedQuestionTitle}
+									reason={useForForkReason}
+								/>
 							) : undefined}
 							{renderResultActions?.({ marketType: questionResult.marketType, questionId: questionResult.questionId, questionTitle: selectedQuestionTitle })}
 							<button className='secondary' onClick={onResetQuestion}>
@@ -226,8 +250,8 @@ export function QuestionCreateSection({
 							submitAction.onSubmit()
 						}}
 					>
-						<fieldset className='question-create-editor' disabled={formDisabled}>
-							<QuestionTypeOptions allowedMarketTypes={marketTypes} disabled={formDisabled} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
+						<fieldset className='question-create-editor' disabled={editorDisabled}>
+							<QuestionTypeOptions allowedMarketTypes={marketTypes} disabled={editorDisabled} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
 
 							<FormField id='market-create-title' label={marketCopy.title} required>
 								<FormInput
@@ -338,10 +362,18 @@ export function QuestionCreateSection({
 											required
 										/>
 									</FormField>
-									<label className='field'>
-										<span>{commonCopy.answerUnit}</span>
-										<FormInput value={questionForm.answerUnit} onInput={event => onQuestionFormChange({ answerUnit: event.currentTarget.value })} placeholder={marketCopy.answerUnitPlaceholder} />
-									</label>
+									<FormField id='market-create-scalarMax' label={marketCopy.scalarMax} required>
+										<FormInput
+											id='market-create-scalarMax'
+											aria-label={marketCopy.scalarMax}
+											error={getVisibleFieldError('scalarMax')}
+											value={questionForm.scalarMax}
+											onBlur={() => markFieldTouched('scalarMax')}
+											onInput={event => onQuestionFormChange({ scalarMax: event.currentTarget.value })}
+											placeholder={marketCopy.scalarMaxExample}
+											required
+										/>
+									</FormField>
 								</div>
 							) : undefined}
 
@@ -359,18 +391,10 @@ export function QuestionCreateSection({
 											required
 										/>
 									</FormField>
-									<FormField id='market-create-scalarMax' label={marketCopy.scalarMax} required>
-										<FormInput
-											id='market-create-scalarMax'
-											aria-label={marketCopy.scalarMax}
-											error={getVisibleFieldError('scalarMax')}
-											value={questionForm.scalarMax}
-											onBlur={() => markFieldTouched('scalarMax')}
-											onInput={event => onQuestionFormChange({ scalarMax: event.currentTarget.value })}
-											placeholder={marketCopy.scalarMaxExample}
-											required
-										/>
-									</FormField>
+									<label className='field'>
+										<span>{commonCopy.answerUnit}</span>
+										<FormInput value={questionForm.answerUnit} onInput={event => onQuestionFormChange({ answerUnit: event.currentTarget.value })} placeholder={marketCopy.answerUnitPlaceholder} />
+									</label>
 								</div>
 							) : undefined}
 							{questionForm.marketType === 'scalar' ? <UserMessage placement='field' detail={marketCopy.scalarResolutionHelpText} /> : undefined}
@@ -393,6 +417,25 @@ export function QuestionCreateSection({
 								<div className='actions'>
 									<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
 								</div>
+							)}
+							{existingQuestion === undefined ? undefined : (
+								<ReadOnlyDetailAccordion title={marketCopy.existingQuestion}>
+									<Question question={existingQuestion} abbreviateIdentifier />
+									{canUseForFork ? (
+										<div className='actions existing-question-actions'>
+											<UseForForkAction
+												hasForked={hasForked}
+												onUse={() => {
+													onUseQuestionForFork(existingQuestion.questionId)
+													onOpenForkTab()
+												}}
+												questionId={existingQuestion.questionId}
+												questionTitle={getQuestionTitle(existingQuestion)}
+												reason={forkUnavailableReason ?? getForkQuestionTimingReason(existingQuestion.endTime, currentTimestamp)}
+											/>
+										</div>
+									) : undefined}
+								</ReadOnlyDetailAccordion>
 							)}
 							<ErrorNotice message={visibleQuestionError} />
 						</div>

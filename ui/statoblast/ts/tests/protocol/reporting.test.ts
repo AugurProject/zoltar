@@ -72,6 +72,17 @@ function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 	return peaks
 }
 
+// The pool state that bounds vault-funded reports: no commitments, so the whole vault backing can be reported.
+const VAULT_REPORTING_LIMIT_READS: Readonly<Record<string, unknown>> = {
+	getTotalPoolHeldAttoRep: 1_000n,
+	lastPrice: 10n ** 18n,
+	minimumVaultRepDepositAttoRep: 0n,
+	openOraclePriceCoordinator: zeroAddress,
+	statoblastSecurityMultiplierBps: 20_000n,
+	totalRepBackingUnits: 1_000n,
+	totalUnderwritingLimitAttoEth: 0n,
+}
+
 // Mocks the reads behind loadReportingDetails for an active escalation game; deposit pages come from the supplied reader.
 function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number, startIndex: bigint) => unknown) {
 	const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
@@ -109,6 +120,7 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 				if (!Array.isArray(args) || typeof args[0] !== 'number' || typeof args[1] !== 'bigint') throw new Error('Expected deposit outcome args')
 				return getDepositsByOutcome(args[0], args[1])
 			}
+			if (request.functionName in VAULT_REPORTING_LIMIT_READS) return VAULT_REPORTING_LIMIT_READS[request.functionName]
 			throw new Error(`Unexpected readContract function: ${request.functionName}`)
 		}),
 	} as unknown as Parameters<typeof loadReportingDetails>[0]
@@ -446,6 +458,7 @@ describe('reporting protocol client', () => {
 					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
 					return args[0] === 1 ? [{ amountAttoRep: escrowedRep, cumulativeAmountAttoRep: escrowedRep, depositor: viewerAddress }] : []
 				}
+				if (request.functionName in VAULT_REPORTING_LIMIT_READS) return VAULT_REPORTING_LIMIT_READS[request.functionName]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]
@@ -518,6 +531,7 @@ describe('reporting protocol client', () => {
 					}
 					return []
 				}
+				if (request.functionName in VAULT_REPORTING_LIMIT_READS) return VAULT_REPORTING_LIMIT_READS[request.functionName]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]
@@ -632,6 +646,7 @@ describe('reporting protocol client', () => {
 					}
 					return []
 				}
+				if (request.functionName in VAULT_REPORTING_LIMIT_READS) return VAULT_REPORTING_LIMIT_READS[request.functionName]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]
@@ -667,6 +682,7 @@ describe('reporting protocol client', () => {
 					return 0n
 				}
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName in VAULT_REPORTING_LIMIT_READS) return VAULT_REPORTING_LIMIT_READS[request.functionName]
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]

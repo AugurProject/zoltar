@@ -8,6 +8,7 @@ import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtil
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { ForkZoltarSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkZoltarSection.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
@@ -79,7 +80,7 @@ function findApproveButton(container: HTMLElement) {
 }
 
 const isForkButtonDisabled = () => within(document.body).getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')
-const FORK_CONFIRMATION = /^I understand forking permanently burns .*REP and cannot be undone\.$/
+const FORK_CONFIRMATION = /^I understand forking permanently burns .*REP(, moves .*REP to my migration balance,)? and cannot be undone\.$/
 const confirmFork = () => fireEvent.click(within(document.body).getByRole('checkbox', { name: FORK_CONFIRMATION }))
 function isForkConfirmed() {
 	const confirmation = within(document.body).getByRole('checkbox', { name: FORK_CONFIRMATION })
@@ -154,6 +155,20 @@ describe('ForkZoltarSection', () => {
 		expect(document.body.querySelectorAll('.tx-action-group .tx-action-notice').length).toBe(1)
 	})
 
+	test('says no browser wallet was found instead of asking to connect when the browser has no wallet', async () => {
+		const walletActions = { hasInjectedWallet: false, isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
+		const rendered = await renderIntoDocument(
+			<WalletActionsProvider walletActions={walletActions}>
+				<ForkZoltarSection {...createProps({ accountAddress: undefined, zoltarForkApproval: { error: undefined, loading: false, value: 0n }, zoltarForkRepBalanceAttoRep: 1000n, zoltarUniverse: createUniverse() })} />
+			</WalletActionsProvider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+
+		expect(findApproveButton(document.body).hasAttribute('disabled')).toBe(true)
+		expect(document.body.textContent).toContain('No browser wallet found. Install or enable one to connect.')
+		expect(document.body.textContent).not.toContain('Connect wallet to continue.')
+	})
+
 	test('describes automatically loading fork data without asking for a manual refresh', async () => {
 		await renderSection(
 			createProps({
@@ -188,11 +203,13 @@ describe('ForkZoltarSection', () => {
 		expect(findApproveButton(renderedComponent.container).hasAttribute('disabled')).toBe(false)
 	})
 
-	test('shows only the required and permanently burned REP amounts before submission', async () => {
+	test('shows the required, permanently burned, and migration-credited REP amounts before submission', async () => {
 		await renderSection(createProps())
 
 		expect(document.body.textContent).toContain('Fork threshold100.00 REP')
 		expect(document.body.textContent).toContain('Permanent REP burn20.00 REP')
+		// The rest of the threshold is not lost: it becomes the forker's migration balance.
+		expect(document.body.textContent).toContain('Credited to migration balance80.00 REP')
 		expect(document.body.textContent).not.toContain('Migration Custody Credit')
 		expect(document.body.textContent).not.toContain('Resulting REP Balance')
 		expect(document.body.textContent).not.toContain('Technical Details')
@@ -357,7 +374,7 @@ describe('ForkZoltarSection', () => {
 		const onForkZoltar = mock(() => undefined)
 		await renderSection(createProps({ onForkZoltar }))
 
-		const confirmation = within(document.body).getByRole('checkbox', { name: /^I understand forking permanently burns 20\.00\sREP and cannot be undone\.$/ })
+		const confirmation = within(document.body).getByRole('checkbox', { name: /^I understand forking permanently burns 20\.00\sREP, moves 80\.00\sREP to my migration balance, and cannot be undone\.$/ })
 		expect(isForkButtonDisabled()).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Fork universe').reason).toBe('Confirm that forking is permanent to continue.')
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Fork universe' }))

@@ -4,7 +4,10 @@ import { tradeTicketModel, type TradeTicketInputs } from '../../features/live/tr
 import type { TradeMode } from '../../features/live/useTransactionWorkflow.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 
-/** An open, initialized market: one ETH backs one complete set and the pool holds 100 YES and 100 NO. */
+/** Room left to mint in the open-market fixtures: a million ETH, so only tests that lower it meet the capacity limit. */
+const AMPLE_MINTING_CAPACITY_ATTO_ETH = 10n ** 24n
+
+/** An open, initialized market: one ETH backs one complete set, the pool holds 100 YES and 100 NO, and the security pool can still mint far more than any test trade. */
 export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMarket {
 	return {
 		pool: `0x${'22'.repeat(20)}` as Address,
@@ -27,7 +30,7 @@ export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMark
 		totalUnderwritingLimitAttoEth: 1n,
 		feeEligibleUnderwritingLimitAttoEth: 1n,
 		mintingCapacityCeilingAttoEth: 1n,
-		availableMintingCapacityAttoEth: 1n,
+		availableMintingCapacityAttoEth: AMPLE_MINTING_CAPACITY_ATTO_ETH,
 		feeBps: 30n,
 		tradingStatus: 0,
 		questionOutcome: 3,
@@ -45,7 +48,7 @@ export function etherScaleMarketFixture(overrides: Partial<LiveMarket> = {}): Li
 		shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 		settlementCollateralAttoEth: 10n * 10n ** 18n,
 		mintingCapacityCeilingAttoEth: 2n,
-		availableMintingCapacityAttoEth: 1n,
+		availableMintingCapacityAttoEth: AMPLE_MINTING_CAPACITY_ATTO_ETH,
 		yesReserve: 50n * 10n ** 18n,
 		noReserve: 50n * 10n ** 18n,
 		lpTotalSupply: 50n * 10n ** 18n,
@@ -109,6 +112,7 @@ export function ticketModelFor(market: LiveMarket, mode: TradeMode, amount: stri
 		walletConnected: true,
 		networkMismatchReason: undefined,
 		walletEthAttoEth: 10n ** 24n,
+		walletEthState: 'ready',
 		marketClosed: false,
 		nowSeconds: 1n,
 		acknowledgedImpactBps: undefined,

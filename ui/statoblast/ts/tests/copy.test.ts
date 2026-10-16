@@ -7,11 +7,6 @@ import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as reportingCopy from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 
-test('vault operation copy uses accounting roles', () => {
-	expect(securityPoolCopy.formatWithdrawingRep('REP')).toBe('Withdrawing REP…')
-	expect(securityPoolCopy.settingCommitmentLimitPending).toBe('Setting commitment limit…')
-})
-
 test('fork migration empty states are complete templates', () => {
 	expect(forkAuctionCopy.formatNoUnresolvedDeposits('No')).toBe('No unresolved deposits remain on No for this wallet.')
 	expect(forkAuctionCopy.formatNoClaimableParentEscalationDeposits('Yes')).toBe('No parent deposits on Yes are currently available for a direct claim by this wallet.')
@@ -40,10 +35,6 @@ test('security-pool count summaries own their complete prose', () => {
 	expect(securityPoolCopy.vaultRegistryScanEmpty).toBe('No active vaults found within the scan limit.')
 	expect(securityPoolCopy.formatNoCurrentVaultPositions(1n)).toBe('No active vaults among 1 known vault.')
 	expect(securityPoolCopy.formatNoCurrentVaultPositions(3n)).toBe('No active vaults among 3 known vaults.')
-})
-
-test('security-pool dynamic values use nonbreaking separators', () => {
-	expect(securityPoolCopy.formatInsufficientRepBalanceDetail('12')).toContain('12\u00a0REP')
 })
 
 test('liquidation actions and pending labels use sentence case independently of titles', () => {

@@ -28,6 +28,10 @@ async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['rev
 type Workflow = NonNullable<typeof transactionSteps.value>
 type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; failedHash?: string | undefined; submissionOutstanding?: boolean; steps?: Workflow['steps'] | undefined; workflow?: Workflow | undefined; plan?: FailedPricePlan }
 
+function getReviewIdentity(review: NonNullable<RequestPriceModalProps['review']>) {
+	return `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}`
+}
+
 function getRunSubmission(run: PriceRequestRun | undefined) {
 	const workflow = transactionSteps.peek()
 	const steps = run?.steps ?? (run !== undefined && workflow?.reviewSignal === run.signal ? workflow.steps : undefined)
@@ -61,7 +65,18 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ignoredFailure = useRef<typeof presentation>()
 	const failureDismissed = presentation?.tone === 'error' && isGlobalTransactionDismissed(presentation)
 	const previousFailureDismissed = useRef(failureDismissed)
+	// The review carries the live oracle fee. Each attempt takes the fee current when it starts (opening, a price edit or quote, or a retry), so a retry after the fee rises sends the new fee, while a fee change alone leaves a prepared request in place.
+	const latestReview = useRef(review)
+	latestReview.current = review
+	const [attemptFee, setAttemptFee] = useState<{ reviewIdentity: string; requestValueAttoEth: bigint }>()
+	const takeCurrentFee = () => {
+		const currentReview = latestReview.current
+		setAttemptFee(currentReview === undefined ? undefined : { reviewIdentity: getReviewIdentity(currentReview), requestValueAttoEth: currentReview.requestValueAttoEth })
+	}
+	const attemptRequestValueAttoEth = review !== undefined && attemptFee?.reviewIdentity === getReviewIdentity(review) ? attemptFee.requestValueAttoEth : undefined
+	const requestValueAttoEth = attemptRequestValueAttoEth ?? review?.requestValueAttoEth
 	const retryPreparation = () => {
+		takeCurrentFee()
 		if (!running) {
 			run.current?.cancel()
 			const tracked = run.current
@@ -93,7 +108,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const validPrice = parsed !== undefined && parsed > 0n && parsed < 2n ** 256n
 	const priceError = price !== '' && !validPrice ? poolCopy.manualInitialPriceError : undefined
 	const proposedPrice = parsed
-	const key = review === undefined ? undefined : `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}:${review.requestValueAttoEth}:${price}:${retry}`
+	const key = review === undefined ? undefined : `${getReviewIdentity(review)}:${requestValueAttoEth}:${price}:${retry}`
 	const valid = review !== undefined && canRequest && confirmationGuardMessage === undefined && validPrice && !fetching
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
@@ -119,9 +134,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 
 	useLayoutEffect(() => {
 		if (review === undefined) return
-		const reviewKey = `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}`
+		const reviewKey = getReviewIdentity(review)
 		if (previousReviewKey.current === reviewKey) return
 		previousReviewKey.current = reviewKey
+		takeCurrentFee()
 		if (run.current !== undefined) run.current.failedHash = undefined
 		quoteAttempt.current += 1
 		setFetching(false)
@@ -186,7 +202,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		[],
 	)
 	useEffect(() => {
-		if (!valid || review === undefined || key === undefined || running || attempted === key || preparationPaused || failureLatched) return
+		if (!valid || review === undefined || requestValueAttoEth === undefined || key === undefined || running || attempted === key || preparationPaused || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
 			const releasePreparation = registerTransactionPreparationScope(cancellation.signal)
@@ -226,14 +242,14 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			run.current = { key, signal: cancellation.signal, cancel }
 			setAttempted(key)
 			setRunning(true)
-			void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice }, cancellation.signal)).finally(() => {
+			void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice, requestValueAttoEth }, cancellation.signal)).finally(() => {
 				releasePreparation()
 				if (mounted.current && run.current?.signal === cancellation.signal) setRunning(false)
 				if (embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
 			})
 		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice, preparationPaused, failureLatched])
+	}, [valid, review, requestValueAttoEth, key, running, attempted, proposedPrice, preparationPaused, failureLatched])
 	const close = () => {
 		if (completedRequest) dismissGlobalTransaction(presentation)
 		quoteAttempt.current += 1
@@ -255,6 +271,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			if (attempt !== quoteAttempt.current || !mounted.current) return
 			const latest = latestPreparationState.current
 			if (latest.failureLatched || latest.preparationPaused) latest.retryPreparation()
+			else takeCurrentFee()
 			// A quote carries 18 decimals; a few significant digits keep the editable price readable and well within the report's dispute tolerance.
 			setPrice(formatOpenOraclePriceInput(value, 18))
 		} catch (error) {
@@ -268,9 +285,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			{quoteError === undefined ? undefined : <UserMessage placement='field' as='span' className='visually-hidden' tone='error' announcement='assertive' detail={quoteError} />}
 			<OpenOraclePriceInput
 				value={price}
+				referencePrice={review?.referenceRepPerEthPrice}
 				disabled={completedRequest}
 				onInput={value => {
 					if (submittedHash !== undefined || failureLatched || preparationPaused) retryPreparation()
+					else takeCurrentFee()
 					run.current?.cancel()
 					quoteAttempt.current += 1
 					setFetching(false)
@@ -303,7 +322,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview
-							requestValue={review?.requestValueAttoEth}
+							requestValue={requestValueAttoEth}
 							prompt={estimatePrompt}
 							failedPlan={failedPlan}
 							onRetry={canRetry ? retryPreparation : undefined}

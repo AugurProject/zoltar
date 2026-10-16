@@ -33,10 +33,13 @@ export function SelectedPoolLiquidationModal({
 	liquidationReceiverVaultSummaryResolved,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
+	liquidationTargetVaultSummary,
+	liquidationTargetVaultSummaryError,
 	liquidationTimeoutMinutes,
 	loadingLiquidationApproval,
 	loadingLiquidationFundingPreview,
 	loadingLiquidationReceiverVaultSummary,
+	loadingLiquidationTargetVaultSummary,
 	loadingPoolOracleManager,
 	onLiquidationAmountChange,
 	onLiquidationApprovalIdChange,
@@ -45,6 +48,7 @@ export function SelectedPoolLiquidationModal({
 	onLoadLiquidationApproval,
 	onLoadLiquidationFundingPreview,
 	onLoadLiquidationReceiverVaultSummary,
+	onLoadLiquidationTargetVaultSummary,
 	onLoadPoolOracleManager,
 	onQueueLiquidation,
 	onSelectedPoolViewChange,
@@ -99,7 +103,11 @@ export function SelectedPoolLiquidationModal({
 			securityPoolOverviewResult={securityPoolOverviewResult}
 			walletBalanceAttoEth={accountState.ethBalanceAttoEth}
 			receiverVaultSummary={liquidationReceiverVaultSummary ?? selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationReceiverVault))}
-			targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault))}
+			// The pool lists a bounded vault preview, so a target outside it uses the summary the dialog reads on demand.
+			targetVaultSummary={selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, liquidationTargetVault)) ?? liquidationTargetVaultSummary}
+			liquidationTargetVaultSummaryError={liquidationTargetVaultSummaryError}
+			loadingLiquidationTargetVaultSummary={loadingLiquidationTargetVaultSummary}
+			onLoadLiquidationTargetVaultSummary={onLoadLiquidationTargetVaultSummary}
 			onLiquidationAmountChange={onLiquidationAmountChange}
 			onLiquidationReceiverVaultChange={onLiquidationReceiverVaultChange}
 			onLiquidationApprovalIdChange={onLiquidationApprovalIdChange}

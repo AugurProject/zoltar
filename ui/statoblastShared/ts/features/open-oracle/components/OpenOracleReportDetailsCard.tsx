@@ -1,6 +1,5 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -19,7 +18,7 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -57,6 +56,7 @@ type OpenOracleReportDetailsCardProps = {
 	onSelectedReportModalChange: (modal: SelectedReportModal) => void
 	onSettleReport: () => void
 	onWithdrawOpenOracleBalance: OpenOracleSectionProps['onWithdrawOpenOracleBalance']
+	onWrapDisputeWeth: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
 	openOracleActiveWithdrawalBalance: OpenOracleSectionProps['openOracleActiveWithdrawalBalance']
 	openOracleDisputeSubmission: OpenOracleSectionProps['openOracleDisputeSubmission']
@@ -113,6 +113,7 @@ export function OpenOracleReportDetailsCard({
 	onSelectedReportModalChange,
 	onSettleReport,
 	onWithdrawOpenOracleBalance,
+	onWrapDisputeWeth,
 	openOracleActiveAction,
 	openOracleActiveWithdrawalBalance,
 	openOracleDisputeSubmission,
@@ -228,12 +229,32 @@ export function OpenOracleReportDetailsCard({
 	]
 	const hasWithdrawableBalance = withdrawableBalanceItems.some(item => (item.amount ?? 0n) > 0n)
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
-	let withdrawableBalancesContent: ComponentChildren
-	if (openOracleWithdrawableBalances === undefined) {
-		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError === undefined ? <UserMessage className='detail' loading detail={openOracleCopy.loadingOracleBalances} /> : undefined
-	} else {
-		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>
+	const withdrawableBalancesContent = openOracleWithdrawableBalances === undefined ? undefined : <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>
+	// Each balance keeps its withdraw button in the same order; a reason every button shares is stated once for the group.
+	const sharedWithdrawReason = (() => {
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		if (openOracleWithdrawableBalances === undefined) return openOracleWithdrawableBalancesError === undefined ? openOracleCopy.loadingOracleBalances : openOracleCopy.oracleBalancesUnavailable
+		if (!hasWithdrawableBalance) return openOracleCopy.noOracleBalances
+		return undefined
+	})()
+	const getWithdrawBalanceAvailability = (amount: bigint | undefined) => {
+		if (sharedWithdrawReason !== undefined) return { disabled: true, reason: sharedWithdrawReason }
+		if ((amount ?? 0n) === 0n) return { disabled: true, reason: openOracleCopy.nothingToWithdraw }
+		return { disabled: openOracleWithdrawalBalanceChecking || openOracleActiveAction !== undefined, reason: undefined }
 	}
+	const withdrawBalanceButtons = withdrawableBalanceItems.map(item => (
+		<TransactionActionButton
+			key={item.key}
+			idleLabel={openOracleCopy.withdrawBalance(item.symbol)}
+			pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(item.symbol) : openOracleCopy.withdrawingBalance(item.symbol)}
+			onClick={() => {
+				if (item.amount !== undefined) onWithdrawOpenOracleBalance(item.key, item.amount)
+			}}
+			pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === item.key}
+			tone='secondary'
+			availability={getWithdrawBalanceAvailability(item.amount)}
+		/>
+	))
 	const selectedReportActionProps = {
 		disputeSubmission: openOracleDisputeSubmission,
 		isConnected,
@@ -243,6 +264,7 @@ export function OpenOracleReportDetailsCard({
 		onDisputeReport,
 		onOpenOracleFormChange,
 		onSettleReport,
+		onWrapDisputeWeth,
 		openOracleActiveAction,
 		openOracleForm,
 		openOracleTokenAccessState,
@@ -293,25 +315,12 @@ export function OpenOracleReportDetailsCard({
 					<ErrorNotice message={openOracleWithdrawableBalancesError} />
 					<ErrorNotice message={openOracleWithdrawalReviewMessage?.message} />
 					{withdrawableBalancesContent}
-					{openOracleWithdrawableBalances !== undefined && !hasWithdrawableBalance && !openOracleWithdrawableBalancesLoading && openOracleWithdrawableBalancesError === undefined ? <UserMessage className='detail' detail={openOracleCopy.noOracleBalances} /> : undefined}
-					{!hasWithdrawableBalance ? undefined : (
-						<div className='actions'>
-							{withdrawableBalanceItems
-								.filter(item => (item.amount ?? 0n) > 0n)
-								.map(item => (
-									<TransactionActionButton
-										key={item.key}
-										idleLabel={openOracleCopy.withdrawBalance(item.symbol)}
-										pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(item.symbol) : openOracleCopy.withdrawingBalance(item.symbol)}
-										onClick={() => {
-											if (item.amount !== undefined) onWithdrawOpenOracleBalance(item.key, item.amount)
-										}}
-										pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === item.key}
-										tone='secondary'
-										availability={{ disabled: !isOnActiveAppChain || openOracleWithdrawalBalanceChecking || openOracleActiveAction !== undefined, reason: isOnActiveAppChain ? undefined : getWrongNetworkReason() }}
-									/>
-								))}
-						</div>
+					{sharedWithdrawReason === undefined ? (
+						<div className='actions'>{withdrawBalanceButtons}</div>
+					) : (
+						<TransactionActionGroup loading={sharedWithdrawReason === openOracleCopy.loadingOracleBalances} message={sharedWithdrawReason}>
+							{withdrawBalanceButtons}
+						</TransactionActionGroup>
 					)}
 				</SectionBlock>
 			)}

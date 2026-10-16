@@ -1,5 +1,5 @@
 import { createContext } from 'preact'
-import { useContext, useId, useRef, useState } from 'preact/hooks'
+import { useContext, useId, useRef } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { LoadingText } from './LoadingText.js'
 import { InlineHint } from './InlineHint.js'
@@ -9,7 +9,8 @@ import { transactionSteps } from '../transactions/transactionSteps.js'
 import { transactionScopesOverlap, unscopedTransaction, type TransactionScope } from '../transactions/transactionScope.js'
 import * as transactionCopy from '../copy/transaction.js'
 import * as transactionStepsCopy from '../copy/transactionSteps.js'
-import { useWalletActionFix } from './WalletActionFix.js'
+import { useNoInjectedWalletReason, useWalletActionFix } from './WalletActionFix.js'
+import { useFocusRetainingDisabled } from '../hooks/useFocusRetainingDisabled.js'
 
 const TransactionActionGroupContext = createContext<{ noticeId: string; hasNotice: boolean } | undefined>(undefined)
 
@@ -44,7 +45,8 @@ export function TransactionActionButtonLockProvider({ children, lock }: { childr
 	return <TransactionActionButtonLockContext.Provider value={lock}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
-export function TransactionActionGroup({ children, id, loading = false, message }: { children: ComponentChildren; id?: string | undefined; loading?: boolean; message: string | undefined }) {
+/** `announce={false}` keeps a transient message, such as an estimate catching up with typing, out of the live region; the buttons still name it. */
+export function TransactionActionGroup({ announce = true, children, id, loading = false, message }: { announce?: boolean; children: ComponentChildren; id?: string | undefined; loading?: boolean; message: string | undefined }) {
 	const generatedId = useId()
 	const noticeId = id ?? generatedId
 	const reviewActive = useContext(TransactionReviewActiveContext)
@@ -52,7 +54,7 @@ export function TransactionActionGroup({ children, id, loading = false, message 
 	return (
 		<TransactionActionGroupContext.Provider value={{ noticeId, hasNotice: notice !== undefined }}>
 			<fieldset className='tx-action-group' disabled={reviewActive}>
-				<div className='tx-action-feedback' aria-live='polite' aria-atomic='true'>
+				<div className='tx-action-feedback' aria-live={announce ? 'polite' : 'off'} aria-atomic='true'>
 					{notice === undefined ? undefined : <InlineHint id={noticeId} loading={loading} message={notice} />}
 				</div>
 				<div className='actions'>{children}</div>
@@ -91,15 +93,14 @@ export function TransactionActionButton({
 	// The initiating button keeps its own pending state; other actions on the same object wait for the transaction.
 	const blockedByPendingRequest = !pending && isTransactionActionLockedBy(lock, actionScope)
 	const isDisabled = reviewActive || disabled || pending || availability?.disabled === true || blockedByPendingRequest
-	let disabledReason = isDisabled ? availability?.reason : undefined
+	const noInjectedWalletReason = useNoInjectedWalletReason(availability)
+	let disabledReason = isDisabled ? (noInjectedWalletReason ?? availability?.reason) : undefined
 	// A transaction still waiting for its receipt (possibly restored after a reload) locks this object; say so instead of
 	// resting disabled without a reason. An open review or wallet prompt is transient and already in front of the user.
 	if (disabledReason === undefined && blockedByPendingRequest && !lock.promptOpen) disabledReason = transactionCopy.waitingForPendingTransaction
 	if (reviewActive) disabledReason = transactionStepsCopy.useTransactionButtons
-	// Native disabling moves keyboard focus to the page, so a button that holds focus (such as the one whose transaction is
-	// now pending) stays focusable and is only marked aria-disabled; the click guard below still blocks it.
-	const [holdsFocus, setHoldsFocus] = useState(false)
-	const focusableWhileDisabled = isDisabled && (pending || holdsFocus)
+	// A button that holds focus, or whose own transaction is pending, stays focusable and is only marked aria-disabled.
+	const { buttonProps, guardClick } = useFocusRetainingDisabled(isDisabled, { keepFocusable: pending })
 	const ownActionButtonRef = useRef<HTMLButtonElement>(null)
 	const actionButtonRef = sharedActionButtonRef ?? ownActionButtonRef
 	// A disconnected wallet or wrong network offers its connect or switch fix where the reason would be. Wallet blockers only exist on disabled availability, so they never coincide with a scoped transaction lock.
@@ -114,30 +115,10 @@ export function TransactionActionButton({
 		const ids = [externalReasonId, resolvedInlineHint === undefined && walletFixId === undefined ? undefined : disabledReasonId].filter(id => id !== undefined)
 		return ids.length === 0 ? undefined : ids.join(' ')
 	})()
-	const handleClick = (event: MouseEvent) => {
-		if (isDisabled) {
-			// An aria-disabled submit button must not submit its form either.
-			event.preventDefault()
-			return
-		}
-		onClick()
-	}
 	return (
 		<div className={`tx-action ${className}`.trim()}>
 			<div className='tx-action-row'>
-				<button
-					ref={actionButtonRef}
-					aria-label={ariaLabel}
-					aria-busy={showPending}
-					aria-disabled={focusableWhileDisabled ? 'true' : undefined}
-					className={`tx-action-button ${tone}`}
-					type={type}
-					onClick={handleClick}
-					onFocus={() => setHoldsFocus(true)}
-					onBlur={() => setHoldsFocus(false)}
-					disabled={isDisabled && !focusableWhileDisabled}
-					aria-describedby={describedBy}
-				>
+				<button ref={actionButtonRef} aria-label={ariaLabel} aria-busy={showPending} className={`tx-action-button ${tone}`} type={type} {...buttonProps} onClick={guardClick(onClick)} aria-describedby={describedBy}>
 					<span className='tx-action-button-labels'>
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof idleLabel === 'string' ? idleLabel : undefined} />
 						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof pendingLabel === 'string' ? pendingLabel : undefined} />

@@ -21,6 +21,11 @@ export function usePortfolioQueries() {
 	return { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, setPortfolioEntries, portfolioBalanceState, setPortfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, portfolioRefreshNonce, setPortfolioRefreshNonce }
 }
 
+/** Resolves the given revalidation waiters. */
+function release(waiters: ReadonlyArray<() => void>) {
+	for (const resolve of waiters) resolve()
+}
+
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
 
 /** A background refresh may have committed a newer market object while its balances were loading; keep the newest one. */
@@ -62,7 +67,11 @@ export function usePortfolioRefreshEffects({
 	const currentMarkets = useRef(visibleMarkets)
 	currentMarkets.current = visibleMarkets
 	const portfolioQueue = useRef<{ key: string; read: (market: LiveMarket) => Promise<PortfolioBalanceEntry> }>()
-	const balanceRead = useRef<{ key: string; request: RequestIdentity }>()
+	const balanceRead = useRef<{ key: string; request: RequestIdentity; waiters: Array<() => void> }>()
+	const [balanceRevalidationNonce, setBalanceRevalidationNonce] = useState(0)
+	const handledBalanceRevalidation = useRef(balanceRevalidationNonce)
+	// Callers waiting for a requested re-read of the selected market's balances; the read it starts releases them when it settles.
+	const balanceRevalidationWaiters = useRef<Array<() => void>>([]).current
 
 	useEffect(() => {
 		if (route !== 'portfolio') {
@@ -138,11 +147,17 @@ export function usePortfolioRefreshEffects({
 	}, [account, configuration, marketRevision, queries.portfolioRefreshNonce, route, selectedUniverseId, walletContextInvalidated])
 
 	useEffect(() => {
+		// A requested revalidation (after a confirmed trade) must not join a read that may have started before the change it waits for.
+		const forced = handledBalanceRevalidation.current !== balanceRevalidationNonce
+		handledBalanceRevalidation.current = balanceRevalidationNonce
+		// Waiters belong to the requested read; an effect run for an earlier render leaves them for it.
+		const requested = forced ? balanceRevalidationWaiters.splice(0) : []
 		if (route === 'portfolio') {
 			balanceRequests.invalidate()
 			queries.setBalances(undefined)
 			queries.setBalanceState('disconnected')
 			queries.setBalanceError(undefined)
+			release(requested)
 			return
 		}
 		if (configuration === undefined || account === undefined || selected === undefined || selected.loadError !== undefined) {
@@ -150,16 +165,20 @@ export function usePortfolioRefreshEffects({
 			queries.setBalances(undefined)
 			queries.setBalanceState(walletContextInvalidated || selected?.loadError !== undefined ? 'error' : 'disconnected')
 			queries.setBalanceError(selected?.loadError)
+			release(requested)
 			return
 		}
 		const scope = shareBalanceScope(selected)
 		const readKey = `${account}|${scope.pool}|${scope.shareToken}|${scope.invalidTokenId.toString()}|${selected.pair ?? ''}`
 		const inFlight = balanceRead.current
-		if (inFlight !== undefined && inFlight.key === readKey && balanceRequests.isCurrent(inFlight.request)) return
+		if (!forced && inFlight !== undefined && inFlight.key === readKey && balanceRequests.isCurrent(inFlight.request)) return
 		const request = balanceRequests.begin()
-		balanceRead.current = { key: readKey, request }
+		// A newer read answers for whoever waited on the read it replaces.
+		const read = { key: readKey, request, waiters: [...requested, ...(inFlight?.waiters.splice(0) ?? [])] }
+		balanceRead.current = read
 		const settle = () => {
-			if (balanceRead.current?.request === request) balanceRead.current = undefined
+			if (balanceRead.current === read) balanceRead.current = undefined
+			release(read.waiters.splice(0))
 		}
 		// Balances already loaded for this exact pool stay visible while they revalidate; anything else shows a loading state.
 		const retained = queries.balanceState === 'ready' ? liveBalancesForMarket(queries.balances, selected) : undefined
@@ -170,27 +189,41 @@ export function usePortfolioRefreshEffects({
 		queries.setBalanceError(undefined)
 		void withReadTimeout(services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account)).then(
 			loaded => {
+				if (balanceRequests.isCurrent(request)) {
+					queries.setBalances(loaded)
+					queries.setBalanceState('ready')
+					queries.setBalanceError(undefined)
+				}
 				settle()
-				if (!balanceRequests.isCurrent(request)) return
-				queries.setBalances(loaded)
-				queries.setBalanceState('ready')
-				queries.setBalanceError(undefined)
 			},
 			error => {
+				if (balanceRequests.isCurrent(request)) {
+					queries.setBalanceState('error')
+					queries.setBalanceError(publicErrorMessage(error, workflowCopy.balanceRefreshFailed))
+				}
 				settle()
-				if (!balanceRequests.isCurrent(request)) return
-				queries.setBalanceState('error')
-				queries.setBalanceError(publicErrorMessage(error, workflowCopy.balanceRefreshFailed))
 			},
 		)
-	}, [account, configuration, route, selected, walletContextInvalidated])
+	}, [account, configuration, route, selected, walletContextInvalidated, balanceRevalidationNonce])
 
 	useEffect(
 		() => () => {
 			portfolioBalanceRequests.invalidate()
 			portfolioQueue.current = undefined
 			balanceRequests.invalidate()
+			// Nothing reads balances once unmounted, so nobody may be left waiting for a read.
+			release(balanceRevalidationWaiters.splice(0))
+			release(balanceRead.current?.waiters.splice(0) ?? [])
 		},
 		[balanceRequests, portfolioBalanceRequests],
 	)
+
+	return {
+		/** Re-reads the selected market's balances even while a read is running, and resolves once that read settles, whatever its result. */
+		revalidateBalances: () =>
+			new Promise<void>(resolve => {
+				balanceRevalidationWaiters.push(resolve)
+				setBalanceRevalidationNonce(value => value + 1)
+			}),
+	}
 }

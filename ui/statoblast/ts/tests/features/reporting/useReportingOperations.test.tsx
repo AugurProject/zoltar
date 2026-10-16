@@ -63,6 +63,8 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 2n,
 		viewerVaultRepBackingAttoRep: 10n,
+		// No commitments or vault minimum, so the whole vault backing can be reported.
+		viewerVaultReportingLimits: { minimumVaultRepDepositAttoRep: 0n, repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, totalPoolHeldAttoRep: 10n ** 20n, totalRepBackingUnits: 10n ** 20n, totalUnderwritingLimitAttoEth: 0n, underwritingLimitAttoEth: 0n, vaultRepBackingUnits: 8n },
 		...overrides,
 	}
 }
@@ -452,6 +454,45 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingForm.selectedOutcome).toBe('yes')
 	})
 
+	test('reportOutcome rejects vault REP the pool keeps for the vault commitment', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
+		// 2 ETH of commitments at 1 REP/ETH and 2× keep 3 REP of the 5 REP backing in the pool, less the rounding margin.
+		const details = createReportingDetails(securityPoolAddress, {
+			contributionFunding: 'vault',
+			forkThresholdAttoRep: 200n * ATTO_REP,
+			nonDecisionThresholdAttoRep: 100n * ATTO_REP,
+			viewerPoolHeldVaultRepBackingAttoRep: 5n * ATTO_REP,
+			viewerVaultDisputeStakedAttoRep: 0n,
+			viewerVaultReportingLimits: {
+				minimumVaultRepDepositAttoRep: 0n,
+				repPerEthPrice: ATTO_REP,
+				statoblastSecurityMultiplierBps: 20_000n,
+				totalPoolHeldAttoRep: 20n * ATTO_REP,
+				totalRepBackingUnits: 20n * ATTO_REP,
+				totalUnderwritingLimitAttoEth: 2n * ATTO_REP,
+				underwritingLimitAttoEth: 2n * ATTO_REP,
+				vaultRepBackingUnits: 5n * ATTO_REP,
+			},
+		})
+		const reportOutcomeInSecurityPool = mock(async () => {
+			throw new Error('Must not write')
+		})
+		let state: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			next => {
+				state = next
+			},
+			createReportingOperationsDependencies({ loadReportingDetails: mock(async () => details), reportOutcomeInSecurityPool }),
+		)
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(() => requireHookState(state).setReportingForm(current => ({ ...current, contributionFunding: 'vault', securityPoolAddress, selectedOutcome: 'no', reportAmount: '3' })))
+		await act(async () => await requireHookState(state).onReportOutcome())
+		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+		const detail = requireHookState(state).reportingFeedback?.status.detail
+		expect(typeof detail === 'string' ? detail.replaceAll('\u00a0', ' ') : detail).toBe('Only 1.999999999999999998 REP is available in your pool vault. Reduce the amount or select Wallet REP.')
+	})
+
 	test.each([true, false])('reportOutcome marks fork-triggering reports for review only when the displayed report already triggered the fork (displayed: %s)', async displayedTriggersFork => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
@@ -674,7 +715,7 @@ describe('useReportingOperations', () => {
 		expect(execute.mock.calls[0]?.[5]).toBe(decrease ? 5n : 15n)
 	})
 
-	test('onApproveReportingRep approves the accepted contribution amount for an active ordinary game', async () => {
+	test.each([undefined, 8n * ATTO_REP])('onApproveReportingRep approves the chosen amount, or the accepted contribution by default, for an active ordinary game (%s)', async chosenAmount => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
 			contributionFunding: 'wallet',
@@ -714,12 +755,32 @@ describe('useReportingOperations', () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' }))
 		})
 		await act(async () => {
-			await requireHookState(hookState).onApproveReportingRep()
+			await requireHookState(hookState).onApproveReportingRep(chosenAmount)
 		})
 
 		expect(approveReportingRep).toHaveBeenCalledTimes(1)
-		expect(approveReportingRep.mock.calls[0]?.[4]).toBe(5n * ATTO_REP)
+		expect(approveReportingRep.mock.calls[0]?.[4]).toBe(chosenAmount ?? 5n * ATTO_REP)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('approveReportingRep')
+	})
+
+	test('onApproveReportingRep rejects an amount that does not raise the allowance', async () => {
+		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const details = createReportingDetails(securityPoolAddress, { contributionFunding: 'wallet', nonDecisionThresholdAttoRep: 20n * ATTO_REP, viewerWalletRepAllowanceAttoRep: 3n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
+		const approveReportingRep = mock(async () => {
+			throw new Error('Must not approve')
+		})
+		let state: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			next => {
+				state = next
+			},
+			createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails: mock(async () => details) }),
+		)
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(() => requireHookState(state).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })))
+		await act(async () => await requireHookState(state).onApproveReportingRep(2n * ATTO_REP))
+		expect(approveReportingRep).not.toHaveBeenCalled()
 	})
 
 	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {

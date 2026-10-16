@@ -1,7 +1,20 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import { requiredElementRole } from '../../browser/dom-elements.ts'
-import { captureActivityDetailFocus, captureDisclosureState, decodedActionLabel, handleActivityDetailDrawerEscape, placeActivityDetailDrawer, reconcileTransactionDialogSnapshot, restoreActivityDetailFocus, restoreDisclosureState, urlWithoutLogDetail, visibleActivityLogCount } from '../../browser/activity-detail-dom.ts'
+import {
+	activityDetailRevealTarget,
+	captureActivityDetailFocus,
+	captureDisclosureState,
+	decodedActionLabel,
+	handleActivityDetailDrawerEscape,
+	placeActivityDetailDrawer,
+	placeOrPinActivityDetailDrawer,
+	reconcileTransactionDialogSnapshot,
+	restoreActivityDetailFocus,
+	restoreDisclosureState,
+	urlWithoutLogDetail,
+	visibleActivityLogCount,
+} from '../../browser/activity-detail-dom.ts'
 import {
 	canonicalPageLimit,
 	collectCanonicalPages,
@@ -137,6 +150,52 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	expect(visibleActivityLogCount(feed)).toBe(2)
 })
 
+test('pins a deep-linked drawer above the feed until its row is loaded, across live refreshes', () => {
+	const { document } = new Window()
+	const shell = document.createElement('div')
+	shell.className = 'feed-shell'
+	const feed = document.createElement('div')
+	shell.append(feed)
+	document.body.replaceChildren(shell)
+	const drawer = document.createElement('section')
+	drawer.className = 'event-detail-drawer'
+	drawer.dataset['triggerKey'] = 'deep'
+	const showRows = (keys: readonly string[]) => {
+		feed.replaceChildren(
+			...keys.map(key => {
+				const row = document.createElement('article')
+				row.className = 'log-row'
+				row.dataset['liveKey'] = key
+				return row
+			}),
+		)
+	}
+	showRows(['first', 'second'])
+	expect(placeOrPinActivityDetailDrawer(feed, shell, drawer, false)).toBeUndefined()
+	expect(drawer.isConnected).toBeFalse()
+	expect(placeOrPinActivityDetailDrawer(feed, shell, drawer, true)).toBe('pinned')
+	expect(shell.previousElementSibling).toBe(drawer)
+	expect(drawer.dataset['placement']).toBe('pinned')
+	// A live refresh that still lacks the row keeps the pinned drawer where it is.
+	showRows(['newer', 'first', 'second'])
+	expect(placeOrPinActivityDetailDrawer(feed, shell, drawer, drawer.dataset['placement'] === 'pinned')).toBe('pinned')
+	expect(shell.previousElementSibling).toBe(drawer)
+	// Once its row is loaded, the drawer moves under it.
+	showRows(['first', 'deep', 'second'])
+	expect(placeOrPinActivityDetailDrawer(feed, shell, drawer, drawer.dataset['placement'] === 'pinned')).toBe('row')
+	expect([...feed.children].map(child => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
+	expect(drawer.dataset['placement']).toBeUndefined()
+})
+
+test('brings a deep-linked drawer into view only when it starts outside the upper viewport', () => {
+	const drawerAt = (top: number, placement?: string) => ({ dataset: placement === undefined ? {} : { placement }, getBoundingClientRect: () => ({ top }) })
+	expect(activityDetailRevealTarget(drawerAt(120), 800)).toBeUndefined()
+	expect(activityDetailRevealTarget(drawerAt(700), 800)).toBe('row')
+	expect(activityDetailRevealTarget(drawerAt(2400), 800)).toBe('row')
+	expect(activityDetailRevealTarget(drawerAt(-300), 800)).toBe('row')
+	expect(activityDetailRevealTarget(drawerAt(2400, 'pinned'), 800)).toBe('drawer')
+})
+
 test('Escape closes an activity detail drawer and restores its trigger focus', () => {
 	const { document, KeyboardEvent } = new Window()
 	const trigger = document.createElement('button')
@@ -155,6 +214,31 @@ test('Escape closes an activity detail drawer and restores its trigger focus', (
 	expect(event.defaultPrevented).toBeTrue()
 	expect(drawer.isConnected).toBeFalse()
 	expect(document.activeElement).toBe(trigger)
+})
+
+test('Escape in a field, the site search, or a dialog is left to that control instead of closing the drawer', () => {
+	const { document, KeyboardEvent } = new Window()
+	document.body.innerHTML =
+		'<form id="global-search"><input id="global-search-input" /></form><form id="filters"><input id="event-filter" /><select id="network"></select></form><section class="event-detail-drawer" tabindex="-1"><button id="inside">Copy</button></section><dialog open><button id="dialog-close">Close</button></dialog><button id="row">Row</button>'
+	let closed = 0
+	document.addEventListener('keydown', event => {
+		if (event instanceof KeyboardEvent) handleActivityDetailDrawerEscape(event, () => closed++)
+	})
+	const pressEscape = (selector: string, consume = false) => {
+		const target = document.querySelector(selector)
+		if (target === null) throw new Error(`Missing ${selector}`)
+		if (consume) target.addEventListener('keydown', event => event.preventDefault(), { once: true })
+		target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+	}
+	for (const selector of ['#global-search-input', '#event-filter', '#network', '#dialog-close']) pressEscape(selector)
+	expect(closed).toBe(0)
+	pressEscape('.event-detail-drawer')
+	pressEscape('#inside')
+	pressEscape('#row')
+	expect(closed).toBe(3)
+	// An Escape that another handler already consumed is ignored.
+	pressEscape('#row', true)
+	expect(closed).toBe(3)
 })
 
 test('restores the corresponding focused control after asynchronous event detail replacement', () => {
@@ -597,37 +681,40 @@ test('orders lifecycle evidence by canonical block, transaction, and log positio
 	expect([consumed, released, reserved].sort(compareCanonicalEventPosition).map(event => event.event_name)).toEqual(['LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed'])
 })
 
-test('labels every approval transition field without hiding consumed debt', () => {
-	const maxCumulativeDebtAttoEth = '10'
+test('labels every approval transition field without hiding consumed debt and shows debt in the native currency', () => {
+	const maxCumulativeDebtAttoEth = '5000000000000000000'
 	const maxDebtPerLiquidationAttoEth = '7'
 	const consumedDebtAttoEth = '6'
 	const releasedDebtAttoEth = '2'
 	const resultingAvailableDebtAttoEth = '4'
 	const resultingReservedDebtAttoEth = '0'
 	const resultingConsumedDebtAttoEth = '6'
-	expect(approvalTransitionFields({ maxCumulativeDebtAttoEth, maxDebtPerLiquidationAttoEth })).toEqual([
-		{ label: 'maximum cumulative debt', value: '10', unit: 'attoETH' },
-		{ label: 'maximum debt per liquidation', value: '7', unit: 'attoETH' },
+	expect(approvalTransitionFields({ maxCumulativeDebtAttoEth, maxDebtPerLiquidationAttoEth }, 'SepoliaETH')).toEqual([
+		{ label: 'maximum cumulative debt', value: '5 SepoliaETH' },
+		{ label: 'maximum debt per liquidation', value: '0.000000000000000007 SepoliaETH' },
 	])
 	expect(
-		approvalTransitionFields({
-			consumedDebtAttoEth,
-			releasedDebtAttoEth,
-			resultingAvailableDebtAttoEth,
-			resultingReservedDebtAttoEth,
-			resultingConsumedDebtAttoEth,
-		}),
+		approvalTransitionFields(
+			{
+				consumedDebtAttoEth,
+				releasedDebtAttoEth,
+				resultingAvailableDebtAttoEth,
+				resultingReservedDebtAttoEth,
+				resultingConsumedDebtAttoEth,
+			},
+			'ETH',
+		),
 	).toEqual([
-		{ label: 'consumed debt', value: '6', unit: 'attoETH' },
-		{ label: 'released debt', value: '2', unit: 'attoETH' },
-		{ label: 'resulting available debt', value: '4', unit: 'attoETH' },
-		{ label: 'resulting reserved debt', value: '0', unit: 'attoETH' },
-		{ label: 'resulting consumed debt', value: '6', unit: 'attoETH' },
+		{ label: 'consumed debt', value: '0.000000000000000006 ETH' },
+		{ label: 'released debt', value: '0.000000000000000002 ETH' },
+		{ label: 'resulting available debt', value: '0.000000000000000004 ETH' },
+		{ label: 'resulting reserved debt', value: '0 ETH' },
+		{ label: 'resulting consumed debt', value: '0.000000000000000006 ETH' },
 	])
-	expect(approvalTransitionFields({ receiverVault: '0xvault' })).toEqual([])
-	expect(approvalTransitionFields({ previousNonce: '41', newNonce: '42' })).toEqual([
-		{ label: 'previous nonce', value: '41', unit: '' },
-		{ label: 'new nonce', value: '42', unit: '' },
+	expect(approvalTransitionFields({ receiverVault: '0xvault' }, 'ETH')).toEqual([])
+	expect(approvalTransitionFields({ previousNonce: '41', newNonce: '1042' }, 'ETH')).toEqual([
+		{ label: 'previous nonce', value: '41' },
+		{ label: 'new nonce', value: '1042' },
 	])
 })
 

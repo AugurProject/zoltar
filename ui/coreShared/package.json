@@ -242,6 +242,10 @@
 			"bun": "./ts/tests/loadingText.test.tsx",
 			"default": "./js/tests/loadingText.test.js"
 		},
+		"./tests/localBrowseControls.test.js": {
+			"bun": "./ts/tests/localBrowseControls.test.tsx",
+			"default": "./js/tests/localBrowseControls.test.js"
+		},
 		"./tests/lookupFieldRow.test.js": {
 			"bun": "./ts/tests/lookupFieldRow.test.tsx",
 			"default": "./js/tests/lookupFieldRow.test.js"
@@ -701,10 +705,6 @@
 		"./forms/viewState.js": {
 			"bun": "./ts/forms/viewState.ts",
 			"default": "./js/forms/viewState.js"
-		},
-		"./hooks/useErc20Loader.js": {
-			"bun": "./ts/hooks/useErc20Loader.ts",
-			"default": "./js/hooks/useErc20Loader.js"
 		},
 		"./hooks/useFormState.js": {
 			"bun": "./ts/hooks/useFormState.ts",

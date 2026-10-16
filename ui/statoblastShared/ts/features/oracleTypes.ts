@@ -22,7 +22,7 @@ export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 export type ReportingRouteContentProps = {
 	accountState: AccountState
 	loadingReportingDetails: boolean
-	onApproveReportingRep: () => void
+	onApproveReportingRep: (amountAttoRep?: bigint) => void
 	onLoadReporting: () => void
 	onReportOutcome: () => void
 	onReportingFormChange: (update: Partial<ReportingFormState>) => void
@@ -64,6 +64,7 @@ type OpenOracleRouteContentProps = {
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
 	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => void
+	onWrapDisputeWeth: () => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined

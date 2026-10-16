@@ -33,7 +33,7 @@ void describe('user copy helpers', () => {
 	})
 
 	void test('keeps disconnected wallet guidance concise', () => {
-		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isOnActiveAppChain: true })?.detail).toBe('Install or enable a wallet to continue.')
+		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isOnActiveAppChain: true })?.detail).toBe('No browser wallet found. Install or enable one to connect.')
 		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false, isOnActiveAppChain: true })?.badgeLabel).toBe('No wallet')
 		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isOnActiveAppChain: true })?.badgeLabel).toBe('Connect wallet')
 		expect(getWalletPresentation({ accountAddress: undefined, hasInjectedWallet: true, isOnActiveAppChain: true })?.detail).toBe('Connect wallet to continue.')

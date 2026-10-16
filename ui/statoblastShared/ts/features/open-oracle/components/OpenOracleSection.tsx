@@ -65,6 +65,7 @@ export function OpenOracleSection({
 	onOpenOracleFormChange,
 	onSettleReport,
 	onWithdrawOpenOracleBalance,
+	onWrapDisputeWeth,
 	loadingOpenOracleCreate,
 	openOracleActiveAction,
 	openOracleActiveWithdrawalBalance,
@@ -468,6 +469,7 @@ export function OpenOracleSection({
 							onSelectedReportModalChange={changeSelectedReportModal}
 							onSettleReport={onSettleReport}
 							onWithdrawOpenOracleBalance={onWithdrawOpenOracleBalance}
+							onWrapDisputeWeth={onWrapDisputeWeth}
 							openOracleActiveAction={openOracleActiveAction}
 							openOracleActiveWithdrawalBalance={openOracleActiveWithdrawalBalance}
 							openOracleDisputeSubmission={openOracleDisputeSubmission}

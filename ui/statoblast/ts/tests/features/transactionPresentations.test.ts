@@ -8,11 +8,8 @@ import {
 	createLiquidationTransactionIntent,
 	createSecurityPoolCreationSuccessPresentation,
 	createSecurityPoolCreationTransactionIntent,
-	createSecurityVaultSuccessPresentation,
-	createSecurityVaultTransactionIntent,
 	createTradingSuccessPresentation,
 	createTradingTransactionIntent,
-	getSecurityVaultActionRepAmount,
 } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { createMarketCreationSuccessPresentation } from '@zoltar/ui-zoltar-shared/features/zoltarTransactionPresentations.js'
 import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createReportingSuccessPresentation, createReportingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
@@ -32,10 +29,7 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action'], over
 }
 
 describe('transaction presentations', () => {
-	test('preserves protocol acronym casing and question terminology', () => {
-		expect(createSecurityVaultTransactionIntent('depositRepToVault').submittedTitle).toBe('Deposit REP')
-		expect(createSecurityVaultTransactionIntent('queueWithdrawRep').submittedTitle).toBe('Withdraw REP')
-		expect(createSecurityVaultSuccessPresentation({ action: 'queueWithdrawRep', hash: '0x1234' }).title).toBe('Withdraw REP')
+	test('preserves question terminology', () => {
 		for (const [marketType, expectedLabel] of [
 			['binary', 'Binary'],
 			['categorical', 'Categorical'],
@@ -44,44 +38,6 @@ describe('transaction presentations', () => {
 			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question type')
 			expect(questionTypeRow?.value).toBe(expectedLabel)
 		}
-	})
-
-	test('does not describe an immediately executed target change as still queued', () => {
-		const presentation = createSecurityVaultSuccessPresentation({
-			action: 'setVaultUnderwritingLimit',
-			hash: transactionHash,
-			queuedOperation: { operation: 'setVaultUnderwritingLimit', operationId: 1n, isPendingSlot: false },
-			stagedExecution: { operation: 'setVaultUnderwritingLimit', operationId: 1n, success: true, errorMessage: undefined },
-		})
-		expect(presentation.detail).toBeUndefined()
-	})
-
-	test('renders child REP symbols in vault transaction actions', () => {
-		const context = { repTokenSymbol: 'REP2' }
-		expect(createSecurityVaultTransactionIntent('depositRepToVault', context).submittedTitle).toBe('Deposit REP2')
-		expect(createSecurityVaultTransactionIntent('queueWithdrawRep', context).submittedTitle).toBe('Withdraw REP2')
-		expect(createSecurityVaultSuccessPresentation({ action: 'redeemRepFromVault', hash: '0x1234' }, context).title).toBe('Redeem REP2')
-	})
-
-	test('keeps vault identity in transaction intent rows', () => {
-		const intent = createSecurityVaultTransactionIntent('depositRepToVault', {
-			securityPoolAddress: '0x0000000000000000000000000000000000000001',
-			vaultAddress: '0x0000000000000000000000000000000000000002',
-		})
-		expect(intent.rows?.map(row => row.label)).toEqual(['Security pool address', 'Vault'])
-	})
-
-	test('states the REP amount in vault deposit and withdrawal reviews', () => {
-		const form = { depositAmount: '1200', repWithdrawAmount: '12.5' }
-		const context = { repTokenSymbol: 'REP2', securityPoolAddress: '0x0000000000000000000000000000000000000001', vaultAddress: '0x0000000000000000000000000000000000000002' }
-		const deposit = createSecurityVaultTransactionIntent('depositRepToVault', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('depositRepToVault', form) })
-		const withdrawal = createSecurityVaultTransactionIntent('queueWithdrawRep', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('queueWithdrawRep', form) })
-		expect(deposit.rows?.map(row => row.label)).toEqual(['Amount', 'Security pool address', 'Vault'])
-		expect(deposit.rows?.[0]?.value).toBe('1\u00a0200\u00a0REP2')
-		expect(withdrawal.rows?.[0]).toEqual({ label: 'Amount', value: '12.5\u00a0REP2' })
-		expect(getSecurityVaultActionRepAmount('redeemFees', form)).toBeUndefined()
-		expect(getSecurityVaultActionRepAmount('depositRepToVault', { depositAmount: '', repWithdrawAmount: '' })).toBeUndefined()
-		expect(getSecurityVaultActionRepAmount('queueWithdrawRep', { depositAmount: '', repWithdrawAmount: 'abc' })).toBeUndefined()
 	})
 
 	test('normalizes the security multiplier in security pool creation intents', () => {
@@ -117,14 +73,6 @@ describe('transaction presentations', () => {
 	})
 
 	test('does not present a failed staged execution as a success', () => {
-		const vaultPresentation = createSecurityVaultSuccessPresentation({
-			action: 'queueWithdrawRep',
-			hash: transactionHash,
-			queuedOperation: { operation: 'withdrawRep', operationId: 3n, isPendingSlot: false },
-			stagedExecution: { operation: 'withdrawRep', operationId: 3n, success: false, errorMessage: 'Price is stale' },
-		})
-		expect(vaultPresentation.tone).toBe('error')
-		expect(vaultPresentation.detail).toBe('Price is stale')
 		const liquidationPresentation = createLiquidationSuccessPresentation({
 			action: 'queueLiquidation',
 			hash: transactionHash,

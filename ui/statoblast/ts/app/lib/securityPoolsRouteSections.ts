@@ -19,39 +19,26 @@ type SectionSource<Hook, Props, Handler extends keyof Hook> = Pick<Hook, Extract
 type SectionAccount = { accountState: AccountState }
 
 type VaultOperations = ReturnType<typeof useSecurityVaultOperations>
-type VaultSource = SectionSource<VaultOperations, SecurityVaultRouteContentProps, 'adjustBackingFactor' | 'approveRep' | 'depositRepToVault' | 'loadSecurityVault' | 'redeemFees' | 'redeemRepFromVault' | 'setSecurityVaultForm' | 'withdrawRep'>
+type VaultSource = SectionSource<VaultOperations, SecurityVaultRouteContentProps, 'loadSecurityVault' | 'setSecurityVaultForm'>
 
 export function buildSecurityVaultSectionProps(vault: VaultSource, shared: SectionAccount & RepPerEthPriceProps, selectedPool: ListedSecurityPool | undefined, setVaultAddress: (address: string | undefined) => void): SecurityVaultRouteContentProps {
 	return {
 		accountState: shared.accountState,
 		loadingSecurityVault: vault.loadingSecurityVault,
-		onApproveRep: vault.approveRep,
-		onSetVaultUnderwritingLimit: vault.adjustBackingFactor,
-		onDepositRepToVault: vault.depositRepToVault,
 		onLoadSecurityVault: vault.loadSecurityVault,
-		onRedeemFees: vault.redeemFees,
-		onRedeemRepFromVault: vault.redeemRepFromVault,
 		onSecurityVaultFormChange: update => {
 			if (update.selectedVaultOwner !== undefined && (update.selectedVaultOwner.trim() === '' || isHexAddressInput(update.selectedVaultOwner))) setVaultAddress(update.selectedVaultOwner)
 			vault.setSecurityVaultForm(current => ({ ...current, ...update }))
 		},
-		onWithdrawRep: vault.withdrawRep,
 		repPerEthPrice: shared.repPerEthPrice,
 		repPerEthSource: shared.repPerEthSource,
 		repPerEthSourceUrl: shared.repPerEthSourceUrl,
 		securityPoolVaults: selectedPool?.vaults,
-		securityVaultActiveAction: vault.securityVaultActiveAction,
 		securityVaultDetails: vault.securityVaultDetails,
 		securityVaultError: vault.securityVaultError,
 		securityVaultForm: vault.securityVaultForm,
 		securityVaultMissing: vault.securityVaultMissing,
-		securityVaultQueuedOperations: vault.securityVaultQueuedOperations,
-		securityVaultRepApproval: vault.securityVaultRepApproval,
-		securityVaultResult: vault.securityVaultResult,
 		selectedPoolStatoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
-		walletRepBalanceAttoRep: vault.walletRepBalanceAttoRep,
-		walletRepBalanceError: vault.walletRepBalanceError,
-		walletRepBalanceLoading: vault.walletRepBalanceLoading,
 	}
 }
 
@@ -182,7 +169,7 @@ type Overview = ReturnType<typeof useSecurityPoolsOverview>
 type OverviewSource = SectionSource<
 	Overview,
 	SecurityPoolWorkflowRouteContentProps,
-	'loadLiquidationApproval' | 'loadLiquidationFundingPreview' | 'loadLiquidationReceiverVaultSummary' | 'openLiquidationModal' | 'queueLiquidation' | 'setLiquidationAmount' | 'setLiquidationApprovalId' | 'setLiquidationReceiverVault' | 'setLiquidationTimeoutMinutes'
+	'loadLiquidationApproval' | 'loadLiquidationFundingPreview' | 'loadLiquidationReceiverVaultSummary' | 'loadLiquidationTargetVaultSummary' | 'openLiquidationModal' | 'queueLiquidation' | 'setLiquidationAmount' | 'setLiquidationApprovalId' | 'setLiquidationReceiverVault' | 'setLiquidationTimeoutMinutes'
 >
 type PriceCoordinator = ReturnType<typeof useOpenOraclePriceCoordinator>
 type PriceCoordinatorSource = SectionSource<PriceCoordinator, SecurityPoolWorkflowRouteContentProps, 'executePendingPoolOperation' | 'loadPoolOracleManager' | 'requestPoolPrice'>
@@ -206,10 +193,13 @@ export function buildLiquidationSectionProps(overview: OverviewSource, priceCoor
 		liquidationReceiverVaultSummaryResolved: overview.liquidationReceiverVaultSummaryResolved,
 		liquidationSecurityPoolAddress: overview.liquidationSecurityPoolAddress,
 		liquidationTargetVault: overview.liquidationTargetVault,
+		liquidationTargetVaultSummary: overview.liquidationTargetVaultSummary,
+		liquidationTargetVaultSummaryError: overview.liquidationTargetVaultSummaryError,
 		liquidationTimeoutMinutes: overview.liquidationTimeoutMinutes,
 		loadingLiquidationApproval: overview.loadingLiquidationApproval,
 		loadingLiquidationFundingPreview: overview.loadingLiquidationFundingPreview,
 		loadingLiquidationReceiverVaultSummary: overview.loadingLiquidationReceiverVaultSummary,
+		loadingLiquidationTargetVaultSummary: overview.loadingLiquidationTargetVaultSummary,
 		loadingPoolOracleManager: priceCoordinator.loadingPoolOracleManager,
 		loadingSecurityPools: overview.loadingSecurityPools,
 		onExecutePendingPoolOperation: priceCoordinator.executePendingPoolOperation,
@@ -220,6 +210,7 @@ export function buildLiquidationSectionProps(overview: OverviewSource, priceCoor
 		onLoadLiquidationApproval: overview.loadLiquidationApproval,
 		onLoadLiquidationFundingPreview: overview.loadLiquidationFundingPreview,
 		onLoadLiquidationReceiverVaultSummary: overview.loadLiquidationReceiverVaultSummary,
+		onLoadLiquidationTargetVaultSummary: overview.loadLiquidationTargetVaultSummary,
 		onLoadPoolOracleManager: priceCoordinator.loadPoolOracleManager,
 		onOpenLiquidationModal: overview.openLiquidationModal,
 		onQueueLiquidation: overview.queueLiquidation,

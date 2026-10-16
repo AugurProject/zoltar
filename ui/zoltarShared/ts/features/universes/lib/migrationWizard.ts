@@ -46,6 +46,8 @@ export type MigrationWizardInput = {
 	childUniverses: readonly ZoltarChildUniverseSummary[]
 	/** REP already burned in this universe and waiting to be sent to outcome universes. */
 	migrationBalanceAttoRep: bigint | undefined
+	/** `childUniverses` lists every outcome of the fork. A scalar fork only loads the values the user picked, so other values can still receive REP. */
+	outcomesExhaustive: boolean
 	/** Parent-universe REP needs an ERC-20 approval; child-universe REP is burned directly. */
 	requiresApproval: boolean
 	selectedOutcomeIndexes: readonly bigint[]
@@ -58,7 +60,7 @@ export type MigrationWizard = {
 	fromMigrationBalanceAttoRep: bigint | undefined
 	/** Largest amount that can go to every selected outcome: reusable migration balance plus wallet REP. */
 	maxAmountAttoRep: bigint | undefined
-	/** Every outcome already received the whole migration balance and the wallet holds no REP. */
+	/** Every outcome of the fork already received the whole migration balance and the wallet holds no REP. */
 	migrationComplete: boolean
 	outcomes: MigrationWizardOutcome[]
 	/** Migration balance that every selected outcome can still receive without new wallet REP. */
@@ -94,9 +96,9 @@ export function formatOutcomeList(outcomes: readonly Pick<MigrationWizardOutcome
 
 function deriveAmountStep(input: MigrationWizardInput, hasSelection: boolean, amountAttoRep: bigint | undefined, reusable: bigint | undefined, walletRepToBurn: bigint | undefined, maxAmount: bigint | undefined): Omit<MigrationWizardStep, 'id'> {
 	if (!hasSelection) return { reason: zoltarCopy.outcomeSelectionRequired, status: 'incomplete' }
-	if (input.amountInput.trim() === '') return { reason: undefined, status: 'incomplete' }
+	if (input.amountInput.trim() === '') return { reason: zoltarCopy.migrationAmountRequired, status: 'incomplete' }
 	if (amountAttoRep === undefined) return { reason: zoltarCopy.migrationAmountInvalid, status: 'incomplete' }
-	if (amountAttoRep <= 0n) return { reason: undefined, status: 'incomplete' }
+	if (amountAttoRep <= 0n) return { reason: zoltarCopy.migrationAmountRequired, status: 'incomplete' }
 	if (reusable === undefined || (walletRepToBurn !== undefined && walletRepToBurn > 0n && input.walletRepAttoRep === undefined)) {
 		return input.balancesLoading ? { reason: zoltarCopy.outcomeBalancesLoading, status: 'loading' } : { reason: zoltarCopy.migrationBalancesReadFailed, status: 'blocked' }
 	}
@@ -153,7 +155,7 @@ export function deriveMigrationWizard(input: MigrationWizardInput): MigrationWiz
 	const reviewStep: MigrationWizardStep = firstUnfinished === undefined ? { id: 'review', reason: undefined, status: 'ready' } : { id: 'review', reason: firstUnfinished.reason, status: 'incomplete' }
 
 	const balancesKnown = input.migrationBalanceAttoRep !== undefined && input.walletRepAttoRep !== undefined && outcomes.every(outcome => outcome.alreadyMigratedAttoRep !== undefined)
-	const migrationComplete = balancesKnown && input.walletRepAttoRep === 0n && outcomes.length > 0 && outcomes.every(outcome => outcome.fullyMigrated)
+	const migrationComplete = input.outcomesExhaustive && balancesKnown && input.walletRepAttoRep === 0n && outcomes.length > 0 && outcomes.every(outcome => outcome.fullyMigrated)
 
 	return {
 		amountAttoRep,
