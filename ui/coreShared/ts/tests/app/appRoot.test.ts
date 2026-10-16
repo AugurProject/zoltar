@@ -31,6 +31,10 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 		expect(document.querySelector('.application-brand img')?.getAttribute('alt')).toBe('')
 		expect(within(document.body).getByText('Augur v2 universe')).not.toBeNull()
 		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe', level: 1 })).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Universe', level: 2 })).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Augur v2 universe', level: 3 })).not.toBeNull()
+		expect(within(document.body).getByText('Forked', { selector: '.decision-heading .badge' })).not.toBeNull()
+		for (const label of ['Universe ID', 'Parent universe', 'REP supply']) expect(within(document.body).queryByText(label)).toBeNull()
 		expect(document.querySelectorAll('.migration-outcome-list .badge')).toHaveLength(0)
 		expect(document.querySelectorAll('.migration-outcome-label')).toHaveLength(2)
 		for (const outcome of ['Yes', 'No']) {
@@ -73,7 +77,7 @@ test('requires an explicit Yes or No choice before initializing or mounting any 
 				.getAllByRole('button')
 				.map(button => button.getAttribute('aria-label')),
 		).toEqual(['Open Yes universe', 'Open No universe'])
-		expect(within(document.body).getByRole('heading', { name: 'Child universes' }).tagName).toBe('H2')
+		expect(within(document.body).getByRole('heading', { name: 'Child universes', level: 3 })).not.toBeNull()
 		await act(() => render(null, document.body))
 	}
 })
