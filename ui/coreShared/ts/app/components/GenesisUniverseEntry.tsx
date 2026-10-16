@@ -22,7 +22,7 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 			</div>
 			<div id='app-content' className='route-view-flow'>
 				<h1>{copy.chooseTruthfulUniverse}</h1>
-				<p className='detail'>{copy.augurFork}</p>
+				<p className='detail'>{copy.augurUniverse}</p>
 				{/* Keep the announcement outside the busy section so it is delivered during initialization. */}
 				<UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={openingOutcome === undefined ? '' : copy.formatOpeningGenesisUniverse(openingOutcome)} />
 				<ForkUniverseNavigation question={AUGUR_GENESIS_FORK_QUESTION} loading={pending} hasOutcomes headingLevel={2}>

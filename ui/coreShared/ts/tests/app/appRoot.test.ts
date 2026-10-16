@@ -19,7 +19,7 @@ installDomTestLifecycle({
 })
 
 for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Trading']) {
-	test(`keeps ${applicationTitle} branding and the Augur v2 fork context visible before a deployment is selected`, async () => {
+	test(`keeps ${applicationTitle} branding and the Augur v2 universe context visible before a deployment is selected`, async () => {
 		window.history.replaceState({}, '', '/')
 		const initialize = mock(async () => undefined)
 		const root = mock(() => createElement('p', {}, 'Application ready'))
@@ -29,7 +29,7 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 		expect(document.querySelector('.app-chrome .header-toolbar .application-brand-name')?.textContent).toBe(applicationTitle)
 		expect(document.querySelector('.application-brand img')?.getAttribute('src')).toBe('./favicon.svg')
 		expect(document.querySelector('.application-brand img')?.getAttribute('alt')).toBe('')
-		expect(within(document.body).getByText('Augur v2 fork')).not.toBeNull()
+		expect(within(document.body).getByText('Augur v2 universe')).not.toBeNull()
 		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe', level: 1 })).not.toBeNull()
 		expect(document.querySelectorAll('.migration-outcome-list .badge')).toHaveLength(0)
 		expect(document.querySelectorAll('.migration-outcome-label')).toHaveLength(2)
@@ -101,7 +101,7 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 	await act(() => within(document.body).getByRole('button', { name: 'Open No universe' }).click())
 	const buttons = within(document.body).getAllByRole('button')
 	expect(document.querySelector('.application-brand-name')?.textContent).toBe(applicationTitle)
-	expect(within(document.body).getByText('Augur v2 fork')).not.toBeNull()
+	expect(within(document.body).getByText('Augur v2 universe')).not.toBeNull()
 	expect(buttons.every(button => button.hasAttribute('disabled'))).toBe(true)
 	const opening = within(document.body).getByRole('status')
 	expect(opening.getAttribute('aria-live')).toBe('polite')

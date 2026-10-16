@@ -106,7 +106,7 @@ describe('UniverseBrowser', () => {
 		expect(queries.getByRole('link', { name: 'Genesis › No' })).toBeTruthy()
 		expect(queries.queryByRole('button', { name: 'Open Genesis › No' })).toBeNull()
 		expect(queries.queryByRole('button', { name: 'Open Genesis › Yes' })).toBeNull()
-		expect(queries.queryByRole('link', { name: 'Augur v2 fork' })).toBeNull()
+		expect(queries.queryByRole('link', { name: 'Augur v2 universe' })).toBeNull()
 		expect(queries.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('universe=21')
 	})
 
@@ -118,7 +118,7 @@ describe('UniverseBrowser', () => {
 			const queries = within(document.body)
 			const field = queries.getByText('Parent universe').parentElement
 			if (field === null) throw new Error('Expected the parent universe field')
-			const parent = within(field).getByRole('link', { name: 'Augur v2 fork' })
+			const parent = within(field).getByRole('link', { name: 'Augur v2 universe' })
 			expect(parent.classList.contains('universe-parent-link')).toBe(true)
 			expect(parent.getAttribute('href')).toBe('/?simulate=1#/')
 			expect(queries.queryByRole('button', { name: 'Open Genesis › Yes' })).toBeNull()
@@ -131,7 +131,7 @@ describe('UniverseBrowser', () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={0n} universe={createUniverse({ childUniverses: [], hasForked: false, lineage: undefined, universeId: 0n })} />)).cleanup
 		const queries = within(document.body)
 		expect(queries.getByRole('heading', { name: 'Genesis › No' })).toBeTruthy()
-		expect(queries.getByRole('link', { name: 'Augur v2 fork' }).getAttribute('href')).toBe('/?simulate=1#/')
+		expect(queries.getByRole('link', { name: 'Augur v2 universe' }).getAttribute('href')).toBe('/?simulate=1#/')
 		expect(queries.queryByText('Genesis › Yes')).toBeNull()
 	})
 

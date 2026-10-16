@@ -48,7 +48,7 @@ function ParentUniverseLink({ universe }: { universe: ZoltarUniverseSummary }) {
 	const parent = new URL(getGenesisUniverseHref(undefined, true))
 	return (
 		<a className='universe-link universe-parent-link' href={`${parent.pathname}${parent.search}${parent.hash}`}>
-			{universeCopy.augurFork}
+			{universeCopy.augurUniverse}
 		</a>
 	)
 }

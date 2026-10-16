@@ -2,7 +2,7 @@ import type { CopyTemplateValue } from './types.js'
 
 export const genesis = 'Genesis'
 export const chooseTruthfulUniverse = 'Choose the truthful universe'
-export const augurFork = 'Augur v2 fork'
+export const augurUniverse = 'Augur v2 universe'
 export const viewAugurFork = 'View fork question on Ethereum'
 export const formatGenesisOutcome = (outcome: 'yes' | 'no') => (outcome === 'yes' ? 'Yes' : 'No')
 export const formatOpeningGenesisUniverse = (outcome: 'yes' | 'no') => `Opening ${formatGenesisOutcome(outcome)} universe`
