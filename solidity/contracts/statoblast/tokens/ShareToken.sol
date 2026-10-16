@@ -23,7 +23,9 @@ contract ShareToken is ERC1155, IShareToken {
 	// Forked source shares remain as branch-independent entitlements. Once an
 	// account materializes any branch, its source balance is locked so a transfer
 	// cannot let both sender and receiver reproduce the same claim.
+	// Source token ID -> target universe ID -> account -> shares already materialized, in attoShares.
 	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
+	// Source token ID -> account -> whether its source balance is locked against transfers.
 	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
 	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 amountAttoShares);
 

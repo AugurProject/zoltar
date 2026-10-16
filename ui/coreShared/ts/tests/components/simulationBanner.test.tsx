@@ -297,15 +297,15 @@ describe('SimulationBanner', () => {
 
 		try {
 			const queries = within(renderedComponent.container)
-			expect(queries.getByRole('option', { name: 'No baseline (Genesis › No)' }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('option', { name: 'No baseline (Augur v2 › No)' }).hasAttribute('disabled')).toBe(true)
 			expect(queries.getByRole('option', { name: 'Older Yes baseline' }).hasAttribute('disabled')).toBe(false)
 			restoreNo = installActiveEnvironmentForTesting(createFakeBackend({ profile: getGenesisNetworkProfile(createFakeSimulationProfile(), 'no') }), createSimulationController())
 			await act(() => render(<SimulationBanner controller={createSimulationController()} onRefresh={async () => undefined} />, renderedComponent.container))
-			expect(queries.getByRole('option', { name: 'Older Yes baseline (Genesis › Yes)' }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('option', { name: 'Older Yes baseline (Augur v2 › Yes)' }).hasAttribute('disabled')).toBe(true)
 			expect(queries.getByRole('option', { name: 'No baseline' }).hasAttribute('disabled')).toBe(false)
 			installActiveEnvironmentForTesting(createFakeBackend({ profile: getGenesisNetworkProfile(createFakeSimulationProfile(), 'yes') }), controller)
 			await act(() => render(<SimulationBanner controller={controller} onRefresh={async () => undefined} />, renderedComponent.container))
-			expect(queries.getByRole('option', { name: 'No baseline (Genesis › No)' }).hasAttribute('disabled')).toBe(true)
+			expect(queries.getByRole('option', { name: 'No baseline (Augur v2 › No)' }).hasAttribute('disabled')).toBe(true)
 			expect(queries.getByRole('option', { name: 'Older Yes baseline' }).hasAttribute('disabled')).toBe(false)
 			expect(getSavedSimulationStateStorageSummary().records.map(record => record.id)).toContain(yesRecord.id)
 			expect(getSavedSimulationStateStorageSummary().records.map(record => record.id)).toContain(noRecord.id)

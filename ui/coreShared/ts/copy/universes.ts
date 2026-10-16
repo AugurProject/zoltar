@@ -1,12 +1,12 @@
 import type { CopyTemplateValue } from './types.js'
 
-export const genesis = 'Genesis'
+const augurV2 = 'Augur v2'
 export const chooseTruthfulUniverse = 'Choose the truthful universe'
-export const augurUniverse = 'Augur v2 universe'
+export const augurUniverse = `${augurV2} universe`
 export const viewAugurFork = 'View fork question on Ethereum'
 export const formatGenesisOutcome = (outcome: 'yes' | 'no') => (outcome === 'yes' ? 'Yes' : 'No')
 export const formatOpeningGenesisUniverse = (outcome: 'yes' | 'no') => `Opening ${formatGenesisOutcome(outcome)} universe`
-export const formatGenesisUniverse = (outcome: 'yes' | 'no') => `${genesis} › ${formatGenesisOutcome(outcome)}`
+export const formatGenesisUniverse = (outcome: 'yes' | 'no') => `${augurV2} › ${formatGenesisOutcome(outcome)}`
 export const formatUnknownLineageUniverse = (shortUniverseId: CopyTemplateValue) => `Universe ${shortUniverseId}`
 
 export const lineageAriaLabel = 'Universe lineage'

@@ -46,6 +46,7 @@ contract VaultOperations {
 		uint256 minimumReceiverHealthFactorBps;
 		BundleLiquidation[] liquidations;
 	}
+	// Coordinator operation ID -> the vault-operation bundle staged for execution.
 	mapping(uint256 => Bundle) private bundles;
 
 	event VaultOperationsStaged(uint256 indexed operationId, address indexed owner, bool changeCommitment, uint256 commitmentAttoEth, uint256 withdrawAttoRep);

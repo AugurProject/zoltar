@@ -265,7 +265,7 @@ describe('ZoltarRoutes', () => {
 		for (const view of ['universes', 'fork', 'migrate'] as const) {
 			const { queries } = await renderRoute(view, undefined, 'missing')
 			expect(queries.getByText('Universe not found')).toBeTruthy()
-			expect(queries.getByRole('link', { name: 'Go to Genesis universe' }).getAttribute('href')).toContain('universe=0')
+			expect(queries.getByRole('link', { name: 'Go to root universe' }).getAttribute('href')).toContain('universe=0')
 			expect(queries.queryByText('Questions')).toBeNull()
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
@@ -278,7 +278,7 @@ describe('ZoltarRoutes', () => {
 		expect(queries.queryByText('Not forked')).toBeNull()
 		expect(queries.queryByText('REP in this universe')).toBeNull()
 		expect(queries.queryByText('Migration')).toBeNull()
-		expect(queries.getByRole('button', { name: 'Go to Genesis universe' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Go to root universe' })).toBeTruthy()
 	})
 
 	test('offers a retry instead of an endless loading state when the universe read failed', async () => {

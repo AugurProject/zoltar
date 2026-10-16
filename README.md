@@ -93,10 +93,10 @@ dependent deployment address for both outcomes. Both tokens mint the same
 allocations, with the constructor lists reversed for No to give it a distinct
 CREATE2 address through the existing zero-salt proxy.
 
-All three apps require a truthful genesis choice. Use `?genesis=yes` or
+All three apps require a truthful universe choice. Use `?genesis=yes` or
 `?genesis=no` (also accepted in the route query). Without a valid choice the app
 shows the Augur V2 fork question and asks for Yes or No before starting. The
-genesis root's Parent universe link returns to the Augur v2 universe, where users can
+selected root's Parent universe link returns to the Augur v2 universe, where users can
 open either child using the same outcome controls as later forks. Descendants
 keep their ordinary parent and child navigation.
 

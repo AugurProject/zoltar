@@ -112,7 +112,7 @@ function ChildUniverseRecords({ activeUniverseId, renderChildSummary, universe }
 }
 
 /**
- * Browses the universe tree around one universe: its lineage back to Genesis, whether it has forked, and the child
+ * Browses the universe tree around one universe: its lineage back to the selected root, whether it has forked, and the child
  * universes its fork created. Ordinary parent and child links change the shared `universe` query parameter;
  * a canonical root's parent returns to the historical Augur fork before choosing a deployment.
  */

@@ -58,9 +58,9 @@ describe('UniversePoolDirectorySection', () => {
 		expect(document.body.textContent).not.toContain('Choose another universe.')
 		expect(document.body.textContent).not.toContain('Loading')
 		expect(within(document.body).queryByRole('textbox', { name: 'Open universe by ID' })).toBeNull()
-		within(document.body).getByRole('button', { name: 'Go to Genesis universe' }).click()
+		within(document.body).getByRole('button', { name: 'Go to root universe' }).click()
 		expect(window.location.hash).toContain('universe=0')
-		expect(within(document.body).queryByText('Go to Genesis universe', { selector: 'p' })).toBeNull()
+		expect(within(document.body).queryByText('Go to root universe', { selector: 'p' })).toBeNull()
 	})
 
 	test('does not enumerate cached migration children in the summary view', async () => {

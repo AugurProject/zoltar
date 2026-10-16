@@ -72,7 +72,7 @@ void describe('active environment', () => {
 			await mismatch.waitUntilReady()
 			expect(mismatch.profile.genesisOutcome).toBe('yes')
 			expect(mismatch.bootstrapError).toBeUndefined()
-			expect(getActiveSimulationController()?.bootstrapWarning).toBe('Saved simulation state "No genesis" belongs to Genesis › No. Falling back to the baseline scenario.')
+			expect(getActiveSimulationController()?.bootstrapWarning).toBe('Saved simulation state "No genesis" belongs to Augur v2 › No. Falling back to the baseline scenario.')
 			expect(getActiveSimulationController()?.simulationSource.kind).toBe('scenario')
 			const restored = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=no&simState=${record.id}` })
 			await restored.waitUntilReady()

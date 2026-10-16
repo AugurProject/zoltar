@@ -94,9 +94,9 @@ describe('trading header', () => {
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
 		// The header names the universe with the shared switcher, which links back to the universe browser.
 		const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value .universe-switcher')
-		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Genesis › Yes')
+		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Augur v2 › Yes')
 		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
-		expect(universeSwitcher?.getAttribute('aria-label')).toBe('Universe: Genesis › Yes. Browse universes')
+		expect(universeSwitcher?.getAttribute('aria-label')).toBe('Universe: Augur v2 › Yes. Browse universes')
 		expect(universeSwitcher?.getAttribute('href')).toContain('#/universe')
 	})
 
@@ -113,7 +113,7 @@ describe('trading header', () => {
 				/>,
 			)
 			cleanupRendered = rendered.cleanup
-			const root = outcome === 'yes' ? 'Genesis › Yes' : 'Genesis › No'
+			const root = outcome === 'yes' ? 'Augur v2 › Yes' : 'Augur v2 › No'
 			await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label-parent')?.textContent).toBe(`${root} ·`))
 			const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .universe-switcher')
 			expect(universeSwitcher?.querySelector('.universe-switcher-label-leaf')?.textContent).toBe('Alpha')
@@ -178,7 +178,7 @@ describe('trading header', () => {
 			await Bun.sleep(20)
 		})
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0'))
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis › Yes'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes'))
 	})
 
 	test('settles on the discovered universe without re-discovering in a loop', async () => {
@@ -190,11 +190,11 @@ describe('trading header', () => {
 				return emptyDiscoveryPage([0n], 0n)
 			},
 		})
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis › Yes'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes'))
 		// The confirmed universe is re-requested once; a confirmed answer must not read as foreign and restart discovery.
 		await act(async () => await Bun.sleep(300))
 		expect(discoveries).toBeLessThanOrEqual(2)
-		expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis › Yes')
+		expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes')
 		expect(window.location.hash).toBe('#/market')
 	})
 
@@ -219,7 +219,7 @@ describe('trading header', () => {
 		const rendered = await renderConfiguredApp({
 			discoverUniverses: async () => emptyDiscoveryPage([0n], 0n),
 		})
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis › Yes'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes'))
 		await clickConnectWallet(rendered.container)
 		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No browser wallet was found'))
 	})

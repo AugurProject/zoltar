@@ -10,8 +10,7 @@ import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithVa
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
-import * as universeCopy from '@zoltar/ui-core-shared/copy/universes.js'
+import { formatRootUniverseName, formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -164,7 +163,7 @@ export function LivePortfolio({
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
 			{balanceState === 'ready' && visibleEntries.length === 0 ? (
 				<EmptyState
-					title={universeId === undefined ? portfolioCopy.noPositions : portfolioCopy.noPositionsInUniverse(universeId === 0n ? universeCopy.genesis : formatUniverseDisplayLabel(universeId))}
+					title={universeId === undefined ? portfolioCopy.noPositions : portfolioCopy.noPositionsInUniverse(universeId === 0n ? formatRootUniverseName() : formatUniverseDisplayLabel(universeId))}
 					detail={portfolioCopy.noPortfolioBalances}
 					actions={
 						<>

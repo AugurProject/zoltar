@@ -86,7 +86,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		const empty = rendered.container.querySelector('.empty-state')
 		// The genesis universe is named without its raw identifier.
-		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('No positions in Genesis')
+		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('No positions in Augur v2 › Yes')
 		// The list only covers markets this browser opened, and the empty state says so.
 		expect(empty?.textContent).toContain('only covers markets opened in this browser')
 		const links = Array.from(empty?.querySelectorAll('a') ?? [])

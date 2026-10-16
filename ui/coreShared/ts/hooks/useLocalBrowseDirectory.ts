@@ -21,14 +21,13 @@ type LocalBrowseDirectoryOptions<TItem, TData> = {
 }
 
 /**
- * Browsing runs over entities already downloaded to this browser: favorites by default, every downloaded summary on
- * request. Scanning the chain is an explicit, paged action whose results join the downloaded cache.
+ * Browsing runs over entities already downloaded to this browser: favorites when available, or downloaded summaries otherwise. The first registry page loads automatically; additional pages join the downloaded cache on request.
  */
 export function useLocalBrowseDirectory<TItem, TData>({ app, contextKey, externalLoading = false, kind, loadPage, pageSize, receivedPage, refreshedItems, store, toDownloadedItem }: LocalBrowseDirectoryOptions<TItem, TData>) {
-	const [collection, setCollection] = useState<LocalBrowseCollection>('favorites')
 	const [searchText, setSearchText] = useState('')
 	const favorites = useFavorites(app, kind)
 	const downloaded = useDownloadedEntities(app, kind, store)
+	const [collection, setCollection] = useState<LocalBrowseCollection>(() => (favorites.entries.length > 0 ? 'favorites' : 'downloaded'))
 	const discovery = usePagedDiscovery({
 		contextKey,
 		loadPage,
