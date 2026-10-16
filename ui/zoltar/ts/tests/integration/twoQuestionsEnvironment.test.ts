@@ -2,7 +2,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { loadAllZoltarQuestions, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 
 void describe('two-question simulation backend', () => {
@@ -11,7 +11,7 @@ void describe('two-question simulation backend', () => {
 	beforeAll(async () => {
 		backend = await createBootstrappedSimulationBackendWithRetry('two-questions')
 		await backend.setTransactionDelayMilliseconds(0)
-	}, 180_000)
+	}, simulationSetupTimeoutMs)
 
 	beforeEach(async () => {
 		await resetSelectedAccountAndTransactionDelay(backend)

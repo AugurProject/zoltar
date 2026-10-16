@@ -9,6 +9,7 @@ import {
 	getCompleteSetRedeemAttoShares,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaximumMintAmount,
+	getPoolRemainingMintCapacity,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
 	getTradingMigrateSharesGuardMessage,
@@ -128,6 +129,15 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
+	})
+
+	void test('gives a listed pool no mintable remainder once escalation starts or the complete-set exchange rate is undefined', () => {
+		const pool = { mintingCapacityAttoEth: 10n, hasForkContinuationEscalationGame: false, ordinaryEscalationGameStarted: false, settlementCollateralAttoEth: 4n, shareTokenSupplyAttoShares: 4n }
+		expect(getPoolRemainingMintCapacity(pool)).toBe(6n)
+		expect(getPoolRemainingMintCapacity({ ...pool, ordinaryEscalationGameStarted: true })).toBe(0n)
+		expect(getPoolRemainingMintCapacity({ ...pool, hasForkContinuationEscalationGame: true })).toBe(0n)
+		expect(getPoolRemainingMintCapacity({ ...pool, settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n })).toBe(0n)
+		expect(getPoolRemainingMintCapacity({ ...pool, mintingCapacityAttoEth: undefined })).toBe(0n)
 	})
 
 	void test('limits the maximum mint amount by both spendable wallet ETH and remaining capacity', () => {

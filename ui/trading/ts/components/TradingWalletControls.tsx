@@ -37,7 +37,7 @@ export type TradingWalletControlsProps = Readonly<{
 function deploymentWalletLabel(state: DeploymentWalletState) {
 	if (state.connecting) return appCopy.connectingWallet
 	if (state.account === undefined) return appCopy.connectWallet
-	return <ReadOnlyAddressValue address={state.account} responsiveAbbreviation />
+	return <ReadOnlyAddressValue address={state.account} />
 }
 
 type TradingWalletSlotState = Pick<TradingWalletControlsProps, 'deploymentSetupActive' | 'liveDeploymentStatus' | 'routeOwnsLiveWallet'>

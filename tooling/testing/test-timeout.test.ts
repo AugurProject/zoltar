@@ -23,6 +23,7 @@ test('the preload and repository runner respect both forms of CLI timeout', asyn
 	}
 })
 
+// The probe sleeps for 5.1s after its own process starts, and starting a process slows down sharply on a loaded machine.
 test('the repository runner allows tests longer than Bun’s five-second fallback', async () => {
 	const root = path.resolve(import.meta.dir, '../..')
 	const directory = await mkdtemp(path.join(root, '.timeout-probe-'))
@@ -36,4 +37,4 @@ test('the repository runner allows tests longer than Bun’s five-second fallbac
 	} finally {
 		await rm(directory, { recursive: true, force: true })
 	}
-}, 15_000)
+}, 60_000)

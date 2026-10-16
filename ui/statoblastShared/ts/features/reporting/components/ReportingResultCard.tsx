@@ -1,7 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as copy from '../../../copy/reporting.js'
 import type { ReportingDetails } from '../../../types/contracts.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { RepAmount } from './RepAmount.js'
 import { getEscalationDepositClaimAmount, getImportedEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { getReportingOutcomeLabel } from '../lib/reporting.js'
 
@@ -24,7 +24,7 @@ export function ReportingResultCard({ details }: { details: ReportingDetails | u
 			detail={
 				<>
 					<strong>{copy.resultSummary(getReportingOutcomeLabel(details.questionOutcome))}</strong>
-					{amount > 0n ? copy.resultClaim(formatCurrencyBalance(amount)) : undefined}
+					{amount > 0n ? copy.resultClaim(<RepAmount value={amount} />) : undefined}
 				</>
 			}
 		/>

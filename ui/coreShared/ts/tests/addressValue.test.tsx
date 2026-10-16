@@ -131,7 +131,7 @@ describe('AddressValue', () => {
 
 	test('provides a start-and-end abbreviation without changing the accessible name or copied value', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} responsiveAbbreviation />)
+		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
@@ -162,9 +162,31 @@ describe('AddressValue', () => {
 		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
 	})
 
+	test('always shows the start-and-end form when abbreviated, while keeping the complete copy target', async () => {
+		const address = '0x1234567890abcdef1234567890abcdef12345678'
+		const renderedComponent = await renderIntoDocument(<AddressValue abbreviated address={address} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
+		expect(copyButton.querySelector('[aria-hidden="true"]')?.textContent).toBe('0x123456…345678')
+		expect(copyButton.querySelector('.visually-hidden')?.textContent).toBe(address)
+		expect(copyButton.getAttribute('title')).toBe(address)
+		await act(() => fireEvent.click(copyButton))
+		await waitFor(() => expect(document.querySelector('.copy-feedback')?.textContent).toBe('Copied address'))
+	})
+
+	test('keeps the full address readable by assistive technology when a read-only value is abbreviated', async () => {
+		const address = '0x1234567890abcdef1234567890abcdef12345678'
+		const renderedComponent = await renderIntoDocument(<AddressValue abbreviated address={address} copyable={false} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const value = document.querySelector('.address-value')
+		expect(value?.querySelector('.visually-hidden')?.textContent).toBe(address)
+		expect(value?.querySelector('[aria-hidden="true"]')?.textContent).toBe('0x123456…345678')
+		expect(value?.textContent).toContain(address)
+	})
+
 	test('uses a shorter visible hash while preserving the complete copy target', async () => {
 		const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={hash} responsiveAbbreviation compactAbbreviation />)
+		const renderedComponent = await renderIntoDocument(<AddressValue address={hash} compactAbbreviation />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${hash}` })
 		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')

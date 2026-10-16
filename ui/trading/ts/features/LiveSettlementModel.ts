@@ -53,10 +53,10 @@ export function forkMigrationBatchWarning(targets: readonly Pick<ForkTarget, 'ca
 	return settlementCopy.missingChildPoolWarning
 }
 
-/** The wallet's balance once it has been read; undefined while it is loading, failed, or the wallet is disconnected, so prose never quotes a state in place of an amount. */
+/** The wallet's balance once it has been read; undefined while it is loading, failed, or the wallet is disconnected, so prose never quotes a state in place of an amount. The settlement panel states blocked redemption itself, so the balance does not repeat it. */
 export function settlementBalanceLabel(balanceState: BalanceState, balance: bigint | undefined, rate: ShareValueRate & Partial<SettlementLifecycle>, outcome?: ShareOutcome) {
 	if (balanceState !== 'ready' || balance === undefined) return undefined
-	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeWithValue(balance, outcome, rate)
+	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeWithValue(balance, outcome, rate, 4, 'nearest', { noteRedemption: false })
 }
 
 /** The standalone balance line: the amount when it is known, otherwise what the user is waiting for or has to do. `locked` marks a balance a migration has locked in this universe. */

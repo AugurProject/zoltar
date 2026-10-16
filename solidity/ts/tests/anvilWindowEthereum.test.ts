@@ -300,12 +300,17 @@ test('send transaction preserves the receipt timeout when diagnostic RPC calls s
 	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
 	const transactionHash = `0x${'56'.repeat(32)}`
 	const diagnosticMethods = new Set(['eth_getTransactionByHash', 'eth_blockNumber', 'txpool_status'])
+	const diagnosticEvents: string[] = []
 	mockMissingReceipt(transactionHash, async (request, init) => {
 		if (!diagnosticMethods.has(request.method)) return undefined
 		const signal = init?.signal
 		if (signal === undefined || signal === null) throw new Error(`Expected ${request.method} to use an abort signal`)
+		diagnosticEvents.push('start')
 		return await new Promise<Response>((_resolve, reject) => {
-			const rejectAsAborted = () => reject(new Error('mocked diagnostic RPC aborted'))
+			const rejectAsAborted = () => {
+				diagnosticEvents.push('abort')
+				reject(new Error('mocked diagnostic RPC aborted'))
+			}
 			if (signal.aborted) {
 				rejectAsAborted()
 				return
@@ -314,7 +319,6 @@ test('send transaction preserves the receipt timeout when diagnostic RPC calls s
 		})
 	})
 	await withMockedClock(receiptTimeoutClock(), async () => {
-		const diagnosticStart = performance.now()
 		let caughtError: unknown
 		try {
 			await sendTestTransaction()
@@ -326,7 +330,8 @@ test('send transaction preserves the receipt timeout when diagnostic RPC calls s
 		expect(caughtError.message).toContain('transaction lookup failed: Anvil RPC eth_getTransactionByHash did not respond within 1000ms')
 		expect(caughtError.message).toContain('latest block lookup failed: Anvil RPC eth_blockNumber did not respond within 1000ms')
 		expect(caughtError.message).toContain('transaction pool lookup failed: Anvil RPC txpool_status did not respond within 1000ms')
-		expect(performance.now() - diagnosticStart).toBeLessThan(2_000)
+		// All three lookups start before the first times out, so they wait out one shared second rather than three in turn.
+		expect(diagnosticEvents).toEqual(['start', 'start', 'start', 'abort', 'abort', 'abort'])
 	})
 })
 

@@ -4,8 +4,9 @@ import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import { signal } from '@preact/signals'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
-import { beforeEach, describe, expect, jest, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -216,26 +217,19 @@ describe('GlobalTransactionDialog', () => {
 	test('keeps confirmed status and its hash until explicitly dismissed, even after a minute', async () => {
 		const hash = '0xabcde0000000000000000000000000000000000000000000000000000000001'
 		const success = { hash, title: 'Price requested', tone: 'success' as const }
-		jest.useFakeTimers()
-		try {
+		await withFakeClock(async clock => {
 			const renderedComponent = await renderIntoDocument(<GlobalTransactionDialog transaction={success} />)
 			trackRendered(renderedComponent)
 			const queries = within(document.body)
-			await act(() => {
-				jest.advanceTimersByTime(60000)
-			})
+			await clock.advance(60000)
 			const panel = queries.getByRole('region', { name: 'Transaction status' })
 			expect(within(panel).getByText(hash)).not.toBeNull()
 			await act(() => fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' })))
 			expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
 			await act(() => render(<GlobalTransactionDialog transaction={{ ...success, detail: 'nonce too low', tone: 'error' }} />, renderedComponent.container))
-			await act(() => {
-				jest.advanceTimersByTime(60000)
-			})
+			await clock.advance(60000)
 			expect(queries.getByRole('region', { name: 'Transaction status' })).not.toBeNull()
-		} finally {
-			jest.useRealTimers()
-		}
+		})
 	})
 
 	test('keeps the failed transaction hash in the shared dialog only', async () => {

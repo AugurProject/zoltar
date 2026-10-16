@@ -23,7 +23,7 @@ export { submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
 import { publicErrorMessage } from './publicError.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 
-export { forkMigrationSettled, liveBalancesForMarket, lockedMigratedBalance, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
+export { forkMigrationSettled, liveBalancesForMarket, lockedMigratedBalance, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, OUTCOME_BALANCE_KEYS, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi

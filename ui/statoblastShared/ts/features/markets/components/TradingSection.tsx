@@ -7,6 +7,7 @@ import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLaun
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -25,6 +26,7 @@ import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
+import { isMintingPausedByEscalation } from '../../security-pools/lib/poolLifecycle.js'
 import {
 	estimateMintCheckpoint,
 	getDefaultShareMigrationTargetOutcomeIndexes,
@@ -43,7 +45,7 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 	getPoolMintingCapacityAttoEth,
-	isMintingPausedByEscalation,
+	hasShares,
 	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
 } from '../lib/trading.js'
 import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -98,15 +100,16 @@ export function TradingSection({
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	// Once balances load and every one is zero, a single line replaces the empty sets figure and three empty bars.
+	const holdsNoShares = shareBalances !== undefined && !hasShares(shareBalances)
 	const outcomeBacking = (outcome: 'yes' | 'no' | 'invalid') => {
 		if (displayShareBalances === undefined) return undefined
 		return selectedPool?.questionOutcome === 'none' || selectedPool?.questionOutcome === outcome ? displayShareBalances[outcome] : 0n
 	}
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
-	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
-	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool)
+	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool, resolvedPoolState.lifecycleState)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
@@ -163,8 +166,9 @@ export function TradingSection({
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.questionFinalizedReason
 		if (mintingPausedByEscalation) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
+		// A pool stage that closes minting explains it before any capacity figure, which a stale escalation flag can zero.
+		if (!mintEnabled) return tradingCopy.actionUnavailableReason
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 		if (remainingMintCapacity === 0n) {
@@ -217,7 +221,6 @@ export function TradingSection({
 	const expectedRedemptionPayoutAttoEth = convertAttoSharesToSettlementCollateralAttoEth(winningAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const redeemSharesLauncherBlocker = getTradingRedeemSharesGuardMessage({ accountAddress: accountState.address, hasSelectedPool, isOnActiveAppChain, questionOutcome: selectedPool?.questionOutcome, shareBalances: loadingTradingDetails ? undefined : shareBalances })
 
-	const effectiveMintLauncherBlocker = mintLauncherBlocker ?? (mintEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
@@ -270,43 +273,21 @@ export function TradingSection({
 			)}
 		</>
 	)
+	// A launcher opens its dialog only when nothing blocks it; otherwise it names the first reason, so it never offers an action its dialog would refuse.
+	const shareActionLauncher = ({ blocker, description, key, label, modal }: { blocker: string | undefined; description: string; key: string; label: string; modal: Exclude<TradingActionModal, undefined> }): ReadinessAction => ({
+		actionLabel: label,
+		description,
+		key,
+		readiness: blocker === undefined ? 'ready' : 'blocked',
+		title: label,
+		...(blocker === undefined ? { onAction: () => setActiveModal(modal) } : { blocker }),
+	})
+	// Minting can never resume once the question has finalized, so its launcher is left out rather than shown disabled; every other action can still apply later and stays with its reason.
 	const tradingLaunchers: ReadinessAction[] = [
-		{
-			actionLabel: tradingCopy.mintCompleteSets,
-			description: tradingCopy.completeSetMintDescription,
-			key: 'mint-complete-sets',
-			readiness: !walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.mintCompleteSets,
-			...(!walletOnWrongNetwork && mintEnabled && effectiveMintLauncherBlocker === undefined ? { onAction: () => setActiveModal('mint') } : {}),
-			...(effectiveMintLauncherBlocker === undefined ? {} : { blocker: effectiveMintLauncherBlocker }),
-		},
-		{
-			actionLabel: tradingCopy.redeemCompleteSets,
-			description: tradingCopy.completeSetBurnDescription,
-			key: 'redeem-complete-sets',
-			readiness: !walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.redeemCompleteSets,
-			...(!walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
-			...(effectiveRedeemCompleteSetsLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemCompleteSetsLauncherBlocker }),
-		},
-		{
-			actionLabel: tradingCopy.migrateForkedShares,
-			description: tradingCopy.shareMigrationDescription,
-			key: 'migrate-shares',
-			readiness: !walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.migrateForkedShares,
-			...(!walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
-			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
-		},
-		{
-			actionLabel: tradingCopy.redeemResolvedShares,
-			description: tradingCopy.resolvedShareRedemptionDescription,
-			key: 'redeem-shares',
-			readiness: !walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.redeemResolvedShares,
-			...(!walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
-			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
-		},
+		...(winningOutcome !== undefined ? [] : [shareActionLauncher({ blocker: mintLauncherBlocker, description: tradingCopy.completeSetMintDescription, key: 'mint-complete-sets', label: tradingCopy.mintCompleteSets, modal: 'mint' })]),
+		shareActionLauncher({ blocker: effectiveRedeemCompleteSetsLauncherBlocker, description: tradingCopy.completeSetBurnDescription, key: 'redeem-complete-sets', label: tradingCopy.redeemCompleteSets, modal: 'redeem-complete-sets' }),
+		shareActionLauncher({ blocker: effectiveMigrateSharesLauncherBlocker, description: tradingCopy.shareMigrationDescription, key: 'migrate-shares', label: tradingCopy.migrateForkedShares, modal: 'migrate-shares' }),
+		shareActionLauncher({ blocker: effectiveRedeemSharesLauncherBlocker, description: tradingCopy.resolvedShareRedemptionDescription, key: 'redeem-shares', label: tradingCopy.redeemResolvedShares, modal: 'redeem-shares' }),
 	]
 	const sections = (
 		<>
@@ -319,51 +300,55 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			{/* Holdings beside the share actions, the same details-and-actions split as the Vaults tab. */}
+			{/* Holdings first, then one row of share actions with their buttons aligned across the cards. */}
 			<div className={selectedPool === undefined ? 'trading-workspace-layout is-single' : 'trading-workspace-layout'}>
 				{selectedPool === undefined ? undefined : (
 					<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
-						<div className='trading-holdings-stage'>
-							<div className='trading-holdings-hero'>
-								<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
-								<strong className='trading-holdings-value'>
-									<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} />
-									{displayMaxRedeemableCompleteSets === undefined ? undefined : (
-										<span className='trading-holdings-backing'>
-											(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
-										</span>
-									)}
-								</strong>
-								<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
+						{holdsNoShares ? (
+							<EmptyState className='trading-holdings-empty' title={tradingCopy.noSharesHeld} />
+						) : (
+							<div className='trading-holdings-stage'>
+								<div className='trading-holdings-hero'>
+									<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
+									<strong className='trading-holdings-value'>
+										<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} />
+										{displayMaxRedeemableCompleteSets === undefined ? undefined : (
+											<span className='trading-holdings-backing'>
+												(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
+											</span>
+										)}
+									</strong>
+									<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
+								</div>
+								<div className='trading-holdings-layout'>
+									<RankedBarList
+										className='trading-share-distribution'
+										emptyMessage={tradingCopy.walletBalancesUnavailable}
+										items={[
+											{
+												key: 'yes',
+												label: commonCopy.yes,
+												valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
+												...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
+											},
+											{
+												key: 'no',
+												label: commonCopy.no,
+												valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
+												...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
+											},
+											{
+												key: 'invalid',
+												label: commonCopy.invalid,
+												valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
+												...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
+											},
+										]}
+									/>
+									<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
+								</div>
 							</div>
-							<div className='trading-holdings-layout'>
-								<RankedBarList
-									className='trading-share-distribution'
-									emptyMessage={tradingCopy.walletBalancesUnavailable}
-									items={[
-										{
-											key: 'yes',
-											label: commonCopy.yes,
-											valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
-											...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
-										},
-										{
-											key: 'no',
-											label: commonCopy.no,
-											valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
-											...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
-										},
-										{
-											key: 'invalid',
-											label: commonCopy.invalid,
-											valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
-											...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
-										},
-									]}
-								/>
-								<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
-							</div>
-						</div>
+						)}
 					</SectionBlock>
 				)}
 

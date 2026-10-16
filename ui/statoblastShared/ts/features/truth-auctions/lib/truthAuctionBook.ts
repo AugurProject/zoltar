@@ -1,4 +1,4 @@
-import { getTruthAuctionBidTimingGuardMessage } from '../../../protocol/truthAuctionTiming.js'
+import { getTruthAuctionBidTimingGuardMessage, hasTruthAuctionEnded } from '../../../protocol/truthAuctionTiming.js'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
@@ -37,6 +37,8 @@ export type TruthAuctionDepthPoint = {
 	isSelected: boolean
 	isPreviewTick: boolean
 	submissionCount: bigint
+	/** The connected wallet's loaded live bids at this price, so the ladder shows where your money sits. */
+	viewerBidAttoEth: bigint
 }
 
 type TruthAuctionBidSettlementEstimate = {
@@ -301,8 +303,24 @@ export function sortTruthAuctionTickSummariesDescending(tickSummaries: TruthAuct
 	})
 }
 
-export function buildTruthAuctionDepthPoints({ enteredBidTick, selectedBookTick, tickSummaries, truthAuction }: { enteredBidTick: bigint | undefined; selectedBookTick: bigint | undefined; tickSummaries: TruthAuctionTickSummary[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionDepthPoint[] {
+export function buildTruthAuctionDepthPoints({
+	enteredBidTick,
+	selectedBookTick,
+	tickSummaries,
+	truthAuction,
+	viewerBids,
+}: {
+	enteredBidTick: bigint | undefined
+	selectedBookTick: bigint | undefined
+	tickSummaries: TruthAuctionTickSummary[]
+	truthAuction: TruthAuctionMetrics | undefined
+	viewerBids: readonly TruthAuctionBidView[]
+}): TruthAuctionDepthPoint[] {
 	let cumulativeBidAttoEth = 0n
+	const viewerBidAttoEthByTick = new Map<bigint, bigint>()
+	for (const bid of viewerBids) {
+		if (!bid.refunded) viewerBidAttoEthByTick.set(bid.tick, (viewerBidAttoEthByTick.get(bid.tick) ?? 0n) + bid.bidAmountAttoEth)
+	}
 
 	return tickSummaries
 		.filter(tickSummary => tickSummary.active || tickSummary.currentTotalBidAttoEth > 0n)
@@ -317,15 +335,21 @@ export function buildTruthAuctionDepthPoints({ enteredBidTick, selectedBookTick,
 				isSelected: selectedBookTick === tickSummary.tick,
 				isPreviewTick: enteredBidTick !== undefined && enteredBidTick === tickSummary.tick,
 				submissionCount: tickSummary.submissionCount,
+				viewerBidAttoEth: viewerBidAttoEthByTick.get(tickSummary.tick) ?? 0n,
 			}
 		})
+}
+
+/** The ETH a finalized auction raised: only the winning bids when it ended underfunded. */
+export function getFinalizedTruthAuctionRaisedAttoEth(truthAuction: TruthAuctionMetrics) {
+	return truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised
 }
 
 export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetrics | undefined, tickSummaries: TruthAuctionTickSummary[]) {
 	if (truthAuction === undefined) return undefined
 	if (truthAuction.finalized) {
 		return {
-			attoEthRaised: truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised,
+			attoEthRaised: getFinalizedTruthAuctionRaisedAttoEth(truthAuction),
 			attoRepSold: truthAuction.totalAttoRepPurchased,
 		}
 	}
@@ -489,7 +513,7 @@ export function getRepPerEthPrice(repPrice: bigint) {
 /** Bidding stops once the auction is finalized or its end time has passed on-chain. */
 export function isTruthAuctionBiddingClosed(truthAuction: TruthAuctionMetrics, currentTimestamp: bigint | undefined) {
 	if (truthAuction.finalized || truthAuction.timeRemaining === 0n) return true
-	return currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt
+	return currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && hasTruthAuctionEnded(currentTimestamp, truthAuction.auctionEndsAt)
 }
 
 /** The live clearing price, the lowest price that wins in full, and where the entered bid sits; `undefined` before the ETH target is met. */

@@ -7,11 +7,13 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TruthAuctionDepthChart } from './TruthAuctionDepthChart.js'
 import { getTruthAuctionDispositionClassName, type TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
-import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
+import { clampPercentage } from './ForkAuctionPresentationState.js'
 
 type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined
 	hasMoreTickSummaries: boolean
+	/** More of the wallet's bids exist than are loaded, so each price's total of your bids is only a lower bound. */
+	hasMoreViewerBids: boolean
 	loadingTruthAuctionBook: boolean
 	maxTickAttoEth: bigint
 	onLoadNextTickPage: () => void
@@ -22,11 +24,7 @@ type TruthAuctionMarketViewSectionProps = {
 	truthAuctionDepthPoints: TruthAuctionDepthPoint[]
 }
 
-function clampPercentage(value: bigint, maxValue: bigint) {
-	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
-}
-
-export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
+export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, hasMoreViewerBids, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
 		<SectionBlock variant='embedded'>
 			{truthAuctionBookError === undefined ? undefined : <UserMessage className='detail truth-auction-book-error' tone='error' detail={truthAuctionBookError} />}
@@ -53,7 +51,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}
-									className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${showDepthClearingTick && clearingTick === point.tick ? ' is-clearing' : ''}`}
+									className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${showDepthClearingTick && clearingTick === point.tick ? ' is-clearing' : ''}${point.viewerBidAttoEth > 0n ? ' has-viewer-bid' : ''}`}
 									key={point.tick.toString()}
 									onClick={() => onSelectTick(point.tick)}
 									type='button'
@@ -64,6 +62,11 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 											<strong>{renderPriceValue(point.price)}</strong>
 											<div className='truth-auction-price-row-badges'>
 												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.yourBidPrice}</span> : undefined}
+												{point.viewerBidAttoEth > 0n ? (
+													<span className='truth-auction-ladder-yours'>
+														{hasMoreViewerBids ? forkAuctionCopy.yourBidsAtPriceAtLeast : forkAuctionCopy.yourBidsAtPrice} <CurrencyValue value={point.viewerBidAttoEth} suffix={commonCopy.eth} />
+													</span>
+												) : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
 											</div>
 										</div>

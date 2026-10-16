@@ -10,6 +10,8 @@ type LocalSettlementBidStatus = 'claimed' | 'refunded'
 
 export type TruthAuctionBidRowViewModel = {
 	bidder: Address
+	/** The bid belongs to the connected wallet; the table names it "You" instead of an address. */
+	isViewer: boolean
 	bidAmountAttoEth: bigint
 	key: string
 	price: bigint
@@ -41,12 +43,13 @@ type ViewerTruthAuctionBidRowsViewModel = {
 	showSettlementActionColumn: boolean
 }
 
-export function buildTruthAuctionBidRows({ bids, truthAuction }: { bids: TruthAuctionBidView[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionBidRowViewModel[] {
+export function buildTruthAuctionBidRows({ accountAddress, bids, truthAuction }: { accountAddress?: Address | undefined; bids: TruthAuctionBidView[]; truthAuction: TruthAuctionMetrics | undefined }): TruthAuctionBidRowViewModel[] {
 	if (truthAuction === undefined) return []
 	return bids.map(bid => {
 		const disposition = getTruthAuctionBidDisposition(bid, truthAuction)
 		return {
 			bidder: bid.bidder,
+			isViewer: accountAddress !== undefined && sameAddress(bid.bidder, accountAddress),
 			bidAmountAttoEth: bid.bidAmountAttoEth,
 			key: `aggregate:${bid.tick.toString()}:${bid.bidIndex.toString()}`,
 			price: getTruthAuctionPriceAtTick(bid.tick),

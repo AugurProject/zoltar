@@ -265,7 +265,7 @@ export function SecurityPoolSection({
 						additionalMetrics={
 							<>
 								<MetricField label={securityPoolCopy.poolAddressLabel}>
-									<AddressValue address={securityPoolResult.securityPoolAddress} responsiveAbbreviation />
+									<AddressValue address={securityPoolResult.securityPoolAddress} />
 								</MetricField>
 								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</MetricField>
 								<MetricField label={commonCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(securityPoolResult.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
@@ -401,7 +401,7 @@ export function SecurityPoolSection({
 															<div>
 																<dt>{securityPoolCopy.poolAddressLabel}</dt>
 																<dd>
-																	<AddressValue address={existingQuestionCheck.poolAddress} responsiveAbbreviation />
+																	<AddressValue address={existingQuestionCheck.poolAddress} />
 																</dd>
 															</div>
 														)}
