@@ -44,7 +44,7 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 									key: outcome,
 									label: copy.formatGenesisOutcome(outcome),
 									disabled: pending,
-									details: openingOutcome === outcome ? <UserMessage placement='field' as='span' detail={copy.formatOpeningGenesisUniverse(outcome)} /> : undefined,
+									pendingLabel: openingOutcome === outcome ? copy.formatOpeningGenesisUniverse(outcome) : undefined,
 									onSelect: () => {
 										if (pending) return
 										setOpeningOutcome(outcome)

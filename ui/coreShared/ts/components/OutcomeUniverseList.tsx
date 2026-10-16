@@ -5,10 +5,11 @@ import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
 
-type Outcome = { key: string; exists?: boolean; label: string; selected?: boolean; disabled?: boolean; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
+type Outcome = { key: string; exists?: boolean; label: string; selected?: boolean; disabled?: boolean; pendingLabel?: string | undefined; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
 
 /**
  * Outcome names and deployment status stay consistent while navigation and selection keep their own semantics.
+ * `pendingLabel` replaces the row label and accessible name without adding a progress row. The caller disables pending controls.
  * Unknown deployment status omits its badge; callers may disable navigation explicitly while it is pending.
  * `notDeployedDetail` explains a not-yet-deployed child beside its badge, inside the row's description, so a disabled row says why.
  */
@@ -20,7 +21,7 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 			emptyMessage={emptyMessage}
 			items={outcomes.map(outcome => ({
 				key: outcome.key,
-				ariaLabel: selection ? outcome.label : universeCopy.formatOpenChildUniverse(outcome.label),
+				ariaLabel: outcome.pendingLabel ?? (selection ? outcome.label : universeCopy.formatOpenChildUniverse(outcome.label)),
 				...(outcome.exists === undefined ? {} : { describedById: `${statusId}-${outcome.key}` }),
 				label: (
 					<>
@@ -29,8 +30,8 @@ export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage,
 								{outcome.selected ? '✓' : ''}
 							</span>
 						) : undefined}
-						{outcome.label}
-						{!selection && outcome.exists !== false ? <span aria-hidden='true'>{universeCopy.openOutcomeArrowTail}</span> : undefined}
+						{outcome.pendingLabel ?? outcome.label}
+						{!selection && outcome.exists !== false && outcome.pendingLabel === undefined ? <span aria-hidden='true'>{universeCopy.openOutcomeArrowTail}</span> : undefined}
 					</>
 				),
 				details:
