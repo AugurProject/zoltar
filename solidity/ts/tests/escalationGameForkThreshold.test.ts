@@ -123,6 +123,25 @@ describe('Escalation Game Fork Threshold Test', () => {
 		assert.strictEqual(walletRepAfter - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
 	})
 
+	test('ordinary settlement freezes a reduced payout before later supply changes', async () => {
+		const depositAmount = 100n * 10n ** 18n
+		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount / 2n)
+		const initialSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(GENESIS_UNIVERSE))
+		await overrideGenesisTheoreticalSupply(initialSupply / 10n)
+		await mockWindow.advanceTime(10n * DAY)
+		const before = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		await overrideGenesisTheoreticalSupply(initialSupply)
+		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: securityPoolAddresses.escalationGame, functionName: 'settleOrdinaryGame' }))
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), depositAmount / 10n, 'the reserve should cover precisely the remaining frozen claim')
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
+		assert.strictEqual((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - before, depositAmount / 5n, 'supply changes after settlement must neither enlarge nor shrink the reserved payout')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n)
+	})
+
 	test('reduced-threshold scaling remains active immediately before and exactly at game end, but not one second after', async () => {
 		const proofVerifier = await deployContract(
 			client,
@@ -248,10 +267,17 @@ describe('Escalation Game Fork Threshold Test', () => {
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: securityPoolAddresses.escalationGame,
 				functionName: 'sweepResidualRepToSecurityPool',
-				args: [],
 			}),
 			/No sweepable REP/,
 		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				address: securityPoolAddresses.escalationGame,
+				functionName: 'settleOrdinaryGame',
+			}),
+		)
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n, 'idempotent settlement must not invent residual after every winner claims')
 
 		const attackerWalletBefore = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
 		await redeemRepFromVault(attacker, securityPoolAddresses.securityPool, attacker.account.address)

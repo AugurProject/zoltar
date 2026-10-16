@@ -11,6 +11,7 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
+import { PortfolioForkClaim } from './PortfolioForkClaim.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { buildPoolsRouteHash } from '../../../lib/statoblastLocation.js'
 import * as copy from '../../../copy/portfolio.js'
@@ -24,7 +25,7 @@ function allocationStatus(allocation: Model['allocations'][number]) {
 	return allocation.reusable ? copy.reusablePosition : copy.historicalPosition
 }
 
-export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'> }) {
+export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy' | 'ownerReason' | 'runPortfolioAction'> }) {
 	const snapshot = model.snapshot
 	const pagedRecovery = snapshot !== undefined && snapshot.intervalCount > 64n
 	const questionSelectId = useId()
@@ -63,6 +64,8 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 						<UserMessage detail={copy.recoveryPageRange(snapshot.intervalStart, snapshot.intervals.length, snapshot.intervalCount)} />
 					</>
 				) : undefined}
+				<PortfolioInput label={copy.recoveryBatchLabel} hint={copy.recoveryBatchHint} value={model.recoveryBatchSize} onChange={model.setRecoveryBatchSize} disabled={actions.busy !== undefined} numeric />
+				{model.recoveryPositionCount > 0 ? <UserMessage detail={copy.readyRecoveryPositions(model.recoveryPositionCount)} /> : undefined}
 				<PortfolioButton model={actions} action='collectPortfolioRecovery' label={copy.collectRecovered} pendingLabel={copy.collectingRecovered} reason={model.collectReason} onClick={model.collectRecovered} />
 				<PaginationControls hasPreviousPage={(snapshot?.intervalStart ?? 0n) > 0n} hasNextPage={snapshot !== undefined && snapshot.intervalStart + 64n < snapshot.intervalCount} loading={model.loading} onPreviousPage={model.previousIntervalPage} onNextPage={model.nextIntervalPage} />
 			</SectionBlock>
@@ -153,6 +156,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 								<summary>{copy.individualControl}</summary>
 								<UserMessage tone='warning' detail={copy.individualControlHint} />
 								<PortfolioButton model={actions} action={`claimPortfolioPosition:${claim.positionId}`} label={copy.claimQuestion} pendingLabel={copy.claimingQuestion} reason={claim.claimReason} onClick={() => model.claimPosition(claim.positionId)} />
+								{snapshot !== undefined && snapshot.forkTime > 0n ? <PortfolioForkClaim snapshot={snapshot} allocation={claim} actions={actions} onConfirmed={model.refresh} /> : undefined}
 							</details>
 						</div>
 					))

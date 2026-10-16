@@ -5,6 +5,7 @@ import { createStatoblastInitCodes } from '@zoltar/statoblast-shared/deployment/
 import { statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import {
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
@@ -30,6 +31,7 @@ export { getZoltarAddress, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-
 const statoblastInitCodes = createStatoblastInitCodes(
 	{
 		escalationGameClaimDelegate: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+		escalationGameDepositDelegate: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 		escalationGameFactory: statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 		multicall3: statoblast_Multicall3_Multicall3,
 		openOracle: statoblast_openOracle_OpenOracle_OpenOracle,
@@ -94,7 +96,8 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		openOraclePriceCoordinatorFactory: constructorArgumentsFromInitCode(getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress), statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
 		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
 		escalationGameClaimDelegate: '',
-		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
+		escalationGameDepositDelegate: '',
+		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate, addresses.escalationGameDepositDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
 		securityPoolFactory: constructorArgumentsFromInitCode(getSecurityPoolFactoryByteCode(addresses), statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
 	}
 }
@@ -102,7 +105,6 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 type BootstrapDescendantAddresses = {
 	[id: string]: Address
 	escalationGameProofVerifier: Address
-	escalationGameDepositDelegate: Address
 	liquidationApprovalRegistryDeployer: Address
 	liquidationApprovalRegistryImplementation: Address
 	oracleReportDelegate: Address
@@ -133,7 +135,6 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		escalationGameCreationCodePartOne: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 2n }),
 		escalationGameCreationCodePartTwo: getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 3n }),
 		escalationGameProofVerifier: infrastructure.escalationGameProofVerifier,
-		escalationGameDepositDelegate: infrastructure.escalationGameDepositDelegate,
 		securityPoolDeployer,
 		securityPoolDeploymentWorker,
 		securityPoolCreationCodeFirstChunk: getCreateAddress({ from: securityPoolDeploymentWorker, nonce: 1n }),

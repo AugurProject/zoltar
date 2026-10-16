@@ -1,4 +1,5 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
+	{ name: 'OrdinarySettlementInitialized', parameters: 'BinaryOutcomes.BinaryOutcome indexed outcome,uint256 winningPrincipalAttoRep,uint256 reservedAttoRep', sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol' },
 	{ name: 'VaultPositionSplit', parameters: 'address indexed source,address indexed recipient,uint256 numerator,uint256 denominator', sourcePath: 'solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol' },
 	{ name: 'ClaimCheckpointProgress', parameters: 'bytes32 indexed claimId,address nextSourceGame,uint256 pendingSteps,bool complete', sourcePath: 'solidity/contracts/statoblast/EscalationGameClaimDelegate.sol' },
 	{ name: 'RegistryInitialized', parameters: 'address indexed coordinator', sourcePath: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol' },
@@ -161,6 +162,8 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 ]
 
 export const delegateEventDeclarationMirrors: Array<{ name: string; sourcePath: string }> = [
+	{ name: 'OrdinarySettlementInitialized', sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol' },
+	{ name: 'ResidualRepSweptToSecurityPool', sourcePath: 'solidity/contracts/statoblast/EscalationGameDepositDelegate.sol' },
 	{ name: 'PoolAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
 	{ name: 'VaultAccountingCheckpoint', sourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol' },
 	{ name: 'ChildPoolLinked', sourcePath: 'solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol' },
@@ -186,4 +189,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = 'a478f01b480166d007650f92faed89907a8cb46cf3a9aba1c8bf522cb9a4978e'
+export const referencedEventAbiFingerprint = '88e70822558f594d167734f756ef0505649adc17fc2b17ee3ebed71e025a237f'

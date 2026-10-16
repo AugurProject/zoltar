@@ -118,7 +118,7 @@ const abi = parseAbi([
 	'function settlementTime() view returns (uint48)',
 	'function getActiveStagedOperationCount() view returns (uint256)',
 	'function stagedOperations(uint256) view returns (uint8,address,address,address,uint256,uint256,uint256,uint256,uint256,bytes32,uint256)',
-	'function getActiveStagedOperations(uint256,uint256) view returns (uint256[], (uint8 operation,address operator,address receiverVault,address targetVault,uint256 operationValue,uint256 queuedAt,uint256 validForSeconds,uint256 snapshotTargetBackingUnits,uint256 snapshotTargetUnderwritingLimitAttoEth,bytes32 liquidationApprovalId,uint256 reservedLiquidationDebtAttoEth)[])',
+	'function getActiveStagedOperationsPage(uint256,uint256) view returns (uint256[], (uint8 operation,address operator,address receiverVault,address targetVault,uint256 operationValue,uint256 queuedAt,uint256 validForSeconds,uint256 snapshotTargetBackingUnits,uint256 snapshotTargetUnderwritingLimitAttoEth,bytes32 liquidationApprovalId,uint256 reservedLiquidationDebtAttoEth)[],uint256)',
 ])
 function uint(value: unknown): bigint {
 	if (typeof value !== 'bigint' || value < 0n) throw new Error('Invalid unsigned integer in portfolio snapshot.')
@@ -300,7 +300,7 @@ export async function loadPortfolioSnapshot(parameters: {
 		let pendingReportCoordinator = zeroAddress
 		if (pendingReportId !== 0n) pendingReportCoordinator = priceFeed.toLowerCase() === coordinator.toLowerCase() ? coordinator : await readAddress(priceFeed, 'pendingCoordinator')
 		let ordinaryResidualPending = false
-		if (game !== zeroAddress) {
+		if (!resolved && game !== zeroAddress) {
 			const [continuation, totalDisputeStaked] = await Promise.all([read(game, 'forkContinuation').then(boolean), readUint(game, 'totalDisputeStakedAttoRep')])
 			ordinaryResidualPending = !continuation && totalDisputeStaked > 0n
 		}
@@ -327,12 +327,17 @@ export async function loadPortfolioSnapshot(parameters: {
 		}
 		if (!queuedOperationsComplete) issues.push(`Operation scan limit reached for pool ${pool}; pending exposure may be missing.`)
 		const limit = operationCount < BigInt(maximumOperations) ? operationCount : BigInt(maximumOperations)
+		let operationCursor = 0n
 		for (let start = 0n; start < limit; start += 64n) {
 			const count = limit - start < 64n ? limit - start : 64n
-			const page = array(await read(coordinator, 'getActiveStagedOperations', [start, count]))
+			const page = array(await read(coordinator, 'getActiveStagedOperationsPage', [operationCursor, count]))
 			const ids = array(page[0]).map(uint)
 			const operations = array(page[1])
 			if (ids.length !== Number(count) || operations.length !== ids.length) throw new Error('Incomplete operation page in portfolio snapshot.')
+			if (operationCursor !== 0n && ids[0] !== operationCursor) throw new Error('Operation page does not start at its cursor.')
+			for (const [index, id] of ids.entries()) if (id === 0n || (index > 0 && id >= (ids[index - 1] ?? 0n))) throw new Error('Operation page is not newest first.')
+			operationCursor = uint(page[2])
+			if ((operationCursor === 0n) !== (start + count === operationCount) || operationCursor >= (ids.at(-1) ?? 0n)) throw new Error('Inconsistent operation cursor in portfolio snapshot.')
 			for (let index = 0; index < ids.length; index++) {
 				const id = ids[index]
 				if (id === undefined) throw new Error('Missing operation id.')

@@ -148,11 +148,12 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 						return 0n
 					case 'getActiveStagedOperationCount':
 						return BigInt(options.pendingPerPool ?? 0)
-					case 'getActiveStagedOperations': {
+					case 'getActiveStagedOperationsPage': {
 						const [start, count] = args
 						if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Invalid operation page')
-						const ids = Array.from({ length: Number(count) }, (_, index) => start + BigInt(index) + 1n)
-						return [ids, ids.map(() => [3n, vault, vault, owner, '0x', 900n, 300n])]
+						const firstId = start === 0n ? BigInt(options.pendingPerPool ?? 0) : start
+						const ids = Array.from({ length: Number(count) }, (_, index) => firstId - BigInt(index))
+						return [ids, ids.map(() => [3n, vault, vault, owner, '0x', 900n, 300n]), firstId - count]
 					}
 					case 'allocatedQuestionCount':
 						return options.allocatedCount ?? 0n

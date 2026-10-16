@@ -53,6 +53,10 @@ abstract contract EscalationGameStorage {
 	// A checkpoint stores only frozen grandparent-and-earlier transforms. The
 	// current game and its immediate source always remain live.
 	mapping(bytes32 => EscalationClaimCheckpoint) internal claimCheckpoints;
+	bool public ordinarySettlementInitialized;
+	BinaryOutcomes.BinaryOutcome internal ordinarySettlementOutcome;
+	uint256 public ordinaryWinningReserveAttoRep;
+	uint256 public ordinarySettlementForkThresholdAttoRep;
 
 	function _isDepositResolutionOpen(BinaryOutcomes.BinaryOutcome provisionalResolution) internal view returns (bool) {
 		// A provisional leader cannot close an unresolved unrelated continuation's
@@ -66,7 +70,13 @@ abstract contract EscalationGameStorage {
 	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
+		if (ordinarySettlementInitialized)
+			return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(ordinarySettlementOutcome)];
 		return _applyTruthAuctionRetention(escalationClaimBundles[vault].disputeStakedRepClaimUnits);
+	}
+
+	function _isRetiredOrdinaryOutcome(uint8 outcomeIndex) internal view returns (bool) {
+		return ordinarySettlementInitialized && outcomeIndex != uint8(ordinarySettlementOutcome);
 	}
 
 	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {

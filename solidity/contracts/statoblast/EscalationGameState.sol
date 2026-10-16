@@ -33,6 +33,7 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
 	event ForkedEscrowExported(address indexed vault, address repReceiver, uint256[3] sourcePrincipalByOutcomeAttoRep, uint256[3] childRepByOutcomeAttoRep, uint256 totalChildRepToTransferAttoRep, bool transferredRep);
 	event ResidualRepSweptToSecurityPool(uint256 amountAttoRep);
+	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
 	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
 

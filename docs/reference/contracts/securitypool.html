@@ -121,9 +121,9 @@
 						<tr>
 							<td><code>redeemRepFromVault(vault)</code></td>
 							<td>Vault owner; caller must equal <code>vault</code>, and REP is sent to <code>vault</code></td>
-							<td>Operational pool with a final outcome; the specified <code>vault</code> has no escalation escrow, has redeemable REP, and has exited its underwriting commitment by setting it to zero (<code>Exit commitment before REP redemption</code>) under the <a href="../invariants.html#bal-03">limit-reduction rules</a>.</td>
-							<td>Burns the vault's REP backing units and returns its proportional vault REP backing.</td>
-							<td>Fee-accrual checkpoints when due; REP <code>Transfer</code>, <code>RepRedeemedFromVault</code>, then <code>VaultAccountingCheckpoint</code></td>
+							<td>Operational pool with a final outcome; the specified <code>vault</code> has no remaining escalation escrow, has positive backing units, and has exited its underwriting commitment by setting it to zero (<code>Exit commitment before REP redemption</code>) under the <a href="../invariants.html#bal-03">limit-reduction rules</a>.</td>
+							<td>First settles an ordinary final game, preserving winner liabilities and returning surplus to the pool. Burns the vault's REP backing units and returns its proportional vault REP backing; zero-valued units can be retired without a token transfer.</td>
+							<td>Ordinary settlement signals when applicable; fee-accrual checkpoints when due; REP <code>Transfer</code> only for positive REP, then <code>RepRedeemedFromVault</code> and <code>VaultAccountingCheckpoint</code></td>
 						</tr>
 						<tr>
 							<td><code>depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)</code><wbr /></td>

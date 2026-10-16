@@ -78,6 +78,7 @@ describe('generated bot contract ABIs', () => {
 		expect(generated(abis.deploySecurityPoolEvent)).toEqual(event(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'DeploySecurityPool'))
 		expect(generated(abis.vaultAccountingCheckpointEvent)).toEqual(event(statoblast_SecurityPool_SecurityPool.abi, 'VaultAccountingCheckpoint'))
 		expect(generated(abis.vaultEscrowUpdatedEvent)).toEqual(event(statoblast_EscalationGame_EscalationGame.abi, 'VaultEscrowUpdated'))
+		expect(generated(abis.ordinarySettlementInitializedEvent)).toEqual(event(statoblast_EscalationGame_EscalationGame.abi, 'OrdinarySettlementInitialized'))
 		expect(generated(abis.truthAuctionHaircutAppliedEvent)).toEqual(event(statoblast_EscalationGame_EscalationGame.abi, 'TruthAuctionHaircutApplied'))
 	})
 
@@ -109,6 +110,7 @@ describe('generated bot contract ABIs', () => {
 			'deploySecurityPoolEvent',
 			'vaultAccountingCheckpointEvent',
 			'vaultEscrowUpdatedEvent',
+			'ordinarySettlementInitializedEvent',
 			'truthAuctionHaircutAppliedEvent',
 		])
 		expect(Object.keys(abis).sort()).toEqual([...asserted].sort())

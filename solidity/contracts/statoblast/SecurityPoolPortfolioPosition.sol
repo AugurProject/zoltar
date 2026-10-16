@@ -83,17 +83,9 @@ contract SecurityPoolPortfolioPosition {
 		if (pool.systemState() == SystemState.Operational) {
 			if (pool.isEscalationResolved()) {
 				EscalationGame game = pool.escalationGame();
-				bool residualPending =
-					address(game) != address(0) && !game.forkContinuation() && game.totalDisputeStakedAttoRep() > 0;
-				if (!residualPending) {
-					if (
-						address(game) != address(0) &&
-						!game.forkContinuation() &&
-						pool.repToken().balanceOf(address(game)) > 0
-					) game.sweepResidualRepToSecurityPool();
-					if (commitment > 0) pool.setUnderwritingLimit(0);
-					if (units > 0 && pool.backingUnitsToAttoRep(units) > 0) pool.redeemRepFromVault(address(this));
-				}
+				if (address(game) != address(0) && !game.forkContinuation()) game.settleOrdinaryGame();
+				if (commitment > 0) pool.setUnderwritingLimit(0);
+				if (units > 0) pool.redeemRepFromVault(address(this));
 			} else {
 				(uint256 retainedCommitment, uint256 releaseAttoRep) = rebalancePlan();
 				if (retainedCommitment < commitment) pool.setUnderwritingLimit(retainedCommitment);

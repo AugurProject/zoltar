@@ -13,6 +13,7 @@ import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_Multicall3_Multicall3,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
@@ -43,6 +44,7 @@ const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisf
 const statoblastInitCodes = createStatoblastInitCodes(
 	{
 		escalationGameClaimDelegate: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+		escalationGameDepositDelegate: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 		escalationGameFactory: statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 		multicall3: statoblast_Multicall3_Multicall3,
 		openOracle: statoblast_openOracle_OpenOracle_OpenOracle,
@@ -186,6 +188,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'openOraclePriceCoordinatorFactory', address: infraContracts.openOraclePriceCoordinatorFactory },
 		{ id: 'securityPoolForker', address: infraContracts.securityPoolForker },
 		{ id: 'escalationGameClaimDelegate', address: infraContracts.escalationGameClaimDelegate },
+		{ id: 'escalationGameDepositDelegate', address: infraContracts.escalationGameDepositDelegate },
 		{ id: 'escalationGameFactory', address: infraContracts.escalationGameFactory },
 		{ id: 'securityPoolFactory', address: infraContracts.securityPoolFactory },
 		{ id: 'securityPoolPortfolioVaultDeployer', address: infraContracts.securityPoolPortfolioVaultDeployer },
@@ -216,7 +219,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		escalationGameClaimDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameClaimDelegate'),
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
-		escalationGameDepositDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
+		escalationGameDepositDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameDepositDelegate'),
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
 		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),
 		securityPoolFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolFactory'),
@@ -255,7 +258,8 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['openOraclePriceCoordinatorFactory']) await deployBytecode('openOraclePriceCoordinatorFactory', getOpenOraclePriceCoordinatorFactoryByteCode(MAINNET_WETH_ADDRESS))
 	if (!existence['securityPoolForker']) await deployBytecode('securityPoolForker', getSecurityPoolForkerByteCode(contractAddresses.zoltar))
 	if (!existence['escalationGameClaimDelegate']) await deployBytecode('escalationGameClaimDelegate', `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`)
-	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameClaimDelegate))
+	if (!existence['escalationGameDepositDelegate']) await deployBytecode('escalationGameDepositDelegate', `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`)
+	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameClaimDelegate, contractAddresses.escalationGameDepositDelegate))
 	if (!existence['securityPoolFactory']) await deployBytecode('securityPoolFactory', getSecurityPoolFactoryByteCode(contractAddresses))
 	if (!existence['securityPoolPortfolioVaultDeployer']) await deployBytecode('securityPoolPortfolioVaultDeployer', getSecurityPoolPortfolioVaultDeployerByteCode())
 

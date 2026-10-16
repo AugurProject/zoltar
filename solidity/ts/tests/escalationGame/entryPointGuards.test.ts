@@ -160,7 +160,7 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 				functionName: 'sweepResidualRepToSecurityPool',
 				args: [],
 			}),
-			/Principal remains/,
+			/No sweepable REP/,
 		)
 
 		const escrowed = await deployEscalationGameWithProofPool()
@@ -287,7 +287,9 @@ describe('Escalation Game: deposits and entry-point guards', () => {
 	test('claimDepositForWinning rejects false-returning REP transfers', async () => {
 		const falseReturningRepToken = await deployFalseReturningToken()
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool(falseReturningRepToken)
-		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
+		await startEscalationFromFork(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		await initializeSnapshotViaTestSecurityPool(testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await resumeEscalationFromFork(escalationGameAddress)
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(4n * DAY)
 

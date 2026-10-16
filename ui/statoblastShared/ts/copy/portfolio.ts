@@ -157,7 +157,7 @@ export const openPrice = 'Open pool price workflow'
 
 export const maximumPurchaseFee = 'Maximum purchase fee ETH'
 export const maximumPurchaseFeeHint = 'Charged on every purchase, including reused backing. Unused budget returns to your wallet.'
-export const residualWithdrawal = 'Ordinary residual claims are pending. Wait for settlement or separately allow forfeiture.'
+export const residualWithdrawal = 'The dispute is not final. Wait for its outcome or separately allow forfeiture of future residual REP.'
 export const allowResidualForfeiture = 'Allow pending residual forfeiture'
 export const allowingResidualForfeiture = 'Allowing pending residual forfeiture…'
 export const revokeResidualForfeiture = 'Protect pending residuals'
@@ -165,8 +165,8 @@ export const revokingResidualForfeiture = 'Protecting pending residuals…'
 export const residualForfeitureAllowed = 'Pending residual forfeiture allowed'
 export const residualsProtected = 'Pending residuals protected'
 export const residualForfeitureReview =
-	'Allow exits for this withdrawal request before ordinary dispute claims settle. Anyone may then process positions, permanently giving up your share of residual REP recovered later. Already collectible residual REP is swept first. Your own dispute deposits and native fork locks still apply.'
-export const residualProtectionReview = 'Require ordinary residual claims to settle before remaining positions exit. This cannot recover residual rights already forfeited by completed exits.'
+	'Allow exits for this withdrawal request before the ordinary dispute is final. Anyone may then process positions, permanently giving up your share of residual REP recovered later. After finality, available surplus is collected before exit. Your own dispute deposits and native fork locks still apply.'
+export const residualProtectionReview = 'Preserve residual REP rights until the ordinary dispute is final. Other reporters do not need to collect first. This cannot recover rights already forfeited by completed exits.'
 
 export const estimatedPurchaseFee = 'Purchase fee ETH'
 export const purchaseFeeLoading = 'Estimating purchase fee…'
@@ -237,10 +237,14 @@ export const transferringNativeRep = 'Transferring recovery REP…'
 export const rebalancePosition = 'Process recovery'
 export const rebalancingPosition = 'Processing recovery…'
 export const rebalancePositionReview = 'Release available REP and fees for all recorded allocation owners. Their combined recovery balances increase without individual question claims. Native coverage, dispute and fork locks remain. Completing recovery earns the displayed processing reward, collected separately.'
-export const collectRecovered = 'Collect recovered REP and fees'
+export const collectRecovered = 'Recover and collect REP and fees'
 export const collectingRecovered = 'Collecting REP and fees…'
+export const recoveryBatchLabel = 'Maximum allocations in this transaction'
+export const recoveryBatchHint = 'Choose a smaller number if the transaction exceeds your gas budget. Enter 0 to collect already available proceeds only.'
+export const recoveryBatchInvalid = 'Enter a nonnegative whole number of allocations.'
 export const combinedRecovery = 'Combined recovery'
-export const combinedRecoveryHint = 'Collect released REP across your allocations, earned fees and processing rewards in one transaction. Withdrawn reserve shares retain these rights.'
+export const combinedRecoveryHint = 'Recover finalized allocations on this page and collect available REP, fees and rewards in one transaction. Withdrawn reserve shares retain these rights.'
+export const readyRecoveryPositions = (count: number) => `${count} finalized allocation${count === 1 ? '' : 's'} on this page will be recovered before collection. Their original owners share the proceeds.`
 export const recoveredRep = 'Released REP available'
 export const recoveredRepPageSubtotal = 'Released REP subtotal'
 export const recoveredFees = 'Fees and rewards available ETH'
@@ -254,8 +258,8 @@ export const intervalNotOnPage = 'Open the ownership history page containing thi
 export const recoveryHistoryChanged = 'Your ownership history changed. Refresh and review again.'
 export const recoveryPageHint = 'Amounts include this ownership history page plus all already credited balances. Other pages may have additional proceeds.'
 export const recoveryPageRange = (start: bigint, count: number, total: bigint) => `Ownership history ${start + 1n}–${start + BigInt(count)} of ${total}`
-export const collectRecoveredReview = (rep: string, eth: string, paged: boolean) =>
-	`Collect ${rep} REP and ${eth} ETH to your wallet, including earned fees and processing rewards.${paged ? ' This subtotal covers the selected ownership history page and all already credited balances.' : ''} Locked backing remains in place.`
+export const collectRecoveredReview = (rep: string, eth: string, paged: boolean, recoveryCount: number) =>
+	`Collect the available ${rep} REP and ${eth} ETH to your wallet, including earned fees and processing rewards.${recoveryCount > 0 ? ` Also recover ${recoveryCount} finalized allocation${recoveryCount === 1 ? '' : 's'} on this page and collect your additional proceeds. Recovery credits every original owner; its gas cost grows with the selected allocations.` : ''}${paged ? ' This subtotal covers the selected ownership history page and all already credited balances.' : ''} Locked backing remains in place.`
 export const approvalReview = (amount: string, portfolio: string) => `Approve ${amount} REP for portfolio ${portfolio}. Deposit requires its own transaction.`
 export const depositReview = (amount: string, minimum: string) =>
 	`Deposit ${amount} REP into the unallocated reserve for at least ${minimum} nontransferable reserve shares. This REP may back future allocations under the shared policy. Existing allocations remain with their recorded owners; their released proceeds are collected through combined recovery.`

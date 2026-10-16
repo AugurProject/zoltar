@@ -660,6 +660,57 @@ describe('durable protocol index', () => {
 		expect(update.index.escalationDeposits).toEqual([])
 	})
 
+	test('ordinary finality retires every indexed losing deposit while preserving winners and other games', async () => {
+		const game = address(21)
+		const pool = address(22)
+		const otherGame = address(23)
+		const previous: ChaosProtocolIndex = {
+			auctionBids: {},
+			auctionRefunds: {},
+			chainId: 31337,
+			childRepSplits: [],
+			cursor: { blockHash: hash(9), blockNumber: '9' },
+			escalationDeposits: [
+				{ amountAttoRep: 9n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 1, parentDepositIndex: '0', pool, vault: address(1) },
+				{ amountAttoRep: 8n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 2, parentDepositIndex: '0', pool, vault: address(1) },
+				{ amountAttoRep: 3n.toString(), claimed: false, depositIndex: '0', escalationGame: game, outcome: 0, parentDepositIndex: '0', pool, vault: address(2) },
+				{ amountAttoRep: 4n.toString(), claimed: false, depositIndex: '0', escalationGame: otherGame, outcome: 2, parentDepositIndex: '0', pool: address(24), vault: address(1) },
+			],
+			migrationRepSplits: [],
+			...indexDeployments,
+			reports: [],
+			schemaVersion: 3,
+			startBlock: '1',
+			wallet: address(1),
+		}
+		const topic = keccak256(toHex('OrdinarySettlementInitialized(uint8,uint256,uint256)'))
+		const settlement = canonicalLog({ address: game, blockNumber: 10n, logIndex: 0, topics: [topic, toHex(1n, { size: 32 })], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [9n, 17n]) })
+		const client = strictReadClient({
+			async getBlock(parameters: { blockNumber: bigint }) {
+				return { hash: hash(Number(parameters.blockNumber)), number: parameters.blockNumber, timestamp: 1_000n }
+			},
+			async getLogs(parameters: { address?: Address | Address[]; topics?: readonly (string | readonly string[] | null)[] }) {
+				const selected = parameters.topics?.[0]
+				return Array.isArray(parameters.address) && parameters.address.includes(game) && Array.isArray(selected) && selected.includes(topic) ? [settlement] : []
+			},
+		})
+		const context = indexContext(client, {
+			escalationGames: [
+				{ escalationGame: game, pool },
+				{ escalationGame: otherGame, pool: address(24) },
+			],
+			previous,
+			startBlock: 1n,
+		})
+		const update = await updateProtocolIndex(context)
+		expect(update.index.escalationDeposits.map(deposit => [deposit.escalationGame, deposit.outcome])).toEqual([
+			[game, 1],
+			[otherGame, 2],
+		])
+		const repeated = await updateProtocolIndex({ ...context, previous: update.index })
+		expect(repeated.index.escalationDeposits).toEqual(update.index.escalationDeposits)
+	})
+
 	test('marks both winning claims and losing carry consumptions terminal', async () => {
 		const game = address(21)
 		const pool = address(22)

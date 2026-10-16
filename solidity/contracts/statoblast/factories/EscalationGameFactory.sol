@@ -19,8 +19,9 @@ contract EscalationGameFactory {
 	address private immutable escalationGameCreationCodePartOne;
 	address private immutable escalationGameCreationCodePartTwo;
 
-	constructor(EscalationGameClaimDelegate _claimDelegate) {
+	constructor(EscalationGameClaimDelegate _claimDelegate, EscalationGameDepositDelegate _depositDelegate) {
 		require(address(_claimDelegate).code.length > 0, 'Claim delegate');
+		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
 		claimDelegate = _claimDelegate;
 		proofVerifier = new EscalationGameProofVerifier();
 		bytes memory creationCode = type(EscalationGame).creationCode;
@@ -29,7 +30,7 @@ contract EscalationGameFactory {
 		escalationGameCreationCodePartOne = _deployCodePart(creationCode, 0, firstPartLength);
 		escalationGameCreationCodePartTwo = _deployCodePart(creationCode, firstPartLength, creationCode.length - firstPartLength);
 		// Stateless delegate code is shared by every game; game storage stays isolated through delegatecall.
-		depositDelegate = new EscalationGameDepositDelegate();
+		depositDelegate = _depositDelegate;
 	}
 
 	function _deployCodePart(bytes memory completeCode, uint256 offset, uint256 length) private returns (address codePart) {

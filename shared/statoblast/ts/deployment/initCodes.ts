@@ -71,6 +71,7 @@ type ContractArtifact = BytecodeArtifact & Readonly<{ abi: Abi }>
 /** Compiled artifacts for the proxy-deployed statoblast infrastructure; callers supply them from their own artifact module. */
 type StatoblastInfrastructureArtifacts = {
 	escalationGameClaimDelegate: BytecodeArtifact
+	escalationGameDepositDelegate: BytecodeArtifact
 	escalationGameFactory: ContractArtifact
 	multicall3: BytecodeArtifact
 	openOracle: BytecodeArtifact
@@ -111,7 +112,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ hash: keccak256(toHex(SECURITY_POOL_UTILS_LIBRARY)).slice(2, 36), address: getSecurityPoolUtilsAddress() }])
 
 	const getShareTokenFactoryByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.shareTokenFactory.abi, bytecode: bytecodeOf(artifacts.shareTokenFactory), args: [zoltar] })
-	const getEscalationGameFactoryByteCode = (claimDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate] })
+	const getEscalationGameFactoryByteCode = (claimDelegate: Address, depositDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate, depositDelegate] })
 	const getPriceCoordinatorDeploymentWorkerByteCode = () => applyLibraries(artifacts.priceCoordinatorDeploymentWorker.evm.bytecode.object)
 	const getSharedPoolPriceFeedDeploymentWorkerByteCode = () => applyLibraries(artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object)
 	const getWorkerAddress = (bytecode: Hex) => getCreate2Address({ bytecode, from: proxyDeployerAddress, salt: zeroSalt })
@@ -143,6 +144,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const createInfraContractAddresses = (weth: Address, zoltar: ZoltarAddressSources) =>
 		createInfraContractAddressHelper({
 			escalationGameClaimDelegateBytecode: bytecodeOf(artifacts.escalationGameClaimDelegate),
+			escalationGameDepositDelegateBytecode: bytecodeOf(artifacts.escalationGameDepositDelegate),
 			getEscalationGameFactoryByteCode,
 			getSecurityPoolFactoryByteCode,
 			getSecurityPoolForkerByteCode,

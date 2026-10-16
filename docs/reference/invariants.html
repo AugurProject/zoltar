@@ -683,7 +683,7 @@
 							<td>
 								<a href="#esc-11"><code>ESC-11</code></a>
 							</td>
-							<td>Residual sweep preconditions</td>
+							<td>Winner reserves and residual settlement</td>
 							<td>Conservation</td>
 							<td>Contract guard</td>
 						</tr>
@@ -2592,11 +2592,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="esc-11">
-						<summary><code>ESC-11</code><span class="invariant-title">Residual sweep preconditions</span></summary>
+						<summary><code>ESC-11</code><span class="invariant-title">Winner reserves and residual settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Residual REP cannot be settled until effective unresolved principal is zero for every outcome. For a continuation, the sweep first retires its inherited aggregate <code>forkCarryDisputeStakedAttoRep</code>; after that retirement, no local dispute stake or vault escrow may remain in <code>totalDisputeStakedAttoRep</code>. Inherited losing principal retires at finalization without a proof; winning inherited proofs and every local unresolved deposit still require their applicable terminal transition. Ordinary-game residual returns to the pool, while fork-continuation residual is burned and cannot accrue to child-local backing units.</div>
-							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
+							<div class="invariant-property">Ordinary final settlement freezes the winning outcome and effective fork threshold, reserves all remaining winning payouts and required burns, and retires losing escrow without visiting deposits. Winning payouts and burns use differences of the frozen cumulative payout curves, so their sum equals the reserved liability regardless of claim order or deposit splitting. Only REP above that reserve returns to the pool; unclaimed winners retain their full reserved entitlement and their own vault escrow. <code>settleOrdinaryGame</code> is permissionless and idempotent, and final backing redemption invokes it before valuing backing units. A continuation keeps separate rules: its sweep requires zero effective unresolved principal, retires inherited aggregate <code>forkCarryDisputeStakedAttoRep</code>, and requires no remaining local stake or vault escrow. Inherited losers retire without proofs, but winning inherited proofs and local unresolved deposits still need their applicable terminal transition. Continuation residual is burned and cannot accrue to child-local backing units.</div>
+							<p class="invariant-example"><strong>Example:</strong> After an ordinary Yes result, a passive backing owner can recover surplus while Yes reporters remain unclaimed; their payout and burn reserve stays in the game. In a continuation, an unclaimed inherited No leaf does not block sweeping, but an unclaimed inherited Yes proof or live local escrow does.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2609,8 +2609,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>sweepResidualRepToSecurityPool</code></a
-										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditForkResidualCapture.test.ts">external-fork residual burn regression test</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditOwnForkResidualRepLock.test.ts">own-fork residual burn regression test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>settleOrdinaryGame</code> and <code>sweepResidualRepToSecurityPool</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/ordinarySettlementRecovery.test.ts">ordinary settlement recovery regressions</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditForkResidualCapture.test.ts">external-fork residual burn regression test</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditOwnForkResidualRepLock.test.ts">own-fork residual burn regression test</a>
 									</dd>
 								</div>
 							</dl>

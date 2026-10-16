@@ -10,7 +10,7 @@ const feed: Address = '0x0000000000000000000000000000000000000004'
 const coordinator: Address = '0x0000000000000000000000000000000000000005'
 const seedPool: Address = '0x0000000000000000000000000000000000000006'
 const zoltar: Address = '0x0000000000000000000000000000000000000007'
-const abi = parseAbi(['function deposit(uint256,uint256)', 'function withdraw(uint256,uint256)', 'function claimPosition(uint256,uint256)', 'function rebalancePosition(uint256)', 'function claimRecovered(uint256[])'])
+const abi = parseAbi(['function deposit(uint256,uint256)', 'function withdraw(uint256,uint256)', 'function claimPosition(uint256,uint256)', 'function rebalancePosition(uint256)', 'function claimRecovered(uint256[],uint256[])'])
 
 test('deposit and exit preserve owner identity and explicit slippage bounds', () => {
 	const deposit = buildPortfolioDepositRequest({ owner, portfolio, amountAttoRep: 40n, minimumShares: 19n })
@@ -111,6 +111,8 @@ function reads(options: { positionCount?: bigint; questionCount?: bigint; assets
 					return zoltar
 				case 'systemState':
 					return 0
+				case 'isEscalationResolved':
+					return false
 				case 'getQuestionEndDate':
 					return 1000n
 				case 'getOwnerPositionShares':
@@ -130,8 +132,8 @@ test('reserve ownership stays separate from allocation claims at one pinned bloc
 	const snapshot = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
 	expect(snapshot).toMatchObject({ shares: 5n, totalShares: 20n, ownerAssetsAttoRep: 25n, walletAttoRep: 60n, allowanceAttoRep: 40n, claimableFeesAttoEth: 3n, reserveAttoRep: 100n, reserveCapacityAttoEth: 12n, questions: [9n] })
 	expect(snapshot.positions).toEqual([
-		{ positionId: 1n, questionId: 1n, custody: token, ownerShares: 2n, remainingShares: 10n, reusable: false, recoveryComplete: false, recoveryBountyAttoEth: 7n, questionEndTime: 1000n, operational: true },
-		{ positionId: 2n, questionId: 2n, custody: token, ownerShares: 0n, remainingShares: 10n, reusable: true, recoveryComplete: false, recoveryBountyAttoEth: 7n, questionEndTime: 1000n, operational: true },
+		{ positionId: 1n, questionId: 1n, custody: token, ownerShares: 2n, remainingShares: 10n, reusable: false, recoveryComplete: false, recoveryBountyAttoEth: 7n, questionEndTime: 1000n, operational: true, resolved: false },
+		{ positionId: 2n, questionId: 2n, custody: token, ownerShares: 0n, remainingShares: 10n, reusable: true, recoveryComplete: false, recoveryBountyAttoEth: 7n, questionEndTime: 1000n, operational: true, resolved: false },
 	])
 	expect(calls.every(call => call.blockNumber === 50n)).toBe(true)
 	expect(calls.find(call => call.functionName === 'allowance')?.args).toEqual([owner, portfolio])
@@ -182,9 +184,12 @@ test('a changed chain anchor cannot authorize a deposit or mint quote', async ()
 test('combined collection normalizes personal intervals and permits already credited rewards alone', () => {
 	const collect = buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [9n, 2n, 9n, 0n] })
 	expect(collect.account).toBe(owner)
-	expect(decodeFunctionData({ abi, data: collect.data })).toEqual({ functionName: 'claimRecovered', args: [[0n, 2n, 9n]] })
-	expect(decodeFunctionData({ abi, data: buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [] }).data }).args).toEqual([[]])
+	expect(decodeFunctionData({ abi, data: collect.data })).toEqual({ functionName: 'claimRecovered', args: [[0n, 2n, 9n], []] })
+	expect(decodeFunctionData({ abi, data: buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [] }).data }).args).toEqual([[], []])
 	expect(() => buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [-1n] })).toThrow('uint256')
+	const withRecovery = buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [0n], positionIds: [12n, 3n, 12n] })
+	expect(decodeFunctionData({ abi, data: withRecovery.data }).args).toEqual([[0n], [3n, 12n]])
+	expect(() => buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [], positionIds: [-1n] })).toThrow('uint256')
 })
 
 test('combined recovery reads only personal history pages and includes exact carry, fees and processing rewards', async () => {

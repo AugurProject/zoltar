@@ -247,7 +247,7 @@ describe('Statoblast: aggregate purchase fees', () => {
 		expect([...(await fixture.owner().readContract({ abi: recoveryArtifact.abi, address: ledger, functionName: 'claimableInterval', args: [fixture.other().account.address, 0n] }))]).toEqual([0n, 0n])
 		expect(await bounty()).toBe(cleanupBounty)
 		const before = await eth(fixture.owner().account.address)
-		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimRecovered', args: [[0n]] }))
+		const hash = await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimRecovered', args: [[0n], []] }))
 		const receipt = await fixture.owner().waitForTransactionReceipt({ hash })
 		if (receipt.effectiveGasPrice === undefined) throw new Error('Missing effective gas price')
 		expect((await eth(fixture.owner().account.address)) + receipt.gasUsed * receipt.effectiveGasPrice - before).toBe(earned + fee)

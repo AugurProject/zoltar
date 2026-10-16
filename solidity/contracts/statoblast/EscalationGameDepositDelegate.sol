@@ -15,6 +15,7 @@ import {
 	IEscalationGameSecurityPoolContext
 } from './interfaces/IEscalationGameDelegateContexts.sol';
 import { IZoltarForkState } from './interfaces/IZoltarForkState.sol';
+import { Zoltar } from '../Zoltar.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
 import {
@@ -33,6 +34,39 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	event TruthAuctionHaircutApplied(uint256 repBeforeAttoRep, uint256 repRemovedAttoRep, uint256 repRemainingAttoRep, uint256 rebasedElapsed);
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
+	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
+	event ResidualRepSweptToSecurityPool(uint256 amountAttoRep);
+
+	function settleOrdinaryGame(EscalationGameProofVerifier verifier, bool releaseSurplus) external returns (uint256) {
+		require(!forkContinuation && nonDecisionState == NonDecisionState.None, 'Not ordinary settlement');
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		if (!ordinarySettlementInitialized) {
+			BinaryOutcomes.BinaryOutcome outcome = game.getFinalQuestionResolution();
+			require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
+			IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+			Zoltar zoltar = Zoltar(pool.zoltar());
+			uint256 threshold = zoltar.getForkThresholdAttoRep(pool.universeId());
+			if (zoltar.getForkTime(pool.universeId()) > game.getEscalationGameEndDate())
+				threshold = nonDecisionThresholdAttoRep;
+			ordinarySettlementForkThresholdAttoRep = threshold;
+			uint256 winningPrincipal = outcomeState[uint8(outcome)].balanceAttoRep;
+			(uint256 payout, uint256 burn) = verifier.computeOrdinaryWinningWithdrawal(winningPrincipal, winningPrincipal, game.getBindingCapitalAttoRep(), winningPrincipal, threshold, nonDecisionThresholdAttoRep);
+			ordinaryWinningReserveAttoRep = payout + burn;
+			require(IERC20(game.repToken()).balanceOf(address(this)) >= ordinaryWinningReserveAttoRep, 'Winner reserve underfunded');
+			ordinarySettlementOutcome = outcome;
+			ordinarySettlementInitialized = true;
+			totalDisputeStakedAttoRep = winningPrincipal;
+			totalLocalUnresolvedAttoRep = winningPrincipal;
+			emit OrdinarySettlementInitialized(outcome, winningPrincipal, ordinaryWinningReserveAttoRep);
+		}
+		if (!releaseSurplus) return 0;
+		IERC20 token = IERC20(game.repToken());
+		uint256 amount = token.balanceOf(address(this)) - ordinaryWinningReserveAttoRep;
+		if (amount == 0) return 0;
+		token.safeTransfer(game.securityPool(), amount);
+		emit ResidualRepSweptToSecurityPool(amount);
+		return amount;
+	}
 
 	/// @notice Pool-only delegate target: install exactly one outcome from a bound fork snapshot.
 	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot, EscalationGameProofVerifier proofVerifier, EscalationGameClaimDelegate claimDelegate, bytes32 emptyNullifierRoot) external {

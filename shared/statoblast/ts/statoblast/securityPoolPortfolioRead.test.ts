@@ -145,8 +145,8 @@ function fixture(
 					return 60n
 				case 'getActiveStagedOperationCount':
 					return options.operationCount ?? 1n
-				case 'getActiveStagedOperations':
-					return [[8n], [{ operation: 0n, operator: owner, receiverVault: owner, targetVault: vault, queuedAt: 900n, validForSeconds: 100n }]]
+				case 'getActiveStagedOperationsPage':
+					return [[8n], [{ operation: 0n, operator: owner, receiverVault: owner, targetVault: vault, queuedAt: 900n, validForSeconds: 100n }], (options.operationCount ?? 1n) > 1n ? 7n : 0n]
 				default:
 					throw new Error(`Unexpected snapshot method ${functionName}`)
 			}
@@ -171,7 +171,7 @@ function filteredFixture(options: { role?: 'operator' | 'receiverVault' | 'targe
 		readContract: async request => {
 			if (request.functionName === 'getForkTime') return 0n
 			if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n]
-			if (request.functionName === 'getActiveStagedOperations') return [[options.role === 'targetVault' ? 8n : 9n], [{ operation: 0n, operator: owner, receiverVault: owner, targetVault: options.role === 'targetVault' ? vault : owner, queuedAt: 900n, validForSeconds: 100n }]]
+			if (request.functionName === 'getActiveStagedOperationsPage') return [[options.role === 'targetVault' ? 8n : 9n], [{ operation: 0n, operator: owner, receiverVault: owner, targetVault: options.role === 'targetVault' ? vault : owner, queuedAt: 900n, validForSeconds: 100n }], 7n]
 			if (request.functionName === 'stagedOperations') {
 				reads.push({ functionName: request.functionName, blockNumber: request.blockNumber })
 				const operator = options.foreignOperation ? owner : roles.operator
@@ -373,12 +373,13 @@ describe('portfolio snapshot reader', () => {
 					return [0n, 0n, 0n, 0n]
 				case 'getActiveStagedOperationCount':
 					return address === secondCoordinator ? 0n : 300n
-				case 'getActiveStagedOperations': {
+				case 'getActiveStagedOperationsPage': {
 					const start = args[0]
 					const count = args[1]
 					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected a queue page.')
-					const ids = Array.from({ length: Number(count) }, (_, index) => start + BigInt(index))
-					return [ids, ids.map(() => ({ operation: 0n, operator: owner, receiverVault: owner, targetVault: owner, queuedAt: 900n, validForSeconds: 100n }))]
+					const firstId = start === 0n ? 300n : start
+					const ids = Array.from({ length: Number(count) }, (_, index) => firstId - BigInt(index))
+					return [ids, ids.map(() => ({ operation: 0n, operator: owner, receiverVault: owner, targetVault: owner, queuedAt: 900n, validForSeconds: 100n })), firstId - count]
 				}
 				default:
 					return client.readContract(request)
@@ -393,6 +394,35 @@ describe('portfolio snapshot reader', () => {
 		const plan = { snapshot, universeId: 0n, minimumIdleAttoRep: 10n, minimumHealthFactorBps: 10_000n, allocations: [allocation] }
 		expect(planPortfolioAllocations(plan).idleAfterAttoRep).toBe(16n)
 		expect(() => planPortfolioAllocations({ ...plan, allocations: [{ ...allocation, questionId: 51n }] })).toThrow('operation scan is incomplete')
+	})
+
+	test('continues queue pages by operation ID at the same snapshot block', async () => {
+		const { client, parameters } = fixture({ operationCount: 130n })
+		const cursors: bigint[] = []
+		const readContract: PortfolioReadClient['readContract'] = async request => {
+			if (request.functionName !== 'getActiveStagedOperationsPage') return client.readContract(request)
+			const [cursor, count] = request.args ?? []
+			if (typeof cursor !== 'bigint' || typeof count !== 'bigint') throw new Error('Missing operation cursor.')
+			expect(request.blockNumber).toBe(123n)
+			cursors.push(cursor)
+			const firstId = cursor === 0n ? 390n : cursor
+			const ids = Array.from({ length: Number(count) }, (_, index) => firstId - BigInt(index) * 3n)
+			return [ids, ids.map(() => ({ operation: 0n, operator: owner, receiverVault: owner, targetVault: vault, queuedAt: 900n, validForSeconds: 100n })), firstId - count * 3n]
+		}
+		const snapshot = await loadPortfolioSnapshot({ ...parameters, client: { ...client, readContract }, universeIds: [0n] })
+		expect(cursors).toEqual([0n, 198n, 6n])
+		expect(snapshot.branches[0]?.positions[0]?.queuedOperations).toHaveLength(130)
+		expect(snapshot.branches[0]?.positions[0]?.queuedOperationsComplete).toBe(true)
+	})
+
+	test.each([
+		{ ids: [8n, 8n], next: 0n, message: 'newest first' },
+		{ ids: [8n, 7n], next: 8n, message: 'Inconsistent operation cursor' },
+		{ ids: [8n, 7n], next: 1n, message: 'Inconsistent operation cursor' },
+	])('rejects malformed operation pages: $ids / $next', async ({ ids, next, message }) => {
+		const { client, parameters } = fixture({ operationCount: 2n })
+		const readContract: PortfolioReadClient['readContract'] = async request => (request.functionName === 'getActiveStagedOperationsPage' ? [ids, ids.map(() => ({ operation: 0n, operator: owner, receiverVault: owner, targetVault: vault, queuedAt: 900n, validForSeconds: 100n })), next] : client.readContract(request))
+		await expect(loadPortfolioSnapshot({ ...parameters, client: { ...client, readContract } })).rejects.toThrow(message)
 	})
 
 	test('fails closed on malformed pages and invalid request bounds', async () => {
@@ -556,7 +586,7 @@ describe('portfolio snapshot reader', () => {
 })
 
 for (const state of [
-	{ resolved: true, forkContinuation: false, totalDisputeStakedAttoRep: 5n, pending: true },
+	{ resolved: true, forkContinuation: false, totalDisputeStakedAttoRep: 5n, pending: false },
 	{ resolved: true, forkContinuation: false, totalDisputeStakedAttoRep: 0n, pending: false },
 	{ resolved: true, forkContinuation: true, totalDisputeStakedAttoRep: 5n, pending: false },
 	{ resolved: false, forkContinuation: false, totalDisputeStakedAttoRep: 5n, pending: true },
@@ -570,7 +600,7 @@ for (const state of [
 }
 
 test('malformed residual metadata rejects the snapshot instead of allowing an unsafe exit', async () => {
-	const { client } = fixture({ resolved: true, game: coordinator, forkContinuation: 'false' })
+	const { client } = fixture({ resolved: false, game: coordinator, forkContinuation: 'false' })
 	await expect(loadPortfolioSnapshot({ client, portfolio, vault, universeIds: [0n] })).rejects.toThrow('Invalid boolean')
 })
 

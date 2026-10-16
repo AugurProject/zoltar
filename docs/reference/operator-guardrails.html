@@ -411,7 +411,7 @@
 							<tr>
 								<td>Residual sweep</td>
 								<td>
-									<code>sweepResidualRepToSecurityPool</code> returns an ordinary game's residual to the security pool and burns a carried game's entire residual. <a href="./invariants.html#esc-11"><code>ESC-11</code></a> owns the preconditions.
+									<code>settleOrdinaryGame</code> reserves final winning liabilities and releases surplus to the security pool without waiting for individual claims; repeated calls with no surplus succeed. Native final backing redemption invokes it automatically. <code>sweepResidualRepToSecurityPool</code> uses the same ordinary settlement but requires a positive release; continuation sweeps retain their claim-completion requirements and burn the residual. <a href="./invariants.html#esc-11"><code>ESC-11</code></a> owns the conservation rules.
 								</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.sweepResidualRepToSecurityPool</code></a>
@@ -629,6 +629,11 @@
 								<td>Recovery path</td>
 								<td>Coordinator reports opt into OpenOracle's <code>STORE_ALL</code> and <code>TRACK_DISPUTES</code> flags. Recovery requires a pending report whose stored OpenOracle settlement timestamp is nonzero. It returns withdrawable reporter balances to the sponsor, clears the report, consumes all associated pending operations, and releases their liquidation reservations. An expired operation can also be cleaned permissionlessly before any valid-price requirement.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
+							</tr>
+							<tr>
+								<td>Queue reads</td>
+								<td><code>getActiveStagedOperationsPage(cursorOperationId, count)</code> walks only the requested page from an active operation ID; zero starts at the newest entry. Pin all pages to one block and continue with the returned cursor. A consumed cursor reverts. <code>getPendingCommitmentOperationId(owner)</code> returns that owner's unconsumed commitment operation directly, including an expired operation awaiting consumption. No queue-wide scan is needed to check this pending state.</td>
+								<td><a href="./contracts/openoraclepricecoordinator.html">OpenOraclePriceCoordinator read surface</a></td>
 							</tr>
 							<tr>
 								<td>Consumed failures</td>

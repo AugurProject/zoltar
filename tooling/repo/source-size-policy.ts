@@ -20,7 +20,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/dashboard/dashboard-server.ts', 816],
 		['bots/chaos/src/state/protocol-index-store.ts', 900],
 		['bots/chaos/src/execution/recovery.ts', 644],
-		['bots/chaos/src/monitoring/protocol-index.ts', 691],
+		['bots/chaos/src/monitoring/protocol-index.ts', 648],
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [['bots/liquidator/src/state/operator-state.ts', 632]]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
@@ -42,6 +42,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 608],
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 754]]),
-	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive; the position-split ABI forwarding remains here while its implementation is delegated.', [['solidity/contracts/statoblast/SecurityPool.sol', 708]]),
+	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive; position splitting remains delegated and final redemption initializes ordinary settlement at the shared entry point.', [['solidity/contracts/statoblast/SecurityPool.sol', 710]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [['solidity/contracts/statoblast/SecurityPoolForker.sol', 613]]),
 ])

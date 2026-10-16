@@ -52,6 +52,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'InheritedThresholdTieReopened',
 		'LocalDepositAppended',
 		'NonDecisionReached',
+		'OrdinarySettlementInitialized',
 		'ResidualRepSweptToSecurityPool',
 		'ForkContinuationResidualRepBurned',
 		'TruthAuctionHaircutApplied',

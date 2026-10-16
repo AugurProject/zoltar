@@ -30,6 +30,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	sharedPoolPriceFeedDeploymentWorker: 6_000_000n,
 	securityPoolForker: 16_250_000n,
 	escalationGameClaimDelegate: 1_250_000n,
+	escalationGameDepositDelegate: 4_500_000n,
 	escalationGameFactory: 15_500_000n,
 	securityPoolFactory: 14_750_000n,
 }

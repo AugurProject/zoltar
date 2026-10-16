@@ -496,6 +496,7 @@ describe('testnet deployment plan', () => {
 		const trading = getTradingDeploymentPlan({ chainId: 11_155_111, chainName: 'Sepolia', defaultRpcUrl: '', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: infrastructure.securityPoolFactory, zoltar: infrastructure.zoltar }, 30)
 		const directInfrastructure = [
 			infrastructure.escalationGameClaimDelegate,
+			infrastructure.escalationGameDepositDelegate,
 			infrastructure.escalationGameFactory,
 			infrastructure.multicall3,
 			infrastructure.openOracle,
@@ -526,11 +527,10 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(19)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(19)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(18)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(18)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
-		expect(bootstrapDescendants.escalationGameDepositDelegate).toBe(getCreateAddress({ from: infrastructure.escalationGameFactory, nonce: 4n }))
 		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
 		expect(bootstrapDescendants.liquidationApprovalRegistryImplementation).toBe(getCreateAddress({ from: bootstrapDescendants.liquidationApprovalRegistryDeployer, nonce: 1n }))
 		expect(bootstrapDescendants.oracleReportDelegate).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 3n }))
@@ -543,12 +543,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(25)
+		expect(plan).toHaveLength(26)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(30)
+		expect(deterministicPlan).toHaveLength(31)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {

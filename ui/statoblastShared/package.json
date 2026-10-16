@@ -685,6 +685,10 @@
 			"bun": "./ts/features/portfolios/hooks/usePortfolioAggregate.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioAggregate.js"
 		},
+		"./features/portfolios/hooks/usePortfolioForkClaim.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioForkClaim.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioForkClaim.js"
+		},
 		"./features/portfolios/lib/runoff.js": {
 			"bun": "./ts/features/portfolios/lib/runoff.ts",
 			"default": "./js/features/portfolios/lib/runoff.js"
@@ -700,6 +704,10 @@
 		"./protocol/securityPoolPortfolio.js": {
 			"bun": "./ts/protocol/securityPoolPortfolio.ts",
 			"default": "./js/protocol/securityPoolPortfolio.js"
+		},
+		"./protocol/securityPoolPortfolioFork.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioFork.ts",
+			"default": "./js/protocol/securityPoolPortfolioFork.js"
 		},
 		"./features/portfolios/lib/history.js": {
 			"bun": "./ts/features/portfolios/lib/history.ts",

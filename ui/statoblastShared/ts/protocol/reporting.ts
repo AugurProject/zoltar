@@ -298,6 +298,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
+	const ordinarySettlementInitialized = !forkContinuationSnapshot && (await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementInitialized' }))
+	const frozenOrdinaryForkThreshold = ordinarySettlementInitialized ? await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'ordinarySettlementForkThresholdAttoRep' }) : undefined
 	const continuationTiming = forkContinuationSnapshot
 		? await Promise.all([
 				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
@@ -425,7 +427,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		currentTime: block.timestamp,
 		escalationEndTime,
 		escalationGameAddress,
-		forkThresholdAttoRep,
+		forkThresholdAttoRep: frozenOrdinaryForkThreshold ?? (universeForkTime > escalationEndTime ? nonDecisionThresholdAttoRep : forkThresholdAttoRep),
 		hasReachedNonDecision,
 		marketDetails,
 		nonDecisionThresholdAttoRep,

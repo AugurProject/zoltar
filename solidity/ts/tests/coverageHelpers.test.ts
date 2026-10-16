@@ -29,6 +29,7 @@ import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
@@ -1594,14 +1595,23 @@ describe('Solidity bytecode coverage helpers', () => {
 				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 			}),
 		)
+		const depositDelegateAddress = await deployContract(
+			client,
+			encodeDeployData({
+				abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+				bytecode: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`,
+			}),
+		)
 		const escalationGameFactoryAddress = await deployContract(
 			client,
 			encodeDeployData({
 				abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
 				bytecode: `0x${statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
-				args: [claimDelegateAddress],
+				args: [claimDelegateAddress, depositDelegateAddress],
 			}),
 		)
+		assert.strictEqual(await client.readContract({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, address: escalationGameFactoryAddress, functionName: 'depositDelegate' }), depositDelegateAddress)
+		assert.strictEqual(await client.readContract({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, address: escalationGameFactoryAddress, functionName: 'claimDelegate' }), claimDelegateAddress)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.sendTransaction({

@@ -23,7 +23,7 @@ describe('Statoblast: lazy allocation custody and selective maintenance', () => 
 	const pool = () => fixture.base.securityPoolAddresses.securityPool
 	const ledger = async () => await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveryLedger' })
 	const recovered = async (owner = fixture.owner().account.address, ids = [0n]) => await fixture.owner().readContract({ abi: recoveryArtifact.abi, address: await ledger(), functionName: 'previewClaim', args: [owner, ids] })
-	const recover = (ids = [0n], sender = fixture.owner()) => writeContractAndWait(sender, () => sender.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimRecovered', args: [ids] }))
+	const recover = (ids = [0n], sender = fixture.owner()) => writeContractAndWait(sender, () => sender.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimRecovered', args: [ids, []] }))
 	const intervalCount = async (owner = fixture.owner().account.address) => await fixture.owner().readContract({ abi: recoveryArtifact.abi, address: await ledger(), functionName: 'getOwnerIntervalCount', args: [owner] })
 	const claimAsOther = (positionId = 1n) => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimPosition', args: [positionId, 0n] }))
 	const prepare = async () => {
@@ -340,7 +340,7 @@ describe('Statoblast: lazy allocation custody and selective maintenance', () => 
 		expect(await getERC20Balance(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), await custody())).toBe(0n)
 	})
 
-	test('shared recovery preserves pending ordinary-game residual and distributes it once after settlement', async () => {
+	test('shared recovery releases ordinary-game surplus at finality before any reporter claims', async () => {
 		await prepare()
 		await redeemCompleteSet(fixture.other(), pool(), 100n * unit)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
@@ -356,18 +356,14 @@ describe('Statoblast: lazy allocation custody and selective maintenance', () => 
 		expect(await complete()).toBe(false)
 		expect(await bounty()).toBe(0n)
 		const game = await advancePastOrdinaryEscalationDeadline(fixture.owner(), fixture.base.mockWindow, pool())
-		await rebalance()
-		expect((await getSecurityVault(fixture.owner(), pool(), source)).repBackingUnits).toBe(originalUnits)
-		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'totalDisputeStakedAttoRep' })).toBeGreaterThan(0n)
-		await withdrawFirstDepositOfEachOutcome(fixture.other(), pool())
 		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
-		const residual = await getERC20Balance(fixture.owner(), rep, game)
-		expect(residual).toBe(ordinaryEscalationPrincipals.lowLosingPrincipal)
 		const poolRep = await getERC20Balance(fixture.owner(), rep, pool())
 		const totalUnits = await fixture.owner().readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'totalRepBackingUnits' })
-		const expected = (originalUnits * (poolRep + residual)) / totalUnits
+		const expected = (originalUnits * (poolRep + ordinaryEscalationPrincipals.lowLosingPrincipal)) / totalUnits
 		await rebalance()
-		expect(await getERC20Balance(fixture.owner(), rep, game)).toBe(0n)
+		expect((await getSecurityVault(fixture.owner(), pool(), source)).repBackingUnits).toBe(0n)
+		expect(await fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName: 'totalDisputeStakedAttoRep' })).toBe(ordinaryEscalationPrincipals.winningPrincipal)
+		expect(await getERC20Balance(fixture.owner(), rep, game)).toBe(ordinaryEscalationPrincipals.winningPrincipal + ordinaryEscalationPrincipals.bindingLosingPrincipal)
 		expect(await fixture.repClaim(pool(), source)).toBe(0n)
 		expect(await complete()).toBe(true)
 		expect(await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveredRepAttoRep' })).toBe(expected)
@@ -379,6 +375,8 @@ describe('Statoblast: lazy allocation custody and selective maintenance', () => 
 		expect((await getERC20Balance(fixture.owner(), rep, fixture.owner().account.address)) - before).toBe(payable)
 		expect(await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveredRepAttoRep' })).toBe(expected - payable)
 		expect(await intervalCount()).toBe(1n)
+		await withdrawFirstDepositOfEachOutcome(fixture.other(), pool())
+		expect(await getERC20Balance(fixture.owner(), rep, game)).toBe(0n)
 		const creditedBounty = await bounty()
 		expect(creditedBounty).toBeGreaterThan(0n)
 		await rebalance()

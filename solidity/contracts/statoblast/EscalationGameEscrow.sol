@@ -9,6 +9,7 @@ import { ForkedEscrowState, OutcomeState } from './EscalationGameTypes.sol';
 abstract contract EscalationGameEscrow is EscalationGameCarry {
 	function getLocalUnresolvedPrincipalByVaultAndOutcome(address vault, BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
+		if (_isRetiredOrdinaryOutcome(uint8(outcome))) return 0;
 		return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(outcome)];
 	}
 
@@ -63,6 +64,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 
 	function _totalUnresolvedPrincipal() internal view returns (uint256 unresolvedPrincipal) {
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			if (_isRetiredOrdinaryOutcome(outcomeIndex)) continue;
 			unresolvedPrincipal +=
 				_getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex) +
 				outcomeState[outcomeIndex].localUnresolvedTotalAttoRep;
@@ -70,6 +72,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 	}
 
 	function _exportVaultUnresolvedTotals(address vault, address repReceiver, bool transferRep) private returns (uint256[3] memory principalByOutcomeAttoRep) {
+		require(!ordinarySettlementInitialized, 'Final claims not exportable');
 		require(vault != address(0x0), 'Vault is zero');
 		require(!localUnresolvedTotalsExportedByVault[vault], 'Vault totals exported');
 		localUnresolvedTotalsExportedByVault[vault] = true;

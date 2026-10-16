@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
 import { IERC165 } from './interfaces/IERC165.sol';
@@ -128,6 +129,15 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 	function execute(address target, uint256 value, bytes calldata data) external payable onlyOwner nonReentrant returns (bytes memory) {
 		_revokeAllocationPolicy(false);
 		return _execute(target, value, data);
+	}
+
+	/// @notice Completes an owner's atomic allocation claim and explicit fork choice.
+	/// @dev Only the immutable portfolio may invoke this narrow operation; its caller must own the allocation.
+	function migrateClaimedPosition(ISecurityPool parent, uint256 outcomeIndex) external nonReentrant {
+		require(msg.sender == address(portfolio), 'Only portfolio');
+		require(address(portfolio.getPool(parent.questionId(), parent.universeId())) == address(parent), 'Question pool unavailable');
+		_revokeAllocationPolicy(false);
+		ISecurityPoolForker(parent.securityPoolForker()).migrateVault(parent, outcomeIndex);
 	}
 
 	/// @notice Execute a bounded batch atomically at the call level.
@@ -366,7 +376,7 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 		if (pool.isEscalationResolved()) {
 			if (units > 0) _collectWithdrawalResidual(pool, true);
 			if (commitment > 0) pool.setUnderwritingLimit(0);
-			if (pool.backingUnitsToAttoRep(units) > 0) pool.redeemRepFromVault(address(this));
+			if (units > 0) pool.redeemRepFromVault(address(this));
 		} else {
 			uint256 total = pool.totalUnderwritingLimitAttoEth();
 			uint256 collateral = pool.settlementCollateralAttoEth();
@@ -393,14 +403,14 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 		EscalationGame game = pool.escalationGame();
 		// Continuation residual is burned, so it never increases this vault's backing claim.
 		if (address(game) == address(0) || game.forkContinuation()) return;
-		// Ordinary games have neither inherited principal nor auction haircuts: their escrow total
-		// reaches zero only after every local principal claim settles. Do not catch a failed sweep,
-		// including out-of-gas, since redemption would silently forfeit an already available claim.
-		if (game.totalDisputeStakedAttoRep() > 0) {
-			require(withdrawalResidualForfeitureAllowed, 'Ordinary residual unsettled');
+		if (isFinal) {
+			// Freeze every remaining winner liability and collect only the safe surplus.
+			// No reporter cleanup is needed before this vault exits.
+			game.settleOrdinaryGame();
 			return;
 		}
-		if (isFinal && pool.repToken().balanceOf(address(game)) > 0) game.sweepResidualRepToSecurityPool();
+		if (game.totalDisputeStakedAttoRep() > 0)
+			require(withdrawalResidualForfeitureAllowed, 'Ordinary residual unsettled');
 	}
 
 	function _payWithdrawal(IERC20 token) private {

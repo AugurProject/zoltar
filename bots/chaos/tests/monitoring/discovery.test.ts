@@ -1576,7 +1576,7 @@ describe('anchored ecosystem discovery', () => {
 						return 1n
 					case 'getPendingSettlementOperationIds':
 						return []
-					case 'getActiveStagedOperations':
+					case 'getActiveStagedOperationsPage':
 						return [
 							[42n],
 							[
@@ -1594,6 +1594,7 @@ describe('anchored ecosystem discovery', () => {
 									validForSeconds: 3_600n,
 								},
 							],
+							0n,
 						]
 					case 'minLiquidationPriceDistanceBps':
 						return 250n
@@ -1726,18 +1727,17 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
-						if (parameters.functionName === 'getActiveStagedOperationCount') return 2n
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string; blockNumber?: bigint }) => {
+						expect(parameters.blockNumber).toBe(555n)
+						if (parameters.functionName === 'getActiveStagedOperationCount') return 66n
 						if (parameters.functionName === 'getPendingSettlementOperationIds') return []
-						if (parameters.functionName === 'getActiveStagedOperations') {
+						if (parameters.functionName === 'getActiveStagedOperationsPage') {
 							pageRequests.push(parameters.args ?? [])
-							const start = parameters.args?.[0]
-							if (start === 0n)
-								return [
-									[42n, 43n],
-									[operation(), operation()],
-								]
-							return [[], []]
+							const [cursor, count] = parameters.args ?? []
+							if (typeof cursor !== 'bigint' || typeof count !== 'bigint') throw new Error('Missing operation cursor')
+							const firstId = cursor === 0n ? 198n : cursor
+							const ids = Array.from({ length: Number(count) }, (_, index) => firstId - BigInt(index) * 3n)
+							return [ids, ids.map(operation), firstId - count * 3n]
 						}
 						throw new Error(`Unexpected read ${parameters.functionName}`)
 					}
@@ -1754,21 +1754,24 @@ describe('anchored ecosystem discovery', () => {
 		})
 		const overflowWarnings: string[] = []
 		expect(await discoverStagedOperations(client, pool, 555n, 1, overflowWarnings)).toEqual([])
-		expect(overflowWarnings).toEqual([`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total 2 exceeds the configured 1-entry resident limit`])
+		expect(overflowWarnings).toEqual([`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total 66 exceeds the configured 1-entry resident limit`])
 		expect(pageRequests).toEqual([])
 
-		const executable = await discoverStagedOperations(client, pool, 555n, 2, [])
+		const executable = await discoverStagedOperations(client, pool, 555n, 66, [])
 		expect(executable[0]).toMatchObject({ executionExpectedResult: '0x', executionExpectedSuccess: true, operation: operationType })
-		expect(executable).toHaveLength(2)
-		expect(pageRequests).toEqual([[0n, 2n]])
+		expect(executable).toHaveLength(66)
+		expect(pageRequests).toEqual([
+			[0n, 64n],
+			[6n, 2n],
+		])
 		expect(simulations[0]).toMatchObject({ account: pool.vaultOperations, args: [fixture.wallet.address, 100n], functionName: operationType === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit' })
 		simulationFailure = new Error('execution reverted: stale withdrawal')
-		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
+		expect((await discoverStagedOperations(client, pool, 555n, 66, []))[0]?.executionExpectedSuccess).toBe(false)
 		simulationFailure = new Error('RPC connection closed')
-		await expect(discoverStagedOperations(client, pool, 555n, 2, [])).rejects.toThrow('RPC connection closed')
+		await expect(discoverStagedOperations(client, pool, 555n, 66, [])).rejects.toThrow('RPC connection closed')
 		simulationFailure = undefined
 		receiver = address(99)
-		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
+		expect((await discoverStagedOperations(client, pool, 555n, 66, []))[0]?.executionExpectedSuccess).toBe(false)
 	})
 
 	test('pins the block fetch, every contract read, and wallet balance to the supplied anchor', async () => {

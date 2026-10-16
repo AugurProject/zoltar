@@ -394,20 +394,27 @@ contract OpenOraclePriceCoordinator is OpenOraclePriceSource {
 		return pendingSettlementOperationIds;
 	}
 
-	/// @notice Returns up to `count` active staged operations, newest first, after skipping `startIndex`.
-	function getActiveStagedOperations(uint256 startIndex, uint256 count) public view returns (uint256[] memory operationIds, StagedOperation[] memory operations) {
-		if (count == 0 || startIndex >= activeStagedOperationCount) {
-			return (new uint256[](0), new StagedOperation[](0));
+	/// @notice Returns the owner's live commitment operation, including expired operations awaiting consumption.
+	function getPendingCommitmentOperationId(address owner) public view returns (uint256) {
+		uint256 operationId = latestBackingTargetOperationIds[owner];
+		return stagedOperations[operationId].operator == address(0) ? 0 : operationId;
+	}
+
+	/// @notice Pages newest first from an inclusive active operation id; zero starts at the head.
+	/// @dev Pin every page to one block. A consumed cursor reverts; nextCursor is zero at the end.
+	function getActiveStagedOperationsPage(uint256 cursorOperationId, uint256 count) public view returns (uint256[] memory operationIds, StagedOperation[] memory operations, uint256 nextCursor) {
+		require(count > 0, 'Page count must be positive');
+		require(cursorOperationId == 0 || isActiveStagedOperation[cursorOperationId], 'Inactive operation cursor');
+		uint256 operationId = cursorOperationId == 0 ? latestActiveStagedOperationId : cursorOperationId;
+		nextCursor = operationId;
+		uint256 resultCount;
+		while (resultCount < count && nextCursor != 0) {
+			resultCount++;
+			nextCursor = olderActiveStagedOperationIds[nextCursor];
 		}
-		uint256 availableCount = activeStagedOperationCount - startIndex;
-		uint256 resultCount = count < availableCount ? count : availableCount;
 		operationIds = new uint256[](resultCount);
 		operations = new StagedOperation[](resultCount);
-		uint256 operationId = latestActiveStagedOperationId;
-		for (uint256 skipped = 0; skipped < startIndex && operationId != 0; skipped++) {
-			operationId = olderActiveStagedOperationIds[operationId];
-		}
-		for (uint256 index = 0; index < resultCount && operationId != 0; index++) {
+		for (uint256 index = 0; index < resultCount; index++) {
 			operationIds[index] = operationId;
 			operations[index] = stagedOperations[operationId];
 			operationId = olderActiveStagedOperationIds[operationId];

@@ -52,7 +52,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		stateView.localHeadNodeId = state.localHeadNodeId;
 		stateView.currentLeafCount = currentLeafCount;
 		stateView.currentPeaks = currentPeaks;
-		stateView.localUnresolvedTotalAttoRep = state.localUnresolvedTotalAttoRep;
+		stateView.localUnresolvedTotalAttoRep =
+			_isRetiredOrdinaryOutcome(outcomeIndex) ? 0 : state.localUnresolvedTotalAttoRep;
 		stateView.currentCarryRoot = currentCarryRoot;
 		stateView.currentCarryTotalAttoRep = currentCarryTotalAttoRep;
 	}
@@ -68,6 +69,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		)
 	{
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			if (_isRetiredOrdinaryOutcome(outcomeIndex)) {
+				nullifierRoots[outcomeIndex] = EMPTY_NULLIFIER_ROOT;
+				continue;
+			}
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			carryPeaks[outcomeIndex] = state.currentPeaks;
 			carryLeafCounts[outcomeIndex] = state.currentLeafCount;
@@ -79,6 +84,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function getForkCarryRoots() external view returns (bytes32[3] memory carryRoots) {
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			if (_isRetiredOrdinaryOutcome(outcomeIndex)) continue;
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			carryRoots[outcomeIndex] = proofVerifier.bagCarryPeaks(state.currentPeaks, state.currentLeafCount);
 		}
@@ -116,6 +122,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function getCarryLeafPageByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startNodeId, uint256 maxEntries) external view returns (CarryLeafView[] memory carryLeaves, uint256 nextPageNodeId) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return (new CarryLeafView[](0), 0);
 		uint8 outcomeIndex = uint8(outcome);
+		if (_isRetiredOrdinaryOutcome(outcomeIndex)) return (new CarryLeafView[](0), 0);
 		if (maxEntries == 0) return (new CarryLeafView[](0), startNodeId);
 
 		OutcomeState storage state = outcomeState[outcomeIndex];
@@ -262,6 +269,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			uint256 currentCarryTotalAttoRep
 		)
 	{
+		if (_isRetiredOrdinaryOutcome(outcomeIndex)) return (currentPeaks, 0, bytes32(0), 0);
 		OutcomeState storage state = outcomeState[outcomeIndex];
 		currentPeaks = state.currentPeaks;
 		currentLeafCount = state.currentLeafCount;

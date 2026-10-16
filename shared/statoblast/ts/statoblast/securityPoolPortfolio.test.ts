@@ -5,6 +5,7 @@ import {
 	buildPortfolioAllocationRequest,
 	buildPortfolioBatchRequest,
 	buildPortfolioDeploymentRequest,
+	buildPortfolioPositionForkClaimRequest,
 	buildPortfolioExecuteRequest,
 	buildPortfolioQuestionBatchRequest,
 	buildPortfolioRevokePolicyRequest,
@@ -31,6 +32,17 @@ const input: VaultOperationsInput = { depositAttoRep: 10n, changeCommitment: fal
 const operations = { ...base, questionId: 51n, universeId: 7n, input, proposedRepPerEthPrice: 2n, requestedInitialAttoWeth: 3n, bountyAttoEth: 4n }
 
 describe('security pool portfolio transaction builders', () => {
+	test('atomic fork claims bind one allocation, its ownership interval and the selected outcome', () => {
+		const request = buildPortfolioPositionForkClaimRequest({ owner, portfolio: pool, positionId: 9n, intervalId: 4n, outcomeIndex: 2n })
+		expect(request).toMatchObject({ account: owner, to: pool, value: 0n })
+		expect(decodeFunctionData({ abi: parseAbi(['function claimPositionAndMigrate(uint256,uint256,uint256)']), data: request.data })).toEqual({ functionName: 'claimPositionAndMigrate', args: [9n, 4n, 2n] })
+		expect(() => buildPortfolioPositionForkClaimRequest({ owner, portfolio: pool, positionId: 0n, intervalId: 0n, outcomeIndex: 0n })).toThrow('Choose an allocation')
+		expect(() => buildPortfolioPositionForkClaimRequest({ owner, portfolio: pool, positionId: 1n, intervalId: -1n, outcomeIndex: 0n })).toThrow('Owner interval')
+		expect(() => buildPortfolioPositionForkClaimRequest({ owner, portfolio: pool, positionId: 1n, intervalId: 0n, outcomeIndex: 1n << 256n })).toThrow('Fork outcome')
+		// An unrelated scalar question can fork the universe; the native protocol validates its outcome encoding.
+		expect(() => buildPortfolioPositionForkClaimRequest({ owner, portfolio: pool, positionId: 1n, intervalId: 0n, outcomeIndex: 37n })).not.toThrow()
+	})
+
 	test('keeps the signer separate from the native pool vault owner', () => {
 		const request = buildPortfolioVaultOperationsRequest({ ...operations, value: 9n })
 		expect(request.account).toBe(owner)

@@ -17,12 +17,14 @@ test('finality unlocks commitment and REP together without an oracle but preserv
 	expect(portfolioRunoffAvailability({ ...unresolved, resolved: true, systemState: 1n }).reason).toContain('migration')
 })
 
-test('ordinary pending residuals need separate consent and consent never bypasses own escrow', () => {
+test('final withdrawal reserves ordinary residuals without consent and never bypasses own escrow', () => {
 	const pending = { ...unresolved, resolved: true, ordinaryResidualPending: true }
-	expect(portfolioRunoffAvailability(pending).reason).toContain('residual')
+	expect(portfolioRunoffAvailability(pending).reason).toBeUndefined()
 	expect(portfolioRunoffAvailability(pending, true).reason).toBeUndefined()
+	expect(portfolioRunoffAvailability({ ...pending, disputeStakeAttoRep: 1n }).reason).toContain('dispute')
 	expect(portfolioRunoffAvailability({ ...pending, disputeStakeAttoRep: 1n }, true).reason).toContain('dispute')
 	expect(portfolioRunoffAvailability({ ...pending, backingUnits: 0n }).reason).toBeUndefined()
+	expect(portfolioRunoffAvailability({ ...pending, backingAttoRep: 0n }).reason).toBeUndefined()
 })
 
 test('unresolved ordinary claims also protect a full REP exit without blocking harmless commitment reductions', () => {

@@ -63,6 +63,7 @@ function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails,
 		forkThresholdAttoRep: details.forkThresholdAttoRep,
 		nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep,
 		winningOutcomeBalanceAttoRep: winningOutcomeBalance,
+		ordinarySettlement: !details.forkContinuation && !details.hasReachedNonDecision,
 	})
 }
 function getWinningImportedEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: ImportedEscalationDeposit) {

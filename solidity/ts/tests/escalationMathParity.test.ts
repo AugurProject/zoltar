@@ -1,4 +1,4 @@
-import { allocatedWinningPayout } from '../../../augurScan/src/claim-payout'
+import { allocatedWinningPayout, ordinaryWinningPayout } from '../../../augurScan/src/claim-payout'
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf as hashSharedCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -358,6 +358,22 @@ describe('Escalation math parity', () => {
 			const actual = allocatedWinningPayout({ principal, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
 			assert.strictEqual(actual.payout, expected.amountToWithdrawAttoRep)
 			assert.strictEqual(actual.burn, expected.burnAmountAttoRep)
+			const ordinary = await client.readContract({ abi, address: verifier, functionName: 'computeOrdinaryWinningWithdrawal', args: [rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold] })
+			const ordinaryModel = ordinaryWinningPayout({ principal: rewardAmount, rewardAmount, rewardCumulative, binding, winningBalance, forkThreshold, nonDecisionThreshold })
+			assert.strictEqual(ordinaryModel.payout, ordinary.amountToWithdrawAttoRep)
+			assert.strictEqual(ordinaryModel.burn, ordinary.burnAmountAttoRep)
+			assert.strictEqual(
+				getWinningEscalationDepositClaimAmount({
+					depositAmountAttoRep: rewardAmount,
+					cumulativeAmountAttoRep: rewardCumulative,
+					bindingCapitalAttoRep: binding,
+					winningOutcomeBalanceAttoRep: winningBalance,
+					forkThresholdAttoRep: forkThreshold,
+					nonDecisionThresholdAttoRep: nonDecisionThreshold,
+					ordinarySettlement: true,
+				}),
+				ordinary.amountToWithdrawAttoRep,
+			)
 		}
 		const leaves = Array.from({ length: 6 }, (_, index) => hashSharedCarryLeaf({ depositor: '0x1111111111111111111111111111111111111111', amountAttoRep: 17n, cumulativeAmountAttoRep: BigInt(index + 1) * 17n, parentDepositIndex: BigInt(index), sourceNodeId: BigInt(index + 1) }, 1))
 		for (let index = 0; index < leaves.length; index++) {
@@ -435,6 +451,7 @@ describe('Escalation math parity', () => {
 			forkThresholdAttoRep: nonDecisionThresholdAttoRep,
 			nonDecisionThresholdAttoRep,
 			winningOutcomeBalanceAttoRep: balances.yes,
+			ordinarySettlement: true,
 		})
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,

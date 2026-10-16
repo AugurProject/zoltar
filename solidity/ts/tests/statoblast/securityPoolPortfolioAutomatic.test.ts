@@ -61,7 +61,7 @@ describe('Statoblast: automatic aggregate underwriting', () => {
 		expect(await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveredRepAttoRep' })).toBe(240n * unit)
 		const rep = getRepTokenAddress(fixture.base.genesisUniverse)
 		const before = await getERC20Balance(fixture.owner(), rep, fixture.owner().account.address)
-		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimRecovered', args: [[0n]] }))
+		await writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimRecovered', args: [[0n], []] }))
 		expect(await getERC20Balance(fixture.owner(), rep, fixture.owner().account.address)).toBe(before + 240n * unit)
 		expect(await fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveredRepAttoRep' })).toBe(0n)
 		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).repBackingUnits).toBe(0n)

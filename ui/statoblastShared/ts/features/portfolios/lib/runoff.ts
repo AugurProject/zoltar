@@ -9,7 +9,7 @@ export function portfolioRunoffAvailability(
 	if ((position.forkTime > 0n && !position.resolved) || position.systemState !== 0n) return { reason: copy.forkWithdrawal, partial: false }
 	if (position.resolved) {
 		if (position.disputeStakeAttoRep > 0n) return { reason: copy.escrowWithdrawal, partial: false }
-		return { reason: position.backingUnits > 0n && position.ordinaryResidualPending && !residualForfeitureAllowed ? copy.residualWithdrawal : undefined, partial: false }
+		return { reason: undefined, partial: false }
 	}
 	const slack = position.poolCommitmentAttoEth > position.settlementCollateralAttoEth ? position.poolCommitmentAttoEth - position.settlementCollateralAttoEth : 0n
 	const canReduce = position.commitmentAttoEth > 0n && slack > 0n

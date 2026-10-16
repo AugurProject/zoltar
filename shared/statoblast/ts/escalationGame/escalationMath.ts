@@ -201,6 +201,7 @@ export function getWinningEscalationDepositClaimAmount({
 	forkThresholdAttoRep,
 	nonDecisionThresholdAttoRep,
 	winningOutcomeBalanceAttoRep,
+	ordinarySettlement = false,
 }: {
 	bindingCapitalAttoRep: bigint
 	depositAmountAttoRep: bigint
@@ -208,7 +209,12 @@ export function getWinningEscalationDepositClaimAmount({
 	forkThresholdAttoRep: bigint
 	nonDecisionThresholdAttoRep: bigint
 	winningOutcomeBalanceAttoRep: bigint
+	ordinarySettlement?: boolean
 }) {
+	if (ordinarySettlement) {
+		const cumulativePayout = (end: bigint) => getWinningWithdrawalAmount({ bindingCapitalAttoRep, depositAmountAttoRep: end, depositEndAttoRep: end, depositStartAttoRep: 0n, forkThresholdAttoRep, nonDecisionThresholdAttoRep, winningOutcomeBalanceAttoRep })
+		return cumulativePayout(cumulativeAmountAttoRep) - cumulativePayout(cumulativeAmountAttoRep - depositAmountAttoRep)
+	}
 	return getWinningWithdrawalAmount({
 		bindingCapitalAttoRep,
 		depositAmountAttoRep,

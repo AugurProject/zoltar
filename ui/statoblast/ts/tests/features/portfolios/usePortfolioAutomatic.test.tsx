@@ -143,7 +143,7 @@ async function renderAutomatic(overrides: Partial<PortfolioPosition> = {}, withd
 }
 
 test('final withdrawal remains processable with outstanding collateral and stale price, and uses the selected native branch', async () => {
-	const { hook, captured } = await renderAutomatic({ resolved: true, priceValid: false }, true)
+	const { hook, captured } = await renderAutomatic({ resolved: true, priceValid: false, ordinaryResidualPending: true, backingAttoRep: 0n }, true)
 	const position = hook.state().positions[0]
 	if (position === undefined) throw new Error('Expected position')
 	expect(position.processReason).toBeUndefined()
@@ -169,8 +169,8 @@ test('cancelling native runoff preserves shared-fund separation and invalidates 
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('authority changed')
 })
 
-test('separate residual consent is reviewed, can be revoked, and invalidates pending withdrawal reviews', async () => {
-	const { hook, captured, changeResidualConsent } = await renderAutomatic({ resolved: true, ordinaryResidualPending: true }, true)
+test('pre-final residual consent is reviewed, can be revoked, and invalidates pending withdrawal reviews', async () => {
+	const { hook, captured, changeResidualConsent } = await renderAutomatic({ ordinaryResidualPending: true, settlementCollateralAttoEth: 0n }, true)
 	expect(hook.state().positions[0]?.processReason).toContain('residual')
 	await act(async () => await hook.state().allowResidualForfeiture())
 	const consent = captured()

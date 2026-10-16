@@ -3,7 +3,7 @@ import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSuppo
 import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { migrateRepToZoltar, createChildUniverse, claimAuctionProceeds } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { depositToEscalationGame, updateSettlementCollateral, updateVaultFees, redeemFees, getSecurityVault, getTotalPoolHeldAttoRep, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { depositToEscalationGame, withdrawFromEscalationGame, updateSettlementCollateral, updateVaultFees, redeemFees, getSecurityVault, getTotalPoolHeldAttoRep, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { requestPriceIfNeededAndStageOperation, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -25,6 +25,8 @@ import { getMigrationRepBalanceAttoRep, getUniverseData, getUniverseTheoreticalS
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from '../statoblast/fixture'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals } from '../residualCaptureHelpers'
 import { getCanonicalEventIdentity, replayZoltarEvents, type ReplayLog } from './eventReplayModel'
 
 const poolAccountingCheckpointEvent = {
@@ -1522,6 +1524,42 @@ describe('event-only replay', () => {
 		if (replayed.escalationLifecycles.get(securityPoolAddresses.escalationGame)?.activationTime === undefined) {
 			throw new Error('initial escalation-game lifecycle was not replayed')
 		}
+	})
+
+	test('actual ordinary settlement replays global losing retirement without synthetic per-deposit cleanup', async () => {
+		const fromBlock = (await client.getBlockNumber()) + 1n
+		const pool = securityPoolAddresses.securityPool
+		const game = securityPoolAddresses.escalationGame
+		const abi = statoblast_EscalationGame_EscalationGame.abi
+		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
+		await depositOrdinaryEscalationPrincipals(client, pool)
+		await advancePastOrdinaryEscalationDeadline(client, mockWindow, pool)
+		const settlement = await writeContractAndWait(client, () => client.writeContract({ abi, address: game, functionName: 'settleOrdinaryGame' }))
+		const checkpointBlock = await client.getBlockNumber()
+		const logs = await getContractReplayLogs(game, abi, fromBlock, checkpointBlock)
+		const checkpointLogs = logs.filter(log => log.transactionHash === settlement)
+		expect(checkpointLogs.filter(log => log.eventName === 'OrdinarySettlementInitialized')).toHaveLength(1)
+		expect(checkpointLogs.some(log => log.eventName === 'CarryDepositConsumed' || log.eventName === 'VaultEscrowUpdated')).toBe(false)
+		const replayed = replayZoltarEvents(logs)
+		expect(replayed.escalationTotalEscrowedRep.get(game)).toBe(ordinaryEscalationPrincipals.winningPrincipal)
+		expect(replayed.escalationVaultEscrowedRep.get(game)?.get(client.account.address)).toBe((await getSecurityVault(client, pool, client.account.address)).disputeStakedAttoRep)
+		expect(replayed.escalationLocalUnresolvedByVault.get(game)?.get(client.account.address)).toEqual([0n, ordinaryEscalationPrincipals.winningPrincipal, 0n])
+		const snapshot = await client.readContract({ abi, address: game, functionName: 'getForkCarrySnapshot' })
+		expect(replayed.escalationCarryRoots.get(game)).toEqual([...(await client.readContract({ abi, address: game, functionName: 'getForkCarryRoots' }))])
+		expect(replayed.escalationLeafCounts.get(game)).toEqual([...snapshot[1]])
+		expect(replayed.escalationUnresolvedTotals.get(game)).toEqual([...snapshot[2]])
+		expect(replayed.escalationNullifierRoots.get(game)).toEqual([...snapshot[3]])
+		expect(replayed.escalationLifecycles.get(game)?.ordinarySettlementOutcome).toBe(BigInt(QuestionOutcome.Yes))
+		expect(replayed.escalationLifecycles.get(game)?.ordinaryWinningReserveAttoRep).toBe(await client.readContract({ abi, address: game, functionName: 'ordinaryWinningReserveAttoRep' }))
+		expect(replayed.escalationConsumptions.get(game)?.size ?? 0).toBe(0)
+		expect(replayed.escalationDeposits.get(game)?.get('0:0')?.consumed).toBe(false)
+		await withdrawFromEscalationGame(client, pool, QuestionOutcome.Yes, [0n])
+		const afterClaim = replayZoltarEvents(await getContractReplayLogs(game, abi, fromBlock, await client.getBlockNumber()))
+		expect(afterClaim.escalationTotalEscrowedRep.get(game)).toBe(0n)
+		expect(afterClaim.escalationUnresolvedTotals.get(game)).toEqual([0n, 0n, 0n])
+		expect(afterClaim.escalationConsumptions.get(game)?.size).toBe(1)
+		expect(afterClaim.escalationLifecycles.get(game)?.ordinaryWinningReserveAttoRep).toBe(0n)
 	})
 
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {

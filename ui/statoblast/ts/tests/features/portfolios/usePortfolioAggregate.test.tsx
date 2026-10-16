@@ -35,6 +35,7 @@ async function renderAggregate(
 		questionCount?: bigint
 		intervalCount?: bigint
 		recoveryComplete?: boolean
+		allPositionsOwned?: boolean
 	} = {},
 ) {
 	let allowance = 0n
@@ -111,7 +112,7 @@ async function renderAggregate(
 				case 'isReusablePosition':
 					return request.args?.[0] === 1n && reusable
 				case 'getOwnerPositionShares':
-					return request.args?.[0] === 1n ? claimShares : 0n
+					return options.allPositionsOwned || request.args?.[0] === 1n ? claimShares : 0n
 				case 'questionOriginIds':
 					return request.args?.[0] === 99n ? zeroHash : `0x${'1'.repeat(64)}`
 				case 'getPool':
@@ -327,7 +328,21 @@ test('an obsolete quote failure cannot overwrite a changed question and recovery
 
 test('pool controls keep approval, deposit and mint actions visible without owner routing inputs', async () => {
 	const { hook } = await renderAggregate()
-	const rendered = lifecycle.trackRendered(await renderIntoDocument(<PortfolioAggregatePanel model={hook.state()} actions={{ scope: unscopedTransaction, busy: undefined }} />))
+	const rendered = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<PortfolioAggregatePanel
+				model={hook.state()}
+				actions={{
+					scope: unscopedTransaction,
+					busy: undefined,
+					ownerReason: undefined,
+					runPortfolioAction: async () => {
+						throw new Error('Unexpected fork transaction')
+					},
+				}}
+			/>,
+		),
+	)
 	const text = rendered.container.textContent ?? ''
 	expect(text).toContain('Deposit REP and commit capacity')
 	expect(text).toContain('Approve REP')
@@ -335,7 +350,7 @@ test('pool controls keep approval, deposit and mint actions visible without owne
 	expect(text).toContain('Withdraw reserve REP')
 	expect(text).toContain('Allocation positions')
 	expect(text).toContain('Process recovery')
-	expect(text).toContain('Collect recovered REP and fees')
+	expect(text).toContain('Recover and collect REP and fees')
 	expect(text).not.toContain('Update pool accounting')
 	expect(text).not.toContain('Contributing vault')
 })
@@ -446,7 +461,7 @@ test('one collection covers a personal interval across many questions and revali
 	await act(async () => await hook.state().collectRecovered())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Expected combined collection')
-	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[])']), data: request.data }).args).toEqual([[0n]])
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[],uint256[])']), data: request.data }).args).toEqual([[0n], []])
 	expect(request.account).toBe(owner)
 	expect(request.reviewDescription).toContain('3 REP and 1 ETH')
 	setIntervalsActive(false)
@@ -462,9 +477,23 @@ test('recovery history paging is independent and collection includes only the di
 	await act(async () => await hook.state().collectRecovered())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Expected paged collection')
-	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[])']), data: request.data }).args).toEqual([Array.from({ length: 64 }, (_, index) => BigInt(index) + 64n)])
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[],uint256[])']), data: request.data }).args).toEqual([Array.from({ length: 64 }, (_, index) => BigInt(index) + 64n), []])
 	expect(request.reviewDescription).toContain('subtotal covers the selected ownership history page')
-	const rendered = lifecycle.trackRendered(await renderIntoDocument(<PortfolioAggregatePanel model={hook.state()} actions={{ scope: unscopedTransaction, busy: undefined }} />))
+	const rendered = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<PortfolioAggregatePanel
+				model={hook.state()}
+				actions={{
+					scope: unscopedTransaction,
+					busy: undefined,
+					ownerReason: undefined,
+					runPortfolioAction: async () => {
+						throw new Error('Unexpected fork transaction')
+					},
+				}}
+			/>,
+		),
+	)
 	expect(rendered.container.textContent).toContain('Other pages may have additional proceeds')
 	expect(rendered.container.textContent).toContain('Released REP subtotal')
 	expect(rendered.container.textContent).toContain('Fees and rewards subtotal ETH')
@@ -476,7 +505,50 @@ test('combined collection stays visible and disabled when no proceeds remain', a
 	await act(async () => await hook.state().refresh())
 	expect(hook.state().collectReason).toContain('No released proceeds')
 	await expect(hook.state().collectRecovered()).rejects.toThrow('No released proceeds')
-	const rendered = lifecycle.trackRendered(await renderIntoDocument(<PortfolioAggregatePanel model={hook.state()} actions={{ scope: unscopedTransaction, busy: undefined }} />))
-	const button = [...rendered.container.querySelectorAll('button')].find(item => item.textContent?.includes('Collect recovered REP and fees'))
+	const rendered = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<PortfolioAggregatePanel
+				model={hook.state()}
+				actions={{
+					scope: unscopedTransaction,
+					busy: undefined,
+					ownerReason: undefined,
+					runPortfolioAction: async () => {
+						throw new Error('Unexpected fork transaction')
+					},
+				}}
+			/>,
+		),
+	)
+	const button = [...rendered.container.querySelectorAll('button')].find(item => item.textContent?.includes('Recover and collect REP and fees'))
 	expect(button?.disabled).toBe(true)
+})
+
+test('collection recovers finalized allocations on the current page without a prior processor transaction', async () => {
+	const { hook, requests, setRecovered } = await renderAggregate({ resolved: true })
+	setRecovered(0n, 0n)
+	await act(async () => await hook.state().refresh())
+	expect(hook.state().collectReason).toBeUndefined()
+	await act(async () => await hook.state().collectRecovered())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected recovery and collection')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[],uint256[])']), data: request.data }).args).toEqual([[0n], [1n]])
+	expect(request.reviewDescription).toContain('1 finalized allocation')
+})
+
+test('owners can reduce recovery work in the same collection action and collect credits alone', async () => {
+	const { hook, requests } = await renderAggregate({ resolved: true, positionCount: 20n, allPositionsOwned: true })
+	expect(hook.state().recoveryPositionCount).toBe(8)
+	await act(() => hook.state().setRecoveryBatchSize('1'))
+	await act(() => hook.state().collectRecovered())
+	const first = requests.at(-1)
+	if (first === undefined) throw new Error('Expected recovery transaction')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[],uint256[])']), data: first.data }).args).toEqual([[0n], [1n]])
+	await act(() => hook.state().setRecoveryBatchSize('0'))
+	await act(() => hook.state().collectRecovered())
+	const credits = requests.at(-1)
+	if (credits === undefined) throw new Error('Expected collection transaction')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[],uint256[])']), data: credits.data }).args).toEqual([[0n], []])
+	await act(() => hook.state().setRecoveryBatchSize('-1'))
+	expect(hook.state().collectReason).toContain('whole number')
 })

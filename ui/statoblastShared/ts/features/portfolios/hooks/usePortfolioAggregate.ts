@@ -53,6 +53,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const page = useSignal(0n)
 	const questionPage = useSignal(0n)
 	const intervalPage = useSignal(0n)
+	const recoveryBatchSize = useSignal('8')
 	const depositAmount = useSignal('')
 	const depositMinimum = useSignal('')
 	const depositMinimumEdited = useSignal(false)
@@ -109,6 +110,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		page.value = 0n
 		questionPage.value = 0n
 		intervalPage.value = 0n
+		recoveryBatchSize.value = '8'
 		depositAmount.value = ''
 		depositMinimum.value = ''
 		depositMinimumEdited.value = false
@@ -234,6 +236,11 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		return undefined
 	}
 	const ownerInterval = (selected: PortfolioAggregateSnapshot, positionId: bigint) => selected.intervals.find(interval => interval.active && interval.startPosition <= positionId && (interval.open || interval.endPosition >= positionId))
+	const recoveryLimit = question(recoveryBatchSize.value)
+	const recoveryPositions = (selected: PortfolioAggregateSnapshot) => {
+		const eligible = selected.positions.filter(allocation => allocation.ownerShares > 0n && allocation.remainingShares > 0n && !allocation.recoveryComplete && allocation.operational && allocation.resolved && ownerInterval(selected, allocation.positionId) !== undefined)
+		return eligible.slice(0, recoveryLimit === undefined ? 0 : Number(recoveryLimit < BigInt(eligible.length) ? recoveryLimit : BigInt(eligible.length)))
+	}
 	const allocationClaimReason = (selected: PortfolioAggregateSnapshot, allocation: PortfolioAggregateSnapshot['positions'][number]) => {
 		if (account?.toLowerCase() !== selected.owner.toLowerCase()) return copy.livePositionOwnerRequired
 		if (allocation.recoveryComplete) return copy.recoveryComplete
@@ -306,19 +313,26 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 					},
 				}
 			}),
-		collectReason: ownerReason ?? (snapshot?.recoverableRepAttoRep === 0n && snapshot.recoverableFeesAttoEth === 0n ? copy.noRecoveredProceeds : undefined),
+		recoveryBatchSize: recoveryBatchSize.value,
+		setRecoveryBatchSize: (value: string) => {
+			recoveryBatchSize.value = value
+		},
+		recoveryPositionCount: snapshot === undefined ? 0 : recoveryPositions(snapshot).length,
+		collectReason: ownerReason ?? (recoveryLimit === undefined ? copy.recoveryBatchInvalid : undefined) ?? (snapshot?.recoverableRepAttoRep === 0n && snapshot.recoverableFeesAttoEth === 0n && recoveryPositions(snapshot).length === 0 ? copy.noRecoveredProceeds : undefined),
 		collectRecovered: () =>
 			run('collectPortfolioRecovery', copy.collectRecovered, () => {
 				const selected = assertOwner()
+				if (recoveryLimit === undefined) throw new Error(copy.recoveryBatchInvalid)
 				const intervalIds = selected.intervals.filter(interval => interval.active).map(interval => interval.intervalId)
-				if (selected.recoverableRepAttoRep === 0n && selected.recoverableFeesAttoEth === 0n) throw new Error(copy.noRecoveredProceeds)
+				const positionIds = recoveryPositions(selected).map(allocation => allocation.positionId)
+				if (selected.recoverableRepAttoRep === 0n && selected.recoverableFeesAttoEth === 0n && positionIds.length === 0) throw new Error(copy.noRecoveredProceeds)
 				return {
-					...buildPortfolioClaimRecoveredRequest({ owner: selected.owner, portfolio: selected.portfolio, intervalIds }),
-					reviewDescription: copy.collectRecoveredReview(formatEther(selected.recoverableRepAttoRep), formatEther(selected.recoverableFeesAttoEth), selected.intervalCount > 64n),
+					...buildPortfolioClaimRecoveredRequest({ owner: selected.owner, portfolio: selected.portfolio, intervalIds, positionIds }),
+					reviewDescription: copy.collectRecoveredReview(formatEther(selected.recoverableRepAttoRep), formatEther(selected.recoverableFeesAttoEth), selected.intervalCount > 64n, positionIds.length),
 					validateBeforeSubmit: async () => {
 						const latest = await read()
 						if (intervalIds.some(id => !latest.intervals.some(interval => interval.intervalId === id && interval.active))) throw new Error(copy.recoveryHistoryChanged)
-						if (latest.recoverableRepAttoRep === 0n && latest.recoverableFeesAttoEth === 0n) throw new Error(copy.noRecoveredProceeds)
+						if (latest.recoverableRepAttoRep === 0n && latest.recoverableFeesAttoEth === 0n && !recoveryPositions(latest).some(allocation => positionIds.includes(allocation.positionId))) throw new Error(copy.noRecoveredProceeds)
 					},
 				}
 			}),

@@ -171,10 +171,10 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`redeemRepFromVault(vault)`',
 			caller: 'Vault owner; caller must equal `vault`, and REP is sent to `vault`',
-			effect: "Burns the vault's REP backing units and returns its proportional vault REP backing.",
+			effect: "First settles an ordinary final game, preserving winner liabilities and returning surplus to the pool. Burns the vault's REP backing units and returns its proportional vault REP backing; zero-valued units can be retired without a token transfer.",
 			declarations: [{ name: 'redeemRepFromVault' }],
-			preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow, has redeemable REP, and has exited its underwriting commitment by setting it to zero (`Exit commitment before REP redemption`) under the [limit-reduction rules](./invariants.html#bal-03).',
-			signals: 'Fee-accrual checkpoints when due; REP `Transfer`, `RepRedeemedFromVault`, then `VaultAccountingCheckpoint`',
+			preconditions: 'Operational pool with a final outcome; the specified `vault` has no remaining escalation escrow, has positive backing units, and has exited its underwriting commitment by setting it to zero (`Exit commitment before REP redemption`) under the [limit-reduction rules](./invariants.html#bal-03).',
+			signals: 'Ordinary settlement signals when applicable; fee-accrual checkpoints when due; REP `Transfer` only for positive REP, then `RepRedeemedFromVault` and `VaultAccountingCheckpoint`',
 		},
 		{
 			call: '`depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)`',

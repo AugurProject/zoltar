@@ -258,6 +258,14 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		Position storage position = positions[positionId];
 		require(address(position.custody) != address(0), 'Unknown allocation position');
 		require(position.remainingShares > 0, 'Allocation fully transferred');
+		_recoverPosition(positionId);
+	}
+
+	function _recoverPosition(uint256 positionId) private {
+		Position storage position = positions[positionId];
+		require(address(position.custody) != address(0), 'Unknown allocation position');
+		// Another owner may have completed recovery or taken the last position since review.
+		if (positionRecoveryComplete[positionId] || position.remainingShares == 0) return;
 		(uint256 rep, uint256 fees, bool complete) = position.custody.recover();
 		_creditRecovery(positionId, rep, fees);
 		if (complete && !positionRecoveryComplete[positionId]) {
@@ -395,6 +403,24 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 
 	/// @notice Opt into individual control of one allocation; only the owner can split its recovery history.
 	function claimPosition(uint256 positionId, uint256 intervalId) external nonReentrant {
+		_claimPosition(positionId, intervalId);
+	}
+
+	/// @notice Take individual ownership and choose a prepared fork branch in one owner transaction.
+	function claimPositionAndMigrate(uint256 positionId, uint256 intervalId, uint256 outcomeIndex) external nonReentrant {
+		Position storage position = positions[positionId];
+		require(address(position.custody) != address(0), 'Unknown allocation position');
+		ISecurityPool parent = position.custody.pool();
+		require(parent.systemState() == SystemState.PoolForked, 'Question pool not forked');
+		SecurityPoolPortfolioVault vault = _createVault(msg.sender);
+		(uint256 units, uint256 commitment, , ) = parent.securityVaults(address(vault));
+		require(units == 0 && commitment == 0 && parent.vaultBadDebtAttoEth(address(vault)) == 0, 'Migrate existing question position first');
+		require(address(parent.escalationGame()) == address(0) || parent.escalationGame().disputeStakedRepByVaultAttoRep(address(vault)) == 0, 'Migrate existing dispute position first');
+		_claimPosition(positionId, intervalId);
+		vault.migrateClaimedPosition(parent, outcomeIndex);
+	}
+
+	function _claimPosition(uint256 positionId, uint256 intervalId) private {
 		address owner = msg.sender;
 		uint256 shares = getOwnerPositionShares(positionId, owner);
 		require(shares > 0, 'No allocation position');
@@ -432,9 +458,10 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		emit RecoveryRewardCredited(positionId, processor, amount);
 	}
 
-	/// @notice Collect aggregate recovered proceeds, earned reserve fees and processing rewards.
-	/// @dev Work depends only on caller-selected personal intervals, never the question registry.
-	function claimRecovered(uint256[] calldata intervalIds) external nonReentrant {
+	/// @notice Recover selected allocations for all owners, then collect the caller's proceeds and fees.
+	/// @dev Empty positionIds collects already released proceeds. Both lists are caller-sized; no registry scan.
+	function claimRecovered(uint256[] calldata intervalIds, uint256[] calldata positionIds) external nonReentrant {
+		for (uint256 index; index < positionIds.length; index++) _recoverPosition(positionIds[index]);
 		(uint256 rep, uint256 fees) = recoveryLedger.claim(msg.sender, intervalIds);
 		recoveredRepAttoRep -= rep;
 		recoveredFeesAttoEth -= fees;

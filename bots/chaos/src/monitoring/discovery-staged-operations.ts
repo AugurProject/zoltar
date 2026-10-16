@@ -51,14 +51,19 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 		return []
 	}
 	const pendingIds = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
+	let cursor = 0n
 	const collected = await collectCountedPages({
 		count,
 		label: `Staged-operation discovery for ${pool.coordinator}`,
 		maximumItems: limit,
-		pageSize: limit,
+		pageSize: Math.min(limit, 64),
 		readPage: async (start, pageCount) => {
-			const [ids, operations] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
+			const [ids, operations, nextCursor] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, args: [cursor, pageCount], blockNumber, functionName: 'getActiveStagedOperationsPage' })
 			if (ids.length !== operations.length) throw new Error(`Coordinator ${pool.coordinator} returned mismatched staged-operation arrays`)
+			if (cursor !== 0n && ids[0] !== cursor) throw new Error(`Coordinator ${pool.coordinator} omitted the requested operation cursor`)
+			for (const [index, id] of ids.entries()) if (id === 0n || (index > 0 && id >= (ids[index - 1] ?? 0n))) throw new Error(`Coordinator ${pool.coordinator} returned an unordered operation page`)
+			if ((nextCursor === 0n) !== (start + pageCount === count) || nextCursor >= (ids.at(-1) ?? 0n)) throw new Error(`Coordinator ${pool.coordinator} returned an inconsistent staged-operation cursor`)
+			cursor = nextCursor
 			return ids.map((id, index) => {
 				const operation = operations[index]
 				if (operation === undefined) throw new Error(`Coordinator ${pool.coordinator} omitted staged operation ${id.toString()}`)

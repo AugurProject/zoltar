@@ -15,7 +15,8 @@ type SecurityPoolFactoryAddressInputs = {
 
 type InfraContractAddressConfig = {
 	escalationGameClaimDelegateBytecode: Hex
-	getEscalationGameFactoryByteCode: (claimDelegate: Address) => Hex
+	escalationGameDepositDelegateBytecode: Hex
+	getEscalationGameFactoryByteCode: (claimDelegate: Address, depositDelegate: Address) => Hex
 	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
 	getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex
 	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
@@ -70,9 +71,10 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			openOraclePriceCoordinatorFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOraclePriceCoordinatorFactoryBytecode()),
 			securityPoolForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerByteCode(config.getZoltarAddress())),
 			escalationGameClaimDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameClaimDelegateBytecode),
+			escalationGameDepositDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameDepositDelegateBytecode),
 			uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.uniformPriceDualCapBatchAuctionFactoryBytecode),
 		}
-		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate))
+		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate, addresses.escalationGameDepositDelegate))
 		const securityPoolOperationsDelegate = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolOperationsDelegateBytecode)
 		const escalationGameProofVerifier = getCreateAddress({
 			from: escalationGameFactory,
@@ -83,7 +85,6 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			...addresses,
 			escalationGameFactory,
 			escalationGameProofVerifier,
-			escalationGameDepositDelegate: getCreateAddress({ from: escalationGameFactory, nonce: 4n }),
 			securityPoolOperationsDelegate,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,

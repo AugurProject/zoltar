@@ -4,7 +4,7 @@ import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
-import { ChaosProtocolIndexReorgError, fetchProtocolLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
+import { ChaosProtocolIndexReorgError, canonicalLogOrdinal, fetchProtocolLogs, orderedCanonicalLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex, type CanonicalLogPosition } from './protocol-index-context.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
 
@@ -84,6 +84,7 @@ const ETH_REFUND_CREDITED = eventTopic('EthRefundCredited(address,uint256,uint25
 const PENDING_ETH_REFUND_WITHDRAWN = eventTopic('PendingEthRefundWithdrawn(address,uint256)')
 const LOCAL_DEPOSIT_APPENDED = eventTopic('LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)')
 const DEPOSIT_ON_OUTCOME = eventTopic('DepositOnOutcome(address,uint8,uint256,uint256,uint256,uint256,uint256)')
+const ORDINARY_SETTLEMENT_INITIALIZED = eventTopic('OrdinarySettlementInitialized(uint8,uint256,uint256)')
 const CLAIM_DEPOSIT = eventTopic('ClaimDeposit(address,uint8,uint256,uint256,uint256,uint256,bool)')
 const CARRY_DEPOSIT_CONSUMED = eventTopic('CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)')
 const MIGRATION_REP_SPLIT = eventTopic('MigrationRepSplit(address,address,uint248,uint256,uint248,uint256,uint256)')
@@ -216,57 +217,6 @@ function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
 	if (universeId < 0n || universeId >= UINT248_LIMIT) throw new Error('Parent universe ID exceeds uint248')
 	if (outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork outcome exceeds uint256')
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, outcomeIndex]))) & (UINT248_LIMIT - 1n)
-}
-
-type CanonicalLogPosition = {
-	address: Address
-	blockHash?: Hash | null | undefined
-	blockNumber?: bigint | null | undefined
-	data: `0x${string}`
-	logIndex?: bigint | number | null | undefined
-	removed?: boolean | undefined
-	topics: readonly Hash[]
-	transactionHash?: Hash | null | undefined
-	transactionIndex?: bigint | number | null | undefined
-}
-
-function canonicalLogOrdinal(value: bigint | number, label: string) {
-	if (typeof value === 'number') {
-		if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} is invalid`)
-		return BigInt(value)
-	}
-	if (value < 0n) throw new Error(`${label} is invalid`)
-	return value
-}
-
-function orderedCanonicalLogs<T extends CanonicalLogPosition>(logs: readonly T[], fromBlock: bigint, toBlock: bigint, label: string) {
-	const identities = new Set<string>()
-	const ordered = [...logs]
-	for (const log of ordered) {
-		if (log.removed) throw new Error(`${label} returned a removed canonical log`)
-		if (log.blockHash == null || log.blockNumber == null || log.transactionHash == null || log.transactionIndex == null || log.logIndex == null) {
-			throw new Error(`${label} returned a log without a canonical position`)
-		}
-		if (log.blockNumber < fromBlock || log.blockNumber > toBlock) throw new Error(`${label} returned a log outside the requested block range`)
-		canonicalLogOrdinal(log.transactionIndex, `${label} transaction index`)
-		canonicalLogOrdinal(log.logIndex, `${label} log index`)
-		const identity = `${log.blockHash.toLowerCase()}:${log.transactionHash.toLowerCase()}:${log.logIndex.toString()}`
-		if (identities.has(identity)) throw new Error(`${label} returned duplicate log ${identity}`)
-		identities.add(identity)
-	}
-	return ordered.sort((left, right) => {
-		if (left.blockNumber == null || right.blockNumber == null || left.transactionIndex == null || right.transactionIndex == null || left.logIndex == null || right.logIndex == null) {
-			throw new Error(`${label} lost a canonical log position`)
-		}
-		if (left.blockNumber !== right.blockNumber) return left.blockNumber < right.blockNumber ? -1 : 1
-		const leftTransactionIndex = canonicalLogOrdinal(left.transactionIndex, `${label} transaction index`)
-		const rightTransactionIndex = canonicalLogOrdinal(right.transactionIndex, `${label} transaction index`)
-		if (leftTransactionIndex !== rightTransactionIndex) return leftTransactionIndex < rightTransactionIndex ? -1 : 1
-		const leftLogIndex = canonicalLogOrdinal(left.logIndex, `${label} log index`)
-		const rightLogIndex = canonicalLogOrdinal(right.logIndex, `${label} log index`)
-		if (leftLogIndex === rightLogIndex) return 0
-		return leftLogIndex < rightLogIndex ? -1 : 1
-	})
 }
 
 function signed256(value: bigint) {
@@ -474,7 +424,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 			fetchProtocolLogs(context.client, { address: context.openOracle, fromBlock, toBlock, topics: [REPORT_SUBMITTED, REPORT_DISPUTED, REPORT_SETTLED] }),
 			fetchProtocolLogs(context.client, { address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock, topics: [MIGRATION_REP_SPLIT, CHILD_REP_SPLIT] }),
 			context.auctionAddresses.length === 0 ? [] : fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock, topics: [BID_SUBMITTED, BID_SETTLED, ETH_REFUND_CREDITED, PENDING_ETH_REFUND_WITHDRAWN] }),
-			context.escalationGames.length === 0 ? [] : fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock, topics: [LOCAL_DEPOSIT_APPENDED, DEPOSIT_ON_OUTCOME, CLAIM_DEPOSIT, CARRY_DEPOSIT_CONSUMED] }),
+			context.escalationGames.length === 0 ? [] : fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock, topics: [LOCAL_DEPOSIT_APPENDED, DEPOSIT_ON_OUTCOME, CLAIM_DEPOSIT, CARRY_DEPOSIT_CONSUMED, ORDINARY_SETTLEMENT_INITIALIZED] }),
 		])
 		const oracleLogs = orderedCanonicalLogs(rawOracleLogs, fromBlock, toBlock, 'OpenOracle report index')
 		for (const log of oracleLogs) {
@@ -635,6 +585,13 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 					const deposit: EscalationDepositSnapshot = { amountAttoRep, claimed: false, depositIndex, escalationGame: route.escalationGame, outcome, parentDepositIndex: local.parentDepositIndex, pool: route.pool, vault }
 					if (existing === undefined) escalationDeposits.push(deposit)
 					else Object.assign(existing, deposit)
+				} else if (topic0 === ORDINARY_SETTLEMENT_INITIALIZED) {
+					const winningOutcome = bigintToSafeNumber(topicUnsigned(log.topics[1], 'Ordinary settlement outcome'), 'Ordinary settlement outcome')
+					if (winningOutcome > 2) throw new Error('Ordinary settlement outcome is out of range')
+					// Retired losing rights are terminal without individual claim/consumption logs.
+					for (const deposit of escalationDeposits) {
+						if (sameAddress(deposit.escalationGame, route.escalationGame) && deposit.outcome !== winningOutcome) deposit.claimed = true
+					}
 				} else if (topic0 === CLAIM_DEPOSIT) {
 					const vault = topicAddress(log.topics[1], 'Escalation claimant')
 					const outcome = bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome')

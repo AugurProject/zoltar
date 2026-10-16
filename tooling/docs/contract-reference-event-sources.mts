@@ -81,6 +81,7 @@ export const eventSourceByName: Record<string, string> = {
 	RepBurned: 'solidity/contracts/Zoltar.sol',
 	ReputationTokenInitialized: 'solidity/contracts/ReputationToken.sol',
 	RepEthPriceSet: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
+	OrdinarySettlementInitialized: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	ForkContinuationResidualRepBurned: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',

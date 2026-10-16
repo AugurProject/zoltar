@@ -29,22 +29,29 @@ import {
 	getShareTokenFactoryByteCode,
 } from './deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import {
+	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
+	statoblast_SecurityPoolUtils_SecurityPoolUtils,
+	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
+	statoblast_openOracle_OpenOracle_OpenOracle,
+} from '../contractArtifact.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameClaimDelegate: '0xaab738fe516485dd6597aa145d2ed7fa0e2e5149489df77d2b9b68929217fdb0',
-	escalationGameFactory: '0xe1bfc8a94d4aa00074d25e51331944bfd3a7b24c576c736f2c58801901a62e5e',
+	escalationGameClaimDelegate: '0x3eea77fadf7d0ed4c1a6f71c89d32c24f260349961959c8f47d98afe80d06edd',
+	escalationGameDepositDelegate: '0xa081694c4a6f9b6f23b4c0d486af552603034e57a7befc1a6e2065e55a62bb47',
+	escalationGameFactory: '0x43279f8d481f985992b1472d01760899776aef8063435ef32d69bb316e10f8d3',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xfcca1f411f2050766168246353ded1afbf82c606f2bad490b05fb91e5586bc30',
-	priceCoordinatorDeploymentWorker: '0x9fb1769a8606207986959139621d1b81b2e59dc4f701f2fd9045f387452c3931',
-	securityPoolFactory: '0x80bd7241367aecbf0b2539ca73dce507fc7bb7544fca6c4d6f166f1bf07b7f51',
+	openOraclePriceCoordinatorFactory: '0x3749708d055d1c7e7bdf97a3b3f2dab9994a645cad5017d11d9ac0d614c866da',
+	priceCoordinatorDeploymentWorker: '0x30a4af6cb351e05bd5a5e2bab8b42587fb8479d796a415010f3c1870a3be2641',
+	securityPoolFactory: '0xe065729e6b0f8dff1f7beecfeb70f2fe333d03a4951546e753afc0f91f4fadf6',
 	securityPoolForker: '0x334bfd80a4c74727dc778aa081a98c12a46c020e9059115e5ba3402eaaf27db6',
 	securityPoolOperationsDelegate: '0xccdcd9965b9656d7b7ee808b3fe5cd21db6b5e7c7cf70cd82af33aa41cb83d03',
-	securityPoolPortfolioVaultDeployer: '0x10b3f456278a761b2e080f771bc35ac6cf47f38ccaf831fd8f719a4d844b48dc',
+	securityPoolPortfolioVaultDeployer: '0x6cfc57fb5b15f8bda96652ae1e3be82517ab5f2be20568853dabf31dc75c3085',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0xd166e808a1860481541ec6f53d80cd284bdc172bfbe286c8b5b65da8978c8c93',
 	sharedPoolPriceFeedDeploymentWorker: '0x07ac6b0c397b09cc0870480ee3fc5f756f59c81f359ce47ca039c76c1d3454ad',
@@ -64,6 +71,7 @@ function getSecurityPoolUtilsRuntimeCode() {
 
 const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	escalationGameClaimDelegate: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
+	escalationGameDepositDelegate: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.deployedBytecode.object}`,
 	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
 	securityPoolOperationsDelegate: getSecurityPoolOperationsDelegateRuntimeCode(),
 	securityPoolPortfolioVaultDeployer: getSecurityPoolPortfolioVaultDeployerRuntimeCode(),
@@ -81,15 +89,16 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameClaimDelegate: '0xaab738fe516485dd6597aa145d2ed7fa0e2e5149489df77d2b9b68929217fdb0',
-	escalationGameFactory: '0xe1bfc8a94d4aa00074d25e51331944bfd3a7b24c576c736f2c58801901a62e5e',
+	escalationGameClaimDelegate: '0x3eea77fadf7d0ed4c1a6f71c89d32c24f260349961959c8f47d98afe80d06edd',
+	escalationGameDepositDelegate: '0xa081694c4a6f9b6f23b4c0d486af552603034e57a7befc1a6e2065e55a62bb47',
+	escalationGameFactory: '0x43279f8d481f985992b1472d01760899776aef8063435ef32d69bb316e10f8d3',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x3954eeffef226816d45ec4947071ce4222c5f69f530c59a77b2fa308bb678c5a',
-	priceCoordinatorDeploymentWorker: '0x9fb1769a8606207986959139621d1b81b2e59dc4f701f2fd9045f387452c3931',
-	securityPoolFactory: '0x9e9c708fdd632629e0c6b010303edc7643a11eff6ee37981c8e25b073ff3b3fc',
+	openOraclePriceCoordinatorFactory: '0xea2fe0da13d28cbdf84f103978f0cdea2b7a4757f510654977d93d3fb4a2ff33',
+	priceCoordinatorDeploymentWorker: '0x30a4af6cb351e05bd5a5e2bab8b42587fb8479d796a415010f3c1870a3be2641',
+	securityPoolFactory: '0xcd9f40e417431313794b41ce0b5b5fc015a58dd15c75ef81c30a8772ec81c6fe',
 	securityPoolForker: '0x847a95eaac2819fad7ffda5e67e145dbedd3c5df004a27025cb8b7e525748ea8',
 	securityPoolOperationsDelegate: '0xccdcd9965b9656d7b7ee808b3fe5cd21db6b5e7c7cf70cd82af33aa41cb83d03',
-	securityPoolPortfolioVaultDeployer: '0x10b3f456278a761b2e080f771bc35ac6cf47f38ccaf831fd8f719a4d844b48dc',
+	securityPoolPortfolioVaultDeployer: '0x6cfc57fb5b15f8bda96652ae1e3be82517ab5f2be20568853dabf31dc75c3085',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0x1bf688e11b6f3558844dcb52898e879f878b2035f6c73b92628460dabd6d6b1e',
 	sharedPoolPriceFeedDeploymentWorker: '0x07ac6b0c397b09cc0870480ee3fc5f756f59c81f359ce47ca039c76c1d3454ad',
@@ -182,11 +191,18 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`),
 		},
 		{
+			id: 'escalationGameDepositDelegate',
+			label: 'EscalationGameDepositDelegate',
+			address: addresses.escalationGameDepositDelegate,
+			dependencies: ['proxyDeployer'],
+			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`),
+		},
+		{
 			id: 'escalationGameFactory',
 			label: 'EscalationGameFactory',
 			address: addresses.escalationGameFactory,
-			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate'],
-			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate)),
+			dependencies: ['proxyDeployer', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate'],
+			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate, addresses.escalationGameDepositDelegate)),
 		},
 		{
 			id: 'securityPoolFactory',
@@ -240,6 +256,7 @@ function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNe
 		addresses.openOraclePriceCoordinatorFactory,
 		addresses.securityPoolForker,
 		addresses.escalationGameClaimDelegate,
+		addresses.escalationGameDepositDelegate,
 		addresses.escalationGameFactory,
 		addresses.securityPoolFactory,
 		addresses.securityPoolPortfolioVaultDeployer,

@@ -27,7 +27,20 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'openOracle', 'securityPoolOperationsDelegate', 'securityPoolPortfolioVaultDeployer', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'openOracle', 'securityPoolOperationsDelegate', 'securityPoolPortfolioVaultDeployer', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
+	})
+
+	test('deploys both shared escalation delegates before binding them to the factory', async () => {
+		const steps = getDeploymentSteps(simulationProfile)
+		const factory = steps.find(step => step.id === 'escalationGameFactory')
+		const claim = steps.find(step => step.id === 'escalationGameClaimDelegate')
+		const deposit = steps.find(step => step.id === 'escalationGameDepositDelegate')
+		if (factory === undefined || claim === undefined || deposit === undefined) throw new Error('Missing escalation deployment step')
+		expect(factory.dependencies).toEqual(['proxyDeployer', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate'])
+		expect(steps.indexOf(claim)).toBeLessThan(steps.indexOf(factory))
+		expect(steps.indexOf(deposit)).toBeLessThan(steps.indexOf(factory))
+		const initCode = await captureDeploymentInitCode(factory.deploy)
+		expect(initCode.endsWith(encodeAbiParameters([{ type: 'address' }, { type: 'address' }], [claim.address, deposit.address]).slice(2))).toBe(true)
 	})
 
 	test('the deployment status oracle step deploys the statoblast oracle, not the zoltar-only oracle', async () => {
@@ -35,7 +48,7 @@ describe('statoblast deployment steps', () => {
 			const steps = getDeploymentSteps(profile)
 			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 			if (oracleStep === undefined) throw new Error(`Missing deployment status oracle step for ${profile.id}`)
-			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameFactory', 'securityPoolFactory', 'securityPoolPortfolioVaultDeployer']
+			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'escalationGameFactory', 'securityPoolFactory', 'securityPoolPortfolioVaultDeployer']
 			for (const stepId of statoblastStepIds) {
 				if (steps.every(step => step.id !== stepId)) throw new Error(`Missing statoblast deployment step ${stepId} for ${profile.id}`)
 			}

@@ -12,7 +12,7 @@ import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses
 import {
 	executeStagedOperation,
 	getActiveStagedOperationCount,
-	getActiveStagedOperations,
+	getActiveStagedOperationsPage,
 	getPendingSettlementOperationCount,
 	getPendingSettlementOperationIds,
 	getPendingOperationSlotId,
@@ -1426,7 +1426,7 @@ describe('Statoblast invariant harness', () => {
 			const pendingIds = Array.from(await getPendingSettlementOperationIds(client, priceOracle))
 			const pendingSlotId = await getPendingOperationSlotId(client, priceOracle)
 			const activeCount = await getActiveStagedOperationCount(client, priceOracle)
-			const [activeIds, activeOperations] = await getActiveStagedOperations(client, priceOracle, 0n, activeCount + 1n)
+			const [activeIds, activeOperations] = await getActiveStagedOperationsPage(client, priceOracle, 0n, activeCount + 1n)
 			const activeIdList = Array.from(activeIds)
 			const activeIdSet = new Set(activeIdList)
 
@@ -1462,7 +1462,7 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(await getPendingSettlementOperationCount(client, priceOracle), 4n, 'oracle settlement should auto-execute only the bounded pending list')
 		assert.deepStrictEqual(Array.from(await getPendingSettlementOperationIds(client, priceOracle)), [1n, 2n, 3n, 4n], 'pending settlement operations should remain in queue order')
 		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 5n, 'active operation count should include pending and manual operations')
-		const [activeOperationIds, activeOperations] = await getActiveStagedOperations(client, priceOracle, 0n, 5n)
+		const [activeOperationIds, activeOperations] = await getActiveStagedOperationsPage(client, priceOracle, 0n, 5n)
 		assert.deepStrictEqual(Array.from(activeOperationIds), [5n, 4n, 3n, 2n, 1n], 'active staged operations should page newest first')
 		assert.strictEqual(activeOperations[0]?.operationValue, withdrawalAmountsAttoRep[4], 'newest overflow operation should retain its amount')
 		assert.strictEqual(activeOperations[4]?.operationValue, withdrawalAmountsAttoRep[0], 'oldest pending operation should retain its amount')

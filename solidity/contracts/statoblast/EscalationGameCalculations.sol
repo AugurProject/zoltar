@@ -115,6 +115,9 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function _computeWinningWithdrawal(uint8 outcomeIndex, uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) internal view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {
+		if (ordinarySettlementInitialized)
+			return
+				proofVerifier.computeOrdinaryWinningWithdrawal(depositAmountAttoRep, cumulativeAmountAttoRep, getBindingCapitalAttoRep(), outcomeState[outcomeIndex].balanceAttoRep, ordinarySettlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 		return
 			_computeAllocatedWinningWithdrawal(outcomeIndex, depositAmountAttoRep, depositAmountAttoRep, cumulativeAmountAttoRep);
 	}

@@ -179,6 +179,10 @@ test('EscalationGame storage layout matches the shared delegate accounting', () 
 			{ label: 'forkCarrySnapshotOutcomesInitialized', slot: '451', offset: 0, type: 'uint8' },
 			{ label: 'forkCarrySnapshotId', slot: '452', offset: 0, type: 'bytes32' },
 			{ label: 'claimCheckpoints', slot: '453', offset: 0, type: 'mapping(bytes32 => struct EscalationClaimCheckpoint)' },
+			{ label: 'ordinarySettlementInitialized', slot: '454', offset: 0, type: 'bool' },
+			{ label: 'ordinarySettlementOutcome', slot: '454', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'ordinaryWinningReserveAttoRep', slot: '455', offset: 0, type: 'uint256' },
+			{ label: 'ordinarySettlementForkThresholdAttoRep', slot: '456', offset: 0, type: 'uint256' },
 		],
 	)
 

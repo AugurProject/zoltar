@@ -1,7 +1,19 @@
-import { type Abi, type Address, type Hex, encodeDeployData, encodeFunctionData, isAddress, isHex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { type Abi, type Address, type Hex, encodeDeployData, encodeFunctionData, isAddress, isHex, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { type VaultOperationsInput, validateVaultOperations } from './vaultOperations.js'
 
 const MAX_PORTFOLIO_CALLS = 16
+const portfolioForkAbi = parseAbi(['function claimPositionAndMigrate(uint256 positionId,uint256 intervalId,uint256 outcomeIndex)'])
+
+/** Extracts one snapshot-owned allocation and assigns its native rights to the owner's chosen fork branch atomically. */
+export function buildPortfolioPositionForkClaimRequest(parameters: { owner: Address; portfolio: Address; positionId: bigint; intervalId: bigint; outcomeIndex: bigint }) {
+	validateAddress(parameters.owner, 'Owner')
+	validateAddress(parameters.portfolio, 'Portfolio')
+	validateUint(parameters.positionId, 256, 'Position id')
+	validateUint(parameters.intervalId, 256, 'Owner interval id')
+	validateUint(parameters.outcomeIndex, 256, 'Fork outcome index')
+	if (parameters.positionId === 0n) throw new Error('Choose an allocation position.')
+	return { account: parameters.owner, to: parameters.portfolio, value: 0n, data: encodeFunctionData({ abi: portfolioForkAbi, functionName: 'claimPositionAndMigrate', args: [parameters.positionId, parameters.intervalId, parameters.outcomeIndex] }) }
+}
 
 export type PortfolioVaultRequestParameters = {
 	/** Transaction signer and immutable owner of the portfolio vault. */

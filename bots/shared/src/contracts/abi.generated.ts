@@ -1692,10 +1692,10 @@ export const openOraclePriceCoordinatorAbi = [
 	{ type: 'function', name: 'getActiveStagedOperationCount', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
-		name: 'getActiveStagedOperations',
+		name: 'getActiveStagedOperationsPage',
 		stateMutability: 'view',
 		inputs: [
-			{ name: 'startIndex', type: 'uint256', internalType: 'uint256' },
+			{ name: 'cursorOperationId', type: 'uint256', internalType: 'uint256' },
 			{ name: 'count', type: 'uint256', internalType: 'uint256' },
 		],
 		outputs: [
@@ -1718,8 +1718,10 @@ export const openOraclePriceCoordinatorAbi = [
 					{ name: 'reservedLiquidationDebtAttoEth', type: 'uint256', internalType: 'uint256' },
 				],
 			},
+			{ name: 'nextCursor', type: 'uint256', internalType: 'uint256' },
 		],
 	},
+	{ type: 'function', name: 'getPendingCommitmentOperationId', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
 		name: 'getPendingOperationSlot',
@@ -2640,6 +2642,16 @@ export const escalationGameAbi = [
 		],
 	},
 	{ type: 'event', name: 'NonDecisionReached', anonymous: false, inputs: [{ name: 'nonDecisionTimestamp', type: 'uint256', internalType: 'uint256', indexed: false }] },
+	{
+		type: 'event',
+		name: 'OrdinarySettlementInitialized',
+		anonymous: false,
+		inputs: [
+			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome', indexed: true },
+			{ name: 'winningPrincipalAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'reservedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
 	{ type: 'event', name: 'ResidualRepSweptToSecurityPool', anonymous: false, inputs: [{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256', indexed: false }] },
 	{
 		type: 'event',
@@ -2937,6 +2949,9 @@ export const escalationGameAbi = [
 	{ type: 'function', name: 'nonDecisionState', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'enum NonDecisionState' }] },
 	{ type: 'function', name: 'nonDecisionThresholdAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'nonDecisionTimestamp', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'ordinarySettlementForkThresholdAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'ordinarySettlementInitialized', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{ type: 'function', name: 'ordinaryWinningReserveAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
 		name: 'previewDepositOnOutcome',
@@ -2977,6 +2992,7 @@ export const escalationGameAbi = [
 	{ type: 'function', name: 'repToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract ReputationToken' }] },
 	{ type: 'function', name: 'resumeFromFork', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 	{ type: 'function', name: 'securityPool', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract ISecurityPool' }] },
+	{ type: 'function', name: 'settleOrdinaryGame', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 	{
 		type: 'function',
 		name: 'start',
@@ -5325,6 +5341,17 @@ export const vaultEscrowUpdatedEvent = {
 		{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
 		{ name: 'disputeStakedRepByVaultAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
 		{ name: 'totalDisputeStakedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+	],
+} as const
+
+export const ordinarySettlementInitializedEvent = {
+	type: 'event',
+	name: 'OrdinarySettlementInitialized',
+	anonymous: false,
+	inputs: [
+		{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome', indexed: true },
+		{ name: 'winningPrincipalAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+		{ name: 'reservedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
 	],
 } as const
 

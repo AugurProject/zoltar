@@ -1,5 +1,5 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { getAddress, getCreate2Address, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
@@ -206,6 +206,11 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'EscalationGameClaimDelegate',
 	},
+	escalationGameDepositDelegate: {
+		artifactPath: 'contracts/statoblast/EscalationGameDepositDelegate.sol',
+		compilerProfile: 'main',
+		contractName: 'EscalationGameDepositDelegate',
+	},
 	escalationGameFactory: {
 		artifactPath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 		compilerProfile: 'main',
@@ -256,16 +261,6 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 			label: step.label,
 		})
 	}
-	// The factory's verified constructor creates the stateless shared delegate after
-	// its proof verifier and two creation-code carriers, fixing this CREATE address.
-	jobs.push({
-		address: getCreateAddress({ from: stepAddress('escalationGameFactory'), nonce: 4n }),
-		compilerProfile: 'main',
-		constructorArguments: '',
-		contractIdentifier: 'contracts/statoblast/EscalationGameDepositDelegate.sol:EscalationGameDepositDelegate',
-		id: 'escalationGameDepositDelegate',
-		label: 'Escalation Game Deposit Delegate',
-	})
 	return { jobs, libraryAddresses, skipped }
 }
 

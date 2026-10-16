@@ -4,7 +4,7 @@ import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 const abi = parseAbi([
 	'function deposit(uint256 amountAttoRep,uint256 minimumShares) returns (uint256)',
 	'function withdraw(uint256 shares,uint256 minimumIdleAttoRep) returns (uint256)',
-	'function claimRecovered(uint256[] intervalIds)',
+	'function claimRecovered(uint256[] intervalIds,uint256[] positionIds)',
 	'function rebalancePosition(uint256 positionId)',
 	'function claimPosition(uint256 positionId,uint256 intervalId)',
 	'function balanceOf(address owner) view returns (uint256)',
@@ -36,6 +36,7 @@ const abi = parseAbi([
 	'function questionData() view returns (address)',
 	'function getQuestionEndDate(uint256 questionId) view returns (uint256)',
 	'function systemState() view returns (uint8)',
+	'function isEscalationResolved() view returns (bool)',
 	'function getOwnerPositionShares(uint256 positionId,address owner) view returns (uint256)',
 	'function quoteMint(uint256 questionId,uint256 mintAttoEth) view returns (uint256 depositAttoRep,uint256 purchaseFeeAttoEth,uint256 availableAttoRep)',
 	'function allowance(address owner,address spender) view returns (uint256)',
@@ -74,13 +75,16 @@ export function buildPortfolioFundWithdrawalRequest(parameters: { owner: Address
 	return request(parameters.owner, parameters.portfolio, 'withdraw', [shares, uint(parameters.minimumIdleAttoRep, 'Minimum idle REP')])
 }
 
-export function buildPortfolioClaimRecoveredRequest(parameters: { owner: Address; portfolio: Address; intervalIds: readonly bigint[] }) {
-	return request(parameters.owner, parameters.portfolio, 'claimRecovered', [
-		[...new Set(parameters.intervalIds.map(id => uint(id, 'Owner interval id')))].sort((left, right) => {
-			if (left === right) return 0
-			return left < right ? -1 : 1
-		}),
-	])
+function orderedIds(values: readonly bigint[], label: string) {
+	return [...new Set(values.map(id => uint(id, label)))].sort((left, right) => {
+		if (left < right) return -1
+		if (left > right) return 1
+		return 0
+	})
+}
+
+export function buildPortfolioClaimRecoveredRequest(parameters: { owner: Address; portfolio: Address; intervalIds: readonly bigint[]; positionIds?: readonly bigint[] }) {
+	return request(parameters.owner, parameters.portfolio, 'claimRecovered', [orderedIds(parameters.intervalIds, 'Owner interval id'), orderedIds(parameters.positionIds ?? [], 'Position id')])
 }
 
 export function buildPortfolioPositionRebalanceRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint }) {
@@ -123,7 +127,7 @@ export type PortfolioAggregateSnapshot = {
 	questions: bigint[]
 	positionCount: bigint
 	positionStart: bigint
-	positions: { positionId: bigint; questionId: bigint; custody: Address; ownerShares: bigint; remainingShares: bigint; reusable: boolean; recoveryComplete: boolean; recoveryBountyAttoEth: bigint; questionEndTime: bigint; operational: boolean }[]
+	positions: { positionId: bigint; questionId: bigint; custody: Address; ownerShares: bigint; remainingShares: bigint; reusable: boolean; recoveryComplete: boolean; recoveryBountyAttoEth: bigint; questionEndTime: bigint; operational: boolean; resolved: boolean }[]
 }
 
 /** Reserve balances and bounded allocation/question pages share one mined block. */
@@ -198,15 +202,16 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const questionPageCount = questionCount - questionStart < 64n ? questionCount - questionStart : 64n
 	const [wallet, allowance, questionPage] = await Promise.all([read(repToken, 'balanceOf', [owner]), read(repToken, 'allowance', [owner, portfolio]), read(portfolio, 'getQuestions', [questionStart, questionPageCount])])
 	const questions = tuple(questionPage, Number(questionPageCount)).map(value => uint(value, 'Question id'))
-	const questionStates = new Map<bigint, Promise<{ questionEndTime: bigint; operational: boolean }>>()
+	const questionStates = new Map<bigint, Promise<{ questionEndTime: bigint; operational: boolean; resolved: boolean }>>()
 	const questionState = (questionId: bigint) => {
 		const existing = questionStates.get(questionId)
 		if (existing !== undefined) return existing
 		const pending = (async () => {
 			const pool = address(await read(portfolio, 'getPool', [questionId, originUniverseId]))
-			const [data, state] = await Promise.all([read(pool, 'questionData'), read(pool, 'systemState')])
+			const [data, state, resolved] = await Promise.all([read(pool, 'questionData'), read(pool, 'systemState'), read(pool, 'isEscalationResolved')])
 			if (typeof state !== 'bigint' && (typeof state !== 'number' || !Number.isInteger(state))) throw new Error('Invalid question state.')
-			return { questionEndTime: uint(await read(address(data), 'getQuestionEndDate', [questionId]), 'Question end'), operational: state === 0n || state === 0 }
+			if (typeof resolved !== 'boolean') throw new Error('Invalid question resolution.')
+			return { questionEndTime: uint(await read(address(data), 'getQuestionEndDate', [questionId]), 'Question end'), operational: state === 0n || state === 0, resolved }
 		})()
 		questionStates.set(questionId, pending)
 		return pending

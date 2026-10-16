@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
+import { deployContract } from '../../testSupport/deployContract'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import {
@@ -9,6 +10,7 @@ import {
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	test_statoblast_SecurityPoolPositionReceiver_SecurityPoolPositionReceiver as receiverArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
@@ -66,20 +68,33 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 		expect(await balance()).toBe(ownerBefore + expectedPayout)
 	})
 
-	test('default final runoff preserves ordinary residual rights while another depositor remains unsettled', async () => {
+	test('final runoff recovers ordinary surplus before any reporter settles and preserves the winning reserve', async () => {
 		await fixture.allocate(fixture.base.questionId)
 		const game = await ordinaryResolution()
 		await request()
-		const before = await getSecurityVault(fixture.owner(), pool(), fixture.vault)
 		const ownerBefore = await balance()
-		await expect(process()).rejects.toThrow('Ordinary residual unsettled')
-		expect(await getSecurityVault(fixture.owner(), pool(), fixture.vault)).toEqual(before)
-		expect(await balance()).toBe(ownerBefore)
-		await withdrawFirstDepositOfEachOutcome(fixture.other(), pool())
 		await process()
 		expect(await balance()).toBeGreaterThan(ownerBefore + 1_000n * unit)
-		expect(await balance(game)).toBe(0n)
+		expect(await balance(game)).toBe(500n * unit)
 		expect(await fixture.repClaim(pool())).toBe(0n)
+		await withdrawFirstDepositOfEachOutcome(fixture.other(), pool())
+		expect(await balance(game)).toBe(0n)
+	})
+
+	test('final runoff retires the owners zero-valued backing fraction', async () => {
+		await fixture.allocate(fixture.base.questionId)
+		await ordinaryResolution()
+		await withdrawFirstDepositOfEachOutcome(fixture.other(), pool())
+		const receiver = await deployContract(fixture.owner(), encodeDeployData({ abi: receiverArtifact.abi, bytecode: `0x${receiverArtifact.evm.bytecode.object}`, args: [fixture.owner().account.address, pool(), fixture.vault] }))
+		const source = await getSecurityVault(fixture.owner(), pool(), fixture.vault)
+		await fixture.execute(pool(), encodeFunctionData({ abi: poolArtifact.abi, functionName: 'splitVaultPosition', args: [receiver, source.repBackingUnits - 1n, source.repBackingUnits] }))
+		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).repBackingUnits).toBe(1n)
+		expect(await fixture.repClaim(pool())).toBe(0n)
+		await request()
+		const before = await balance()
+		await process()
+		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).repBackingUnits).toBe(0n)
+		expect(await balance()).toBe(before)
 	})
 
 	test('unresolved ordinary claims require forfeiture consent before REP exit while harmless commitment reductions remain available', async () => {
@@ -108,7 +123,10 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 
 	test('only explicit owner consent permits early exit while ordinary residual remains unsettled', async () => {
 		await fixture.allocate(fixture.base.questionId)
-		const game = await ordinaryResolution()
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		await fixture.refreshPrice(fixture.base.questionId)
+		await depositOrdinaryEscalationPrincipals(fixture.owner(), pool())
+		const game = fixture.base.securityPoolAddresses.escalationGame
 		await request()
 		await expect(allowForfeiture(true, fixture.other())).rejects.toThrow('Only vault owner')
 		await allowForfeiture()
@@ -121,6 +139,7 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 		expect(await balance()).toBe(before + 1_000n * unit)
 		expect(await fixture.repClaim(pool())).toBe(0n)
 		expect(await balance(game)).toBe(escrowBefore)
+		await advancePastOrdinaryEscalationDeadline(fixture.owner(), fixture.base.mockWindow, pool())
 		await withdrawFirstDepositOfEachOutcome(fixture.other(), pool())
 		const afterSettlement = await balance()
 		await process()
@@ -267,7 +286,7 @@ describe('Statoblast: owner-requested portfolio runoff', () => {
 		await fixture.execute(pool(), encodeFunctionData({ abi: poolArtifact.abi, functionName: 'depositToEscalationGame', args: [QuestionOutcome.Yes, base.reportBond] }))
 		await base.mockWindow.advanceTime(10n * DAY)
 		await request()
-		await expect(process()).rejects.toThrow('Ordinary residual unsettled')
+		await expect(process()).rejects.toThrow('Escrow locked')
 		await allowForfeiture()
 		await expect(process()).rejects.toThrow('Escrow locked')
 		expect((await getSecurityVault(fixture.owner(), pool(), fixture.vault)).underwritingLimitAttoEth).toBe(100n * unit)

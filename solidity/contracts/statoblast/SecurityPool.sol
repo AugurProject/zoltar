@@ -512,18 +512,20 @@ contract SecurityPool is SecurityPoolStorage {
 		require(msg.sender == vault, 'Unauthorized');
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
+		if (address(escalationGame) != address(0x0) && !escalationGame.forkContinuation())
+			escalationGame.settleOrdinaryGame();
 		uint256 disputeStakedAttoRep =
 			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
 		require(disputeStakedAttoRep == 0, 'Escrow locked');
 		updateVaultFees(vault);
 		uint256 backingUnitsToRedeem = securityVaults[vault].repBackingUnits;
 		uint256 amountAttoRep = backingUnitsToAttoRep(backingUnitsToRedeem);
-		require(amountAttoRep > 0, 'No redeemable REP');
+		require(backingUnitsToRedeem > 0, 'No redeemable REP');
 		require(securityVaults[vault].underwritingLimitAttoEth == 0, 'Exit commitment before REP redemption');
 		securityVaults[vault].repBackingUnits = 0;
 		totalRepBackingUnits -= backingUnitsToRedeem;
 		// A positive claim was registered when its backing units were created or transferred.
-		IERC20(address(repToken)).safeTransfer(vault, amountAttoRep);
+		if (amountAttoRep > 0) IERC20(address(repToken)).safeTransfer(vault, amountAttoRep);
 		emit RepRedeemedFromVault(msg.sender, vault, amountAttoRep, 0, totalRepBackingUnits);
 		_emitVaultAccountingCheckpoint(vault);
 	}

@@ -617,7 +617,7 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(vaultAfterWithdrawal.disputeStakedAttoRep, 0n, 'winning withdrawals should unlock all deposited REP')
 	})
 
-	test('losing escalation deposits stay locked and reduce the losing vaults available REP claim after winner withdrawal', async () => {
+	test('ordinary finality retires losing escrow without restoring the forfeited stake or requiring loser cleanup', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
@@ -643,9 +643,12 @@ describe('Statoblast: vault accounting', () => {
 		const losingClaimAfterWithdrawal = await getVaultRepClaim(attackerClient.account.address)
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'question should resolve to yes')
 		strictEqualTypeSafe(losingVaultBeforeWithdrawal.disputeStakedAttoRep, losingDeposit, 'losing-side REP should start fully locked')
-		strictEqualTypeSafe(losingVaultAfterWithdrawal.disputeStakedAttoRep, losingDeposit, 'losing-side REP should remain locked after the winner withdraws')
+		strictEqualTypeSafe(losingVaultAfterWithdrawal.disputeStakedAttoRep, 0n, 'ordinary finality should retire the losing escrow globally')
 		strictEqualTypeSafe(losingClaimAfterWithdrawal, losingClaimBeforeWithdrawal, "winning-side settlement should not affect the losing vault's pool-held REP backing once dispute-staked REP is fully escrowed outside the pool")
-		assert.ok(losingClaimAfterWithdrawal + losingVaultAfterWithdrawal.disputeStakedAttoRep === repDeposit, "the losing vault's total economic position should remain split across pool-held REP backing and dispute-staked REP until its own settlement")
+		strictEqualTypeSafe(losingClaimAfterWithdrawal, repDeposit - losingDeposit, 'retiring a losing claim must not restore its forfeited principal')
+		const walletBefore = await getERC20Balance(attackerClient, escrowRepToken, attackerClient.account.address)
+		await redeemRepFromVault(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address)
+		strictEqualTypeSafe((await getERC20Balance(attackerClient, escrowRepToken, attackerClient.account.address)) - walletBefore, losingClaimAfterWithdrawal, 'the losing vault can redeem its remaining backing without settling its losing deposit')
 	})
 
 	test('withdrawRep only uses available REP and cannot drain another vaults locked escalation stake', async () => {
@@ -1035,7 +1038,7 @@ describe('Statoblast: vault accounting', () => {
 		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /No outcome/)
 	})
 
-	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
+	test('repeated losing settlement retires the claim once without minting backing or paying REP', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
@@ -1055,7 +1058,11 @@ describe('Statoblast: vault accounting', () => {
 		const attackerVaultAfterSettlement = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
 		strictEqualTypeSafe(attackerVaultAfterSettlement.disputeStakedAttoRep, 0n, 'losing-side settlement should clear the resolved escalation lock')
 		strictEqualTypeSafe(attackerVaultAfterSettlement.repBackingUnits, attackerVaultBeforeSettlement.repBackingUnits, 'settling a fully losing escalation deposit should not mint new vault backingUnits to the loser')
-		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex]), /Deposit settled/)
+		const walletBeforeRepeat = await getERC20Balance(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), attackerClient.account.address)
+		await withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex])
+		assert.deepStrictEqual(await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address), attackerVaultAfterSettlement, 'a repeated retired loss must leave vault accounting unchanged')
+		strictEqualTypeSafe(await getERC20Balance(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), attackerClient.account.address), walletBeforeRepeat, 'a repeated retired loss must not pay REP')
+		await assert.rejects(withdrawFromEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, [canceledCandidateDeposit.depositIndex + 1n]), /Bad deposit index/)
 	})
 
 	test('mixed-outcome settlements from one vault are settlement-order independent after exchange-rate changes', async () => {

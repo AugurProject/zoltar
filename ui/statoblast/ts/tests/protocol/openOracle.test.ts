@@ -327,8 +327,9 @@ describe('openOracle protocol client', () => {
 		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
 		const requestedFunctionNames: string[] = []
 		const client = createMockLoaderClient({
-			getBlock: async () => ({ timestamp: 0n, baseFeePerGas: 0n }),
+			getBlock: async () => ({ timestamp: 0n, baseFeePerGas: 0n, number: 51n, hash: '0x11' }),
 			multicall: async request => {
+				expect(request.blockNumber).toBe(51n)
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
@@ -338,9 +339,10 @@ describe('openOracle protocol client', () => {
 				if (request.functionName === 'priceFeed') return managerAddress
 				if (request.functionName === 'getSettlementCallbackGasLimit') return 10
 				if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
-				if (request.functionName === 'getActiveStagedOperations') {
+				if (request.functionName === 'getActiveStagedOperationsPage') {
+					expect(request.blockNumber).toBe(51n)
 					const args = request.args
-					if (args === undefined) throw new Error('Expected getActiveStagedOperations args')
+					if (args === undefined) throw new Error('Expected getActiveStagedOperationsPage args')
 					const startIndex = args[0]
 					const count = args[1]
 					if (typeof startIndex !== 'bigint' || typeof count !== 'bigint') throw new Error('Expected bigint staged operation args')
@@ -359,6 +361,7 @@ describe('openOracle protocol client', () => {
 							targetVault: vaultAddress,
 							validForSeconds: 60n,
 						})),
+						15n,
 					]
 				}
 				if (request.functionName === 'getPendingOperationSlot') {
@@ -402,6 +405,8 @@ describe('openOracle protocol client', () => {
 		expect(details.stagedOperations?.[0]?.operationId).toBe(40n)
 		expect(details.stagedOperations?.at(-1)?.operationId).toBe(pendingOperationSlotId)
 		expect(details.stagedOperations).toHaveLength(26)
+		let headerReads = 0
+		await expect(loadOracleManagerDetails({ ...client, getBlock: async () => ({ ...(await client.getBlock()), hash: headerReads++ === 0 ? '0x11' : '0x22' }) }, managerAddress)).rejects.toThrow('Chain changed while reading the operation queue')
 	})
 
 	for (const association of ['verified', 'different oracle', 'different coordinator', 'generic callback'] as const) {

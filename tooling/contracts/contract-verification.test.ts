@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test'
-import { getCreateAddress } from '@zoltar/core-shared/evm/ethereum'
 import { promises as fs } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,23 +22,23 @@ test('every manifest deployment step is either verifiable or explicitly skipped,
 		const manifest = await loadRealManifest(networkId)
 		const plan = buildVerificationPlan(manifest, artifactLookup)
 		expect(plan.skipped.map(step => step.id)).toEqual(['proxyDeployer'])
-		expect(plan.jobs.map(job => job.id)).toEqual([...manifest.deploymentSteps.map(step => step.id).filter(id => id !== 'proxyDeployer'), 'escalationGameDepositDelegate'])
+		expect(plan.jobs.map(job => job.id)).toEqual(manifest.deploymentSteps.map(step => step.id).filter(id => id !== 'proxyDeployer'))
 	}
 })
 
-test('verification includes the factory-owned shared escalation deposit delegate', async () => {
+test('verification authenticates the directly deployed shared escalation deposit delegate', async () => {
 	const artifactLookup = await loadRealArtifactLookup()
 	const manifest = await loadRealManifest('sepolia')
-	const factory = manifest.deploymentSteps.find(step => step.id === 'escalationGameFactory')
-	if (factory === undefined) throw new Error('Missing escalation game factory deployment')
+	const delegateStep = manifest.deploymentSteps.find(step => step.id === 'escalationGameDepositDelegate')
+	if (delegateStep === undefined) throw new Error('Missing escalation game deposit delegate deployment')
 	const delegate = buildVerificationPlan(manifest, artifactLookup).jobs.find(job => job.id === 'escalationGameDepositDelegate')
 	expect(delegate).toEqual({
-		address: getCreateAddress({ from: factory.address, nonce: 4n }),
+		address: delegateStep.address,
 		compilerProfile: 'main',
 		constructorArguments: '',
 		contractIdentifier: 'contracts/statoblast/EscalationGameDepositDelegate.sol:EscalationGameDepositDelegate',
 		id: 'escalationGameDepositDelegate',
-		label: 'Escalation Game Deposit Delegate',
+		label: delegateStep.label,
 	})
 })
 

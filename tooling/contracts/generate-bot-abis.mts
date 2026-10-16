@@ -47,6 +47,7 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'deploySecurityPoolEvent', source: statoblast('factories/SecurityPoolFactory'), event: 'DeploySecurityPool' },
 	{ name: 'vaultAccountingCheckpointEvent', source: statoblast('SecurityPool'), event: 'VaultAccountingCheckpoint' },
 	{ name: 'vaultEscrowUpdatedEvent', source: statoblast('EscalationGame'), event: 'VaultEscrowUpdated' },
+	{ name: 'ordinarySettlementInitializedEvent', source: statoblast('EscalationGame'), event: 'OrdinarySettlementInitialized' },
 	{ name: 'truthAuctionHaircutAppliedEvent', source: statoblast('EscalationGame'), event: 'TruthAuctionHaircutApplied' },
 ]
 const outputPath = path.join(repositoryRoot, 'bots', 'shared', 'src', 'contracts', 'abi.generated.ts')

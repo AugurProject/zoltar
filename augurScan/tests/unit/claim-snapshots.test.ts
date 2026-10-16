@@ -1,9 +1,22 @@
 import { expect, test } from 'bun:test'
 import { sampleClaimPositions } from '../../src/claim-snapshots.ts'
-import { allocatedWinningPayout } from '../../src/claim-payout.ts'
+import { allocatedWinningPayout, ordinaryWinningPayout } from '../../src/claim-payout.ts'
 
 test('separates retained principal from reward intervals and applies fork haircut after reward rounding', () => {
 	expect(allocatedWinningPayout({ principal: 81n, rewardAmount: 33n, rewardCumulative: 75n, binding: 100n, winningBalance: 160n, forkThreshold: 500n, nonDecisionThreshold: 1000n })).toEqual({ payout: 47n, burn: 8n })
+})
+
+test('ordinary payout intervals telescope across reward and haircut rounding', () => {
+	const base = { principal: 1n, rewardAmount: 1n, rewardCumulative: 0n, binding: 7n, winningBalance: 11n, forkThreshold: 13n, nonDecisionThreshold: 19n }
+	let payout = 0n
+	let burn = 0n
+	for (let end = 1n; end <= 11n; end++) {
+		const part = ordinaryWinningPayout({ ...base, rewardCumulative: end })
+		payout += part.payout
+		burn += part.burn
+	}
+	expect({ payout, burn }).toEqual(ordinaryWinningPayout({ ...base, principal: 11n, rewardAmount: 11n, rewardCumulative: 11n }))
+	expect({ payout, burn }).toEqual({ payout: 10n, burn: 2n })
 })
 
 test('failed proof reads produce explicit unavailable evidence rather than claimable principal', async () => {
@@ -51,7 +64,7 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean } = {}): StateRead =>
+	(options: { consumed?: bigint[]; directlyClaimed?: boolean; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; checkpointRequired?: boolean; ordinarySettled?: boolean } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
 		const kind = ['getInheritedClaimAllocation', 'getClaimCheckpointProgress'].includes(name) ? 'escalationGameClaimDelegate' : fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
@@ -80,6 +93,10 @@ const fixtureRead =
 				return 0n
 			case 'getForkThresholdAttoRep':
 				return 500n
+			case 'ordinarySettlementInitialized':
+				return options.ordinarySettled ?? false
+			case 'ordinarySettlementForkThresholdAttoRep':
+				return 7n
 			case 'getOutcomeState':
 				return {
 					balanceAttoRep: 150n,
@@ -115,6 +132,13 @@ test('reconstructs inherited membership and independent unspent proofs with tagg
 	expect(result.positions[2]).toMatchObject({ kind: 'inherited', status: 'claimable', retained_principal_atto_rep: '33', auction_haircut_atto_rep: '17', payout_atto_rep: '23', burn_atto_rep: '8', proof: { leafIndex: '2', merkleMountainRangePeakIndex: '0', merkleMountainRangeSiblings: [peaks[1]] } })
 	expect(result.positions[2]?.['membership_root']).toBe(buildCarryMerkleMountainRangeProof(hashes, 2).root)
 	expect(result.positions.every(position => position['nullifier_root'] === createSparseNullifier([]).getRoot())).toBe(true)
+})
+
+test('ordinary claim evidence uses the frozen threshold and telescoping interval payouts', async () => {
+	const result = await sampleClaimPositions(root, fixtureRead({ ordinarySettled: true }), state)
+	expect(result.positions.map(position => position['payout_atto_rep'])).toEqual(['0', '0', '1'])
+	expect(result.positions.map(position => position['burn_atto_rep'])).toEqual(['13', '13', '14'])
+	expect(result.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '7' })
 })
 
 test('excludes consumed leaves, suppresses direct parent claims, and retains pending statuses', async () => {
