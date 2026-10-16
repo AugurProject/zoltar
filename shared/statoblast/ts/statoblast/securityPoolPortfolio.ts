@@ -104,13 +104,14 @@ function validateInput(input: VaultOperationsInput, vault: Address) {
  * Inject the compiled artifact so the shared SDK does not depend on contract generation.
  * @public Deployment API exported by the securityPoolPortfolio package subpath.
  */
-export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; initialOriginPool: Address; maximumQuestionHorizonSeconds: bigint; artifact: { abi: Abi; bytecode: Hex } }) {
+export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; initialOriginPool: Address; maximumQuestionHorizonSeconds: bigint; vaultDeployer: Address; artifact: { abi: Abi; bytecode: Hex } }) {
 	validateAddress(parameters.owner, 'Owner')
 	validateAddress(parameters.factory, 'Factory')
 	validateAddress(parameters.initialOriginPool, 'Initial origin pool')
+	validateAddress(parameters.vaultDeployer, 'Vault deployer')
 	validateUint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
 	if (parameters.maximumQuestionHorizonSeconds === 0n) throw new Error('Question horizon must be positive.')
-	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.initialOriginPool, parameters.maximumQuestionHorizonSeconds] }) }
+	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.initialOriginPool, parameters.maximumQuestionHorizonSeconds, parameters.vaultDeployer] }) }
 }
 
 export type PortfolioQuestionOperations = {
@@ -210,7 +211,16 @@ export function exportPortfolioTransaction(parameters: { chainId: number; reques
 export { loadPortfolioSnapshot, type PortfolioReadClient, type PortfolioSnapshot, type PortfolioPosition } from './securityPoolPortfolioRead.js'
 export { planPortfolioAllocations } from './securityPoolPortfolioPlanning.js'
 export { resolvePortfolioOperationStatus, type PortfolioOperationStatus } from './securityPoolPortfolioStatus.js'
-export { buildPortfolioDepositRequest, buildPortfolioFundWithdrawalRequest, buildPortfolioClaimFeesRequest, buildPortfolioPositionClaimRequest, buildPortfolioPositionRebalanceRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote, type PortfolioAggregateSnapshot } from './securityPoolPortfolioAggregate.js'
+export {
+	buildPortfolioDepositRequest,
+	buildPortfolioFundWithdrawalRequest,
+	buildPortfolioClaimRecoveredRequest,
+	buildPortfolioPositionClaimRequest,
+	buildPortfolioPositionRebalanceRequest,
+	loadPortfolioAggregateSnapshot,
+	loadPortfolioMintQuote,
+	type PortfolioAggregateSnapshot,
+} from './securityPoolPortfolioAggregate.js'
 export {
 	buildPortfolioMintRequest,
 	buildPortfolioWithdrawalRequest,

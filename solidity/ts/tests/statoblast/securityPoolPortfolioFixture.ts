@@ -79,6 +79,7 @@ export function useSecurityPoolPortfolioFixture() {
 			buildPortfolioDeploymentRequest({
 				owner: owner().account.address,
 				factory: getInfraContractAddresses().securityPoolFactory,
+				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: base.securityPoolAddresses.securityPool,
 				maximumQuestionHorizonSeconds,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },

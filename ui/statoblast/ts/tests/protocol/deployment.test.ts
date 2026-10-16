@@ -27,7 +27,7 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'openOracle', 'securityPoolOperationsDelegate', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'openOracle', 'securityPoolOperationsDelegate', 'securityPoolPortfolioVaultDeployer', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
 	})
 
 	test('the deployment status oracle step deploys the statoblast oracle, not the zoltar-only oracle', async () => {
@@ -35,7 +35,7 @@ describe('statoblast deployment steps', () => {
 			const steps = getDeploymentSteps(profile)
 			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 			if (oracleStep === undefined) throw new Error(`Missing deployment status oracle step for ${profile.id}`)
-			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameFactory', 'securityPoolFactory']
+			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameFactory', 'securityPoolFactory', 'securityPoolPortfolioVaultDeployer']
 			for (const stepId of statoblastStepIds) {
 				if (steps.every(step => step.id !== stepId)) throw new Error(`Missing statoblast deployment step ${stepId} for ${profile.id}`)
 			}

@@ -102,15 +102,16 @@ describe('security pool portfolio transaction builders', () => {
 						{ name: 'factory', type: 'address' },
 						{ name: 'initialOriginPool', type: 'address' },
 						{ name: 'maximumQuestionHorizonSeconds', type: 'uint256' },
+						{ name: 'vaultDeployer', type: 'address' },
 					],
 					stateMutability: 'nonpayable',
 				},
 			],
 			bytecode: '0x6000',
 		} as const
-		const request = buildPortfolioDeploymentRequest({ owner, factory, initialOriginPool: pool, maximumQuestionHorizonSeconds: 30n * 86400n, artifact })
+		const request = buildPortfolioDeploymentRequest({ owner, factory, initialOriginPool: pool, maximumQuestionHorizonSeconds: 30n * 86400n, vaultDeployer: vault, artifact })
 		expect(request.account).toBe(owner)
-		expect(request.data).toBe(`0x6000${encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [factory, pool, 30n * 86400n]).slice(2)}`)
+		expect(request.data).toBe(`0x6000${encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'address' }], [factory, pool, 30n * 86400n, vault]).slice(2)}`)
 	})
 })
 

@@ -62,7 +62,13 @@ describe('Statoblast: one price feed per question pool', () => {
 
 	test('two pools with identical rules have isolated question ledgers and share tokens', async () => {
 		const client = fixture.owner()
-		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, fixture.base.securityPoolAddresses.securityPool, maximumQuestionHorizonSeconds] }) })
+		const hash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: portfolioArtifact.abi,
+				bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
+				args: [getInfraContractAddresses().securityPoolFactory, fixture.base.securityPoolAddresses.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer],
+			}),
+		})
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		const secondPortfolio = receipt.contractAddress
 		if (!secondPortfolio) throw new Error('Second pool deployment address missing')

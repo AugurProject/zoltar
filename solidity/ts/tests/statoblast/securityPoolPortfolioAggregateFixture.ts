@@ -1,6 +1,6 @@
 import { type Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../types/contractArtifact'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as recoveryArtifact } from '../../types/contractArtifact'
+import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
@@ -26,6 +26,17 @@ export function useAggregatePortfolioFixture() {
 	const mint = (amount = 100n * unit, questionId = fixture.base.questionId, budget = 10n * unit, minimumShares = 0n, recipient = fixture.other().account.address) =>
 		writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'createCompleteSet', args: [questionId, recipient, minimumShares, amount], value: amount + budget }))
 	const withdraw = (amount: bigint, owner = fixture.owner(), minimumIdleAttoRep = 0n) => writeContractAndWait(owner, () => owner.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'withdraw', args: [amount, minimumIdleAttoRep] }))
-	const claim = (positionId = 1n, owner = fixture.owner().account.address, sender = fixture.owner()) => writeContractAndWait(sender, () => sender.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimPosition', args: [positionId, owner] }))
+	const claim = async (positionId = 1n, owner = fixture.owner().account.address, sender?: WriteClient) => {
+		const claimant = sender ?? [fixture.owner(), fixture.other()].find(client => client.account.address.toLowerCase() === owner.toLowerCase())
+		if (claimant === undefined || claimant.account.address.toLowerCase() !== owner.toLowerCase()) throw new Error('Only owner can claim allocation')
+		const ledger = await claimant.readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveryLedger' })
+		const count = await claimant.readContract({ abi: recoveryArtifact.abi, address: ledger, functionName: 'getOwnerIntervalCount', args: [owner] })
+		for (let intervalId = 0n; intervalId < count; intervalId++) {
+			const interval = await claimant.readContract({ abi: recoveryArtifact.abi, address: ledger, functionName: 'getOwnerInterval', args: [owner, intervalId] })
+			if (interval.active && interval.startPosition <= positionId && (interval.open || interval.endPosition >= positionId)) return writeContractAndWait(claimant, () => claimant.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimPosition', args: [positionId, intervalId] }))
+		}
+		throw new Error('No allocation position')
+	}
+
 	return { fixture, deposit, quote, shares, assets, fees, rebalance, position, custody, positionCount, ownerPositionShares, reusable, mint, withdraw, claim }
 }

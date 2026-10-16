@@ -15,6 +15,7 @@ contract SecurityPoolPortfolioQuote {
 	struct MintPlan {
 		bool reusePosition;
 		bool reserveFunded;
+		bool needsCommitment;
 		uint256 availableAttoRep;
 		uint256 depositAttoRep;
 		uint256 feeAttoEth;
@@ -42,6 +43,11 @@ contract SecurityPoolPortfolioQuote {
 
 	function mintPlan(ISecurityPool pool, address custody, uint256 mintAttoEth, uint256 idleRep, bool reserveFunded, bool previewRebalance) external view returns (MintPlan memory plan) {
 		QuoteState memory state = _quoteState(pool, custody);
+		require(state.freshPrice, 'Mint needs settled fresh price');
+		// Price every purchase against its standalone backing requirement. Existing
+		// spare capacity and historical recapitalization do not change this charge.
+		uint256 purchaseBacking = _requiredBacking(state, mintAttoEth, MINIMUM_HEALTH_FACTOR_BPS);
+		plan.feeAttoEth = Math.max(Math.mulDiv(Math.mulDiv(purchaseBacking, 1e18, state.price, Math.Rounding.Ceil), RESERVATION_FEE_BPS, 10_000, Math.Rounding.Ceil), MINIMUM_RESERVATION_FEE_ATTO_ETH);
 		plan.reusePosition = custody != address(0);
 		plan.reserveFunded = reserveFunded;
 		plan.availableAttoRep = reserveFunded ? idleRep : 0;
@@ -52,7 +58,7 @@ contract SecurityPoolPortfolioQuote {
 				plan.availableAttoRep += released;
 			}
 		}
-		(plan.depositAttoRep, plan.feeAttoEth, plan.nextCommitment) = _mintBackingQuote(state, mintAttoEth);
+		(plan.depositAttoRep, plan.nextCommitment, plan.needsCommitment) = _mintBackingQuote(state, mintAttoEth);
 		if (!reserveFunded && plan.depositAttoRep > plan.availableAttoRep) {
 			// Historical capital cannot receive a reserve top-up. A fresh cohort uses the
 			// post-withdrawal exchange rate and counts the retained commitment as other capacity.
@@ -62,7 +68,7 @@ contract SecurityPoolPortfolioQuote {
 			state.vaultUnits = 0;
 			state.others += state.commitment;
 			state.commitment = 0;
-			(plan.depositAttoRep, plan.feeAttoEth, plan.nextCommitment) = _mintBackingQuote(state, mintAttoEth);
+			(plan.depositAttoRep, plan.nextCommitment, plan.needsCommitment) = _mintBackingQuote(state, mintAttoEth);
 		}
 	}
 
@@ -118,23 +124,20 @@ contract SecurityPoolPortfolioQuote {
 		state.totalHeld -= released;
 	}
 
-	function _mintBackingQuote(QuoteState memory state, uint256 mintAttoEth) private pure returns (uint256 depositAttoRep, uint256 feeAttoEth, uint256 nextCommitment) {
+	function _mintBackingQuote(QuoteState memory state, uint256 mintAttoEth) private pure returns (uint256 depositAttoRep, uint256 nextCommitment, bool needsCommitment) {
 		uint256 requiredCommitment = state.collateral + mintAttoEth;
 		nextCommitment =
 			requiredCommitment > state.others
 				? Math.max(state.commitment, requiredCommitment - state.others)
 				: state.commitment;
-		if (nextCommitment <= state.commitment) return (0, 0, nextCommitment);
-		require(state.freshPrice, 'Mint needs settled fresh price');
+		if (nextCommitment <= state.commitment) return (0, nextCommitment, false);
+		needsCommitment = true;
 		uint256 held = _held(state);
 		uint256 requiredRep = _requiredBacking(state, nextCommitment, MINIMUM_HEALTH_FACTOR_BPS);
 		if (requiredRep > held) depositAttoRep = requiredRep - held;
 		// Native deposits round backing units down; cover the last unit at the projected pool rate.
 		if (depositAttoRep > 0 && state.totalUnits > 0 && state.totalHeld > 0)
 			depositAttoRep = Math.mulDiv(Math.mulDiv(depositAttoRep, state.totalUnits, state.totalHeld, Math.Rounding.Ceil), state.totalHeld, state.totalUnits, Math.Rounding.Ceil);
-		uint256 previouslyReserved = Math.min(held, _requiredBacking(state, state.commitment, MINIMUM_HEALTH_FACTOR_BPS));
-		uint256 newlyReserved = Math.max(depositAttoRep, requiredRep - previouslyReserved);
-		feeAttoEth = Math.max(Math.mulDiv(Math.mulDiv(newlyReserved, 1e18, state.price, Math.Rounding.Ceil), RESERVATION_FEE_BPS, 10_000, Math.Rounding.Ceil), MINIMUM_RESERVATION_FEE_ATTO_ETH);
 	}
 
 	function _held(QuoteState memory state) private pure returns (uint256) {

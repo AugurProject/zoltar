@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
+import { EscalationGame } from './EscalationGame.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
@@ -67,6 +68,54 @@ contract SecurityPoolPortfolioPosition {
 		uint256 fees = Math.mulDiv(address(this).balance, numerator, denominator);
 		if (rep > 0) repToken.safeTransfer(recipient, rep);
 		_sendEth(recipient, fees);
+	}
+
+	/// @notice Collect already liquid proceeds before changing the allocation's ownership weights.
+	function collect() external onlyPortfolio returns (uint256 rep, uint256 fees) {
+		pool.redeemFees(address(this));
+		return _collect();
+	}
+
+	/// @notice Release available backing once for all remaining owners, without selecting a fork branch.
+	function recover() external onlyPortfolio returns (uint256 rep, uint256 fees, bool complete) {
+		pool.redeemFees(address(this));
+		(uint256 units, uint256 commitment, , ) = pool.securityVaults(address(this));
+		if (pool.systemState() == SystemState.Operational) {
+			if (pool.isEscalationResolved()) {
+				EscalationGame game = pool.escalationGame();
+				bool residualPending =
+					address(game) != address(0) && !game.forkContinuation() && game.totalDisputeStakedAttoRep() > 0;
+				if (!residualPending) {
+					if (
+						address(game) != address(0) &&
+						!game.forkContinuation() &&
+						pool.repToken().balanceOf(address(game)) > 0
+					) game.sweepResidualRepToSecurityPool();
+					if (commitment > 0) pool.setUnderwritingLimit(0);
+					if (units > 0 && pool.backingUnitsToAttoRep(units) > 0) pool.redeemRepFromVault(address(this));
+				}
+			} else {
+				(uint256 retainedCommitment, uint256 releaseAttoRep) = rebalancePlan();
+				if (retainedCommitment < commitment) pool.setUnderwritingLimit(retainedCommitment);
+				EscalationGame game = pool.escalationGame();
+				bool residualPending =
+					address(game) != address(0) && !game.forkContinuation() && game.totalDisputeStakedAttoRep() > 0;
+				// Preserve backing units that may receive ordinary-game residual after principal claims settle.
+				if (releaseAttoRep > 0 && !residualPending)
+					pool.openOraclePriceCoordinator().vaultOperations().submitVaultOperations(VaultOperationsInput(0, false, 0, new VaultLiquidationInput[](0), releaseAttoRep, MINIMUM_HEALTH_FACTOR_BPS, 300), 0, 0, 0);
+			}
+		}
+		(rep, fees) = _collect();
+		(units, commitment, , ) = pool.securityVaults(address(this));
+		complete = units == 0 && commitment == 0;
+	}
+
+	function _collect() private returns (uint256 rep, uint256 fees) {
+		IERC20 repToken = IERC20(address(pool.repToken()));
+		rep = repToken.balanceOf(address(this));
+		fees = address(this).balance;
+		if (rep > 0) repToken.safeTransfer(portfolio, rep);
+		_sendEth(portfolio, fees);
 	}
 
 	function _sendEth(address recipient, uint256 amount) private {

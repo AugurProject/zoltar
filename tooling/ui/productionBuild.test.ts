@@ -474,7 +474,7 @@ test(
 				expect(body).toContain('Browser simulation')
 				expect(body).not.toContain('Could not load the portfolio snapshot')
 				// Seeded reservation fees make this available only after the authenticated fund snapshot loads.
-				await driver.waitForButtonEnabled(portfolioCopy.claimFundFees)
+				await driver.waitForButtonEnabled(portfolioCopy.collectRecovered)
 				expect(
 					await driver.evaluate(
 						`(() => { const summary = [...document.querySelectorAll('summary')].find(node => node.textContent === ${JSON.stringify(portfolioCopy.recovery)}); const details = summary?.parentElement; if (!(summary instanceof HTMLElement) || !(details instanceof HTMLDetailsElement)) return false; summary.click(); return details.open })()`,
@@ -496,7 +496,7 @@ test(
 					if (!bothQuestionsLoaded) await Bun.sleep(50)
 				}
 				expect(bothQuestionsLoaded).toBe(true)
-				await driver.waitForButtonEnabled(portfolioCopy.claimFundFees)
+				await driver.waitForButtonEnabled(portfolioCopy.collectRecovered)
 				expect(
 					await driver.evaluate(`(() => {
 			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
@@ -946,7 +946,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
 	await driver.waitForButtonEnabled('Deploy next contract')
 	await driver.clickButton('Deploy next contract')
-	const deployedBody = await driver.waitForBodyText('1 / 17')
+	const deployedBody = await driver.waitForBodyText('1 / 18')
 	expect(deployedBody).toContain('Proxy Deployer')
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.

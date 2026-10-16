@@ -27,6 +27,7 @@ type InfraContractAddressConfig = {
 	proxyDeployerAddress: Address
 	securityPoolUtilsBytecode: Hex
 	securityPoolOperationsDelegateBytecode: Hex
+	securityPoolPortfolioVaultDeployerBytecode: Hex
 	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
 	zeroSalt: Hex
 	getZoltarAddress: () => Address
@@ -47,6 +48,7 @@ type InfraContractAddresses = {
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
 	securityPoolUtils: Address
+	securityPoolPortfolioVaultDeployer: Address
 	shareTokenFactory: Address
 	uniformPriceDualCapBatchAuctionFactory: Address
 	zoltar: Address
@@ -58,6 +60,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 		const addresses = {
 			multicall3: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.multicall3Bytecode),
 			securityPoolUtils: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolUtilsBytecode),
+			securityPoolPortfolioVaultDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolPortfolioVaultDeployerBytecode),
 			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
 			zoltar: config.getZoltarAddress(),

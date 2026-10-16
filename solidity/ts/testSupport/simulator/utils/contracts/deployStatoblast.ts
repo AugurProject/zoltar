@@ -27,6 +27,7 @@ import {
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
+	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
@@ -51,6 +52,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+		securityPoolPortfolioVaultDeployer: statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 		uniformPriceDualCapBatchAuctionFactory: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
@@ -59,8 +61,17 @@ const statoblastInitCodes = createStatoblastInitCodes(
 )
 
 export const { applyLibraries } = statoblastInitCodes
-const { getEscalationGameFactoryByteCode, getOpenOraclePriceCoordinatorFactoryByteCode, getPriceCoordinatorDeploymentWorkerByteCode, getSharedPoolPriceFeedDeploymentWorkerByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getSecurityPoolOperationsDelegateByteCode, getShareTokenFactoryByteCode } =
-	statoblastInitCodes
+const {
+	getEscalationGameFactoryByteCode,
+	getOpenOraclePriceCoordinatorFactoryByteCode,
+	getPriceCoordinatorDeploymentWorkerByteCode,
+	getSharedPoolPriceFeedDeploymentWorkerByteCode,
+	getSecurityPoolFactoryByteCode,
+	getSecurityPoolForkerByteCode,
+	getSecurityPoolOperationsDelegateByteCode,
+	getSecurityPoolPortfolioVaultDeployerByteCode,
+	getShareTokenFactoryByteCode,
+} = statoblastInitCodes
 
 export function getDeploymentStepAddresses() {
 	return getDeploymentStatusOracleSteps().map(step => step.address)
@@ -177,6 +188,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'escalationGameClaimDelegate', address: infraContracts.escalationGameClaimDelegate },
 		{ id: 'escalationGameFactory', address: infraContracts.escalationGameFactory },
 		{ id: 'securityPoolFactory', address: infraContracts.securityPoolFactory },
+		{ id: 'securityPoolPortfolioVaultDeployer', address: infraContracts.securityPoolPortfolioVaultDeployer },
 	] as const
 }
 
@@ -208,6 +220,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
 		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),
 		securityPoolFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolFactory'),
+		securityPoolPortfolioVaultDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioVaultDeployer'),
 	}
 }
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
@@ -244,6 +257,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['escalationGameClaimDelegate']) await deployBytecode('escalationGameClaimDelegate', `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`)
 	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameClaimDelegate))
 	if (!existence['securityPoolFactory']) await deployBytecode('securityPoolFactory', getSecurityPoolFactoryByteCode(contractAddresses))
+	if (!existence['securityPoolPortfolioVaultDeployer']) await deployBytecode('securityPoolPortfolioVaultDeployer', getSecurityPoolPortfolioVaultDeployerByteCode())
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${name} does not exist even though we deployed it`)

@@ -23,7 +23,7 @@ import { unit, maximumQuestionHorizonSeconds } from './securityPoolPortfolioFixt
 import { useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
 
 describe('Statoblast: portfolio fork isolation', () => {
-	const { fixture, deposit, mint, claim } = useAggregatePortfolioFixture()
+	const { fixture, deposit, mint, claim, custody, rebalance, ownerPositionShares } = useAggregatePortfolioFixture()
 	const forkA = async () => {
 		await approveToken(fixture.owner(), getRepTokenAddress(fixture.base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(fixture.owner(), fixture.base.genesisUniverse, fixture.base.questionId)
@@ -44,7 +44,7 @@ describe('Statoblast: portfolio fork isolation', () => {
 		expect((await owner().waitForTransactionReceipt({ hash })).gasUsed).toBeLessThanOrEqual(16_777_216n)
 	})
 
-	test('A forks while B is future; each owner chooses a different branch for each question', async () => {
+	test('shared recovery during A fork preserves each owners independent branch choice while B is future', async () => {
 		const { owner, other, base, vault, portfolio, poolFor, secondQuestionId } = fixture
 		const otherVault = await fixture.createVault(other())
 		await deposit(5_000n * unit)
@@ -56,6 +56,17 @@ describe('Statoblast: portfolio fork isolation', () => {
 		await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		await forkA()
 		for (const positionId of [1n, 2n]) {
+			const questionId = positionId === 1n ? base.questionId : secondQuestionId
+			const parent = poolFor(questionId).securityPool
+			const source = await custody(positionId)
+			const before = await getSecurityVault(owner(), parent, source)
+			await rebalance(positionId)
+			const after = await getSecurityVault(owner(), parent, source)
+			expect(after.repBackingUnits).toBe(before.repBackingUnits)
+			expect(after.underwritingLimitAttoEth).toBe(before.underwritingLimitAttoEth)
+			expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'positionRecoveryComplete', args: [positionId] })).toBe(false)
+			expect(await ownerPositionShares(positionId)).toBe(5_000n * unit)
+			expect(await ownerPositionShares(positionId, other().account.address)).toBe(5_000n * unit)
 			await claim(positionId)
 			await claim(positionId, other().account.address)
 		}
@@ -113,7 +124,9 @@ describe('Statoblast: portfolio fork isolation', () => {
 		const bYes = poolFor(secondQuestionId, yesUniverse, poolFor(secondQuestionId).securityPool)
 		expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getPool', args: [secondQuestionId, yesUniverse] })).toBe(bYes.securityPool)
 		expect(bYes.securityPool).not.toBe(poolFor(secondQuestionId, yesUniverse, zeroAddress).securityPool)
-		await expect(owner().call({ data: encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, aYes.securityPool, maximumQuestionHorizonSeconds] }) })).rejects.toThrow('Choose an origin pool')
+		await expect(
+			owner().call({ data: encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, aYes.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer] }) }),
+		).rejects.toThrow('Choose an origin pool')
 		const yesFeed = await owner().readContract({ abi: coordinatorArtifact.abi, address: aYes.openOraclePriceCoordinator, functionName: 'priceFeed' })
 		const noFeed = await owner().readContract({ abi: coordinatorArtifact.abi, address: aNo.openOraclePriceCoordinator, functionName: 'priceFeed' })
 		expect(yesFeed).not.toBe(noFeed)

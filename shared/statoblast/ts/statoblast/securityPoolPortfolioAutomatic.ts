@@ -56,13 +56,13 @@ function request(account: Address, to: Address, functionName: string, args: read
 }
 
 /** Buy question-specific complete sets from the portfolio's common underwriting capacity. */
-export function buildPortfolioMintRequest(parameters: { trader: Address; portfolio: Address; questionId: bigint; recipient: Address; minimumShares: bigint; mintAttoEth: bigint; maximumReservationFeeAttoEth: bigint }) {
+export function buildPortfolioMintRequest(parameters: { trader: Address; portfolio: Address; questionId: bigint; recipient: Address; minimumShares: bigint; mintAttoEth: bigint; maximumPurchaseFeeAttoEth: bigint }) {
 	uint(parameters.questionId, 'Question id')
 	uint(parameters.minimumShares, 'Minimum shares')
 	uint(parameters.mintAttoEth, 'Mint collateral')
-	uint(parameters.maximumReservationFeeAttoEth, 'Maximum reservation fee')
+	uint(parameters.maximumPurchaseFeeAttoEth, 'Maximum purchase fee')
 	if (parameters.mintAttoEth <= 0n) throw new Error('Enter a positive ETH mint amount.')
-	return request(parameters.trader, parameters.portfolio, 'createCompleteSet', [parameters.questionId, address(parameters.recipient), parameters.minimumShares, parameters.mintAttoEth], parameters.mintAttoEth + parameters.maximumReservationFeeAttoEth)
+	return request(parameters.trader, parameters.portfolio, 'createCompleteSet', [parameters.questionId, address(parameters.recipient), parameters.minimumShares, parameters.mintAttoEth], parameters.mintAttoEth + parameters.maximumPurchaseFeeAttoEth)
 }
 
 /** Withdraw all vault ETH to its immutable owner without changing REP allocation authority. */

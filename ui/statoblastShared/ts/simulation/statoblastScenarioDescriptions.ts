@@ -24,7 +24,7 @@ export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
 	switch (scenario) {
 		case 'portfolio':
-			return 'A shared REP reserve funding two questions. Test aggregate deposits and purchases, proportional exits, and individual position recovery.'
+			return 'A shared REP reserve funding two questions. Test aggregate deposits and purchases, idle reserve exits, shared recovery processing, and combined owner collection.'
 		case 'security-pool':
 			return 'One seeded question, one security pool, and one funded vault with a standing ETH commitment. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':

@@ -4,7 +4,7 @@ import { encodeFunctionData, formatEther, type Address } from '@zoltar/core-shar
 import {
 	buildPortfolioDepositRequest,
 	buildPortfolioFundWithdrawalRequest,
-	buildPortfolioClaimFeesRequest,
+	buildPortfolioClaimRecoveredRequest,
 	buildPortfolioPositionClaimRequest,
 	buildPortfolioPositionRebalanceRequest,
 	buildPortfolioMintRequest,
@@ -15,7 +15,7 @@ import {
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorDetail, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { loadPortfolioMintQuestion } from '../../../protocol/securityPoolPortfolioMint.js'
 import { parsePortfolioAmount } from '../lib/draft.js'
@@ -52,6 +52,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const draftScope = useRef<{ backend: typeof backend; portfolio: Address; owner: Address } | undefined>(undefined)
 	const page = useSignal(0n)
 	const questionPage = useSignal(0n)
+	const intervalPage = useSignal(0n)
 	const depositAmount = useSignal('')
 	const depositMinimum = useSignal('')
 	const depositMinimumEdited = useSignal(false)
@@ -68,7 +69,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 	const snapshot = loaded.value?.backend === backend && loaded.value.account === account && loaded.value.snapshot.portfolio === selection?.portfolio && loaded.value.snapshot.owner === selection.owner ? loaded.value.snapshot : undefined
 	const read = async () => {
 		if (selection === undefined) throw new Error(copy.enterPortfolio)
-		return loadPortfolioAggregateSnapshot({ client: portfolioReadClient(backend.createReadClient()), portfolio: selection.portfolio, owner: selection.owner, positionStart: page.value * 64n, questionStart: questionPage.value * 64n })
+		return loadPortfolioAggregateSnapshot({ client: portfolioReadClient(backend.createReadClient()), portfolio: selection.portfolio, owner: selection.owner, positionStart: page.value * 64n, questionStart: questionPage.value * 64n, intervalStart: intervalPage.value * 64n })
 	}
 	const refresh = async () => {
 		if (!enabled || selection === undefined) return
@@ -99,7 +100,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		return () => {
 			generation.current += 1
 		}
-	}, [backend, enabled, selection?.portfolio, selection?.owner, page.value, questionPage.value, account])
+	}, [backend, enabled, selection?.portfolio, selection?.owner, page.value, questionPage.value, intervalPage.value, account])
 	useEffect(() => {
 		if (selection === undefined) return
 		const previous = draftScope.current
@@ -107,6 +108,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		if (previous === undefined || (previous.backend === backend && previous.portfolio === selection.portfolio && previous.owner === selection.owner)) return
 		page.value = 0n
 		questionPage.value = 0n
+		intervalPage.value = 0n
 		depositAmount.value = ''
 		depositMinimum.value = ''
 		depositMinimumEdited.value = false
@@ -161,14 +163,14 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				if (current && environment.isCurrent()) quoteResult.value = { snapshot, key: quoteKey, quote }
 			})
 			.catch(failure => {
-				if (current && environment.isCurrent()) quoteResult.value = { snapshot, key: quoteKey, error: getErrorMessage(failure, copy.reservationFeeFailed) }
+				if (current && environment.isCurrent()) quoteResult.value = { snapshot, key: quoteKey, error: getErrorDetail(failure)?.includes('No portfolio capital') ? copy.portfolioNeedsCapital : getErrorMessage(failure, copy.purchaseFeeFailed) }
 			})
 		return () => {
 			current = false
 		}
 	}, [backend, enabled, snapshot, quoteKey, currentQuestion?.position])
 	useEffect(() => {
-		if (!maximumFeeEdited.value && currentQuote?.quote !== undefined) maximumFee.value = formatEther(currentQuote.quote.reservationFeeAttoEth)
+		if (!maximumFeeEdited.value && currentQuote?.quote !== undefined) maximumFee.value = formatEther(currentQuote.quote.purchaseFeeAttoEth)
 	}, [currentQuote?.quote, maximumFeeEdited.value])
 	const walletReason = account === undefined ? copy.connect : undefined
 	let stateReason = readError.value
@@ -209,9 +211,9 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		else if (snapshot !== undefined && position.questionEndTime <= snapshot.timestamp) mintReason = copy.questionMatured
 		else if (mintAttoEth === undefined || mintAttoEth === 0n || mintFloor === undefined) mintReason = copy.mintInvalid
 		else if (currentQuote?.error !== undefined) mintReason = currentQuote.error
-		else if (quote === undefined) mintReason = copy.reservationFeeLoading
+		else if (quote === undefined) mintReason = copy.purchaseFeeLoading
 		else if (quote.depositAttoRep > quote.availableAttoRep) mintReason = copy.insufficientPoolCapacity
-		else if (feeLimit === undefined || feeLimit < quote.reservationFeeAttoEth) mintReason = copy.reservationFeeBudgetLow
+		else if (feeLimit === undefined || feeLimit < quote.purchaseFeeAttoEth) mintReason = copy.purchaseFeeBudgetLow
 		else if (loaded.value?.walletAttoEth !== undefined && mintAttoEth + feeLimit > loaded.value.walletAttoEth) mintReason = copy.insufficientMintEth
 	}
 	const run = (action: string, label: string, build: () => Promise<PortfolioTransaction> | PortfolioTransaction) =>
@@ -226,18 +228,20 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		if (ownerReason !== undefined) throw new Error(ownerReason)
 		return requireSnapshot()
 	}
-	const rebalanceReason = (selected: PortfolioAggregateSnapshot, allocation: PortfolioAggregateSnapshot['positions'][number]) => {
+	const rebalanceReason = (allocation: PortfolioAggregateSnapshot['positions'][number]) => {
 		if (allocation.remainingShares === 0n) return copy.positionClaimed
-		if (selected.forkTime > 0n) return copy.forkPosition
-		if (allocation.questionEndTime <= selected.timestamp) return copy.endedPosition
-		if (!allocation.operational) return copy.inactivePosition
+		if (allocation.recoveryComplete) return copy.recoveryComplete
 		return undefined
 	}
+	const ownerInterval = (selected: PortfolioAggregateSnapshot, positionId: bigint) => selected.intervals.find(interval => interval.active && interval.startPosition <= positionId && (interval.open || interval.endPosition >= positionId))
 	const allocationClaimReason = (selected: PortfolioAggregateSnapshot, allocation: PortfolioAggregateSnapshot['positions'][number]) => {
+		if (account?.toLowerCase() !== selected.owner.toLowerCase()) return copy.livePositionOwnerRequired
+		if (allocation.recoveryComplete) return copy.recoveryComplete
 		if (allocation.ownerShares === 0n) return copy.noPositionClaim
-		if (allocation.reusable && selected.forkTime === 0n && allocation.questionEndTime > selected.timestamp && account?.toLowerCase() !== selected.owner.toLowerCase()) return copy.livePositionOwnerRequired
+		if (ownerInterval(selected, allocation.positionId) === undefined) return copy.intervalNotOnPage
 		return undefined
 	}
+
 	return {
 		snapshot,
 		loading: loading.value,
@@ -302,12 +306,29 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 					},
 				}
 			}),
-		claimFeesReason: ownerReason ?? (snapshot?.claimableFeesAttoEth === 0n ? copy.noFundFees : undefined),
-		claimFees: () =>
-			run('claimPortfolioFundFees', copy.claimFundFees, () => {
+		collectReason: ownerReason ?? (snapshot?.recoverableRepAttoRep === 0n && snapshot.recoverableFeesAttoEth === 0n ? copy.noRecoveredProceeds : undefined),
+		collectRecovered: () =>
+			run('collectPortfolioRecovery', copy.collectRecovered, () => {
 				const selected = assertOwner()
-				return { ...buildPortfolioClaimFeesRequest({ owner: selected.owner, portfolio: selected.portfolio }), reviewDescription: copy.claimFundFeesReview }
+				const intervalIds = selected.intervals.filter(interval => interval.active).map(interval => interval.intervalId)
+				if (selected.recoverableRepAttoRep === 0n && selected.recoverableFeesAttoEth === 0n) throw new Error(copy.noRecoveredProceeds)
+				return {
+					...buildPortfolioClaimRecoveredRequest({ owner: selected.owner, portfolio: selected.portfolio, intervalIds }),
+					reviewDescription: copy.collectRecoveredReview(formatEther(selected.recoverableRepAttoRep), formatEther(selected.recoverableFeesAttoEth), selected.intervalCount > 64n),
+					validateBeforeSubmit: async () => {
+						const latest = await read()
+						if (intervalIds.some(id => !latest.intervals.some(interval => interval.intervalId === id && interval.active))) throw new Error(copy.recoveryHistoryChanged)
+						if (latest.recoverableRepAttoRep === 0n && latest.recoverableFeesAttoEth === 0n) throw new Error(copy.noRecoveredProceeds)
+					},
+				}
 			}),
+		previousIntervalPage: () => {
+			if (intervalPage.value > 0n) intervalPage.value -= 1n
+		},
+		nextIntervalPage: () => {
+			if (snapshot !== undefined && (intervalPage.value + 1n) * 64n < snapshot.intervalCount) intervalPage.value += 1n
+		},
+
 		questionInput: questionInput.value,
 		setQuestionInput: (value: string) => {
 			questionInput.value = value
@@ -338,37 +359,36 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				const selected = requireSnapshot()
 				if (mintReason !== undefined || account === undefined || questionId === undefined || mintAttoEth === undefined || mintFloor === undefined || feeLimit === undefined) throw new Error(mintReason ?? copy.mintInvalid)
 				return {
-					...buildPortfolioMintRequest({ trader: account, portfolio: selected.portfolio, questionId, recipient: account, minimumShares: mintFloor, mintAttoEth, maximumReservationFeeAttoEth: feeLimit }),
+					...buildPortfolioMintRequest({ trader: account, portfolio: selected.portfolio, questionId, recipient: account, minimumShares: mintFloor, mintAttoEth, maximumPurchaseFeeAttoEth: feeLimit }),
 					reviewDescription: copy.aggregateMintReview(formatEther(mintAttoEth), formatEther(feeLimit), formatEther(mintFloor)),
 					validateBeforeSubmit: async () => {
 						const latest = await read()
 						const nextQuote = await loadPortfolioMintQuote({ client: portfolioReadClient(backend.createReadClient()), snapshot: latest, questionId, mintAttoEth })
-						if (nextQuote.reservationFeeAttoEth > feeLimit) throw new Error(copy.reservationFeeBudgetLow)
+						if (nextQuote.purchaseFeeAttoEth > feeLimit) throw new Error(copy.purchaseFeeBudgetLow)
 						if (nextQuote.depositAttoRep > nextQuote.availableAttoRep) throw new Error(copy.insufficientPoolCapacity)
 						if ((await backend.createReadClient().getBalance({ address: account })) < mintAttoEth + feeLimit) throw new Error(copy.insufficientMintEth)
 					},
 				}
 			}),
-		allocations: snapshot?.positions.map(allocation => ({ ...allocation, claimReason: walletReason ?? stateReason ?? allocationClaimReason(snapshot, allocation), rebalanceReason: walletReason ?? stateReason ?? rebalanceReason(snapshot, allocation) })) ?? [],
-		claimReason: walletReason ?? stateReason,
+		allocations: snapshot?.positions.map(allocation => ({ ...allocation, claimReason: walletReason ?? stateReason ?? allocationClaimReason(snapshot, allocation), rebalanceReason: walletReason ?? stateReason ?? rebalanceReason(allocation) })) ?? [],
+		claimReason: ownerReason,
 		rebalancePosition: (positionId: bigint) =>
 			run(`rebalancePortfolioPosition:${positionId}`, copy.rebalancePosition, () => {
 				const selected = requireSnapshot()
 				if (account === undefined) throw new Error(copy.connect)
 				const allocation = selected.positions.find(item => item.positionId === positionId)
 				if (allocation === undefined) throw new Error(copy.positionUnavailable)
-				const reason = rebalanceReason(selected, allocation)
+				const reason = rebalanceReason(allocation)
 				if (reason !== undefined) throw new Error(reason)
 				return {
 					...buildPortfolioPositionRebalanceRequest({ processor: account, portfolio: selected.portfolio, positionId }),
-					reviewDescription: copy.rebalancePositionReview(allocation.reusable),
+					reviewDescription: copy.rebalancePositionReview,
 					validateBeforeSubmit: async () => {
 						const latest = await read()
 						const current = latest.positions.find(item => item.positionId === positionId)
 						if (current === undefined) throw new Error(copy.positionUnavailable)
-						const unavailable = rebalanceReason(latest, current)
+						const unavailable = rebalanceReason(current)
 						if (unavailable !== undefined) throw new Error(unavailable)
-						if (current.reusable !== allocation.reusable) throw new Error(copy.positionOwnershipChanged)
 					},
 				}
 			}),
@@ -380,8 +400,10 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 				if (allocation === undefined) throw new Error(copy.positionUnavailable)
 				const reason = allocationClaimReason(selected, allocation)
 				if (reason !== undefined) throw new Error(reason)
+				const interval = ownerInterval(selected, positionId)
+				if (interval === undefined) throw new Error(copy.intervalNotOnPage)
 				return {
-					...buildPortfolioPositionClaimRequest({ processor: account, portfolio: selected.portfolio, positionId, owner: selected.owner }),
+					...buildPortfolioPositionClaimRequest({ owner: selected.owner, portfolio: selected.portfolio, positionId, intervalId: interval.intervalId }),
 					reviewDescription: copy.claimQuestionReview(selected.owner),
 					validateBeforeSubmit: async () => {
 						const latest = await read()
@@ -389,6 +411,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 						if (current === undefined) throw new Error(copy.positionUnavailable)
 						const unavailable = allocationClaimReason(latest, current)
 						if (unavailable !== undefined) throw new Error(unavailable)
+						if (ownerInterval(latest, positionId)?.intervalId !== interval.intervalId) throw new Error(copy.recoveryHistoryChanged)
 					},
 				}
 			}),

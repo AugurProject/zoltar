@@ -21,7 +21,22 @@ const token = getAddress('0x0000000000000000000000000000000000000055')
 const unit = 10n ** 18n
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 
-async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => Promise<void>; withoutSelection?: boolean; questionEndTime?: bigint; resolved?: boolean; systemState?: number; forkTime?: bigint; account?: typeof owner; reusable?: boolean; positionCount?: bigint; questionCount?: bigint } = {}) {
+async function renderAggregate(
+	options: {
+		beforeQuote?: (questionId: bigint) => Promise<void>
+		withoutSelection?: boolean
+		questionEndTime?: bigint
+		resolved?: boolean
+		systemState?: number
+		forkTime?: bigint
+		account?: typeof owner
+		reusable?: boolean
+		positionCount?: bigint
+		questionCount?: bigint
+		intervalCount?: bigint
+		recoveryComplete?: boolean
+	} = {},
+) {
 	let allowance = 0n
 	let fee = 10n ** 15n
 	let wallet = 100n * unit
@@ -29,6 +44,10 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 	let forkTime = options.forkTime ?? 0n
 	let reusable = options.reusable ?? true
 	let claimShares = 10n * unit
+	let recoveryComplete = options.recoveryComplete ?? false
+	let recoveredRep = 3n * unit
+	let recoveredEth = unit
+	let intervalsActive = true
 	const account = options.account ?? owner
 	const requests: PortfolioTransaction[] = []
 	const reads: { name: string; args: readonly unknown[] | undefined }[] = []
@@ -46,6 +65,20 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 					return token
 				case 'getForkTime':
 					return forkTime
+				case 'recoveryLedger':
+					return token
+				case 'getOwnerIntervalCount':
+					return options.intervalCount ?? 1n
+				case 'getOwnerInterval':
+					return { generation: 1n, startPosition: 1n, endPosition: 0n, shares: 10n * unit, repIndex: 0n, feeIndex: 0n, open: true, active: intervalsActive }
+				case 'previewClaim':
+					return [recoveredRep, recoveredEth]
+				case 'processingRewards':
+					return 0n
+				case 'positionRecoveryComplete':
+					return recoveryComplete
+				case 'recoveryBounties':
+					return unit / 4000n
 				case 'originUniverseId':
 					return 0n
 				case 'repToken':
@@ -147,6 +180,16 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 		setReusable: (value: boolean) => {
 			reusable = value
 		},
+		setRecoveryComplete: (value: boolean) => {
+			recoveryComplete = value
+		},
+		setRecovered: (rep: bigint, eth: bigint) => {
+			recoveredRep = rep
+			recoveredEth = eth
+		},
+		setIntervalsActive: (value: boolean) => {
+			intervalsActive = value
+		},
 		setClaimShares: (value: bigint) => {
 			claimShares = value
 		},
@@ -155,7 +198,7 @@ async function renderAggregate(options: { beforeQuote?: (questionId: bigint) => 
 
 test('a connected wallet without a selected portfolio is told to choose one before owner authorization', async () => {
 	const { hook, reads } = await renderAggregate({ withoutSelection: true })
-	for (const reason of [hook.state().fundingReason, hook.state().depositReason, hook.state().withdrawalReason, hook.state().claimFeesReason, hook.state().mintReason, hook.state().claimReason]) expect(reason).toBe('Open a portfolio first')
+	for (const reason of [hook.state().fundingReason, hook.state().depositReason, hook.state().withdrawalReason, hook.state().collectReason, hook.state().mintReason, hook.state().claimReason]) expect(reason).toBe('Open a portfolio first')
 	expect(reads).toHaveLength(0)
 })
 
@@ -279,7 +322,7 @@ test('an obsolete quote failure cannot overwrite a changed question and recovery
 	await act(async () => await hook.state().claimPosition(1n))
 	const request = requests[0]
 	if (request === undefined) throw new Error('Expected recovery')
-	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([1n, owner])
+	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,uint256)']), data: request.data }).args).toEqual([1n, 0n])
 })
 
 test('pool controls keep approval, deposit and mint actions visible without owner routing inputs', async () => {
@@ -291,32 +334,47 @@ test('pool controls keep approval, deposit and mint actions visible without owne
 	expect(text).toContain('Mint portfolio complete sets')
 	expect(text).toContain('Withdraw reserve REP')
 	expect(text).toContain('Allocation positions')
-	expect(text).toContain('Rebalance allocation')
+	expect(text).toContain('Process recovery')
+	expect(text).toContain('Collect recovered REP and fees')
 	expect(text).not.toContain('Update pool accounting')
 	expect(text).not.toContain('Contributing vault')
 })
 
-test('allocation maintenance selects one position, explains owner custody and rechecks continued reuse', async () => {
-	const { hook, requests, setReusable } = await renderAggregate()
+test('a purchase without portfolio capital explains the required backing and keeps recovery available', async () => {
+	const { hook } = await renderAggregate({
+		beforeQuote: async () => {
+			throw new Error('No portfolio capital')
+		},
+	})
+	await act(() => {
+		hook.state().setQuestionInput('51')
+		hook.state().setMintAmount('1')
+	})
+	await waitFor(() => expect(hook.state().quoteError).toBeDefined())
+	expect(hook.state().mintReason).toBe('This portfolio needs reserve REP or reusable backing before it can sell complete sets. Deposit REP or use the question’s direct mint flow.')
+	expect(hook.state().collectReason).toBeUndefined()
+})
+
+test('shared processing remains permissionless across ownership changes and rejects already completed recovery', async () => {
+	const { hook, requests, setReusable, setRecoveryComplete } = await renderAggregate()
 	expect(hook.state().allocations[0]).toMatchObject({ reusable: true, claimReason: undefined, rebalanceReason: undefined })
 	expect(hook.state().allocations[1]?.claimReason).toContain('No unclaimed ownership')
 	await act(async () => await hook.state().rebalancePosition(1n))
 	const request = requests[0]
-	if (request === undefined) throw new Error('Expected rebalance')
+	if (request === undefined) throw new Error('Expected recovery processing')
 	expect(decodeFunctionData({ abi: parseAbi(['function rebalancePosition(uint256)']), data: request.data }).args).toEqual([1n])
-	expect(request.reviewDescription).toContain('reserve only while ownership still matches')
-	expect(request.reviewDescription).toContain('reuse on the same question')
+	expect(request.reviewDescription).toContain('all recorded allocation owners')
 	setReusable(false)
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('reuse changed')
+	await request.validateBeforeSubmit?.()
+	setRecoveryComplete(true)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Recovery complete')
 	await act(async () => await hook.state().refresh())
-	await act(async () => await hook.state().rebalancePosition(1n))
-	expect(requests[1]?.reviewDescription).toContain('stay with its recorded owners')
-	expect(requests).toHaveLength(2)
+	expect(hook.state().allocations[0]?.rebalanceReason).toBe('Recovery complete')
 })
 
-test.each([{ questionEndTime: 999n }, { forkTime: 10n }, { systemState: 1 }])('unavailable native maintenance leaves allocation claiming available', async options => {
+test.each([{ questionEndTime: 999n }, { forkTime: 10n }, { systemState: 1 }])('ended and forked allocations retain shared processing and owner-selected individual recovery', async options => {
 	const { hook, requests } = await renderAggregate(options)
-	expect(hook.state().allocations[0]?.rebalanceReason).toContain('claim the position')
+	expect(hook.state().allocations[0]?.rebalanceReason).toBeUndefined()
 	expect(hook.state().allocations[0]?.claimReason).toBeUndefined()
 	await act(async () => await hook.state().claimPosition(1n))
 	expect(requests).toHaveLength(1)
@@ -327,8 +385,8 @@ test('claiming a reusable allocation remains owner-bound and rechecks an already
 	await act(async () => await hook.state().claimPosition(1n))
 	const request = requests[0]
 	if (request === undefined) throw new Error('Expected allocation claim')
-	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([1n, owner])
-	expect(request.reviewDescription).toContain('closes only this allocation')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,uint256)']), data: request.data }).args).toEqual([1n, 0n])
+	expect(request.reviewDescription).toContain('other owners retain their capital and reuse')
 	setClaimShares(0n)
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('No unclaimed ownership')
 	await act(async () => await hook.state().refresh())
@@ -347,23 +405,23 @@ test('reserve withdrawal checks its idle-only minimum and preserves allocation c
 	const request = requests[0]
 	if (request === undefined) throw new Error('Expected reserve withdrawal')
 	expect(decodeFunctionData({ abi: parseAbi(['function withdraw(uint256,uint256)']), data: request.data }).args).toEqual([10n * unit, 20n * unit])
-	expect(request.reviewDescription).toContain('allocation claims remain yours')
+	expect(request.reviewDescription).toContain('ownership of existing allocations survives')
 	expect(hook.state().allocations[0]?.ownerShares).toBe(10n * unit)
 })
 
-test('outsiders cannot close live reusable allocations but can deliver closed allocation claims to their owner', async () => {
+test('outsiders process shared recovery but cannot take individual control or collect another owner’s proceeds', async () => {
 	const { hook, requests, setReusable } = await renderAggregate({ account: token })
 	expect(hook.state().allocations[0]?.claimReason).toContain('Only the recorded owner')
 	await expect(hook.state().claimPosition(1n)).rejects.toThrow('Only the recorded owner')
-	expect(requests).toHaveLength(0)
+	await expect(hook.state().collectRecovered()).rejects.toThrow('owner')
 	setReusable(false)
 	await act(async () => await hook.state().refresh())
-	expect(hook.state().allocations[0]?.claimReason).toBeUndefined()
-	await act(async () => await hook.state().claimPosition(1n))
+	expect(hook.state().allocations[0]?.claimReason).toContain('Only the recorded owner')
+	await act(async () => await hook.state().rebalancePosition(1n))
 	const request = requests[0]
-	if (request === undefined) throw new Error('Expected closed allocation claim')
+	if (request === undefined) throw new Error('Expected shared recovery')
 	expect(request.account).toBe(token)
-	expect(decodeFunctionData({ abi: parseAbi(['function claimPosition(uint256,address)']), data: request.data }).args).toEqual([1n, owner])
+	expect(decodeFunctionData({ abi: parseAbi(['function rebalancePosition(uint256)']), data: request.data }).args).toEqual([1n])
 })
 
 test('position and registered-question pages advance independently while keeping deposit drafts', async () => {
@@ -381,4 +439,44 @@ test('position and registered-question pages advance independently while keeping
 	expect(hook.state().snapshot?.positionStart).toBe(64n)
 	expect(hook.state().depositAmount).toBe('10')
 	expect(reads.filter(read => read.name === 'getQuestions').every(read => read.args?.[1] === 64n)).toBe(true)
+})
+
+test('one collection covers a personal interval across many questions and revalidates retired history', async () => {
+	const { hook, requests, setIntervalsActive } = await renderAggregate({ positionCount: 5000n })
+	await act(async () => await hook.state().collectRecovered())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected combined collection')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[])']), data: request.data }).args).toEqual([[0n]])
+	expect(request.account).toBe(owner)
+	expect(request.reviewDescription).toContain('3 REP and 1 ETH')
+	setIntervalsActive(false)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('ownership history changed')
+})
+
+test('recovery history paging is independent and collection includes only the displayed active intervals', async () => {
+	const { hook, requests } = await renderAggregate({ positionCount: 130n, questionCount: 130n, intervalCount: 130n })
+	await act(() => hook.state().nextIntervalPage())
+	await waitFor(() => expect(hook.state().snapshot?.intervalStart).toBe(64n))
+	expect(hook.state().snapshot?.positionStart).toBe(0n)
+	expect(hook.state().snapshot?.questionStart).toBe(0n)
+	await act(async () => await hook.state().collectRecovered())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected paged collection')
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[])']), data: request.data }).args).toEqual([Array.from({ length: 64 }, (_, index) => BigInt(index) + 64n)])
+	expect(request.reviewDescription).toContain('subtotal covers the selected ownership history page')
+	const rendered = lifecycle.trackRendered(await renderIntoDocument(<PortfolioAggregatePanel model={hook.state()} actions={{ scope: unscopedTransaction, busy: undefined }} />))
+	expect(rendered.container.textContent).toContain('Other pages may have additional proceeds')
+	expect(rendered.container.textContent).toContain('Released REP subtotal')
+	expect(rendered.container.textContent).toContain('Fees and rewards subtotal ETH')
+})
+
+test('combined collection stays visible and disabled when no proceeds remain', async () => {
+	const { hook, setRecovered } = await renderAggregate()
+	setRecovered(0n, 0n)
+	await act(async () => await hook.state().refresh())
+	expect(hook.state().collectReason).toContain('No released proceeds')
+	await expect(hook.state().collectRecovered()).rejects.toThrow('No released proceeds')
+	const rendered = lifecycle.trackRendered(await renderIntoDocument(<PortfolioAggregatePanel model={hook.state()} actions={{ scope: unscopedTransaction, busy: undefined }} />))
+	const button = [...rendered.container.querySelectorAll('button')].find(item => item.textContent?.includes('Collect recovered REP and fees'))
+	expect(button?.disabled).toBe(true)
 })

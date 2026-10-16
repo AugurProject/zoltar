@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { decodeFunctionData, parseAbi, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { buildPortfolioDepositRequest, buildPortfolioFundWithdrawalRequest, buildPortfolioPositionClaimRequest, buildPortfolioPositionRebalanceRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote } from './securityPoolPortfolioAggregate.js'
+import { buildPortfolioClaimRecoveredRequest, buildPortfolioDepositRequest, buildPortfolioFundWithdrawalRequest, buildPortfolioPositionClaimRequest, buildPortfolioPositionRebalanceRequest, loadPortfolioAggregateSnapshot, loadPortfolioMintQuote } from './securityPoolPortfolioAggregate.js'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 
 const owner: Address = '0x0000000000000000000000000000000000000001'
@@ -10,7 +10,7 @@ const feed: Address = '0x0000000000000000000000000000000000000004'
 const coordinator: Address = '0x0000000000000000000000000000000000000005'
 const seedPool: Address = '0x0000000000000000000000000000000000000006'
 const zoltar: Address = '0x0000000000000000000000000000000000000007'
-const abi = parseAbi(['function deposit(uint256,uint256)', 'function withdraw(uint256,uint256)', 'function claimPosition(uint256,address)', 'function rebalancePosition(uint256)'])
+const abi = parseAbi(['function deposit(uint256,uint256)', 'function withdraw(uint256,uint256)', 'function claimPosition(uint256,uint256)', 'function rebalancePosition(uint256)', 'function claimRecovered(uint256[])'])
 
 test('deposit and exit preserve owner identity and explicit slippage bounds', () => {
 	const deposit = buildPortfolioDepositRequest({ owner, portfolio, amountAttoRep: 40n, minimumShares: 19n })
@@ -22,10 +22,10 @@ test('deposit and exit preserve owner identity and explicit slippage bounds', ()
 	expect(() => buildPortfolioFundWithdrawalRequest({ owner, portfolio, shares: 1n, minimumIdleAttoRep: -1n })).toThrow('uint256')
 })
 
-test('permissionless question recovery binds the actual beneficiary instead of the processor', () => {
-	const claim = buildPortfolioPositionClaimRequest({ processor: token, portfolio, positionId: 9n, owner })
-	expect(claim.account).toBe(token)
-	expect(decodeFunctionData({ abi, data: claim.data })).toEqual({ functionName: 'claimPosition', args: [9n, owner] })
+test('individual position recovery binds the signing owner and personal interval', () => {
+	const claim = buildPortfolioPositionClaimRequest({ owner, portfolio, positionId: 9n, intervalId: 2n })
+	expect(claim.account).toBe(owner)
+	expect(decodeFunctionData({ abi, data: claim.data })).toEqual({ functionName: 'claimPosition', args: [9n, 2n] })
 })
 
 test('permissionless maintenance selects one allocation without an owner route', () => {
@@ -35,7 +35,7 @@ test('permissionless maintenance selects one allocation without an owner route',
 	expect(() => buildPortfolioPositionRebalanceRequest({ processor: token, portfolio, positionId: -1n })).toThrow('uint256')
 })
 
-function reads(options: { positionCount?: bigint; questionCount?: bigint; assets?: bigint; price?: bigint; multiplier?: bigint } = {}) {
+function reads(options: { positionCount?: bigint; questionCount?: bigint; assets?: bigint; price?: bigint; multiplier?: bigint; intervalCount?: bigint } = {}) {
 	const calls: Parameters<PortfolioReadClient['readContract']>[0][] = []
 	const client: PortfolioReadClient = {
 		getChainId: async () => 1,
@@ -59,6 +59,20 @@ function reads(options: { positionCount?: bigint; questionCount?: bigint; assets
 				case 'getForkTime':
 					expect(request.address).toBe(zoltar)
 					return 0n
+				case 'recoveryLedger':
+					return zoltar
+				case 'processingRewards':
+					return 5n
+				case 'getOwnerIntervalCount':
+					return options.intervalCount ?? 1n
+				case 'getOwnerInterval':
+					return { generation: 1n, startPosition: 1n, endPosition: 0n, shares: 5n, repIndex: 0n, feeIndex: 0n, open: true, active: true }
+				case 'previewClaim':
+					return [17n, 19n]
+				case 'positionRecoveryComplete':
+					return false
+				case 'recoveryBounties':
+					return 7n
 				case 'originUniverseId':
 					return 0n
 				case 'repToken':
@@ -116,13 +130,13 @@ test('reserve ownership stays separate from allocation claims at one pinned bloc
 	const snapshot = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
 	expect(snapshot).toMatchObject({ shares: 5n, totalShares: 20n, ownerAssetsAttoRep: 25n, walletAttoRep: 60n, allowanceAttoRep: 40n, claimableFeesAttoEth: 3n, reserveAttoRep: 100n, reserveCapacityAttoEth: 12n, questions: [9n] })
 	expect(snapshot.positions).toEqual([
-		{ positionId: 1n, questionId: 1n, custody: token, ownerShares: 2n, remainingShares: 10n, reusable: false, questionEndTime: 1000n, operational: true },
-		{ positionId: 2n, questionId: 2n, custody: token, ownerShares: 0n, remainingShares: 10n, reusable: true, questionEndTime: 1000n, operational: true },
+		{ positionId: 1n, questionId: 1n, custody: token, ownerShares: 2n, remainingShares: 10n, reusable: false, recoveryComplete: false, recoveryBountyAttoEth: 7n, questionEndTime: 1000n, operational: true },
+		{ positionId: 2n, questionId: 2n, custody: token, ownerShares: 0n, remainingShares: 10n, reusable: true, recoveryComplete: false, recoveryBountyAttoEth: 7n, questionEndTime: 1000n, operational: true },
 	])
 	expect(calls.every(call => call.blockNumber === 50n)).toBe(true)
 	expect(calls.find(call => call.functionName === 'allowance')?.args).toEqual([owner, portfolio])
 	expect(calls.some(call => call.functionName === 'vaultOf' || call.functionName === 'securityVaults')).toBe(false)
-	expect(await loadPortfolioMintQuote({ client, snapshot, questionId: 9n, mintAttoEth: 10n })).toEqual({ depositAttoRep: 7n, reservationFeeAttoEth: 2n, availableAttoRep: 40n })
+	expect(await loadPortfolioMintQuote({ client, snapshot, questionId: 9n, mintAttoEth: 10n })).toEqual({ depositAttoRep: 7n, purchaseFeeAttoEth: 2n, availableAttoRep: 40n })
 })
 
 test('allocation and registered-question pages stay bounded beyond sixteen positions', async () => {
@@ -163,4 +177,23 @@ test('a changed chain anchor cannot authorize a deposit or mint quote', async ()
 	let calls = 0
 	client.getChainId = async () => ++calls
 	await expect(loadPortfolioAggregateSnapshot({ client, portfolio, owner })).rejects.toThrow('Chain changed')
+})
+
+test('combined collection normalizes personal intervals and permits already credited rewards alone', () => {
+	const collect = buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [9n, 2n, 9n, 0n] })
+	expect(collect.account).toBe(owner)
+	expect(decodeFunctionData({ abi, data: collect.data })).toEqual({ functionName: 'claimRecovered', args: [[0n, 2n, 9n]] })
+	expect(decodeFunctionData({ abi, data: buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [] }).data }).args).toEqual([[]])
+	expect(() => buildPortfolioClaimRecoveredRequest({ owner, portfolio, intervalIds: [-1n] })).toThrow('uint256')
+})
+
+test('combined recovery reads only personal history pages and includes exact carry, fees and processing rewards', async () => {
+	const { client, calls } = reads({ positionCount: 100_000n, intervalCount: 130n })
+	const snapshot = await loadPortfolioAggregateSnapshot({ client, portfolio, owner, intervalStart: 128n })
+	expect(snapshot.intervals.map(interval => interval.intervalId)).toEqual([128n, 129n])
+	expect(snapshot).toMatchObject({ intervalCount: 130n, intervalStart: 128n, recoverableRepAttoRep: 17n, recoverableFeesAttoEth: 27n, processingRewardsAttoEth: 5n })
+	expect(calls.filter(call => call.functionName === 'getOwnerInterval')).toHaveLength(2)
+	expect(calls.find(call => call.functionName === 'previewClaim')?.args).toEqual([owner, [128n, 129n]])
+	expect(calls.every(call => call.blockNumber === 50n)).toBe(true)
+	await expect(loadPortfolioAggregateSnapshot({ client, portfolio, owner, intervalStart: 131n })).rejects.toThrow('Recovery history page is out of bounds')
 })

@@ -152,7 +152,14 @@ describe('Statoblast: portfolio capital under shared and question-specific stres
 		const poolA = base.securityPoolAddresses.securityPool
 		const poolB = fixture.poolFor(secondQuestionId).securityPool
 		const deploymentHash = await other().sendTransaction(
-			buildPortfolioDeploymentRequest({ owner: other().account.address, factory: getInfraContractAddresses().securityPoolFactory, initialOriginPool: poolA, maximumQuestionHorizonSeconds, artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) } }),
+			buildPortfolioDeploymentRequest({
+				owner: other().account.address,
+				factory: getInfraContractAddresses().securityPoolFactory,
+				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
+				initialOriginPool: poolA,
+				maximumQuestionHorizonSeconds,
+				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
+			}),
 		)
 		const secondPortfolio = (await other().waitForTransactionReceipt({ hash: deploymentHash })).contractAddress
 		if (!secondPortfolio) throw new Error('Second portfolio deployment address missing')
@@ -221,6 +228,7 @@ describe('Statoblast: portfolio capital under shared and question-specific stres
 			buildPortfolioDeploymentRequest({
 				owner: other().account.address,
 				factory: getInfraContractAddresses().securityPoolFactory,
+				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: base.securityPoolAddresses.securityPool,
 				maximumQuestionHorizonSeconds,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },

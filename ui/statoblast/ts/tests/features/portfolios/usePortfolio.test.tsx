@@ -7,7 +7,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createMockLoaderClient, createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioRecoveryRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
 import { usePortfolioAutomatic } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioAutomatic.js'
 import { vaultArtifact, type PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
@@ -16,8 +16,9 @@ import { portfolioStorageKey } from '@zoltar/ui-statoblast-shared/features/portf
 import { planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { renderHookWithProps } from '../../support/renderHook.js'
 
-const deployer = getAddress('0x00000000000000000000000000000000000000d1')
+const deployer = getInfraContractAddresses().securityPoolPortfolioVaultDeployer
 const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
+const recoveryLedger = getAddress('0x00000000000000000000000000000000000000e2')
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const manager = getAddress('0x0000000000000000000000000000000000000022')
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${manager}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
@@ -29,10 +30,12 @@ async function renderDeferredPortfolio() {
 		getChainId: async () => (++reads === 1 ? await firstChainId.promise : 1),
 		getCode: async ({ address }: { address: Address }) => {
 			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
+			if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 			return address === deployer ? getSecurityPoolPortfolioVaultDeployerRuntimeCode() : getSecurityPoolPortfolioRuntimeCode()
 		},
 		...createMockReadClient(async request => {
 			if (request.functionName === 'quoteHelper') return quoteHelper
+			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'portfolio') return manager
 			if (request.functionName === 'factory') return getInfraContractAddresses().securityPoolFactory
@@ -101,6 +104,7 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 		getChainId: async () => 1,
 		getCode: async ({ address }: { address: Address }) => {
 			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
+			if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 			if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
 			if (address === manager) return getSecurityPoolPortfolioRuntimeCode()
 			return getSecurityPoolPortfolioVaultRuntimeCode()
@@ -118,6 +122,8 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 				switch (functionName) {
 					case 'quoteHelper':
 						return quoteHelper
+					case 'recoveryLedger':
+						return recoveryLedger
 					case 'vaultDeployer':
 						return deployer
 					case 'factory':

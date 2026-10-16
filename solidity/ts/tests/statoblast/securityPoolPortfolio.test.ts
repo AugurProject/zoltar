@@ -7,6 +7,7 @@ import {
 	ReputationToken_ReputationToken as repArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
 	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact,
+	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer as vaultDeployerArtifact,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
 	statoblast_SecurityPool_SecurityPool as poolArtifact,
 	statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry as registryArtifact,
@@ -25,9 +26,33 @@ import { emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPo
 describe('Statoblast: independently reserved question portfolios', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 
+	test('one vault factory isolates the same owner across caller namespaces and prevents address squatting', async () => {
+		const client = fixture.owner()
+		const hash = await client.sendTransaction({ data: applyLibraries(vaultDeployerArtifact.evm.bytecode.object) })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Vault factory deployment missing')
+		const deployer = receipt.contractAddress
+		const owner = fixture.other().account.address
+		const predictions = []
+		for (const namespace of [fixture.portfolio, fixture.vault]) {
+			await fixture.base.mockWindow.impersonateAccount(namespace)
+			await fixture.base.mockWindow.setBalance(namespace, unit)
+			const sender = createWriteClient(fixture.base.mockWindow, BigInt(namespace))
+			const predicted = await sender.readContract({ account: namespace, abi: vaultDeployerArtifact.abi, address: deployer, functionName: 'predictVaultAddress', args: [owner] })
+			await writeContractAndWait(sender, () => sender.writeContract({ abi: vaultDeployerArtifact.abi, address: deployer, functionName: 'createVault', args: [owner] }))
+			expect(await client.readContract({ abi: vaultArtifact.abi, address: predicted, functionName: 'portfolio' })).toBe(namespace)
+			expect(await client.readContract({ abi: vaultArtifact.abi, address: predicted, functionName: 'owner' })).toBe(owner)
+			predictions.push(predicted)
+		}
+		expect(predictions[0]).not.toBe(predictions[1])
+		const directPrediction = await client.readContract({ account: client.account, abi: vaultDeployerArtifact.abi, address: deployer, functionName: 'predictVaultAddress', args: [owner] })
+		expect(predictions).not.toContain(directPrediction)
+		await expect(client.simulateContract({ abi: vaultDeployerArtifact.abi, address: deployer, functionName: 'createVault', args: [owner] })).rejects.toThrow('Portfolio has no code')
+	})
+
 	test('portfolio construction rejects addresses without factory or pool code', async () => {
 		const { owner, base } = fixture
-		const deployment = (factory: Hex, pool: Hex) => encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [factory, pool, maximumQuestionHorizonSeconds] })
+		const deployment = (factory: Hex, pool: Hex) => encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [factory, pool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer] })
 		await expect(owner().call({ data: deployment(owner().account.address, base.securityPoolAddresses.securityPool) })).rejects.toThrow('Factory has no code')
 		await expect(owner().call({ data: deployment(getInfraContractAddresses().securityPoolFactory, owner().account.address) })).rejects.toThrow('Pool has no code')
 	})

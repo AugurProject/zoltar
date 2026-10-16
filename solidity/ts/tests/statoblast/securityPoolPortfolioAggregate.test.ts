@@ -149,7 +149,7 @@ describe('Statoblast: common reserve and historical allocation ownership', () =>
 		expect(await ownerPositionShares()).toBe(0n)
 		await expect(claim()).rejects.toThrow()
 		const secondVault = await fixture.createVault(fixture.other())
-		await claim(1n, fixture.other().account.address)
+		await claim(1n, fixture.other().account.address, fixture.other())
 		const second = await getSecurityVault(fixture.owner(), pool(), secondVault)
 		expect(first.repBackingUnits + second.repBackingUnits).toBe(before.repBackingUnits)
 		expect(first.underwritingLimitAttoEth + second.underwritingLimitAttoEth).toBe(before.underwritingLimitAttoEth)

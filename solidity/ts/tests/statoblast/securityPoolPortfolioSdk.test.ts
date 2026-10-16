@@ -18,6 +18,7 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 			buildPortfolioDeploymentRequest({
 				owner: client.account.address,
 				factory: getInfraContractAddresses().securityPoolFactory,
+				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: fixture.base.securityPoolAddresses.securityPool,
 				maximumQuestionHorizonSeconds,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
@@ -47,7 +48,7 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 		const quote = await loadPortfolioMintQuote({ client, snapshot: funded, questionId: fixture.base.questionId, mintAttoEth: 100n * unit })
 		expect(quote.depositAttoRep).toBeGreaterThan(0n)
 		expect(quote.availableAttoRep).toBe(5_000n * unit)
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio, recipient: owner, questionId: fixture.base.questionId, mintAttoEth: 100n * unit, maximumReservationFeeAttoEth: quote.reservationFeeAttoEth, minimumShares: 0n })))
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioMintRequest({ trader: owner, portfolio, recipient: owner, questionId: fixture.base.questionId, mintAttoEth: 100n * unit, maximumPurchaseFeeAttoEth: quote.purchaseFeeAttoEth, minimumShares: 0n })))
 		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioPositionRebalanceRequest({ processor: owner, portfolio, positionId: 1n })))
 		const allocated = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
 		expect(allocated.positionCount).toBe(1n)

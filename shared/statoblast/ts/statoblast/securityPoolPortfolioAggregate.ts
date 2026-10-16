@@ -4,9 +4,9 @@ import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 const abi = parseAbi([
 	'function deposit(uint256 amountAttoRep,uint256 minimumShares) returns (uint256)',
 	'function withdraw(uint256 shares,uint256 minimumIdleAttoRep) returns (uint256)',
-	'function claimFees()',
+	'function claimRecovered(uint256[] intervalIds)',
 	'function rebalancePosition(uint256 positionId)',
-	'function claimPosition(uint256 positionId,address owner)',
+	'function claimPosition(uint256 positionId,uint256 intervalId)',
 	'function balanceOf(address owner) view returns (uint256)',
 	'function totalSupply() view returns (uint256)',
 	'function totalAssets() view returns (uint256)',
@@ -23,6 +23,13 @@ const abi = parseAbi([
 	'function lastPrice() view returns (uint256)',
 	'function positions(uint256 positionId) view returns (uint256 questionId,uint256 totalShares,uint256 remainingShares,address custody)',
 	'function isReusablePosition(uint256 positionId) view returns (bool)',
+	'function positionRecoveryComplete(uint256 positionId) view returns (bool)',
+	'function recoveryLedger() view returns (address)',
+	'function recoveryBounties(uint256 positionId) view returns (uint256)',
+	'function processingRewards(address owner) view returns (uint256)',
+	'function getOwnerIntervalCount(address owner) view returns (uint256)',
+	'function getOwnerInterval(address owner,uint256 intervalId) view returns ((uint256 generation,uint256 startPosition,uint256 endPosition,uint256 shares,uint256 repIndex,uint256 feeIndex,bool open,bool active))',
+	'function previewClaim(address owner,uint256[] intervalIds) view returns (uint256 rep,uint256 eth)',
 	'function questionCount() view returns (uint256)',
 	'function getQuestions(uint256 start,uint256 count) view returns (uint256[])',
 	'function getPool(uint256 questionId,uint248 universeId) view returns (address)',
@@ -30,7 +37,7 @@ const abi = parseAbi([
 	'function getQuestionEndDate(uint256 questionId) view returns (uint256)',
 	'function systemState() view returns (uint8)',
 	'function getOwnerPositionShares(uint256 positionId,address owner) view returns (uint256)',
-	'function quoteMint(uint256 questionId,uint256 mintAttoEth) view returns (uint256 depositAttoRep,uint256 reservationFeeAttoEth,uint256 availableAttoRep)',
+	'function quoteMint(uint256 questionId,uint256 mintAttoEth) view returns (uint256 depositAttoRep,uint256 purchaseFeeAttoEth,uint256 availableAttoRep)',
 	'function allowance(address owner,address spender) view returns (uint256)',
 ])
 
@@ -67,17 +74,22 @@ export function buildPortfolioFundWithdrawalRequest(parameters: { owner: Address
 	return request(parameters.owner, parameters.portfolio, 'withdraw', [shares, uint(parameters.minimumIdleAttoRep, 'Minimum idle REP')])
 }
 
-export function buildPortfolioClaimFeesRequest(parameters: { owner: Address; portfolio: Address }) {
-	return request(parameters.owner, parameters.portfolio, 'claimFees')
+export function buildPortfolioClaimRecoveredRequest(parameters: { owner: Address; portfolio: Address; intervalIds: readonly bigint[] }) {
+	return request(parameters.owner, parameters.portfolio, 'claimRecovered', [
+		[...new Set(parameters.intervalIds.map(id => uint(id, 'Owner interval id')))].sort((left, right) => {
+			if (left === right) return 0
+			return left < right ? -1 : 1
+		}),
+	])
 }
 
 export function buildPortfolioPositionRebalanceRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint }) {
 	return request(parameters.processor, parameters.portfolio, 'rebalancePosition', [uint(parameters.positionId, 'Position id')])
 }
 
-/** Live reusable allocations require the entitled owner; closed, ended or forked claims may be processed by anyone for that owner. */
-export function buildPortfolioPositionClaimRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint; owner: Address }) {
-	return request(parameters.processor, parameters.portfolio, 'claimPosition', [uint(parameters.positionId, 'Position id'), address(parameters.owner)])
+// Individual in-kind recovery is an owner-authorized exception to shared cash collection.
+export function buildPortfolioPositionClaimRequest(parameters: { owner: Address; portfolio: Address; positionId: bigint; intervalId: bigint }) {
+	return request(parameters.owner, parameters.portfolio, 'claimPosition', [uint(parameters.positionId, 'Position id'), uint(parameters.intervalId, 'Owner interval id')])
 }
 
 export type PortfolioAggregateSnapshot = {
@@ -95,6 +107,13 @@ export type PortfolioAggregateSnapshot = {
 	assetsAttoRep: bigint
 	ownerAssetsAttoRep: bigint
 	claimableFeesAttoEth: bigint
+	recoveryLedger: Address
+	intervalCount: bigint
+	intervalStart: bigint
+	intervals: { intervalId: bigint; generation: bigint; startPosition: bigint; endPosition: bigint; shares: bigint; open: boolean; active: boolean }[]
+	recoverableRepAttoRep: bigint
+	recoverableFeesAttoEth: bigint
+	processingRewardsAttoEth: bigint
 	walletAttoRep: bigint
 	allowanceAttoRep: bigint
 	reserveAttoRep: bigint
@@ -104,16 +123,17 @@ export type PortfolioAggregateSnapshot = {
 	questions: bigint[]
 	positionCount: bigint
 	positionStart: bigint
-	positions: { positionId: bigint; questionId: bigint; custody: Address; ownerShares: bigint; remainingShares: bigint; reusable: boolean; questionEndTime: bigint; operational: boolean }[]
+	positions: { positionId: bigint; questionId: bigint; custody: Address; ownerShares: bigint; remainingShares: bigint; reusable: boolean; recoveryComplete: boolean; recoveryBountyAttoEth: bigint; questionEndTime: bigint; operational: boolean }[]
 }
 
 /** Reserve balances and bounded allocation/question pages share one mined block. */
-export async function loadPortfolioAggregateSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; positionStart?: bigint; questionStart?: bigint }): Promise<PortfolioAggregateSnapshot> {
+export async function loadPortfolioAggregateSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; positionStart?: bigint; questionStart?: bigint; intervalStart?: bigint }): Promise<PortfolioAggregateSnapshot> {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio)
 	const owner = address(parameters.owner)
 	const positionStart = uint(parameters.positionStart ?? 0n, 'Position page start')
 	const questionStart = uint(parameters.questionStart ?? 0n, 'Question page start')
+	const intervalStart = uint(parameters.intervalStart ?? 0n, 'Recovery history page start')
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
 	const { number: blockNumber, hash: blockHash, timestamp } = block
 	if (blockNumber === undefined || blockHash === undefined) throw new Error('Portfolio snapshot requires a mined block.')
@@ -128,6 +148,8 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		read(portfolio, 'statoblastSecurityMultiplierBps'),
 		read(portfolio, 'positionCount'),
 		read(portfolio, 'questionCount'),
+		read(portfolio, 'recoveryLedger'),
+		read(portfolio, 'processingRewards', [owner]),
 	])
 	const originUniverseId = uint(values[0], 'Universe id')
 	// The shared feed exists before any question is registered. Its configuration
@@ -148,6 +170,28 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const reserveCapacityAttoEth = price === 0n ? 0n : (((reserveAttoRep * 10n ** 18n) / price) * 100_000_000n) / ((multiplier > 10_500n ? multiplier : 10_500n) * 12_000n)
 	const positionCount = uint(values[7], 'Position count')
 	const questionCount = uint(values[8], 'Question count')
+	const recoveryLedger = address(values[9])
+	const processingRewardsAttoEth = uint(values[10], 'Processing rewards')
+	const intervalCountValue = await read(recoveryLedger, 'getOwnerIntervalCount', [owner])
+	const intervalCount = uint(intervalCountValue, 'Recovery history count')
+	if (intervalStart > intervalCount) throw new Error('Recovery history page is out of bounds.')
+	const intervalPageCount = intervalCount - intervalStart < 64n ? intervalCount - intervalStart : 64n
+	const intervals = await Promise.all(
+		Array.from({ length: Number(intervalPageCount) }, async (_, index) => {
+			const intervalId = intervalStart + BigInt(index)
+			const value = await read(recoveryLedger, 'getOwnerInterval', [owner, intervalId])
+			const fields = ['generation', 'startPosition', 'endPosition', 'shares', 'repIndex', 'feeIndex', 'open', 'active']
+			const entry = Array.isArray(value) ? tuple(value, fields.length) : fields.map(field => (value !== null && typeof value === 'object' ? Reflect.get(value, field) : undefined))
+			const open = entry[6]
+			const active = entry[7]
+			if (typeof open !== 'boolean' || typeof active !== 'boolean') throw new Error('Invalid recovery interval state.')
+			return { intervalId, generation: uint(entry[0], 'Recovery generation'), startPosition: uint(entry[1], 'First allocation'), endPosition: uint(entry[2], 'Last allocation'), shares: uint(entry[3], 'Recovery shares'), open, active }
+		}),
+	)
+	const proceeds = tuple(await read(recoveryLedger, 'previewClaim', [owner, intervals.filter(interval => interval.active).map(interval => interval.intervalId)]), 2)
+	const recoverableRepAttoRep = uint(proceeds[0], 'Recovered REP')
+	const recoverableFeesAttoEth = claimableFeesAttoEth + processingRewardsAttoEth + uint(proceeds[1], 'Recovered fees')
+
 	if (positionStart > positionCount) throw new Error('Position page is out of bounds.')
 	if (questionStart > questionCount) throw new Error('Question page is out of bounds.')
 	const count = positionCount - positionStart < 64n ? positionCount - positionStart : 64n
@@ -170,11 +214,17 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const positions = await Promise.all(
 		Array.from({ length: Number(count) }, async (_, index) => {
 			const positionId = positionStart + BigInt(index) + 1n
-			const [allocation, ownerShares, reusable] = await Promise.all([read(portfolio, 'positions', [positionId]), read(portfolio, 'getOwnerPositionShares', [positionId, owner]), read(portfolio, 'isReusablePosition', [positionId])])
+			const [allocation, ownerShares, reusable, recoveryComplete, recoveryBounty] = await Promise.all([
+				read(portfolio, 'positions', [positionId]),
+				read(portfolio, 'getOwnerPositionShares', [positionId, owner]),
+				read(portfolio, 'isReusablePosition', [positionId]),
+				read(portfolio, 'positionRecoveryComplete', [positionId]),
+				read(portfolio, 'recoveryBounties', [positionId]),
+			])
 			const position = tuple(allocation, 4)
-			if (typeof reusable !== 'boolean') throw new Error('Invalid position reuse state.')
+			if (typeof reusable !== 'boolean' || typeof recoveryComplete !== 'boolean') throw new Error('Invalid position reuse state.')
 			const questionId = uint(position[0], 'Question id')
-			return { positionId, questionId, custody: address(position[3]), ownerShares: uint(ownerShares, 'Position claim'), remainingShares: uint(position[2], 'Remaining position shares'), reusable, ...(await questionState(questionId)) }
+			return { positionId, questionId, custody: address(position[3]), ownerShares: uint(ownerShares, 'Position claim'), remainingShares: uint(position[2], 'Remaining position shares'), reusable, recoveryComplete, recoveryBountyAttoEth: uint(recoveryBounty, 'Recovery reward'), ...(await questionState(questionId)) }
 		}),
 	)
 	const [latestBlock, latestChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
@@ -194,6 +244,13 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		assetsAttoRep,
 		ownerAssetsAttoRep: totalShares === 0n ? 0n : (assetsAttoRep * shares) / totalShares,
 		claimableFeesAttoEth,
+		recoveryLedger,
+		intervalCount,
+		intervalStart,
+		intervals,
+		recoverableRepAttoRep,
+		recoverableFeesAttoEth,
+		processingRewardsAttoEth,
 		walletAttoRep: uint(wallet, 'Wallet REP'),
 		allowanceAttoRep: uint(allowance, 'REP allowance'),
 		reserveAttoRep,
@@ -216,5 +273,5 @@ export async function loadPortfolioMintQuote(parameters: { client: PortfolioRead
 	const values = tuple(result, 3)
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber: snapshot.blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while quoting the mint. Refresh and try again.')
-	return { depositAttoRep: uint(values[0], 'Required REP'), reservationFeeAttoEth: uint(values[1], 'Reservation fee'), availableAttoRep: uint(values[2], 'Available REP') }
+	return { depositAttoRep: uint(values[0], 'Required REP'), purchaseFeeAttoEth: uint(values[1], 'Purchase fee'), availableAttoRep: uint(values[2], 'Available REP') }
 }

@@ -14,6 +14,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolPortfolioVaultDeployer } from './SecurityPoolPortfolioVaultDeployer.sol';
 import { SecurityPoolPortfolioPosition } from './SecurityPoolPortfolioPosition.sol';
 import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
+import { SecurityPoolPortfolioRecovery } from './SecurityPoolPortfolioRecovery.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Common idle REP reserve with allocation-time ownership of each question position.
@@ -25,6 +26,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	uint256 private constant MAX_QUESTION_PAGE = 64;
 	uint256 private constant FEE_PRECISION = 1e36;
 	uint256 private constant MAX_POOL_SHARES = FEE_PRECISION;
+	uint256 private constant RECOVERY_BOUNTY_ATTO_ETH = 0.00025 ether;
 	ISecurityPoolFactory public immutable factory;
 	uint248 public immutable originUniverseId;
 	uint256 public immutable statoblastSecurityMultiplierBps;
@@ -33,6 +35,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	IERC20 public immutable repToken;
 	SecurityPoolPortfolioVaultDeployer public immutable vaultDeployer;
 	SecurityPoolPortfolioQuote public immutable quoteHelper;
+	SecurityPoolPortfolioRecovery public immutable recoveryLedger;
 	Zoltar private immutable zoltar;
 	mapping(uint256 => bytes32) public questionOriginIds;
 	mapping(address => SecurityPoolPortfolioVault) public vaultOf;
@@ -55,6 +58,11 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	mapping(address => address) private positionSourcePools;
 	mapping(uint256 => uint256) private positionVersions;
 	mapping(uint256 => uint256) private reusablePositions;
+	mapping(uint256 => bool) public positionRecoveryComplete;
+	mapping(uint256 => uint256) public recoveryBounties;
+	mapping(address => uint256) public processingRewards;
+	uint256 public recoveredRepAttoRep;
+	uint256 public recoveredFeesAttoEth;
 
 	struct WithdrawalRequest {
 		SecurityPoolPortfolioVault vault;
@@ -82,7 +90,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	event QuestionRegistered(uint256 indexed questionId, bytes32 indexed originId, ISecurityPool indexed originPool);
 	event VaultCreated(address indexed owner, SecurityPoolPortfolioVault indexed vault);
 	event CompleteSetsFunded(uint256 indexed questionId, address indexed payer, address indexed recipient, uint256 amountAttoEth, uint256 mintedAttoShares);
-	event ReservationFeesPaid(uint256 indexed questionId, address indexed payer, uint256 feesAttoEth);
+	event PurchaseFeesPaid(uint256 indexed questionId, address indexed payer, uint256 feesAttoEth);
 	event WithdrawalQueued(uint256 indexed index, SecurityPoolPortfolioVault indexed vault, uint256 requestId);
 	event Deposited(address indexed owner, uint256 amountAttoRep, uint256 shares, uint256 generation);
 	event Withdrawn(address indexed owner, uint256 shares, uint256 idleAttoRep, uint256 generation);
@@ -91,9 +99,12 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	event QuestionPositionClaimed(uint256 indexed positionId, address indexed owner, SecurityPoolPortfolioVault indexed vault, uint256 shares);
 	event FeesClaimed(address indexed owner, uint256 amountAttoEth);
 	event ShareGenerationStarted(uint256 indexed generation);
+	event PositionRecovered(uint256 indexed positionId, uint256 repAttoRep, uint256 feesAttoEth, bool complete);
+	event RecoveryCollected(address indexed owner, uint256 repAttoRep, uint256 feesAttoEth);
+	event RecoveryRewardCredited(uint256 indexed positionId, address indexed processor, uint256 amountAttoEth);
 	event ReservePrecisionRolledOver(uint256 indexed positionId, uint256 indexed generation, uint256 residualAttoRep);
 
-	constructor(ISecurityPoolFactory _factory, ISecurityPool initialOriginPool, uint256 _maximumQuestionHorizonSeconds) {
+	constructor(ISecurityPoolFactory _factory, ISecurityPool initialOriginPool, uint256 _maximumQuestionHorizonSeconds, SecurityPoolPortfolioVaultDeployer _vaultDeployer) {
 		require(_maximumQuestionHorizonSeconds > 0 && _maximumQuestionHorizonSeconds <= type(uint48).max, 'Invalid question horizon');
 		maximumQuestionHorizonSeconds = _maximumQuestionHorizonSeconds;
 		require(address(_factory).code.length > 0, 'Factory has no code');
@@ -102,8 +113,10 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		zoltar = initialOriginPool.zoltar();
 		originUniverseId = initialOriginPool.universeId();
 		repToken = IERC20(address(initialOriginPool.repToken()));
-		vaultDeployer = new SecurityPoolPortfolioVaultDeployer();
+		require(address(_vaultDeployer).code.length > 0, 'Vault deployer has no code');
+		vaultDeployer = _vaultDeployer;
 		quoteHelper = new SecurityPoolPortfolioQuote();
+		recoveryLedger = new SecurityPoolPortfolioRecovery();
 		statoblastSecurityMultiplierBps = initialOriginPool.statoblastSecurityMultiplierBps();
 		initialReportPriorityFeeAttoEthPerGas = initialOriginPool.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		bytes32 seedOriginId = _factory.getSecurityPoolOriginId(initialOriginPool);
@@ -201,6 +214,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		_checkpointOwner(msg.sender);
 		ownershipVersion++;
 		shareBalances[shareGeneration][msg.sender] += mintedShares;
+		recoveryLedger.setOwnerBalance(msg.sender, shareGeneration, balanceOf(msg.sender));
 		totalSupply += mintedShares;
 		idleRepAttoRep += amountAttoRep;
 		repToken.safeTransferFrom(msg.sender, address(this), amountAttoRep);
@@ -217,6 +231,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		require(returnedAttoRep >= minimumIdleAttoRep, 'Minimum idle REP not met');
 		ownershipVersion++;
 		shareBalances[shareGeneration][msg.sender] -= shares;
+		recoveryLedger.setOwnerBalance(msg.sender, shareGeneration, balanceOf(msg.sender));
 		totalSupply -= shares;
 		idleRepAttoRep -= returnedAttoRep;
 		if (returnedAttoRep > 0) repToken.safeTransfer(msg.sender, returnedAttoRep);
@@ -232,16 +247,25 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		Position storage position = positions[positionId];
 		return
 			positionId != 0 &&
+			position.remainingShares > 0 &&
+			!positionRecoveryComplete[positionId] &&
 			reusablePositions[position.questionId] == positionId &&
 			!_hasEnded(position.custody.pool());
 	}
 
-	/// @notice Maintain one live allocation. Historical owners retain released REP and fees in custody.
+	/// @notice Recover one allocation for all its owners. Each owner collects across personal intervals.
 	function rebalancePosition(uint256 positionId) external nonReentrant {
 		Position storage position = positions[positionId];
 		require(address(position.custody) != address(0), 'Unknown allocation position');
-		_requireEligible(position.custody.pool(), position.questionId);
-		_rebalancePosition(positionId);
+		require(position.remainingShares > 0, 'Allocation fully transferred');
+		(uint256 rep, uint256 fees, bool complete) = position.custody.recover();
+		_creditRecovery(positionId, rep, fees);
+		if (complete && !positionRecoveryComplete[positionId]) {
+			positionRecoveryComplete[positionId] = true;
+			if (reusablePositions[position.questionId] == positionId) delete reusablePositions[position.questionId];
+			_creditRecoveryReward(positionId, msg.sender);
+		}
+		emit PositionRecovered(positionId, rep, fees, complete);
 	}
 
 	function _rebalancePosition(uint256 positionId) private {
@@ -252,9 +276,10 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	}
 
 	function _createPosition(uint256 questionId, ISecurityPool pool) private returns (uint256 positionId) {
-		positionId = ++snapshotCounter;
+		positionId = recoveryLedger.appendPosition();
+		snapshotCounter = positionId;
 		snapshotGenerations[positionId] = shareGeneration;
-		SecurityPoolPortfolioPosition custody = new SecurityPoolPortfolioPosition(address(this), pool, quoteHelper);
+		SecurityPoolPortfolioPosition custody = recoveryLedger.createPosition(pool, quoteHelper);
 		positionSourcePools[address(custody)] = address(pool);
 		positions[positionId] = Position(questionId, totalSupply, totalSupply, custody);
 		positionVersions[positionId] = ownershipVersion;
@@ -277,6 +302,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 			emit ReservePrecisionRolledOver(positionId, shareGeneration, residual);
 		}
 		closedFeeIndexes[shareGeneration] = feeIndex;
+		recoveryLedger.closeGeneration(shareGeneration);
 		shareGeneration++;
 		ownershipVersion++;
 		totalSupply = 0;
@@ -284,7 +310,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		emit ShareGenerationStarted(shareGeneration);
 	}
 
-	function quoteMint(uint256 questionId, uint256 mintAttoEth) external view returns (uint256 depositAttoRep, uint256 reservationFeeAttoEth, uint256 availableAttoRep) {
+	function quoteMint(uint256 questionId, uint256 mintAttoEth) external view returns (uint256 depositAttoRep, uint256 purchaseFeeAttoEth, uint256 availableAttoRep) {
 		ISecurityPool pool = getPool(questionId, originUniverseId);
 		_requireEligible(pool, questionId);
 		require(mintAttoEth > 0, 'Mint collateral not funded');
@@ -293,6 +319,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	}
 
 	function _mintPlan(ISecurityPool pool, uint256 mintAttoEth, uint256 positionId, bool previewRebalance) private view returns (SecurityPoolPortfolioQuote.MintPlan memory) {
+		require(totalSupply > 0 || positionId != 0, 'No portfolio capital');
 		return
 			quoteHelper.mintPlan(pool, address(positions[positionId].custody), mintAttoEth, idleRepAttoRep, positionId == 0 || positionVersions[positionId] == ownershipVersion, previewRebalance);
 	}
@@ -318,7 +345,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		}
 		IERC1155(address(pool.shareToken())).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
 		emit CompleteSetsFunded(questionId, msg.sender, recipient, mintAttoEth, minted);
-		emit ReservationFeesPaid(questionId, msg.sender, feeAttoEth);
+		emit PurchaseFeesPaid(questionId, msg.sender, feeAttoEth);
 		_sendEth(msg.sender, msg.value - mintAttoEth - feeAttoEth);
 	}
 
@@ -328,21 +355,27 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		pool.updateSettlementCollateral();
 		SecurityPoolPortfolioQuote.MintPlan memory plan = _mintPlan(pool, mintAttoEth, positionId, false);
 		feeAttoEth = plan.feeAttoEth;
-		require(feeAttoEth <= feeBudget, 'Reservation fee exceeds budget');
+		require(feeAttoEth <= feeBudget, 'Purchase fee exceeds budget');
 		require(plan.depositAttoRep <= plan.availableAttoRep, 'Insufficient aggregate backing');
-		if (feeAttoEth == 0) return 0;
-		if (plan.reserveFunded) require(totalSupply > 0, 'No underwriting capital');
-		if (!plan.reusePosition) positionId = _createPosition(questionId, pool);
-		SecurityPoolPortfolioPosition custody = positions[positionId].custody;
-		if (plan.reserveFunded && plan.depositAttoRep > 0) {
-			idleRepAttoRep -= plan.depositAttoRep;
-			repToken.safeTransfer(address(custody), plan.depositAttoRep);
+		uint256 ownersFee = feeAttoEth;
+		if (plan.needsCommitment) {
+			if (plan.reserveFunded) require(totalSupply > 0, 'No underwriting capital');
+			if (!plan.reusePosition) {
+				positionId = _createPosition(questionId, pool);
+				recoveryBounties[positionId] = RECOVERY_BOUNTY_ATTO_ETH;
+				ownersFee -= RECOVERY_BOUNTY_ATTO_ETH;
+			}
+			SecurityPoolPortfolioPosition custody = positions[positionId].custody;
+			if (plan.reserveFunded && plan.depositAttoRep > 0) {
+				idleRepAttoRep -= plan.depositAttoRep;
+				repToken.safeTransfer(address(custody), plan.depositAttoRep);
+			}
+			custody.allocate(plan.depositAttoRep, plan.nextCommitment);
 		}
-		custody.allocate(plan.depositAttoRep, plan.nextCommitment);
-		if (plan.reserveFunded) {
-			_creditFees(feeAttoEth);
-			_closeReserveIfNeeded(positionId);
-		} else _sendEth(address(custody), feeAttoEth);
+		if (positionId != 0 && positionVersions[positionId] != ownershipVersion)
+			_creditRecovery(positionId, 0, ownersFee);
+		else _creditFees(ownersFee);
+		if (plan.needsCommitment && plan.reserveFunded) _closeReserveIfNeeded(positionId);
 	}
 
 	function getOwnerPositionShares(uint256 positionId, address owner) public view returns (uint256) {
@@ -360,19 +393,59 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		return low < checkpoints.length ? checkpoints[low].shares : shareBalances[generation][owner];
 	}
 
-	function claimPosition(uint256 positionId, address owner) external nonReentrant {
+	/// @notice Opt into individual control of one allocation; only the owner can split its recovery history.
+	function claimPosition(uint256 positionId, uint256 intervalId) external nonReentrant {
+		address owner = msg.sender;
 		uint256 shares = getOwnerPositionShares(positionId, owner);
 		require(shares > 0, 'No allocation position');
-		require(msg.sender == owner || !isReusablePosition(positionId), 'Only owner can claim reusable position');
+		require(!positionRecoveryComplete[positionId], 'Allocation already recovered');
 		Position storage position = positions[positionId];
+		(uint256 rep, uint256 fees) = position.custody.collect();
+		_creditRecovery(positionId, rep, fees);
+		require(recoveryLedger.excludePosition(owner, intervalId, positionId) == shares, 'Owner interval shares mismatch');
 		uint256 denominator = position.remainingShares;
 		position.remainingShares -= shares;
 		positionClaimed[positionId][owner] = true;
-		// Only this allocation closes; the owner's action leaves other questions' custody reusable.
-		if (reusablePositions[position.questionId] == positionId) delete reusablePositions[position.questionId];
+		// Remaining owners can reuse their capital, but cannot mix it with current reserve shares.
+		positionVersions[positionId] = 0;
+		if (position.remainingShares == 0) {
+			if (reusablePositions[position.questionId] == positionId) delete reusablePositions[position.questionId];
+			_creditRecoveryReward(positionId, owner);
+		}
 		SecurityPoolPortfolioVault vault = _createVault(owner);
 		position.custody.release(address(vault), shares, denominator);
 		emit QuestionPositionClaimed(positionId, owner, vault, shares);
+	}
+
+	function _creditRecovery(uint256 positionId, uint256 rep, uint256 fees) private {
+		if (rep == 0 && fees == 0) return;
+		recoveredRepAttoRep += rep;
+		recoveredFeesAttoEth += fees;
+		recoveryLedger.credit(positionId, rep, fees, positions[positionId].remainingShares);
+	}
+
+	function _creditRecoveryReward(uint256 positionId, address processor) private {
+		uint256 amount = recoveryBounties[positionId];
+		if (amount == 0) return;
+		delete recoveryBounties[positionId];
+		processingRewards[processor] += amount;
+		emit RecoveryRewardCredited(positionId, processor, amount);
+	}
+
+	/// @notice Collect aggregate recovered proceeds, earned reserve fees and processing rewards.
+	/// @dev Work depends only on caller-selected personal intervals, never the question registry.
+	function claimRecovered(uint256[] calldata intervalIds) external nonReentrant {
+		(uint256 rep, uint256 fees) = recoveryLedger.claim(msg.sender, intervalIds);
+		recoveredRepAttoRep -= rep;
+		recoveredFeesAttoEth -= fees;
+		_settleOwnerFees(msg.sender);
+		fees += ownerFees[msg.sender].accruedAttoEth + processingRewards[msg.sender];
+		ownerFees[msg.sender].accruedAttoEth = 0;
+		processingRewards[msg.sender] = 0;
+		require(rep > 0 || fees > 0, 'No recovered proceeds');
+		if (rep > 0) repToken.safeTransfer(msg.sender, rep);
+		_sendEth(msg.sender, fees);
+		emit RecoveryCollected(msg.sender, rep, fees);
 	}
 
 	function _checkpointOwner(address owner) private {

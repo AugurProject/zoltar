@@ -21,7 +21,7 @@ const abi = parseAbi(['function createCompleteSet(uint256,address,uint256,uint25
 
 describe('native recovery authority and aggregate mint requests', () => {
 	test('binds aggregate mint collateral, maximum fee, recipient and minimum shares', () => {
-		const parameters = { trader: processor, portfolio, questionId: 51n, recipient: owner, minimumShares: 6n, mintAttoEth: 10n, maximumReservationFeeAttoEth: 3n }
+		const parameters = { trader: processor, portfolio, questionId: 51n, recipient: owner, minimumShares: 6n, mintAttoEth: 10n, maximumPurchaseFeeAttoEth: 3n }
 		const request = buildPortfolioMintRequest(parameters)
 		expect(request).toMatchObject({ account: processor, to: portfolio, value: 13n })
 		const exported = exportPortfolioTransaction({ chainId: 1, request })
@@ -30,8 +30,8 @@ describe('native recovery authority and aggregate mint requests', () => {
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [51n, owner, 6n, 10n] })
 		expect(() => buildPortfolioMintRequest({ ...parameters, mintAttoEth: 0n })).toThrow('positive')
 		expect(() => buildPortfolioMintRequest({ ...parameters, recipient: zeroAddress })).toThrow('nonzero')
-		expect(() => buildPortfolioMintRequest({ ...parameters, maximumReservationFeeAttoEth: -1n })).toThrow('Maximum reservation fee')
-		expect(() => buildPortfolioMintRequest({ ...parameters, maximumReservationFeeAttoEth: (1n << 256n) - 1n })).toThrow('ETH value')
+		expect(() => buildPortfolioMintRequest({ ...parameters, maximumPurchaseFeeAttoEth: -1n })).toThrow('Maximum purchase fee')
+		expect(() => buildPortfolioMintRequest({ ...parameters, maximumPurchaseFeeAttoEth: (1n << 256n) - 1n })).toThrow('ETH value')
 	})
 
 	test('separates owner request/cancel from permissionless processing and offers no payout recipient override', () => {

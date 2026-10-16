@@ -10,6 +10,7 @@ import {
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
 	statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote,
+	statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery,
 	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault,
 	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
@@ -38,6 +39,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+		securityPoolPortfolioVaultDeployer: statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 		uniformPriceDualCapBatchAuctionFactory: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
@@ -53,12 +55,14 @@ export const {
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
 	getSecurityPoolOperationsDelegateByteCode,
+	getSecurityPoolPortfolioVaultDeployerByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
 export const getSecurityPoolPortfolioByteCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.bytecode.object)
 
 export const getSecurityPoolPortfolioRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.evm.deployedBytecode.object)
+export const getSecurityPoolPortfolioRecoveryRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioQuoteRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioVaultRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioVaultDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.deployedBytecode.object)
@@ -85,6 +89,7 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		openOracle: '',
 		priceCoordinatorDeploymentWorker: '',
 		sharedPoolPriceFeedDeploymentWorker: '',
+		securityPoolPortfolioVaultDeployer: '',
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
 		openOraclePriceCoordinatorFactory: constructorArgumentsFromInitCode(getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress), statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
 		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),

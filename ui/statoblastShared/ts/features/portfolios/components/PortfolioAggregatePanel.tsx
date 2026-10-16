@@ -19,12 +19,14 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 type Model = ReturnType<typeof usePortfolioAggregate>
 
 function allocationStatus(allocation: Model['allocations'][number]) {
+	if (allocation.recoveryComplete) return copy.recoveryComplete
 	if (allocation.remainingShares === 0n) return copy.positionClaimed
 	return allocation.reusable ? copy.reusablePosition : copy.historicalPosition
 }
 
 export function PortfolioAggregatePanel({ model, actions }: { model: Model; actions: Pick<PortfolioActions, 'scope' | 'busy'> }) {
 	const snapshot = model.snapshot
+	const pagedRecovery = snapshot !== undefined && snapshot.intervalCount > 64n
 	const questionSelectId = useId()
 	const selectedQuestion = snapshot?.questions.find(questionId => String(questionId) === model.questionInput || toHex(questionId) === model.questionInput)
 	return (
@@ -44,11 +46,25 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 					<MetricField label={copy.yourCurrentRep} loading={model.loading}>
 						<CurrencyValue value={snapshot?.ownerAssetsAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
-					<MetricField label={copy.fees} loading={model.loading}>
-						<CurrencyValue value={snapshot?.claimableFeesAttoEth} suffix={commonCopy.eth} />
+				</MetricGrid>
+			</SectionBlock>
+			<SectionBlock title={copy.combinedRecovery} description={copy.combinedRecoveryHint}>
+				<MetricGrid>
+					<MetricField label={pagedRecovery ? copy.recoveredRepPageSubtotal : copy.recoveredRep} loading={model.loading}>
+						<CurrencyValue value={snapshot?.recoverableRepAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={pagedRecovery ? copy.recoveredFeesPageSubtotal : copy.recoveredFees} loading={model.loading}>
+						<CurrencyValue value={snapshot?.recoverableFeesAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 				</MetricGrid>
-				<PortfolioButton model={actions} action='claimPortfolioFundFees' label={copy.claimFundFees} pendingLabel={copy.claimingFundFees} reason={model.claimFeesReason} onClick={model.claimFees} />
+				{pagedRecovery ? (
+					<>
+						<UserMessage detail={copy.recoveryPageHint} />
+						<UserMessage detail={copy.recoveryPageRange(snapshot.intervalStart, snapshot.intervals.length, snapshot.intervalCount)} />
+					</>
+				) : undefined}
+				<PortfolioButton model={actions} action='collectPortfolioRecovery' label={copy.collectRecovered} pendingLabel={copy.collectingRecovered} reason={model.collectReason} onClick={model.collectRecovered} />
+				<PaginationControls hasPreviousPage={(snapshot?.intervalStart ?? 0n) > 0n} hasNextPage={snapshot !== undefined && snapshot.intervalStart + 64n < snapshot.intervalCount} loading={model.loading} onPreviousPage={model.previousIntervalPage} onNextPage={model.nextIntervalPage} />
 			</SectionBlock>
 			<SectionBlock title={copy.depositPoolRep} description={copy.depositPoolHint}>
 				<MetricGrid>
@@ -90,17 +106,17 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				{model.position === undefined ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: model.position.pool, tab: 'vaults' })}>{copy.openPrice}</a>}
 				<MetricGrid>
 					<PortfolioInput label={copy.mintAmount} value={model.mintAmount} onChange={model.setMintAmount} disabled={actions.busy !== undefined} numeric />
-					<PortfolioInput label={copy.maximumReservationFee} hint={copy.maximumReservationFeeHint} value={model.maximumFee} onChange={model.setMaximumFee} disabled={actions.busy !== undefined} numeric />
+					<PortfolioInput label={copy.maximumPurchaseFee} hint={copy.maximumPurchaseFeeHint} value={model.maximumFee} onChange={model.setMaximumFee} disabled={actions.busy !== undefined} numeric />
 					<PortfolioInput label={copy.minimumShares} value={model.minimumShares} onChange={model.setMinimumShares} disabled={actions.busy !== undefined} numeric />
 				</MetricGrid>
 				<MetricGrid>
-					<MetricField label={copy.estimatedReservationFee} loading={model.quoteLoading}>
-						<CurrencyValue value={model.quote?.reservationFeeAttoEth} suffix={commonCopy.eth} />
+					<MetricField label={copy.estimatedPurchaseFee} loading={model.quoteLoading}>
+						<CurrencyValue value={model.quote?.purchaseFeeAttoEth} suffix={commonCopy.eth} />
 					</MetricField>
 				</MetricGrid>
 				{model.quoteError === undefined ? undefined : <UserMessage tone='error' detail={model.quoteError} />}
 				<div className='actions'>
-					<ActionLauncherButton tone='secondary' idleLabel={copy.retryReservationFee} pendingLabel={copy.reservationFeeLoading} availability={{ disabled: actions.busy !== undefined || model.quoteLoading, reason: actions.busy !== undefined ? copy.busy : copy.reservationFeeLoading }} onClick={model.retryQuote} />
+					<ActionLauncherButton tone='secondary' idleLabel={copy.retryPurchaseFee} pendingLabel={copy.purchaseFeeLoading} availability={{ disabled: actions.busy !== undefined || model.quoteLoading, reason: actions.busy !== undefined ? copy.busy : copy.purchaseFeeLoading }} onClick={model.retryQuote} />
 					<PortfolioButton model={actions} action='mintPortfolioCompleteSet' label={copy.mint} pendingLabel={copy.minting} reason={model.mintReason} onClick={model.mint} />
 				</div>
 			</SectionBlock>
@@ -122,15 +138,22 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 								<MetricField label={copy.questionId}>
 									<code>{toHex(claim.questionId)}</code>
 								</MetricField>
+								<MetricField label={copy.processingReward}>
+									<CurrencyValue value={claim.recoveryBountyAttoEth} suffix={commonCopy.eth} />
+								</MetricField>
 								<MetricField label={copy.allocationStatus}>
 									<Badge tone={claim.reusable ? 'ok' : 'muted'}>{allocationStatus(claim)}</Badge>
 								</MetricField>
 							</MetricGrid>
-							{claim.remainingShares === 0n ? undefined : <UserMessage detail={claim.reusable ? copy.reusablePositionHint : copy.historicalPositionHint} />}
+							{claim.remainingShares === 0n || claim.recoveryComplete ? undefined : <UserMessage detail={claim.reusable ? copy.reusablePositionHint : copy.historicalPositionHint} />}
 							<div className='actions'>
 								<PortfolioButton model={actions} action={`rebalancePortfolioPosition:${claim.positionId}`} label={copy.rebalancePosition} pendingLabel={copy.rebalancingPosition} reason={claim.rebalanceReason} onClick={() => model.rebalancePosition(claim.positionId)} />
-								<PortfolioButton model={actions} action={`claimPortfolioPosition:${claim.positionId}`} label={copy.claimQuestion} pendingLabel={copy.claimingQuestion} reason={claim.claimReason} onClick={() => model.claimPosition(claim.positionId)} />
 							</div>
+							<details>
+								<summary>{copy.individualControl}</summary>
+								<UserMessage tone='warning' detail={copy.individualControlHint} />
+								<PortfolioButton model={actions} action={`claimPortfolioPosition:${claim.positionId}`} label={copy.claimQuestion} pendingLabel={copy.claimingQuestion} reason={claim.claimReason} onClick={() => model.claimPosition(claim.positionId)} />
+							</details>
 						</div>
 					))
 				)}
