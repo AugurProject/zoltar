@@ -18,6 +18,11 @@ function requireVaultUnderwritingLimitAttoEth(vault: SecurityPoolVaultSummary) {
 	return underwritingLimitAttoEth
 }
 
+/** The REP a commitment requires at the given price before any security multiplier, rounded up. */
+export function getBaseRequiredRepAttoRep(underwritingLimitAttoEth: bigint, repPerEthPrice: bigint) {
+	return ceilDiv(underwritingLimitAttoEth * repPerEthPrice, LIQUIDATION_PRICE_PRECISION)
+}
+
 export function isVaultHealthyAtFactor({
 	disputeStakedAttoRep = 0n,
 	healthFactorBps,
@@ -35,7 +40,7 @@ export function isVaultHealthyAtFactor({
 }) {
 	if (healthFactorBps < LIQUIDATION_BPS_DENOMINATOR) return false
 	if (underwritingLimitAttoEth === 0n) return true
-	const baseRequiredRepAttoRep = ceilDiv(underwritingLimitAttoEth * repPerEthPrice, LIQUIDATION_PRICE_PRECISION)
+	const baseRequiredRepAttoRep = getBaseRequiredRepAttoRep(underwritingLimitAttoEth, repPerEthPrice)
 	const associatedRequiredAttoRep = ceilDiv(ceilDiv(baseRequiredRepAttoRep * poolSecurityMultiplierBps, LIQUIDATION_BPS_DENOMINATOR) * healthFactorBps, LIQUIDATION_BPS_DENOMINATOR)
 	if (poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep < associatedRequiredAttoRep) return false
 	const migrationMultiplierBps = getLiquidationMigrationSecurityMultiplierBps(poolSecurityMultiplierBps)
@@ -213,10 +218,14 @@ export function getVaultLiquidatability({ minLiquidationPriceDistanceBps, repPer
 	return reason === undefined ? { kind: 'allowed' } : { kind: 'blocked', reason }
 }
 
+/** Why a verdict blocks liquidation; undefined when it allows it or is unknown. */
+export function getBlockedLiquidationReason(liquidatability: VaultLiquidatability) {
+	return liquidatability.kind === 'blocked' ? liquidatability.reason : undefined
+}
+
 /** Why the target cannot be liquidated at the given protocol price; undefined when it can, or when no price is known and a queued liquidation decides at execution. */
 export function getVaultNotLiquidatableReason(input: VaultLiquidatabilityInput) {
-	const liquidatability = getVaultLiquidatability(input)
-	return liquidatability.kind === 'blocked' ? liquidatability.reason : undefined
+	return getBlockedLiquidationReason(getVaultLiquidatability(input))
 }
 
 export function getMaxLiquidationAmount({

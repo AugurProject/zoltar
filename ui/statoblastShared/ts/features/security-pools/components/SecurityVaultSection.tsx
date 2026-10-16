@@ -25,7 +25,6 @@ import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
-import { isVaultCurrentlyHealthy } from '../lib/vaultHealth.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import {
 	buildVaultReadinessActions,
@@ -83,8 +82,6 @@ export function SecurityVaultSection({
 	onViewStagedOperations,
 	onWithdrawRep,
 	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceUrl,
 	securityVaultDetails,
 	securityVaultError,
 	securityVaultForm,
@@ -144,7 +141,6 @@ export function SecurityVaultSection({
 	// Like the deposit field, an empty withdrawal field means no amount yet.
 	const withdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() === '' ? 0n : tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
 	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
-	const underwritingLimitAttoEth = currentSelectedVaultDetails?.underwritingLimitAttoEth ?? 0n
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails, currentTimestamp)
 	const executionRepPerEthPrice = hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined
@@ -153,7 +149,6 @@ export function SecurityVaultSection({
 	const poolEnded = poolState?.lifecycleState === 'ended'
 	const commitmentChangeIsDirect = poolEnded
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
-	const currentVaultIsHealthy = currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined ? undefined : isVaultCurrentlyHealthy({ multiplierBps: selectedPoolStatoblastSecurityMultiplierBps, repPerEthPrice, vault: currentSelectedVaultDetails })
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const walletRepShortfallAttoRep = balanceShortage(depositAmount, walletRepBalanceAttoRep)
 	const minimumVaultRepDepositAttoRep = currentSelectedVaultDetails?.minimumVaultRepDepositAttoRep
@@ -438,7 +433,7 @@ export function SecurityVaultSection({
 				walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 			/>
 		)
-	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, poolEnded, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
+	const selectedVaultSummaryProps = { repPerEthPrice, poolEnded, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
 			{currentSelectedVaultDetails !== undefined && !commitmentChangeIsDirect && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice) ? (
@@ -470,7 +465,7 @@ export function SecurityVaultSection({
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
-							<SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={currentSelectedVaultDetails.underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
+							<SelectedVaultSummarySection {...selectedVaultSummaryProps} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						) : (
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
@@ -494,7 +489,7 @@ export function SecurityVaultSection({
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
-						<SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={currentSelectedVaultDetails.underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
+						<SelectedVaultSummarySection {...selectedVaultSummaryProps} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						<VaultWithdrawalSummaryMetrics repTokenSymbol={repTokenSymbol} amountLabel={repExitAmountLabel} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} isEstimate={withdrawalPrice.isEstimate} priceValidUntil={oraclePriceValidUntilTimestamp} />
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
@@ -536,7 +531,7 @@ export function SecurityVaultSection({
 			walletRepBalanceError={walletRepBalanceError}
 		/>
 	)
-	const summarySection = showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} /> : undefined
+	const summarySection = showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} securityVaultDetails={currentSelectedVaultDetails} /> : undefined
 	const vaultActions = (
 		<>
 			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />

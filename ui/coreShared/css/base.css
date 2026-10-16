@@ -1172,6 +1172,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	font-size: var(--font-caption);
 }
 
+.timestamp-value-lead,
 .timestamp-value-relative {
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;

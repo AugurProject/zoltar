@@ -4,6 +4,7 @@ import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statobla
 import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import { TRUTH_AUCTION_TIME_LENGTH } from '../protocol/truthAuctionTiming.js'
+import { FORK_MIGRATION_DURATION_SECONDS } from '../protocol/forkMigrationTiming.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
@@ -27,7 +28,6 @@ import { STATOBLAST_SCENARIOS, type StatoblastScenario } from './statoblastScena
 
 export { STATOBLAST_SCENARIOS, getStatoblastScenarioLabel, getStatoblastScenarioDescription } from './statoblastScenarioDescriptions.js'
 
-const FORK_MIGRATION_TIME_SECONDS = 8n * 7n * DAY_IN_SECONDS
 const SECURITY_POOL_X2_FIRST_QUESTION_TITLE = 'Will this resolve? (securitypoolx2 #1)'
 const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP = 40n * 10n ** 18n
@@ -269,7 +269,7 @@ async function seedSecurityPoolX2AuctionScenario(parameters: ScenarioSeedParamet
 		profile,
 		readClient,
 	})
-	await advanceSimulationTime(memoryClient, FORK_MIGRATION_TIME_SECONDS + DAY_IN_SECONDS)
+	await advanceSimulationTime(memoryClient, FORK_MIGRATION_DURATION_SECONDS + DAY_IN_SECONDS)
 
 	const yesChildPool = await loadRequiredChildSecurityPool(readClient, parentPool.securityPoolAddress, 'yes')
 	const yesForkDetailsBeforeAuction = await getScenarioProtocol().loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)

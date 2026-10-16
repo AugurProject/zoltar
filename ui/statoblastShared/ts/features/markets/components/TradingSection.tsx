@@ -108,7 +108,6 @@ export function TradingSection({
 	}
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
-	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
 	const mintingPausedByEscalation = selectedPool !== undefined && isMintingPausedByEscalation(selectedPool, resolvedPoolState.lifecycleState)
 	const mintCheckpoint = estimateMintCheckpoint({
@@ -274,49 +273,21 @@ export function TradingSection({
 			)}
 		</>
 	)
-	const mintReady = mintLauncherBlocker === undefined
+	// A launcher opens its dialog only when nothing blocks it; otherwise it names the first reason, so it never offers an action its dialog would refuse.
+	const shareActionLauncher = ({ blocker, description, key, label, modal }: { blocker: string | undefined; description: string; key: string; label: string; modal: Exclude<TradingActionModal, undefined> }): ReadinessAction => ({
+		actionLabel: label,
+		description,
+		key,
+		readiness: blocker === undefined ? 'ready' : 'blocked',
+		title: label,
+		...(blocker === undefined ? { onAction: () => setActiveModal(modal) } : { blocker }),
+	})
 	// Minting can never resume once the question has finalized, so its launcher is left out rather than shown disabled; every other action can still apply later and stays with its reason.
 	const tradingLaunchers: ReadinessAction[] = [
-		...(winningOutcome !== undefined
-			? []
-			: [
-					{
-						actionLabel: tradingCopy.mintCompleteSets,
-						description: tradingCopy.completeSetMintDescription,
-						key: 'mint-complete-sets',
-						readiness: mintReady ? 'ready' : 'blocked',
-						title: tradingCopy.mintCompleteSets,
-						...(mintReady ? { onAction: () => setActiveModal('mint') } : {}),
-						...(mintLauncherBlocker === undefined ? {} : { blocker: mintLauncherBlocker }),
-					} satisfies ReadinessAction,
-				]),
-		{
-			actionLabel: tradingCopy.redeemCompleteSets,
-			description: tradingCopy.completeSetBurnDescription,
-			key: 'redeem-complete-sets',
-			readiness: !walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.redeemCompleteSets,
-			...(!walletOnWrongNetwork && redeemCompleteSetsEnabled && effectiveRedeemCompleteSetsLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-complete-sets') } : {}),
-			...(effectiveRedeemCompleteSetsLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemCompleteSetsLauncherBlocker }),
-		},
-		{
-			actionLabel: tradingCopy.migrateForkedShares,
-			description: tradingCopy.shareMigrationDescription,
-			key: 'migrate-shares',
-			readiness: !walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.migrateForkedShares,
-			...(!walletOnWrongNetwork && migrateSharesEnabled && effectiveMigrateSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('migrate-shares') } : {}),
-			...(effectiveMigrateSharesLauncherBlocker === undefined ? {} : { blocker: effectiveMigrateSharesLauncherBlocker }),
-		},
-		{
-			actionLabel: tradingCopy.redeemResolvedShares,
-			description: tradingCopy.resolvedShareRedemptionDescription,
-			key: 'redeem-shares',
-			readiness: !walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.redeemResolvedShares,
-			...(!walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
-			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
-		},
+		...(winningOutcome !== undefined ? [] : [shareActionLauncher({ blocker: mintLauncherBlocker, description: tradingCopy.completeSetMintDescription, key: 'mint-complete-sets', label: tradingCopy.mintCompleteSets, modal: 'mint' })]),
+		shareActionLauncher({ blocker: effectiveRedeemCompleteSetsLauncherBlocker, description: tradingCopy.completeSetBurnDescription, key: 'redeem-complete-sets', label: tradingCopy.redeemCompleteSets, modal: 'redeem-complete-sets' }),
+		shareActionLauncher({ blocker: effectiveMigrateSharesLauncherBlocker, description: tradingCopy.shareMigrationDescription, key: 'migrate-shares', label: tradingCopy.migrateForkedShares, modal: 'migrate-shares' }),
+		shareActionLauncher({ blocker: effectiveRedeemSharesLauncherBlocker, description: tradingCopy.resolvedShareRedemptionDescription, key: 'redeem-shares', label: tradingCopy.redeemResolvedShares, modal: 'redeem-shares' }),
 	]
 	const sections = (
 		<>

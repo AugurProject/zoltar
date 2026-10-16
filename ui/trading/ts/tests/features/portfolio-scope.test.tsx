@@ -144,8 +144,8 @@ describe('live portfolio scope', () => {
 		] as const) {
 			const rendered = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, questionOutcome, systemState }} />)
 			expect(rendered.container.textContent).toContain('1 Yes')
-			expect(rendered.container.textContent).toContain(expected)
-			// The payout is its own caption line, so it carries no brackets.
+			// The payout is its own caption line, so it carries no brackets, and nothing else renders beside the quantity.
+			expect(rendered.container.querySelector('.payout-caption')?.textContent).toContain(expected)
 			expect(rendered.container.textContent).toBe(`1 Yes ${rendered.container.querySelector('.payout-caption')?.textContent?.trim() ?? ''}`)
 			expect(rendered.container.textContent).not.toContain('(')
 			await rendered.cleanup()

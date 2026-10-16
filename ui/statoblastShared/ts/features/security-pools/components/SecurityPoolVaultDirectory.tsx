@@ -12,27 +12,23 @@ import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../../../type
 type SecurityPoolVaultDirectoryProps = {
 	emptyState: ComponentChildren
 	pool: ListedSecurityPool | undefined
-	/** After resolution liquidation is closed, so rows carry no health verdict, edge, or risk ordering, as the selected vault drops its verdict. */
+	/** After resolution liquidation is closed, so rows, like the selected vault, carry no health verdict, backing ratio, or risk ordering. */
 	poolEnded: boolean
 	renderActions?: (vault: SecurityPoolVaultSummary) => ComponentChildren
 	renderBadge?: (vault: SecurityPoolVaultSummary) => ComponentChildren
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'mock' | 'v3' | 'v4' | 'open-oracle' | undefined
-	repPerEthSourceUrl: string | undefined
 }
 
 /** Each vault is one compact row: its address and health verdict, its figures, then its actions. Riskier vaults come first, so liquidation candidates lead the list. */
-export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded, renderActions, renderBadge, repPerEthPrice, repPerEthSource, repPerEthSourceUrl }: SecurityPoolVaultDirectoryProps) {
+export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded, renderActions, renderBadge, repPerEthPrice }: SecurityPoolVaultDirectoryProps) {
 	if (pool === undefined) return <>{emptyState}</>
 	const loadedVaultCount = BigInt(pool.vaults.length)
 	const showingPartialDirectory = loadedVaultCount < pool.vaultCount
-	// Health uses the same price as the selected vault's verdict, so opening a row never contradicts its badge.
-	const rows = poolEnded
-		? pool.vaults.map(vault => ({ health: { associatedRepPerCapacityBps: undefined, tier: 'unknown' as const }, vault }))
-		: sortByVaultHealthRisk(
-				pool.vaults.map(vault => ({ health: getVaultSummaryHealth({ multiplierBps: pool.statoblastSecurityMultiplierBps, repPerEthPrice, vault }), vault })),
-				row => row.health.tier,
-			)
+	// Health uses the same price and rule as the selected vault's verdict, so opening a row never contradicts its badge.
+	const rows = sortByVaultHealthRisk(
+		pool.vaults.map(vault => ({ health: getVaultSummaryHealth({ multiplierBps: pool.statoblastSecurityMultiplierBps, poolEnded, repPerEthPrice, vault }), vault })),
+		row => row.health.tier,
+	)
 
 	return (
 		<div className='vault-position-list'>
@@ -70,11 +66,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, poolEnded, render
 							layout='preview'
 							disputeStakedAttoRep={vault.disputeStakedAttoRep}
 							vaultAttoRepBacking={vault.vaultAttoRepBacking}
-							repPerEthPrice={repPerEthPrice}
-							repPerEthSource={repPerEthSource}
-							repPerEthSourceUrl={repPerEthSourceUrl}
 							underwritingLimitAttoEth={vault.underwritingLimitAttoEth}
-							claimableFeesAttoEth={vault.claimableFeesAttoEth}
 						/>
 						<div className='vault-position-strip-actions'>{renderActions === undefined ? null : renderActions(vault)}</div>
 					</div>

@@ -45,12 +45,9 @@ export type VaultMetricGridProps = {
 	healthTier: VaultHealthTier
 	/** After resolution liquidation is closed, so the health verdict and its price source are hidden. */
 	poolEnded?: boolean | undefined
-	poolHeldRepPerCapacityBps?: bigint | undefined
-	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
 	underwritingLimitAttoEth: bigint | undefined
-	claimableFeesAttoEth: bigint | undefined
-} & RepPerEthPriceProps
+}
 
 export type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
@@ -229,7 +226,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
-} & RepPerEthPriceProps
+} & Pick<RepPerEthPriceProps, 'repPerEthPrice'>
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean

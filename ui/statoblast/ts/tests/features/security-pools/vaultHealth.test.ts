@@ -1,46 +1,36 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { SecurityPoolVaultSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { getVaultHealthTier, getVaultSummaryHealth, sortByVaultHealthRisk } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/vaultHealth.js'
+import { createUnencumberedVaultSummary } from './workflow/builders.js'
 
 const ATTO = 10n ** 18n
 const MULTIPLIER_BPS = 20_000n
 
-// 100 REP backing a 10 ETH commitment at a 2x multiplier stays healthy up to 5 REP/ETH.
-function createVault(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
-	return {
-		badDebtAttoEth: 0n,
-		claimableFeesAttoEth: 0n,
-		disputeStakedAttoRep: 0n,
-		underwritingLimitAttoEth: 10n * ATTO,
-		vaultAddress: zeroAddress,
-		vaultAttoRepBacking: 100n * ATTO,
-		...overrides,
-	}
-}
-
 describe('vault health', () => {
 	test('reads a vault far above its multiplier as healthy, with its backing ratio', () => {
-		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, repPerEthPrice: ATTO, vault: createVault() })).toEqual({ associatedRepPerCapacityBps: 100_000n, tier: 'healthy' })
+		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: false, repPerEthPrice: ATTO, vault: createUnencumberedVaultSummary() })).toEqual({ associatedRepPerCapacityBps: 100_000n, tier: 'healthy' })
 	})
 
 	test('reads a healthy vault within 5% of its multiplier as near minimum', () => {
-		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, repPerEthPrice: (48n * ATTO) / 10n, vault: createVault() }).tier).toBe('nearMinimum')
+		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: false, repPerEthPrice: (48n * ATTO) / 10n, vault: createUnencumberedVaultSummary() }).tier).toBe('nearMinimum')
 	})
 
 	test('reads a vault past its liquidation threshold as underwater', () => {
-		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, repPerEthPrice: 6n * ATTO, vault: createVault() }).tier).toBe('underwater')
+		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: false, repPerEthPrice: 6n * ATTO, vault: createUnencumberedVaultSummary() }).tier).toBe('underwater')
 	})
 
 	test('gives no verdict without a usable price or multiplier', () => {
-		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, repPerEthPrice: undefined, vault: createVault() })).toEqual({ associatedRepPerCapacityBps: undefined, tier: 'unknown' })
-		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, repPerEthPrice: 0n, vault: createVault() }).tier).toBe('unknown')
-		expect(getVaultSummaryHealth({ multiplierBps: undefined, repPerEthPrice: ATTO, vault: createVault() }).tier).toBe('unknown')
+		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: false, repPerEthPrice: undefined, vault: createUnencumberedVaultSummary() })).toEqual({ associatedRepPerCapacityBps: undefined, tier: 'unknown' })
+		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: false, repPerEthPrice: 0n, vault: createUnencumberedVaultSummary() }).tier).toBe('unknown')
+		expect(getVaultSummaryHealth({ multiplierBps: undefined, poolEnded: false, repPerEthPrice: ATTO, vault: createUnencumberedVaultSummary() }).tier).toBe('unknown')
 	})
 
-	test('maps the selected vault verdict onto the same tiers', () => {
+	test('gives no verdict once the pool has ended, when liquidation is closed', () => {
+		expect(getVaultSummaryHealth({ multiplierBps: MULTIPLIER_BPS, poolEnded: true, repPerEthPrice: 6n * ATTO, vault: createUnencumberedVaultSummary() })).toEqual({ associatedRepPerCapacityBps: undefined, tier: 'unknown' })
+	})
+
+	test('maps a health verdict and backing ratio onto tiers', () => {
 		expect(getVaultHealthTier({ associatedRepPerCapacityBps: 75_000n, isCurrentlyHealthy: false, multiplierBps: MULTIPLIER_BPS })).toBe('underwater')
 		expect(getVaultHealthTier({ associatedRepPerCapacityBps: 21_000n, isCurrentlyHealthy: true, multiplierBps: MULTIPLIER_BPS })).toBe('nearMinimum')
 		expect(getVaultHealthTier({ associatedRepPerCapacityBps: 21_001n, isCurrentlyHealthy: true, multiplierBps: MULTIPLIER_BPS })).toBe('healthy')

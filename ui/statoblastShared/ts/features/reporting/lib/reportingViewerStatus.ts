@@ -1,5 +1,5 @@
 import { getDisplayedLeadingEscalationOutcome, getReportingOutcomeLabel } from './reporting.js'
-import { formatAmountDisplay, formatRelativeTimestamp, formatTimestamp, type AmountRounding } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmountDisplay, formatRelativeTimestamp, formatTimestamp, formatUnitSuffix, type AmountRounding } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
@@ -30,7 +30,7 @@ export function getViewerPositions<Amount>(details: ActiveReportingDetails, rend
 			const minimum = getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 			const lead = leading ? copy.winningStatusLead(side.label) : copy.losingStatusLead(side.label)
 			const detail: copy.CopyParts<Amount> = leading ? copy.winningStatusDetail(renderAmount(stake), renderAmount(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? undefined : renderAmount(minimum, 'up'), deadline, renderAmount(stake))
-			let positionStatus: copy.CopyParts<Amount> = [copy.losingPosition]
+			let positionStatus: copy.CopyParts<Amount> = copy.losingPosition(renderAmount(0n))
 			if (details.hasReachedNonDecision || details.systemState !== 'operational') positionStatus = [copy.forkPosition]
 			else if (worth === undefined) positionStatus = [copy.tiedPosition]
 			else if (leading) positionStatus = copy.winningPosition(renderAmount(worth))
@@ -39,9 +39,9 @@ export function getViewerPositions<Amount>(details: ActiveReportingDetails, rend
 		.sort((a, b) => Number(b.leading) - Number(a.leading))
 }
 
-/** A REP amount as rounded plain text, for sentences outside the page such as a calendar reminder. */
+/** A REP amount as rounded plain text, the same text `RepAmount` shows, for sentences outside the page such as a calendar reminder. */
 function formatRoundedRep(attoRep: bigint, rounding: AmountRounding = 'nearest') {
-	return `${formatAmountDisplay(attoRep, { rounding })} ${commonCopy.rep}`
+	return `${formatAmountDisplay(attoRep, { rounding })}${formatUnitSuffix(commonCopy.rep)}`
 }
 
 export function getViewerStatusSentence(details: ActiveReportingDetails) {

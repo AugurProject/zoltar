@@ -11,7 +11,6 @@ import type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
 export type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
 
 export type PoolBrowseRow = Readonly<{
-	capacity: bigint
 	fetchedAt: number
 	lifecycleState: SecurityPoolLifecycleState | undefined
 	pool: ListedSecurityPool
@@ -91,10 +90,10 @@ function getPoolLifecycleState(pool: ListedSecurityPool) {
 	}).lifecycleState
 }
 
-/** Rows show the standing ETH commitment; remaining capacity counts only what can still be minted (zero once escalation starts or reported backing capacity is zero or unknown). */
+/** Remaining capacity, which the capacity sort reads, counts only what can still be minted (zero once escalation starts or reported backing capacity is zero or unknown). */
 export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[]): PoolBrowseRow[] {
 	return entries.map(({ data: pool, fetchedAt }) => {
-		return { capacity: pool.totalUnderwritingLimitAttoEth, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getPoolRemainingMintCapacity(pool) }
+		return { fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getPoolRemainingMintCapacity(pool) }
 	})
 }
 

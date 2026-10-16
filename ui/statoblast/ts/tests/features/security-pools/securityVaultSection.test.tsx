@@ -66,8 +66,6 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		onWithdrawRep: createPreparedOperationFixture('Withdraw REP', onWithdrawRep),
 		oracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
 		securityPoolVaults: undefined,
 		securityVaultActiveAction: undefined,
 		securityVaultDetails: createSecurityVaultDetails(),
@@ -847,7 +845,6 @@ describe('SecurityVaultSection', () => {
 					{...createSecurityVaultSectionProps({
 						modalFirst: true,
 						repPerEthPrice: displayPrice * 10n ** 18n,
-						repPerEthSource: timestamp === 10n ? 'open-oracle' : 'v3',
 						oracleManagerDetails: createOracleManagerDetails({ lastPrice: coordinatorPrice * 10n ** 18n, isPriceValid: timestamp !== 10n, priceValidUntilTimestamp: timestamp === 10n ? 10n : 1000n }),
 						securityVaultDetails: createSecurityVaultDetails({
 							targetBackingFactorBps: 20_000n,
@@ -937,18 +934,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('uses the selected UI price for backing ratios and the near-minimum warning', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={3n * 10n ** 18n}
-				repPerEthSource='v3'
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy
-				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 20_500n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={3n * 10n ** 18n} securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 20_500n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).getByText('2.5×')).not.toBeNull()
 		expect(within(document.body).queryByText('2.05×')).toBeNull()
@@ -956,18 +942,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('colors associated REP per capacity green when the vault remains comfortably above the security multiplier', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={10n ** 18n}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy
-				securityVaultDetails={createSecurityVaultDetails()}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={10n ** 18n} securityVaultDetails={createSecurityVaultDetails()} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
@@ -977,18 +952,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('colors associated REP per capacity yellow when the vault is near the security multiplier', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={10n ** 18n}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy
-				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n, vaultAttoRepBacking: 41n * 10n ** 17n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={10n ** 18n} securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n, vaultAttoRepBacking: 41n * 10n ** 17n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body).getByText('2.05×').closest('.metric-field-value')
@@ -998,39 +962,17 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('colors associated REP per capacity red when the current vault health is underwater', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={10n ** 18n}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy={false}
-				securityVaultDetails={createSecurityVaultDetails()}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={10n ** 18n} securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n, vaultAttoRepBacking: 3n * 10n ** 18n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const metricValue = within(document.body).getByText('7.5×').closest('.metric-field-value')
+		const metricValue = within(document.body).getByText('1.5×').closest('.metric-field-value')
 		expect(metricValue?.className).toContain('metric-value-danger')
 		expect(within(document.body).getByText('Underwater')).not.toBeNull()
 		expect(document.querySelector('.vault-health')?.classList.contains('danger')).toBe(true)
 	})
 
-	test('does not infer vault health text from associated REP per capacity when current health is unavailable', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={undefined}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				currentVaultIsHealthy={undefined}
-				securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 19_000n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-			/>,
-		)
+	test('shows no health verdict or backing ratio without a REP price, ignoring the loaded backing ratio', async () => {
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={undefined} securityVaultDetails={createSecurityVaultDetails({ associatedRepPerCapacityBps: 19_000n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).queryByText('1.9×')).toBeNull()
@@ -1093,18 +1035,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('keeps nonzero dispute-staked REP visible in the embedded selected-vault action summary', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={undefined}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 3n * 10n ** 18n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-				variant='embedded'
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={undefined} securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 3n * 10n ** 18n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount variant='embedded' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
@@ -1113,18 +1044,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('keeps zero dispute-staked REP explicit in the embedded selected-vault action summary', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={undefined}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={2n * 10n ** 18n}
-				securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-				variant='embedded'
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={undefined} securityVaultDetails={createSecurityVaultDetails({ disputeStakedAttoRep: 0n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount variant='embedded' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const escalationMetric = within(document.body).getByText('Dispute-staked REP').closest('.security-pool-browse-vault-row-kpi')
@@ -1133,18 +1053,7 @@ describe('SecurityVaultSection', () => {
 	})
 
 	test('expands the embedded selected-vault summary grid for nonzero bad debt', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SelectedVaultSummarySection
-				repPerEthPrice={undefined}
-				repPerEthSource={undefined}
-				repPerEthSourceUrl={undefined}
-				underwritingLimitAttoEth={0n}
-				securityVaultDetails={createSecurityVaultDetails({ badDebtAttoEth: 2n })}
-				selectedPoolStatoblastSecurityMultiplierBps={20_000n}
-				selectedVaultIsOwnedByAccount
-				variant='embedded'
-			/>,
-		)
+		const renderedComponent = await renderIntoDocument(<SelectedVaultSummarySection repPerEthPrice={undefined} securityVaultDetails={createSecurityVaultDetails({ badDebtAttoEth: 2n })} selectedPoolStatoblastSecurityMultiplierBps={20_000n} selectedVaultIsOwnedByAccount variant='embedded' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const summaryGrid = document.querySelector('.security-pool-browse-vault-row-top-compact')
@@ -1961,7 +1870,6 @@ describe('SecurityVaultSection', () => {
 			await renderIntoDocument(
 				<SecurityVaultSection
 					{...createSecurityVaultSectionProps({
-						currentVaultIsHealthy: true,
 						oracleManagerDetails: createOracleManagerDetails(),
 						poolState,
 						repPerEthPrice: 3n * 10n ** 18n,
@@ -1969,12 +1877,23 @@ describe('SecurityVaultSection', () => {
 					})}
 				/>,
 			)
+		const backingDetailsText = () => {
+			const details = document.body.querySelector('.vault-backing-details')
+			if (!(details instanceof HTMLElement)) throw new Error('Expected the vault backing details')
+			return details.textContent ?? ''
+		}
 		const operational = await renderVault(undefined)
 		expect(document.body.querySelector('.vault-health-status')).not.toBeNull()
+		// 12 REP behind a 2 ETH commitment at 3 REP per ETH is exactly the 2× multiplier.
+		expect(backingDetailsText()).toContain('2×')
+		expect(backingDetailsText()).toContain('Near minimum')
 		operational.cleanup()
 		cleanupRenderedComponent = (await renderVault(createEndedPoolState())).cleanup
-		// After resolution liquidation is closed, so a health verdict priced from an expired oracle is only noise.
+		// After resolution liquidation is closed, so neither the verdict, priced from an expired oracle, nor the backing ratio it judges remains.
 		expect(document.body.querySelector('.vault-health-status')).toBeNull()
+		expect(backingDetailsText()).toContain('Current proportional obligation')
+		expect(backingDetailsText()).not.toContain('×')
+		expect(backingDetailsText()).not.toContain('Near minimum')
 		expect(within(document.body).queryByText('Healthy')).toBeNull()
 	})
 

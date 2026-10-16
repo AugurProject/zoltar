@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { buildPoolPageRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
-import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkWorkflowPrimary } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolLifecycle.js'
+import { deriveListedPoolLifecycleStep, derivePoolLifecycleStep, getDefaultPoolTab, getSkippedLifecycleSteps, isForkLifecycleState, isForkWorkflowPrimary } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolLifecycle.js'
 import { derivePoolActionItems, type PoolActionInput } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolActions.js'
 import { derivePoolViewModel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolViewModel.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
@@ -82,6 +82,17 @@ describe('pool lifecycle stage', () => {
 		expect(isForkWorkflowPrimary('operational', false)).toBe(false)
 		expect(isForkWorkflowPrimary('forkMigration', false)).toBe(true)
 		expect(isForkWorkflowPrimary('settled', true)).toBe(true)
+	})
+
+	test('counts only the forked, migrating and truth auction states as fork stages', () => {
+		expect(([undefined, 'operational', 'ended', 'poolForked', 'forkMigration', 'forkTruthAuction'] as const).map(state => [state, isForkLifecycleState(state)])).toEqual([
+			[undefined, false],
+			['operational', false],
+			['ended', false],
+			['poolForked', true],
+			['forkMigration', true],
+			['forkTruthAuction', true],
+		])
 	})
 
 	test('derives a listed pool stage from registry data and the clock', () => {

@@ -82,8 +82,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		poolOracleManagerDetails,
 		poolPriceOracleResult,
 		repPerEthPrice,
-		repPerEthSource,
-		repPerEthSourceUrl,
 		reporting,
 		securityPoolAddress,
 		securityPoolOverviewError,
@@ -311,8 +309,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								vaultOperations={vaultOperations}
 								poolState={selectedPoolStateModel}
 								repPerEthPrice={repPerEthPrice}
-								repPerEthSource={repPerEthSource}
-								repPerEthSourceUrl={repPerEthSourceUrl}
 								securityVault={securityVault}
 								selectedPool={selectedPool}
 								selectedVaultDetails={model.selectedVaultDetails}

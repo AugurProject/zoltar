@@ -7,7 +7,7 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TruthAuctionDepthChart } from './TruthAuctionDepthChart.js'
 import { getTruthAuctionDispositionClassName, type TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
-import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
+import { clampPercentage } from './ForkAuctionPresentationState.js'
 
 type TruthAuctionMarketViewSectionProps = {
 	clearingTick: bigint | undefined
@@ -22,10 +22,6 @@ type TruthAuctionMarketViewSectionProps = {
 	showDepthClearingTick: boolean
 	truthAuctionBookError: string | undefined
 	truthAuctionDepthPoints: TruthAuctionDepthPoint[]
-}
-
-function clampPercentage(value: bigint, maxValue: bigint) {
-	return (getVisualRatio({ value, maxValue }) ?? 0) * 100
 }
 
 export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, hasMoreViewerBids, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {

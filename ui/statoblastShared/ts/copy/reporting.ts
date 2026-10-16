@@ -152,7 +152,7 @@ export const formatExplainerForkThresholdSeparator = (threshold: string) => ` ($
 export const explainerForkTail = ' can be triggered. Your REP then follows the outcome you backed through Fork & migration.'
 export const fullExplanation = 'Read the full explanation'
 export const winningPosition = <Amount>(worth: Amount): CopyParts<Amount> => ['Leading · worth ', worth, ' if it ended now']
-export const losingPosition = 'Behind · worth 0.00 REP if it ended now'
+export const losingPosition = <Amount>(zero: Amount): CopyParts<Amount> => ['Behind · worth ', zero, ' if it ended now']
 export const tiedPosition = 'Tied'
 export const forkPosition = 'Continue in Fork & migration'
 export const responseWindowEnds = 'Response window ends'

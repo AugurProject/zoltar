@@ -16,7 +16,7 @@ import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { AmountOfLimit, formatPercentOfLimit, PoolCapacitySummary } from './PoolCapacitySummary.js'
+import { AmountOfLimit, PoolCapacitySummary } from './PoolCapacitySummary.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -24,14 +24,13 @@ import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getFinalizedTruthAuctionRaisedAttoEth } from '../../truth-auctions/lib/truthAuctionBook.js'
-import { hasTruthAuctionEnded, isMigrationClosed } from '../../truth-auctions/lib/forkAuction.js'
-import { getPoolStripStage, type PoolForkTimeline } from '../lib/poolStrip.js'
+import { isMigrationClosed } from '../../../protocol/forkMigrationTiming.js'
+import { hasTruthAuctionEnded } from '../../../protocol/truthAuctionTiming.js'
+import { formatPercentOfLimit, getPoolStripStage, type PoolForkTimeline } from '../lib/poolStrip.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getPoolRemainingMintCapacity } from '../../markets/lib/trading.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { isMintingPausedByEscalation } from '../lib/poolLifecycle.js'
 import type { MarketDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool, OracleManagerDetails, TruthAuctionMetrics } from '../../../types/contracts.js'
 
@@ -92,7 +91,7 @@ function getTruthAuctionProgressDetail(auction: TruthAuctionMetrics, amountAttoE
 function TruthAuctionProgressFigure({ auction }: { auction: TruthAuctionMetrics }) {
 	const amountAttoEth = auction.finalized ? getFinalizedTruthAuctionRaisedAttoEth(auction) : auction.accumulatedBidAttoEth
 	return (
-		<div className='pool-meter is-prominent pool-auction-progress'>
+		<div className='pool-meter'>
 			<ProgressMeter label={forkAuctionCopy.attoEthRaised} maxValue={auction.attoEthRaiseCap} value={amountAttoEth} valueText={<AmountOfLimit amount={amountAttoEth} limit={auction.attoEthRaiseCap} />} detail={getTruthAuctionProgressDetail(auction, amountAttoEth)} />
 		</div>
 	)
@@ -134,7 +133,7 @@ function PoolStageFigures({ currentTimestamp, forkTimeline, lifecycleState, pool
 				</>
 			)
 		case 'operating':
-			return <PoolCapacitySummary showUnavailableReason={false} capacity={pool.totalUnderwritingLimitAttoEth} minted={pool.settlementCollateralAttoEth} mintingPaused={isMintingPausedByEscalation(pool, lifecycleState)} remainingCapacity={getPoolRemainingMintCapacity(pool)} showUsage />
+			return <PoolCapacitySummary lifecycleState={lifecycleState} pool={pool} />
 		default:
 			return assertNever(stripStage)
 	}

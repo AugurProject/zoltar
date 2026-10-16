@@ -8,7 +8,6 @@ export const moreToolsShort = 'More'
 export const formatMoreToolsActive = (view: string) => `More: ${view}`
 export const poolAddressAndRefresh = 'Pool address'
 export const capacityLabel = 'Open interest / commitment'
-export const capacityUnavailable = 'The pool commitment is unavailable.'
 export const stagedOperationCount = (count: bigint) => `${count.toString()} staged ${count === 1n ? 'operation' : 'operations'}`
 export const vaults = (count: bigint) => `${count.toString()} ${count === 1n ? 'vault' : 'vaults'}`
 export const myVault = 'My vault'

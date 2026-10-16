@@ -11,7 +11,8 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
+import { getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
+import { getTruthAuctionEndsAt } from '../../../protocol/truthAuctionTiming.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
@@ -32,7 +33,6 @@ export type DisplayMetric = {
 	label: string
 	value: ComponentChildren
 }
-export const FORK_MIGRATION_DURATION = 4_838_400n
 const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-triggered', 'migration', 'auction', 'settlement']
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 	switch (stage) {
@@ -54,11 +54,8 @@ function getForkWorkflowStageOrder(stage: ForkWorkflowSelectionStage) {
 }
 
 export function getTruthAuctionWindow(startedAt: bigint | undefined) {
-	if (startedAt === undefined || startedAt === 0n) return undefined
-	return {
-		startedAt,
-		endsAt: startedAt + AUCTION_TIME_SECONDS,
-	}
+	const endsAt = getTruthAuctionEndsAt(startedAt)
+	return startedAt === undefined || endsAt === undefined ? undefined : { startedAt, endsAt }
 }
 export function renderMetricValue(value: bigint | undefined, suffix: string, fallbackText: string) {
 	if (value === undefined) return fallbackText

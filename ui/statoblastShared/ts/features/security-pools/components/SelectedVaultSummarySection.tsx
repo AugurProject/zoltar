@@ -1,4 +1,4 @@
-import { getAssociatedRepPerCapacityBps, getVaultHealthTier } from '../lib/vaultHealth.js'
+import { getVaultSummaryHealth } from '../lib/vaultHealth.js'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -12,9 +12,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
 
-type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
-	underwritingLimitAttoEth: bigint
-	currentVaultIsHealthy?: boolean | undefined
+type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
 	poolEnded?: boolean | undefined
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
@@ -31,19 +29,9 @@ function VaultCardAddress({ address }: { address: string }) {
 	)
 }
 
-export function SelectedVaultSummarySection({
-	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceUrl,
-	underwritingLimitAttoEth,
-	currentVaultIsHealthy,
-	poolEnded = false,
-	securityVaultDetails,
-	selectedPoolStatoblastSecurityMultiplierBps,
-	selectedVaultIsOwnedByAccount,
-	variant = 'record',
-}: SelectedVaultSummarySectionProps) {
-	const associatedRepPerCapacityBps = getAssociatedRepPerCapacityBps({ disputeStakedAttoRep: securityVaultDetails.disputeStakedAttoRep, repPerEthPrice, underwritingLimitAttoEth, vaultAttoRepBacking: securityVaultDetails.vaultAttoRepBacking })
+export function SelectedVaultSummarySection({ repPerEthPrice, poolEnded = false, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+	// The same rule as the vault directory's rows; details still loading carry no verdict.
+	const health = securityVaultDetails.openInterestAttoEth === undefined ? undefined : getVaultSummaryHealth({ multiplierBps: selectedPoolStatoblastSecurityMultiplierBps, poolEnded, repPerEthPrice, vault: securityVaultDetails })
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 	const repTokenSymbol = securityVaultDetails.repTokenSymbol ?? commonCopy.rep
 	const embeddedContent = (
@@ -60,7 +48,7 @@ export function SelectedVaultSummarySection({
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{securityPoolCopy.commitmentLimit}</span>
 						<strong>
-							<VaultExposureValue capacity={underwritingLimitAttoEth} />
+							<VaultExposureValue capacity={securityVaultDetails.underwritingLimitAttoEth} />
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
@@ -90,19 +78,14 @@ export function SelectedVaultSummarySection({
 	const gridContent = (
 		<VaultMetricGrid
 			openInterestAttoEth={securityVaultDetails.openInterestAttoEth}
-			associatedRepPerCapacityBps={associatedRepPerCapacityBps}
+			associatedRepPerCapacityBps={health?.associatedRepPerCapacityBps}
 			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'
 			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}
-			healthTier={getVaultHealthTier({ associatedRepPerCapacityBps, isCurrentlyHealthy: currentVaultIsHealthy, multiplierBps: selectedPoolStatoblastSecurityMultiplierBps })}
+			healthTier={health?.tier ?? 'unknown'}
 			poolEnded={poolEnded}
-			poolHeldRepPerCapacityBps={securityVaultDetails.poolHeldRepPerCapacityBps}
 			vaultAttoRepBacking={securityVaultDetails.vaultAttoRepBacking}
-			repPerEthPrice={repPerEthPrice}
-			repPerEthSource={repPerEthSource}
-			repPerEthSourceUrl={repPerEthSourceUrl}
-			underwritingLimitAttoEth={underwritingLimitAttoEth}
-			claimableFeesAttoEth={securityVaultDetails.claimableFeesAttoEth}
+			underwritingLimitAttoEth={securityVaultDetails.underwritingLimitAttoEth}
 		/>
 	)
 	if (variant === 'embedded')

@@ -195,7 +195,8 @@ export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFra
 /**
  * `down` truncates toward zero, for figures such as limits that must never read above the exact value; `up` rounds away
  * from zero, for minimums a user must reach, so following the shown figure is always enough. Both always use standard
- * notation, because compact SI rounding could cross the exact value.
+ * notation, because compact SI rounding could cross the exact value. Token approval figures round up through
+ * `formatCeilingAmountDisplay` instead, which keeps two decimals so they line up with the approval button.
  */
 export type AmountRounding = 'nearest' | 'down' | 'up'
 
@@ -250,8 +251,10 @@ export type FormattedAmount = {
 	text: string
 }
 
+type AmountFormatOptions = { decimals?: number; notation?: AmountNotation; rounding?: AmountRounding; units?: number }
+
 /** Rounds a fixed-point amount for display and reports whether rounding lost precision. See the spec at the top of this file. */
-export function formatAmount(value: bigint, { decimals = 2, notation = 'standard', rounding = 'nearest', units = 18 }: { decimals?: number; notation?: AmountNotation; rounding?: AmountRounding; units?: number } = {}): FormattedAmount {
+export function formatAmount(value: bigint, { decimals = 2, notation = 'standard', rounding = 'nearest', units = 18 }: AmountFormatOptions = {}): FormattedAmount {
 	assertNonNegativeInteger(units, 'Units')
 	assertNonNegativeInteger(decimals, 'Decimals')
 	const exact = formatCurrencyBalance(value, units)
@@ -308,7 +311,7 @@ export function withApproximateMarker({ approximate, text }: Pick<FormattedAmoun
 	return approximate ? `${APPROXIMATE_MARKER}${text}` : text
 }
 
-export function formatAmountDisplay(value: bigint, options?: { decimals?: number; notation?: AmountNotation; rounding?: AmountRounding; units?: number }) {
+export function formatAmountDisplay(value: bigint, options?: AmountFormatOptions) {
 	return withApproximateMarker(formatAmount(value, options))
 }
 

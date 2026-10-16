@@ -54,9 +54,9 @@ export function MarketContracts({ market }: { market: LiveMarket }) {
 				<MetricField label={liveCopy.securityPool}>
 					<TradingSecurityPoolLink value={market.pool} />
 				</MetricField>
-				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation />}</MetricField>
+				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} />}</MetricField>
 				<MetricField label={marketsCopy.shareToken}>
-					<ReadOnlyAddressValue address={market.shareToken} responsiveAbbreviation />
+					<ReadOnlyAddressValue address={market.shareToken} />
 				</MetricField>
 			</DataGrid>
 		</ReadOnlyDetailAccordion>

@@ -5,7 +5,9 @@ import { act } from 'preact/test-utils'
 import { zeroAddress, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { resolveRepPrice, type ResolvedRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createSecurityVaultProps, createSecurityVaultDetails } from './workflow/builders.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 installTestRouting()
@@ -22,6 +24,8 @@ const renderHarness = async (node: ComponentChild) => {
 }
 
 const otherOwner = getAddress('0x0000000000000000000000000000000000000001')
+const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
+const walletOwner = getAddress('0x0000000000000000000000000000000000000003')
 function VaultSelectionHarness({ exists = true, loaded = true, connected = true, accountAddress = zeroAddress, onLoad = (_owner: string) => undefined, error }: { onLoad?: (owner: string) => void; error?: string; exists?: boolean; loaded?: boolean; connected?: boolean; accountAddress?: Address }) {
 	const [owner, setOwner] = useState(zeroAddress)
 	const [loadedOwner, setLoadedOwner] = useState(zeroAddress)
@@ -161,31 +165,31 @@ test('follows URL-controlled vault views instead of resetting them to the wallet
 	expect(within(document.body).getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
 })
 
-test('offers directory liquidation only for other vaults and shows why a healthy vault cannot be liquidated', async () => {
-	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
-	const walletOwner = getAddress('0x0000000000000000000000000000000000000003')
-	const opened: Address[] = []
+// Opens All vaults for the selected zero-address pool at a 2x multiplier, listing exactly `vaults`.
+async function renderVaultDirectory(vaults: ListedSecurityPool['vaults'], overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}, { pool = {}, repPrice }: { pool?: Partial<ListedSecurityPool>; repPrice?: ResolvedRepPrice } = {}) {
+	const props = createSecurityPoolWorkflowProps({
+		securityPoolAddress: zeroAddress,
+		securityPools: [createSelectedPool({ hasLoadedVaults: true, statoblastSecurityMultiplierBps: 20_000n, vaultCount: BigInt(vaults.length), vaults, ...pool })],
+		selectedPoolView: 'vaults',
+		...overrides,
+	})
 	await renderHarness(
-		<SecurityPoolWorkflowSection
-			{...createSecurityPoolWorkflowProps({
-				accountState: createAccountState({ address: walletOwner }),
-				onOpenLiquidationModal: (_manager, _pool, vaultAddress) => opened.push(vaultAddress),
-				poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n }),
-				// The rows' health uses the same UI price estimate as the selected vault's verdict.
-				repPerEthPrice: 10n ** 18n,
-				securityPoolAddress: zeroAddress,
-				securityPools: [
-					createSelectedPool({
-						hasLoadedVaults: true,
-						statoblastSecurityMultiplierBps: 20_000n,
-						vaultCount: 3n,
-						vaults: [createSecurityVaultDetails({ vaultAddress: walletOwner }), createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
-					}),
-				],
-				selectedPoolView: 'vaults',
-			})}
-		/>,
+		<SelectedPoolRepPriceContext.Provider value={repPrice}>
+			<SecurityPoolWorkflowSection {...props} />
+		</SelectedPoolRepPriceContext.Provider>,
 	)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+}
+
+test('offers directory liquidation only for other vaults and shows why a healthy vault cannot be liquidated', async () => {
+	const opened: Address[] = []
+	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: walletOwner }), createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })], {
+		accountState: createAccountState({ address: walletOwner }),
+		onOpenLiquidationModal: (_manager, _pool, vaultAddress) => opened.push(vaultAddress),
+		poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n }),
+		// The rows' health uses the same UI price estimate as the selected vault's verdict.
+		repPerEthPrice: 10n ** 18n,
+	})
 	const getRow = (address: Address) => {
 		const row = within(document.body)
 			.getByRole('button', { name: 'Copy address ' + address })
@@ -193,7 +197,6 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 		if (!(row instanceof HTMLElement)) throw new Error('Expected vault record')
 		return within(row)
 	}
-	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
 	expect(document.querySelector('.vault-more-actions')).toBeNull()
 	expect(getRow(walletOwner).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 	const healthyButton = getRow(otherOwner).getByRole('button', { name: 'Liquidate vault' })
@@ -205,8 +208,10 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 	// The underwater vault leads the list with its verdict, and its liquidation is the row's main action.
 	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
 	expect(rows.map(row => row.querySelector('.vault-health')?.textContent)).toEqual(['Underwater', 'Healthy', 'Healthy'])
-	expect(rows[0]?.classList.contains('is-underwater')).toBe(true)
-	expect(within(rows[0] instanceof HTMLElement ? rows[0] : document.body).getByRole('button', { name: 'Liquidate vault' })).toBe(unhealthyButton)
+	const firstRow = rows[0]
+	if (!(firstRow instanceof HTMLElement)) throw new Error('Expected vault record')
+	expect(firstRow.classList.contains('is-underwater')).toBe(true)
+	expect(within(firstRow).getByRole('button', { name: 'Liquidate vault' })).toBe(unhealthyButton)
 	expect(unhealthyButton.classList.contains('primary')).toBe(true)
 	expect(healthyButton.classList.contains('secondary')).toBe(true)
 	expect(getRow(walletOwner).getByText('Owned')).not.toBeNull()
@@ -215,27 +220,11 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 })
 
 test('keeps a blocked liquidation secondary even when the UI price reads the vault as underwater', async () => {
-	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
-	await renderHarness(
-		<SecurityPoolWorkflowSection
-			{...createSecurityPoolWorkflowProps({
-				// The protocol guard uses the oracle price, at which the vault stays healthy, so the UI estimate's verdict cannot make liquidation the row's main action.
-				poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 16n }),
-				repPerEthPrice: 10n ** 18n,
-				securityPoolAddress: zeroAddress,
-				securityPools: [
-					createSelectedPool({
-						hasLoadedVaults: true,
-						statoblastSecurityMultiplierBps: 20_000n,
-						vaultCount: 1n,
-						vaults: [createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
-					}),
-				],
-				selectedPoolView: 'vaults',
-			})}
-		/>,
-	)
-	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })], {
+		// The protocol guard uses the oracle price, at which the vault stays healthy, so the UI estimate's verdict cannot make liquidation the row's main action.
+		poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 16n }),
+		repPerEthPrice: 10n ** 18n,
+	})
 	expect(document.querySelector('.vault-position-strip .vault-health')?.textContent).toBe('Underwater')
 	const liquidateButton = within(document.body).getByRole('button', { name: 'Liquidate vault' })
 	expect(liquidateButton.hasAttribute('disabled')).toBe(true)
@@ -243,28 +232,12 @@ test('keeps a blocked liquidation secondary even when the UI price reads the vau
 })
 
 test('keeps every liquidation secondary but available while the protocol price is unusable', async () => {
-	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
-	await renderHarness(
-		<SecurityPoolWorkflowSection
-			{...createSecurityPoolWorkflowProps({
-				accountState: createAccountState({ address: getAddress('0x0000000000000000000000000000000000000003') }),
-				// Without a usable oracle price the protocol has no verdict, so neither the healthy nor the underwater vault's liquidation leads its row.
-				poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n }),
-				repPerEthPrice: 10n ** 18n,
-				securityPoolAddress: zeroAddress,
-				securityPools: [
-					createSelectedPool({
-						hasLoadedVaults: true,
-						statoblastSecurityMultiplierBps: 20_000n,
-						vaultCount: 2n,
-						vaults: [createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
-					}),
-				],
-				selectedPoolView: 'vaults',
-			})}
-		/>,
-	)
-	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })], {
+		accountState: createAccountState({ address: walletOwner }),
+		// Without a usable oracle price the protocol has no verdict, so neither the healthy nor the underwater vault's liquidation leads its row.
+		poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n }),
+		repPerEthPrice: 10n ** 18n,
+	})
 	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
 	expect(rows.map(row => row.querySelector('.vault-health')?.textContent)).toEqual(['Underwater', 'Healthy'])
 	const liquidateButtons = within(document.body).getAllByRole('button', { name: 'Liquidate vault' })
@@ -278,19 +251,7 @@ test('keeps every liquidation secondary but available while the protocol price i
 test('names the price behind the directory verdicts once, above the rows', async () => {
 	// After the OpenOracle price expires the verdicts fall back to Uniswap, so the directory says which price they use.
 	const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle-fallback', uniswapPrice: 3n * 10n ** 18n })
-	await renderHarness(
-		<SelectedPoolRepPriceContext.Provider value={repPrice}>
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					repPerEthPrice: repPrice.price,
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool({ hasLoadedVaults: true, statoblastSecurityMultiplierBps: 20_000n, vaultCount: 1n, vaults: [createSecurityVaultDetails({ vaultAddress: otherOwner })] })],
-					selectedPoolView: 'vaults',
-				})}
-			/>
-		</SelectedPoolRepPriceContext.Provider>,
-	)
-	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: otherOwner })], { repPerEthPrice: repPrice.price }, { repPrice })
 	expect(document.querySelectorAll('.vault-directory-price')).toHaveLength(1)
 	expect(document.querySelector('.vault-directory-price .rep-price-status-title')?.textContent).toBe('via Uniswap')
 	// The line names its subject, so it reads as the price rather than as the list's freshness.
@@ -298,26 +259,7 @@ test('names the price behind the directory verdicts once, above the rows', async
 })
 
 test('shows no health verdicts or risk ordering in an ended pool, where liquidation no longer applies', async () => {
-	const unhealthyOwner = getAddress('0x0000000000000000000000000000000000000002')
-	await renderHarness(
-		<SecurityPoolWorkflowSection
-			{...createSecurityPoolWorkflowProps({
-				repPerEthPrice: 10n ** 18n,
-				securityPoolAddress: zeroAddress,
-				securityPools: [
-					createSelectedPool({
-						hasLoadedVaults: true,
-						questionOutcome: 'yes',
-						statoblastSecurityMultiplierBps: 20_000n,
-						vaultCount: 2n,
-						vaults: [createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })],
-					}),
-				],
-				selectedPoolView: 'vaults',
-			})}
-		/>,
-	)
-	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })], { repPerEthPrice: 10n ** 18n }, { pool: { questionOutcome: 'yes' } })
 	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
 	expect(rows).toHaveLength(2)
 	expect(document.querySelector('.vault-position-strip .vault-health')).toBeNull()

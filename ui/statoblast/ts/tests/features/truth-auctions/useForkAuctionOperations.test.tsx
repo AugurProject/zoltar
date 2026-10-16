@@ -22,7 +22,7 @@ import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { createTruthAuctionMetrics } from './forkAuctionFixtures.js'
+import { createTruthAuctionMetrics } from '../security-pools/workflow/builders.js'
 
 type UseForkAuctionOperationsState = ReturnType<typeof useForkAuctionOperations>
 type TestForkAuctionWriteClient = { kind: 'injected-write-client' }

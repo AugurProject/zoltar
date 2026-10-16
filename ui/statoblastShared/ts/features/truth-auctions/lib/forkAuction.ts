@@ -2,37 +2,26 @@ import type { ForkOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-sh
 import type { ForkAuctionDetails, SecurityPoolVaultSummary, TruthAuctionMetrics } from '../../../types/contracts.js'
 import { getTimeRemaining as getSharedTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { deriveHasForkActivity } from '../../../protocol/forkActivity.js'
+import { isMigrationClosed } from '../../../protocol/forkMigrationTiming.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
-
-/** Migration accepts block.timestamp <= forkActivationTime + MIGRATION_TIME, so it closes only after `migrationEndsAt`. */
-export function isMigrationClosed(currentTimestamp: bigint, migrationEndsAt: bigint) {
-	return currentTimestamp > migrationEndsAt
-}
-
-/** UniformPriceDualCapBatchAuction.finalize requires block.timestamp >= auctionStarted + AUCTION_TIME, so the auction has ended at its end time. */
-export function hasTruthAuctionEnded(currentTimestamp: bigint, auctionEndsAt: bigint) {
-	return currentTimestamp >= auctionEndsAt
-}
 
 /**
  * When migration ends and whether it has. `SecurityPoolForker.startTruthAuction` requires block.timestamp >
  * forkActivationTime + MIGRATION_TIME, so once the selected outcome's truth auction has started, migration had ended by
- * then; the auction start stands in when the loaded deadline is unknown or reads later. Undefined while neither time is known.
+ * then, even before the chain time loads; the auction start stands in when the loaded deadline is unknown or reads later.
+ * Undefined while neither time is known.
  */
 export function getMigrationEnd({ auctionStartedAt, currentTimestamp, migrationEndsAt }: { auctionStartedAt: bigint | undefined; currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
 	const endedByAuction = auctionStartedAt !== undefined && (migrationEndsAt === undefined || auctionStartedAt < migrationEndsAt)
 	const endsAt = endedByAuction ? auctionStartedAt : migrationEndsAt
 	if (endsAt === undefined) return undefined
-	const ended = currentTimestamp !== undefined && (endedByAuction ? endsAt <= currentTimestamp : isMigrationClosed(currentTimestamp, endsAt))
+	const ended = auctionStartedAt !== undefined || (currentTimestamp !== undefined && isMigrationClosed(currentTimestamp, endsAt))
 	return { endsAt, ended }
 }
 
 export { deriveHasForkActivity }
 
-const SECONDS_PER_WEEK = 7n * 24n * 60n * 60n
-
-export const AUCTION_TIME_SECONDS = SECONDS_PER_WEEK
 export const AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL = 'Auctioned underwriting commitments'
 
 export type ForkAuctionStageView = 'initiate' | 'migration' | 'auction' | 'settlement'

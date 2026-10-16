@@ -6,7 +6,6 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import type { VaultMetricGridProps } from '../../types.js'
 import type { VaultHealthTier } from '../lib/vaultHealth.js'
@@ -39,14 +38,6 @@ function DisputeStakedMetric({ value }: { value: bigint }) {
 	)
 }
 
-function PriceValidUntilMetric({ timestamp }: { timestamp: bigint }) {
-	return (
-		<MetricField label={securityPoolCopy.priceValidUntil}>
-			<TimestampValue timestamp={timestamp} />
-		</MetricField>
-	)
-}
-
 /** The badge tone, verdict, and value tone for a vault health tier; an unknown tier has no verdict. */
 export function getVaultHealthPresentation(tier: VaultHealthTier) {
 	switch (tier) {
@@ -63,20 +54,7 @@ export function getVaultHealthPresentation(tier: VaultHealthTier) {
 	}
 }
 
-export function VaultMetricGrid({
-	openInterestAttoEth,
-	associatedRepPerCapacityBps,
-	badDebtAttoEth,
-	className = '',
-	layout = 'grid',
-	disputeStakedAttoRep,
-	healthTier,
-	poolEnded = false,
-	poolHeldRepPerCapacityBps: _poolHeldRepPerCapacityBps,
-	priceValidUntilTimestamp,
-	vaultAttoRepBacking,
-	underwritingLimitAttoEth,
-}: VaultMetricGridProps) {
+export function VaultMetricGrid({ openInterestAttoEth, associatedRepPerCapacityBps, badDebtAttoEth, className = '', layout = 'grid', disputeStakedAttoRep, healthTier, poolEnded = false, vaultAttoRepBacking, underwritingLimitAttoEth }: VaultMetricGridProps) {
 	const { badgeTone: healthBadgeTone, statusLabel: associatedRepStatusLabel, toneClass: associatedRepToneClass } = getVaultHealthPresentation(healthTier)
 
 	// The directory preview is one flat metric row, so every figure shares the grid's label, value size, and baseline.
@@ -97,7 +75,6 @@ export function VaultMetricGrid({
 				)}
 				{disputeStakedAttoRep === undefined || disputeStakedAttoRep === 0n ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
 				{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? <BadDebtMetric value={badDebtAttoEth} valueClassName='metric-value-danger' /> : undefined}
-				{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 			</div>
 		)
 
@@ -142,7 +119,6 @@ export function VaultMetricGrid({
 					)}
 					{badDebtAttoEth === undefined || badDebtAttoEth > 0n ? undefined : <BadDebtMetric value={badDebtAttoEth} />}
 					{disputeStakedAttoRep === undefined || disputeStakedAttoRep > 0n ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
-					{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 				</div>
 			</details>
 		</div>

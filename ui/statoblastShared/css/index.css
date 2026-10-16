@@ -2388,7 +2388,7 @@
 		color var(--transition-standard);
 }
 
-/* Hover and selection match the vault sub-tabs, so a hovered stage never reads as more selected than the open one. */
+/* A hovered stage stays lighter than the selected one, so it never reads as the stage on view. */
 .fork-workflow-stage:hover:not(:disabled):not(.is-selected) {
 	border-color: color-mix(in srgb, var(--accent) 14%, transparent);
 	background: color-mix(in srgb, var(--accent) 6%, transparent);
@@ -2658,7 +2658,7 @@
 }
 
 .pool-directory-identity,
-.pool-capacity-unavailable {
+.pool-capacity-empty {
 	display: grid;
 	justify-items: start;
 	gap: var(--space-2);
@@ -2744,8 +2744,12 @@ span.rep-price-status.stale,
 	gap: var(--space-2);
 }
 
-.pool-meter .progress-meter-value,
-.pool-capacity-unavailable > strong {
+.pool-meter .progress-meter-value {
+	font-size: var(--font-lg);
+	overflow-wrap: anywhere;
+}
+
+.pool-capacity-empty > strong {
 	font-size: 1rem;
 	overflow-wrap: anywhere;
 }
@@ -2753,10 +2757,6 @@ span.rep-price-status.stale,
 .pool-capacity-limit {
 	color: var(--muted);
 	font-weight: 400;
-}
-
-.pool-capacity-unavailable .detail {
-	margin: 0;
 }
 
 .pool-object-title {
@@ -2801,15 +2801,11 @@ span.rep-price-status.stale,
 }
 
 /* Browse rows and the pool header lead with a meter: a taller bar with larger numbers and the share used. */
-.pool-meter.is-prominent .progress-meter-value {
-	font-size: var(--font-lg);
-}
-
-.pool-meter.is-prominent .progress-meter-track {
+.pool-meter .progress-meter-track {
 	height: 0.625rem;
 }
 
-.pool-meter.is-prominent .progress-meter-footer {
+.pool-meter .progress-meter-footer {
 	display: flex;
 	flex-wrap: wrap;
 	justify-content: space-between;

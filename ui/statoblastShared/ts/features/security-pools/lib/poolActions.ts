@@ -1,6 +1,7 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { TradingShareBalances } from '../../../types/contracts.js'
 import { hasShares } from '../../markets/lib/trading.js'
+import { hasTruthAuctionEnded } from '../../../protocol/truthAuctionTiming.js'
 import type { PoolLifecycleStep } from './poolLifecycle.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
 import type { SecurityPoolReportingStage } from './securityPoolState/types.js'
@@ -133,7 +134,7 @@ function getStageItems(input: PoolActionInput): PoolActionItem[] {
 		case 'forkMigration':
 			return getForkMigrationItems(input)
 		case 'truthAuction':
-			if (input.auctionEndsAt !== undefined && input.auctionEndsAt > 0n && input.now !== undefined && input.now >= input.auctionEndsAt) return [{ id: 'finalizeTruthAuction', tab: 'fork-workflow', tone: 'action' }]
+			if (input.auctionEndsAt !== undefined && input.auctionEndsAt > 0n && input.now !== undefined && hasTruthAuctionEnded(input.now, input.auctionEndsAt)) return [{ id: 'finalizeTruthAuction', tab: 'fork-workflow', tone: 'action' }]
 			return [withDeadline({ id: 'bidTruthAuction', tab: 'fork-workflow', tone: 'action' }, input.auctionEndsAt, input.now)]
 		case 'settled':
 			return getSettledItems(input)

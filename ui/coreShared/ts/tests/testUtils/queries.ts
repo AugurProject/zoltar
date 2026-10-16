@@ -13,7 +13,8 @@ type TextOptions = {
 
 type FireEventInit = Record<string, unknown>
 
-function normalizeText(text: string): string {
+/** Collapses whitespace runs to single spaces and trims the ends, as the text and role queries do before matching. */
+export function normalizeText(text: string): string {
 	return text.replace(/\s+/g, ' ').trim()
 }
 
@@ -122,7 +123,7 @@ function computeLabelTextForControl(label: Element, control: Element): string {
 			result += child.textContent ?? ''
 		}
 	}
-	return result.replace(/\s+/g, ' ').trim()
+	return normalizeText(result)
 }
 
 function matchesTargetText(elementText: string, match: TextMatch): boolean {
@@ -171,7 +172,7 @@ function getLabelText(labelEl: Element): string {
 			result += child.textContent ?? ''
 		}
 	}
-	return result.replace(/\s+/g, ' ').trim()
+	return normalizeText(result)
 }
 
 function findLabelElement(container: Element, label: TextMatch): Element | null {

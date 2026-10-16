@@ -30,33 +30,26 @@ const TRUTH_AUCTION_MIN_TICK = -524288n
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { createTruthAuctionMetrics } from '../security-pools/workflow/builders.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
 const ONE_UNIT = 10n ** 18n
 const HALF_UNIT = 5n * 10n ** 17n
 
+// An open auction with nothing bid or sold yet that ends at timestamp 10_000.
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
-	return {
+	return createTruthAuctionMetrics({
 		accumulatedBidAttoEth: 0n,
 		auctionEndsAt: 10_000n,
 		clearingPrice: 0n,
 		clearingTick: 0n,
-		bidAtClearingTickAttoEth: 0n,
-		attoEthRaiseCap: 100n * 10n ** 18n,
 		attoEthRaised: 0n,
-		finalized: false,
-		hitCap: false,
 		maxAttoRepBeingSold: 0n,
-		minBidSizeAttoEth: 1n * 10n ** 18n,
 		attoRepPurchasableAtBid: 0n,
 		timeRemaining: 10n * 10n ** 18n,
-		totalAttoRepPurchased: 0n,
-		underfunded: false,
-		underfundedThreshold: undefined,
-		underfundedWinningAttoEth: 0n,
 		...overrides,
-	}
+	})
 }
 
 function createTickSummary(overrides: { tick: bigint } & Partial<Omit<TruthAuctionTickSummary, 'tick'>>): TruthAuctionTickSummary {
@@ -946,19 +939,22 @@ describe('fork auction contract time boundaries', () => {
 		expect(getFinalizeTruthAuctionGuardMessage({ currentTimestamp: 1_000n, truthAuction, truthAuctionEndsAt: 1_000n })).toBeUndefined()
 	})
 
-	test('migration stays open through its end timestamp, matching block.timestamp <= forkActivationTime + MIGRATION_TIME', () => {
-		expect(getMigrationStateBadge({ currentTimestamp: 1_000n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('pending')
-		expect(getMigrationStateBadge({ currentTimestamp: 1_001n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('ok')
+	test('maps the migration end onto the Open, Closed and Not started badge', () => {
+		expect(getMigrationStateBadge(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 500n, migrationEndsAt: 1_000n }))).toEqual({ label: 'Open', tone: 'pending' })
+		expect(getMigrationStateBadge(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 2_000n, migrationEndsAt: 1_000n }))).toEqual({ label: 'Closed', tone: 'ok' })
+		expect(getMigrationStateBadge(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 2_000n, migrationEndsAt: undefined }))).toEqual({ label: 'Not started', tone: 'muted' })
 	})
 
-	test('migration ends at its deadline, or at a started truth auction when the loaded deadline is unknown or reads later', () => {
+	test('migration stays open through its deadline, matching block.timestamp <= forkActivationTime + MIGRATION_TIME, or ends at a started truth auction', () => {
 		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_000n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: false })
 		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_001n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
 		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: 1_010n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
 		// An auction starts only after migration closes, so a deadline that reads later than the auction start is not shown as upcoming.
 		expect(getMigrationEnd({ auctionStartedAt: 600n, currentTimestamp: 700n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 600n, ended: true })
 		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: 1_010n, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: true })
-		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: undefined, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: false })
+		// A started auction proves migration ended, even before the chain time loads.
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: undefined, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: undefined, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
 		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_010n, migrationEndsAt: undefined })).toBeUndefined()
 	})
 })

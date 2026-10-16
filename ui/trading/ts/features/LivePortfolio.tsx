@@ -3,10 +3,10 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import * as availabilityCopy from '../copy/availability.js'
 import type { ComponentChildren } from 'preact'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { LpHolding, OutcomeHoldingItem } from './OutcomeHolding.js'
+import { LockedCaption, LpHolding, OutcomeHoldingItem } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
 import * as payoutCopy from '../copy/payout.js'
-import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithValueWithoutRedemptionNote, shareOutcome } from '../lib/shareValue.js'
+import { formatCollateralEth, formatCompleteSetQuantity, formatCompleteSetWithValue, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -17,7 +17,7 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
-import { lockedMigratedBalance, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
+import { OUTCOME_BALANCE_KEYS, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { liveCopy } from '../copy/live.js'
@@ -29,31 +29,22 @@ import { marketsCopy } from '../copy/markets.js'
 import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
 import { PortfolioActionItems, PortfolioRowActions, PortfolioRowValue, PortfolioSummary } from './PortfolioOverview.js'
 
-/** A balance a fork migration locked stays listed, marked as locked, so the holder sees it was migrated. */
-function LockedCaption({ balances, outcome }: { balances: LiveBalances; outcome: ShareOutcome }) {
-	return lockedMigratedBalance(balances, outcome) === 0n ? null : <small className='payout-caption holding-locked'>{marketsCopy.lockedAfterMigration}</small>
-}
-
 /** A row's holdings; when redemption is blocked, the row's value caption already says why (migrate after a fork, or the pool is inactive), so no holding repeats it. */
 function PortfolioHoldings({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
 	return (
 		<ul className='portfolio-holdings'>
-			{balances.yes === 0n ? undefined : (
-				<OutcomeHoldingItem amount={balances.yes} outcome={shareOutcome.yes} market={market} noteRedemption={false}>
-					<LockedCaption balances={balances} outcome={shareOutcome.yes} />
-				</OutcomeHoldingItem>
+			{OUTCOME_BALANCE_KEYS.map(key =>
+				balances[key] === 0n ? undefined : (
+					<OutcomeHoldingItem key={key} amount={balances[key]} outcome={shareOutcome[key]} market={market} noteRedemption={false}>
+						<LockedCaption balances={balances} outcome={shareOutcome[key]} />
+					</OutcomeHoldingItem>
+				),
 			)}
-			{balances.no === 0n ? undefined : (
-				<OutcomeHoldingItem amount={balances.no} outcome={shareOutcome.no} market={market} noteRedemption={false}>
-					<LockedCaption balances={balances} outcome={shareOutcome.no} />
-				</OutcomeHoldingItem>
+			{balances.lp === 0n ? undefined : (
+				<li>
+					<LpHolding amount={balances.lp} market={market} rounding='down' />
+				</li>
 			)}
-			{balances.invalid === 0n ? undefined : (
-				<OutcomeHoldingItem amount={balances.invalid} outcome={shareOutcome.invalid} market={market} noteRedemption={false}>
-					<LockedCaption balances={balances} outcome={shareOutcome.invalid} />
-				</OutcomeHoldingItem>
-			)}
-			{balances.lp === 0n ? undefined : <li>{<LpHolding amount={balances.lp} market={market} rounding='down' />}</li>}
 		</ul>
 	)
 }
@@ -87,8 +78,8 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 			{balances.lp === 0n ? undefined : (
 				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
-						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValueWithoutRedemptionNote(yesClaim, shareOutcome.yes, market)}</MetricField>
-						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValueWithoutRedemptionNote(noClaim, shareOutcome.no, market)}</MetricField>
+						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeWithValue(yesClaim, shareOutcome.yes, market, 4, 'nearest', { noteRedemption: false })}</MetricField>
+						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeWithValue(noClaim, shareOutcome.no, market, 4, 'nearest', { noteRedemption: false })}</MetricField>
 						<MetricField label={portfolioCopy.claimInsuredByInvalid}>{formatCompleteSetWithValue(coveredSets, market)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>

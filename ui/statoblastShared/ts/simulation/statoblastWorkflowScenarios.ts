@@ -4,7 +4,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
-import { CAPACITY_OWNERSHIP_ATTO_REP, DAY_IN_SECONDS, SECURITY_POOL_REP_DEPOSIT, loadRequiredSecurityVault, seedSecurityPool, settleOracleReportIfNeeded, type ScenarioSeedParameters, type SeededVaultSpec } from './statoblastScenarioSeeding.js'
+import { CAPACITY_OWNERSHIP_ATTO_REP, DAY_IN_SECONDS, SECURITY_POOL_REP_DEPOSIT, loadRequiredSecurityVault, refreshSeededOraclePrice, seedSecurityPool, type ScenarioSeedParameters, type SeededVaultSpec } from './statoblastScenarioSeeding.js'
 
 const ENDED_POOL_COMMITMENT_QUESTION_TITLE = 'Will this resolve? (ended pool)'
 const ESCALATION_IN_PROGRESS_QUESTION_TITLE = 'Will this resolve? (escalation in progress)'
@@ -51,14 +51,11 @@ async function reportFromWallet(writeClient: WriteClient, repTokenAddress: Addre
 }
 
 /** Lets the seeding price expire, then settles a fresh REP/ETH price last so it stays valid when the app opens. */
-async function repriceSeededPool({ managerAddress, memoryClient, price, readClient, writeClient }: { managerAddress: Address; memoryClient: TevmLikeClient; price: bigint; readClient: ReadClient; writeClient: WriteClient }) {
-	await advanceSimulationTime(memoryClient, ORACLE_PRICE_VALIDITY_SECONDS + 60n)
-	await getScenarioProtocol().requestOraclePrice(writeClient, managerAddress, price)
-	const managerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)
-	if (managerDetails.pendingReportId === 0n) throw new Error(`Expected a pending repricing report for ${managerAddress}`)
-	await settleOracleReportIfNeeded({ memoryClient, openOracleAddress: managerDetails.openOracleAddress, pendingReportId: managerDetails.pendingReportId, readClient, writeClient })
-	const repricedManagerDetails = await getScenarioProtocol().loadOracleManagerDetails(readClient, managerAddress)
-	if (!repricedManagerDetails.isPriceValid || repricedManagerDetails.lastPrice !== price) throw new Error(`Expected a valid ${price.toString()} REP/ETH price for ${managerAddress}`)
+async function repriceSeededPool(parameters: Parameters<typeof refreshSeededOraclePrice>[0] & { price: bigint }) {
+	await advanceSimulationTime(parameters.memoryClient, ORACLE_PRICE_VALIDITY_SECONDS + 60n)
+	await refreshSeededOraclePrice(parameters)
+	const repricedManagerDetails = await getScenarioProtocol().loadOracleManagerDetails(parameters.readClient, parameters.managerAddress)
+	if (repricedManagerDetails.lastPrice !== parameters.price) throw new Error(`Expected a ${parameters.price.toString()} REP/ETH price for ${parameters.managerAddress}`)
 }
 
 /** Ends the seeded pool's question so its escalation game can open. */
@@ -120,7 +117,7 @@ export async function seedLiquidationDistanceScenario(parameters: ScenarioSeedPa
 	})
 
 	await reportBootstrapProgress(onProgress, 'Repricing REP for the liquidation targets', 0.95)
-	await repriceSeededPool({ managerAddress: pool.managerAddress, memoryClient, price: LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE, readClient, writeClient: createWriteClient(receiverAccount) })
+	await repriceSeededPool({ accountAddress: receiverAccount, createWriteClient, managerAddress: pool.managerAddress, memoryClient, price: LIQUIDATION_DISTANCE_REPRICED_REP_ETH_PRICE, readClient })
 	await reportBootstrapProgress(onProgress, 'Seeded liquidation-distance scenario is ready', 0.98)
 }
 
@@ -171,7 +168,7 @@ export async function seedNearMinimumVaultScenario(parameters: ScenarioSeedParam
 	})
 
 	await reportBootstrapProgress(onProgress, 'Repricing REP toward the vault minimum', 0.95)
-	await repriceSeededPool({ managerAddress: pool.managerAddress, memoryClient, price: NEAR_MINIMUM_VAULT_REPRICED_REP_ETH_PRICE, readClient, writeClient: createWriteClient(secondaryAccount) })
+	await repriceSeededPool({ accountAddress: secondaryAccount, createWriteClient, managerAddress: pool.managerAddress, memoryClient, price: NEAR_MINIMUM_VAULT_REPRICED_REP_ETH_PRICE, readClient })
 	const vault = await loadRequiredSecurityVault(readClient, pool.securityPoolAddress, primaryAccount, primaryAccount)
 	if (vault.vaultAttoRepBacking !== NEAR_MINIMUM_VAULT_REP_DEPOSIT || vault.underwritingLimitAttoEth !== NEAR_MINIMUM_VAULT_COMMITMENT_ATTO_ETH) throw new Error('Expected the near-minimum vault to keep its seeded REP backing and commitment')
 	await reportBootstrapProgress(onProgress, 'Seeded near-minimum-vault scenario is ready', 0.98)

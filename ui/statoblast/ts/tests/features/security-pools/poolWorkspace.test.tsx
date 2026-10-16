@@ -10,11 +10,11 @@ import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletA
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, normalizeText, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { PoolActionCard, PoolLifecycleStepper } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { createAccountState, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
+import { createAccountState, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createTruthAuctionMetrics, migratingPoolState, truthAuctionPoolState } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
@@ -293,7 +293,7 @@ test('uses the refreshed manager price for the single capacity summary', async (
 })
 
 // The header's remaining figure must agree with the pool directory and the Mint action, which treat these pools as closed to minting.
-const getHeaderRemainingText = () => (document.querySelector('.pool-overview-header .pool-capacity-summary .progress-meter-detail')?.textContent ?? '').replace(/\s+/g, ' ').trim()
+const getHeaderRemainingText = () => normalizeText(document.querySelector('.pool-overview-header .pool-capacity-summary .progress-meter-detail')?.textContent ?? '')
 test('shows the mintable remainder in the header capacity summary', async () => {
 	await renderPoolPage(createSelectedPool({ mintingCapacityAttoEth: 5n * 10n ** 18n }))
 	expect(getHeaderRemainingText()).toBe('5.00 ETH remaining')
@@ -424,7 +424,7 @@ test('hides the oracle price row in an ended pool, where a new price has no use'
 const getStripFigures = () =>
 	Array.from(document.querySelectorAll('.pool-overview-header .pool-status-strip > *')).map(slot => {
 		const label = slot.querySelector('.metric-label, .progress-meter-label, .pool-lifecycle-summary-label')?.textContent ?? ''
-		const value = slot.querySelector('.pool-strip-figure-value, .progress-meter-value, .pool-lifecycle-summary-value strong, .oracle-price-value')?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+		const value = normalizeText(slot.querySelector('.pool-strip-figure-value, .progress-meter-value, .pool-lifecycle-summary-value strong, .oracle-price-value')?.textContent ?? '')
 		return `${label}: ${value}`
 	})
 
@@ -439,14 +439,11 @@ test('leads an ended pool with its outcome and settlement collateral instead of 
 	expect(document.querySelector('.pool-object-meta .badge')?.textContent).toBe('Finalized')
 })
 
-const migratingPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' } as const
-const truthAuctionPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkTruthAuction', truthAuctionStartedAt: 1n } as const
-
 test('leads a migrating pool with its settlement collateral and migration deadline, without the unused price', async () => {
-	const forkedPoolState = { ...migratingPoolState, settlementCollateralAttoEth: 2n * 10n ** 18n }
+	const migratingPoolWithCollateral = { ...migratingPoolState, settlementCollateralAttoEth: 2n * 10n ** 18n }
 	await renderPoolPage(
-		createSelectedPool({ ...forkedPoolState, lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n }),
-		{ forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...forkedPoolState, migrationEndsAt: 100n + 2n * 3600n }) }), poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n }) },
+		createSelectedPool({ ...migratingPoolWithCollateral, lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n }),
+		{ forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...migratingPoolWithCollateral, migrationEndsAt: 100n + 2n * 3600n }) }), poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n }) },
 		100n,
 	)
 	expect(getStripFigures()).toEqual(['Settlement collateral: 2.00 ETH', 'Migration ends: in 2h', 'Pool stage: Fork & migration'])
@@ -466,7 +463,7 @@ test('labels a passed migration deadline as ended', async () => {
 
 test('leads a pool in its truth auction with the ETH it raises against the target and the auction deadline', async () => {
 	// Before finalization the clearing amount, capped at the target, is what the auction raises; the auction card names it the same way.
-	const truthAuction = createFinalizedTruthAuction({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n, finalized: false, hitCap: false })
+	const truthAuction = createTruthAuctionMetrics({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n })
 	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
 	expect(getStripFigures()).toEqual(['ETH raised: 1.00 ETH / 4.00 ETH', 'Auction ends: in 3d', 'Pool stage: Truth auction'])
 	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('25% of target')

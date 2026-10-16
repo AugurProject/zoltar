@@ -19,6 +19,7 @@ import {
 	createSecurityVaultProps,
 	createSelectedPool,
 	createTradingProps,
+	forkedPoolState,
 } from './builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
@@ -663,7 +664,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('keeps the duplicate summary absent after fork migration starts', async () => {
-		await renderLoadedPool({ securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'poolForked' })], selectedPoolView: 'reporting' })
+		await renderLoadedPool({ securityPools: [createSelectedPool(forkedPoolState)], selectedPoolView: 'reporting' })
 
 		expect(document.body.querySelectorAll('.selected-pool-object-header')).toHaveLength(1)
 		expect(document.body.querySelector('.pool-object-meta .badge')?.textContent).toBe('Fork migration')

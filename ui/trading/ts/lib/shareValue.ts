@@ -94,14 +94,9 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 	return noteRedemption && isUnresolvedRedemptionBlocked(market) ? `${payout}; ${payoutCopy.redemptionUnavailable}` : payout
 }
 
-/** Display current backing as a conditional payout, never as an executable sale quote. */
-export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest') {
-	return `${formatOutcomeQuantity(amount, outcome, digits, rounding)} (${formatOutcomePayout(amount, outcome, market, rounding)})`
-}
-
-/** `formatOutcomeWithValue` for a holding whose surroundings already state that redemption is blocked, so the payout leaves that note out. */
-export function formatOutcomeWithValueWithoutRedemptionNote(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket) {
-	return `${formatOutcomeQuantity(amount, outcome)} (${formatOutcomePayout(amount, outcome, market, 'nearest', { noteRedemption: false })})`
+/** Display current backing as a conditional payout, never as an executable sale quote. `noteRedemption` is as for `formatOutcomePayout`. */
+export function formatOutcomeWithValue(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, digits = 4, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
+	return `${formatOutcomeQuantity(amount, outcome, digits, rounding)} (${formatOutcomePayout(amount, outcome, market, rounding, { noteRedemption })})`
 }
 
 export function formatCompleteSetWithValue(amount: bigint, market: ShareValueRate & Partial<Pick<LiveMarket, 'loadError'>>, digits = 4, rounding: ShareValueRounding = 'nearest') {

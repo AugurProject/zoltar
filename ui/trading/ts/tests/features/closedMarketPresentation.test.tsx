@@ -35,17 +35,21 @@ describe('closed market presentation', () => {
 		expect(document.querySelector('.market-odds-closed .probability')).not.toBeNull()
 	})
 
-	test('says once, above the holdings, that a forked market cannot redeem its shares', async () => {
+	const renderForkedPosition = async (balance: bigint) => {
 		const rendered = await renderIntoDocument(
 			<MarketPosition
 				market={forkedMarket}
-				holdings={{ balances: { scope: shareBalanceScope(forkedMarket), yes: SET, no: SET, invalid: SET, lp: 0n }, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }}
+				holdings={{ balances: { scope: shareBalanceScope(forkedMarket), yes: balance, no: balance, invalid: balance, lp: 0n }, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }}
 				wallet={{ networkMismatchReason: undefined }}
 				disabled={false}
 				ownsBalanceError={false}
 			/>,
 		)
 		cleanupRendered = rendered.cleanup
+	}
+
+	test('says once, above the holdings, that a forked market cannot redeem its shares', async () => {
+		await renderForkedPosition(SET)
 		expect(document.querySelector('.market-holdings')?.textContent).not.toContain('Redemption unavailable')
 		// The note heads the whole position, before the holdings list, so it never reads as one holding's caption.
 		const notes = Array.from(document.querySelectorAll('.market-position .market-position-note'))
@@ -54,10 +58,7 @@ describe('closed market presentation', () => {
 	})
 
 	test('says nothing about redemption to a wallet that holds no shares', async () => {
-		const rendered = await renderIntoDocument(
-			<MarketPosition market={forkedMarket} holdings={{ balances: { scope: shareBalanceScope(forkedMarket), yes: 0n, no: 0n, invalid: 0n, lp: 0n }, balanceState: 'ready', balanceError: undefined, retry: async () => undefined }} wallet={{ networkMismatchReason: undefined }} disabled={false} ownsBalanceError={false} />,
-		)
-		cleanupRendered = rendered.cleanup
+		await renderForkedPosition(0n)
 		expect(document.querySelector('.market-position .market-position-note')).toBeNull()
 	})
 })

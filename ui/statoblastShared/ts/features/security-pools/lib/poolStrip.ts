@@ -1,6 +1,13 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TruthAuctionMetrics } from '../../../types/contracts.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
+
+/** An amount as a share of its limit, in tenths of a percent; values above the limit stay visible. Undefined without a positive limit. */
+export function formatPercentOfLimit(amount: bigint, limit: bigint) {
+	if (limit <= 0n) return undefined
+	return formatTrimmedUnits((amount * 1000n) / limit, 1)
+}
 
 /** Fork-stage deadlines and auction progress for the pool header's strip; each is undefined until the pool's fork details load, and `loading` is true only while that read is in flight. */
 export type PoolForkTimeline = {

@@ -1,6 +1,7 @@
 import { formatLpPayout, formatLpQuantity, formatOutcomePayout, formatOutcomeQuantity, type ShareValueRounding } from '../lib/shareValue.js'
 import type { ComponentChildren } from 'preact'
-import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
+import { lockedMigratedBalance, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
+import { marketsCopy } from '../copy/markets.js'
 
 /**
  * A held balance rounds down like every "You hold" hint, so the same holding reads the same everywhere and is never overstated.
@@ -15,7 +16,13 @@ export function OutcomeHolding({ amount, outcome, market, noteRedemption = true,
 	)
 }
 
-const OUTCOME_HOLDING_CLASS: Record<ShareOutcome, string | undefined> = { YES: 'portfolio-holding-yes', NO: 'portfolio-holding-no', INVALID: undefined }
+/** The list-item class that colours a holding by its outcome. */
+export const OUTCOME_HOLDING_CLASS: Record<ShareOutcome, string | undefined> = { YES: 'portfolio-holding-yes', NO: 'portfolio-holding-no', INVALID: undefined }
+
+/** A balance a fork migration locked stays listed, marked as locked, so the holder sees it was migrated. */
+export function LockedCaption({ balances, outcome }: { balances: LiveBalances | undefined; outcome: ShareOutcome }) {
+	return balances === undefined || lockedMigratedBalance(balances, outcome) === 0n ? undefined : <small className='payout-caption holding-locked'>{marketsCopy.lockedAfterMigration}</small>
+}
 
 /** One outcome holding as a list item coloured by its outcome; `children` adds lines under it, such as a locked-balance caption. */
 export function OutcomeHoldingItem({ children, ...holding }: Parameters<typeof OutcomeHolding>[0] & { children?: ComponentChildren }) {

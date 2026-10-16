@@ -49,7 +49,7 @@ describe('TimestampValue', () => {
 	})
 
 	test('relative-first timestamps lead with the relative time and keep UTC beneath it', async () => {
-		const renderedComponent = await renderIntoDocument(<TimestampValue currentTimestamp={1_000n} relativeFirst timestamp={1_060n} />)
+		const renderedComponent = await renderIntoDocument(<TimestampValue currentTimestamp={1_000n} relative='first' timestamp={1_060n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const time = document.querySelector('time.is-relative-first')
 		expect(time?.getAttribute('datetime')).toBe('1970-01-01T00:17:40.000Z')

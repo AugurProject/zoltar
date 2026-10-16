@@ -14,7 +14,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
-import { getVaultLiquidatability, getVaultNotLiquidatableReason } from '../lib/liquidation.js'
+import { getBlockedLiquidationReason, getVaultLiquidatability, getVaultNotLiquidatableReason } from '../lib/liquidation.js'
 import { getVaultLiquidationLauncherBlocker } from '../lib/liquidationModalGuards.js'
 import { isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -36,8 +36,6 @@ export function SecurityPoolVaultWorkspace({
 	vaultOperations,
 	poolState,
 	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceUrl,
 	securityVault,
 	selectedPool,
 	selectedVaultDetails,
@@ -60,8 +58,6 @@ export function SecurityPoolVaultWorkspace({
 	vaultOperations: ComponentChildren
 	poolState: PoolState
 	repPerEthPrice: SecurityPoolWorkflowRouteContentProps['repPerEthPrice']
-	repPerEthSource: SecurityPoolWorkflowRouteContentProps['repPerEthSource']
-	repPerEthSourceUrl: SecurityPoolWorkflowRouteContentProps['repPerEthSourceUrl']
 	securityVault: SecurityPoolWorkflowRouteContentProps['securityVault']
 	selectedPool: ListedSecurityPool | undefined
 	selectedVaultDetails: SecurityVaultDetails | undefined
@@ -163,7 +159,7 @@ export function SecurityPoolVaultWorkspace({
 							// The connected wallet's own vault can never be liquidated by it, so its row offers no liquidation.
 							const ownVault = isWalletVault(vault.vaultAddress)
 							const liquidatability = getVaultLiquidatability(getLiquidatabilityInput(vault))
-							const liquidationBlocker = ownVault ? undefined : getLiquidationLauncherBlocker({ notLiquidatableReason: liquidatability.kind === 'blocked' ? liquidatability.reason : undefined, vaultExistsOnchain: true, vaultLoaded: true })
+							const liquidationBlocker = ownVault ? undefined : getLiquidationLauncherBlocker({ notLiquidatableReason: getBlockedLiquidationReason(liquidatability), vaultExistsOnchain: true, vaultLoaded: true })
 							const liquidationReasonId = `${liquidationReasonIdPrefix}-${vault.vaultAddress}`
 							return (
 								<>
@@ -202,8 +198,6 @@ export function SecurityPoolVaultWorkspace({
 							return selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='muted'>{commonCopy.selected}</Badge> : undefined
 						}}
 						repPerEthPrice={repPerEthPrice}
-						repPerEthSource={repPerEthSource}
-						repPerEthSourceUrl={repPerEthSourceUrl}
 					/>
 				</div>
 			) : undefined}

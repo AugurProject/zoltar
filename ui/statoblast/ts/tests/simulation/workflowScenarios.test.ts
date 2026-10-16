@@ -102,7 +102,7 @@ void describe('production workflow simulation scenarios', () => {
 		const readClient = nearMinimumBackend.createReadClient()
 		const pool = await loadOnlyPool(nearMinimumBackend, 'Will this resolve? (near-minimum vault)')
 		const manager = await loadOracleManagerDetails(readClient, pool.managerAddress)
-		const tierOf = async (account: Address) => getVaultSummaryHealth({ multiplierBps: pool.statoblastSecurityMultiplierBps, repPerEthPrice: manager.lastPrice, vault: await loadSecurityPoolVaultSummary(readClient, pool.securityPoolAddress, account) }).tier
+		const tierOf = async (account: Address) => getVaultSummaryHealth({ multiplierBps: pool.statoblastSecurityMultiplierBps, poolEnded: false, repPerEthPrice: manager.lastPrice, vault: await loadSecurityPoolVaultSummary(readClient, pool.securityPoolAddress, account) }).tier
 
 		expect(nearMinimumBackend.currentScenario).toBe('near-minimum-vault')
 		expect(manager.isPriceValid).toBe(true)
@@ -139,6 +139,7 @@ void describe('production workflow simulation scenarios', () => {
 	}, 60_000)
 })
 
+// The slowest seed (the x2 auction setup, then finalization) bootstraps here under its own setup limit, since the CPU-bound bootstraps above share one.
 void describe('finalized truth auction simulation scenario', () => {
 	let finalizedAuctionBackend: SimulationBackend
 

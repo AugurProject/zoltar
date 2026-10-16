@@ -15,6 +15,7 @@ import {
 	createSecurityVaultForm,
 	createSecurityVaultProps,
 	createSelectedPool,
+	migratingPoolState,
 } from './builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
@@ -162,7 +163,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 		const onLoadForkAuction = () => {
 			forkLoadCalls += 1
 		}
-		const forkedPool = createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' })
+		const forkedPool = createSelectedPool(migratingPoolState)
 		const { rerender } = await renderWorkflow(createLoadedPoolProps({ forkAuction: createForkAuctionProps({ onLoadForkAuction }), securityPools: [forkedPool], selectedPoolView: 'vaults' }))
 		expect(forkLoadCalls).toBe(1)
 		// While the read is in flight, the deadline tile holds its place with a loading value instead of leaving a gap.
@@ -178,7 +179,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 	})
 
 	test('leaves no spinning deadline tile once a fork-details read has failed', async () => {
-		const forkedPool = createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'forkMigration' })
+		const forkedPool = createSelectedPool(migratingPoolState)
 		await renderWorkflow(createLoadedPoolProps({ forkAuction: forkAuctionFailure(() => undefined), securityPools: [forkedPool], selectedPoolView: 'vaults' }))
 		expect(document.querySelector('.pool-status-strip .loading-value')).toBeNull()
 	})

@@ -131,7 +131,7 @@ describe('AddressValue', () => {
 
 	test('provides a start-and-end abbreviation without changing the accessible name or copied value', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} responsiveAbbreviation />)
+		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${address}` })
@@ -186,7 +186,7 @@ describe('AddressValue', () => {
 
 	test('uses a shorter visible hash while preserving the complete copy target', async () => {
 		const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-		const renderedComponent = await renderIntoDocument(<AddressValue address={hash} responsiveAbbreviation compactAbbreviation />)
+		const renderedComponent = await renderIntoDocument(<AddressValue address={hash} compactAbbreviation />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const copyButton = within(document.body).getByRole('button', { name: `Copy address ${hash}` })
 		expect(copyButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234…cdef')

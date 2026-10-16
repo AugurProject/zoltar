@@ -18,6 +18,12 @@ import { useZoltarWorkspace } from './ZoltarWorkspace.js'
 
 type NextStepPresentation = { actionLabel: string; detail: string }
 
+const MODEL_STEPS = [
+	{ detail: zoltarCopy.modelQuestions, title: zoltarCopy.modelQuestionsTitle },
+	{ detail: zoltarCopy.modelFork, title: zoltarCopy.modelForkTitle },
+	{ detail: zoltarCopy.modelMigrate, title: zoltarCopy.modelMigrateTitle },
+] as const
+
 function getNextStepPresentation(nextStep: ZoltarNextStep): NextStepPresentation {
 	switch (nextStep.kind) {
 		case 'retry-universe':
@@ -106,7 +112,7 @@ function ZoltarOverviewView({ currentTimestamp, loadingRepBalance, model, ...act
 						{/* A universe that does not exist or could not be read has no fork, REP, or migration to report. */}
 						{model.status === 'missing' || model.status === 'unavailable' ? undefined : (
 							<>
-								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue relativeFirst timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
+								<MetricField label={zoltarCopy.forkStatus}>{model.forkTime === undefined ? zoltarCopy.notForked : <TimestampValue relative='first' timestamp={model.forkTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />}</MetricField>
 								<MetricField label={zoltarCopy.universeRep}>{renderRepBalance(model, loadingRepBalance)}</MetricField>
 								<MetricField label={zoltarCopy.migrationStatus}>{renderMigrationStatus(model)}</MetricField>
 							</>
@@ -121,11 +127,7 @@ function ZoltarOverviewView({ currentTimestamp, loadingRepBalance, model, ...act
 			)}
 			<SectionBlock title={zoltarCopy.howZoltarWorks} variant='plain'>
 				<ol className='zoltar-model-steps'>
-					{[
-						{ detail: zoltarCopy.modelQuestions, title: zoltarCopy.modelQuestionsTitle },
-						{ detail: zoltarCopy.modelFork, title: zoltarCopy.modelForkTitle },
-						{ detail: zoltarCopy.modelMigrate, title: zoltarCopy.modelMigrateTitle },
-					].map(step => (
+					{MODEL_STEPS.map(step => (
 						<li key={step.title}>
 							<strong>{step.title}</strong>
 							<span>{step.detail}</span>
