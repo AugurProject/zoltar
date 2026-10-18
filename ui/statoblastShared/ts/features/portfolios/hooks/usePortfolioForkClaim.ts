@@ -77,6 +77,7 @@ export function usePortfolioForkClaim({ snapshot, allocation, actions, onConfirm
 		},
 		parent: parent.value?.key === parentKey && parent.value.backend === backend ? parent.value.address : current?.state?.parent,
 		loading: selection !== undefined && current === undefined,
+		needsPreparation: current?.state === undefined || [copy.notForked, copy.childFeed, copy.childContracts, copy.childPool, copy.childHistory].includes(current.state.reason ?? ''),
 		error: current?.error,
 		selectedBranch: current?.state?.questionTitle === undefined || current.state.outcomeLabel === undefined ? undefined : copy.selectedBranch(current.state.questionTitle, current.state.outcomeLabel),
 		reason,

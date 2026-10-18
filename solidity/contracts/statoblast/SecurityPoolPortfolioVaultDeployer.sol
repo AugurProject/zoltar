@@ -2,9 +2,16 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolPortfolioVault, ISecurityPoolPortfolio } from './SecurityPoolPortfolioVault.sol';
+import { SecurityPoolPortfolioRecoveryDeployer } from './SecurityPoolPortfolioRecoveryDeployer.sol';
 
 /// @dev Shared creation code with a separate deterministic vault namespace for every caller.
 contract SecurityPoolPortfolioVaultDeployer {
+	SecurityPoolPortfolioRecoveryDeployer public immutable helpers;
+
+	constructor() {
+		helpers = new SecurityPoolPortfolioRecoveryDeployer();
+	}
+
 	function createVault(address owner) external returns (SecurityPoolPortfolioVault) {
 		return
 			new SecurityPoolPortfolioVault{salt: keccak256(abi.encode(msg.sender, owner))}(owner, ISecurityPoolPortfolio(msg.sender));

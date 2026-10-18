@@ -7,7 +7,16 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createMockLoaderClient, createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioRecoveryRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import {
+	getInfraContractAddresses,
+	getSecurityPoolPortfolioRuntimeCode,
+	getSecurityPoolPortfolioQuoteRuntimeCode,
+	getSecurityPoolPortfolioRecoveryRuntimeCode,
+	getSecurityPoolPortfolioVaultRuntimeCode,
+	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
+	getSecurityPoolPortfolioForkControllerRuntimeCode,
+	getSecurityPoolPortfolioRecoveryDeployerRuntimeCode,
+} from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
 import { usePortfolioAutomatic } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioAutomatic.js'
 import { vaultArtifact, type PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
@@ -19,6 +28,8 @@ import { renderHookWithProps } from '../../support/renderHook.js'
 const deployer = getInfraContractAddresses().securityPoolPortfolioVaultDeployer
 const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
 const recoveryLedger = getAddress('0x00000000000000000000000000000000000000e2')
+const forkController = getAddress('0x00000000000000000000000000000000000000e3')
+const helpers = getAddress('0x00000000000000000000000000000000000000e4')
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const manager = getAddress('0x0000000000000000000000000000000000000022')
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${manager}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
@@ -29,11 +40,18 @@ async function renderDeferredPortfolio() {
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getChainId: async () => (++reads === 1 ? await firstChainId.promise : 1),
 		getCode: async ({ address }: { address: Address }) => {
+			if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+			if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 			if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 			return address === deployer ? getSecurityPoolPortfolioVaultDeployerRuntimeCode() : getSecurityPoolPortfolioRuntimeCode()
 		},
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -103,6 +121,8 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getChainId: async () => 1,
 		getCode: async ({ address }: { address: Address }) => {
+			if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+			if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 			if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 			if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
@@ -119,7 +139,16 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 			},
 			readContract: async ({ address, functionName, args = [] }) => {
 				queries.push({ functionName, args })
+				if (functionName === 'zoltar' && address === forkController) return getInfraContractAddresses().zoltar
 				switch (functionName) {
+					case 'forkController':
+						return forkController
+					case 'helpers':
+						return helpers
+					case 'getContext':
+						return { ledger: recoveryLedger, universeId: 0n }
+					case 'fixedOwnership':
+						return false
 					case 'quoteHelper':
 						return quoteHelper
 					case 'recoveryLedger':

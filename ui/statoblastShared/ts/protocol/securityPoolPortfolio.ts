@@ -11,8 +11,24 @@ import {
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact, statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as recoveryArtifact } from '../contractArtifact.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioByteCode, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioRecoveryRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from './deploymentHelpers.js'
+import {
+	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact,
+	statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as recoveryArtifact,
+	statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController as forkArtifact,
+	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer as deployerArtifact,
+} from '../contractArtifact.js'
+import {
+	getInfraContractAddresses,
+	getSecurityPoolPortfolioByteCode,
+	getSecurityPoolPortfolioRuntimeCode,
+	getSecurityPoolPortfolioQuoteRuntimeCode,
+	getSecurityPoolPortfolioRecoveryRuntimeCode,
+	getSecurityPoolPortfolioVaultRuntimeCode,
+	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
+	getSecurityPoolPortfolioForkControllerRuntimeCode,
+	getSecurityPoolPortfolioRecoveryDeployerRuntimeCode,
+} from './deploymentHelpers.js'
 
 export { vaultArtifact }
 
@@ -56,8 +72,21 @@ export async function loadPortfolioOwnerVault(client: Pick<ReadClient, 'getCode'
 	verifyRuntimeCode(await client.getCode({ address: recoveryLedger }), getSecurityPoolPortfolioRecoveryRuntimeCode(), recoveryArtifact.evm.deployedBytecode.immutableReferences, 'portfolio recovery ledger')
 	if (getAddress(await client.readContract({ address: recoveryLedger, abi: recoveryArtifact.abi, functionName: 'portfolio' })) !== getAddress(portfolio)) throw new Error('Recovery ledger belongs to another portfolio.')
 	const deployer = await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'vaultDeployer' })
-	verifyRuntimeCode(await client.getCode({ address: deployer }), getSecurityPoolPortfolioVaultDeployerRuntimeCode(), {}, 'portfolio vault deployer')
+	verifyRuntimeCode(await client.getCode({ address: deployer }), getSecurityPoolPortfolioVaultDeployerRuntimeCode(), deployerArtifact.evm.deployedBytecode.immutableReferences, 'portfolio vault deployer')
 	if (getAddress(deployer) !== getAddress(getInfraContractAddresses().securityPoolPortfolioVaultDeployer)) throw new Error('Portfolio uses an unrecognized vault deployer.')
+	const [helpers, forkController] = await Promise.all([client.readContract({ address: deployer, abi: deployerArtifact.abi, functionName: 'helpers' }), client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })])
+	verifyRuntimeCode(await client.getCode({ address: helpers }), getSecurityPoolPortfolioRecoveryDeployerRuntimeCode(), {}, 'portfolio recovery deployer')
+	verifyRuntimeCode(await client.getCode({ address: forkController }), getSecurityPoolPortfolioForkControllerRuntimeCode(), forkArtifact.evm.deployedBytecode.immutableReferences, 'portfolio fork controller')
+	const [controllerPortfolio, controllerHelpers, controllerZoltar, rootContext, fixedOwnership] = await Promise.all([
+		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'portfolio' }),
+		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'helpers' }),
+		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'zoltar' }),
+		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'getContext', args: [0n] }),
+		client.readContract({ address: recoveryLedger, abi: recoveryArtifact.abi, functionName: 'fixedOwnership' }),
+	])
+	if (getAddress(controllerPortfolio) !== getAddress(portfolio) || getAddress(controllerHelpers) !== getAddress(helpers) || getAddress(controllerZoltar) !== getAddress(getInfraContractAddresses().zoltar)) throw new Error('Fork controller does not match this portfolio and its canonical helpers.')
+	if (getAddress(rootContext.ledger) !== getAddress(recoveryLedger) || rootContext.universeId !== originUniverseId || fixedOwnership) throw new Error('Fork controller root ownership does not match this portfolio.')
+
 	if (vault !== zeroAddress) {
 		const predictedVault = await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'predictVaultAddress', args: [owner] })
 		if (getAddress(vault) !== getAddress(predictedVault)) throw new Error('Portfolio did not return its canonical owner vault address.')

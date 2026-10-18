@@ -1,6 +1,6 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { bytesToHex, encodeDeployData, hexToBytes, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { bytesToHex, encodeDeployData, getCreateAddress, hexToBytes, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	assertDeploymentStepRuntimeCode,
@@ -32,6 +32,7 @@ import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-s
 import {
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
+	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
@@ -51,7 +52,7 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	securityPoolFactory: '0xc11e8b422943a305de7ab8d438e07f22388ba2378587f5f375e9362ba2cae2d2',
 	securityPoolForker: '0x334bfd80a4c74727dc778aa081a98c12a46c020e9059115e5ba3402eaaf27db6',
 	securityPoolOperationsDelegate: '0xccdcd9965b9656d7b7ee808b3fe5cd21db6b5e7c7cf70cd82af33aa41cb83d03',
-	securityPoolPortfolioVaultDeployer: '0x6cfc57fb5b15f8bda96652ae1e3be82517ab5f2be20568853dabf31dc75c3085',
+	securityPoolPortfolioVaultDeployer: '0x88a4978bf0866ca75fbd7bda9c5efa3333ab3572e5173cd1923d7afb99f241e8',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0xd166e808a1860481541ec6f53d80cd284bdc172bfbe286c8b5b65da8978c8c93',
 	sharedPoolPriceFeedDeploymentWorker: '0x07ac6b0c397b09cc0870480ee3fc5f756f59c81f359ce47ca039c76c1d3454ad',
@@ -69,12 +70,27 @@ function getSecurityPoolUtilsRuntimeCode() {
 	return bytesToHex(runtimeBytes)
 }
 
+function getCanonicalPortfolioVaultDeployerRuntimeCode() {
+	const references = Object.values(statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.deployedBytecode.immutableReferences)
+	if (references.length !== 1) throw new Error('Portfolio vault deployer must have exactly one helper immutable')
+	const helper = getCreateAddress({ from: getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE).securityPoolPortfolioVaultDeployer, nonce: 1n })
+	const code = hexToBytes(getSecurityPoolPortfolioVaultDeployerRuntimeCode())
+	const paddedHelper = hexToBytes(toHex(hexToBytes(helper), { size: 32 }))
+	for (const group of references) {
+		for (const reference of group) {
+			if (reference.length !== 32 || code.slice(reference.start, reference.start + reference.length).some(byte => byte !== 0)) throw new Error('Unexpected portfolio helper immutable layout')
+			code.set(paddedHelper, reference.start)
+		}
+	}
+	return bytesToHex(code)
+}
+
 const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	escalationGameClaimDelegate: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
 	escalationGameDepositDelegate: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.deployedBytecode.object}`,
 	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
 	securityPoolOperationsDelegate: getSecurityPoolOperationsDelegateRuntimeCode(),
-	securityPoolPortfolioVaultDeployer: getSecurityPoolPortfolioVaultDeployerRuntimeCode(),
+	securityPoolPortfolioVaultDeployer: getCanonicalPortfolioVaultDeployerRuntimeCode(),
 	securityPoolUtils: getSecurityPoolUtilsRuntimeCode(),
 	uniformPriceDualCapBatchAuctionFactory: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.deployedBytecode.object}`,
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
@@ -98,7 +114,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	securityPoolFactory: '0x24135b855ef640e64279485de6f7443f37427895afd6f4d8eae075199f8b67fa',
 	securityPoolForker: '0x847a95eaac2819fad7ffda5e67e145dbedd3c5df004a27025cb8b7e525748ea8',
 	securityPoolOperationsDelegate: '0xccdcd9965b9656d7b7ee808b3fe5cd21db6b5e7c7cf70cd82af33aa41cb83d03',
-	securityPoolPortfolioVaultDeployer: '0x6cfc57fb5b15f8bda96652ae1e3be82517ab5f2be20568853dabf31dc75c3085',
+	securityPoolPortfolioVaultDeployer: '0x88a4978bf0866ca75fbd7bda9c5efa3333ab3572e5173cd1923d7afb99f241e8',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
 	shareTokenFactory: '0x1bf688e11b6f3558844dcb52898e879f878b2035f6c73b92628460dabd6d6b1e',
 	sharedPoolPriceFeedDeploymentWorker: '0x07ac6b0c397b09cc0870480ee3fc5f756f59c81f359ce47ca039c76c1d3454ad',

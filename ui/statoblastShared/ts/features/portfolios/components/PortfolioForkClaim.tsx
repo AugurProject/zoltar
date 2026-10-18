@@ -14,7 +14,7 @@ export function PortfolioForkClaim(parameters: PortfolioForkClaimParameters) {
 	return (
 		<div className='workflow-subsection'>
 			<h4>{copy.title}</h4>
-			<UserMessage detail={copy.prepareHint} />
+			{model.needsPreparation ? <UserMessage detail={copy.prepareHint} /> : undefined}
 			{model.parent === undefined ? undefined : <a href={buildPoolsRouteHash({ view: 'operate', securityPoolAddress: model.parent, tab: 'fork-workflow' })}>{copy.prepare}</a>}
 			<PortfolioInput label={copy.outcome} hint={copy.outcomeHint} value={model.outcomeInput} onChange={model.setOutcome} disabled={parameters.actions.busy !== undefined} numeric />
 			{model.selectedBranch === undefined ? undefined : <UserMessage detail={model.selectedBranch} />}

@@ -59,6 +59,10 @@ function reads(options: { positionCount?: bigint; questionCount?: bigint; assets
 				case 'getForkTime':
 					expect(request.address).toBe(zoltar)
 					return 0n
+				case 'forkController':
+					return token
+				case 'isIntervalSelected':
+					return false
 				case 'recoveryLedger':
 					return zoltar
 				case 'processingRewards':

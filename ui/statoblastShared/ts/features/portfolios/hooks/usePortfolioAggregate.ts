@@ -22,6 +22,7 @@ import { parsePortfolioAmount } from '../lib/draft.js'
 import type { usePortfolio } from './usePortfolio.js'
 import type { usePortfolioActions } from './usePortfolioActions.js'
 import * as copy from '../../../copy/portfolio.js'
+import * as forkCopy from '../../../copy/portfolioSharedFork.js'
 
 function amount(value: string) {
 	try {
@@ -246,6 +247,7 @@ export function usePortfolioAggregate(model: Pick<ReturnType<typeof usePortfolio
 		if (allocation.recoveryComplete) return copy.recoveryComplete
 		if (allocation.ownerShares === 0n) return copy.noPositionClaim
 		if (ownerInterval(selected, allocation.positionId) === undefined) return copy.intervalNotOnPage
+		if (ownerInterval(selected, allocation.positionId)?.sharedForkSelected) return forkCopy.selectedFallback
 		return undefined
 	}
 

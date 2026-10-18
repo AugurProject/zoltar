@@ -25,6 +25,8 @@ const abi = parseAbi([
 	'function isReusablePosition(uint256 positionId) view returns (bool)',
 	'function positionRecoveryComplete(uint256 positionId) view returns (bool)',
 	'function recoveryLedger() view returns (address)',
+	'function forkController() view returns (address)',
+	'function isIntervalSelected(uint256 contextId,address owner,uint256 intervalId) view returns (bool)',
 	'function recoveryBounties(uint256 positionId) view returns (uint256)',
 	'function processingRewards(address owner) view returns (uint256)',
 	'function getOwnerIntervalCount(address owner) view returns (uint256)',
@@ -114,7 +116,7 @@ export type PortfolioAggregateSnapshot = {
 	recoveryLedger: Address
 	intervalCount: bigint
 	intervalStart: bigint
-	intervals: { intervalId: bigint; generation: bigint; startPosition: bigint; endPosition: bigint; shares: bigint; open: boolean; active: boolean }[]
+	intervals: { intervalId: bigint; generation: bigint; startPosition: bigint; endPosition: bigint; shares: bigint; open: boolean; active: boolean; sharedForkSelected?: boolean }[]
 	recoverableRepAttoRep: bigint
 	recoverableFeesAttoEth: bigint
 	processingRewardsAttoEth: bigint
@@ -154,6 +156,7 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		read(portfolio, 'questionCount'),
 		read(portfolio, 'recoveryLedger'),
 		read(portfolio, 'processingRewards', [owner]),
+		read(portfolio, 'forkController'),
 	])
 	const originUniverseId = uint(values[0], 'Universe id')
 	// The shared feed exists before any question is registered. Its configuration
@@ -176,6 +179,7 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const questionCount = uint(values[8], 'Question count')
 	const recoveryLedger = address(values[9])
 	const processingRewardsAttoEth = uint(values[10], 'Processing rewards')
+	const forkController = address(values[11])
 	const intervalCountValue = await read(recoveryLedger, 'getOwnerIntervalCount', [owner])
 	const intervalCount = uint(intervalCountValue, 'Recovery history count')
 	if (intervalStart > intervalCount) throw new Error('Recovery history page is out of bounds.')
@@ -183,13 +187,13 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const intervals = await Promise.all(
 		Array.from({ length: Number(intervalPageCount) }, async (_, index) => {
 			const intervalId = intervalStart + BigInt(index)
-			const value = await read(recoveryLedger, 'getOwnerInterval', [owner, intervalId])
+			const [value, sharedForkSelected] = await Promise.all([read(recoveryLedger, 'getOwnerInterval', [owner, intervalId]), forkTime > 0n ? read(forkController, 'isIntervalSelected', [0n, owner, intervalId]) : Promise.resolve(false)])
 			const fields = ['generation', 'startPosition', 'endPosition', 'shares', 'repIndex', 'feeIndex', 'open', 'active']
 			const entry = Array.isArray(value) ? tuple(value, fields.length) : fields.map(field => (value !== null && typeof value === 'object' ? Reflect.get(value, field) : undefined))
 			const open = entry[6]
 			const active = entry[7]
-			if (typeof open !== 'boolean' || typeof active !== 'boolean') throw new Error('Invalid recovery interval state.')
-			return { intervalId, generation: uint(entry[0], 'Recovery generation'), startPosition: uint(entry[1], 'First allocation'), endPosition: uint(entry[2], 'Last allocation'), shares: uint(entry[3], 'Recovery shares'), open, active }
+			if (typeof open !== 'boolean' || typeof active !== 'boolean' || typeof sharedForkSelected !== 'boolean') throw new Error('Invalid recovery interval state.')
+			return { intervalId, generation: uint(entry[0], 'Recovery generation'), startPosition: uint(entry[1], 'First allocation'), endPosition: uint(entry[2], 'Last allocation'), shares: uint(entry[3], 'Recovery shares'), open, active, sharedForkSelected }
 		}),
 	)
 	const proceeds = tuple(await read(recoveryLedger, 'previewClaim', [owner, intervals.filter(interval => interval.active).map(interval => interval.intervalId)]), 2)

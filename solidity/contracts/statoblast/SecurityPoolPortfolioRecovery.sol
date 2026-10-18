@@ -2,9 +2,6 @@
 pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { SecurityPoolPortfolioPosition } from './SecurityPoolPortfolioPosition.sol';
-import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
 
 /// @notice Aggregate recovery accounting for allocation-time ownership, without holding assets.
 /// @dev A point-updated Fenwick tree lets each owner collect a balance-constant interval of allocations.
@@ -12,6 +9,9 @@ import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
 contract SecurityPoolPortfolioRecovery {
 	uint256 private constant PRECISION = 1e36;
 	address public immutable portfolio;
+	bool public immutable fixedOwnership;
+	bool public importsSealed;
+	mapping(uint256 => int256) private ownershipTree;
 	uint256 public positionCount;
 	mapping(uint256 => Amounts) private tree;
 	mapping(uint256 => DistributionCarry) private distributionCarries;
@@ -50,8 +50,12 @@ contract SecurityPoolPortfolioRecovery {
 		bool active;
 	}
 
-	constructor() {
-		portfolio = msg.sender;
+	constructor(address authority, uint256 initialPositionCount, bool _fixedOwnership) {
+		require(authority != address(0), 'Invalid recovery authority');
+		require(_fixedOwnership || initialPositionCount == 0, 'Growing recovery must start empty');
+		portfolio = authority;
+		positionCount = initialPositionCount;
+		fixedOwnership = _fixedOwnership;
 	}
 
 	modifier onlyPortfolio() {
@@ -59,13 +63,58 @@ contract SecurityPoolPortfolioRecovery {
 		_;
 	}
 
-	/// @notice Deploy immutable custody on behalf of the portfolio without embedding it in root runtime.
-	function createPosition(ISecurityPool pool, SecurityPoolPortfolioQuote quoteHelper) external onlyPortfolio returns (SecurityPoolPortfolioPosition) {
-		return new SecurityPoolPortfolioPosition(portfolio, pool, quoteHelper);
+	/// @notice Import one frozen owner interval before any branch recovery can be credited.
+	/// @dev The controller proves the owner and source interval, and prevents duplicate enrollment.
+	function importInterval(address owner, uint256 start, uint256 end, uint256 shares) external onlyPortfolio returns (uint256 intervalId) {
+		require(fixedOwnership && !importsSealed, 'Fork imports sealed');
+		require(owner != address(0) && start > 0 && start <= end && end <= positionCount, 'Invalid imported interval');
+		require(shares > 0 && shares <= PRECISION, 'Invalid imported shares');
+		intervalId = ownerIntervals[owner].length;
+		_appendInterval(owner, 0, start, end, shares, false);
+		_changeWeight(start, end, int256(shares));
+	}
+
+	/// @notice Revoke a not-yet-frozen branch choice without changing any other owner's history.
+	function retireImportedInterval(address owner, uint256 intervalId) external onlyPortfolio {
+		require(fixedOwnership && !importsSealed, 'Fork imports sealed');
+		Interval storage interval = _interval(owner, intervalId);
+		interval.active = false;
+		_changeWeight(interval.startPosition, interval.endPosition, -int256(interval.shares));
+	}
+
+	/// @notice Freeze imports before migration or cash recovery; repeat calls are harmless.
+	function sealImports() external onlyPortfolio {
+		require(fixedOwnership, 'Growing recovery ownership');
+		importsSealed = true;
+	}
+
+	/// @notice Aggregate logical owner shares at one allocation, independent of other branches.
+	function getPointShares(uint256 positionId) public view returns (uint256) {
+		require(fixedOwnership, 'Growing recovery ownership');
+		require(positionId > 0 && positionId <= positionCount, 'Unknown allocation position');
+		int256 shares;
+		for (uint256 index = positionId; index > 0; index -= _lowBit(index)) shares += ownershipTree[index];
+		require(shares >= 0 && uint256(shares) <= PRECISION, 'Invalid recovery ownership weight');
+		return uint256(shares);
+	}
+
+	function _changeWeight(uint256 start, uint256 end, int256 delta) private {
+		_updateWeight(start, delta);
+		if (end < positionCount) _updateWeight(end + 1, -delta);
+	}
+
+	function _updateWeight(uint256 index, int256 delta) private {
+		while (index <= positionCount) {
+			ownershipTree[index] += delta;
+			uint256 step = _lowBit(index);
+			if (step > positionCount - index) break;
+			index += step;
+		}
 	}
 
 	/// @notice Append a zero-valued point, retaining old recoveries in newly created tree ancestors.
 	function appendPosition() external onlyPortfolio returns (uint256 positionId) {
+		require(!fixedOwnership, 'Fixed recovery ownership');
 		positionId = ++positionCount;
 		Amounts memory previous = _range(positionId - _lowBit(positionId) + 1, positionId - 1);
 		tree[positionId] = previous;
@@ -73,6 +122,7 @@ contract SecurityPoolPortfolioRecovery {
 
 	/// @notice Record one owner's new reserve balance. Its old interval still receives late recoveries.
 	function setOwnerBalance(address owner, uint256 generation, uint256 shares) external onlyPortfolio {
+		require(!fixedOwnership, 'Fixed recovery ownership');
 		require(generation > 0 && !closedGenerations[generation], 'Generation is closed');
 		require(shares <= PRECISION, 'Recovery share precision exceeded');
 		uint256 openId = openIntervals[owner];
@@ -97,6 +147,7 @@ contract SecurityPoolPortfolioRecovery {
 
 	/// @notice End every open interval of a depleted reserve generation with one write.
 	function closeGeneration(uint256 generation) external onlyPortfolio {
+		require(!fixedOwnership, 'Fixed recovery ownership');
 		require(generation > 0 && !closedGenerations[generation], 'Generation is closed');
 		closedGenerations[generation] = true;
 		generationEnds[generation] = positionCount;
@@ -106,6 +157,10 @@ contract SecurityPoolPortfolioRecovery {
 	function credit(uint256 positionId, uint256 rep, uint256 eth, uint256 remainingShares) external onlyPortfolio {
 		require(positionId > 0 && positionId <= positionCount, 'Unknown allocation position');
 		require(remainingShares > 0 && remainingShares <= PRECISION, 'Invalid recovery denominator');
+		if (fixedOwnership) {
+			require(importsSealed, 'Fork imports not sealed');
+			require(remainingShares == getPointShares(positionId), 'Recovery cohort shares mismatch');
+		}
 		DistributionCarry storage carry = distributionCarries[positionId];
 		if (carry.denominator == 0) carry.denominator = remainingShares;
 		require(carry.denominator == remainingShares, 'Recovery ownership denominator changed');
@@ -113,9 +168,13 @@ contract SecurityPoolPortfolioRecovery {
 		uint256 feeIndex;
 		(repIndex, carry.rep) = _indexDelta(rep, remainingShares, carry.rep);
 		(feeIndex, carry.eth) = _indexDelta(eth, remainingShares, carry.eth);
-		for (uint256 index = positionId; index <= positionCount; index += _lowBit(index)) {
+		uint256 index = positionId;
+		while (index <= positionCount) {
 			tree[index].rep += repIndex;
 			tree[index].eth += feeIndex;
+			uint256 step = _lowBit(index);
+			if (step > positionCount - index) break;
+			index += step;
 		}
 	}
 
@@ -153,6 +212,7 @@ contract SecurityPoolPortfolioRecovery {
 	/// @notice Remove an owner-selected in-kind allocation while preserving all its previous cash rewards.
 	/// @dev The portfolio must first harvest that allocation using the old remaining-share denominator.
 	function excludePosition(address owner, uint256 intervalId, uint256 positionId) external onlyPortfolio returns (uint256 shares) {
+		if (fixedOwnership) require(importsSealed, 'Fork imports not sealed');
 		Interval storage source = _interval(owner, intervalId);
 		uint256 end = _end(source);
 		require(positionId >= source.startPosition && positionId <= end, 'Allocation outside owner interval');
@@ -160,6 +220,7 @@ contract SecurityPoolPortfolioRecovery {
 		Interval memory previous = source;
 		shares = previous.shares;
 		_excludeCarry(owner, positionId, shares);
+		if (fixedOwnership) _changeWeight(positionId, positionId, -int256(shares));
 		source.active = false;
 		if (openIntervals[owner] == intervalId + 1) delete openIntervals[owner];
 		if (positionId > previous.startPosition)

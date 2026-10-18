@@ -222,6 +222,16 @@ export function exportPortfolioTransaction(parameters: { chainId: number; reques
 
 export { loadPortfolioSnapshot, type PortfolioReadClient, type PortfolioSnapshot, type PortfolioPosition } from './securityPoolPortfolioRead.js'
 export { planPortfolioAllocations } from './securityPoolPortfolioPlanning.js'
+export {
+	buildPortfolioSharedForkChoiceRequest,
+	buildPortfolioSharedForkRevokeRequest,
+	buildPortfolioSharedForkProcessRequest,
+	buildPortfolioSharedForkRecoveryRequest,
+	buildPortfolioContextPositionClaimRequest,
+	loadPortfolioSharedForkSnapshot,
+	loadPortfolioSharedForkPosition,
+	type PortfolioSharedForkSnapshot,
+} from './securityPoolPortfolioFork.js'
 export { resolvePortfolioOperationStatus, type PortfolioOperationStatus } from './securityPoolPortfolioStatus.js'
 export {
 	buildPortfolioDepositRequest,

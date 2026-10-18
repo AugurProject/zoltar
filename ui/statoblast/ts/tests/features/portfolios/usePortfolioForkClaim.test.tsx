@@ -23,7 +23,7 @@ const selection = { owner, portfolio, questionId: 51n, originUniverseId: 0n, pos
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 
 function fixture() {
-	const state = { timestamp: 1000n, systemState: 1, units: 0n, commitment: 0n, debt: 0n, escrow: 0n, ownerShares: 10n, intervalActive: true, feed: true, dependencies: true, child: true, history: true }
+	const state = { timestamp: 1000n, systemState: 1, units: 0n, commitment: 0n, debt: 0n, escrow: 0n, ownerShares: 10n, intervalActive: true, sharedChoice: false, feed: true, dependencies: true, child: true, history: true }
 	const reads: { functionName: string; blockNumber: bigint | undefined }[] = []
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
 		getBlock: async () => ({ ...createBlockWithTimestamp(state.timestamp), number: 9n, hash: zeroHash }),
@@ -34,6 +34,10 @@ function fixture() {
 					return parent
 				case 'vaultOf':
 					return vault
+				case 'forkController':
+					return game
+				case 'isIntervalSelected':
+					return state.sharedChoice
 				case 'recoveryLedger':
 					return game
 				case 'getOwnerPositionShares':
@@ -98,6 +102,7 @@ for (const scenario of [
 	{ patch: { systemState: 0 }, reason: 'Activate this question' },
 	{ patch: { ownerShares: 0n }, reason: 'No' },
 	{ patch: { intervalActive: false }, reason: 'ownership history changed' },
+	{ patch: { sharedChoice: true }, reason: 'saved shared branch' },
 	{ patch: { units: 1n }, reason: 'existing individual question position' },
 	{ patch: { debt: 1n }, reason: 'existing individual question position' },
 	{ patch: { escrow: 1n }, reason: 'existing dispute position' },
@@ -113,7 +118,7 @@ for (const scenario of [
 		expect((await loadPortfolioForkClaimState(client, selection)).reason?.toLowerCase()).toContain(scenario.reason.toLowerCase())
 	})
 
-const allocation = { positionId: 1n, questionId: 51n, custody: parent, ownerShares: 10n, remainingShares: 10n, reusable: false, recoveryComplete: false, recoveryBountyAttoEth: 0n, questionEndTime: 500n, operational: false, claimReason: undefined }
+const allocation = { positionId: 1n, questionId: 51n, custody: parent, ownerShares: 10n, remainingShares: 10n, reusable: false, recoveryComplete: false, recoveryBountyAttoEth: 0n, questionEndTime: 500n, operational: false, resolved: false, claimReason: undefined }
 const snapshot: PortfolioAggregateSnapshot = {
 	portfolio,
 	owner,
@@ -171,6 +176,7 @@ test('fork choice requires explicit input, builds only one transaction and reval
 		hook.state().setOutcome('1')
 	})
 	await waitFor(() => expect(hook.state().reason).toBeUndefined())
+	expect(hook.state().needsPreparation).toBe(false)
 	await act(async () => {
 		await hook.state().claim()
 	})
@@ -181,4 +187,9 @@ test('fork choice requires explicit input, builds only one transaction and reval
 	await request.validateBeforeSubmit?.()
 	state.units = 1n
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('existing individual question position')
+	state.units = 0n
+	state.feed = false
+	await act(() => hook.state().refresh())
+	await waitFor(() => expect(hook.state().reason).toContain('price feed'))
+	expect(hook.state().needsPreparation).toBe(true)
 })

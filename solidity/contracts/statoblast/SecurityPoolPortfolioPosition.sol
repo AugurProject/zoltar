@@ -8,10 +8,12 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
 import { VaultOperationsInput, VaultLiquidationInput } from './VaultOperations.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
 /// @notice Immutable custody of one question allocation and its original owners' rights.
 /// @dev Only the portfolio can allocate, rebalance, or split rights to an owner's recovery vault.
-/// This account cannot stake on an outcome, choose a fork child, or execute arbitrary calls.
+/// Fork custody can accept one authenticated parent split and migrate to its immutable child.
+/// This account cannot stake or execute arbitrary calls.
 contract SecurityPoolPortfolioPosition {
 	using SafeERC20Ops for IERC20;
 
@@ -19,11 +21,17 @@ contract SecurityPoolPortfolioPosition {
 	address public immutable portfolio;
 	ISecurityPool public immutable pool;
 	SecurityPoolPortfolioQuote private immutable quoteHelper;
+	ISecurityPool public immutable incomingParent;
+	address public immutable incomingSource;
+	bool private incomingReceived;
+	bool private incomingMigrated;
 
-	constructor(address _portfolio, ISecurityPool _pool, SecurityPoolPortfolioQuote _quoteHelper) {
+	constructor(address _portfolio, ISecurityPool _pool, SecurityPoolPortfolioQuote _quoteHelper, ISecurityPool _incomingParent, address _incomingSource) {
 		portfolio = _portfolio;
 		pool = _pool;
 		quoteHelper = _quoteHelper;
+		incomingParent = _incomingParent;
+		incomingSource = _incomingSource;
 	}
 
 	modifier onlyPortfolio() {
@@ -74,6 +82,28 @@ contract SecurityPoolPortfolioPosition {
 	function collect() external onlyPortfolio returns (uint256 rep, uint256 fees) {
 		pool.redeemFees(address(this));
 		return _collect();
+	}
+
+	function onSecurityPoolVaultPositionReceived(address source) external returns (bytes4) {
+		require(msg.sender == address(incomingParent) && source == incomingSource && source != address(0), 'Unexpected fork position');
+		require(!incomingReceived, 'Fork position already received');
+		incomingReceived = true;
+		return this.onSecurityPoolVaultPositionReceived.selector;
+	}
+
+	/// @notice Finish the single parent split into the immutable canonical child ledger.
+	/// Parent cash returns to its source cohort before child proceeds can accrue here.
+	function migrateIncoming(uint256 outcomeIndex) external onlyPortfolio {
+		require(incomingReceived && !incomingMigrated, 'No incoming fork position');
+		require(incomingParent.zoltar().getChildUniverseId(incomingParent.universeId(), outcomeIndex) == pool.universeId(), 'Fork child mismatch');
+		require(address(pool.parent()) == address(incomingParent), 'Fork parent mismatch');
+		incomingMigrated = true;
+		incomingParent.redeemFees(address(this));
+		IERC20 parentRep = IERC20(address(incomingParent.repToken()));
+		uint256 parentCash = parentRep.balanceOf(address(this));
+		if (parentCash > 0) parentRep.safeTransfer(incomingSource, parentCash);
+		_sendEth(incomingSource, address(this).balance);
+		ISecurityPoolForker(incomingParent.securityPoolForker()).migrateVault(incomingParent, outcomeIndex);
 	}
 
 	/// @notice Release available backing once for all remaining owners, without selecting a fork branch.

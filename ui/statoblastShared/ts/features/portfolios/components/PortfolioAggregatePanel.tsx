@@ -12,15 +12,17 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { PortfolioButton, PortfolioInput, type PortfolioActions } from './PortfolioControls.js'
 import { PortfolioForkClaim } from './PortfolioForkClaim.js'
+import { PortfolioSharedFork } from './PortfolioSharedFork.js'
 import type { usePortfolioAggregate } from '../hooks/usePortfolioAggregate.js'
 import { buildPoolsRouteHash } from '../../../lib/statoblastLocation.js'
 import * as copy from '../../../copy/portfolio.js'
+import * as sharedForkCopy from '../../../copy/portfolioSharedFork.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
 
-function allocationStatus(allocation: Model['allocations'][number]) {
-	if (allocation.recoveryComplete) return copy.recoveryComplete
+function allocationStatus(allocation: Model['allocations'][number], forked: boolean) {
+	if (allocation.recoveryComplete) return forked ? sharedForkCopy.sourceRecovered : copy.recoveryComplete
 	if (allocation.remainingShares === 0n) return copy.positionClaimed
 	return allocation.reusable ? copy.reusablePosition : copy.historicalPosition
 }
@@ -69,6 +71,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				<PortfolioButton model={actions} action='collectPortfolioRecovery' label={copy.collectRecovered} pendingLabel={copy.collectingRecovered} reason={model.collectReason} onClick={model.collectRecovered} />
 				<PaginationControls hasPreviousPage={(snapshot?.intervalStart ?? 0n) > 0n} hasNextPage={snapshot !== undefined && snapshot.intervalStart + 64n < snapshot.intervalCount} loading={model.loading} onPreviousPage={model.previousIntervalPage} onNextPage={model.nextIntervalPage} />
 			</SectionBlock>
+			{snapshot !== undefined && snapshot.forkTime > 0n ? <PortfolioSharedFork snapshot={snapshot} actions={actions} onConfirmed={model.refresh} /> : undefined}
 			<SectionBlock title={copy.depositPoolRep} description={copy.depositPoolHint}>
 				<MetricGrid>
 					<PortfolioInput label={copy.amount} value={model.depositAmount} onChange={model.setDepositAmount} disabled={actions.busy !== undefined} numeric />
@@ -145,10 +148,11 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 									<CurrencyValue value={claim.recoveryBountyAttoEth} suffix={commonCopy.eth} />
 								</MetricField>
 								<MetricField label={copy.allocationStatus}>
-									<Badge tone={claim.reusable ? 'ok' : 'muted'}>{allocationStatus(claim)}</Badge>
+									<Badge tone={claim.reusable ? 'ok' : 'muted'}>{allocationStatus(claim, snapshot !== undefined && snapshot.forkTime > 0n)}</Badge>
 								</MetricField>
 							</MetricGrid>
 							{claim.remainingShares === 0n || claim.recoveryComplete ? undefined : <UserMessage detail={claim.reusable ? copy.reusablePositionHint : copy.historicalPositionHint} />}
+							{claim.recoveryComplete && snapshot !== undefined && snapshot.forkTime > 0n ? <UserMessage detail={sharedForkCopy.sourceRecoveredHint} /> : undefined}
 							<div className='actions'>
 								<PortfolioButton model={actions} action={`rebalancePortfolioPosition:${claim.positionId}`} label={copy.rebalancePosition} pendingLabel={copy.rebalancingPosition} reason={claim.rebalanceReason} onClick={() => model.rebalancePosition(claim.positionId)} />
 							</div>

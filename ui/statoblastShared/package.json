@@ -689,6 +689,10 @@
 			"bun": "./ts/features/portfolios/hooks/usePortfolioAggregate.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioAggregate.js"
 		},
+		"./features/portfolios/hooks/usePortfolioSharedFork.js": {
+			"bun": "./ts/features/portfolios/hooks/usePortfolioSharedFork.ts",
+			"default": "./js/features/portfolios/hooks/usePortfolioSharedFork.js"
+		},
 		"./features/portfolios/hooks/usePortfolioForkClaim.js": {
 			"bun": "./ts/features/portfolios/hooks/usePortfolioForkClaim.ts",
 			"default": "./js/features/portfolios/hooks/usePortfolioForkClaim.js"

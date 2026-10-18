@@ -49,6 +49,7 @@ async function renderAggregate(
 	let recoveredRep = 3n * unit
 	let recoveredEth = unit
 	let intervalsActive = true
+	let sharedForkSelected = false
 	const account = options.account ?? owner
 	const requests: PortfolioTransaction[] = []
 	const reads: { name: string; args: readonly unknown[] | undefined }[] = []
@@ -66,6 +67,10 @@ async function renderAggregate(
 					return token
 				case 'getForkTime':
 					return forkTime
+				case 'forkController':
+					return token
+				case 'isIntervalSelected':
+					return sharedForkSelected
 				case 'recoveryLedger':
 					return token
 				case 'getOwnerIntervalCount':
@@ -187,6 +192,9 @@ async function renderAggregate(
 		setRecovered: (rep: bigint, eth: bigint) => {
 			recoveredRep = rep
 			recoveredEth = eth
+		},
+		setSharedForkSelected: (value: boolean) => {
+			sharedForkSelected = value
 		},
 		setIntervalsActive: (value: boolean) => {
 			intervalsActive = value
@@ -353,6 +361,21 @@ test('pool controls keep approval, deposit and mint actions visible without owne
 	expect(text).toContain('Recover and collect REP and fees')
 	expect(text).not.toContain('Update pool accounting')
 	expect(text).not.toContain('Contributing vault')
+})
+
+test.each([0n, 10n])('completed allocation status distinguishes source recovery after a fork (%s)', async forkTime => {
+	const { hook } = await renderAggregate({ forkTime, recoveryComplete: true })
+	const rendered = lifecycle.trackRendered(await renderIntoDocument(<PortfolioAggregatePanel model={hook.state()} actions={{ scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runPortfolioAction: async () => undefined }} />))
+	const badges = [...rendered.container.querySelectorAll('.badge')].map(element => element.textContent)
+	if (forkTime === 0n) {
+		expect(badges).toContain('Recovery complete')
+		expect(badges).not.toContain('Source recovery complete')
+		expect(rendered.container.textContent).not.toContain('Shared branch positions can still require')
+	} else {
+		expect(badges).toContain('Source recovery complete')
+		expect(badges).not.toContain('Recovery complete')
+		expect(rendered.container.textContent).toContain('Shared branch positions can still require migration or recovery')
+	}
 })
 
 test('a purchase without portfolio capital explains the required backing and keeps recovery available', async () => {
@@ -551,4 +574,16 @@ test('owners can reduce recovery work in the same collection action and collect 
 	expect(decodeFunctionData({ abi: parseAbi(['function claimRecovered(uint256[],uint256[])']), data: credits.data }).args).toEqual([[0n], []])
 	await act(() => hook.state().setRecoveryBatchSize('-1'))
 	expect(hook.state().collectReason).toContain('whole number')
+})
+
+test('shared fork enrollment blocks individual extraction while preserving aggregate cash collection', async () => {
+	const { hook, requests, setSharedForkSelected } = await renderAggregate({ forkTime: 100n })
+	await act(async () => await hook.state().claimPosition(1n))
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing individual extraction request')
+	setSharedForkSelected(true)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('saved shared branch')
+	await act(async () => await hook.state().refresh())
+	expect(hook.state().allocations[0]?.claimReason).toContain('saved shared branch')
+	expect(hook.state().collectReason).toBeUndefined()
 })

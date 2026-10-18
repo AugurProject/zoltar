@@ -2,7 +2,16 @@ import { expect, mock, test } from 'bun:test'
 import { createPublicClient, custom, decodeFunctionData, encodeEventTopics, getAddress, isHex, parseAbi, zeroAddress, zeroHash, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { asWriteClient, createMockWriteClient, createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { getInfraContractAddresses, getSecurityPoolPortfolioRuntimeCode, getSecurityPoolPortfolioQuoteRuntimeCode, getSecurityPoolPortfolioRecoveryRuntimeCode, getSecurityPoolPortfolioVaultRuntimeCode, getSecurityPoolPortfolioVaultDeployerRuntimeCode } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import {
+	getInfraContractAddresses,
+	getSecurityPoolPortfolioRuntimeCode,
+	getSecurityPoolPortfolioQuoteRuntimeCode,
+	getSecurityPoolPortfolioRecoveryRuntimeCode,
+	getSecurityPoolPortfolioVaultRuntimeCode,
+	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
+	getSecurityPoolPortfolioForkControllerRuntimeCode,
+	getSecurityPoolPortfolioRecoveryDeployerRuntimeCode,
+} from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { portfolioContractRequest, sendPortfolioTransaction, vaultArtifact, loadPortfolioOwnerVault, discoverSimulationPortfolio, capturePortfolioBatchReview, portfolioPolicyReviewRequest, type loadPortfolioPolicy } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { planPortfolioAllocations, type PortfolioSnapshot, type PortfolioPosition } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
@@ -10,11 +19,15 @@ import { planPortfolioAllocations, type PortfolioSnapshot, type PortfolioPositio
 const deployer = getInfraContractAddresses().securityPoolPortfolioVaultDeployer
 const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
 const recoveryLedger = getAddress('0x00000000000000000000000000000000000000e2')
+const forkController = getAddress('0x00000000000000000000000000000000000000e3')
+const helpers = getAddress('0x00000000000000000000000000000000000000e4')
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const vault = getAddress('0x0000000000000000000000000000000000000022')
 type Policy = Awaited<ReturnType<typeof loadPortfolioPolicy>>
 
 function fixtureRuntime(address: Address, vaultRuntime = getSecurityPoolPortfolioVaultRuntimeCode()) {
+	if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+	if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 	if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 	if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 	if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
@@ -250,6 +263,11 @@ test('rejects an imported manager that spoofs vault ownership with different run
 test('rejects the expected manager bytecode when its immutable factory is not the configured factory', async () => {
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -265,6 +283,11 @@ test('rejects the expected manager bytecode when its immutable factory is not th
 test.each(['missing', 'wrong'] as const)('rejects an imported manager with %s quote helper runtime', async fault => {
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -290,6 +313,11 @@ for (const fault of ['runtime', 'canonical address'] as const) {
 	test(`rejects an imported manager with a vault deployer ${fault} mismatch`, async () => {
 		const client = {
 			...createMockReadClient(async request => {
+				if (request.functionName === 'forkController') return forkController
+				if (request.functionName === 'helpers') return helpers
+				if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+				if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+				if (request.functionName === 'fixedOwnership') return false
 				if (request.functionName === 'quoteHelper') return quoteHelper
 				if (request.functionName === 'recoveryLedger') return recoveryLedger
 				if (request.functionName === 'vaultDeployer') return fault === 'canonical address' ? vault : deployer
@@ -300,6 +328,8 @@ for (const fault of ['runtime', 'canonical address'] as const) {
 				throw new Error('Unexpected portfolio read')
 			}),
 			getCode: async ({ address }: { address: Address }) => {
+				if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+				if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 				if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 				if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 				if (address === owner) return getSecurityPoolPortfolioRuntimeCode()
@@ -312,6 +342,11 @@ for (const fault of ['runtime', 'canonical address'] as const) {
 
 test('rejects spoofed vault code and owner claims after verifying the manager', async () => {
 	const readContract = createMockReadClient(async request => {
+		if (request.functionName === 'forkController') return forkController
+		if (request.functionName === 'helpers') return helpers
+		if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+		if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+		if (request.functionName === 'fixedOwnership') return false
 		if (request.functionName === 'quoteHelper') return quoteHelper
 		if (request.functionName === 'recoveryLedger') return recoveryLedger
 		if (request.functionName === 'vaultDeployer') return deployer
@@ -338,6 +373,11 @@ test('rejects a vault with inconsistent repeated immutable values even when gett
 	if (!isHex(malicious)) throw new Error('Expected hexadecimal malicious runtime')
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -356,6 +396,11 @@ test('rejects a vault with inconsistent repeated immutable values even when gett
 test('rejects a vault clone at a noncanonical address despite matching code and owner getters', async () => {
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -383,6 +428,8 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 	const spoof = getAddress('0x0000000000000000000000000000000000000044')
 	const queried: { fromBlock: bigint; args: { owner: Address } }[] = []
 	const getCode = mock(async ({ address }: { address: Address }) => {
+		if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+		if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 		if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 		if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
 		if (address === deployer) return getSecurityPoolPortfolioVaultDeployerRuntimeCode()
@@ -392,6 +439,11 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 	})
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -433,6 +485,11 @@ test('does not perform global portfolio log scans on production backends', async
 test.each(['missing', 'runtime', 'binding'] as const)('rejects an imported manager with a recovery ledger %s mismatch', async fault => {
 	const client = {
 		...createMockReadClient(async request => {
+			if (request.functionName === 'forkController') return forkController
+			if (request.functionName === 'helpers') return helpers
+			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
+			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
+			if (request.functionName === 'fixedOwnership') return false
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -449,3 +506,30 @@ test.each(['missing', 'runtime', 'binding'] as const)('rejects an imported manag
 	}
 	await expect(loadPortfolioOwnerVault(client, owner, owner)).rejects.toThrow(fault === 'binding' ? 'Recovery ledger belongs to another portfolio' : 'Unrecognized portfolio recovery ledger runtime code')
 })
+
+for (const fault of ['controller runtime', 'helper runtime', 'owner', 'helpers', 'zoltar', 'ledger', 'universe', 'fixed ownership'] as const) {
+	test(`rejects shared fork authority with mismatched ${fault}`, async () => {
+		const client = {
+			...createMockReadClient(async request => {
+				if (request.functionName === 'quoteHelper') return quoteHelper
+				if (request.functionName === 'recoveryLedger') return recoveryLedger
+				if (request.functionName === 'vaultDeployer') return deployer
+				if (request.functionName === 'vaultOf') return zeroAddress
+				if (request.functionName === 'originUniverseId') return 0n
+				if (request.functionName === 'factory') return getInfraContractAddresses().securityPoolFactory
+				if (request.functionName === 'forkController') return forkController
+				if (request.functionName === 'helpers') return request.address === forkController && fault === 'helpers' ? vault : helpers
+				if (request.functionName === 'portfolio') return request.address === forkController && fault === 'owner' ? vault : owner
+				if (request.functionName === 'zoltar') return fault === 'zoltar' ? vault : getInfraContractAddresses().zoltar
+				if (request.functionName === 'getContext') return { ledger: fault === 'ledger' ? vault : recoveryLedger, universeId: fault === 'universe' ? 1n : 0n }
+				if (request.functionName === 'fixedOwnership') return fault === 'fixed ownership'
+				throw new Error(`Unexpected shared fork verification read ${request.functionName}`)
+			}),
+			getCode: async ({ address }: { address: Address }) => ((address === forkController && fault === 'controller runtime') || (address === helpers && fault === 'helper runtime') ? ('0x00' as const) : fixtureRuntime(address)),
+		}
+		let expectedError = 'canonical helpers'
+		if (fault.endsWith('runtime')) expectedError = 'Unrecognized portfolio'
+		else if (fault === 'ledger' || fault === 'universe' || fault === 'fixed ownership') expectedError = 'root ownership'
+		await expect(loadPortfolioOwnerVault(client, owner, owner)).rejects.toThrow(expectedError)
+	})
+}

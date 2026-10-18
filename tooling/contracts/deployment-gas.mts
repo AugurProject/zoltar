@@ -20,7 +20,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	uniformPriceDualCapBatchAuctionFactory: 4_750_000n,
 	securityPoolUtils: 2_000_000n,
 	securityPoolOperationsDelegate: 3_000_000n,
-	securityPoolPortfolioVaultDeployer: 8_000_000n,
+	securityPoolPortfolioVaultDeployer: 14_500_000n,
 	openOracle: 4_250_000n,
 	zoltarQuestionData: 2_750_000n,
 	zoltar: 4_250_000n,

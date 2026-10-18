@@ -14,6 +14,7 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface ISecurityPoolPortfolio {
+	function forkController() external view returns (address);
 	function getPool(uint256 questionId, uint248 universeId) external view returns (ISecurityPool);
 	function originUniverseId() external view returns (uint248);
 	function maximumQuestionHorizonSeconds() external view returns (uint256);
@@ -134,7 +135,7 @@ contract SecurityPoolPortfolioVault is IERC1155Receiver, IERC1271 {
 	/// @notice Completes an owner's atomic allocation claim and explicit fork choice.
 	/// @dev Only the immutable portfolio may invoke this narrow operation; its caller must own the allocation.
 	function migrateClaimedPosition(ISecurityPool parent, uint256 outcomeIndex) external nonReentrant {
-		require(msg.sender == address(portfolio), 'Only portfolio');
+		require(msg.sender == address(portfolio) || msg.sender == portfolio.forkController(), 'Only portfolio');
 		require(address(portfolio.getPool(parent.questionId(), parent.universeId())) == address(parent), 'Question pool unavailable');
 		_revokeAllocationPolicy(false);
 		ISecurityPoolForker(parent.securityPoolForker()).migrateVault(parent, outcomeIndex);

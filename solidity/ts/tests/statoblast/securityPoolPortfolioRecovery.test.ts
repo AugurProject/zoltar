@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeAbiParameters, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as artifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -34,7 +34,7 @@ describe('Statoblast: aggregate allocation recovery accounting', () => {
 		const ethereum = getAnvilWindowEthereum()
 		await setupTestAccounts(ethereum)
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: `0x${artifact.evm.bytecode.object}` }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: concatHex([`0x${artifact.evm.bytecode.object}`, encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'bool' }], [client.account.address, 0n, false])]) }) })
 		if (receipt.contractAddress === undefined) throw new Error('Recovery ledger deployment address missing')
 		ledger = receipt.contractAddress
 		await setBaselineSnapshot()
@@ -251,5 +251,157 @@ describe('Statoblast: aggregate allocation recovery accounting', () => {
 		}
 		expect(await count(alice)).toBe(1n)
 		expect(await claim(alice)).toEqual([2_080n, 64n])
+	})
+})
+
+describe('Statoblast: sparse shared fork recovery accounting', () => {
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
+	const importedAbi = parseAbi(['function importInterval(address owner, uint256 start, uint256 end, uint256 shares) returns (uint256)', 'function retireImportedInterval(address owner, uint256 intervalId)', 'function sealImports()', 'function getPointShares(uint256 positionId) view returns (uint256)'])
+	let client: WriteClient
+	let ledger: Address
+	const alice = addressString(TEST_ADDRESSES[0])
+	const bob = addressString(TEST_ADDRESSES[1])
+	const target = () => ({ abi: artifact.abi, address: ledger })
+	const importedTarget = () => ({ abi: importedAbi, address: ledger })
+	const register = async (owner: Address, start: bigint, end: bigint, shares: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...importedTarget(), functionName: 'importInterval', args: [owner, start, end, shares] }))
+	const retire = async (owner: Address, id: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...importedTarget(), functionName: 'retireImportedInterval', args: [owner, id] }))
+	const seal = async () => await writeContractAndWait(client, () => client.writeContract({ ...importedTarget(), functionName: 'sealImports' }))
+	const weight = async (position: bigint) => await client.readContract({ ...importedTarget(), functionName: 'getPointShares', args: [position] })
+	const credit = async (position: bigint, rep: bigint, eth: bigint, shares: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'credit', args: [position, rep, eth, shares] }))
+	const claim = async (owner: Address, ids: bigint[]) => {
+		const amounts = await client.readContract({ ...target(), functionName: 'previewClaim', args: [owner, ids] })
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'claim', args: [owner, ids] }))
+		return [...amounts]
+	}
+
+	beforeAll(async () => {
+		const ethereum = getAnvilWindowEthereum()
+		await setupTestAccounts(ethereum)
+		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
+		const data = concatHex([`0x${artifact.evm.bytecode.object}`, encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'bool' }], [client.account.address, 4_096n, true])])
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
+		if (receipt.contractAddress === undefined) throw new Error('Sparse recovery ledger deployment address missing')
+		ledger = receipt.contractAddress
+		await setBaselineSnapshot()
+	})
+
+	test('one imported ownership interval covers thousands of sparse allocations without appending leaves', async () => {
+		expect(await client.readContract({ ...target(), functionName: 'positionCount' })).toBe(4_096n)
+		await register(alice, 1n, 4_096n, 60n)
+		await register(bob, 17n, 19n, 40n)
+		expect(await weight(1n)).toBe(60n)
+		expect(await weight(16n)).toBe(60n)
+		expect(await weight(17n)).toBe(100n)
+		expect(await weight(19n)).toBe(100n)
+		expect(await weight(20n)).toBe(60n)
+		expect(await weight(4_096n)).toBe(60n)
+		await retire(bob, 0n)
+		expect(await weight(17n)).toBe(60n)
+		expect(await client.readContract({ ...target(), functionName: 'getOwnerIntervalCount', args: [alice] })).toBe(1n)
+		await seal()
+		await credit(4_096n, 120n, 12n, 60n)
+		await credit(1n, 180n, 18n, 60n)
+		expect(await claim(alice, [0n])).toEqual([300n, 30n])
+		expect(await claim(alice, [0n])).toEqual([0n, 0n])
+	})
+
+	test('enrollment cannot change after recovery begins and malformed ranges cannot create rights', async () => {
+		await expect(register(alice, 0n, 1n, 1n)).rejects.toThrow('Invalid imported interval')
+		await expect(register(alice, 2n, 1n, 1n)).rejects.toThrow('Invalid imported interval')
+		await expect(register(alice, 1n, 4_097n, 1n)).rejects.toThrow('Invalid imported interval')
+		await expect(register(alice, 1n, 1n, 0n)).rejects.toThrow('Invalid imported shares')
+		await expect(register(alice, 1n, 1n, 10n ** 36n + 1n)).rejects.toThrow('Invalid imported shares')
+		await register(alice, 1n, 2n, 60n)
+		await expect(credit(1n, 1n, 0n, 60n)).rejects.toThrow('Fork imports not sealed')
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'excludePosition', args: [alice, 0n, 1n] }))).rejects.toThrow('Fork imports not sealed')
+		await seal()
+		await expect(register(bob, 1n, 2n, 40n)).rejects.toThrow('Fork imports sealed')
+		await expect(retire(alice, 0n)).rejects.toThrow('Fork imports sealed')
+		await expect(credit(1n, 1n, 0n, 100n)).rejects.toThrow('Recovery cohort shares mismatch')
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'appendPosition' }))).rejects.toThrow('Fixed recovery ownership')
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'setOwnerBalance', args: [alice, 1n, 100n] }))).rejects.toThrow('Fixed recovery ownership')
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'closeGeneration', args: [1n] }))).rejects.toThrow('Fixed recovery ownership')
+		await expect(weight(0n)).rejects.toThrow('Unknown allocation position')
+		await expect(weight(4_097n)).rejects.toThrow('Unknown allocation position')
+	})
+
+	test('a revoked choice can rejoin without resurrecting the retired interval or growing another owner history', async () => {
+		await register(alice, 1n, 4_096n, 60n)
+		for (let index = 0n; index < 8n; index++) {
+			await register(bob, 10n, 20n, 40n)
+			await retire(bob, index)
+		}
+		await register(bob, 10n, 20n, 40n)
+		expect(await weight(10n)).toBe(100n)
+		expect(await client.readContract({ ...target(), functionName: 'getOwnerIntervalCount', args: [alice] })).toBe(1n)
+		await expect(retire(bob, 0n)).rejects.toThrow('Owner interval retired')
+		await seal()
+		await credit(11n, 100n, 10n, 100n)
+		expect(await claim(alice, [0n])).toEqual([60n, 6n])
+		expect(await claim(bob, [8n])).toEqual([40n, 4n])
+		await expect(claim(bob, [0n])).rejects.toThrow('Owner interval retired')
+	})
+
+	test('an individual child exit excludes one point while preserving earlier cash and surrounding weights', async () => {
+		await register(alice, 1n, 3n, 60n)
+		await register(bob, 1n, 3n, 40n)
+		await seal()
+		await credit(1n, 100n, 10n, 100n)
+		await credit(2n, 200n, 20n, 100n)
+		await credit(3n, 300n, 30n, 100n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'excludePosition', args: [alice, 0n, 2n] }))
+		expect(await weight(1n)).toBe(100n)
+		expect(await weight(2n)).toBe(40n)
+		expect(await weight(3n)).toBe(100n)
+		expect(await claim(alice, [])).toEqual([360n, 36n])
+		await credit(2n, 100n, 10n, 40n)
+		await credit(1n, 50n, 5n, 100n)
+		await credit(3n, 50n, 5n, 100n)
+		expect(await claim(alice, [1n, 2n])).toEqual([60n, 6n])
+		expect(await claim(bob, [0n])).toEqual([380n, 38n])
+	})
+
+	test('fractional distribution carry survives a sparse child exclusion and final exit', async () => {
+		const precision = 10n ** 36n
+		await register(alice, 4_096n, 4_096n, precision / 2n)
+		await register(bob, 4_096n, 4_096n, precision / 4n)
+		await seal()
+		await credit(4_096n, 1n, 1n, (3n * precision) / 4n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'excludePosition', args: [alice, 0n, 4_096n] }))
+		expect(await weight(4_096n)).toBe(precision / 4n)
+		await credit(4_096n, 1n, 1n, precision / 4n)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'excludePosition', args: [bob, 0n, 4_096n] }))
+		expect(await weight(4_096n)).toBe(0n)
+		expect(await claim(alice, [])).toEqual([0n, 0n])
+		expect(await claim(bob, [])).toEqual([1n, 1n])
+		const first = await client.readContract({ ...target(), functionName: 'ownerCredits', args: [alice] })
+		const second = await client.readContract({ ...target(), functionName: 'ownerCredits', args: [bob] })
+		expect(first[2] + second[2]).toBe(precision)
+		expect(first[3] + second[3]).toBe(precision)
+	})
+
+	test('deployment can bind authority to a controller distinct from the deploying account', async () => {
+		const controller = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
+		const data = concatHex([`0x${artifact.evm.bytecode.object}`, encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'bool' }], [controller.account.address, 1n, true])])
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
+		if (receipt.contractAddress === undefined) throw new Error('Controller-owned ledger deployment address missing')
+		const child = { abi: importedAbi, address: receipt.contractAddress }
+		const args = [alice, 1n, 1n, 100n] as const
+		await expect(writeContractAndWait(client, () => client.writeContract({ ...child, functionName: 'importInterval', args }))).rejects.toThrow('Only portfolio')
+		await writeContractAndWait(controller, () => controller.writeContract({ ...child, functionName: 'importInterval', args }))
+		expect(await controller.readContract({ ...child, functionName: 'getPointShares', args: [1n] })).toBe(100n)
+		expect((await controller.readContract({ abi: artifact.abi, address: receipt.contractAddress, functionName: 'portfolio' })).toLowerCase()).toBe(controller.account.address.toLowerCase())
+	})
+
+	test('only the declared controller can import, revoke, seal or collect ownership', async () => {
+		const outsider = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1])
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...importedTarget(), functionName: 'importInterval', args: [bob, 1n, 2n, 100n] }))).rejects.toThrow('Only portfolio')
+		await register(alice, 1n, 2n, 100n)
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...importedTarget(), functionName: 'retireImportedInterval', args: [alice, 0n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...importedTarget(), functionName: 'sealImports' }))).rejects.toThrow('Only portfolio')
+		await seal()
+		await credit(2n, 100n, 10n, 100n)
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'claim', args: [alice, [0n]] }))).rejects.toThrow('Only portfolio')
+		expect(await claim(alice, [0n])).toEqual([100n, 10n])
 	})
 })
