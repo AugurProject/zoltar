@@ -141,6 +141,31 @@ test('ordinary claim evidence uses the frozen threshold and telescoping interval
 	expect(result.positions[2]?.['calculation']).toMatchObject({ fork_threshold_atto_rep: '7' })
 })
 
+test('claim snapshots continue past empty consumed-node pages', async () => {
+	const read = fixtureRead()
+	const rootHash = buildCarryMerkleMountainRangeProof([...hashes, ...Array.from({ length: 125 }, () => zero)], 0).root
+	const cursors: unknown[] = []
+	const sparseRead: StateRead = async (target, abi, name, args = []) => {
+		if (name === 'getOutcomeState' && args[0] === 1) {
+			return { balanceAttoRep: 150n, snapshotLeafCount: target === child ? 128n : 0n, snapshotPeaks: Array.from({ length: 64 }, (_, index) => (index === 7 ? rootHash : zero)), currentNullifierRoot: createSparseNullifier([]).getRoot(), localHeadNodeId: target === root ? 128n : 0n }
+		}
+		if (name === 'getCarryLeafPageByOutcome' && target === root && args[0] === 1) {
+			cursors.push(args[1])
+			expect(args[2]).toBe(100n)
+			return args[1] === 0n ? [[], 28n] : [[...leaves].reverse(), 0n]
+		}
+		if (name === 'nodes' && typeof args[0] === 'bigint' && args[0] > 3n) {
+			const nodeId = args[0]
+			return [nodeId - 1n, owner, 1n, 50n, nodeId - 1n, nodeId * 50n, nodeId - 1n]
+		}
+		return await read(target, abi, name, args)
+	}
+	const result = await sampleClaimPositions(child, sparseRead, state)
+	expect(result.positions).toHaveLength(3)
+	expect(result.positions.map(position => position['deposit_index'])).toEqual(['0', '1', '2'])
+	expect(cursors).toEqual([0n, 28n])
+})
+
 test('excludes consumed leaves, suppresses direct parent claims, and retains pending statuses', async () => {
 	const consumed = await sampleClaimPositions(child, fixtureRead({ consumed: [0n], directlyClaimed: true }), state)
 	expect(consumed.positions).toHaveLength(2)

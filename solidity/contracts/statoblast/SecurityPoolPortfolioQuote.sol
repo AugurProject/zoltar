@@ -44,10 +44,6 @@ contract SecurityPoolPortfolioQuote {
 	function mintPlan(ISecurityPool pool, address custody, uint256 mintAttoEth, uint256 idleRep, bool reserveFunded, bool previewRebalance) external view returns (MintPlan memory plan) {
 		QuoteState memory state = _quoteState(pool, custody);
 		require(state.freshPrice, 'Mint needs settled fresh price');
-		// Price every purchase against its standalone backing requirement. Existing
-		// spare capacity and historical recapitalization do not change this charge.
-		uint256 purchaseBacking = _requiredBacking(state, mintAttoEth, MINIMUM_HEALTH_FACTOR_BPS);
-		plan.feeAttoEth = Math.max(Math.mulDiv(Math.mulDiv(purchaseBacking, 1e18, state.price, Math.Rounding.Ceil), RESERVATION_FEE_BPS, 10_000, Math.Rounding.Ceil), MINIMUM_RESERVATION_FEE_ATTO_ETH);
 		plan.reusePosition = custody != address(0);
 		plan.reserveFunded = reserveFunded;
 		plan.availableAttoRep = reserveFunded ? idleRep : 0;
@@ -70,6 +66,11 @@ contract SecurityPoolPortfolioQuote {
 			state.commitment = 0;
 			(plan.depositAttoRep, plan.nextCommitment, plan.needsCommitment) = _mintBackingQuote(state, mintAttoEth);
 		}
+		// Charge every purchase for its standalone backing, including capacity reuse.
+		// A dust mint that also repairs old backing must pay for all newly locked REP,
+		// whether that capital comes from the reserve or historical custody cash.
+		uint256 feeBacking = Math.max(_requiredBacking(state, mintAttoEth, MINIMUM_HEALTH_FACTOR_BPS), plan.depositAttoRep);
+		plan.feeAttoEth = Math.max(Math.mulDiv(Math.mulDiv(feeBacking, 1e18, state.price, Math.Rounding.Ceil), RESERVATION_FEE_BPS, 10_000, Math.Rounding.Ceil), MINIMUM_RESERVATION_FEE_ATTO_ETH);
 	}
 
 	function _quoteState(ISecurityPool pool, address custody) private view returns (QuoteState memory state) {

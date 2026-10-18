@@ -78,6 +78,21 @@ test('preserves zero slots for locally consumed leaves', async () => {
 	expect(candidates[0]?.proof?.merkleMountainRangeSiblings).toEqual([zeroHash])
 })
 
+test('continues through an empty consumed-node page to the oldest live claim', async () => {
+	const fixture = storageFixture()
+	const origin = fixture.games[0]
+	const target = fixture.games[1]
+	if (origin === undefined || target === undefined) throw new Error('Missing fixture games')
+	const consumed = Array.from({ length: 30 }, (_, index) => ({ ...slot(source, index + 1), hash: zeroHash, consumedLocally: true }))
+	origin.local = [fixture.leaf, ...consumed]
+	target.inherited = [...origin.local]
+	const candidates = await load(fixture)
+	expect(candidates).toHaveLength(1)
+	expect(candidates[0]?.parentDepositIndex).toBe(fixture.leaf.leaf.parentDepositIndex)
+	expect(candidates[0]?.proof?.leafIndex).toBe('0')
+	expect(fixture.calls.filter(call => call.functionName === 'getCarryLeafPageByOutcome')).toHaveLength(2)
+})
+
 test('preserves a directly claimed leaf hash while excluding it from wallet claims', async () => {
 	const fixture = storageFixture()
 	const origin = fixture.games[0]

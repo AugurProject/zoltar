@@ -269,7 +269,7 @@ export function useEscalationGameFixture() {
 			assert.strictEqual(await getEscrowedRepByVault(client, escalationGameAddress, vault), expectedVaultTotal, 'vault escrow should match active local deposits')
 		}
 
-		const [carryPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, BigInt(activeCarryDeposits.length + 1))
+		const [carryPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, BigInt(deposits.length + 1))
 		const expectedNewestFirst = activeCarryDeposits.slice().reverse()
 		assert.deepStrictEqual(
 			carryPage.map(leaf => ({

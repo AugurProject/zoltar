@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { getAddress, keccak256, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import { buildCarryMerkleMountainRangeProof, hashCarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { loadForkCarriedEscalationDepositsFromParentSnapshot } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
 import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -19,6 +20,46 @@ function emptyCarryResponse(functionName: string) {
 }
 
 const load = (client: Parameters<typeof loadForkCarriedEscalationDepositsFromParentSnapshot>[0]) => loadForkCarriedEscalationDepositsFromParentSnapshot(client, child, parent, 'yes', parent)
+
+test('claim discovery follows empty consumed-node pages to the oldest live leaf', async () => {
+	const leaf = { amountAttoRep: 10n, cumulativeAmountAttoRep: 10n, depositor: parent, parentDepositIndex: 0n, sourceNodeId: 1n }
+	const leafHashes = Array.from({ length: 32 }, (_, index) => (index === 0 ? hashCarryLeaf(leaf, 1) : zeroHash))
+	const root = buildCarryMerkleMountainRangeProof(leafHashes, 0).root
+	const cursors: bigint[] = []
+	const client = {
+		getBlockNumber: async () => 1n,
+		getBlock: async () => ({ number: 1n, hash }),
+		readContract: createReadContractStub(async request => {
+			switch (request.functionName) {
+				case 'getOutcomeState':
+					return { currentCarryRoot: root, currentLeafCount: 32n, currentNullifierRoot: zeroHash, localHeadNodeId: request.address === game ? 32n : 0n, snapshotLeafCount: request.address === child ? 32n : 0n, snapshotPeaks: Array.from({ length: 64 }, (_, index) => (index === 5 ? root : zeroHash)) }
+				case 'getCarryLeafPageByOutcome': {
+					const cursor = request.args?.[1]
+					if (typeof cursor !== 'bigint') throw new Error('Missing carry page cursor')
+					expect(request.args?.[2]).toBe(30n)
+					cursors.push(cursor)
+					return cursor === 0n ? [[], 2n] : [[leaf], 0n]
+				}
+				case 'nodes': {
+					const nodeId = request.args?.[0]
+					if (typeof nodeId !== 'bigint') throw new Error('Missing node id')
+					return [nodeId - 1n, parent, 1, 10n, nodeId - 1n, nodeId * 10n, nodeId - 1n]
+				}
+				case 'securityPool':
+				case 'securityPoolForker':
+					return parent
+				case 'isEscalationDepositClaimedDirectly':
+					return false
+				case 'getClaimCheckpointProgress':
+					return [game, 9n, false, false]
+				default:
+					return emptyCarryResponse(request.functionName)
+			}
+		}),
+	}
+	await expect(load(client)).resolves.toMatchObject([{ parentDepositIndex: 0n, claimIdentity: { leafIndex: 0n, snapshotLeafCount: 32n } }])
+	expect(cursors).toEqual([0n, 2n])
+})
 
 for (const mode of ['stable', 'reorg', 'continuous reorg', 'provider error', 'bad reconstruction after reorg'] as const)
 	test(`claim reads bracket one memoized block snapshot (${mode})`, async () => {

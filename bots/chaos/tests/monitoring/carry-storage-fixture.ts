@@ -98,12 +98,13 @@ export function storageFixture() {
 			case 'getProofConsumedCarriedDepositIndexesByOutcome':
 				return [outcome === 0n ? (game?.consumed ?? []).slice(Number(args[1]), Number(args[1]) + Number(args[2])).map(BigInt) : []]
 			case 'getCarryLeafPageByOutcome': {
-				const available = outcome === 0n ? (game?.local ?? []).filter(slot => slot.hash !== zeroHash && !game?.direct.has(slot.leaf.parentDepositIndex) && (args[1] === 0n || BigInt(slot.leaf.sourceNodeId) <= BigInt(String(args[1])))).reverse() : []
-				const page = available.slice(0, Number(args[2]))
-				const last = page.at(-1)
+				const available = outcome === 0n ? (game?.local ?? []).filter(slot => args[1] === 0n || BigInt(slot.leaf.sourceNodeId) <= BigInt(String(args[1]))).reverse() : []
+				const visited = available.slice(0, Number(args[2]))
+				const page = visited.filter(slot => slot.hash !== zeroHash && !game?.direct.has(slot.leaf.parentDepositIndex))
+				const last = visited.at(-1)
 				return [
 					page.map(slot => ({ depositor: slot.leaf.depositor, amountAttoRep: BigInt(slot.leaf.amountAttoRep), parentDepositIndex: BigInt(slot.leaf.parentDepositIndex), cumulativeAmountAttoRep: BigInt(slot.leaf.cumulativeAmountAttoRep), sourceNodeId: BigInt(slot.leaf.sourceNodeId) })),
-					available.length > page.length && last !== undefined ? BigInt(last.leaf.sourceNodeId) - 1n : 0n,
+					available.length > visited.length && last !== undefined ? BigInt(last.leaf.sourceNodeId) - 1n : 0n,
 				]
 			}
 			case 'nodes': {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, toEventSelector, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as recoveryArtifact } from '../../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -23,6 +23,27 @@ describe('Statoblast: aggregate purchase fees', () => {
 	}
 	const claimFees = (owner = fixture.owner()) => writeContractAndWait(owner, () => owner.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'claimFees' }))
 	const bounty = (positionId = 1n) => fixture.owner().readContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'recoveryBounties', args: [positionId] })
+	const mintRepricedDust = async (feeBudget: bigint, price: bigint) => {
+		const hash = await mint(1n, fixture.base.questionId, feeBudget)
+		const receipt = await fixture.other().waitForTransactionReceipt({ hash })
+		const depositAbi = poolArtifact.abi.find(item => item.type === 'event' && item.name === 'RepDepositedToVault')
+		const feeAbi = aggregatePortfolioAbi.find(item => item.type === 'event' && item.name === 'PurchaseFeesPaid')
+		if (depositAbi === undefined || feeAbi === undefined) throw new Error('Missing recapitalization deposit or purchase fee ABI')
+		const depositLog = receipt.logs.find(log => log.address.toLowerCase() === pool().toLowerCase() && log.topics[0] === toEventSelector(depositAbi))
+		const feeLog = receipt.logs.find(log => log.address.toLowerCase() === fixture.portfolio.toLowerCase() && log.topics[0] === toEventSelector(feeAbi))
+		if (depositLog === undefined || feeLog === undefined) throw new Error('Missing recapitalization deposit or purchase fee event')
+		const depositEvent = decodeEventLog({ abi: poolArtifact.abi, data: depositLog.data, topics: depositLog.topics })
+		const feeEvent = decodeEventLog({ abi: aggregatePortfolioAbi, data: feeLog.data, topics: feeLog.topics })
+		if (depositEvent.eventName !== 'RepDepositedToVault' || feeEvent.eventName !== 'PurchaseFeesPaid') throw new Error('Unexpected recapitalization event')
+		const backing = depositEvent.args.amountAttoRep
+		const paidFee = feeEvent.args.feesAttoEth
+		if (typeof backing !== 'bigint' || typeof paidFee !== 'bigint') throw new Error('Invalid recapitalization deposit or purchase fee amount')
+		// Native fees accrue between the quote and execution, reducing the required top-up.
+		const backingValue = (backing * unit + price - 1n) / price
+		expect(paidFee).toBe((backingValue + 99n) / 100n)
+		expect(paidFee).toBeLessThanOrEqual(feeBudget)
+		return backing
+	}
 
 	test('the same purchase has the same positive fee with new backing or spare native capacity', async () => {
 		await prepare()
@@ -169,15 +190,68 @@ describe('Statoblast: aggregate purchase fees', () => {
 		expect(await fees(fixture.other().account.address)).toBe(0n)
 	})
 
-	test('price-induced capital top-ups use the same purchase fee as standalone backing', async () => {
+	test('a dust purchase must pay for the reserve capital it recapitalizes after a price shock', async () => {
+		await prepare()
+		await mint()
+		const price = 20n * unit
+		await manipulatePriceOracle(fixture.owner(), fixture.base.mockWindow, fixture.base.securityPoolAddresses.openOraclePriceCoordinator, price)
+		const reserveBefore = await assets()
+		const [backing, fee] = await quote(1n)
+		const [, standaloneFee] = await quote(1n, fixture.secondQuestionId)
+		expect(backing).toBeGreaterThan(4_500n * unit)
+		const backingValue = (backing * unit + price - 1n) / price
+		const expectedFee = (backingValue + 99n) / 100n
+		expect(expectedFee).toBeGreaterThan(standaloneFee)
+		expect(fee).toBe(expectedFee)
+		await expect(mint(1n, fixture.base.questionId, standaloneFee)).rejects.toThrow('Purchase fee exceeds budget')
+		expect(await assets()).toBe(reserveBefore)
+		const deposited = await mintRepricedDust(fee, price)
+		expect(deposited).toBeGreaterThan(4_500n * unit)
+		expect(await assets()).toBe(reserveBefore - deposited)
+		expect(await positionCount()).toBe(1n)
+	})
+
+	test('a dust purchase must pay for historical liquid capital it recapitalizes after a price shock', async () => {
+		await prepare()
+		const [, initialFee] = await quote(1_000n * unit)
+		await mint(1_000n * unit, fixture.base.questionId, initialFee)
+		const source = await custody()
+		await deposit(await assets(), fixture.other())
+		await redeemCompleteSet(fixture.other(), pool(), 900n * unit)
+		const [, reuseFee] = await quote(1n)
+		await mint(1n, fixture.base.questionId, reuseFee)
+		const token = getRepTokenAddress(fixture.base.genesisUniverse)
+		const liquidBefore = await getERC20Balance(fixture.owner(), token, source)
+		expect(liquidBefore).toBeGreaterThan(2_100n * unit)
+		const price = 5n * unit
+		await manipulatePriceOracle(fixture.owner(), fixture.base.mockWindow, fixture.base.securityPoolAddresses.openOraclePriceCoordinator, price)
+		const reserveBefore = await assets()
+		const [backing, fee, available] = await quote(1n)
+		const [, standaloneFee] = await quote(1n, fixture.secondQuestionId)
+		expect(backing).toBeGreaterThan(900n * unit)
+		expect(available).toBe(liquidBefore)
+		const backingValue = (backing * unit + price - 1n) / price
+		const expectedFee = (backingValue + 99n) / 100n
+		expect(expectedFee).toBeGreaterThan(standaloneFee)
+		expect(fee).toBe(expectedFee)
+		await expect(mint(1n, fixture.base.questionId, standaloneFee)).rejects.toThrow('Purchase fee exceeds budget')
+		expect(await getERC20Balance(fixture.owner(), token, source)).toBe(liquidBefore)
+		const deposited = await mintRepricedDust(fee, price)
+		expect(deposited).toBeGreaterThan(900n * unit)
+		expect(await getERC20Balance(fixture.owner(), token, source)).toBe(liquidBefore - deposited)
+		expect(await assets()).toBe(reserveBefore)
+		expect(await positionCount()).toBe(1n)
+	})
+
+	test('price-induced capital top-ups charge for additional backing above the standalone purchase', async () => {
 		await prepare()
 		await mint()
 		await manipulatePriceOracle(fixture.owner(), fixture.base.mockWindow, fixture.base.securityPoolAddresses.openOraclePriceCoordinator, 2n * unit)
 		const [backing, fee] = await quote()
 		expect(backing).toBeGreaterThan(240n * unit)
 		const [, standaloneFee] = await quote(100n * unit, fixture.secondQuestionId)
-		expect(fee).toBe(standaloneFee)
-		expect(fee).toBe((24n * unit) / 10n)
+		expect(fee).toBeGreaterThan(standaloneFee)
+		expect(fee).toBe(((backing + 1n) / 2n + 99n) / 100n)
 		await expect(mint(100n * unit, fixture.base.questionId, 0n)).rejects.toThrow('Purchase fee exceeds budget')
 		await mint(100n * unit, fixture.base.questionId, fee)
 	})

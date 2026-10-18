@@ -5,6 +5,7 @@ import type { ForkedClaimCheckpointSnapshot } from '../../src/operations/carry-t
 import { claimCheckpointWithdrawalCalls } from '../../src/operations/statoblast/checkpoint-call.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { prepareInheritedClaim } from '../../src/operations/statoblast/carry.ts'
+import { decodedTransaction, readableTransaction } from '../../src/operations/transaction-description.ts'
 import { address, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
 test('each claim preparation batch has a canonical progress identity and submits only its bounded checkpoint', () => {
@@ -113,6 +114,8 @@ test('final preparation calls the game then pool atomically with a committed rec
 	expect(step.to).toBe(address(90))
 	expect(plan?.lastValidBlockNumber).toBe('101')
 	expect(decodeFunctionData({ abi: multicall3Abi, data: step.data })).toMatchObject({ functionName: 'aggregate3', args: [calls] })
+	expect(decodedTransaction(step)).toMatchObject({ method: 'aggregate3', args: [calls] })
+	expect(readableTransaction(step)).toMatchObject({ method: 'aggregate3', to: candidate.finalWithdrawal?.multicall3 })
 	expect(calls.map(call => ({ target: call.target, allowFailure: call.allowFailure }))).toEqual([
 		{ target: candidate.game, allowFailure: false },
 		{ target: candidate.pool, allowFailure: false },

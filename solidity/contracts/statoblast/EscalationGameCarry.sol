@@ -119,6 +119,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	// Pages unresolved local carry leaves only, in newest-first local linked-list order.
 	// Inherited snapshot leaves are exposed through getForkCarrySnapshot().
+	// maxEntries bounds visited nodes, including consumed leaves. Follow nonzero cursors even after empty pages.
 	function getCarryLeafPageByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startNodeId, uint256 maxEntries) external view returns (CarryLeafView[] memory carryLeaves, uint256 nextPageNodeId) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return (new CarryLeafView[](0), 0);
 		uint8 outcomeIndex = uint8(outcome);
@@ -132,7 +133,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 		carryLeaves = new CarryLeafView[](maxEntries);
 		uint256 writeIndex = 0;
-		while (nodeId != 0 && writeIndex < maxEntries) {
+		for (uint256 visitedNodes = 0; nodeId != 0 && visitedNodes < maxEntries; visitedNodes++) {
 			Node storage currentNode = nodes[nodeId];
 			uint256 parentNodeId = currentNode.parentNodeId;
 			require(currentNode.outcome == outcome, 'Wrong outcome');
