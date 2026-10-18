@@ -18,6 +18,23 @@ installDomTestLifecycle({
 	},
 })
 
+test('shows the historical fork resolution criteria and verified market metadata before choosing a universe', async () => {
+	window.history.replaceState({}, '', '/')
+	await act(async () => await mountApp({ applicationTitle, initialize: async () => undefined, root: () => createElement('p', {}, 'Application ready') }))
+	expect(within(document.body).getByRole('heading', { name: 'Fork question' })).not.toBeNull()
+	expect(document.body.textContent).toContain('If the rocket explodes on the launch pad while attempting to launch on a launch day, then this market will resolve as No.')
+	expect(document.body.textContent).toContain('If the Artemis II Mission is renamed')
+	expect(document.body.textContent).toContain('Categorical')
+	expect(document.body.textContent).toContain('2026-03-03 12:14:47 UTC')
+	expect(document.body.textContent).toContain('2026-04-08 00:00:00 UTC')
+	expect(document.body.textContent).toContain('Invalid')
+	expect(document.body.textContent).toContain('0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e')
+	expect(document.body.textContent).toContain('space, moon, artemis')
+	expect(within(document.body).queryByText('Question ID')).toBeNull()
+	expect(within(document.body).queryByText('Starts')).toBeNull()
+	expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
+})
+
 for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Trading']) {
 	test(`keeps ${applicationTitle} branding and the Augur v2 universe context visible before a deployment is selected`, async () => {
 		window.history.replaceState({}, '', '/')
@@ -44,7 +61,7 @@ for (const applicationTitle of ['Zoltar', 'Augur Statoblast', 'Statoblast Tradin
 			expect(button.hasAttribute('aria-describedby')).toBe(false)
 		}
 		expect(
-			within(document.body)
+			within(document.querySelector('.migration-outcome-list') ?? document.body)
 				.getAllByRole('button')
 				.map(button => button.getAttribute('aria-label')),
 		).toEqual(['Open Yes universe', 'Open No universe'])
@@ -73,7 +90,7 @@ test('requires an explicit Yes or No choice before initializing or mounting any 
 		expect(root).not.toHaveBeenCalled()
 		expect(within(document.body).getByRole('heading', { name: 'Choose the truthful universe' })).not.toBeNull()
 		expect(
-			within(document.body)
+			within(document.querySelector('.migration-outcome-list') ?? document.body)
 				.getAllByRole('button')
 				.map(button => button.getAttribute('aria-label')),
 		).toEqual(['Open Yes universe', 'Open No universe'])
@@ -103,7 +120,7 @@ test('disables both ordinary outcome controls while the chosen deployment initia
 	const root = mock(() => createElement('p', {}, 'Application ready'))
 	await act(async () => await mountApp({ applicationTitle, initialize, root }))
 	await act(() => within(document.body).getByRole('button', { name: 'Open No universe' }).click())
-	const buttons = within(document.body).getAllByRole('button')
+	const buttons = within(document.querySelector('.migration-outcome-list') ?? document.body).getAllByRole('button')
 	expect(document.querySelector('.application-brand-name')?.textContent).toBe(applicationTitle)
 	expect(within(document.body).getByText('Augur v2 universe')).not.toBeNull()
 	expect(buttons.every(button => button.hasAttribute('disabled'))).toBe(true)

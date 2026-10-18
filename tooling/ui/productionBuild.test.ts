@@ -488,8 +488,11 @@ for (const appId of UI_APP_IDS) {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(`${baseUrl}/${appId}/?simulate=1&simScenario=baseline`, { height: 844, width: 390 }, async driver => {
-			const body = await driver.waitForBodyText(AUGUR_GENESIS_FORK_QUESTION)
+			const body = await driver.waitForBodyText(AUGUR_GENESIS_FORK_QUESTION.title)
 			expect(body).toContain('Choose the truthful universe')
+			expect(body).toContain('If the rocket explodes on the launch pad while attempting to launch on a launch day, then this market will resolve as No.')
+			expect(body).toContain('2026-04-08 00:00:00 UTC')
+			expect(body).toContain('Market address')
 			expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
 			await driver.clickButton('Open No universe')
 			await driver.waitForBodyText('Browser simulation')

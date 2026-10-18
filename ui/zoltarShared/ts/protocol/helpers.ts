@@ -84,7 +84,7 @@ export function getEscalationSideLabel(key: ReportingOutcomeKey) {
 	}
 }
 
-export function getMarketType(questionData: QuestionData, outcomeLabels: string[]): MarketType {
+export function getMarketType(questionData: QuestionData, outcomeLabels: readonly string[]): MarketType {
 	if (outcomeLabels.length === 0 && questionData.numTicks > 0n) return 'scalar'
 	if (outcomeLabels.length === 2 && outcomeLabels[0] === 'Yes' && outcomeLabels[1] === 'No') return 'binary'
 	return 'categorical'

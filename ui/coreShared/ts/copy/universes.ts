@@ -15,7 +15,13 @@ export const parentUniverse = 'Parent universe'
 export const repSupply = 'REP supply'
 export const childrenBeforeForkDetail = 'Child universes appear after this universe forks.'
 export const openUniverse = 'Open'
-export const formatForkQuestion = (title: string) => `Fork question: ${title}`
+export const forkQuestion = 'Fork question'
+export const outcomesOnThisPage = 'Outcomes on this page'
+export const marketAddress = 'Market address'
+export const creator = 'Creator'
+export const designatedReporter = 'Designated reporter'
+export const categories = 'Categories'
+export const tags = 'Tags'
 export const formatOpenChildUniverse = (outcome: CopyTemplateValue) => `Open ${outcome} universe`
 export const openOutcomeArrowTail = ' →'
 

@@ -803,6 +803,12 @@ void describe('TradingSection', () => {
 		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share outcome to migrate' }) as HTMLButtonElement
 		expect(shareOutcomeDropdown.disabled).toBe(false)
 		expect(modalQueries.getByText('Target child universes')).not.toBeNull()
+		expect(modalQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(modalQueries.getByText('Will this resolve?')).toBeTruthy()
+		expect(modalQueries.getByText('Question description')).toBeTruthy()
+		expect(modalQueries.getByText('Scalar')).toBeTruthy()
+		expect(modalQueries.getByText('Display range')).toBeTruthy()
+		expect(modalQueries.getByText('USD')).toBeTruthy()
 	})
 
 	void test('shows the share redemption disabled reason before finalization', async () => {
@@ -1132,6 +1138,9 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog'))
+		expect(modalQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(modalQueries.getByText('Question description')).toBeTruthy()
+		expect(modalQueries.getByText('Binary')).toBeTruthy()
 		const selectAllButton = modalQueries.getByRole('button', { name: 'Select all' }) as HTMLButtonElement
 		const clearButton = modalQueries.getByRole('button', { name: 'Clear' }) as HTMLButtonElement
 		expect(clearButton.disabled).toBe(true)

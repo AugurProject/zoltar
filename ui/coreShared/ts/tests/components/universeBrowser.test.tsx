@@ -14,6 +14,7 @@ import { fireEvent, within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
 import { createUniverseSummary } from '../testUtils/universeFixtures.js'
+import { createMarketDetails } from '../testUtils/marketFixtures.js'
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE, setRuntimeNetworkProfile } from '../../wallet/networkProfile.js'
 
 const yesUniverseId = 11n
@@ -90,6 +91,14 @@ describe('UniverseBrowser', () => {
 		expect(queries.getByText('Deployed')).toBeTruthy()
 		expect(queries.getByText('Not deployed')).toBeTruthy()
 		expect(queries.getAllByRole('link', { name: 'Open' })).toHaveLength(1)
+	})
+
+	test('uses the complete fork question presentation when related universes are already loaded', async () => {
+		const question = createMarketDetails({ description: 'Use the certified result and ignore preliminary tallies.' })
+		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ forkQuestionDetails: question })} />)).cleanup
+		expect(within(document.body).getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		for (const text of [question.title, question.description, question.questionId, 'Starts', 'End time', 'Yes, No, Invalid']) expect(document.body.textContent).toContain(text)
+		expect(within(document.body).getAllByRole('link', { name: 'Open' })).toHaveLength(1)
 	})
 
 	test('keeps normal fork ancestry without repeating the historical fork choices on descendants', async () => {

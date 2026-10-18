@@ -566,18 +566,6 @@ button.outcome-button--no:hover:not(:disabled) {
 	}
 }
 
-/* Fork migration targets: the fork question the shared target picker belongs to. */
-.fork-question-summary {
-	display: grid;
-	gap: var(--space-1);
-}
-.fork-question-summary span {
-	color: var(--muted);
-	font-size: var(--font-label);
-}
-.fork-question-summary strong {
-	overflow-wrap: anywhere;
-}
 .fork-migration-context {
 	display: grid;
 	gap: var(--space-4);

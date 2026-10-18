@@ -10,7 +10,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { navigateToUniverse } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
-import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkQuestionDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import * as copy from '../../../copy/universeNavigation.js'
 import { loadUniverseOutcomePage, UNIVERSE_OUTCOME_PAGE_SIZE, type UniverseOutcomePage } from '../../../protocol/universeNavigation.js'
@@ -22,6 +22,11 @@ const loadConnectedOutcomes: LoadUniverseOutcomes = (address, universeId, start)
 import { ScalarUniverseOutcomePicker, type LoadScalarUniverseOutcome } from './ScalarUniverseOutcomePicker.js'
 
 type Props = { universe: ZoltarUniverseSummary; loadPage?: LoadUniverseOutcomes; loadOutcome?: LoadScalarUniverseOutcome }
+
+function getScalarQuestion(question: ForkQuestionDetails | undefined) {
+	if (question?.marketType !== 'scalar' || question.numTicks === undefined || question.displayValueMin === undefined || question.displayValueMax === undefined || question.answerUnit === undefined) return undefined
+	return { numTicks: question.numTicks, displayValueMin: question.displayValueMin, displayValueMax: question.displayValueMax, answerUnit: question.answerUnit }
+}
 
 /** Keying by universe prevents a selected outcome or page from leaking into the next generation. */
 export function UniverseOutcomeNavigation({ universe, loadPage = loadConnectedOutcomes, loadOutcome }: Props) {
@@ -39,7 +44,8 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 	const retained = snapshot?.backend === backend && snapshot.loadPage === loadPage ? snapshot.page : undefined
 	const page = current?.error !== undefined && current.pageStart !== start ? undefined : (current?.page ?? retained)
 	const loading = current === undefined
-	useBlockRefresh(() => setRefresh(count => count + 1), page?.scalarQuestion === undefined)
+	const scalarQuestion = getScalarQuestion(page?.question)
+	useBlockRefresh(() => setRefresh(count => count + 1), scalarQuestion === undefined)
 	useEffect(() => {
 		let active = true
 		const guard = createActiveEnvironmentGuard()
@@ -65,9 +71,9 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 		}
 	}, [address, backend, loadPage, refresh, retry, start, universeId])
 	return (
-		<ForkUniverseNavigation question={page?.title} loading={loading} hasOutcomes={page !== undefined}>
+		<ForkUniverseNavigation question={page?.question} loading={loading} hasOutcomes={page !== undefined}>
 			{loading && page === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChildUniverses, detailIsLoading: true }} /> : undefined}
-			{page?.scalarQuestion === undefined ? (
+			{scalarQuestion === undefined ? (
 				<OutcomeUniverseList
 					emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
 					notDeployedDetail={copy.childNotDeployedDetail}
@@ -81,7 +87,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 					}))}
 				/>
 			) : (
-				<ScalarUniverseOutcomePicker address={address} universeId={universeId} question={page.scalarQuestion} loadOutcome={loadOutcome} />
+				<ScalarUniverseOutcomePicker address={address} universeId={universeId} question={scalarQuestion} loadOutcome={loadOutcome} />
 			)}
 
 			<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />

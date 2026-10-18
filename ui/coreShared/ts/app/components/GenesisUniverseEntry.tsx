@@ -35,10 +35,16 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 					name={copy.augurUniverse}
 					hasForked
 					navigation={
-						<ForkUniverseNavigation question={AUGUR_GENESIS_FORK_QUESTION} loading={pending} hasOutcomes>
-							<a className='detail' href={`${forkQuestionExplorerUrl}#readContract`} target='_blank' rel='noreferrer'>
-								{copy.viewAugurFork}
-							</a>
+						<ForkUniverseNavigation
+							question={AUGUR_GENESIS_FORK_QUESTION}
+							loading={pending}
+							hasOutcomes
+							questionSource={
+								<a className='detail' href={`${forkQuestionExplorerUrl}#readContract`} target='_blank' rel='noreferrer'>
+									{copy.viewAugurFork}
+								</a>
+							}
+						>
 							<OutcomeUniverseList
 								outcomes={GENESIS_OUTCOMES.map(outcome => ({
 									key: outcome,

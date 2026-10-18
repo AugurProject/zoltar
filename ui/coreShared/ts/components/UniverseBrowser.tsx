@@ -14,6 +14,7 @@ import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { TimestampValue } from './TimestampValue.js'
 import { UniverseLink } from './UniverseLink.js'
+import { ForkUniverseNavigation } from './ForkUniverseNavigation.js'
 import { getGenesisUniverseHref } from '../navigation/genesisNavigation.js'
 
 type UniverseBrowserProps = {
@@ -148,6 +149,21 @@ export function UniverseBrowserView({ name, hasForked, forkTime, lineage, action
 	)
 }
 
+function RelatedUniverseNavigation({ activeUniverseId, renderChildSummary, universe }: Pick<UniverseBrowserProps, 'activeUniverseId' | 'renderChildSummary' | 'universe'>) {
+	const records = <ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
+	if (universe.hasForked)
+		return (
+			<ForkUniverseNavigation question={universe.forkQuestionDetails} hasOutcomes={universe.childUniverses.length > 0}>
+				{records}
+			</ForkUniverseNavigation>
+		)
+	return (
+		<SectionBlock title={commonCopy.childUniverses} variant='plain'>
+			{records}
+		</SectionBlock>
+	)
+}
+
 /**
  * Browses a live universe and its lineage. Ordinary parent and child links change the `universe` query parameter;
  * a canonical root's parent returns to the historical Augur universe before choosing a deployment.
@@ -179,11 +195,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 			}
 			navigation={navigation}
 		>
-			{!includeRelatedUniverses ? undefined : (
-				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
-					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />
-				</SectionBlock>
-			)}
+			{!includeRelatedUniverses ? undefined : <RelatedUniverseNavigation activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />}
 		</UniverseBrowserView>
 	)
 }
