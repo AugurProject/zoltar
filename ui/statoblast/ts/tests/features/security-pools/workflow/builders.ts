@@ -109,27 +109,44 @@ export function createActiveReportingDetails(overrides: Partial<ActiveReportingD
 	}
 }
 
-export function createFinalizedTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
+/** An open truth auction that has raised 1 ETH of its 100 ETH cap, with no clearing price yet. */
+export function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {
-		accumulatedBidAttoEth: 0n,
-		auctionEndsAt: 10n,
-		clearingPrice: 1n,
-		clearingTick: 0n,
+		accumulatedBidAttoEth: 1n * 10n ** 18n,
+		auctionEndsAt: 400n,
+		clearingPrice: undefined,
+		clearingTick: undefined,
 		bidAtClearingTickAttoEth: 0n,
-		attoEthRaiseCap: 1n,
-		attoEthRaised: 0n,
-		finalized: true,
-		hitCap: true,
-		maxAttoRepBeingSold: 1n,
-		minBidSizeAttoEth: 1n,
-		attoRepPurchasableAtBid: undefined,
-		timeRemaining: 0n,
+		attoEthRaiseCap: 100n * 10n ** 18n,
+		attoEthRaised: 1n * 10n ** 18n,
+		finalized: false,
+		hitCap: false,
+		maxAttoRepBeingSold: 100n * 10n ** 18n,
+		minBidSizeAttoEth: 1n * 10n ** 18n,
+		attoRepPurchasableAtBid: 1n * 10n ** 18n,
+		timeRemaining: 150n,
 		totalAttoRepPurchased: 0n,
 		underfunded: false,
 		underfundedThreshold: undefined,
 		underfundedWinningAttoEth: 0n,
 		...overrides,
 	}
+}
+
+/** A truth auction finalized after raising its full 100 ETH cap, with its clearing price set. */
+export function createFinalizedTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
+	return createTruthAuctionMetrics({
+		accumulatedBidAttoEth: 100n * 10n ** 18n,
+		auctionEndsAt: 10n,
+		clearingPrice: 1n,
+		clearingTick: 0n,
+		attoEthRaised: 100n * 10n ** 18n,
+		finalized: true,
+		hitCap: true,
+		attoRepPurchasableAtBid: undefined,
+		timeRemaining: 0n,
+		...overrides,
+	})
 }
 
 type SecurityVaultForm = SecurityVaultRouteContentProps['securityVaultForm']
@@ -159,8 +176,6 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 		onSetVaultUnderwritingLimit: () => undefined,
 		onWithdrawRep: () => undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
 		securityPoolVaults: undefined,
 		securityVaultActiveAction: undefined,
 		securityVaultDetails: undefined,
@@ -233,6 +248,18 @@ export function createSecurityPoolVaultSummary(overrides: Partial<SecurityPoolVa
 		vaultAddress: zeroAddress,
 		...overrides,
 	}
+}
+
+// 100 REP backing a 10 ETH commitment with no stake, fees, or bad debt: at a 2x multiplier its threshold price is 5 REP/ETH.
+export function createUnencumberedVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
+	return createSecurityPoolVaultSummary({
+		badDebtAttoEth: 0n,
+		claimableFeesAttoEth: 0n,
+		disputeStakedAttoRep: 0n,
+		underwritingLimitAttoEth: 10n * 10n ** 18n,
+		vaultAttoRepBacking: 100n * 10n ** 18n,
+		...overrides,
+	})
 }
 
 export function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps> = {}): ForkAuctionRouteContentProps {
@@ -312,6 +339,11 @@ export function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> 
 		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(forkAuctionDetails),
 	}
 }
+
+// A pool whose universe forked to Yes and which has migrated REP, at each stage of its fork workflow.
+export const forkedPoolState = { forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'poolForked' } as const
+export const migratingPoolState = { ...forkedPoolState, systemState: 'forkMigration' } as const
+export const truthAuctionPoolState = { ...forkedPoolState, systemState: 'forkTruthAuction', truthAuctionStartedAt: 1n } as const
 
 export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {

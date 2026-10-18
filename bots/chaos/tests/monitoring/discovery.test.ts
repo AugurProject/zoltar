@@ -1,4 +1,6 @@
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
+import type { DiscoveryIssue } from '../../src/operations/types.ts'
+import { formatDiscoveryWarnings } from '../../src/monitoring/discovery-coverage.ts'
 import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
@@ -20,7 +22,8 @@ import { discoverStagedOperations } from '../../src/monitoring/discovery-staged-
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { urgentOperationPlans } from '../support/operation-plans.ts'
 import type { OracleGameSnapshot, PlanningOptions } from '../../src/operations/types.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-schema.ts'
+import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
@@ -923,15 +926,15 @@ describe('anchored ecosystem discovery', () => {
 		const context = { anchorBlockNumber: 10n, client, deployments: fixture.deployments, wallet: fixture.wallet.address }
 		const forkedUniverse = { ...universe, forkQuestionId: question.id, forkTime: '1' }
 		const withinQuestion = { ...question, kind: 'categorical' as const, outcomeLabels: Array.from({ length: 2_498 }, (_, index) => `Outcome ${index.toString()}`) }
-		const warnings: string[] = []
+		const warnings: DiscoveryIssue[] = []
 		expect(await discoverShareInventory(context, [pool], fixture.pairs, [forkedUniverse], [withinQuestion], 10n, warnings)).toHaveLength(1)
-		expect(warnings).toEqual([])
+		expect(formatDiscoveryWarnings(warnings)).toEqual([])
 		expect(reads.filter(name => name === 'getChildUniverseId')).toHaveLength(2_499)
 
 		reads.length = 0
 		const overflowQuestion = { ...withinQuestion, outcomeLabels: [...withinQuestion.outcomeLabels, 'Overflow'] }
 		expect(await discoverShareInventory(context, [pool], fixture.pairs, [forkedUniverse], [overflowQuestion], 10n, warnings)).toEqual([])
-		expect(warnings).toEqual(['Share-inventory discovery truncated because planned approval and migration fan-out is at least 10002 entries, exceeding the configured 10000-entry aggregate limit'])
+		expect(formatDiscoveryWarnings(warnings)).toEqual(['Share-inventory discovery truncated because planned approval and migration fan-out is at least 10002 entries, exceeding the configured 10000-entry aggregate limit'])
 		expect(reads).toEqual([])
 	})
 
@@ -953,9 +956,9 @@ describe('anchored ecosystem discovery', () => {
 				}
 			},
 		})
-		const warnings: string[] = []
+		const warnings: DiscoveryIssue[] = []
 		expect(await discoverShareInventory({ anchorBlockNumber: 10n, client, deployments: fixture.deployments, wallet: fixture.wallet.address }, pools, pairs, universes, fixture.questions, 10n, warnings)).toEqual([])
-		expect(warnings).toEqual(['Share-inventory discovery truncated because planned approval and migration fan-out is at least 10100 entries, exceeding the configured 10000-entry aggregate limit'])
+		expect(formatDiscoveryWarnings(warnings)).toEqual(['Share-inventory discovery truncated because planned approval and migration fan-out is at least 10100 entries, exceeding the configured 10000-entry aggregate limit'])
 		expect(reads).toBe(0)
 	})
 
@@ -973,6 +976,8 @@ describe('anchored ecosystem discovery', () => {
 		})
 		expect(snapshot.questions).toEqual([])
 		expect(snapshot.universes.map(universe => universe.id)).toEqual(['0', '1'])
+		expect(snapshot.discoveryIssues).toContainEqual({ kind: 'universe-limit', retained: 2, limit: 2 })
+		expect(snapshot.discoveryIssues).toContainEqual({ kind: 'registry', collection: 'questions', label: 'Question', authenticated: '2', canonicalCount: '3', residentLimit: '2' })
 		expect(snapshot.warnings).toContain('Question discovery truncated while bounded catch-up authenticated 2 of 3 canonical entries')
 		expect(snapshot.warnings.some(warning => warning.startsWith('Universe discovery truncated'))).toBeTrue()
 	})
@@ -1752,9 +1757,9 @@ describe('anchored ecosystem discovery', () => {
 				throw new Error(`Unexpected client method ${String(property)}`)
 			},
 		})
-		const overflowWarnings: string[] = []
+		const overflowWarnings: DiscoveryIssue[] = []
 		expect(await discoverStagedOperations(client, pool, 555n, 1, overflowWarnings)).toEqual([])
-		expect(overflowWarnings).toEqual([`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total 66 exceeds the configured 1-entry resident limit`])
+		expect(formatDiscoveryWarnings(overflowWarnings)).toEqual([`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total 66 exceeds the configured 1-entry resident limit`])
 		expect(pageRequests).toEqual([])
 
 		const executable = await discoverStagedOperations(client, pool, 555n, 66, [])

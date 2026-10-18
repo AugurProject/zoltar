@@ -17,6 +17,7 @@ contract ZoltarQuestionData {
 		string answerUnit;
 	}
 
+	// Each mapping is keyed by the question ID returned by getQuestionId.
 	mapping(uint256 => uint256) public questionCreatedTimestamp;
 	mapping(uint256 => string[]) private outcomeLabels;
 	mapping(uint256 => QuestionData) public questions;
@@ -37,7 +38,6 @@ contract ZoltarQuestionData {
 			require(questionData.displayValueMax > questionData.displayValueMin, 'Scalar question display max must be greater than display min');
 			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
-			// Check that all strings are non-empty
 			uint256 previous = type(uint256).max;
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {
 				require(bytes(outcomeOptions[index]).length > 0, 'Outcome option label must not be an empty string');

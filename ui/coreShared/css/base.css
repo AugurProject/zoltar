@@ -930,11 +930,6 @@ button.quiet:disabled {
 	text-transform: inherit;
 	color: inherit;
 	white-space: inherit;
-	opacity: 0.72;
-}
-
-button .loading-value {
-	opacity: 1;
 }
 
 .currency-value-wrap {
@@ -1161,9 +1156,24 @@ button.currency-value.copyable:hover:not(:disabled) {
 	opacity: 0.72;
 }
 
+/* Relative-first timestamps stack the relative time over a quiet UTC line instead of wrapping one long string. */
+.timestamp-value.is-relative-first {
+	display: inline-grid;
+	gap: var(--space-1);
+}
+
+.timestamp-value-absolute,
 .timestamp-value-relative {
 	color: var(--muted);
 	font-weight: 400;
+}
+
+.timestamp-value-absolute {
+	font-size: var(--font-caption);
+}
+
+.timestamp-value-lead,
+.timestamp-value-relative {
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
@@ -1411,6 +1421,12 @@ button.wallet-asset-action-pending:disabled {
 
 .address-value-text[data-abbreviated="true"] .address-value-abbreviated {
 	visibility: visible;
+}
+
+/* A fitted address control sizes to its visible text, so a copy glyph follows it. */
+.address-fit-control {
+	display: inline-flex;
+	max-width: 100%;
 }
 
 /* A stable external slot lets a control fit its visible label without losing

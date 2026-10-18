@@ -17,7 +17,7 @@ import { LiveTrading } from '../../features/LiveTrading.js'
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { createSecurityPoolDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -100,7 +100,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			backend = await createBootstrappedSimulationBackendWithRetry(scenario, 1, 'trading')
 			await backend.setTransactionDelayMilliseconds(0)
 			await backend.setQueryDelayMilliseconds(0)
-		}, 180_000)
+		}, simulationSetupTimeoutMs)
 
 		if (scenario === FUNDED_TRADING_SIMULATION_SCENARIO)
 			test('a timed-out saved pool does not prevent loading the following healthy pool', async () => {
@@ -114,7 +114,8 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				const dom = installDomEnvironment()
 				const restore = installActiveEnvironmentForTesting(backend, backend)
 				const originalTimeout = globalThis.setTimeout
-				const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalTimeout(handler, delay === 30_000 ? 3_000 : delay, ...args))
+				// Shortens the 30s no-progress read deadline so the stalled pool times out sooner. Every read in the test shares it, so it leaves the healthy pool's simulation reads room on a loaded machine.
+				const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalTimeout(handler, delay === 30_000 ? 10_000 : delay, ...args))
 				let result: Awaited<ReturnType<typeof discoverSavedMarkets>> | undefined
 				try {
 					const scope = getLocalEntityScope('trading', 'pool')
@@ -147,12 +148,12 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						}),
 					)
 					try {
-						await waitFor(() => expect([...rendered.container.querySelectorAll('button')].find(button => button.textContent === 'Refresh portfolio')?.disabled).toBe(false), { timeout: 8_000 })
+						await waitFor(() => expect([...rendered.container.querySelectorAll('button')].find(button => button.textContent === 'Refresh portfolio')?.disabled).toBe(false), simulationWaitOptions)
 						expect(result?.markets).toHaveLength(2)
 						expect(result?.markets.find(market => market.pool === stalledPool)?.loadError).toContain('timed out')
 						expect(result?.markets.find(market => market.pool === seeded.pool)?.loadError).toBeUndefined()
 						expect(result?.markets.find(market => market.pool === seeded.pool)?.pair).toBe(seeded.pair)
-						await waitFor(() => expect(rendered.container.querySelector(`[data-portfolio-pool="${stalledPool}"]`)?.textContent).toContain('timed out'))
+						await waitFor(() => expect(rendered.container.querySelector(`[data-portfolio-pool="${stalledPool}"]`)?.textContent).toContain('timed out'), simulationWaitOptions)
 						expect(rendered.container.querySelector(`[data-portfolio-pool="${seeded.pool}"]`)?.textContent).not.toContain('timed out')
 					} finally {
 						await rendered.cleanup()
@@ -183,7 +184,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				for (const [route, backLabel, backHref] of returns) {
 					const rendered = await renderIntoDocument(h(LiveTrading, { route, configuration, configurationError: undefined, selectedUniverseId: '0', controllerServices: liveTradingControllerServices, onWorkflowLockChange: () => undefined }))
 					try {
-						await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'))
+						await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'), simulationWaitOptions)
 						expect(rendered.container.textContent).not.toContain('discovery failed')
 						expect(rendered.container.textContent).not.toContain('Retry')
 						expect(rendered.container.querySelector('.empty-state')?.textContent).toContain(missingPool)
@@ -328,7 +329,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						}),
 					)
 					try {
-						await waitFor(() => expect(addressed.container.textContent).toContain(directRoute.startsWith('security-pool/') ? 'Registered vaults' : 'Trading fee'), { timeout: 10_000 })
+						await waitFor(() => expect(addressed.container.textContent).toContain(directRoute.startsWith('security-pool/') ? 'Registered vaults' : 'Trading fee'), simulationWaitOptions)
 						expect(addressed.container.querySelector('.market-list')).toBeNull()
 						expect(addressed.container.querySelector('.mobile-return')).toBeNull()
 					} finally {
@@ -367,8 +368,8 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						}),
 					)
 					try {
-						await waitFor(() => expect(rendered.container.querySelector('[aria-busy="true"]')?.getAttribute('class'), `${scenario}/${route}: ${rendered.container.textContent}`).toBeUndefined(), { timeout: 10_000 })
-						await waitFor(() => expect(summary?.status).toBe('ready'), { timeout: 10_000 })
+						await waitFor(() => expect(rendered.container.querySelector('[aria-busy="true"]')?.getAttribute('class'), `${scenario}/${route}: ${rendered.container.textContent}`).toBeUndefined(), simulationWaitOptions)
+						await waitFor(() => expect(summary?.status).toBe('ready'), simulationWaitOptions)
 						expect(rendered.container.textContent).not.toContain('Connect a wallet to load')
 						if (route !== 'portfolio') {
 							// Fresh browser lists have no favorites; simulation registry seeding does not trigger scans.

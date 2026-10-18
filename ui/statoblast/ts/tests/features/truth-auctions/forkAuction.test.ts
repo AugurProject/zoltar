@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView, getForkVaultMigrationRepAttoRep } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView, getForkVaultMigrationRepAttoRep, getMigrationEnd } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import { getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionPresentation.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {
@@ -30,33 +30,26 @@ const TRUTH_AUCTION_MIN_TICK = -524288n
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { createTruthAuctionMetrics } from '../security-pools/workflow/builders.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
 const ONE_UNIT = 10n ** 18n
 const HALF_UNIT = 5n * 10n ** 17n
 
+// An open auction with nothing bid or sold yet that ends at timestamp 10_000.
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
-	return {
+	return createTruthAuctionMetrics({
 		accumulatedBidAttoEth: 0n,
 		auctionEndsAt: 10_000n,
 		clearingPrice: 0n,
 		clearingTick: 0n,
-		bidAtClearingTickAttoEth: 0n,
-		attoEthRaiseCap: 100n * 10n ** 18n,
 		attoEthRaised: 0n,
-		finalized: false,
-		hitCap: false,
 		maxAttoRepBeingSold: 0n,
-		minBidSizeAttoEth: 1n * 10n ** 18n,
 		attoRepPurchasableAtBid: 0n,
 		timeRemaining: 10n * 10n ** 18n,
-		totalAttoRepPurchased: 0n,
-		underfunded: false,
-		underfundedThreshold: undefined,
-		underfundedWinningAttoEth: 0n,
 		...overrides,
-	}
+	})
 }
 
 function createTickSummary(overrides: { tick: bigint } & Partial<Omit<TruthAuctionTickSummary, 'tick'>>): TruthAuctionTickSummary {
@@ -395,6 +388,7 @@ void describe('fork auction helpers', () => {
 			selectedBookTick: 3n,
 			tickSummaries,
 			truthAuction: auction,
+			viewerBids: [],
 		})
 
 		expect(depthPoints.map(point => point.tick)).toEqual([3n, 2n, 1n])
@@ -403,6 +397,23 @@ void describe('fork auction helpers', () => {
 		expect(depthPoints.map(point => point.isSelected)).toEqual([true, false, false])
 		expect(depthPoints.map(point => point.isPreviewTick)).toEqual([false, false, true])
 		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])
+		expect(depthPoints.map(point => point.viewerBidAttoEth)).toEqual([0n, 0n, 0n])
+	})
+
+	void test('sums the connected wallet live bids at each depth price, leaving out refunded ones', () => {
+		const tickSummaries = sortTruthAuctionTickSummariesDescending([createTickSummary({ active: true, currentTotalBidAttoEth: 5n * ONE_UNIT, submissionCount: 3n, tick: 1n }), createTickSummary({ active: true, currentTotalBidAttoEth: 3n * ONE_UNIT, submissionCount: 1n, tick: 3n })])
+		const depthPoints = buildTruthAuctionDepthPoints({
+			enteredBidTick: undefined,
+			selectedBookTick: undefined,
+			tickSummaries,
+			truthAuction: createTruthAuction({ clearingTick: 3n, hitCap: true }),
+			viewerBids: [createBid({ bidIndex: 1n, bidAmountAttoEth: ONE_UNIT, tick: 1n }), createBid({ bidIndex: 2n, bidAmountAttoEth: 2n * ONE_UNIT, tick: 1n }), createBid({ bidIndex: 3n, bidAmountAttoEth: 4n * ONE_UNIT, refunded: true, tick: 1n })],
+		})
+
+		expect(depthPoints.map(point => [point.tick, point.viewerBidAttoEth])).toEqual([
+			[3n, 0n],
+			[1n, 3n * ONE_UNIT],
+		])
 	})
 
 	void test('derives provisional truth auction progress from loaded depth', () => {
@@ -851,12 +862,15 @@ void describe('fork auction helpers', () => {
 			{
 				bidder: walletAddress,
 				bidAmountAttoEth: 2n,
+				isViewer: false,
 				key: 'aggregate:11:1',
 				price: getTruthAuctionPriceAtTick(11n),
 				statusLabel: 'Winning',
 				statusToneClassName: 'is-success',
 			},
 		])
+		// The connected wallet's own bids are marked so the table can name them as yours.
+		expect(buildTruthAuctionBidRows({ accountAddress: walletAddress, bids: [createBid({ bidIndex: 1n, cumulativeBidAttoEth: 3n, bidAmountAttoEth: 2n, tick: 11n })], truthAuction: finalizedAuction }).map(row => row.isViewer)).toEqual([true])
 		expect(buildTruthAuctionBidRows({ bids: rows.map(row => createBid({ bidIndex: 1n, bidder: row.bidder, cumulativeBidAttoEth: 3n, bidAmountAttoEth: row.bidAmountAttoEth, tick: 11n })), truthAuction: undefined })).toEqual([])
 	})
 
@@ -925,9 +939,23 @@ describe('fork auction contract time boundaries', () => {
 		expect(getFinalizeTruthAuctionGuardMessage({ currentTimestamp: 1_000n, truthAuction, truthAuctionEndsAt: 1_000n })).toBeUndefined()
 	})
 
-	test('migration stays open through its end timestamp, matching block.timestamp <= forkActivationTime + MIGRATION_TIME', () => {
-		expect(getMigrationStateBadge({ currentTimestamp: 1_000n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('pending')
-		expect(getMigrationStateBadge({ currentTimestamp: 1_001n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('ok')
+	test('maps the migration end onto the Open, Closed and Not started badge', () => {
+		expect(getMigrationStateBadge(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 500n, migrationEndsAt: 1_000n }))).toEqual({ label: 'Open', tone: 'pending' })
+		expect(getMigrationStateBadge(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 2_000n, migrationEndsAt: 1_000n }))).toEqual({ label: 'Closed', tone: 'ok' })
+		expect(getMigrationStateBadge(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 2_000n, migrationEndsAt: undefined }))).toEqual({ label: 'Not started', tone: 'muted' })
+	})
+
+	test('migration stays open through its deadline, matching block.timestamp <= forkActivationTime + MIGRATION_TIME, or ends at a started truth auction', () => {
+		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_000n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: false })
+		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_001n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: 1_010n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
+		// An auction starts only after migration closes, so a deadline that reads later than the auction start is not shown as upcoming.
+		expect(getMigrationEnd({ auctionStartedAt: 600n, currentTimestamp: 700n, migrationEndsAt: 1_000n })).toEqual({ endsAt: 600n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: 1_010n, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: true })
+		// A started auction proves migration ended, even before the chain time loads.
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: undefined, migrationEndsAt: undefined })).toEqual({ endsAt: 1_005n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: 1_005n, currentTimestamp: undefined, migrationEndsAt: 1_000n })).toEqual({ endsAt: 1_000n, ended: true })
+		expect(getMigrationEnd({ auctionStartedAt: undefined, currentTimestamp: 1_010n, migrationEndsAt: undefined })).toBeUndefined()
 	})
 })
 
@@ -941,7 +969,7 @@ describe('live underfunded truth auction reserve', () => {
 
 	test('labels ticks and bids below the reserve instead of counting them as in the book', () => {
 		const tickSummaries = sortTruthAuctionTickSummariesDescending([createTickSummary({ active: true, currentTotalBidAttoEth: ONE_UNIT, submissionCount: 1n, tick: 5n }), createTickSummary({ active: true, currentTotalBidAttoEth: ONE_UNIT, submissionCount: 1n, tick: -5n })])
-		const depthPoints = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: liveAuction })
+		const depthPoints = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: liveAuction, viewerBids: [] })
 		expect(depthPoints.map(point => point.disposition.label)).toEqual(['In book', 'Below reserve'])
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 0n, tick: 0n }), liveAuction).label).toBe('In book')
 		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 1n, tick: -1n }), liveAuction).label).toBe('Below reserve')

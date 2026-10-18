@@ -50,6 +50,7 @@ export const formatOtherUniversePoolsHidden = (count: CopyTemplateValue) => `${c
 export const formatPoolUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
 export const formatCapacityUsed = (percent: CopyTemplateValue) => `${percent}% used`
 export const capacityRemaining = 'remaining'
+export const mintingPaused = 'Minting paused'
 export const poolSearchPlaceholder = 'Address, question ID, or text'
 export const systemState = 'System state'
 export const allStates = 'All states'

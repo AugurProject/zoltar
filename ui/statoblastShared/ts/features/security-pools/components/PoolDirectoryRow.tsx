@@ -21,23 +21,7 @@ import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 
-export function PoolDirectoryRow({
-	pool,
-	lifecycleState,
-	capacity,
-	currentTimestamp,
-	fetchedAt,
-	onSelect,
-	remainingCapacity,
-}: {
-	fetchedAt: number
-	remainingCapacity: bigint | undefined
-	pool: ListedSecurityPool
-	lifecycleState: SecurityPoolLifecycleState | undefined
-	capacity: bigint | undefined
-	currentTimestamp: bigint | undefined
-	onSelect: ((address: string, universeId: bigint) => void) | undefined
-}) {
+export function PoolDirectoryRow({ pool, lifecycleState, currentTimestamp, fetchedAt, onSelect }: { fetchedAt: number; pool: ListedSecurityPool; lifecycleState: SecurityPoolLifecycleState | undefined; currentTimestamp: bigint | undefined; onSelect: ((address: string, universeId: bigint) => void) | undefined }) {
 	const title = getQuestionTitle(pool.marketDetails)
 	const status = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, questionOutcome: pool.questionOutcome, lifecycleState })
 	const href = getSecurityPoolLinkHref(pool.securityPoolAddress, '', pool.universeId)
@@ -56,7 +40,7 @@ export function PoolDirectoryRow({
 					</Badge>
 				</div>
 				<div className='pool-directory-meta'>
-					<AddressValue address={pool.securityPoolAddress} responsiveAbbreviation />
+					<AddressValue address={pool.securityPoolAddress} />
 					<span>
 						{appCopy.statoblastSecurityMultiplierBps}: {formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}
 					</span>
@@ -70,7 +54,7 @@ export function PoolDirectoryRow({
 				</div>
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
-			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} remainingCapacity={remainingCapacity} showUsage />
+			<PoolCapacitySummary lifecycleState={lifecycleState} pool={pool} />
 			<a
 				className='secondary pool-open-link'
 				href={href}

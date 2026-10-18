@@ -46,6 +46,10 @@
 			"bun": "./ts/tests/testUtils/domTestLifecycle.ts",
 			"default": "./js/tests/testUtils/domTestLifecycle.js"
 		},
+		"./tests/testUtils/fakeClock.js": {
+			"bun": "./ts/tests/testUtils/fakeClock.ts",
+			"default": "./js/tests/testUtils/fakeClock.js"
+		},
 		"./tests/testUtils/fakeBackend.js": {
 			"bun": "./ts/tests/testUtils/fakeBackend.ts",
 			"default": "./js/tests/testUtils/fakeBackend.js"

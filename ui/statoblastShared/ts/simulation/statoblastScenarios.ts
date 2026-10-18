@@ -4,6 +4,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
 import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
+import { TRUTH_AUCTION_TIME_LENGTH } from '../protocol/truthAuctionTiming.js'
+import { FORK_MIGRATION_DURATION_SECONDS } from '../protocol/forkMigrationTiming.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { ListedSecurityPool } from '../types/contracts.js'
@@ -22,11 +24,12 @@ import {
 	type ScenarioSeedParameters,
 	type SeededVaultSpec,
 } from './statoblastScenarioSeeding.js'
-import { seedEndedPoolCommitmentScenario, seedLiquidationDistanceScenario } from './statoblastWorkflowScenarios.js'
+import { seedEndedPoolCommitmentScenario, seedEscalationInProgressScenario, seedLiquidationDistanceScenario, seedNearMinimumVaultScenario } from './statoblastWorkflowScenarios.js'
+import { STATOBLAST_SCENARIOS, type StatoblastScenario } from './statoblastScenarioDescriptions.js'
 
-export { getStatoblastScenarioLabel, getStatoblastScenarioDescription, type StatoblastScenario } from './statoblastScenarioDescriptions.js'
+export { STATOBLAST_SCENARIOS, getStatoblastScenarioLabel, getStatoblastScenarioDescription } from './statoblastScenarioDescriptions.js'
 
-const FORK_MIGRATION_TIME_SECONDS = 8n * 7n * DAY_IN_SECONDS
+const SECURITY_POOL_X2_FIRST_QUESTION_TITLE = 'Will this resolve? (securitypoolx2 #1)'
 const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_CAPACITY_OWNERSHIP_ATTO_REP = 40n * 10n ** 18n
 const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
@@ -84,7 +87,7 @@ async function seedSecurityPoolX2Scenario({ accounts, createReadClient, createWr
 	const seededPools = [
 		{
 			poolLabel: 'securitypoolx2 pool 1',
-			questionTitle: 'Will this resolve? (securitypoolx2 #1)',
+			questionTitle: SECURITY_POOL_X2_FIRST_QUESTION_TITLE,
 			vaults: seededVaults,
 		},
 		{
@@ -239,22 +242,17 @@ export async function forkSecurityPoolUniverseWithOwnEscalation({
 	await getScenarioProtocol().migrateRepToZoltarFromSecurityPool(writeClient, parentPool.securityPoolAddress, parentPool.universeId, ['yes'])
 }
 
-async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
-	await seedSecurityPoolX2Scenario({
-		accounts,
-		createReadClient,
-		createWriteClient,
-		memoryClient,
-		onProgress,
-		profile,
-	})
+/** Returns the Yes child pool holding the seeded truth auction, with its universe id, so follow-up scenarios can build on it. */
+async function seedSecurityPoolX2AuctionScenario(parameters: ScenarioSeedParameters, readyLabel: string) {
+	const { accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile } = parameters
+	await seedSecurityPoolX2Scenario(parameters)
 
 	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for securitypoolx2-auction')
 	const secondaryAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for securitypoolx2-auction')
 	const readClient = createReadClient()
 	const writeClient = createWriteClient(primaryAccount)
 	const x2Pools = await getScenarioProtocol().loadAllSecurityPools(readClient)
-	const parentPool = x2Pools.find(pool => pool.marketDetails.title === 'Will this resolve? (securitypoolx2 #1)')
+	const parentPool = x2Pools.find(pool => pool.marketDetails.title === SECURITY_POOL_X2_FIRST_QUESTION_TITLE)
 	if (parentPool === undefined) throw new Error('Expected the first securitypoolx2 parent pool for auction scenario seeding')
 
 	await reportBootstrapProgress(onProgress, 'Preparing fork-auction seed pool', 0.985)
@@ -274,7 +272,7 @@ async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, c
 		profile,
 		readClient,
 	})
-	await advanceSimulationTime(memoryClient, FORK_MIGRATION_TIME_SECONDS + DAY_IN_SECONDS)
+	await advanceSimulationTime(memoryClient, FORK_MIGRATION_DURATION_SECONDS + DAY_IN_SECONDS)
 
 	const yesChildPool = await loadRequiredChildSecurityPool(readClient, parentPool.securityPoolAddress, 'yes')
 	const yesForkDetailsBeforeAuction = await getScenarioProtocol().loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
@@ -285,9 +283,10 @@ async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, c
 	if (yesForkDetails.truthAuctionAddress === undefined || yesForkDetails.truthAuctionAddress === '0x0000000000000000000000000000000000000000') {
 		throw new Error('Expected a seeded truth auction address for the Yes child pool')
 	}
+	const seededAuction = { universeId: yesForkDetails.universeId, yesChildPool }
 	if (yesForkDetails.truthAuction?.finalized) {
-		await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
-		return
+		await reportBootstrapProgress(onProgress, readyLabel, 0.995)
+		return seededAuction
 	}
 
 	const biddingAccounts = [primaryAccount, secondaryAccount, ...accounts.slice(2)]
@@ -314,71 +313,54 @@ async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, c
 		await getScenarioProtocol().submitTruthAuctionBid(createWriteClient(bidderAccount), yesChildPool.securityPoolAddress, yesForkDetails.universeId, yesForkDetails.truthAuctionAddress, bidTick, bidAmount)
 	}
 
-	await reportBootstrapProgress(onProgress, 'Seeded securitypoolx2-auction scenario is ready', 0.995)
+	await reportBootstrapProgress(onProgress, readyLabel, 0.995)
+	return seededAuction
 }
 
-export async function applyStatoblastScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario }: BootstrapScenarioApplyParameters): Promise<boolean> {
-	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
+/** The securitypoolx2-auction setup with the Yes child's truth auction run past its end and finalized. */
+async function seedFinalizedTruthAuctionScenario(parameters: ScenarioSeedParameters) {
+	const { accounts, createReadClient, createWriteClient, memoryClient, onProgress } = parameters
+	const { universeId, yesChildPool } = await seedSecurityPoolX2AuctionScenario(parameters, 'Seeded the Yes child truth auction')
+	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for finalized-truth-auction')
+	const readClient = createReadClient()
 
-	switch (scenario) {
-		case 'security-pool':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 }, getScenarioProtocol().getDeploymentSteps)
-			await seedSecurityPoolScenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return true
-		case 'portfolio':
-		case 'securitypoolx2':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 }, getScenarioProtocol().getDeploymentSteps)
-			await seedSecurityPoolX2Scenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			if (scenario === 'portfolio') await seedPortfolioScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile })
-			return true
-		case 'securitypoolx2-auction':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 }, getScenarioProtocol().getDeploymentSteps)
-			await seedSecurityPoolX2AuctionScenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return true
-		case 'ended-pool-commitment':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 }, getScenarioProtocol().getDeploymentSteps)
-			await seedEndedPoolCommitmentScenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return true
-		case 'liquidation-distance':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 }, getScenarioProtocol().getDeploymentSteps)
-			await seedLiquidationDistanceScenario({
-				accounts,
-				createReadClient,
-				createWriteClient,
-				memoryClient,
-				onProgress,
-				profile,
-			})
-			return true
-		default:
-			return false
-	}
+	await reportBootstrapProgress(onProgress, 'Ending the seeded truth auction', 0.996)
+	await advanceSimulationTime(memoryClient, TRUTH_AUCTION_TIME_LENGTH + DAY_IN_SECONDS)
+	await getScenarioProtocol().finalizeSecurityPoolTruthAuction(createWriteClient(primaryAccount), yesChildPool.securityPoolAddress, universeId)
+	const finalizedDetails = await getScenarioProtocol().loadForkAuctionDetails(readClient, yesChildPool.securityPoolAddress)
+	if (finalizedDetails.truthAuction?.finalized !== true) throw new Error('Expected the seeded truth auction to be finalized')
+	await reportBootstrapProgress(onProgress, 'Seeded finalized-truth-auction scenario is ready', 0.998)
+}
+
+// Every scenario deploys the app contracts from 0.32 to `deployEnd` on the progress bar, then seeds from there.
+const STATOBLAST_SCENARIO_SEEDING: Record<StatoblastScenario, { deployEnd: number; seed: (parameters: ScenarioSeedParameters) => Promise<unknown> }> = {
+	portfolio: {
+		deployEnd: 0.7,
+		seed: async parameters => {
+			await seedSecurityPoolX2Scenario(parameters)
+			await seedPortfolioScenario(parameters)
+		},
+	},
+	'security-pool': { deployEnd: 0.78, seed: seedSecurityPoolScenario },
+	securitypoolx2: { deployEnd: 0.7, seed: seedSecurityPoolX2Scenario },
+	'securitypoolx2-auction': { deployEnd: 0.7, seed: parameters => seedSecurityPoolX2AuctionScenario(parameters, 'Seeded securitypoolx2-auction scenario is ready') },
+	'finalized-truth-auction': { deployEnd: 0.7, seed: seedFinalizedTruthAuctionScenario },
+	'ended-pool-commitment': { deployEnd: 0.78, seed: seedEndedPoolCommitmentScenario },
+	'escalation-in-progress': { deployEnd: 0.78, seed: seedEscalationInProgressScenario },
+	'liquidation-distance': { deployEnd: 0.78, seed: seedLiquidationDistanceScenario },
+	'near-minimum-vault': { deployEnd: 0.78, seed: seedNearMinimumVaultScenario },
+}
+
+function isStatoblastScenario(scenario: string): scenario is StatoblastScenario {
+	return STATOBLAST_SCENARIOS.some(candidate => candidate === scenario)
+}
+
+export async function applyStatoblastScenario({ scenario, ...parameters }: BootstrapScenarioApplyParameters): Promise<boolean> {
+	const primaryAccount = requireQaAccount(parameters.accounts[0], 'Expected seeded simulation QA account A1')
+	if (!isStatoblastScenario(scenario)) return false
+
+	const { deployEnd, seed } = STATOBLAST_SCENARIO_SEEDING[scenario]
+	await deploySimulationAppContracts(parameters.createWriteClient(primaryAccount), parameters.memoryClient, parameters.onProgress, parameters.profile, { start: 0.32, end: deployEnd }, getScenarioProtocol().getDeploymentSteps)
+	await seed(parameters)
+	return true
 }

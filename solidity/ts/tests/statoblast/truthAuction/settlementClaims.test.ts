@@ -197,8 +197,6 @@ describe('Statoblast: truth auction', () => {
 
 			// Migrate vault to yes
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			// Skip escalation game migration for simpler test
-			// await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 
 			// Wait for migration period
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -235,7 +233,6 @@ describe('Statoblast: truth auction', () => {
 			// Claim proceeds
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
-			// Verify they got backingUnits shares matching purchasedRep (with tolerance for rounding)
 			const vault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			const repFromBackingUnits = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, vault.repBackingUnits)
 			strictEqualTypeSafe(repFromBackingUnits, purchasedAttoRep, 'the sole bidder must receive the purchased REP')

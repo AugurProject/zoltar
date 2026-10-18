@@ -107,8 +107,9 @@ test('the list landings say when the selected universe has forked and link to it
 	try {
 		const notice = rendered.container.querySelector('.universe-forked-notice')
 		expect(notice?.textContent).toContain('This universe has forked.')
-		// A market whose question resolved before the fork keeps redeeming instead of migrating.
-		expect(notice?.textContent).toContain('holders of a resolved market redeem their winning shares')
+		// A market whose question resolved before the fork keeps redeeming, so the notice points at each market's Settlement tab rather than telling every holder to migrate.
+		expect(notice?.textContent).toContain('Settlement tab')
+		expect(notice?.textContent).not.toContain('migrate')
 		expect(notice?.querySelector('a')?.getAttribute('href')).toContain('#/universe')
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={offlineControllerServices} />, rendered.container))
 		expect(rendered.container.querySelector('.universe-forked-notice')).toBeNull()

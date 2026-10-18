@@ -9,7 +9,6 @@ const { appRoot: uiRootDirectory, repositoryRoot: repositoryRootDirectory } = ge
 const server = http.createServer()
 server.on('request', createDevServerRequestHandler({ repositoryRootDirectory, uiRootDirectory }))
 
-// Initiate the server on `port` and print a message
 const port = resolveDevServerPort(appId)
 // Repository files and live reload are intended only for local development.
 server.listen(port, '127.0.0.1')

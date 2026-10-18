@@ -57,6 +57,7 @@ describe('TruthAuctionBidsSection', () => {
 					{
 						bidder: walletAddress,
 						bidAmountAttoEth: 2n,
+						isViewer: true,
 						key: 'aggregate:11:1',
 						price: 42n,
 						statusLabel: 'Winning',
@@ -84,6 +85,33 @@ describe('TruthAuctionBidsSection', () => {
 		expect(within(bidHistory).queryByRole('button', { name: /Copy exact value/ })).toBeNull()
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Show more truth auction bids' }))
 		expect(loadMoreCalls).toBe(1)
+	})
+
+	test('names the connected wallet bids as yours and abbreviates other bidders', async () => {
+		const otherBidder: Address = '0x00000000000000000000000000000000000000b2'
+		const row = { bidAmountAttoEth: 2n, price: 42n, statusLabel: 'Winning', statusToneClassName: 'is-success' }
+		const rendered = await renderIntoDocument(
+			<TruthAuctionBidsSection
+				aggregatedAuctionBidCountForLoadedTicks={2n}
+				hasMoreAggregatedAuctionBids={false}
+				loadedTickCount={1}
+				loadingAggregatedAuctionBids={false}
+				onLoadNextAuctionBidPage={() => undefined}
+				renderPriceValue={renderPriceValue}
+				rows={[
+					{ ...row, bidder: walletAddress, isViewer: true, key: 'aggregate:11:1' },
+					{ ...row, bidder: otherBidder, isViewer: false, key: 'aggregate:11:2' },
+				]}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		const you = within(document.body).getByText('You')
+		expect(you.getAttribute('title')).toBe(walletAddress)
+		const bidHistory = within(document.body).getByRole('table', { name: 'Current bids' })
+		// Other bidders read short on screen, with the full address kept for assistive technology.
+		const bidder = bidHistory.querySelector('.address-value')
+		expect(bidder?.querySelector('[aria-hidden="true"]')?.textContent).toBe('0x000000…0000b2')
+		expect(bidder?.querySelector('.visually-hidden')?.textContent).toBe(otherBidder)
 	})
 
 	test('disables auction bid pagination while the next page is loading', async () => {

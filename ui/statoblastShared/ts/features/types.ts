@@ -30,6 +30,7 @@ import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPo
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { ReportingRouteContentProps } from './oracleTypes.js'
 import type { UiRepPriceSource } from './security-pools/lib/repPriceSource.js'
+import type { VaultHealthTier } from './security-pools/lib/vaultHealth.js'
 import type { VaultMigrationReviewAmounts } from '../protocol/forks.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
@@ -41,16 +42,13 @@ export type VaultMetricGridProps = {
 	className?: string
 	layout?: 'grid' | 'preview'
 	disputeStakedAttoRep?: bigint | undefined
-	isCurrentlyHealthy?: boolean | undefined
+	/** The verdict the badge, the backing ratio's tone, and the near-minimum label share. */
+	healthTier: VaultHealthTier
 	/** After resolution liquidation is closed, so the health verdict and its price source are hidden. */
 	poolEnded?: boolean | undefined
-	poolHeldRepPerCapacityBps?: bigint | undefined
-	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined
-	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	underwritingLimitAttoEth: bigint | undefined
-	claimableFeesAttoEth: bigint | undefined
-} & RepPerEthPriceProps
+}
 
 export type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
@@ -229,7 +227,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
-} & RepPerEthPriceProps
+} & Pick<RepPerEthPriceProps, 'repPerEthPrice'>
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean

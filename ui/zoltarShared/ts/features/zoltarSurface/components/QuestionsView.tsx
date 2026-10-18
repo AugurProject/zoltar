@@ -34,7 +34,7 @@ type QuestionsViewProps = {
 	requestContextKey: number
 }
 
-/** Questions are browsed from this browser's favorites and downloaded summaries; the registry is scanned one page at a time on request. */
+/** The first registry page loads on entry; favorites and downloaded summaries remain searchable while it refreshes. */
 export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError, zoltarQuestionsFreshness }: QuestionsViewProps) {
 	const receivedPage = useMemo((): DiscoveredPage<MarketDetails> | undefined => {
 		if (zoltarQuestionPage === undefined) return undefined
@@ -57,12 +57,13 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 	const questions = entries.map(entry => entry.data).filter(question => questionMatchesSearch(question, directory.normalizedSearchText))
 	const loadError = zoltarQuestionsError ?? (discovery.loadFailed ? marketCopy.questionPageLoadError : undefined)
 	const content = (() => {
+		if (entries.length === 0 && discovery.loading) return undefined
+		if (entries.length === 0 && loadError !== undefined) return undefined
 		if (entries.length === 0)
 			return (
 				<LocalCollectionEmptyState
 					copy={{
 						downloadedEmpty: marketCopy.noDownloadedQuestions,
-						downloadedEmptyDetail: marketCopy.noDownloadedQuestionsDetail,
 						favoritesEmpty: marketCopy.noFavoriteQuestions,
 						favoritesEmptyDetail: marketCopy.noFavoriteQuestionsDetail,
 						favoritesEmptyWithDownloadsDetail: marketCopy.noFavoriteQuestionsWithDownloadsDetail,
@@ -135,7 +136,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 		<div className='route-view-flow'>
 			<RouteHeader description={canFork && !hasForked ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse} title={marketCopy.browseQuestions} />
 			<SectionBlock title={marketCopy.questions} variant='plain'>
-				<LocalBrowseBar directory={directory} discoverLabel={marketCopy.discoverQuestions} freshness={zoltarQuestionsFreshness} nounPlural={marketCopy.questionsNoun} />
+				<LocalBrowseBar directory={directory} freshness={zoltarQuestionsFreshness} nounPlural={marketCopy.questionsNoun} />
 				<LocalBrowseSearchField label={marketCopy.searchDownloadedQuestions} onChange={directory.setSearchText} placeholder={marketCopy.questionSearchPlaceholder} value={directory.searchText} />
 				<RetryableNotice disabled={discovery.loading} message={loadError} onRetry={discovery.retry} retryLabel={discovery.loading ? commonCopy.retrying : commonCopy.retry} />
 				{content}

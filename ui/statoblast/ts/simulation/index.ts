@@ -1,7 +1,5 @@
 import { registerSimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
-import { getStatoblastScenarioDescription, getStatoblastScenarioLabel, type StatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
-
-const STATOBLAST_SCENARIOS = ['portfolio', 'security-pool', 'securitypoolx2', 'securitypoolx2-auction', 'ended-pool-commitment', 'liquidation-distance'] as const satisfies readonly StatoblastScenario[]
+import { STATOBLAST_SCENARIOS, getStatoblastScenarioDescription, getStatoblastScenarioLabel } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 
 export function registerStatoblastSimulationScenarios() {
 	for (const scenario of STATOBLAST_SCENARIOS) {

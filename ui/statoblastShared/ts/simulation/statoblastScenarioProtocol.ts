@@ -9,7 +9,7 @@ import { getDeploymentSteps } from '../protocol/deployment.js'
 import { createSecurityPool, loadAllSecurityPools, loadSecurityVaultDetails } from '../protocol/securityPools.js'
 import { depositRepToVaultToSecurityPool, setUnderwritingLimit } from '../protocol/securityVault.js'
 import { createCompleteSetInSecurityPool } from '../protocol/trading.js'
-import { startTruthAuctionForSecurityPool, submitTruthAuctionBid } from '../protocol/truthAuctionActions.js'
+import { finalizeSecurityPoolTruthAuction, startTruthAuctionForSecurityPool, submitTruthAuctionBid } from '../protocol/truthAuctionActions.js'
 
 const defaultScenarioProtocol = {
 	approveErc20,
@@ -20,6 +20,7 @@ const defaultScenarioProtocol = {
 	createMarket,
 	createSecurityPool,
 	depositRepToVaultToSecurityPool,
+	finalizeSecurityPoolTruthAuction,
 	setUnderwritingLimit,
 	forkZoltarWithOwnEscalation,
 	getDeploymentSteps,

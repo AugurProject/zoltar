@@ -31,7 +31,9 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	uint256 public immutable override minimumSecurityBondDebtAttoEth;
 	uint256 public immutable override minimumVaultRepDepositAttoRep;
 	SecurityPoolDeployment[] private securityPoolDeployments;
+	// Pool ID from getPoolId(originId, universeId) -> the registered pool.
 	mapping(bytes32 => ISecurityPool) private securityPoolsById;
+	// The same pool ID -> whether its deployment slot has been reserved.
 	mapping(bytes32 => bool) private securityPoolIdClaims;
 	mapping(ISecurityPool => bytes32) private securityPoolOriginIds;
 	mapping(ISecurityPool => bool) private securityPoolHasInheritedForkOutcome;

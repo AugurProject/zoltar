@@ -176,6 +176,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				{ address: weth, allowances: { [openOracle]: '0', [pool]: '0', [zoltar]: '0' }, balance: '1000000000000000000', openOracleCredit: '1', openOracleInternalAllowanceToSelf: '0', symbol: 'WETH' },
 			],
 		},
+		discoveryIssues: [],
 		warnings: [],
 	}
 }

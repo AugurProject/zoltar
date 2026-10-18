@@ -10,14 +10,15 @@ import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { MUTATING_CONTRACT_SURFACE } from '../../src/contracts/surface.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../support/canonical-contracts.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
-import { discoveryCoverageIsComplete } from '../../src/monitoring/discovery.ts'
+import { discoveryCoverageIsComplete } from '../../src/monitoring/discovery-coverage.ts'
 import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, createChaosReadPool, planningOptions, unavailableOperationCatalog } from '../../src/runtime/canonical-scan.ts'
 import { completeOperationCoverage } from '../../src/runtime/surface-coverage.ts'
 import { walletInventory } from '../../src/state/runtime-state.ts'
 import type { ChaosEcosystem, EcosystemSnapshot, EvaluatedOperation } from '../../src/operations/types.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { deriveChildUniverseId } from '../support/universe.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-schema.ts'
+import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
 import { hash, snapshotFixture } from '../operations/fixture.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
@@ -134,6 +135,7 @@ function snapshot(): EcosystemSnapshot {
 				{ address: rep, allowances: {}, balance: '9', openOracleCredit: '0', symbol: 'REP' },
 			],
 		},
+		discoveryIssues: [],
 		warnings: [],
 	}
 }
@@ -571,11 +573,10 @@ describe('canonical scan policy', () => {
 		expect(completeOperationCoverage(coverage).filter(operation => operation.definition.method === 'claimAuctionProceeds')).toHaveLength(1)
 	})
 
-	test('fails closed when any bounded discovery collection is truncated', () => {
+	test('fails closed when any bounded discovery collection is incomplete', () => {
 		expect(discoveryCoverageIsComplete([])).toBeTrue()
-		expect(discoveryCoverageIsComplete(['Pool discovery truncated at 100 entries'])).toBeFalse()
-		expect(discoveryCoverageIsComplete(['Share-inventory discovery truncated because planned fan-out exceeds its aggregate limit'])).toBeFalse()
-		expect(discoveryCoverageIsComplete(['A non-coverage advisory'])).toBeTrue()
+		expect(discoveryCoverageIsComplete([{ kind: 'registry', collection: 'pools', label: 'Pool', authenticated: '1', canonicalCount: '2', residentLimit: '100' }])).toBeFalse()
+		expect(discoveryCoverageIsComplete([{ kind: 'share-fanout', plannedFanout: '10002', limit: 10000 }])).toBeFalse()
 	})
 
 	test('shows role-restricted and dangerous ABI methods as explicit non-candidates', () => {

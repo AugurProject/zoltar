@@ -359,6 +359,14 @@ export interface EcosystemDeployments {
 	uniswapV3Factory?: Address | undefined
 }
 
+/** Machine-readable reasons why bounded discovery cannot yet authorize execution. */
+export type DiscoveryIssue =
+	| { kind: 'registry'; collection: 'questions' | 'pools' | 'vaults'; label: string; authenticated: string; canonicalCount: string; residentLimit: string }
+	| { kind: 'universe-limit'; retained: number; limit: number }
+	| { kind: 'pool-prerequisites'; authenticated: string; canonicalCount: string }
+	| { kind: 'staged-operation-limit'; coordinator: Address; count: string; limit: number }
+	| { kind: 'share-fanout'; plannedFanout: string; limit: number }
+
 export interface EcosystemSnapshot {
 	schemaVersion: 1
 	chainId: number
@@ -381,6 +389,7 @@ export interface EcosystemSnapshot {
 	tradingDeployment?: { factory: boolean; router: boolean }
 	genesisUniswap?: { factory: boolean; initialized: boolean; liquidity: string; pool?: Address | undefined; proxy: boolean; seeder: boolean }
 	universeUniswap?: UniverseUniswapSnapshot
+	discoveryIssues: DiscoveryIssue[]
 	warnings: string[]
 }
 

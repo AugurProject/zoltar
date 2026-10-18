@@ -226,7 +226,6 @@
 	--radius-circle: 50%;
 	--radius-shell: var(--radius-overlay);
 	--radius-section: var(--radius-normal);
-	--radius-panel: var(--radius-normal);
 	--radius-record: var(--radius-normal);
 	--radius-control: var(--radius-compact);
 	--divider-subtle: light-dark(rgba(30, 50, 80, 0.1), rgba(159, 180, 207, 0.1));

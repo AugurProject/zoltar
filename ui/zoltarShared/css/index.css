@@ -55,12 +55,70 @@
 	overflow-wrap: anywhere;
 }
 
+/* The universe's status leads with large figures, so its state reads at a glance; extra space below keeps the next section heading from reading as another figure. */
+.zoltar-overview-status {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+	gap: var(--space-4) var(--space-5);
+	margin-bottom: var(--space-4);
+}
+
+.zoltar-overview-status .metric-field-value {
+	font-size: var(--font-lg);
+	line-height: var(--line-height-tight);
+}
+
+/* The protocol model as three numbered steps side by side: a short title to scan, the sentence beneath it. */
 .zoltar-model-steps {
 	display: grid;
-	gap: var(--space-2);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-4);
 	margin: 0;
-	padding-left: 1.25rem;
+	padding: 0;
+	list-style: none;
+	counter-reset: zoltar-model-step;
+}
+
+.zoltar-model-steps > li {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-rows: auto auto;
+	align-content: start;
+	gap: var(--space-1) var(--space-3);
+	padding: var(--space-4);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-record);
+	background: var(--surface-record);
+	counter-increment: zoltar-model-step;
+}
+
+.zoltar-model-steps > li::before {
+	content: counter(zoltar-model-step);
+	grid-row: span 2;
+	display: grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+	border-radius: var(--radius-circle);
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-family: var(--font-family-mono);
+	font-weight: 600;
+}
+
+.zoltar-model-steps > li > strong {
+	font-size: var(--font-body);
+}
+
+.zoltar-model-steps > li > span {
 	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	line-height: var(--line-height-body);
+}
+
+@media (max-width: 64rem) {
+	.zoltar-model-steps {
+		grid-template-columns: 1fr;
+	}
 }
 
 /* Fork acknowledgment: the whole label is the click target, and the checkbox shrinks to one label line so it sits on the first line instead of centring below it. */

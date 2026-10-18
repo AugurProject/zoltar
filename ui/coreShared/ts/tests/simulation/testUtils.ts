@@ -4,6 +4,12 @@ import type { SimulationScenario } from '../../simulation/scenarios.js'
 
 export type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
 
+/** `waitFor` options for reads from the in-process simulation chain, which slow down sharply on a loaded machine. The limit only bounds how long a real failure takes to report. */
+export const simulationWaitOptions = { timeout: 60_000 }
+
+/** Limit for hooks that bootstrap a simulation chain. Setup is CPU-bound and takes about a minute on an idle machine; five minutes leaves room on a loaded one while a hung setup still fails well inside a CI job. */
+export const simulationSetupTimeoutMs = 300_000
+
 export function activateSimulationBackendProfile(backend: SimulationBackend) {
 	setRuntimeNetworkProfile(backend.profile)
 }

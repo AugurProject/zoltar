@@ -5,7 +5,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 		compiledAbiFingerprint: 'c4c3b830e96f478974149aacb56eee2bb36bee4c0ef7f104ffa43239dcb28ada',
 		name: 'LiquidationApprovalRegistry',
 		purpose: 'Stores coordinator-local, bounded authorization for a receiver vault to accept liquidation debt from an exact operator.',
-		readAbiFingerprint: '04465d90cef2bd37454bf8496fffcaccf07f0ec5808f31ffd6481d4cdc46f810',
+		readAbiFingerprint: 'b60052cad1ad645b06600310891f34d5208b2e0b17446f74306cb4caad3e5185',
 		readSurface:
 			'Use `coordinator` to identify the validating coordinator and implied security pool. `LIQUIDATION_APPROVAL_TYPEHASH`, `DOMAIN_SEPARATOR`, and `liquidationApprovalDigest` define the chain- and registry-bound EIP-712 message. `getLiquidationApproval` reports parameters plus available, reserved, consumed, and revoked state; `minimumLiquidationApprovalNonce` reports receiver invalidation state; `liquidationReservations` and `minimumHealthFactorBps` expose operation reservation state and its execution-time health floor.',
 		readDeclarations: [{ name: 'DOMAIN_SEPARATOR' }, { name: 'liquidationApprovalDigest' }, { name: 'getLiquidationApproval' }, { name: 'minimumHealthFactorBps' }],

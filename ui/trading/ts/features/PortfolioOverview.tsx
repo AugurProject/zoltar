@@ -1,6 +1,7 @@
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { marketsCopy } from '../copy/markets.js'
 import { formatEthAmount } from '../copy/outcomes.js'
@@ -8,7 +9,7 @@ import * as portfolioCopy from '../copy/portfolio.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { marketTicketHref } from '../lib/routeState.js'
-import type { PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
+import type { PortfolioActionGroup, PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
 
 function formatPortfolioEth(attoEth: bigint) {
 	return formatEthAmount(formatRoundedUnits(attoEth, 18, 4))
@@ -23,11 +24,21 @@ function valuationCaption(valuation: PortfolioValuation) {
 	return valuation.reason === 'market-unavailable' ? portfolioCopy.marketValueReason : portfolioCopy.balanceValueReason
 }
 
+/** A value that cannot be priced shows a quiet dash, read aloud as unavailable, so it never looks like a headline figure. */
+function UnpricedValue() {
+	return (
+		<>
+			<span aria-hidden='true'>{commonCopy.metricUnavailablePlaceholder}</span>
+			<span className='visually-hidden'>{portfolioCopy.valueUnavailable}</span>
+		</>
+	)
+}
+
 export function PortfolioRowValue({ valuation }: { valuation: PortfolioValuation }) {
 	return (
 		<div className='portfolio-position-value'>
 			<span className='metric-label'>{portfolioCopy.valueNow}</span>
-			<strong>{valuation.kind === 'unavailable' ? portfolioCopy.valueUnavailable : formatPortfolioEth(valuation.attoEth)}</strong>
+			<strong className={valuation.kind === 'unavailable' ? 'is-unpriced' : undefined}>{valuation.kind === 'unavailable' ? <UnpricedValue /> : formatPortfolioEth(valuation.attoEth)}</strong>
 			<small className='payout-caption'>{valuationCaption(valuation)}</small>
 		</div>
 	)
@@ -39,13 +50,14 @@ function totalValueCaptions(overview: PortfolioOverview) {
 	return captions.length === 0 ? [portfolioCopy.totalValueBasis] : captions
 }
 
-/** Current value, position count, and action items across every listed position. */
+/** Current value, position count, and action items across every listed position. With no priced position the total is a dash, not a misleading 0 ETH. */
 export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) {
+	const noPricedPosition = overview.positionCount > 0 && overview.unvaluedCount === overview.positionCount
 	return (
 		<section className='portfolio-summary' aria-label={portfolioCopy.summaryLabel}>
 			<DataGrid className='portfolio-summary-grid'>
-				<MetricField label={portfolioCopy.totalValue}>
-					{formatPortfolioEth(overview.totalValueAttoEth)}
+				<MetricField label={portfolioCopy.totalValue} valueClassName={noPricedPosition ? 'is-unpriced' : undefined}>
+					{noPricedPosition ? <UnpricedValue /> : formatPortfolioEth(overview.totalValueAttoEth)}
 					{totalValueCaptions(overview).map(caption => (
 						<small key={caption} className='payout-caption'>
 							{caption}
@@ -53,7 +65,7 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 					))}
 				</MetricField>
 				<MetricField label={portfolioCopy.positions}>{overview.positionCount.toString()}</MetricField>
-				<MetricField label={portfolioCopy.needsAttention}>{overview.actionItems.length === 0 ? portfolioCopy.nothingNeedsAttention : overview.actionItems.length.toString()}</MetricField>
+				<MetricField label={portfolioCopy.needsAttention}>{overview.actionGroups.length === 0 ? portfolioCopy.nothingNeedsAttention : overview.actionGroups.length.toString()}</MetricField>
 			</DataGrid>
 		</section>
 	)
@@ -77,23 +89,33 @@ function actionItemPresentation(item: PortfolioActionItem) {
 	return { ...actionBadge(item), ...actionLink(item) }
 }
 
-/** What needs the account's attention, soonest deadline first, each with the action that resolves it. */
-export function PortfolioActionItems({ items, nowSeconds }: { items: readonly PortfolioActionItem[]; nowSeconds: bigint }) {
-	if (items.length === 0) return null
+/** Each market that needs the account's attention, soonest deadline first: its states as badges and the action that resolves each one. */
+export function PortfolioActionItems({ groups, nowSeconds }: { groups: readonly PortfolioActionGroup[]; nowSeconds: bigint }) {
+	if (groups.length === 0) return null
 	return (
 		<section className='portfolio-action-items' aria-labelledby='portfolio-action-items-heading'>
 			<h3 id='portfolio-action-items-heading'>{portfolioCopy.needsAttention}</h3>
 			<ul>
-				{items.map(item => {
-					const presentation = actionItemPresentation(item)
+				{groups.map(group => {
+					const presentations = group.items.map(item => ({ item, ...actionItemPresentation(item) }))
 					return (
-						<li key={`${item.kind}:${item.pool}`}>
-							<Badge tone={presentation.tone}>{presentation.label}</Badge>
-							<span className='portfolio-action-item-title'>{item.title}</span>
-							<span className='portfolio-action-item-deadline'>{item.deadline === undefined ? portfolioCopy.noDeadline : <TimestampValue timestamp={item.deadline} currentTimestamp={nowSeconds} />}</span>
-							<a className='button-link secondary-link' href={presentation.href} aria-label={portfolioCopy.actionFor(presentation.action, item.title)}>
-								{presentation.action}
-							</a>
+						<li key={group.pool}>
+							<div className='portfolio-action-item-subject'>
+								<span className='portfolio-action-item-title'>{group.title}</span>
+								{presentations.map(({ item, label, tone }) => (
+									<Badge key={item.kind} tone={tone}>
+										{label}
+									</Badge>
+								))}
+							</div>
+							<span className='portfolio-action-item-deadline'>{group.deadline === undefined ? portfolioCopy.noDeadline : <TimestampValue timestamp={group.deadline} currentTimestamp={nowSeconds} />}</span>
+							<div className='portfolio-action-item-links'>
+								{presentations.map(({ action, href, item }) => (
+									<a key={item.kind} className='button-link secondary-link' href={href} aria-label={portfolioCopy.actionFor(action, group.title)}>
+										{action}
+									</a>
+								))}
+							</div>
 						</li>
 					)
 				})}

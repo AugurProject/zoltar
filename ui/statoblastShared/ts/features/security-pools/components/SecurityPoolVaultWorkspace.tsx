@@ -14,7 +14,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../../../types/contracts.js'
-import { getVaultNotLiquidatableReason } from '../lib/liquidation.js'
+import { getBlockedLiquidationReason, getVaultLiquidatability, getVaultNotLiquidatableReason } from '../lib/liquidation.js'
 import { getVaultLiquidationLauncherBlocker } from '../lib/liquidationModalGuards.js'
 import { isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -36,8 +36,6 @@ export function SecurityPoolVaultWorkspace({
 	vaultOperations,
 	poolState,
 	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceUrl,
 	securityVault,
 	selectedPool,
 	selectedVaultDetails,
@@ -60,8 +58,6 @@ export function SecurityPoolVaultWorkspace({
 	vaultOperations: ComponentChildren
 	poolState: PoolState
 	repPerEthPrice: SecurityPoolWorkflowRouteContentProps['repPerEthPrice']
-	repPerEthSource: SecurityPoolWorkflowRouteContentProps['repPerEthSource']
-	repPerEthSourceUrl: SecurityPoolWorkflowRouteContentProps['repPerEthSourceUrl']
 	securityVault: SecurityPoolWorkflowRouteContentProps['securityVault']
 	selectedPool: ListedSecurityPool | undefined
 	selectedVaultDetails: SecurityVaultDetails | undefined
@@ -81,8 +77,8 @@ export function SecurityPoolVaultWorkspace({
 	const liquidationReasonIdPrefix = useId()
 	// The launchers check the price the protocol guard uses, so a vault that is healthy on-chain is never offered for liquidation.
 	const protocolRepPerEthPrice = currentPoolOracleManagerDetails !== undefined && isOracleManagerPriceUsable(currentPoolOracleManagerDetails, chainTimestamp) ? currentPoolOracleManagerDetails.lastPrice : undefined
-	const getNotLiquidatableReason = (vault: SecurityPoolVaultSummary | undefined) =>
-		vault === undefined ? undefined : getVaultNotLiquidatableReason({ minLiquidationPriceDistanceBps: currentPoolOracleManagerDetails?.minLiquidationPriceDistanceBps, repPerEthPrice: protocolRepPerEthPrice, statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps, targetVaultSummary: vault })
+	const getLiquidatabilityInput = (vault: SecurityPoolVaultSummary) => ({ minLiquidationPriceDistanceBps: currentPoolOracleManagerDetails?.minLiquidationPriceDistanceBps, repPerEthPrice: protocolRepPerEthPrice, statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps, targetVaultSummary: vault })
+	const getNotLiquidatableReason = (vault: SecurityPoolVaultSummary | undefined) => (vault === undefined ? undefined : getVaultNotLiquidatableReason(getLiquidatabilityInput(vault)))
 	const isWalletVault = (vaultAddress: string) => walletAddress !== undefined && sameCaseInsensitiveText(walletAddress, vaultAddress)
 	const getLiquidationLauncherBlocker = ({ notLiquidatableReason, vaultExistsOnchain, vaultLoaded }: { notLiquidatableReason: string | undefined; vaultExistsOnchain: boolean; vaultLoaded: boolean }) =>
 		getVaultLiquidationLauncherBlocker({ hasWallet: walletAddress !== undefined, isOnActiveAppChain, liquidationEnabled, notLiquidatableReason, vaultExistsOnchain, vaultLoaded, wrongNetworkReason: getWrongNetworkReason() })
@@ -157,11 +153,13 @@ export function SecurityPoolVaultWorkspace({
 					<SecurityPoolVaultDirectory
 						emptyState={browseEmptyState}
 						pool={selectedPool}
+						poolEnded={poolState?.lifecycleState === 'ended'}
 						renderActions={vault => {
 							if (selectedPool === undefined) return undefined
 							// The connected wallet's own vault can never be liquidated by it, so its row offers no liquidation.
 							const ownVault = isWalletVault(vault.vaultAddress)
-							const liquidationBlocker = ownVault ? undefined : getLiquidationLauncherBlocker({ notLiquidatableReason: getNotLiquidatableReason(vault), vaultExistsOnchain: true, vaultLoaded: true })
+							const liquidatability = getVaultLiquidatability(getLiquidatabilityInput(vault))
+							const liquidationBlocker = ownVault ? undefined : getLiquidationLauncherBlocker({ notLiquidatableReason: getBlockedLiquidationReason(liquidatability), vaultExistsOnchain: true, vaultLoaded: true })
 							const liquidationReasonId = `${liquidationReasonIdPrefix}-${vault.vaultAddress}`
 							return (
 								<>
@@ -178,7 +176,14 @@ export function SecurityPoolVaultWorkspace({
 											{workspaceCopy.openVault}
 										</button>
 										{ownVault ? undefined : (
-											<button aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId} className='secondary' disabled={liquidationBlocker !== undefined} type='button' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}>
+											// Only a liquidation the protocol's price confirms is the row's main action. The health badge uses the UI estimate, and without a usable protocol price the action stays available but secondary.
+											<button
+												aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId}
+												className={liquidationBlocker === undefined && liquidatability.kind === 'allowed' ? 'primary' : 'secondary'}
+												disabled={liquidationBlocker !== undefined}
+												type='button'
+												onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}
+											>
 												{liquidationCopy.liquidateVault}
 											</button>
 										)}
@@ -187,10 +192,12 @@ export function SecurityPoolVaultWorkspace({
 								</>
 							)
 						}}
-						renderBadge={vault => (selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='ok'>{commonCopy.selected}</Badge> : undefined)}
+						renderBadge={vault => {
+							// The row's health badge carries the color, so ownership and selection stay neutral beside it.
+							if (isWalletVault(vault.vaultAddress)) return <Badge tone='muted'>{securityPoolCopy.owned}</Badge>
+							return selectedVaultOwner !== '' && sameCaseInsensitiveText(selectedVaultOwner, vault.vaultAddress) ? <Badge tone='muted'>{commonCopy.selected}</Badge> : undefined
+						}}
 						repPerEthPrice={repPerEthPrice}
-						repPerEthSource={repPerEthSource}
-						repPerEthSourceUrl={repPerEthSourceUrl}
 					/>
 				</div>
 			) : undefined}

@@ -1,3 +1,4 @@
+import type { DiscoveryIssue } from '../operations/types.ts'
 import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type VaultSnapshot } from '../operations/types.ts'
 
@@ -44,10 +45,10 @@ export async function discoverVault(client: ChaosReadClient, pool: Address, esca
 	}
 }
 
-export async function discoverStagedOperations(client: ChaosReadClient, pool: PoolSnapshot, blockNumber: bigint, limit: number, warnings: string[]) {
+export async function discoverStagedOperations(client: ChaosReadClient, pool: PoolSnapshot, blockNumber: bigint, limit: number, issues: DiscoveryIssue[]) {
 	const count = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' })
 	if (count > BigInt(limit)) {
-		warnings.push(`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total ${count.toString()} exceeds the configured ${limit.toString()}-entry resident limit`)
+		issues.push({ kind: 'staged-operation-limit', coordinator: pool.coordinator, count: count.toString(), limit })
 		return []
 	}
 	const pendingIds = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })

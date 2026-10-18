@@ -1,7 +1,7 @@
 import { openOraclePriceCoordinatorAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
-import type { CachedPoolDeployment } from './topology-cache.ts'
+import type { CachedPoolDeployment } from './topology-schema.ts'
 import { type ChaosReadClient, drainConcurrent } from './discovery-client.ts'
 
 export function requireGraphEdge(actual: Address, expected: Address, label: string) {
@@ -106,4 +106,8 @@ export function cachePoolDeployment(deployment: { parent: Address; openOraclePri
 		truthAuction: getAddress(deployment.truthAuction),
 		universeId: deployment.universeId.toString(),
 	}
+}
+
+export function hasCode(code: string | undefined): code is string {
+	return code !== undefined && code !== '0x'
 }

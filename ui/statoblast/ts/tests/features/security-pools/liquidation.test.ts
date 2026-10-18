@@ -1,10 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { SecurityPoolVaultSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getPoolExecutionFailureSentence, getMaxLiquidationAmount, isLiquidationBeyondMinPriceDistance } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
+import { createUnencumberedVaultSummary } from './workflow/builders.js'
 
 const ATTO = 10n ** 18n
 const DISTANCE_BPS = 1_000n
@@ -12,21 +11,9 @@ const DISTANCE_BPS = 1_000n
 // so a 10% distance first passes at ceil(5e22 / 9000) = 5555555555555555556.
 const FIRST_PRICE_BEYOND_DISTANCE = 5_555_555_555_555_555_556n
 
-function createVault(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
-	return {
-		badDebtAttoEth: 0n,
-		claimableFeesAttoEth: 0n,
-		disputeStakedAttoRep: 0n,
-		underwritingLimitAttoEth: 10n * ATTO,
-		vaultAddress: zeroAddress,
-		vaultAttoRepBacking: 100n * ATTO,
-		...overrides,
-	}
-}
-
 function createReasonInput(overrides: Partial<Parameters<typeof getDeterministicLiquidationFailureReason>[0]> = {}): Parameters<typeof getDeterministicLiquidationFailureReason>[0] {
 	return {
-		callerVaultSummary: createVault({ underwritingLimitAttoEth: 0n, vaultAttoRepBacking: 1_000n * ATTO }),
+		callerVaultSummary: createUnencumberedVaultSummary({ underwritingLimitAttoEth: 0n, vaultAttoRepBacking: 1_000n * ATTO }),
 		minLiquidationPriceDistanceBps: DISTANCE_BPS,
 		minimumSecurityBondDebtAttoEth: 1n,
 		minimumVaultRepDepositAttoRep: 1n,
@@ -34,7 +21,7 @@ function createReasonInput(overrides: Partial<Parameters<typeof getDeterministic
 		requestedDebtAttoEth: ATTO,
 		settlementCollateralAttoEth: 10n * ATTO,
 		statoblastSecurityMultiplierBps: 20_000n,
-		targetVaultSummary: createVault(),
+		targetVaultSummary: createUnencumberedVaultSummary(),
 		totalUnderwritingLimitAttoEth: 10n * ATTO,
 		...overrides,
 	}
@@ -66,14 +53,14 @@ describe('liquidation minimum price distance', () => {
 		const withinDistance = createReasonInput({ repPerEthPrice: FIRST_PRICE_BEYOND_DISTANCE - 1n })
 		const reason = 'The price must move at least 10% past this vault’s liquidation threshold before it can be liquidated.'
 		expect(getDeterministicLiquidationFailureReason(withinDistance)).toBe(reason)
-		expect(getMaxLiquidationAmount({ minLiquidationPriceDistanceBps: DISTANCE_BPS, repPerEthPrice: FIRST_PRICE_BEYOND_DISTANCE - 1n, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: createVault() })).toBe(0n)
+		expect(getMaxLiquidationAmount({ minLiquidationPriceDistanceBps: DISTANCE_BPS, repPerEthPrice: FIRST_PRICE_BEYOND_DISTANCE - 1n, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: createUnencumberedVaultSummary() })).toBe(0n)
 		expect(getLiquidationFailureReason({ ...withinDistance, settlementCollateralAttoEth: 10n * ATTO, totalUnderwritingLimitAttoEth: 10n * ATTO })).toBe(reason)
 		expect(getDeterministicLiquidationFailureReason(createReasonInput({ minLiquidationPriceDistanceBps: 1_050n, repPerEthPrice: FIRST_PRICE_BEYOND_DISTANCE }))).toBe('The price must move at least 10.5% past this vault’s liquidation threshold before it can be liquidated.')
 	})
 
 	test('allows the vault once the price is beyond the distance', () => {
 		expect(getDeterministicLiquidationFailureReason(createReasonInput())).toBeUndefined()
-		expect(getMaxLiquidationAmount({ minLiquidationPriceDistanceBps: DISTANCE_BPS, repPerEthPrice: FIRST_PRICE_BEYOND_DISTANCE, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: createVault() })).toBe(10n * ATTO)
+		expect(getMaxLiquidationAmount({ minLiquidationPriceDistanceBps: DISTANCE_BPS, repPerEthPrice: FIRST_PRICE_BEYOND_DISTANCE, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: createUnencumberedVaultSummary() })).toBe(10n * ATTO)
 	})
 
 	test('keeps the safe-vault reason for a healthy vault', () => {
@@ -83,11 +70,11 @@ describe('liquidation minimum price distance', () => {
 
 describe('liquidation bad debt', () => {
 	test('blocks when the target vault has bad debt', () => {
-		expect(getDeterministicLiquidationFailureReason(createReasonInput({ targetVaultSummary: createVault({ badDebtAttoEth: 1n }) }))).toBe(liquidationCopy.targetBadDebtReason)
+		expect(getDeterministicLiquidationFailureReason(createReasonInput({ targetVaultSummary: createUnencumberedVaultSummary({ badDebtAttoEth: 1n }) }))).toBe(liquidationCopy.targetBadDebtReason)
 	})
 
 	test('blocks when the receiver vault has bad debt', () => {
-		expect(getDeterministicLiquidationFailureReason(createReasonInput({ callerVaultSummary: createVault({ badDebtAttoEth: 1n, underwritingLimitAttoEth: 0n, vaultAttoRepBacking: 1_000n * ATTO }) }))).toBe(liquidationCopy.receiverBadDebtReason)
+		expect(getDeterministicLiquidationFailureReason(createReasonInput({ callerVaultSummary: createUnencumberedVaultSummary({ badDebtAttoEth: 1n, underwritingLimitAttoEth: 0n, vaultAttoRepBacking: 1_000n * ATTO }) }))).toBe(liquidationCopy.receiverBadDebtReason)
 	})
 })
 

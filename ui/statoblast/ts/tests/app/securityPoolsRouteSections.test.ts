@@ -59,8 +59,6 @@ describe('security pools route section builders', () => {
 			'onSetVaultUnderwritingLimit',
 			'onWithdrawRep',
 			'repPerEthPrice',
-			'repPerEthSource',
-			'repPerEthSourceUrl',
 			'securityPoolVaults',
 			'securityVaultActiveAction',
 			'securityVaultDetails',
@@ -78,7 +76,7 @@ describe('security pools route section builders', () => {
 		expectPassedThrough(props, vault)
 		expect(props.onApproveRep).toBe(vault.approveRep)
 		expect(props.onSetVaultUnderwritingLimit).toBe(vault.adjustBackingFactor)
-		expect(props.repPerEthSourceUrl).toBe(repPrice.repPerEthSourceUrl)
+		expect(props.repPerEthPrice).toBe(repPrice.repPerEthPrice)
 	})
 
 	test('reporting props name exactly the declared reporting section props', () => {

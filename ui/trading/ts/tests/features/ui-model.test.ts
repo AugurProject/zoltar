@@ -475,7 +475,7 @@ describe('standalone trading UI model', () => {
 		expect(settlementUnavailableReason('redeem-complete-set', open, holdings)).toBeUndefined()
 		expect(settlementUnavailableReason('redeem-complete-set', open, empty)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
 		expect(settlementUnavailableReason('redeem-complete-set', open, undefined)).toBe('You hold no complete sets. Redeeming needs equal Yes, No, and Invalid shares.')
-		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked. Migrate your shares to a child universe instead.')
+		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked; migrate your shares instead.')
 		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The security pool is not operational, so it cannot pay out ETH.')
 		expect(settlementUnavailableReason('redeem-winning-shares', open, holdings)).toBe('The question has not resolved yet.')
 		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 0n })).toBe('You hold no No shares to redeem.')
@@ -524,6 +524,8 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 Yes (5 ETH if the question resolves Yes)')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 No (5 ETH if the question resolves No)')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 Invalid (5 ETH if the question resolves Invalid)')
+		// The settlement panel already says a forked market cannot redeem, so its balance line does not repeat it.
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, { ...unit, questionOutcome: 3, universeForkTime: 1n }, 'YES')).toBe('5 Yes (5 ETH if the question resolves Yes)')
 	})
 
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {

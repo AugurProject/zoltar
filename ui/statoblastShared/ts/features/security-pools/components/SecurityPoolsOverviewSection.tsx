@@ -68,7 +68,7 @@ export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange,
 		return (
 			<div className='comparison-record-list'>
 				{visibleRows.map(row => (
-					<PoolDirectoryRow key={row.pool.securityPoolAddress} pool={row.pool} lifecycleState={row.lifecycleState} capacity={row.capacity} currentTimestamp={currentTimestamp} fetchedAt={row.fetchedAt} onSelect={onSelectSecurityPool} remainingCapacity={row.remainingCapacity} />
+					<PoolDirectoryRow key={row.pool.securityPoolAddress} pool={row.pool} lifecycleState={row.lifecycleState} currentTimestamp={currentTimestamp} fetchedAt={row.fetchedAt} onSelect={onSelectSecurityPool} />
 				))}
 			</div>
 		)

@@ -3,18 +3,21 @@ import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TruthAuctionMetrics } from '../../../types/contracts.js'
+import { isMigrationClosed } from '../../../protocol/forkMigrationTiming.js'
+import { hasTruthAuctionEnded } from '../../../protocol/truthAuctionTiming.js'
 
 export function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
 	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (currentTimestamp <= migrationEndsAt) return forkAuctionCopy.truthAuctionMigrationPendingDetail
+	if (!isMigrationClosed(currentTimestamp, migrationEndsAt)) return forkAuctionCopy.truthAuctionMigrationPendingDetail
 	return undefined
 }
 
-export function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
+/** Why migration actions are closed, from the same `getMigrationEnd` result as the migration badge, so a started truth auction reads as a closed window even before the deadline loads. */
+export function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrationEnd }: { currentTimestamp: bigint | undefined; migrationEnd: { ended: boolean } | undefined }) {
+	if (migrationEnd?.ended === true) return forkAuctionCopy.parentMigrationExpiredDetail
+	if (migrationEnd === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (currentTimestamp > migrationEndsAt) return forkAuctionCopy.parentMigrationExpiredDetail
 	return undefined
 }
 
@@ -31,8 +34,7 @@ export function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuc
 	if (truthAuction.finalized) return forkAuctionCopy.truthAuctionFinalizedReason
 	if (truthAuctionEndsAt === undefined) return forkAuctionCopy.auctionEndTimeUnavailable
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	// UniformPriceDualCapBatchAuction.finalize requires block.timestamp >= auctionStarted + AUCTION_TIME.
-	if (currentTimestamp < truthAuctionEndsAt) return forkAuctionCopy.auctionOngoingReason
+	if (!hasTruthAuctionEnded(currentTimestamp, truthAuctionEndsAt)) return forkAuctionCopy.auctionOngoingReason
 	return undefined
 }
 
@@ -67,11 +69,10 @@ export function getTruthAuctionStateBadge({
 	return { label: forkAuctionCopy.unfilled, tone: 'muted' } as const
 }
 
-export function getMigrationStateBadge({ currentTimestamp, effectiveTruthAuctionStartedAt, migrationEndsAt }: { currentTimestamp: bigint | undefined; effectiveTruthAuctionStartedAt: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return { label: forkAuctionCopy.notStarted, tone: 'muted' } as const
-	if (effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
-	// Migration accepts block.timestamp <= forkActivationTime + MIGRATION_TIME, so it closes only after migrationEndsAt.
-	if (currentTimestamp !== undefined && currentTimestamp > migrationEndsAt) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
+/** The migration badge reads from the same `getMigrationEnd` result as the migration end figure, so the two never disagree. */
+export function getMigrationStateBadge(migrationEnd: { ended: boolean } | undefined) {
+	if (migrationEnd === undefined) return { label: forkAuctionCopy.notStarted, tone: 'muted' } as const
+	if (migrationEnd.ended) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
 	return { label: forkAuctionCopy.open, tone: 'pending' } as const
 }
 
