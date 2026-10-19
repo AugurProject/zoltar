@@ -87,6 +87,9 @@ type ShareBalanceScope = Readonly<{ pool: Address; shareToken: Address; invalidT
  */
 export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint; migrated?: Readonly<{ invalid: bigint; yes: bigint; no: bigint }> | undefined }>
 
+/** The outcome share balances, in display order. */
+export const OUTCOME_BALANCE_KEYS = ['yes', 'no', 'invalid'] as const
+
 /** Shares of `outcome` the wallet holds whose transfers are locked after a migration; zero when unknown or never migrated. */
 export function lockedMigratedBalance(balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no' | 'migrated'>, outcome: 'INVALID' | 'YES' | 'NO') {
 	let key: 'invalid' | 'yes' | 'no' = 'no'
@@ -102,7 +105,7 @@ export function lockedMigratedBalance(balances: Pick<LiveBalances, 'invalid' | '
 export function forkMigrationSettled(balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no' | 'migrated'>) {
 	const migrated = balances.migrated
 	if (migrated === undefined) return false
-	return (['invalid', 'yes', 'no'] as const).every(key => balances[key] === 0n || migrated[key] >= balances[key])
+	return OUTCOME_BALANCE_KEYS.every(key => balances[key] === 0n || migrated[key] >= balances[key])
 }
 
 export function shareBalanceScope(market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'>) {

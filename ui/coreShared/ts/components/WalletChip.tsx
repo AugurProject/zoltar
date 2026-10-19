@@ -12,7 +12,7 @@ export function WalletChip({ address, tone = 'ok' }: { address: string; tone?: W
 	return (
 		<span className={chipClassName(tone)}>
 			<span className='wallet-chip-dot' aria-hidden='true' />
-			<AddressValue address={address} responsiveAbbreviation />
+			<AddressValue address={address} />
 		</span>
 	)
 }
@@ -22,7 +22,7 @@ export function WalletChipLabel({ address, tone = 'ok', widthConstraint }: { add
 	return (
 		<span className={chipClassName(tone, 'is-static')}>
 			<span className='wallet-chip-dot' aria-hidden='true' />
-			<ReadOnlyAddressValue address={address} responsiveAbbreviation widthConstraint={widthConstraint} />
+			<ReadOnlyAddressValue address={address} widthConstraint={widthConstraint} />
 		</span>
 	)
 }

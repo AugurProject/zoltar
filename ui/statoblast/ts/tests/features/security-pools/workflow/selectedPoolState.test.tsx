@@ -19,6 +19,7 @@ import {
 	createSecurityVaultProps,
 	createSelectedPool,
 	createTradingProps,
+	forkedPoolState,
 } from './builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
@@ -663,13 +664,13 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('keeps the duplicate summary absent after fork migration starts', async () => {
-		await renderLoadedPool({ securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedAttoRep: 1n, systemState: 'poolForked' })], selectedPoolView: 'reporting' })
+		await renderLoadedPool({ securityPools: [createSelectedPool(forkedPoolState)], selectedPoolView: 'reporting' })
 
 		expect(document.body.querySelectorAll('.selected-pool-object-header')).toHaveLength(1)
 		expect(document.body.querySelector('.pool-object-meta .badge')?.textContent).toBe('Fork migration')
 	})
 
-	test('disables minting in trading when the workflow state shows the selected pool has ended', async () => {
+	test('leaves minting out of trading when the workflow state shows the selected pool has ended', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
 		const selectedPool = createSelectedPool({ questionOutcome: 'none', securityPoolAddress: selectedPoolAddress })
 		await renderPoolAt(
@@ -682,7 +683,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			},
 		)
 
-		expectTransactionButtonDisabled(document.body, 'Mint complete sets')
+		// A finalized question can never mint again, so the launcher is left out rather than shown disabled.
+		expect(within(document.body).queryByRole('button', { name: 'Mint complete sets' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
 	})
 
 	test('allows selecting a vault from the directory within the current pool', async () => {

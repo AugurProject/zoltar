@@ -180,7 +180,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		operationOption('migrate-shares', settlementCopy.forkMigrationAction, workflowLocked || !forked || winningOutcome !== undefined, forkedResolvedReason ?? (forked ? undefined : settlementCopy.universeNotForkedReason)),
 	]
 	// Shown before the action once there is a balance to move and a branch to move it to.
-	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market) : undefined
+	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market, 4, 'nearest', { noteRedemption: false }) : undefined
 	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
 	// Max fills a readable ETH amount: six decimals, rounded down so it never exceeds what the sets redeem for.
 	const maxRedeemAttoEth = redeemableAttoEth === undefined || redeemableAttoEth < MAX_FILL_STEP_ATTO_ETH ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % MAX_FILL_STEP_ATTO_ETH)

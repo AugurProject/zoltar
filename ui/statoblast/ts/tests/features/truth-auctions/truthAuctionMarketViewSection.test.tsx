@@ -22,6 +22,7 @@ describe('TruthAuctionMarketViewSection', () => {
 			<TruthAuctionMarketViewSection
 				clearingTick={1n}
 				hasMoreTickSummaries={true}
+				hasMoreViewerBids={false}
 				loadingTruthAuctionBook={true}
 				maxTickAttoEth={5n}
 				onLoadNextTickPage={() => undefined}
@@ -39,6 +40,7 @@ describe('TruthAuctionMarketViewSection', () => {
 						price: 2n,
 						submissionCount: 1n,
 						tick: 1n,
+						viewerBidAttoEth: 0n,
 					},
 				]}
 			/>,
@@ -55,13 +57,51 @@ describe('TruthAuctionMarketViewSection', () => {
 		expect(document.querySelectorAll('[data-message-placement] .loading-value[role="status"]')).toHaveLength(1)
 	})
 
+	test('marks the ladder prices that hold the connected wallet bids with their total', async () => {
+		const point = { cumulativeBidAttoEth: 5n * 10n ** 18n, currentTotalBidAttoEth: 5n * 10n ** 18n, disposition: { label: 'Winning', tone: 'success' as const }, isPreviewTick: false, isSelected: false, price: 2n, submissionCount: 2n }
+		const renderLadder = (hasMoreViewerBids: boolean) =>
+			renderIntoDocument(
+				<TruthAuctionMarketViewSection
+					clearingTick={1n}
+					hasMoreTickSummaries={false}
+					hasMoreViewerBids={hasMoreViewerBids}
+					loadingTruthAuctionBook={false}
+					maxTickAttoEth={5n * 10n ** 18n}
+					onLoadNextTickPage={() => undefined}
+					onSelectTick={() => undefined}
+					renderPriceValue={value => value?.toString()}
+					showDepthClearingTick={false}
+					truthAuctionBookError={undefined}
+					truthAuctionDepthPoints={[
+						{ ...point, tick: 2n, viewerBidAttoEth: 3n * 10n ** 18n },
+						{ ...point, tick: 1n, viewerBidAttoEth: 0n },
+						{ ...point, tick: 0n, viewerBidAttoEth: 2n * 10n ** 18n },
+					]}
+				/>,
+			)
+		const rendered = await renderLadder(false)
+		cleanupRendered = rendered.cleanup
+		const rows = Array.from(document.querySelectorAll('.truth-auction-ladder-row'))
+		expect(rows.map(row => row.classList.contains('has-viewer-bid'))).toEqual([true, false, true])
+		expect(rows[0]?.querySelector('.truth-auction-ladder-yours')?.textContent).toBe('Yours 3.00 ETH')
+		expect(rows[1]?.querySelector('.truth-auction-ladder-yours')).toBeNull()
+		expect(rows[2]?.querySelector('.truth-auction-ladder-yours')?.textContent).toBe('Yours 2.00 ETH')
+		await rendered.cleanup()
+
+		// While more of the wallet's bids are still to load, each total reads as a lower bound.
+		const partial = await renderLadder(true)
+		cleanupRendered = partial.cleanup
+		expect(Array.from(document.querySelectorAll('.truth-auction-ladder-yours')).map(element => element.textContent)).toEqual(['Yours ≥ 3.00 ETH', 'Yours ≥ 2.00 ETH'])
+	})
+
 	test('depth-chart points announce the price they fill, the depth, and the clearing and bid-price status', async () => {
 		const onSelectTick = mock((_tick: bigint) => undefined)
-		const point = { cumulativeBidAttoEth: 3n * 10n ** 18n, currentTotalBidAttoEth: 10n ** 18n, disposition: { label: 'Winning', tone: 'success' as const }, isPreviewTick: true, isSelected: false, price: 2n, submissionCount: 1n }
+		const point = { cumulativeBidAttoEth: 3n * 10n ** 18n, currentTotalBidAttoEth: 10n ** 18n, disposition: { label: 'Winning', tone: 'success' as const }, isPreviewTick: true, isSelected: false, price: 2n, submissionCount: 1n, viewerBidAttoEth: 0n }
 		const rendered = await renderIntoDocument(
 			<TruthAuctionMarketViewSection
 				clearingTick={1n}
 				hasMoreTickSummaries={false}
+				hasMoreViewerBids={false}
 				loadingTruthAuctionBook={false}
 				maxTickAttoEth={10n ** 18n}
 				onLoadNextTickPage={() => undefined}
