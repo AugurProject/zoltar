@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'preact/hooks'
-import { AUGUR_GENESIS_FORK_MARKET, AUGUR_GENESIS_FORK_QUESTION, GENESIS_OUTCOMES, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { AUGUR_GENESIS_FORK_QUESTION, GENESIS_OUTCOMES, type GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 import { ForkUniverseNavigation } from '../../components/ForkUniverseNavigation.js'
 import { HeaderToolbar } from '../../components/HeaderToolbar.js'
 import { OutcomeUniverseList } from '../../components/OutcomeUniverseList.js'
@@ -8,7 +8,7 @@ import { UniverseBrowserView } from '../../components/UniverseBrowser.js'
 import { UserMessage } from '../../components/UserMessage.js'
 import * as commonCopy from '../../copy/common.js'
 import * as copy from '../../copy/universes.js'
-import { buildAddressExplorerUrl, MAINNET_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
 import { formatAppDocumentTitle } from '../lib/appTitle.js'
 import { AppPageHeading } from './AppPageHeading.js'
 import { ApplicationBrand } from './OverviewHeaderPanel.js'
@@ -18,8 +18,6 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 	const [openingOutcome, setOpeningOutcome] = useState<GenesisOutcome>()
 	const pending = openingOutcome !== undefined
 	const formatDocumentTitle = useCallback((pageTitle: string) => formatAppDocumentTitle(pageTitle, applicationTitle), [applicationTitle])
-	const forkQuestionExplorerUrl = buildAddressExplorerUrl(MAINNET_NETWORK_PROFILE, AUGUR_GENESIS_FORK_MARKET)
-	if (forkQuestionExplorerUrl === undefined) throw new Error('The Ethereum mainnet address explorer URL is unavailable')
 	return (
 		<main>
 			<AppPageHeading pageTitle={copy.chooseTruthfulUniverse} formatDocumentTitle={formatDocumentTitle} />
@@ -35,7 +33,7 @@ export function GenesisUniverseEntry({ applicationTitle, onSelect }: { applicati
 					name={copy.augurUniverse}
 					hasForked
 					navigation={
-						<ForkUniverseNavigation question={AUGUR_GENESIS_FORK_QUESTION} loading={pending} hasOutcomes marketExplorerUrl={`${forkQuestionExplorerUrl}#readContract`}>
+						<ForkUniverseNavigation question={AUGUR_GENESIS_FORK_QUESTION} loading={pending} hasOutcomes explorerProfile={MAINNET_NETWORK_PROFILE}>
 							<OutcomeUniverseList
 								outcomes={GENESIS_OUTCOMES.map(outcome => ({
 									key: outcome,

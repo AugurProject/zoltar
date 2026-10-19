@@ -5,17 +5,18 @@ import * as commonCopy from '../copy/common.js'
 import type { SectionBlockProps } from '../types/components.js'
 import type { ForkQuestionDetails } from '../types/contracts.js'
 import { ForkQuestion } from './Question.js'
+import type { NetworkProfile } from '../wallet/networkProfile.js'
 
 export function ForkUniverseNavigation({
 	question,
-	marketExplorerUrl,
+	explorerProfile,
 	loading = false,
 	hasOutcomes = false,
 	headingLevel = 3,
 	children,
 }: {
 	question?: ForkQuestionDetails | undefined
-	marketExplorerUrl?: string | undefined
+	explorerProfile?: NetworkProfile | undefined
 	loading?: boolean
 	hasOutcomes?: boolean
 	headingLevel?: SectionBlockProps['headingLevel']
@@ -36,7 +37,7 @@ export function ForkUniverseNavigation({
 			busy={loading}
 		>
 			<div className='form-grid'>
-				{question === undefined ? undefined : <ForkQuestion question={question} marketExplorerUrl={marketExplorerUrl} />}
+				{question === undefined ? undefined : <ForkQuestion question={question} explorerProfile={explorerProfile} />}
 				{children}
 			</div>
 		</SectionBlock>

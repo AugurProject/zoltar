@@ -614,7 +614,7 @@ button.quiet:disabled {
 
 /* Account details share the same responsive address presentation as the toolbar. */
 .account-menu-popover .address-value,
-.account-menu-popover .address-value.copyable {
+.account-menu-popover .address-copy-button {
 	font-family: var(--font-family-mono);
 	font-size: var(--font-caption);
 	white-space: normal;
@@ -663,12 +663,11 @@ button.quiet:disabled {
 }
 
 .wallet-chip .address-value-text {
-	min-width: 15ch;
+	min-width: 0;
 	width: 15ch;
 }
 
-.wallet-chip .address-value.copyable {
-	min-height: 2rem;
+.wallet-chip .address-copy-button {
 	margin: 0;
 }
 
@@ -734,19 +733,6 @@ button.quiet:disabled {
 .security-pool-link:focus-visible {
 	outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
 	outline-offset: 2px;
-}
-
-/* A bare address is the link's only label, so it carries a rest-state underline that does not depend on hover. */
-.security-pool-link > .address-value {
-	text-decoration: underline;
-	text-decoration-color: var(--muted);
-	text-decoration-thickness: 0.08em;
-	text-underline-offset: 0.16em;
-}
-
-.security-pool-link:hover > .address-value,
-.security-pool-link:focus-visible > .address-value {
-	text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .security-pool-link[aria-disabled="true"] {
@@ -1016,6 +1002,7 @@ button.quiet:disabled {
 .copy-error-recovery-wrap {
 	display: block;
 	max-width: 100%;
+	pointer-events: auto;
 }
 
 .copy-error-recovery {
@@ -1082,10 +1069,24 @@ button.quiet:disabled {
 }
 
 .copy-manual-value {
+	display: block;
 	width: 100%;
 	min-height: var(--touch-target-min);
+	padding: var(--space-2);
+	border: 1px solid var(--control-border);
+	border-radius: var(--radius-control);
+	background: var(--surface-row);
 	font-family: var(--font-family-mono);
 	font-size: var(--font-caption);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	cursor: text;
+	user-select: text;
+}
+
+.copy-manual-value:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 
 .currency-value {
@@ -1183,9 +1184,12 @@ button.currency-value.copyable:hover:not(:disabled) {
 	white-space: nowrap;
 }
 
-.address-value.copyable {
+.address-copy-button {
 	display: inline-flex;
 	align-items: center;
+	justify-content: center;
+	flex: 0 0 var(--touch-target-min);
+	width: var(--touch-target-min);
 	min-height: var(--touch-target-min);
 	max-width: 100%;
 	box-sizing: border-box;
@@ -1201,11 +1205,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 	touch-action: manipulation;
 }
 
-.address-value.copyable:hover:not(:disabled) {
+.address-copy-button:hover:not(:disabled) {
 	background: var(--color-white-08);
 }
 
-.address-value.copyable:focus-visible {
+.address-copy-button:focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 }
@@ -1395,6 +1399,66 @@ button.wallet-asset-action-pending:disabled {
 	max-width: 100%;
 	min-width: 0;
 	vertical-align: bottom;
+}
+
+/* Read-only address actions remain available when a transaction locks its route. */
+.address-copy-control {
+	pointer-events: auto;
+}
+
+.address-control {
+	display: inline-flex;
+	flex-direction: row;
+	align-items: center;
+	max-width: 100%;
+	min-width: 0;
+	gap: 0;
+	font-family: var(--font-family-mono);
+}
+
+.address-value-link,
+.address-value-unavailable {
+	display: inline-flex;
+	align-items: center;
+	min-height: var(--touch-target-min);
+	white-space: nowrap;
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.address-value-link::after {
+	flex: 0 0 auto;
+}
+
+.address-value-link:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: var(--radius-control);
+}
+
+.address-value-unavailable {
+	text-decoration-style: dotted;
+	text-decoration-color: var(--muted);
+	cursor: not-allowed;
+}
+
+.address-control-wrap {
+	align-items: flex-start;
+}
+
+.address-value-wrapped {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+
+.security-pool-navigation {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	max-width: 100%;
+	min-width: 0;
 }
 
 /* The full text retains intrinsic width even while abbreviated, so growing the

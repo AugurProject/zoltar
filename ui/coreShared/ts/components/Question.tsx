@@ -1,9 +1,8 @@
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
-import * as transactionCopy from '../copy/transaction.js'
-
 import { LoadingText } from '../components/LoadingText.js'
+import { AddressValue } from './AddressValue.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
 import { MetricGrid } from '../components/MetricGrid.js'
 import { MetricField } from '../components/MetricField.js'
@@ -15,6 +14,7 @@ import * as marketTypeCopy from '../copy/marketType.js'
 import { formatScalarDisplayValue } from '../lib/scalarOutcome.js'
 import type { ForkQuestionDetails, MarketDetails } from '../types/contracts.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
+import type { NetworkProfile } from '../wallet/networkProfile.js'
 
 type QuestionProps = {
 	abbreviateIdentifier?: boolean
@@ -45,10 +45,9 @@ type QuestionSummaryField =
 			value: bigint
 	  }
 	| {
-			kind: 'link'
+			kind: 'address'
 			label: string
 			value: string
-			href: string
 	  }
 
 export function getQuestionTitle(question: Pick<MarketDetails, 'title'>) {
@@ -72,7 +71,7 @@ function getDisplayRange(question: Pick<MarketDetails, 'displayValueMin' | 'disp
 	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
-function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: boolean, showIdentifier: boolean, fork = false, marketExplorerUrl?: string): QuestionSummaryField[] {
+function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: boolean, showIdentifier: boolean, fork = false): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) }]
 	if (showIdentifier && question.questionId !== undefined) fields.push({ kind: 'identifier', label: commonCopy.questionId, value: question.questionId })
 	if (question.createdAt !== undefined) fields.push({ kind: 'timestamp', label: commonCopy.created, value: question.createdAt })
@@ -88,12 +87,12 @@ function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: bo
 		if (question.answerUnit !== undefined) fields.push({ kind: 'text', label: commonCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
 	}
 	if (fork) {
-		if (question.marketAddress !== undefined) fields.push(marketExplorerUrl === undefined ? { kind: 'identifier', label: universeCopy.marketAddress, value: question.marketAddress } : { kind: 'link', label: universeCopy.marketAddress, value: question.marketAddress, href: marketExplorerUrl })
+		if (question.marketAddress !== undefined) fields.push({ kind: 'address', label: universeCopy.marketAddress, value: question.marketAddress })
 		for (const [label, value] of [
 			[universeCopy.creator, question.creator],
 			[universeCopy.designatedReporter, question.designatedReporter],
 		] as const)
-			if (value !== undefined) fields.push({ kind: 'identifier', label, value })
+			if (value !== undefined) fields.push({ kind: 'address', label, value })
 		for (const [label, values] of [
 			[universeCopy.categories, question.categories],
 			[universeCopy.tags, question.tags],
@@ -123,8 +122,8 @@ function FullQuestion({
 	showEndTime = true,
 	showIdentifier = true,
 	fork = false,
-	marketExplorerUrl,
-}: Omit<QuestionProps, 'question' | 'variant'> & { question: ForkQuestionDetails; fork?: boolean; marketExplorerUrl?: string | undefined }) {
+	explorerProfile,
+}: Omit<QuestionProps, 'question' | 'variant'> & { question: ForkQuestionDetails; fork?: boolean; explorerProfile?: NetworkProfile | undefined }) {
 	const descriptionNode = renderQuestionDescription(getQuestionDescription(question), fork)
 	return (
 		<div className={`question-summary ${className}`}>
@@ -137,24 +136,22 @@ function FullQuestion({
 				descriptionNode
 			)}
 			<MetricGrid variant='question'>
-				{getQuestionSummaryFields(question, showEndTime, showIdentifier, fork, marketExplorerUrl).map(field => renderQuestionSummaryField(field, abbreviateIdentifier))}
+				{getQuestionSummaryFields(question, showEndTime, showIdentifier, fork).map(field => renderQuestionSummaryField(field, abbreviateIdentifier, explorerProfile))}
 				{additionalMetrics}
 			</MetricGrid>
 		</div>
 	)
 }
 
-export function ForkQuestion({ question, loading = false, marketExplorerUrl }: { question: ForkQuestionDetails | undefined; loading?: boolean; marketExplorerUrl?: string | undefined }) {
-	return <WorkflowSubsection title={universeCopy.forkQuestion}>{loading || question === undefined ? <Question question={undefined} loading /> : <FullQuestion question={question} fork marketExplorerUrl={marketExplorerUrl} />}</WorkflowSubsection>
+export function ForkQuestion({ question, loading = false, explorerProfile }: { question: ForkQuestionDetails | undefined; loading?: boolean; explorerProfile?: NetworkProfile | undefined }) {
+	return <WorkflowSubsection title={universeCopy.forkQuestion}>{loading || question === undefined ? <Question question={undefined} loading /> : <FullQuestion question={question} fork explorerProfile={explorerProfile} />}</WorkflowSubsection>
 }
 
-function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdentifier: boolean) {
-	if (field.kind === 'link')
+function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdentifier: boolean, explorerProfile?: NetworkProfile) {
+	if (field.kind === 'address')
 		return (
 			<MetricField key={field.label} label={field.label}>
-				<a className='identifier-value' href={field.href} title={field.value} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(field.value)}>
-					{field.value}
-				</a>
+				<AddressValue address={field.value} explorerProfile={explorerProfile} wrap />
 			</MetricField>
 		)
 	if (field.kind === 'identifier')

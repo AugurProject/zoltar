@@ -76,6 +76,8 @@ describe('LookupFieldRow', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Selected pool')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: `Copy address ${address}` }).querySelector('.address-value-full')?.textContent).toBe(address)
+		const copy = documentQueries.getByRole('button', { name: `Copy address ${address}` })
+		expect(copy.parentElement?.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(copy.parentElement?.querySelector('a')?.getAttribute('href')).toBe(`https://sepolia.etherscan.io/address/${address}`)
 	})
 })

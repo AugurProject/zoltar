@@ -633,7 +633,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		align-items: stretch;
 	}
 
-	.address-value.copyable,
+	.address-copy-button,
 	.identifier-value.copyable,
 	.metric-label-refresh,
 	.security-pool-link,
@@ -1066,6 +1066,21 @@ button.tx-action-button[aria-disabled="true"]:hover {
 .header-toolbar .account-menu {
 	position: static;
 	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.account-menu-controls {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.account-menu-controls > .wallet-chip {
+	min-width: 0;
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+	padding-inline-end: 0;
 }
 
 .account-menu-trigger {
@@ -1074,18 +1089,15 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
-	min-height: 2.5rem;
-	padding: 0 0.7rem 0 0;
+	min-width: var(--touch-target-min);
+	min-height: calc(var(--touch-target-min) + 2px);
+	justify-content: center;
+	padding: 0 var(--space-1);
 	border: 1px solid var(--control-border);
-	border-radius: var(--radius-pill);
+	border-inline-start: 0;
+	border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
 	background: var(--surface-row);
 	color: var(--text-secondary);
-}
-
-.account-menu-trigger .wallet-chip {
-	min-height: 2.4rem;
-	border: 0;
-	background: transparent;
 }
 
 .account-menu-trigger:hover,

@@ -136,7 +136,9 @@ describe('SecurityPoolsOverviewSection', () => {
 			expect(within(row).getByRole('button', { name: 'Copy address ' + pool.securityPoolAddress })).not.toBeNull()
 			expect(row.textContent).toContain(index === 0 ? '2×' : '3×')
 			expect(row.querySelector('details')?.textContent).toContain('Initial report priority fee')
-			const link = within(row).getByRole('link', { name: new RegExp(pool.securityPoolAddress) })
+			const explorer = within(row).getByRole('link', { name: new RegExp(`^View address ${pool.securityPoolAddress}`) })
+			expect(explorer.getAttribute('href')).toContain(`/address/${pool.securityPoolAddress}`)
+			const link = within(row).getByRole('link', { name: new RegExp(`^Open pool: .*${pool.securityPoolAddress}`) })
 			expect(link.getAttribute('href')).toContain(pool.securityPoolAddress)
 			fireEvent.click(link)
 		}

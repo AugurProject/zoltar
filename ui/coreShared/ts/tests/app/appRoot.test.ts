@@ -74,14 +74,21 @@ test('links the historical Augur fork to Ethereum mainnet while the application 
 	try {
 		await act(async () => await mountApp({ applicationTitle, initialize: async () => undefined, root: () => createElement('p', {}, 'Application ready') }))
 		expect(getActiveNetworkProfile().id).toBe('sepolia')
-		const address = '0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e'
-		const marketLink = within(document.body).getByRole('link', { name: `View address ${address} on explorer (opens in a new tab)` })
-		expect(marketLink.textContent).toBe(address)
-		expect(marketLink.getAttribute('href')).toBe(`https://etherscan.io/address/${address}#readContract`)
-		expect(marketLink.getAttribute('target')).toBe('_blank')
-		expect(marketLink.getAttribute('rel')).toBe('noreferrer')
-		expect(marketLink.querySelector('button')).toBeNull()
-		expect(document.querySelectorAll('.question-summary a')).toHaveLength(1)
+		const marketAddress = '0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e'
+		const creatorAddress = '0xed1e06B49C53293A1321Dd47Abf8D50F9Be77E11'
+		const question = document.querySelector('.question-summary')
+		if (question === null) throw new Error('Expected the historical fork question')
+		const questionQueries = within(question)
+		expect(questionQueries.getByRole('button', { name: `Copy address ${marketAddress}` })).not.toBeNull()
+		expect(questionQueries.getAllByRole('button', { name: `Copy address ${creatorAddress}` })).toHaveLength(2)
+		const links = Array.from(question.querySelectorAll('a'))
+		expect(links.map(link => link.getAttribute('href'))).toEqual([`https://etherscan.io/address/${marketAddress}`, `https://etherscan.io/address/${creatorAddress}`, `https://etherscan.io/address/${creatorAddress}`])
+		for (const [index, link] of links.entries()) {
+			expect(link.textContent).toContain(index === 0 ? marketAddress : creatorAddress)
+			expect(link.getAttribute('target')).toBe('_blank')
+			expect(link.getAttribute('rel')).toContain('noreferrer')
+			expect(link.querySelector('button, [role="button"]')).toBeNull()
+		}
 	} finally {
 		resetEnvironment()
 	}

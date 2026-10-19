@@ -309,10 +309,11 @@ describe('trading header', () => {
 		const balances = <TradingBalanceGroup walletSummary={{ account, ethAttoEth: 10n ** 18n, repAttoRep: 2n * 10n ** 18n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />
 		const live = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} accountMetrics={balances} networkName='Local' simulation={false} />)
 		cleanupRendered = live.cleanup
-		expect(live.container.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(live.container.querySelector('.account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
 		expect(live.container.querySelector('.wallet-button')).toBeNull()
 		await act(() => live.container.querySelector<HTMLButtonElement>('.account-menu-trigger')?.click())
-		expect(live.container.querySelector('.account-menu-popover button.address-value')?.getAttribute('title')).toBe(account)
+		expect(live.container.querySelector(`.account-menu-controls [role="button"][aria-label="Copy address ${account}"]`)).not.toBeNull()
+		expect(live.container.querySelector(`.account-menu-controls a[href="https://sepolia.etherscan.io/address/${account}"]`)).not.toBeNull()
 		expect(live.container.querySelector('.account-menu-network')?.textContent).toContain('Local')
 		expect(live.container.querySelector('.account-menu-popover [data-wallet-asset="ETH"]')?.textContent).toContain('1.00')
 		expect(live.container.querySelector('.account-menu-popover [data-wallet-asset="REP"]')).toBeNull()
@@ -324,7 +325,7 @@ describe('trading header', () => {
 
 		const simulated = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} accountMetrics={balances} simulation />)
 		cleanupRendered = simulated.cleanup
-		expect(simulated.container.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(simulated.container.querySelector('.account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
 		await act(() => simulated.container.querySelector<HTMLButtonElement>('.account-menu-trigger')?.click())
 		expect(simulated.container.querySelector('.account-menu-popover [data-wallet-asset="ETH"]')).not.toBeNull()
 		expect(simulated.container.querySelector('.wallet-button')).toBeNull()
@@ -344,6 +345,33 @@ describe('trading header', () => {
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'missing', routeOwnsLiveWallet: true })).toBe(false)
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'verified', routeOwnsLiveWallet: false })).toBe(false)
 		expect(hasTradingWalletControls({ deploymentSetupActive: true, liveDeploymentStatus: 'missing', routeOwnsLiveWallet: false })).toBe(true)
+	})
+
+	test('keeps a deployment account copyable and linked independently of its disconnect action', async () => {
+		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
+		let disconnects = 0
+		const rendered = await renderIntoDocument(
+			<TradingWalletControls
+				account={undefined}
+				deploymentSetupActive
+				deploymentWalletState={{ account, connecting: false, ready: true }}
+				liveDeploymentStatus='missing'
+				onDeploymentWalletRequest={() => disconnects++}
+				onWalletConnectRequest={() => undefined}
+				routeOwnsLiveWallet={false}
+				simulation={false}
+				workflowLocked={false}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${account}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${account}"]`)).not.toBeNull()
+		const disconnect = rendered.container.querySelector<HTMLButtonElement>('.wallet-button')
+		expect(disconnect?.textContent).toBe('Disconnect')
+		expect(disconnect?.getAttribute('aria-label')).toBe(`Disconnect ${account}`)
+		expect(rendered.container.querySelector('a a, a button, a [role=button], button a, button button, button [role=button], [role=button] a')).toBeNull()
+		await act(() => disconnect?.click())
+		expect(disconnects).toBe(1)
 	})
 
 	test('omits the toolbar controls slot on routes without wallet or universe context', async () => {

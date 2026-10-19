@@ -5,7 +5,7 @@ export type GenesisOutcome = (typeof GENESIS_OUTCOMES)[number]
 
 // Augur V2 mainnet fork identities, verified against both child universes.
 // https://github.com/AugurProject/augur-reboot-website/blob/main/docs/moon-fork-final-record.md
-export const AUGUR_GENESIS_FORK_MARKET = getAddress('0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e')
+const AUGUR_GENESIS_FORK_MARKET = getAddress('0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e')
 
 // Immutable MarketCreated metadata, including the complete extraInfo.longDescription.
 // https://etherscan.io/tx/0x247d3ef9f9a54983a653733fd7730d98a5fe9ce95e4072dbf557cb5323ae7736#eventlog

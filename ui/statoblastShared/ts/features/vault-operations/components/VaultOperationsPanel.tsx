@@ -147,14 +147,14 @@ export function VaultOperationsPanel({ pool, parameters, contextKey, networkRead
 									const availability = getVaultOperationsTargetState(pool, model.owned, target, model.input, model.price, model.manager?.minLiquidationPriceDistanceBps)
 									return (
 										<li key={target.vaultAddress}>
-											<label className='vault-operations-target-choice'>
-												<input type='checkbox' checked={selected !== undefined} disabled={operationalFieldsDisabled || (availability.reason !== undefined && selected === undefined)} onChange={() => model.toggle(target)} />
+											<div className='vault-operations-target-choice'>
+												<input aria-label={copy.formatSelectLiquidationTarget(target.vaultAddress)} type='checkbox' checked={selected !== undefined} disabled={operationalFieldsDisabled || (availability.reason !== undefined && selected === undefined)} onChange={() => model.toggle(target)} />
 												<span>
 													<AddressValue abbreviated address={target.vaultAddress} />
 													<small>{copy.formatTargetSummary(formatAmountDisplay(target.vaultAttoRepBacking, { notation: 'compact' }), formatAmountDisplay(target.underwritingLimitAttoEth, { notation: 'compact' }))}</small>
 													<small>{availability.reason ?? copy.formatTargetMaximum(formatAmountDisplay(availability.maximum ?? 0n, { notation: 'compact' }))}</small>
 												</span>
-											</label>
+											</div>
 											{selected === undefined ? undefined : (
 												<AmountField
 													label={liquidationCopy.requestedLiquidationDebt}

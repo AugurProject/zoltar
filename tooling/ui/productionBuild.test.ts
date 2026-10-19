@@ -495,11 +495,13 @@ for (const appId of UI_APP_IDS) {
 			expect(body).toContain('Market address')
 			expect(
 				await driver.evaluate(`(() => {
-					const links = document.querySelectorAll('.question-summary a')
-					const link = links[0]
-					return { count: links.length, text: link?.textContent, href: link?.getAttribute('href'), target: link?.getAttribute('target'), rel: link?.getAttribute('rel'), nestedButton: link?.querySelector('button') !== null }
+					const question = document.querySelector('.question-summary')
+					return { links: [...question.querySelectorAll('a')].map(link => ({ href: link.getAttribute('href'), target: link.getAttribute('target'), noreferrer: link.relList.contains('noreferrer'), nestedButton: link.querySelector('button, [role="button"]') !== null })), copyLabels: [...question.querySelectorAll('[role="button"]')].map(button => button.getAttribute('aria-label')) }
 				})()`),
-			).toEqual({ count: 1, text: AUGUR_GENESIS_FORK_QUESTION.marketAddress, href: `https://etherscan.io/address/${AUGUR_GENESIS_FORK_QUESTION.marketAddress}#readContract`, target: '_blank', rel: 'noreferrer', nestedButton: false })
+			).toEqual({
+				links: [AUGUR_GENESIS_FORK_QUESTION.marketAddress, AUGUR_GENESIS_FORK_QUESTION.creator, AUGUR_GENESIS_FORK_QUESTION.designatedReporter].map(address => ({ href: `https://etherscan.io/address/${address}`, target: '_blank', noreferrer: true, nestedButton: false })),
+				copyLabels: [AUGUR_GENESIS_FORK_QUESTION.marketAddress, AUGUR_GENESIS_FORK_QUESTION.creator, AUGUR_GENESIS_FORK_QUESTION.designatedReporter].map(address => `Copy address ${address}`),
+			})
 			expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
 			await driver.clickButton('Open No universe')
 			await driver.waitForBodyText('Browser simulation')

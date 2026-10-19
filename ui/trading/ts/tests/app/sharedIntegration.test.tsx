@@ -235,14 +235,14 @@ test('Trading reports a failed environment on the deployment route', async () =>
 	}
 })
 
-test('Trading address links use the coreShared address value', async () => {
+test('Trading pool addresses offer explorer and copy controls beside the local pool link', async () => {
 	const dom = installDomEnvironment()
 	const address = '0x00000000000000000000000000000000000000a1'
 	const rendered = await renderIntoDocument(<TradingSecurityPoolLink value={address} />)
-	expect(rendered.container.querySelector('a.security-pool-link .address-value')?.getAttribute('title')).toBe(address)
 	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
-	// The address is the link's only label and a direct child, so the shared rest-state underline rule applies to it.
-	expect(rendered.container.querySelector('a.security-pool-link > .address-value')).not.toBeNull()
+	expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
+	expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${address}"]`)).not.toBeNull()
+	expect(rendered.container.querySelector('a a, a button, a [role=button], button a, button button, button [role=button], [role=button] a')).toBeNull()
 	await rendered.cleanup()
 	dom.cleanup()
 })

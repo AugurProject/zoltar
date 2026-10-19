@@ -24,7 +24,7 @@ describe('OverviewPanels', () => {
 	}
 
 	function getAccountMenuTrigger() {
-		const trigger = document.body.querySelector('.account-menu > .account-menu-trigger')
+		const trigger = document.body.querySelector('.account-menu .account-menu-trigger')
 		if (!(trigger instanceof HTMLElement)) throw new Error('Expected the account menu trigger')
 		expect(trigger.getAttribute('aria-label')).toBe('Account menu 0x123456…567890')
 		return trigger
@@ -245,12 +245,15 @@ describe('OverviewPanels', () => {
 		const address = '0x1234567890123456789012345678901234567890'
 		const documentQueries = await renderOverviewPanels({ accountState: connectedAccount })
 
-		expect(document.body.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
-		expect(document.body.querySelector('.account-menu-trigger .wallet-chip .address-value')?.getAttribute('title')).toBe(address)
-		openAccountMenu()
 		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
-		expect(addressButton.closest('.account-menu-popover')).not.toBeNull()
-		expect(addressButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(addressButton.closest('.wallet-chip')).not.toBeNull()
+		expect(addressButton.closest('.account-menu-trigger')).toBeNull()
+		expect(document.body.querySelector(`.wallet-chip a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
+		expect(document.body.querySelector('.account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.account-menu-controls .wallet-chip .address-value-full')?.textContent).toBe(address)
+		expect(document.body.querySelector('a a, a button, button a, button button')).toBeNull()
+		openAccountMenu()
+		expect(documentQueries.getAllByRole('button', { name: `Copy address ${address}` })).toHaveLength(1)
 	})
 
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
@@ -259,7 +262,7 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Wrong network (Base)')).not.toBeNull()
-		expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
+		expect(document.body.querySelector('.account-menu-controls .wallet-chip.is-danger')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -454,7 +457,7 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.getByText('Wrong network (31337)')).not.toBeNull()
-			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
+			expect(document.body.querySelector('.account-menu-controls .wallet-chip.is-danger')).not.toBeNull()
 			const switchButton = documentQueries.getByRole('button', { name: 'Switch to Browser simulation' })
 			expect(switchButton.closest('.header-toolbar-controls')).not.toBeNull()
 			fireEvent.click(switchButton)
@@ -481,7 +484,7 @@ describe('OverviewPanels', () => {
 			})
 
 			expect(documentQueries.queryByText(/Wrong Network/)).toBeNull()
-			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).toBeNull()
+			expect(document.body.querySelector('.account-menu-controls .wallet-chip.is-danger')).toBeNull()
 			openAccountMenu()
 			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser simulation' })).toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Disconnect' })).toBeNull()
@@ -520,7 +523,7 @@ describe('OverviewPanels', () => {
 			showWethBalance: true,
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
-		expect(document.body.querySelector('.header-toolbar-controls .account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.header-toolbar-controls .account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
 		openAccountMenu()
 		expect(readGroups()).toEqual(['Balances', 'Prices'])
 		expect(readMetricValues().slice(0, 3)).toEqual(['2.00', '1.00', '5.00'])

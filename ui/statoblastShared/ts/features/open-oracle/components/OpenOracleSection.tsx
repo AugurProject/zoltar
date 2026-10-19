@@ -241,8 +241,8 @@ export function OpenOracleSection({
 								className='mobile-workflow-context'
 								title={openOracleCopy.reportAtAGlance}
 								items={[
-									{ label: openOracleCopy.baseToken, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} copyable={false} /> },
-									{ label: openOracleCopy.quoteToken, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} copyable={false} /> },
+									{ label: openOracleCopy.baseToken, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} /> },
+									{ label: openOracleCopy.quoteToken, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} /> },
 									{ label: openOracleCopy.impliedInitialPrice, value: createImpliedPriceValue },
 									{ label: openOracleCopy.ethSent, value: formatValueWithUnit(createEthSentText, commonCopy.eth) },
 								]}

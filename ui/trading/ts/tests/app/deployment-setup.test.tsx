@@ -140,6 +140,8 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('Deploy trading factory')
 		expect(rendered.container.textContent).toContain('0 / 2')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
+		expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${core.securityPoolFactory}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${core.securityPoolFactory}"]`)).not.toBeNull()
 	})
 
 	test('waits for the simulated environment before inspecting the deployment', async () => {
@@ -940,7 +942,10 @@ describe('trading deployment setup', () => {
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
 		expect(rendered.container.querySelector('.header-toolbar .badge')?.textContent).toContain(core.chainName)
-		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toBe('Disconnect')
+		expect(rendered.container.querySelector(`.trading-wallet-actions a[href="https://sepolia.etherscan.io/address/${testWalletAccount}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector(`.trading-wallet-actions [role="button"][aria-label="Copy address ${testWalletAccount}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector('.trading-wallet-actions button a, .trading-wallet-actions button button, .trading-wallet-actions button [role=button], .trading-wallet-actions a button, .trading-wallet-actions a [role=button], .trading-wallet-actions a a')).toBeNull()
 		for (let attempt = 0; attempt < 30; attempt++) {
 			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect ${testWalletAccount}`) break
 			await act(async () => {

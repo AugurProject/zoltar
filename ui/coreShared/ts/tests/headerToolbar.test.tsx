@@ -5,7 +5,7 @@ import { HeaderMetricGroup } from '../components/HeaderMetricStrip.js'
 import { HeaderToolbar } from '../components/HeaderToolbar.js'
 import { LoadingText } from '../components/LoadingText.js'
 import { ToolbarField } from '../components/ToolbarField.js'
-import { WalletChip, WalletChipLabel, WalletChipPlaceholder } from '../components/WalletChip.js'
+import { WalletChip, WalletChipPlaceholder } from '../components/WalletChip.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('header toolbar primitives', () => {
@@ -71,29 +71,19 @@ describe('header toolbar primitives', () => {
 	})
 
 	test('provides responsive account text in the wallet chip while copying the full address', async () => {
-		const rendered = await renderIntoDocument(
-			<div>
-				<WalletChip address={address} />
-				<summary>
-					<WalletChipLabel address={address} />
-				</summary>
-			</div>,
-		)
+		const rendered = await renderIntoDocument(<WalletChip address={address} />)
 		cleanupRenderedComponent = rendered.cleanup
-		const copyButton = rendered.container.querySelector('.wallet-chip button.address-value')
-		expect(copyButton?.getAttribute('title')).toBe(address)
-		expect(copyButton?.querySelector('.address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
-		expect(copyButton?.querySelector('.address-value-full')?.textContent).toBe(address)
-		const staticChip = rendered.container.querySelector('summary .wallet-chip.is-static')
-		expect(staticChip?.querySelector('button')).toBeNull()
-		expect(staticChip?.querySelector('.address-value')?.getAttribute('title')).toBe(address)
-		expect(staticChip?.querySelector('.address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(rendered.container.querySelector(`.wallet-chip [role="button"][aria-label="Copy address ${address}"]`)).not.toBeNull()
+		const explorerLink = rendered.container.querySelector(`.wallet-chip a[href="https://sepolia.etherscan.io/address/${address}"]`)
+		expect(explorerLink?.querySelector('.address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(explorerLink?.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(rendered.container.querySelector('a button, a a, button button, button a')).toBeNull()
 	})
 
 	test('marks a wrong-network account and reserves the slot while loading', async () => {
 		const rendered = await renderIntoDocument(
 			<div>
-				<WalletChipLabel address={address} tone='danger' />
+				<WalletChip address={address} tone='danger' />
 				<WalletChipPlaceholder>Loading…</WalletChipPlaceholder>
 			</div>,
 		)
