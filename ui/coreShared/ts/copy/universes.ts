@@ -3,7 +3,6 @@ import type { CopyTemplateValue } from './types.js'
 const augurV2 = 'Augur v2'
 export const chooseTruthfulUniverse = 'Choose the truthful universe'
 export const augurUniverse = `${augurV2} universe`
-export const viewAugurFork = 'View market on Etherscan (mainnet)'
 export const formatGenesisOutcome = (outcome: 'yes' | 'no') => (outcome === 'yes' ? 'Yes' : 'No')
 export const formatOpeningGenesisUniverse = (outcome: 'yes' | 'no') => `Opening ${formatGenesisOutcome(outcome)} universe`
 export const formatGenesisUniverse = (outcome: 'yes' | 'no') => `${augurV2} › ${formatGenesisOutcome(outcome)}`

@@ -493,6 +493,13 @@ for (const appId of UI_APP_IDS) {
 			expect(body).toContain('If the rocket explodes on the launch pad while attempting to launch on a launch day, then this market will resolve as No.')
 			expect(body).toContain('2026-04-08 00:00:00 UTC')
 			expect(body).toContain('Market address')
+			expect(
+				await driver.evaluate(`(() => {
+					const links = document.querySelectorAll('.question-summary a')
+					const link = links[0]
+					return { count: links.length, text: link?.textContent, href: link?.getAttribute('href'), target: link?.getAttribute('target'), rel: link?.getAttribute('rel'), nestedButton: link?.querySelector('button') !== null }
+				})()`),
+			).toEqual({ count: 1, text: AUGUR_GENESIS_FORK_QUESTION.marketAddress, href: `https://etherscan.io/address/${AUGUR_GENESIS_FORK_QUESTION.marketAddress}#readContract`, target: '_blank', rel: 'noreferrer', nestedButton: false })
 			expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
 			await driver.clickButton('Open No universe')
 			await driver.waitForBodyText('Browser simulation')

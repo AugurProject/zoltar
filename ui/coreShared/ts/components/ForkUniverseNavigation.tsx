@@ -8,14 +8,14 @@ import { ForkQuestion } from './Question.js'
 
 export function ForkUniverseNavigation({
 	question,
-	questionSource,
+	marketExplorerUrl,
 	loading = false,
 	hasOutcomes = false,
 	headingLevel = 3,
 	children,
 }: {
 	question?: ForkQuestionDetails | undefined
-	questionSource?: ComponentChildren
+	marketExplorerUrl?: string | undefined
 	loading?: boolean
 	hasOutcomes?: boolean
 	headingLevel?: SectionBlockProps['headingLevel']
@@ -36,7 +36,7 @@ export function ForkUniverseNavigation({
 			busy={loading}
 		>
 			<div className='form-grid'>
-				{question === undefined ? undefined : <ForkQuestion question={question} source={questionSource} />}
+				{question === undefined ? undefined : <ForkQuestion question={question} marketExplorerUrl={marketExplorerUrl} />}
 				{children}
 			</div>
 		</SectionBlock>

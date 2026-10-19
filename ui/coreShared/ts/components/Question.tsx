@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 import * as universeCopy from '../copy/universes.js'
+import * as transactionCopy from '../copy/transaction.js'
 
 import { LoadingText } from '../components/LoadingText.js'
 import { IdentifierValue } from '../components/IdentifierValue.js'
@@ -43,6 +44,12 @@ type QuestionSummaryField =
 			label: string
 			value: bigint
 	  }
+	| {
+			kind: 'link'
+			label: string
+			value: string
+			href: string
+	  }
 
 export function getQuestionTitle(question: Pick<MarketDetails, 'title'>) {
 	return question.title.trim() === '' ? commonCopy.untitledQuestion : question.title
@@ -65,7 +72,7 @@ function getDisplayRange(question: Pick<MarketDetails, 'displayValueMin' | 'disp
 	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
-function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: boolean, showIdentifier: boolean, fork = false): QuestionSummaryField[] {
+function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: boolean, showIdentifier: boolean, fork = false, marketExplorerUrl?: string): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) }]
 	if (showIdentifier && question.questionId !== undefined) fields.push({ kind: 'identifier', label: commonCopy.questionId, value: question.questionId })
 	if (question.createdAt !== undefined) fields.push({ kind: 'timestamp', label: commonCopy.created, value: question.createdAt })
@@ -81,8 +88,8 @@ function getQuestionSummaryFields(question: ForkQuestionDetails, showEndTime: bo
 		if (question.answerUnit !== undefined) fields.push({ kind: 'text', label: commonCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
 	}
 	if (fork) {
+		if (question.marketAddress !== undefined) fields.push(marketExplorerUrl === undefined ? { kind: 'identifier', label: universeCopy.marketAddress, value: question.marketAddress } : { kind: 'link', label: universeCopy.marketAddress, value: question.marketAddress, href: marketExplorerUrl })
 		for (const [label, value] of [
-			[universeCopy.marketAddress, question.marketAddress],
 			[universeCopy.creator, question.creator],
 			[universeCopy.designatedReporter, question.designatedReporter],
 		] as const)
@@ -107,7 +114,17 @@ function renderQuestionDescription(description: string, fork: boolean) {
 	))
 }
 
-function FullQuestion({ abbreviateIdentifier = false, additionalMetrics, className = '', question, showTitle = true, showEndTime = true, showIdentifier = true, fork = false, source }: Omit<QuestionProps, 'question' | 'variant'> & { question: ForkQuestionDetails; fork?: boolean; source?: ComponentChildren }) {
+function FullQuestion({
+	abbreviateIdentifier = false,
+	additionalMetrics,
+	className = '',
+	question,
+	showTitle = true,
+	showEndTime = true,
+	showIdentifier = true,
+	fork = false,
+	marketExplorerUrl,
+}: Omit<QuestionProps, 'question' | 'variant'> & { question: ForkQuestionDetails; fork?: boolean; marketExplorerUrl?: string | undefined }) {
 	const descriptionNode = renderQuestionDescription(getQuestionDescription(question), fork)
 	return (
 		<div className={`question-summary ${className}`}>
@@ -120,19 +137,26 @@ function FullQuestion({ abbreviateIdentifier = false, additionalMetrics, classNa
 				descriptionNode
 			)}
 			<MetricGrid variant='question'>
-				{getQuestionSummaryFields(question, showEndTime, showIdentifier, fork).map(field => renderQuestionSummaryField(field, abbreviateIdentifier))}
+				{getQuestionSummaryFields(question, showEndTime, showIdentifier, fork, marketExplorerUrl).map(field => renderQuestionSummaryField(field, abbreviateIdentifier))}
 				{additionalMetrics}
 			</MetricGrid>
-			{source}
 		</div>
 	)
 }
 
-export function ForkQuestion({ question, loading = false, source }: { question: ForkQuestionDetails | undefined; loading?: boolean; source?: ComponentChildren }) {
-	return <WorkflowSubsection title={universeCopy.forkQuestion}>{loading || question === undefined ? <Question question={undefined} loading /> : <FullQuestion question={question} fork source={source} />}</WorkflowSubsection>
+export function ForkQuestion({ question, loading = false, marketExplorerUrl }: { question: ForkQuestionDetails | undefined; loading?: boolean; marketExplorerUrl?: string | undefined }) {
+	return <WorkflowSubsection title={universeCopy.forkQuestion}>{loading || question === undefined ? <Question question={undefined} loading /> : <FullQuestion question={question} fork marketExplorerUrl={marketExplorerUrl} />}</WorkflowSubsection>
 }
 
 function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdentifier: boolean) {
+	if (field.kind === 'link')
+		return (
+			<MetricField key={field.label} label={field.label}>
+				<a className='identifier-value' href={field.href} title={field.value} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(field.value)}>
+					{field.value}
+				</a>
+			</MetricField>
+		)
 	if (field.kind === 'identifier')
 		return (
 			<MetricField key={field.label} label={field.label}>
