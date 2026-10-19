@@ -124,7 +124,8 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 winningOutcomeBalanceAttoRep = outcomeState[outcomeIndex].balanceAttoRep;
 		uint256 actualForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
 		uint256 forkTime = _getUniverseForkTime();
-		if (forkTime > getEscalationGameEndDate()) {
+		// Local non-decision fixes the payout even when its completing deposit and the fork share a block.
+		if (nonDecisionState == NonDecisionState.Local || forkTime > getEscalationGameEndDate()) {
 			actualForkThresholdAttoRep = nonDecisionThresholdAttoRep;
 		}
 		return
