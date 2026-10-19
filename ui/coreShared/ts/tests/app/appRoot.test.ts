@@ -74,7 +74,7 @@ test('links the historical Augur fork to Ethereum mainnet while the application 
 	try {
 		await act(async () => await mountApp({ applicationTitle, initialize: async () => undefined, root: () => createElement('p', {}, 'Application ready') }))
 		expect(getActiveNetworkProfile().id).toBe('sepolia')
-		expect(within(document.body).getByRole('link', { name: 'View fork question on Ethereum' }).getAttribute('href')).toBe('https://etherscan.io/address/0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e#readContract')
+		expect(within(document.body).getByRole('link', { name: 'View market on Etherscan (mainnet)' }).getAttribute('href')).toBe('https://etherscan.io/address/0x963EED85778CC23E2D4636Cd4f29eECDF9827E9e#readContract')
 	} finally {
 		resetEnvironment()
 	}
