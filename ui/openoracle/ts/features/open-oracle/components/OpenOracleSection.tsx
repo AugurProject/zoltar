@@ -3,6 +3,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
@@ -463,7 +464,7 @@ export function OpenOracleSection({
 
 			{view === 'selected-report' ? (
 				<div className='workflow-stack route-workflow-stack open-oracle-report-stack'>
-					<TransactionScopeProvider scope={createTransactionScope('open-oracle-report', openOracleForm.reportId)}>
+					<TransactionScopeProvider scope={createTransactionScope('open-oracle-report', tryParseBigIntInput(openOracleForm.reportId)?.toString() ?? openOracleForm.reportId)}>
 						<OpenOracleReportDetailsCard
 							accountAddress={accountState.address}
 							isConnected={isConnected}

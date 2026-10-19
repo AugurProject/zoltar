@@ -3,7 +3,8 @@
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -433,6 +434,39 @@ function createApprovedTokenAccessState(approvedAmount: bigint, overrides: Parti
 }
 
 void describe('OpenOracleSection', () => {
+	test.each([
+		{ pendingReportId: '7', locked: true },
+		{ pendingReportId: '8', locked: false },
+	])('uses the canonical scope for a leading-zero ID with pending report $pendingReportId', async ({ pendingReportId, locked }) => {
+		const environment = installDomEnvironment()
+		const onSettleReport = mock(() => undefined)
+		const rendered = await renderIntoDocument(
+			<TransactionActionButtonLockProvider lock={{ lockedScopes: [[`open-oracle-report:${pendingReportId}`]], promptOpen: false }}>
+				<OpenOracleSection
+					{...createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						onSettleReport,
+						openOracleForm: createOpenOracleForm({ reportId: '07' }),
+						openOracleReportLookupState: 'ready',
+						openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: REPORTER, currentTime: 161n, reportTimestamp: 100n, settlementTime: 60n }),
+					})}
+				/>
+			</TransactionActionButtonLockProvider>,
+		)
+		try {
+			if (locked) {
+				expectTransactionButtonDisabled(rendered.container, 'Settle report')
+			} else {
+				expectTransactionButtonEnabled(rendered.container, 'Settle report')
+			}
+			fireEvent.click(within(rendered.container).getByRole('button', { name: 'Settle report' }))
+			expect(onSettleReport).toHaveBeenCalledTimes(locked ? 0 : 1)
+		} finally {
+			await rendered.cleanup()
+			environment.cleanup()
+		}
+	})
+
 	test('announces a create failure exactly once', async () => {
 		const rendered = await renderBrowseSection({ activeView: 'create', openOracleError: 'Create request failed' })
 		try {

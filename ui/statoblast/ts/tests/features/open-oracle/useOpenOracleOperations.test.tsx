@@ -7,6 +7,7 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -234,6 +235,39 @@ describe('useOpenOracleOperations', () => {
 		})
 		expect(requireHookState(state).openOracleError).toBeUndefined()
 		expect(settleOracleReport).toHaveBeenCalledTimes(1)
+	})
+
+	test('uses the canonical report scope and success title when settlement starts with leading zeros', async () => {
+		const report = createOpenOracleReportDetails({ reportId: 7n, currentReporter: WALLET_ADDRESS, currentTime: 11n, reportTimestamp: 1n, settlementTime: 10n })
+		const settleOracleReport = mock(async () => ({ action: 'settle' as const, hash: STATE_HASH }))
+		const dependencies = createOpenOracleOperationsDependencies({ loadOpenOracleReportDetails: async () => report, settleOracleReport })
+		const onTransactionRequested = mock((_intent: TransactionIntent) => undefined)
+		let successTitle: string | undefined
+		let state: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			next => {
+				state = next
+			},
+			true,
+			{
+				onTransactionRequested,
+				onTransactionPresented: presentation => {
+					successTitle = presentation.title
+				},
+			},
+		)
+		trackCleanup((await renderIntoDocument(<Harness />)).cleanup)
+		await act(() => requireHookState(state).setOpenOracleForm(current => ({ ...current, reportId: '07' })))
+		expect(requireHookState(state).openOracleForm.reportId).toBe('07')
+		await act(async () => {
+			await requireHookState(state).settleReport()
+		})
+		expect(requireHookState(state).openOracleError).toBeUndefined()
+		expect(settleOracleReport).toHaveBeenCalledTimes(1)
+		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
+		expect(onTransactionRequested).toHaveBeenCalledWith(expect.objectContaining({ scope: ['open-oracle-report:7'] }))
+		expect(successTitle).toBe('Report #7 settled')
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {

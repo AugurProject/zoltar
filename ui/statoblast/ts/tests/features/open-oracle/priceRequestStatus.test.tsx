@@ -144,15 +144,25 @@ describe('Statoblast price requests', () => {
 		expectTransactionButtonDisabled(rendered.container, 'Settling report…')
 	})
 
+	test('settles the loaded report when its form ID has leading zeros', async () => {
+		const onSettleReport = mock(() => undefined)
+		const rendered = await renderRequest({ onSettleReport, openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '07' } })
+		expectTransactionButtonEnabled(rendered.container, 'Settle report')
+		fireEvent.click(within(rendered.container).getByRole('button', { name: 'Settle report' }))
+		expect(onSettleReport).toHaveBeenCalledTimes(1)
+	})
+
 	test.each([
-		{ reportId: '7', locked: true },
-		{ reportId: '8', locked: false },
-	])('applies a restored pending settlement lock for report $reportId', async ({ reportId, locked }) => {
+		{ reportId: '7', formReportId: '7', locked: true },
+		{ reportId: '8', formReportId: '7', locked: false },
+		{ reportId: '7', formReportId: '07', locked: true },
+		{ reportId: '8', formReportId: '07', locked: false },
+	])('applies a restored pending settlement lock for report $reportId with form $formReportId', async ({ reportId, formReportId, locked }) => {
 		const onSettleReport = mock(() => undefined)
 		const rendered = lifecycle.trackRendered(
 			await renderIntoDocument(
 				<TransactionActionButtonLockProvider lock={{ lockedScopes: [[`open-oracle-report:${reportId}`]], promptOpen: false }}>
-					<PriceRequestStatusSection {...props({ onSettleReport, openOracleActiveAction: undefined })} />
+					<PriceRequestStatusSection {...props({ onSettleReport, openOracleActiveAction: undefined, openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: formReportId } })} />
 				</TransactionActionButtonLockProvider>,
 			),
 		)

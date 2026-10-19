@@ -13,6 +13,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWalletActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as copy from '../../../copy/openOracle.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
@@ -76,7 +77,7 @@ export function PriceRequestStatusSection({ accountState, onLoadOracleReport, on
 								pendingLabel={copy.settlingReport}
 								pending={openOracleActiveAction === 'settle'}
 								onClick={onSettleReport}
-								availability={withWalletGuardFirst({ disabled: loading || openOracleReportLookupState !== 'ready' || report.reportId.toString() !== openOracleForm.reportId.trim() || availability?.canAct !== true, reason: loading ? commonCopy.loadingWithEllipsis : availability?.message }, walletGuard)}
+								availability={withWalletGuardFirst({ disabled: loading || openOracleReportLookupState !== 'ready' || tryParseBigIntInput(openOracleForm.reportId) !== report.reportId || availability?.canAct !== true, reason: loading ? commonCopy.loadingWithEllipsis : availability?.message }, walletGuard)}
 							/>
 						</div>
 					</>
