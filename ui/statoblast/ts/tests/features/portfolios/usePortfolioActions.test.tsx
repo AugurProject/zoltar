@@ -11,6 +11,7 @@ import type { ChainBackend, TransactionPlanStep } from '@zoltar/ui-core-shared/w
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { vaultArtifact, type loadPortfolioPolicy } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
 import { usePortfolioActions } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioActions.js'
+import { statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 
 const owner = getAddress('0x0000000000000000000000000000000000000011')
@@ -56,8 +57,12 @@ function createExportBackend(
 		}),
 	}).extend(() => ({
 		getChainId: readChainId,
+		getCode: async () => `0x${openAdmissionArtifact.evm.deployedBytecode.object}` as const,
 		...createMockReadClient(async request => {
 			if (request.functionName === 'questionId') return 5n
+			if (request.functionName === 'universeId') return 0n
+			if (request.functionName === 'questionAdmissionPolicy') return manager
+			if (request.functionName === 'isQuestionAllowed') return true
 			if (request.functionName === 'balanceOf') return 1000n * 10n ** 18n
 			const policy = await readPolicy()
 			if (request.functionName === 'allocationPolicy') return [policy.config, policy.repToken, policy.spentDepositAttoRep, policy.spentCommitmentIncreaseAttoEth]
@@ -449,14 +454,14 @@ test('allows an in-flight export to finish across a transient same-portfolio ref
 })
 
 for (const failRegistration of [false, true]) {
-	test(`deploys with one transaction and registers its seed only on a separate click, retaining it on failure (${failRegistration})`, async () => {
+	test(`deploys admission, portfolio and seed registration only on separate clicks, retaining the seed on failure (${failRegistration})`, async () => {
 		const sent: { to?: `0x${string}` | null | undefined; data?: Hex | undefined }[] = []
 		let failing = failRegistration
 		const mockClient = createMockWriteClient(request => {
 			sent.push(request)
 			if (request.to === manager && failing) throw new Error('Registration rejected by wallet')
 		})
-		mockClient.waitForTransactionReceipt = async () => ({ status: 'success', contractAddress: sent.length === 1 ? manager : null })
+		mockClient.waitForTransactionReceipt = async () => ({ status: 'success', contractAddress: sent.length <= 2 ? manager : null })
 		const client = asWriteClient(mockClient)
 		const hook = await renderActions(undefined, undefined, undefined, () => {
 			let planned = false
@@ -473,20 +478,23 @@ for (const failRegistration of [false, true]) {
 		})
 		const load = mock(async () => undefined)
 		await hook.setProps({ model: { ...selectedModel, load } })
-		await act(async () => {
-			hook.state().setOriginInput(vault)
-			await hook.state().deploy()
-		})
-		expect(load).toHaveBeenCalledWith(manager, owner)
+		await act(() => hook.state().setOriginInput(vault))
+		await act(async () => await hook.state().deployAdmission())
 		expect(sent).toHaveLength(1)
+		expect(load).not.toHaveBeenCalled()
+		await act(async () => await hook.state().deploy())
+		expect(load).toHaveBeenCalledWith(manager, owner)
+		expect(sent).toHaveLength(2)
 		expect(sent[0]?.to).toBeUndefined()
+		expect(sent[1]?.to).toBeUndefined()
 		expect(hook.state().questionInput).toBe('5')
 		expect(hook.state().error).toBeUndefined()
+		await waitFor(() => expect(hook.state().registerReason).toBeUndefined())
 		await act(async () => {
 			await hook.state().register()
 		})
-		expect(sent).toHaveLength(2)
-		const registration = sent[1]
+		expect(sent).toHaveLength(3)
+		const registration = sent[2]
 		if (registration?.data === undefined) throw new Error('Missing registration')
 		expect(registration.to).toBe(manager)
 		expect(decodeFunctionData({ abi: parseAbi(['function addQuestion(uint256 questionId)']), data: registration.data }).args).toEqual([5n])
@@ -497,8 +505,30 @@ for (const failRegistration of [false, true]) {
 			await act(async () => {
 				await hook.state().register()
 			})
-			expect(sent).toHaveLength(3)
-			expect(sent[2]?.to).toBe(manager)
+			expect(sent).toHaveLength(4)
+			expect(sent[3]?.to).toBe(manager)
 		} else expect(hook.state().error).toBeUndefined()
 	})
 }
+
+test('creation requires an explicit admission transaction before portfolio deployment and invalidates changed policy choices', async () => {
+	const requests: { data?: Hex | undefined }[] = []
+	const client = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => ({ status: 'success' as const, contractAddress: manager }) })
+	const hook = await renderActions(undefined, undefined, undefined, () => ({ ...client, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }))
+	await act(() => hook.state().setOriginInput(manager))
+	expect(hook.state().deployReason).toContain('admission policy first')
+	await act(async () => await hook.state().deployAdmission())
+	expect(hook.state().error).toBeUndefined()
+	expect(requests).toHaveLength(1)
+	expect(hook.state().admissionAddress).toBe(manager)
+	expect(hook.state().deployReason).toBeUndefined()
+	await act(async () => await hook.state().deploy())
+	expect(hook.state().error).toBeUndefined()
+	expect(requests).toHaveLength(2)
+	await act(() => {
+		hook.state().setAdmissionMode('fixed')
+		hook.state().setFixedQuestions('5, 7')
+	})
+	expect(hook.state().admissionAddress).toBeUndefined()
+	expect(hook.state().deployReason).toContain('admission policy first')
+})

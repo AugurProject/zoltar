@@ -21,6 +21,7 @@ interface IPortfolioForkSource {
 	function createForkVault(address owner) external returns (SecurityPoolPortfolioVault);
 	function claimForkPosition(address owner, uint256 positionId, uint256 intervalId, bool migrate, uint256 outcomeIndex) external;
 	function recoverForkPosition(uint256 positionId, address processor) external;
+	function finalizeForkPosition(uint256 positionId) external;
 }
 
 /// @notice Owner-authorized branch groups share native migration and recovery work.
@@ -61,6 +62,14 @@ contract SecurityPoolPortfolioForkController {
 		bool recoveryComplete;
 	}
 
+	struct OwnerBranches {
+		uint256 first;
+		uint256 last;
+		mapping(uint256 => uint256) selections;
+		mapping(uint256 => uint256) next;
+		mapping(uint256 => uint256) previous;
+	}
+
 	mapping(uint256 => Context) private contexts;
 	mapping(uint256 => mapping(uint256 => uint256)) public childContextIds;
 	mapping(uint256 => mapping(address => mapping(uint256 => Choice))) public choices;
@@ -69,6 +78,7 @@ contract SecurityPoolPortfolioForkController {
 	mapping(address => address) private positionSourcePools;
 	mapping(uint256 => uint256) public recoveredRep;
 	mapping(uint256 => uint256) public recoveredFees;
+	mapping(uint256 => mapping(address => OwnerBranches)) private ownerBranches;
 
 	event ForkContextCreated(uint256 indexed contextId, uint256 indexed parentContextId, uint256 indexed outcomeIndex, uint248 universeId, SecurityPoolPortfolioRecovery ledger);
 	event SharedForkChosen(uint256 indexed contextId, address indexed owner, uint256 indexed intervalId, uint256 outcomeIndex, uint256 childIntervalId);
@@ -130,6 +140,45 @@ contract SecurityPoolPortfolioForkController {
 		return choices[contextId][owner][intervalId].selected;
 	}
 
+	/// @notice Selected children remain discoverable after their source cash intervals retire.
+	function getOwnerForkBranches(uint256 contextId, address owner, uint256 cursor, uint256 count) external view returns (uint256[] memory children, uint256 nextCursor) {
+		require(count > 0, 'Choose a positive branch page size');
+		OwnerBranches storage branches = ownerBranches[contextId][owner];
+		require(cursor == 0 || branches.selections[cursor] > 0, 'Branch cursor retired');
+		nextCursor = cursor == 0 ? branches.first : cursor;
+		children = new uint256[](count);
+		uint256 length;
+		while (nextCursor != 0 && length < count) {
+			children[length++] = nextCursor;
+			nextCursor = branches.next[nextCursor];
+		}
+		assembly ('memory-safe') {
+			mstore(children, length)
+		}
+	}
+
+	function _addBranchSelection(uint256 contextId, uint256 childId) private {
+		OwnerBranches storage branches = ownerBranches[contextId][msg.sender];
+		if (branches.selections[childId]++ > 0) return;
+		branches.previous[childId] = branches.last;
+		if (branches.last == 0) branches.first = childId;
+		else branches.next[branches.last] = childId;
+		branches.last = childId;
+	}
+
+	function _removeBranchSelection(uint256 contextId, uint256 childId) private {
+		OwnerBranches storage branches = ownerBranches[contextId][msg.sender];
+		if (--branches.selections[childId] > 0) return;
+		uint256 previous = branches.previous[childId];
+		uint256 next = branches.next[childId];
+		if (previous == 0) branches.first = next;
+		else branches.next[previous] = next;
+		if (next == 0) branches.last = previous;
+		else branches.previous[next] = previous;
+		delete branches.previous[childId];
+		delete branches.next[childId];
+	}
+
 	/// @notice Assign caller-selected ownership intervals, with no question or owner scan.
 	function chooseSharedFork(uint256 contextId, uint256[] calldata intervalIds, uint256 outcomeIndex) external nonReentrant {
 		_requireChoiceWindow(contextId);
@@ -151,6 +200,7 @@ contract SecurityPoolPortfolioForkController {
 			if (choice.selected) _revoke(contextId, intervalId);
 			uint256 imported = childLedger.importInterval(msg.sender, interval.startPosition, end, interval.shares);
 			choices[contextId][msg.sender][intervalId] = Choice(true, outcomeIndex, imported);
+			_addBranchSelection(contextId, childId);
 			emit SharedForkChosen(contextId, msg.sender, intervalId, outcomeIndex, imported);
 		}
 	}
@@ -172,7 +222,9 @@ contract SecurityPoolPortfolioForkController {
 	function _revoke(uint256 contextId, uint256 intervalId) private {
 		Choice memory choice = choices[contextId][msg.sender][intervalId];
 		require(choice.selected, 'No shared fork choice');
-		contexts[childContextIds[contextId][choice.outcomeIndex]].ledger.retireImportedInterval(msg.sender, choice.childIntervalId);
+		uint256 childId = childContextIds[contextId][choice.outcomeIndex];
+		contexts[childId].ledger.retireImportedInterval(msg.sender, choice.childIntervalId);
+		_removeBranchSelection(contextId, childId);
 		delete choices[contextId][msg.sender][intervalId];
 		emit SharedForkRevoked(contextId, msg.sender, intervalId);
 	}
@@ -236,6 +288,11 @@ contract SecurityPoolPortfolioForkController {
 		custody.migrateIncoming(outcomeIndex);
 		// Split-time parent fee fractions and parent-token donations belong to the source owners.
 		_collect(contextId, positionId);
+		if (contextId == 0) portfolio.finalizeForkPosition(positionId);
+		else if (positions[contextId][positionId].unmigratedShares == 0) {
+			positions[contextId][positionId].recoveryComplete = true;
+			contexts[contextId].ledger.markPositionComplete(positionId);
+		}
 		emit SharedForkMigrated(contextId, positionId, childId, custody, shares);
 		return true;
 	}
@@ -243,6 +300,7 @@ contract SecurityPoolPortfolioForkController {
 	function _completeEmpty(uint256 contextId, uint256 positionId) private returns (bool) {
 		processedPositions[contextId][positionId] = true;
 		positions[contextId][positionId].recoveryComplete = true;
+		contexts[contextId].ledger.markPositionComplete(positionId);
 		return true;
 	}
 
@@ -275,6 +333,7 @@ contract SecurityPoolPortfolioForkController {
 		(uint256 rep, uint256 fees, bool complete) = previous.custody.recover();
 		_credit(contextId, positionId, rep, fees);
 		positions[contextId][positionId].recoveryComplete = complete;
+		if (complete) contexts[contextId].ledger.markPositionComplete(positionId);
 		emit ForkPositionRecovered(contextId, positionId, rep, fees, complete);
 		return complete || rep > 0 || fees > 0;
 	}
@@ -292,10 +351,10 @@ contract SecurityPoolPortfolioForkController {
 			}
 			if (_recoverPosition(contextId, positionId)) progressed = true;
 		}
-		(uint256 rep, uint256 fees) = context.ledger.claim(msg.sender, intervalIds);
+		(uint256 rep, uint256 fees, bool retired) = context.ledger.claim(msg.sender, intervalIds);
 		recoveredRep[contextId] -= rep;
 		recoveredFees[contextId] -= fees;
-		require(progressed || rep > 0 || fees > 0, 'No fork recovery progress');
+		require(progressed || rep > 0 || fees > 0 || retired, 'No fork recovery progress');
 		if (rep > 0) context.repToken.safeTransfer(msg.sender, rep);
 		_sendEth(msg.sender, fees);
 		emit ForkRecoveryCollected(contextId, msg.sender, rep, fees);
@@ -328,9 +387,13 @@ contract SecurityPoolPortfolioForkController {
 		Position storage position = positions[contextId][positionId];
 		position.remainingShares -= shares;
 		position.unmigratedShares -= shares;
-		if (position.remainingShares == 0) position.recoveryComplete = true;
+		if (position.unmigratedShares == 0) position.recoveryComplete = true;
 		source.custody.release(address(vault), shares, source.unmigratedShares);
 		if (migrate) vault.migrateClaimedPosition(parent, outcomeIndex);
+		if (position.unmigratedShares == 0) {
+			if (position.remainingShares > 0) _collect(contextId, positionId);
+			contexts[contextId].ledger.markPositionComplete(positionId);
+		}
 		emit ForkPositionClaimed(contextId, positionId, msg.sender, vault, shares);
 	}
 

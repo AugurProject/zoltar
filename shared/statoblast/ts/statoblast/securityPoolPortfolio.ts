@@ -116,14 +116,32 @@ function validateInput(input: VaultOperationsInput, vault: Address) {
  * Inject the compiled artifact so the shared SDK does not depend on contract generation.
  * @public Deployment API exported by the securityPoolPortfolio package subpath.
  */
-export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; initialOriginPool: Address; maximumQuestionHorizonSeconds: bigint; vaultDeployer: Address; artifact: { abi: Abi; bytecode: Hex } }) {
+export type PortfolioEconomicsConfig = {
+	targetHealthFactorBps: bigint
+	purchaseFeeBps: bigint
+	minimumPurchaseFeeAttoEth: bigint
+	completionRewardAttoEth: bigint
+	ownershipChangeFeeAttoEth: bigint
+}
+
+export function validatePortfolioEconomics(config: PortfolioEconomicsConfig) {
+	for (const [name, value] of Object.entries(config)) validateUint(value, 256, name)
+	if (config.targetHealthFactorBps < 10_000n) throw new Error('Target health must be at least 100%.')
+	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
+	if (config.completionRewardAttoEth > config.minimumPurchaseFeeAttoEth) throw new Error('Completion reward cannot exceed the minimum purchase fee.')
+	if (config.ownershipChangeFeeAttoEth > 0n && config.completionRewardAttoEth === 0n) throw new Error('Ownership change fees require a positive completion reward.')
+}
+
+export function buildPortfolioDeploymentRequest(parameters: { owner: Address; factory: Address; initialOriginPool: Address; maximumQuestionHorizonSeconds: bigint; vaultDeployer: Address; questionAdmissionPolicy: Address; economics: PortfolioEconomicsConfig; artifact: { abi: Abi; bytecode: Hex } }) {
 	validateAddress(parameters.owner, 'Owner')
 	validateAddress(parameters.factory, 'Factory')
 	validateAddress(parameters.initialOriginPool, 'Initial origin pool')
 	validateAddress(parameters.vaultDeployer, 'Vault deployer')
+	validateAddress(parameters.questionAdmissionPolicy, 'Question admission policy')
 	validateUint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
 	if (parameters.maximumQuestionHorizonSeconds === 0n) throw new Error('Question horizon must be positive.')
-	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.initialOriginPool, parameters.maximumQuestionHorizonSeconds, parameters.vaultDeployer] }) }
+	validatePortfolioEconomics(parameters.economics)
+	return { account: parameters.owner, data: encodeDeployData({ abi: parameters.artifact.abi, bytecode: parameters.artifact.bytecode, args: [parameters.factory, parameters.initialOriginPool, parameters.maximumQuestionHorizonSeconds, parameters.vaultDeployer, parameters.questionAdmissionPolicy, parameters.economics] }) }
 }
 
 export type PortfolioQuestionOperations = {
@@ -237,6 +255,8 @@ export {
 	buildPortfolioDepositRequest,
 	buildPortfolioFundWithdrawalRequest,
 	buildPortfolioClaimRecoveredRequest,
+	buildPortfolioClaimAndDepositRequest,
+	buildPortfolioRecyclePositionRequest,
 	buildPortfolioPositionClaimRequest,
 	buildPortfolioPositionRebalanceRequest,
 	loadPortfolioAggregateSnapshot,

@@ -1,5 +1,5 @@
 import { beforeAll } from 'bun:test'
-import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioDeploymentRequest, buildPortfolioExecuteRequest, buildPortfolioVaultOperationsRequest } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { VaultOperationsInput } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
@@ -7,6 +7,7 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	ReputationToken_ReputationToken as repArtifact,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact,
 	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
@@ -25,11 +26,14 @@ import { useStatoblastVaultAccountingFixture } from './fixture'
 
 export const unit = 10n ** 18n
 export const maximumQuestionHorizonSeconds = 20n * 365n * DAY
+export const portfolioEconomics = { targetHealthFactorBps: 12_000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 10n ** 15n, completionRewardAttoEth: 25n * 10n ** 13n, ownershipChangeFeeAttoEth: 0n }
 export const emptyOperations = (): VaultOperationsInput => ({ depositAttoRep: 0n, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n })
 
-export function useSecurityPoolPortfolioFixture() {
+export function useSecurityPoolPortfolioFixture(economicsOverrides: Partial<typeof portfolioEconomics> = {}) {
+	const economics = { ...portfolioEconomics, ...economicsOverrides }
 	const base = useStatoblastVaultAccountingFixture()
 	let portfolio: Address
+	let questionAdmissionPolicy: Address
 	let vault: Address
 	let secondQuestionId: bigint
 	let secondEndTime: bigint
@@ -75,6 +79,10 @@ export function useSecurityPoolPortfolioFixture() {
 		return { amount, cost: await getRequestPriceCostAttoEth(owner(), coordinator) }
 	}
 	beforeAll(async () => {
+		const policyHash = await owner().sendTransaction({ data: encodeDeployData({ abi: openAdmissionArtifact.abi, bytecode: applyLibraries(openAdmissionArtifact.evm.bytecode.object) }) })
+		const policyReceipt = await owner().waitForTransactionReceipt({ hash: policyHash })
+		if (!policyReceipt.contractAddress) throw new Error('Question admission policy address missing')
+		questionAdmissionPolicy = policyReceipt.contractAddress
 		const hash = await owner().sendTransaction(
 			buildPortfolioDeploymentRequest({
 				owner: owner().account.address,
@@ -82,6 +90,8 @@ export function useSecurityPoolPortfolioFixture() {
 				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: base.securityPoolAddresses.securityPool,
 				maximumQuestionHorizonSeconds,
+				questionAdmissionPolicy,
+				economics,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 			}),
 		)
@@ -118,6 +128,9 @@ export function useSecurityPoolPortfolioFixture() {
 		fundVaultOracle,
 		get portfolio() {
 			return portfolio
+		},
+		get questionAdmissionPolicy() {
+			return questionAdmissionPolicy
 		},
 		get vault() {
 			return vault

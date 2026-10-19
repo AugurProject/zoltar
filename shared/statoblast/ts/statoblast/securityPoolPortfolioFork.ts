@@ -8,7 +8,10 @@ const abi = parseAbi([
 	'function choiceWindow(uint256 contextId) view returns (uint256 opensAt,uint256 closesAt)',
 	'function choices(uint256 contextId,address owner,uint256 intervalId) view returns (bool selected,uint256 outcomeIndex,uint256 childIntervalId)',
 	'function childContextIds(uint256 contextId,uint256 outcomeIndex) view returns (uint256)',
-	'function getOwnerIntervalCount(address owner) view returns (uint256)',
+	'function getOwnerActiveIntervalCount(address owner) view returns (uint256)',
+	'function getOwnerActiveIntervals(address owner,uint256 cursor,uint256 count) view returns (uint256[] intervalIds,uint256 nextCursor)',
+	'function canRetireOwnerInterval(address owner,uint256 intervalId) view returns (bool)',
+	'function getOwnerForkBranches(uint256 contextId,address owner,uint256 cursor,uint256 count) view returns (uint256[] childContextIds,uint256 nextCursor)',
 	'function getOwnerInterval(address owner,uint256 intervalId) view returns ((uint256 generation,uint256 startPosition,uint256 endPosition,uint256 shares,uint256 repIndex,uint256 feeIndex,bool open,bool active))',
 	'function previewClaim(address owner,uint256[] intervalIds) view returns (uint256 rep,uint256 eth)',
 	'function readPosition(uint256 contextId,uint256 positionId) view returns ((address custody,uint256 remainingShares,uint256 unmigratedShares,bool recoveryComplete))',
@@ -96,12 +99,13 @@ export function buildPortfolioContextPositionClaimRequest(parameters: OwnerReque
 export type PortfolioSharedForkSnapshot = Awaited<ReturnType<typeof loadPortfolioSharedForkSnapshot>>
 
 /** Reads only one context and one personal history page, all anchored to a single mined block. */
-export async function loadPortfolioSharedForkSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; contextId: bigint; intervalStart?: bigint; outcomeIndex?: bigint }) {
+export async function loadPortfolioSharedForkSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; contextId: bigint; intervalCursor?: bigint; branchCursor?: bigint; outcomeIndex?: bigint }) {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio)
 	const owner = address(parameters.owner)
 	const contextId = uint(parameters.contextId, 'Fork context')
-	const intervalStart = uint(parameters.intervalStart ?? 0n, 'Owner interval page')
+	const intervalCursor = uint(parameters.intervalCursor ?? 0n, 'Owner interval cursor')
+	const branchCursor = uint(parameters.branchCursor ?? 0n, 'Fork branch cursor')
 	const outcomeIndex = parameters.outcomeIndex === undefined ? undefined : uint(parameters.outcomeIndex, 'Fork outcome')
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Shared fork snapshot requires a mined block.')
@@ -115,13 +119,17 @@ export async function loadPortfolioSharedForkSnapshot(parameters: { client: Port
 	const context = fields(contextValue, ['universeId', 'parentContextId', 'outcomeIndex', 'incomingActivationFloor', 'ledger', 'repToken', 'pointCount'])
 	const window = fields(windowValue, ['opensAt', 'closesAt'])
 	const ledger = address(context[4])
-	const intervalCount = uint(await read(ledger, 'getOwnerIntervalCount', [owner]), 'Owner interval count')
-	if (intervalStart > intervalCount) throw new Error('Owner interval page is out of bounds.')
-	const count = intervalCount - intervalStart < 64n ? intervalCount - intervalStart : 64n
+	const intervalCount = uint(await read(ledger, 'getOwnerActiveIntervalCount', [owner]), 'Active owner interval count')
+	const page = fields(await read(ledger, 'getOwnerActiveIntervals', [owner, intervalCursor, 64n]), ['intervalIds', 'nextCursor'])
+	if (!Array.isArray(page[0]) || page[0].length > 64) throw new Error('Invalid active owner interval page.')
+	const intervalIds = page[0].map(value => uint(value, 'Owner interval'))
+	const nextIntervalCursor = uint(page[1], 'Next owner interval cursor')
+	if (intervalIds.some((id, index) => id + 1n < intervalCursor || (index > 0 && id <= (intervalIds[index - 1] ?? id)))) throw new Error('Invalid active owner interval order.')
+	const lastInterval = intervalIds.at(-1)
+	if (nextIntervalCursor !== 0n && (lastInterval === undefined || nextIntervalCursor <= lastInterval + 1n)) throw new Error('Invalid owner interval continuation.')
 	const intervals = await Promise.all(
-		Array.from({ length: Number(count) }, async (_, offset) => {
-			const intervalId = intervalStart + BigInt(offset)
-			const [intervalValue, choiceValue] = await Promise.all([read(ledger, 'getOwnerInterval', [owner, intervalId]), read(controller, 'choices', [contextId, owner, intervalId])])
+		intervalIds.map(async intervalId => {
+			const [intervalValue, choiceValue, canRetireValue] = await Promise.all([read(ledger, 'getOwnerInterval', [owner, intervalId]), read(controller, 'choices', [contextId, owner, intervalId]), read(ledger, 'canRetireOwnerInterval', [owner, intervalId])])
 			const interval = fields(intervalValue, ['generation', 'startPosition', 'endPosition', 'shares', 'repIndex', 'feeIndex', 'open', 'active'])
 			const choice = fields(choiceValue, ['selected', 'outcomeIndex', 'childIntervalId'])
 			return {
@@ -131,6 +139,7 @@ export async function loadPortfolioSharedForkSnapshot(parameters: { client: Port
 				shares: uint(interval[3], 'Owner shares'),
 				open: bool(interval[6]),
 				active: bool(interval[7]),
+				canRetire: bool(canRetireValue),
 				selected: bool(choice[0]),
 				outcomeIndex: uint(choice[1], 'Selected outcome'),
 				childIntervalId: uint(choice[2], 'Child interval'),
@@ -140,8 +149,19 @@ export async function loadPortfolioSharedForkSnapshot(parameters: { client: Port
 	const activeIds = intervals.filter(interval => interval.active).map(interval => interval.intervalId)
 	const [recoveryValue, childContextValue] = await Promise.all([read(ledger, 'previewClaim', [owner, activeIds]), outcomeIndex === undefined ? Promise.resolve(0n) : read(controller, 'childContextIds', [contextId, outcomeIndex])])
 	const recovery = fields(recoveryValue, ['rep', 'eth'])
-	const branchOutcomes = [...new Set(intervals.filter(interval => interval.active && interval.selected).map(interval => interval.outcomeIndex))]
-	const branches = await Promise.all(branchOutcomes.map(async outcomeIndex => ({ outcomeIndex, contextId: uint(await read(controller, 'childContextIds', [contextId, outcomeIndex]), 'Child context') })))
+	const branchPage = fields(await read(controller, 'getOwnerForkBranches', [contextId, owner, branchCursor, 64n]), ['childContextIds', 'nextCursor'])
+	if (!Array.isArray(branchPage[0]) || branchPage[0].length > 64) throw new Error('Invalid fork branch page.')
+	const branchIds = branchPage[0].map(value => uint(value, 'Child context'))
+	if (new Set(branchIds).size !== branchIds.length || branchIds.includes(0n)) throw new Error('Invalid fork branch identities.')
+	const nextBranchCursor = uint(branchPage[1], 'Next fork branch cursor')
+	if (nextBranchCursor !== 0n && (nextBranchCursor === branchCursor || branchIds.includes(nextBranchCursor) || branchIds.length === 0)) throw new Error('Invalid fork branch continuation.')
+	const branches = await Promise.all(
+		branchIds.map(async childContextId => {
+			const child = fields(await read(controller, 'getContext', [childContextId]), ['universeId', 'parentContextId', 'outcomeIndex', 'incomingActivationFloor', 'ledger', 'repToken', 'pointCount'])
+			if (uint(child[1], 'Parent context') !== contextId) throw new Error('Fork branch belongs to a different parent.')
+			return { outcomeIndex: uint(child[2], 'Fork outcome'), contextId: childContextId }
+		}),
+	)
 	const parentContext = contextId === 0n ? context : fields(await read(controller, 'getContext', [uint(context[1], 'Parent context')]), ['universeId', 'parentContextId', 'outcomeIndex', 'incomingActivationFloor', 'ledger', 'repToken', 'pointCount'])
 	const [anchor, latestChainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (anchor.hash !== blockHash || latestChainId !== chainId) throw new Error('Chain changed while reading shared fork choices. Refresh and try again.')
@@ -167,7 +187,10 @@ export async function loadPortfolioSharedForkSnapshot(parameters: { client: Port
 		opensAt: uint(window[0], 'Choice opening'),
 		closesAt: uint(window[1], 'Choice cutoff'),
 		intervalCount,
-		intervalStart,
+		intervalCursor,
+		nextIntervalCursor,
+		branchCursor,
+		nextBranchCursor,
 		intervals,
 		recoverableRepAttoRep: uint(recovery[0], 'Recovered REP'),
 		recoverableFeesAttoEth: uint(recovery[1], 'Recovered fees'),

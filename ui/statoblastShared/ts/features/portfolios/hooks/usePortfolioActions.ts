@@ -1,8 +1,8 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
-import { encodeFunctionData, formatEther, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatEther, formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildPortfolioRevokePolicyRequest, exportPortfolioTransaction, loadPortfolioSnapshot, planPortfolioAllocations } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
-import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../../../contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '../../../contractArtifact.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createConnectedReadClient, createWalletWriteClient, type ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
@@ -14,12 +14,18 @@ import { portfolioContractRequest, portfolioCreationRequest, portfolioReadClient
 import { emptyAllocationDraft, parseAllocationDrafts, parsePortfolioAmount, type AllocationDraft } from '../lib/draft.js'
 import type { usePortfolio } from './usePortfolio.js'
 import * as copy from '../../../copy/portfolio.js'
+import { defaultPortfolioCreationDraft, parseFixedPortfolioQuestions, parsePortfolioCreationEconomics, type CuratedAdmissionMode, type PortfolioCreationDraft } from '../lib/creation.js'
+import { loadPortfolioAdmission, portfolioAdmissionCreationRequest, requirePortfolioQuestionAdmission } from '../../../protocol/securityPoolPortfolioAdmission.js'
 
 type PortfolioModel = Pick<ReturnType<typeof usePortfolio>, 'snapshot' | 'selection' | 'managerInput' | 'ownerInput' | 'loading' | 'error' | 'load' | 'refresh'>
 
 export function usePortfolioActions(model: PortfolioModel, parameters: WriteOperationsParameters, selectedUniverse: bigint) {
 	const originInput = useSignal('')
 	const horizonDays = useSignal('30')
+	const admissionMode = useSignal<CuratedAdmissionMode>('open')
+	const fixedQuestions = useSignal('')
+	const economicsDraft = useSignal(defaultPortfolioCreationDraft())
+	const deployedAdmission = useSignal<{ address: Address; key: string; universeId: bigint; backend: ReturnType<typeof getActiveBackend> } | undefined>(undefined)
 	const questionInput = useSignal('')
 	const fundingAmount = useSignal('')
 	const drafts = useSignal<Record<string, AllocationDraft>>({})
@@ -41,6 +47,42 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 	const vault = selection?.vault === zeroAddress ? undefined : selection?.vault
 	const branch = snapshot?.branches.find(item => item.universeId === selectedUniverse)
 	const backend = getActiveBackend()
+	let creationError: string | undefined
+	let fixedQuestionIds: bigint[] = []
+	let creationEconomics: ReturnType<typeof parsePortfolioCreationEconomics> | undefined
+	try {
+		if (admissionMode.value === 'fixed') fixedQuestionIds = parseFixedPortfolioQuestions(fixedQuestions.value)
+		creationEconomics = parsePortfolioCreationEconomics(economicsDraft.value)
+	} catch (failure) {
+		creationError = getErrorMessage(failure, copy.creationInvalid)
+	}
+	const admissionKey = `${originInput.value.trim().toLowerCase()}:${admissionMode.value}:${fixedQuestionIds.join(',')}`
+	const admission = deployedAdmission.value?.key === admissionKey && deployedAdmission.value.backend === backend ? deployedAdmission.value : undefined
+	const registration = useSignal<{ key: string; reason?: string } | undefined>(undefined)
+	const registrationKey = `${selection?.portfolio}:${selection?.originUniverseId}:${questionInput.value}:${backend.id}`
+	useEffect(() => {
+		let current = true
+		registration.value = undefined
+		if (selection !== undefined && /^(0x[0-9a-fA-F]+|\d+)$/.test(questionInput.value)) {
+			const questionId = BigInt(questionInput.value)
+			const client = backend.createReadClient()
+			void (async () => {
+				const policyValue = await client.readContract({ address: selection.portfolio, abi: portfolioArtifact.abi, functionName: 'questionAdmissionPolicy' })
+				if (typeof policyValue !== 'string' || !isAddress(policyValue)) throw new Error(copy.admissionCheckFailed)
+				const policy = getAddress(policyValue)
+				const verified = await loadPortfolioAdmission(client, policy, selection.originUniverseId)
+				if (verified.mode === 'custom') throw new Error(copy.unsupportedAdmission)
+				await requirePortfolioQuestionAdmission(client, policy, selection.portfolio, selection.originUniverseId, questionId)
+				if (current) registration.value = { key: registrationKey }
+			})().catch(failure => {
+				if (current) registration.value = { key: registrationKey, reason: getErrorMessage(failure, copy.admissionCheckFailed) }
+			})
+		}
+		return () => {
+			current = false
+		}
+	}, [backend, registrationKey])
+	const registrationReason = registration.value?.key === registrationKey ? registration.value.reason : copy.admissionChecking
 	const loadedPolicy = policySnapshot.value
 	const policy = loadedPolicy?.vault === vault && loadedPolicy?.backend === backend && loadedPolicy?.blockNumber === snapshot?.blockNumber ? loadedPolicy?.policy : undefined
 	useEffect(() => {
@@ -218,6 +260,45 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 			health.value = value
 			invalidateExport()
 		},
+		admissionMode: admissionMode.value,
+		setAdmissionMode: (value: CuratedAdmissionMode) => {
+			if (busy.value !== undefined) return
+			admissionMode.value = value
+		},
+		fixedQuestions: fixedQuestions.value,
+		setFixedQuestions: (value: string) => {
+			fixedQuestions.value = value
+		},
+		economicsDraft: economicsDraft.value,
+		setEconomicsField: (field: keyof PortfolioCreationDraft, value: string) => {
+			economicsDraft.value = { ...economicsDraft.value, [field]: value }
+		},
+		admissionAddress: admission?.address,
+		creationError,
+		admissionDeployReason: walletReason ?? (!isAddress(originInput.value) ? copy.enterOrigin : creationError) ?? (admission !== undefined ? copy.admissionDeployed : undefined),
+		deployAdmission: async () => {
+			let captured: { key: string; universeId: bigint } | undefined
+			await run(
+				'deployPortfolioAdmission',
+				copy.deployAdmission,
+				async () => {
+					if (parameters.accountAddress === undefined) throw new Error(copy.connect)
+					if (creationError !== undefined) throw new Error(creationError)
+					const key = admissionKey
+					const mode = admissionMode.value
+					const ids = [...fixedQuestionIds]
+					const universeId = await createConnectedReadClient().readContract({ address: getAddress(originInput.value), abi: securityPoolArtifact.abi, functionName: 'universeId' })
+					captured = { key, universeId }
+					return portfolioAdmissionCreationRequest(parameters.accountAddress, mode, universeId, ids)
+				},
+				undefined,
+				async result => {
+					const address = result.receipt.contractAddress
+					if (address === null || address === undefined || captured === undefined) throw new Error(copy.admissionAddressMissing)
+					deployedAdmission.value = { ...captured, address, backend }
+				},
+			)
+		},
 		originInput: originInput.value,
 		horizonDays: horizonDays.value,
 		setHorizonDays: (value: string) => {
@@ -266,13 +347,13 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 		branch,
 		ownerReason,
 		vaultReason,
-		deployReason: walletReason ?? (!isAddress(originInput.value) ? copy.enterOrigin : horizonError),
+		deployReason: walletReason ?? (!isAddress(originInput.value) ? copy.enterOrigin : horizonError) ?? creationError ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
 		createReason: (selection === undefined ? copy.enterPortfolio : undefined) ?? (vault !== undefined ? copy.vaultExists : ownerReason),
 		fundingReason: (vault === undefined || branch === undefined ? copy.noVault : undefined) ?? walletReason ?? fundingError,
 		allocationReason: vaultReason ?? (model.loading ? copy.loading : (model.error ?? planError ?? (plan === undefined ? copy.allocationNeeded : undefined))),
 		policyReason: vaultReason ?? (policy === undefined ? (policyReadError.value ?? copy.policyLoading) : policyError),
 		policyExportReason: (vault === undefined ? copy.noVault : undefined) ?? (policy === undefined ? (policyReadError.value ?? copy.policyLoading) : policyError),
-		registerReason: (selection === undefined ? copy.enterPortfolio : undefined) ?? walletReason ?? (!/^(0x[0-9a-fA-F]+|\d+)$/.test(questionInput.value) ? copy.registerDisabled : undefined),
+		registerReason: (selection === undefined ? copy.enterPortfolio : undefined) ?? walletReason ?? (!/^(0x[0-9a-fA-F]+|\d+)$/.test(questionInput.value) ? copy.registerDisabled : registrationReason),
 		deploy: async () => {
 			let initialQuestionId: bigint | undefined
 			await run(
@@ -282,10 +363,26 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 					if (parameters.accountAddress === undefined) throw new Error(copy.connect)
 					const initialPool = getAddress(originInput.value)
 					const horizon = horizonDays.value
+					if (creationError !== undefined || creationEconomics === undefined || admission === undefined) throw new Error(creationError ?? copy.deployAdmissionFirst)
+					const config = { ...creationEconomics }
+					const chosenAdmission = admission
+					const chosenMode = admissionMode.value
+					const validateAdmission = async () => {
+						const verified = await loadPortfolioAdmission(createConnectedReadClient(), chosenAdmission.address, chosenAdmission.universeId)
+						if (verified.mode !== chosenMode) throw new Error(copy.unsupportedAdmission)
+					}
+					await validateAdmission()
 					initialQuestionId = await createConnectedReadClient().readContract({ address: initialPool, abi: securityPoolArtifact.abi, functionName: 'questionId' })
 					return {
-						...portfolioCreationRequest(parameters.accountAddress, initialPool, BigInt(horizon) * 86400n),
-						reviewDescription: `Deploy a portfolio manager using settings from source pool ${initialPool}, accepting questions ending within ${horizon} days at admission. After deployment, use Add question to register its first question in a separate transaction. Question end closes minting; REP remains exposed until final resolution and may suffer losses or fork delays.`,
+						...portfolioCreationRequest(parameters.accountAddress, initialPool, BigInt(horizon) * 86400n, chosenAdmission.address, config),
+						validateBeforeSubmit: validateAdmission,
+						reviewDescription: [
+							`Deploy a portfolio using ${chosenMode} admission policy ${chosenAdmission.address}. These settings cannot change.`,
+							`Target health: ${formatUnits(config.targetHealthFactorBps, 2)}%. Purchase fee: ${formatUnits(config.purchaseFeeBps, 2)}%.`,
+							`Minimum purchase fee: ${formatEther(config.minimumPurchaseFeeAttoEth)} ETH. Completion reward: ${formatEther(config.completionRewardAttoEth)} ETH. Ownership change fee: ${formatEther(config.ownershipChangeFeeAttoEth)} ETH.`,
+							`Source pool: ${initialPool}. Eligible questions end within ${horizon} days at admission.`,
+							'After deployment, use Register question in a separate transaction. Question end closes minting; REP remains exposed until final resolution and may suffer losses or fork delays.',
+						].join('\n'),
 					}
 				},
 				undefined,
@@ -294,7 +391,7 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 					if (portfolio === null || portfolio === undefined) throw new Error('Portfolio deployment address unavailable.')
 					if (initialQuestionId === undefined || parameters.accountAddress === undefined) throw new Error('Source question unavailable.')
 					await model.load(portfolio, parameters.accountAddress)
-					questionInput.value = initialQuestionId.toString()
+					questionInput.value = (admissionMode.value === 'fixed' ? (fixedQuestionIds[0] ?? initialQuestionId) : initialQuestionId).toString()
 					feedback.value = copy.portfolioDeployed
 				},
 			)
@@ -303,6 +400,7 @@ export function usePortfolioActions(model: PortfolioModel, parameters: WriteOper
 		register: () =>
 			run('registerPortfolioQuestion', copy.addQuestion, () => {
 				if (selection === undefined || parameters.accountAddress === undefined) throw new Error(copy.enterPortfolio)
+				if (registrationReason !== undefined) throw new Error(registrationReason)
 				const questionId = BigInt(questionInput.value)
 				return { ...portfolioContractRequest(parameters.accountAddress, selection.portfolio, 'addQuestion', [questionId]), reviewDescription: `Register question 0x${questionId.toString(16)} in portfolio ${selection.portfolio}. Registration does not allocate REP.` }
 			}),

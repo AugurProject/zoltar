@@ -252,7 +252,8 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`deployPortfolioSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
 				caller: 'Anyone, within their own caller-address namespace',
-				effect: 'Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Portfolio admission calls this from the portfolio contract, after enforcing its immutable question horizon.',
+				effect:
+					'Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Portfolio admission calls this from the portfolio contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
 				declarations: [{ name: 'deployPortfolioSecurityPool' }],
 				preconditions: 'The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.',
 				signals: '`SharedPriceFeedSet`, feed `CoordinatorRegistered`, `SecurityPoolRegistered`, and `DeploySecurityPool`',

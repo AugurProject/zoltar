@@ -15,7 +15,7 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getPendingReportId, openOracleSettle } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { handleOracleReporting } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: one price feed per question pool', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -66,7 +66,7 @@ describe('Statoblast: one price feed per question pool', () => {
 			data: encodeDeployData({
 				abi: portfolioArtifact.abi,
 				bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
-				args: [getInfraContractAddresses().securityPoolFactory, fixture.base.securityPoolAddresses.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer],
+				args: [getInfraContractAddresses().securityPoolFactory, fixture.base.securityPoolAddresses.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer, fixture.questionAdmissionPolicy, portfolioEconomics],
 			}),
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash })

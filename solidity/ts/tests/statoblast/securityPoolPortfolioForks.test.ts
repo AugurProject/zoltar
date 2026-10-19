@@ -19,7 +19,7 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
 } from '../../types/contractArtifact'
-import { unit, maximumQuestionHorizonSeconds } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, unit, maximumQuestionHorizonSeconds } from './securityPoolPortfolioFixture'
 import { useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
 
 describe('Statoblast: portfolio fork isolation', () => {
@@ -125,7 +125,13 @@ describe('Statoblast: portfolio fork isolation', () => {
 		expect(await owner().readContract({ abi: portfolioArtifact.abi, address: portfolio, functionName: 'getPool', args: [secondQuestionId, yesUniverse] })).toBe(bYes.securityPool)
 		expect(bYes.securityPool).not.toBe(poolFor(secondQuestionId, yesUniverse, zeroAddress).securityPool)
 		await expect(
-			owner().call({ data: encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, aYes.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer] }) }),
+			owner().call({
+				data: encodeDeployData({
+					abi: portfolioArtifact.abi,
+					bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object),
+					args: [getInfraContractAddresses().securityPoolFactory, aYes.securityPool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer, fixture.questionAdmissionPolicy, portfolioEconomics],
+				}),
+			}),
 		).rejects.toThrow('Choose an origin pool')
 		const yesFeed = await owner().readContract({ abi: coordinatorArtifact.abi, address: aYes.openOraclePriceCoordinator, functionName: 'priceFeed' })
 		const noFeed = await owner().readContract({ abi: coordinatorArtifact.abi, address: aNo.openOraclePriceCoordinator, functionName: 'priceFeed' })

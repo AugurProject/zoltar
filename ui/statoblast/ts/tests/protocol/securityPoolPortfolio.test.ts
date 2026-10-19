@@ -6,6 +6,7 @@ import {
 	getInfraContractAddresses,
 	getSecurityPoolPortfolioRuntimeCode,
 	getSecurityPoolPortfolioQuoteRuntimeCode,
+	getSecurityPoolPortfolioQuoteDeployerRuntimeCode,
 	getSecurityPoolPortfolioRecoveryRuntimeCode,
 	getSecurityPoolPortfolioVaultRuntimeCode,
 	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
@@ -21,12 +22,14 @@ const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
 const recoveryLedger = getAddress('0x00000000000000000000000000000000000000e2')
 const forkController = getAddress('0x00000000000000000000000000000000000000e3')
 const helpers = getAddress('0x00000000000000000000000000000000000000e4')
+const quoteDeployer = getInfraContractAddresses().securityPoolPortfolioQuoteDeployer
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const vault = getAddress('0x0000000000000000000000000000000000000022')
 type Policy = Awaited<ReturnType<typeof loadPortfolioPolicy>>
 
 function fixtureRuntime(address: Address, vaultRuntime = getSecurityPoolPortfolioVaultRuntimeCode()) {
 	if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+	if (address === quoteDeployer) return getSecurityPoolPortfolioQuoteDeployerRuntimeCode()
 	if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 	if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 	if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
@@ -268,6 +271,10 @@ test('rejects the expected manager bytecode when its immutable factory is not th
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -288,6 +295,10 @@ test.each(['missing', 'wrong'] as const)('rejects an imported manager with %s qu
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -318,6 +329,10 @@ for (const fault of ['runtime', 'canonical address'] as const) {
 				if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 				if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 				if (request.functionName === 'fixedOwnership') return false
+				if (request.functionName === 'quoteDeployer') return quoteDeployer
+				if (request.functionName === 'targetHealthFactorBps') return 12000n
+				if (request.functionName === 'purchaseFeeBps') return 100n
+				if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 				if (request.functionName === 'quoteHelper') return quoteHelper
 				if (request.functionName === 'recoveryLedger') return recoveryLedger
 				if (request.functionName === 'vaultDeployer') return fault === 'canonical address' ? vault : deployer
@@ -329,6 +344,7 @@ for (const fault of ['runtime', 'canonical address'] as const) {
 			}),
 			getCode: async ({ address }: { address: Address }) => {
 				if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+				if (address === quoteDeployer) return getSecurityPoolPortfolioQuoteDeployerRuntimeCode()
 				if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 				if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 				if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
@@ -347,6 +363,10 @@ test('rejects spoofed vault code and owner claims after verifying the manager', 
 		if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 		if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 		if (request.functionName === 'fixedOwnership') return false
+		if (request.functionName === 'quoteDeployer') return quoteDeployer
+		if (request.functionName === 'targetHealthFactorBps') return 12000n
+		if (request.functionName === 'purchaseFeeBps') return 100n
+		if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 		if (request.functionName === 'quoteHelper') return quoteHelper
 		if (request.functionName === 'recoveryLedger') return recoveryLedger
 		if (request.functionName === 'vaultDeployer') return deployer
@@ -378,6 +398,10 @@ test('rejects a vault with inconsistent repeated immutable values even when gett
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -401,6 +425,10 @@ test('rejects a vault clone at a noncanonical address despite matching code and 
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -429,6 +457,7 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 	const queried: { fromBlock: bigint; args: { owner: Address } }[] = []
 	const getCode = mock(async ({ address }: { address: Address }) => {
 		if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+		if (address === quoteDeployer) return getSecurityPoolPortfolioQuoteDeployerRuntimeCode()
 		if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 		if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 		if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
@@ -444,6 +473,10 @@ test('discovers the simulation portfolio on the main thread and verifies spoofed
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -490,13 +523,17 @@ test.each(['missing', 'runtime', 'binding'] as const)('rejects an imported manag
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
 			if (request.functionName === 'vaultOf') return zeroAddress
 			if (request.functionName === 'originUniverseId') return 0n
 			if (request.functionName === 'factory') return getInfraContractAddresses().securityPoolFactory
-			if (request.functionName === 'portfolio') return fault === 'binding' ? vault : owner
+			if (request.functionName === 'portfolio') return request.address === recoveryLedger && fault === 'binding' ? vault : owner
 			throw new Error('Unexpected recovery authentication read')
 		}),
 		getCode: async ({ address }: { address: Address }) => {
@@ -507,10 +544,15 @@ test.each(['missing', 'runtime', 'binding'] as const)('rejects an imported manag
 	await expect(loadPortfolioOwnerVault(client, owner, owner)).rejects.toThrow(fault === 'binding' ? 'Recovery ledger belongs to another portfolio' : 'Unrecognized portfolio recovery ledger runtime code')
 })
 
-for (const fault of ['controller runtime', 'helper runtime', 'owner', 'helpers', 'zoltar', 'ledger', 'universe', 'fixed ownership'] as const) {
+for (const fault of ['controller runtime', 'helper runtime', 'quote deployer runtime', 'quote deployer address', 'quote owner', 'owner', 'helpers', 'zoltar', 'ledger', 'universe', 'fixed ownership', 'targetHealthFactorBps', 'purchaseFeeBps', 'minimumPurchaseFeeAttoEth'] as const) {
 	test(`rejects shared fork authority with mismatched ${fault}`, async () => {
 		const client = {
 			...createMockReadClient(async request => {
+				if (request.address === quoteHelper && request.functionName === fault) return 999n
+				if (request.functionName === 'quoteDeployer') return fault === 'quote deployer address' ? vault : quoteDeployer
+				if (request.functionName === 'targetHealthFactorBps') return 12000n
+				if (request.functionName === 'purchaseFeeBps') return 100n
+				if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 				if (request.functionName === 'quoteHelper') return quoteHelper
 				if (request.functionName === 'recoveryLedger') return recoveryLedger
 				if (request.functionName === 'vaultDeployer') return deployer
@@ -519,17 +561,20 @@ for (const fault of ['controller runtime', 'helper runtime', 'owner', 'helpers',
 				if (request.functionName === 'factory') return getInfraContractAddresses().securityPoolFactory
 				if (request.functionName === 'forkController') return forkController
 				if (request.functionName === 'helpers') return request.address === forkController && fault === 'helpers' ? vault : helpers
-				if (request.functionName === 'portfolio') return request.address === forkController && fault === 'owner' ? vault : owner
+				if (request.functionName === 'portfolio') return (request.address === forkController && fault === 'owner') || (request.address === quoteHelper && fault === 'quote owner') ? vault : owner
 				if (request.functionName === 'zoltar') return fault === 'zoltar' ? vault : getInfraContractAddresses().zoltar
 				if (request.functionName === 'getContext') return { ledger: fault === 'ledger' ? vault : recoveryLedger, universeId: fault === 'universe' ? 1n : 0n }
 				if (request.functionName === 'fixedOwnership') return fault === 'fixed ownership'
 				throw new Error(`Unexpected shared fork verification read ${request.functionName}`)
 			}),
-			getCode: async ({ address }: { address: Address }) => ((address === forkController && fault === 'controller runtime') || (address === helpers && fault === 'helper runtime') ? ('0x00' as const) : fixtureRuntime(address)),
+			getCode: async ({ address }: { address: Address }) => ((address === forkController && fault === 'controller runtime') || (address === helpers && fault === 'helper runtime') || (address === quoteDeployer && fault === 'quote deployer runtime') ? ('0x00' as const) : fixtureRuntime(address)),
 		}
 		let expectedError = 'canonical helpers'
 		if (fault.endsWith('runtime')) expectedError = 'Unrecognized portfolio'
+		else if (fault === 'quote deployer address') expectedError = 'Portfolio uses an unrecognized quote deployer'
+		else if (fault === 'quote owner') expectedError = 'Quote helper belongs to another portfolio'
 		else if (fault === 'ledger' || fault === 'universe' || fault === 'fixed ownership') expectedError = 'root ownership'
+		else if (fault === 'targetHealthFactorBps' || fault === 'purchaseFeeBps' || fault === 'minimumPurchaseFeeAttoEth') expectedError = 'economics do not match'
 		await expect(loadPortfolioOwnerVault(client, owner, owner)).rejects.toThrow(expectedError)
 	})
 }

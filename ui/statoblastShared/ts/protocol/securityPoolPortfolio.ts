@@ -8,11 +8,14 @@ import {
 	type PortfolioSnapshot,
 	type PortfolioAllocationPolicyConfig,
 	type PortfolioAllocationRule,
+	type PortfolioEconomicsConfig,
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import {
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote as quoteArtifact,
+	statoblast_SecurityPoolPortfolioRecoveryDeployer_SecurityPoolPortfolioRecoveryDeployer as recoveryDeployerArtifact,
 	statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault as vaultArtifact,
 	statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery as recoveryArtifact,
 	statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController as forkArtifact,
@@ -23,6 +26,7 @@ import {
 	getSecurityPoolPortfolioByteCode,
 	getSecurityPoolPortfolioRuntimeCode,
 	getSecurityPoolPortfolioQuoteRuntimeCode,
+	getSecurityPoolPortfolioQuoteDeployerRuntimeCode,
 	getSecurityPoolPortfolioRecoveryRuntimeCode,
 	getSecurityPoolPortfolioVaultRuntimeCode,
 	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
@@ -34,7 +38,7 @@ export { vaultArtifact }
 
 export type PortfolioTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 
-function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, references: Readonly<Record<string, readonly { start: number; length: number }[]>>, label: string) {
+export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, references: Readonly<Record<string, readonly { start: number; length: number }[]>>, label: string) {
 	if (actual === undefined || actual.length !== expected.length) throw new Error(`Unrecognized ${label} runtime code.`)
 	for (const entries of Object.values(references)) {
 		let immutableValue: string | undefined
@@ -67,15 +71,23 @@ export async function loadPortfolioOwnerVault(client: Pick<ReadClient, 'getCode'
 		client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'recoveryLedger' }),
 	])
 	if (getAddress(factory) !== getAddress(getInfraContractAddresses().securityPoolFactory)) throw new Error('Portfolio uses an unrecognized pool factory.')
-	// The stateless helper has no immutables: every linked runtime byte must match.
-	verifyRuntimeCode(await client.getCode({ address: quoteHelper }), getSecurityPoolPortfolioQuoteRuntimeCode(), {}, 'portfolio quote helper')
+	// Quote code and all immutable economic parameters must match this portfolio.
+	verifyRuntimeCode(await client.getCode({ address: quoteHelper }), getSecurityPoolPortfolioQuoteRuntimeCode(), quoteArtifact.evm.deployedBytecode.immutableReferences, 'portfolio quote helper')
+	if (getAddress(await client.readContract({ address: quoteHelper, abi: quoteArtifact.abi, functionName: 'portfolio' })) !== getAddress(portfolio)) throw new Error('Quote helper belongs to another portfolio.')
+	for (const functionName of ['targetHealthFactorBps', 'purchaseFeeBps', 'minimumPurchaseFeeAttoEth'] as const) {
+		const [configured, quoted] = await Promise.all([client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName }), client.readContract({ address: quoteHelper, abi: quoteArtifact.abi, functionName })])
+		if (configured !== quoted) throw new Error('Portfolio quote helper economics do not match the reserve.')
+	}
 	verifyRuntimeCode(await client.getCode({ address: recoveryLedger }), getSecurityPoolPortfolioRecoveryRuntimeCode(), recoveryArtifact.evm.deployedBytecode.immutableReferences, 'portfolio recovery ledger')
 	if (getAddress(await client.readContract({ address: recoveryLedger, abi: recoveryArtifact.abi, functionName: 'portfolio' })) !== getAddress(portfolio)) throw new Error('Recovery ledger belongs to another portfolio.')
 	const deployer = await client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'vaultDeployer' })
 	verifyRuntimeCode(await client.getCode({ address: deployer }), getSecurityPoolPortfolioVaultDeployerRuntimeCode(), deployerArtifact.evm.deployedBytecode.immutableReferences, 'portfolio vault deployer')
 	if (getAddress(deployer) !== getAddress(getInfraContractAddresses().securityPoolPortfolioVaultDeployer)) throw new Error('Portfolio uses an unrecognized vault deployer.')
 	const [helpers, forkController] = await Promise.all([client.readContract({ address: deployer, abi: deployerArtifact.abi, functionName: 'helpers' }), client.readContract({ address: portfolio, abi: portfolioArtifact.abi, functionName: 'forkController' })])
-	verifyRuntimeCode(await client.getCode({ address: helpers }), getSecurityPoolPortfolioRecoveryDeployerRuntimeCode(), {}, 'portfolio recovery deployer')
+	verifyRuntimeCode(await client.getCode({ address: helpers }), getSecurityPoolPortfolioRecoveryDeployerRuntimeCode(), recoveryDeployerArtifact.evm.deployedBytecode.immutableReferences, 'portfolio recovery deployer')
+	const quoteDeployer = await client.readContract({ address: helpers, abi: recoveryDeployerArtifact.abi, functionName: 'quoteDeployer' })
+	if (getAddress(quoteDeployer) !== getAddress(getInfraContractAddresses().securityPoolPortfolioQuoteDeployer)) throw new Error('Portfolio uses an unrecognized quote deployer.')
+	verifyRuntimeCode(await client.getCode({ address: quoteDeployer }), getSecurityPoolPortfolioQuoteDeployerRuntimeCode(), {}, 'portfolio quote deployer')
 	verifyRuntimeCode(await client.getCode({ address: forkController }), getSecurityPoolPortfolioForkControllerRuntimeCode(), forkArtifact.evm.deployedBytecode.immutableReferences, 'portfolio fork controller')
 	const [controllerPortfolio, controllerHelpers, controllerZoltar, rootContext, fixedOwnership] = await Promise.all([
 		client.readContract({ address: forkController, abi: forkArtifact.abi, functionName: 'portfolio' }),
@@ -97,11 +109,13 @@ export async function loadPortfolioOwnerVault(client: Pick<ReadClient, 'getCode'
 	return { vault, originUniverseId }
 }
 
-export function portfolioCreationRequest(owner: Address, initialOriginPool: Address, maximumQuestionHorizonSeconds: bigint) {
+export function portfolioCreationRequest(owner: Address, initialOriginPool: Address, maximumQuestionHorizonSeconds: bigint, questionAdmissionPolicy: Address, economics: PortfolioEconomicsConfig) {
 	return buildPortfolioDeploymentRequest({
 		owner,
 		initialOriginPool,
 		maximumQuestionHorizonSeconds,
+		questionAdmissionPolicy,
+		economics,
 		factory: getInfraContractAddresses().securityPoolFactory,
 		vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 		artifact: { abi: portfolioArtifact.abi, bytecode: getSecurityPoolPortfolioByteCode() },

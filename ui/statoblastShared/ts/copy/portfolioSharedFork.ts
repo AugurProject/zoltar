@@ -67,6 +67,7 @@ export const originalReserve = 'Original reserve'
 export const parentBranch = 'Back to parent branch'
 export const openBranch = (label: string) => `Open ${label} branch`
 export const periods = 'Ownership periods on this page'
+export const savedBranches = 'Saved branches on this page'
 export const nativeLocked = 'Wait for this pool’s incoming fork and truth auction to finish'
 
 export const positionRecovered = 'This allocation has no remaining individual backing'

@@ -21,14 +21,14 @@ import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/util
 import { createCompleteSet, getSecurityVault, getSettlementCollateralAttoEth, getTotalUnderwritingLimitAttoEth, redeemShares } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { handleOracleReporting } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: independently reserved question portfolios', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
 
 	test('one vault factory isolates the same owner across caller namespaces and prevents address squatting', async () => {
 		const client = fixture.owner()
-		const hash = await client.sendTransaction({ data: applyLibraries(vaultDeployerArtifact.evm.bytecode.object) })
+		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: vaultDeployerArtifact.abi, bytecode: applyLibraries(vaultDeployerArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolPortfolioQuoteDeployer] }) })
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Vault factory deployment missing')
 		const deployer = receipt.contractAddress
@@ -52,7 +52,8 @@ describe('Statoblast: independently reserved question portfolios', () => {
 
 	test('portfolio construction rejects addresses without factory or pool code', async () => {
 		const { owner, base } = fixture
-		const deployment = (factory: Hex, pool: Hex) => encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [factory, pool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer] })
+		const deployment = (factory: Hex, pool: Hex) =>
+			encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [factory, pool, maximumQuestionHorizonSeconds, getInfraContractAddresses().securityPoolPortfolioVaultDeployer, fixture.questionAdmissionPolicy, portfolioEconomics] })
 		await expect(owner().call({ data: deployment(owner().account.address, base.securityPoolAddresses.securityPool) })).rejects.toThrow('Factory has no code')
 		await expect(owner().call({ data: deployment(getInfraContractAddresses().securityPoolFactory, owner().account.address) })).rejects.toThrow('Pool has no code')
 	})

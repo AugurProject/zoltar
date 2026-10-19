@@ -257,7 +257,6 @@ export const individualControlHint = 'Optional: move your share of this position
 export const intervalNotOnPage = 'Open the ownership history page containing this allocation before taking individual control'
 export const recoveryHistoryChanged = 'Your ownership history changed. Refresh and review again.'
 export const recoveryPageHint = 'Amounts include this ownership history page plus all already credited balances. Other pages may have additional proceeds.'
-export const recoveryPageRange = (start: bigint, count: number, total: bigint) => `Ownership history ${start + 1n}–${start + BigInt(count)} of ${total}`
 export const collectRecoveredReview = (rep: string, eth: string, paged: boolean, recoveryCount: number) =>
 	`Collect the available ${rep} REP and ${eth} ETH to your wallet, including earned fees and processing rewards.${recoveryCount > 0 ? ` Also recover ${recoveryCount} finalized allocation${recoveryCount === 1 ? '' : 's'} on this page and collect your additional proceeds. Recovery credits every original owner; its gas cost grows with the selected allocations.` : ''}${paged ? ' This subtotal covers the selected ownership history page and all already credited balances.' : ''} Locked backing remains in place.`
 export const approvalReview = (amount: string, portfolio: string) => `Approve ${amount} REP for portfolio ${portfolio}. Deposit requires its own transaction.`
@@ -267,3 +266,47 @@ export const withdrawFundReview = (shares: string, minimum: string) => `Burn ${s
 export const aggregateMintReview = (amount: string, fee: string, minimum: string) => `Mint complete sets from aggregate pool capacity using ${amount} ETH collateral, with at most ${fee} ETH purchase fees and at least ${minimum} shares of every outcome. Unused fee budget returns to the connected wallet.`
 export const claimQuestionReview = (owner: string) =>
 	`Claim this allocation's recorded share into the canonical recovery vault of ${owner}, including its REP, native obligations and fees. Only your share leaves shared recovery; other owners retain their capital and reuse. Native settlement, escrow and fork rules remain in force.`
+
+export const admissionMode = 'Question admission'
+export const admissionOpen = 'Open questions'
+export const admissionFixed = 'Fixed question list'
+export const admissionOpenHint = 'Anyone may add an eligible question. Deposited REP automatically backs future paid purchases.'
+export const admissionFixedHint = 'Only the listed questions may receive backing. Nobody can change this list after the policy is deployed.'
+export const fixedQuestionIds = 'Approved question IDs'
+export const fixedQuestionIdsHint = 'Separate decimal or hexadecimal IDs with commas or spaces. Registration can happen later.'
+export const targetHealthPercent = 'Target health (%)'
+export const targetHealthHint = 'Buffer above the native backing requirement; minimum 100%.'
+export const purchaseFeePercent = 'Purchase fee (%)'
+export const minimumPurchaseFee = 'Minimum purchase fee ETH'
+export const completionReward = 'Completion reward ETH'
+export const ownershipChangeFee = 'Ownership change fee ETH'
+export const ownershipChangeFeeHint = 'Nonrefundable fee funding completion rewards. Charged on deposits and partial withdrawals while allocations remain unfinished; full withdrawals and forked-universe exits are free.'
+export const immutableEconomics = 'Admission and fees are fixed at portfolio creation. Existing allocation owners keep their gains, losses and obligations.'
+export const deployAdmission = 'Deploy admission policy'
+export const deployingAdmission = 'Deploying admission policy…'
+export const deployAdmissionFirst = 'Deploy the selected admission policy first'
+export const admissionDeployed = 'Admission policy deployed'
+export const admissionAddressMissing = 'Admission policy deployment address unavailable.'
+export const creationInvalid = 'Check the portfolio configuration.'
+export const unsupportedAdmission = 'This admission policy is not supported by this interface. Recovery and reserve exits remain available.'
+export const admissionCustom = 'Custom policy — underwriting unavailable'
+export const currentOwnershipFee = 'Ownership fee for this transaction ETH'
+export const maintenanceBudget = 'Remaining maintenance budget ETH'
+export const insufficientMaintenanceEth = 'Insufficient wallet ETH for the ownership change fee'
+export const recyclePosition = 'Recycle available backing'
+export const recyclingPosition = 'Recycling available backing…'
+export const recyclePositionHint = 'Return safe surplus to the reserve when owners still match; otherwise credit historical owners. Locked backing remains committed.'
+export const redepositRecovered = 'Recover and redeposit REP'
+export const redepositingRecovered = 'Recovering and redepositing REP…'
+export const redepositHint = 'Reinvest your recovered REP in the idle reserve for future allocations. ETH fees and rewards go to your wallet.'
+export const redepositMinimum = 'Minimum new reserve shares'
+export const noRecoveredRep = 'No recovered REP available to redeposit'
+export const redepositReview = (minimum: string, fee: string) =>
+	`Collect selected ownership proceeds and redeposit all recovered REP for at least ${minimum} new reserve shares. REP may back future questions under this portfolio policy. ETH proceeds return to your wallet. ${maintenanceFeeReview(fee)} Historical obligations remain.`
+export const maintenanceFeeChanged = 'The ownership change fee changed. Refresh and review again.'
+export const maintenanceFeeReview = (fee: string) => (fee === '0' ? 'No ownership-change fee.' : `Attach up to ${fee} ETH for the nonrefundable ownership-change fee. Any excess payment is refunded; the remaining shared maintenance budget is not refundable.`)
+export const activeRecoveryPage = (count: number, total: bigint) => `${count} active ownership intervals on this page; ${total} active in total. Completed history retires during collection.`
+export const admissionChecking = 'Checking question admission…'
+export const admissionCheckFailed = 'Could not verify the question admission policy.'
+export const portfolioPolicyChanged = 'The portfolio policy changed on the connected chain. Reload and review its configuration.'
+export const approvedQuestionCount = (count: bigint) => `${count} permanently approved question${count === 1n ? '' : 's'}. Only the current page is listed below.`

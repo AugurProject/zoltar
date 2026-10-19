@@ -21,7 +21,7 @@ import { getQuestionOutcome, initiateSecurityPoolFork } from '../../testSupport/
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, emptyOperations, unit, maximumQuestionHorizonSeconds, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: portfolio capital under shared and question-specific stress', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -158,6 +158,8 @@ describe('Statoblast: portfolio capital under shared and question-specific stres
 				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: poolA,
 				maximumQuestionHorizonSeconds,
+				questionAdmissionPolicy: fixture.questionAdmissionPolicy,
+				economics: portfolioEconomics,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 			}),
 		)
@@ -231,6 +233,8 @@ describe('Statoblast: portfolio capital under shared and question-specific stres
 				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: base.securityPoolAddresses.securityPool,
 				maximumQuestionHorizonSeconds,
+				questionAdmissionPolicy: fixture.questionAdmissionPolicy,
+				economics: portfolioEconomics,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 			}),
 		)

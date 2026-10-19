@@ -12,6 +12,7 @@ import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transac
 import { usePortfolioAggregate } from '@zoltar/ui-statoblast-shared/features/portfolios/hooks/usePortfolioAggregate.js'
 import { PortfolioAggregatePanel } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfolioAggregatePanel.js'
 import type { PortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
+import { statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openAdmissionArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 
 const owner = getAddress('0x0000000000000000000000000000000000000011')
@@ -36,6 +37,9 @@ async function renderAggregate(
 		intervalCount?: bigint
 		recoveryComplete?: boolean
 		allPositionsOwned?: boolean
+		customAdmission?: boolean
+		ownershipFee?: bigint
+		canRetire?: boolean
 	} = {},
 ) {
 	let allowance = 0n
@@ -54,6 +58,7 @@ async function renderAggregate(
 	const requests: PortfolioTransaction[] = []
 	const reads: { name: string; args: readonly unknown[] | undefined }[] = []
 	const client = createPublicClient({ transport: http('https://example.test') }).extend(() => ({
+		getCode: async () => (options.customAdmission ? ('0x6000' as const) : (`0x${openAdmissionArtifact.evm.deployedBytecode.object}` as const)),
 		getChainId: async () => 1,
 		getBalance: async () => walletEth,
 		getBlock: async () => ({ ...createBlockWithTimestamp(1000n), number: 1n, hash: zeroHash }),
@@ -73,8 +78,37 @@ async function renderAggregate(
 					return sharedForkSelected
 				case 'recoveryLedger':
 					return token
-				case 'getOwnerIntervalCount':
+				case 'getOwnerActiveIntervalCount':
 					return options.intervalCount ?? 1n
+				case 'getOwnerActiveIntervals': {
+					const cursor = request.args?.[1]
+					if (typeof cursor !== 'bigint') throw new Error('Expected history cursor')
+					if (!intervalsActive) return [[], 0n]
+					const total = options.intervalCount ?? 1n
+					const start = cursor === 0n ? 0n : cursor - 1n
+					const end = start + 64n < total ? start + 64n : total
+					return [Array.from({ length: Number(end - start) }, (_, index) => start + BigInt(index)), end < total ? end + 1n : 0n]
+				}
+				case 'canRetireOwnerInterval':
+					return options.canRetire ?? false
+				case 'isQuestionAllowed':
+					return true
+				case 'targetHealthFactorBps':
+					return 12000n
+				case 'purchaseFeeBps':
+					return 100n
+				case 'minimumPurchaseFeeAttoEth':
+					return 10n ** 15n
+				case 'completionRewardAttoEth':
+					return 25n * 10n ** 13n
+				case 'ownershipChangeFeeAttoEth':
+					return options.ownershipFee ?? 0n
+				case 'quoteOwnershipChangeFee':
+					return options.ownershipFee ?? 0n
+				case 'maintenanceBudgetAttoEth':
+					return 0n
+				case 'questionAdmissionPolicy':
+					return token
 				case 'getOwnerInterval':
 					return { generation: 1n, startPosition: 1n, endPosition: 0n, shares: 10n * unit, repIndex: 0n, feeIndex: 0n, open: true, active: intervalsActive }
 				case 'previewClaim':
@@ -494,7 +528,7 @@ test('one collection covers a personal interval across many questions and revali
 test('recovery history paging is independent and collection includes only the displayed active intervals', async () => {
 	const { hook, requests } = await renderAggregate({ positionCount: 130n, questionCount: 130n, intervalCount: 130n })
 	await act(() => hook.state().nextIntervalPage())
-	await waitFor(() => expect(hook.state().snapshot?.intervalStart).toBe(64n))
+	await waitFor(() => expect(hook.state().snapshot?.intervalCursor).toBe(65n))
 	expect(hook.state().snapshot?.positionStart).toBe(0n)
 	expect(hook.state().snapshot?.questionStart).toBe(0n)
 	await act(async () => await hook.state().collectRecovered())
@@ -586,4 +620,63 @@ test('shared fork enrollment blocks individual extraction while preserving aggre
 	await act(async () => await hook.state().refresh())
 	expect(hook.state().allocations[0]?.claimReason).toContain('saved shared branch')
 	expect(hook.state().collectReason).toBeUndefined()
+})
+
+test('unsupported policy disables new underwriting but leaves reserve exits and recovery available', async () => {
+	const { hook } = await renderAggregate({ customAdmission: true })
+	await act(() => {
+		hook.state().setDepositAmount('1')
+		hook.state().setWithdrawalShares('1')
+	})
+	expect(hook.state().depositReason).toContain('not supported')
+	expect(hook.state().mintReason).toContain('not supported')
+	expect(hook.state().redepositReason).toContain('not supported')
+	expect(hook.state().withdrawalReason).toBeUndefined()
+	expect(hook.state().collectReason).toBeUndefined()
+})
+
+test('reinvestment is one owner transaction with explicit minimum shares and ownership fee', async () => {
+	const { hook, requests } = await renderAggregate({ ownershipFee: 9n })
+	await act(() => hook.state().setRedepositMinimum('1'))
+	await act(async () => {
+		await hook.state().redepositRecovered()
+	})
+	const request = requests[0]
+	if (request === undefined) throw new Error('Expected reinvestment')
+	expect(request).toMatchObject({ account: owner, value: 9n })
+	expect(decodeFunctionData({ abi: parseAbi(['function claimRecoveredAndDeposit(uint256[],uint256[],uint256) payable']), data: request.data })).toMatchObject({ functionName: 'claimRecoveredAndDeposit', args: [[0n], [], unit] })
+	expect(request.reviewDescription).toContain('future questions')
+	expect(requests).toHaveLength(1)
+})
+
+test('recycle is permissionless and zero-proceeds completed history can be retired during collection', async () => {
+	const { hook, requests, setRecovered } = await renderAggregate({ canRetire: true })
+	await act(async () => {
+		setRecovered(0n, 0n)
+		await hook.state().refresh()
+	})
+	expect(hook.state().collectReason).toBeUndefined()
+	await act(async () => {
+		await hook.state().collectRecovered()
+		await hook.state().recyclePosition(1n)
+	})
+	expect(requests).toHaveLength(2)
+	const recycled = requests[1]
+	if (recycled === undefined) throw new Error('Expected recycling')
+	expect(decodeFunctionData({ abi: parseAbi(['function recyclePosition(uint256)']), data: recycled.data })).toMatchObject({ functionName: 'recyclePosition', args: [1n] })
+})
+
+test('a full reserve withdrawal remains fee-free when a partial withdrawal requires maintenance ETH', async () => {
+	const { hook, requests, setWalletEth } = await renderAggregate({ ownershipFee: unit })
+	await act(async () => {
+		setWalletEth(0n)
+		await hook.state().refresh()
+		hook.state().setWithdrawalShares('1')
+	})
+	expect(hook.state().withdrawalReason).toContain('ownership change fee')
+	await act(() => hook.state().setWithdrawalShares('10'))
+	expect(hook.state().withdrawalFee).toBe(0n)
+	expect(hook.state().withdrawalReason).toBeUndefined()
+	await act(async () => await hook.state().withdraw())
+	expect(requests[0]?.value).toBe(0n)
 })

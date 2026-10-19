@@ -4238,6 +4238,14 @@ span.rep-price-status.stale,
 	min-width: 0;
 }
 
+.portfolio-creation-form {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.portfolio-creation-form .field-row {
+	align-items: start;
+}
+
 .portfolio-transaction-export {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;

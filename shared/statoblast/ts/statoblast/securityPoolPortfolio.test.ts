@@ -115,15 +115,20 @@ describe('security pool portfolio transaction builders', () => {
 						{ name: 'initialOriginPool', type: 'address' },
 						{ name: 'maximumQuestionHorizonSeconds', type: 'uint256' },
 						{ name: 'vaultDeployer', type: 'address' },
+						{ name: 'questionAdmissionPolicy', type: 'address' },
+						{ name: 'economics', type: 'tuple', components: ['targetHealthFactorBps', 'purchaseFeeBps', 'minimumPurchaseFeeAttoEth', 'completionRewardAttoEth', 'ownershipChangeFeeAttoEth'].map(name => ({ name, type: 'uint256' })) },
 					],
 					stateMutability: 'nonpayable',
 				},
 			],
 			bytecode: '0x6000',
 		} as const
-		const request = buildPortfolioDeploymentRequest({ owner, factory, initialOriginPool: pool, maximumQuestionHorizonSeconds: 30n * 86400n, vaultDeployer: vault, artifact })
+		const economics = { targetHealthFactorBps: 12000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 1000n, completionRewardAttoEth: 250n, ownershipChangeFeeAttoEth: 1000n }
+		const request = buildPortfolioDeploymentRequest({ owner, factory, initialOriginPool: pool, maximumQuestionHorizonSeconds: 30n * 86400n, vaultDeployer: vault, questionAdmissionPolicy: pool, economics, artifact })
 		expect(request.account).toBe(owner)
-		expect(request.data).toBe(`0x6000${encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'address' }], [factory, pool, 30n * 86400n, vault]).slice(2)}`)
+		expect(request.data).toBe(
+			`0x6000${encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [factory, pool, 30n * 86400n, vault, pool, 12000n, 100n, 1000n, 250n, 1000n]).slice(2)}`,
+		)
 	})
 })
 

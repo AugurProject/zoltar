@@ -34,11 +34,23 @@ function reads() {
 				case 'contextCount':
 					return 10n
 				case 'getContext':
-					return { universeId: 100n, parentContextId: 0n, outcomeIndex: 37n, incomingActivationFloor: 1_000_000n, ledger, repToken: token, pointCount: 100_000n }
+					return { universeId: 100n, parentContextId: call.args?.[0] === 8n ? (calls.find(call => call.functionName === 'getOwnerForkBranches')?.args?.[0] ?? 0n) : 0n, outcomeIndex: 37n, incomingActivationFloor: 1_000_000n, ledger, repToken: token, pointCount: 100_000n }
 				case 'choiceWindow':
 					return [1_000_000n, 2_000_000n]
-				case 'getOwnerIntervalCount':
+				case 'getOwnerActiveIntervalCount':
 					return state.intervalCount
+				case 'getOwnerActiveIntervals': {
+					const cursor = call.args?.[1]
+					if (typeof cursor !== 'bigint') throw new Error('Missing cursor')
+					const start = cursor === 0n ? 0n : cursor - 1n
+					if (start >= state.intervalCount && cursor !== 0n) throw new Error('Owner interval cursor retired')
+					const end = start + 64n < state.intervalCount ? start + 64n : state.intervalCount
+					return [Array.from({ length: Number(end - start) }, (_, index) => start + BigInt(index)), end < state.intervalCount ? end + 1n : 0n]
+				}
+				case 'canRetireOwnerInterval':
+					return false
+				case 'getOwnerForkBranches':
+					return [[8n], 0n]
 				case 'getOwnerInterval':
 					return { generation: 1n, startPosition: 1n, endPosition: 100_000n, shares: 7n, repIndex: 0n, feeIndex: 0n, open: false, active: true }
 				case 'choices':
@@ -97,7 +109,7 @@ test('individual fallback preserves context identity and only includes a branch 
 
 test('a shared snapshot reads one bounded personal page independent of global allocation and owner counts', async () => {
 	const { client, calls } = reads()
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalStart: 128n, outcomeIndex: 37n })
+	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 129n, outcomeIndex: 37n })
 	expect(snapshot).toMatchObject({ contextId: 7n, controller, universeId: 100n, repToken: token, positionCount: 100_000n, recoverableRepAttoRep: 13n, recoverableFeesAttoEth: 17n, childContextId: 8n })
 	expect(snapshot.intervals.map(interval => interval.intervalId)).toEqual([128n, 129n])
 	expect(snapshot.intervals[0]).toMatchObject({ selected: true, outcomeIndex: 37n, childIntervalId: 3n })
@@ -106,7 +118,7 @@ test('a shared snapshot reads one bounded personal page independent of global al
 	expect(calls.every(call => call.blockNumber === 51n)).toBe(true)
 	expect(calls.some(call => call.functionName === 'positions' || call.functionName === 'getQuestions' || call.functionName === 'getVaults')).toBe(false)
 	await expect(loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 10n })).rejects.toThrow('existing fork context')
-	await expect(loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalStart: 131n })).rejects.toThrow('out of bounds')
+	await expect(loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 132n })).rejects.toThrow('cursor retired')
 })
 
 test('first history page remains bounded and only saved personal branches are linked', async () => {
@@ -114,14 +126,14 @@ test('first history page remains bounded and only saved personal branches are li
 	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 0n })
 	expect(snapshot.intervals).toHaveLength(64)
 	expect(snapshot.childContextId).toBe(0n)
-	expect(calls.filter(call => call.functionName === 'childContextIds').map(call => call.args)).toEqual([[0n, 37n]])
+	expect(calls.filter(call => call.functionName === 'getOwnerForkBranches').map(call => call.args)).toEqual([[0n, owner, 0n, 64n]])
 	expect(snapshot.branches).toEqual([{ outcomeIndex: 37n, contextId: 8n }])
 	expect(calls.filter(call => call.functionName === 'getOwnerInterval')).toHaveLength(64)
 })
 
 test('selected allocation readiness keeps unmaterialized rights distinct from already processed branches', async () => {
 	const { client, state, calls } = reads()
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalStart: 128n, outcomeIndex: 37n })
+	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 129n, outcomeIndex: 37n })
 	calls.length = 0
 	expect(await loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n, outcomeIndex: 37n })).toMatchObject({ positionId: 99n, questionId: 901n, custody: zeroAddress, branchProcessed: false, branchWeight: 3n })
 	expect(calls.map(call => call.functionName).sort()).toEqual(['getBranchWeight', 'factory', 'questionOriginIds', 'getSecurityPool', 'positions', 'processedPositions', 'readPosition'].sort())
@@ -143,7 +155,7 @@ test('a snapshot changing chain anchors cannot authorize choices or recovery', a
 test('an enrolled child position can have neither pool nor custody, including a completed source hole', async () => {
 	const { client, state, calls } = reads()
 	state.pool = zeroAddress
-	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalStart: 128n })
+	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 7n, intervalCursor: 129n })
 	calls.length = 0
 	expect(await loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).toMatchObject({ pool: zeroAddress, custody: zeroAddress, recoveryComplete: false })
 	expect(calls.find(call => call.functionName === 'getSecurityPool')).toMatchObject({ address: factory, args: [originId, 100n], blockNumber: 51n })
@@ -156,4 +168,12 @@ test('an enrolled child position can have neither pool nor custody, including a 
 	state.factoryUnavailable = false
 	state.originId = zeroHash
 	await expect(loadPortfolioSharedForkPosition({ client, snapshot, positionId: 99n })).rejects.toThrow('Question not registered')
+})
+
+test('child navigation survives retirement of every source ownership interval', async () => {
+	const { client, state } = reads()
+	state.intervalCount = 0n
+	const snapshot = await loadPortfolioSharedForkSnapshot({ client, portfolio, owner, contextId: 0n })
+	expect(snapshot.intervals).toEqual([])
+	expect(snapshot.branches).toEqual([{ outcomeIndex: 37n, contextId: 8n }])
 })

@@ -76,12 +76,13 @@ export function PortfolioSharedFork(parameters: PortfolioSharedForkParameters) {
 				<ActionLauncherButton tone='secondary' idleLabel={copy.openChild} pendingLabel={copy.loading} availability={{ disabled: busy || model.openChildReason !== undefined, reason: busy ? portfolioCopy.busy : model.openChildReason }} onClick={model.openChild} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.refreshed} pendingLabel={copy.refreshing} availability={{ disabled: busy || model.loading, reason: busy ? portfolioCopy.busy : copy.loading }} onClick={model.refresh} />
 			</div>
+			<PaginationControls summary={copy.periods} hasPreviousPage={model.hasPreviousPage} hasNextPage={state !== undefined && state.nextIntervalCursor !== 0n} loading={model.loading} onPreviousPage={model.previousPage} onNextPage={model.nextPage} />
 			<div className='actions'>
 				{model.branches.map(branch => (
 					<ActionLauncherButton key={String(branch.contextId)} tone='secondary' idleLabel={copy.openBranch(branch.label)} pendingLabel={copy.loading} availability={{ disabled: busy, reason: portfolioCopy.busy }} onClick={() => model.openContext(branch.contextId)} />
 				))}
 			</div>
-			<PaginationControls hasPreviousPage={(state?.intervalStart ?? 0n) > 0n} hasNextPage={state !== undefined && state.intervalStart + 64n < state.intervalCount} loading={model.loading} onPreviousPage={model.previousPage} onNextPage={model.nextPage} />
+			<PaginationControls summary={copy.savedBranches} hasPreviousPage={model.hasPreviousBranchPage} hasNextPage={state !== undefined && state.nextBranchCursor !== 0n} loading={model.loading} onPreviousPage={model.previousBranchPage} onNextPage={model.nextBranchPage} />
 			<div className='workflow-subsection'>
 				<PortfolioInput label={copy.position} hint={copy.positionHint} value={model.positionInput} onChange={model.setPosition} disabled={busy} numeric />
 				{preparation?.needsPreparation ? <UserMessage detail={forkCopy.prepareHint} /> : undefined}

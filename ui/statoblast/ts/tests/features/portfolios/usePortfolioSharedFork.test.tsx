@@ -22,6 +22,10 @@ const token = getAddress('0x0000000000000000000000000000000000000077')
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const snapshot: PortfolioAggregateSnapshot = {
 	portfolio,
+	questionAdmissionPolicy: portfolio,
+	economics: { targetHealthFactorBps: 12000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 1000n, completionRewardAttoEth: 250n, ownershipChangeFeeAttoEth: 1000n },
+	ownershipChangeFeeAttoEth: 0n,
+	maintenanceBudgetAttoEth: 0n,
 	owner,
 	chainId: 1,
 	blockNumber: 9n,
@@ -37,8 +41,9 @@ const snapshot: PortfolioAggregateSnapshot = {
 	claimableFeesAttoEth: 0n,
 	recoveryLedger: ledger,
 	intervalCount: 1n,
-	intervalStart: 0n,
-	intervals: [{ intervalId: 0n, generation: 1n, startPosition: 1n, endPosition: 2n, shares: 1n, open: false, active: true }],
+	intervalCursor: 0n,
+	nextIntervalCursor: 0n,
+	intervals: [{ intervalId: 0n, generation: 1n, startPosition: 1n, endPosition: 2n, shares: 1n, open: false, active: true, canRetire: false }],
 	recoverableRepAttoRep: 0n,
 	recoverableFeesAttoEth: 0n,
 	processingRewardsAttoEth: 0n,
@@ -94,10 +99,16 @@ async function fixture() {
 					return { universeId: request.args?.[0] === 0n ? 0n : 7n, parentContextId: 0n, outcomeIndex: 37n, incomingActivationFloor: 0n, ledger, repToken: token, pointCount: 2n }
 				case 'choiceWindow':
 					return request.args?.[0] === 0n ? [100n, state.cutoff] : [0n, 0n]
-				case 'getOwnerIntervalCount':
+				case 'getOwnerActiveIntervalCount':
 					return 1n
+				case 'getOwnerActiveIntervals':
+					return [[0n], 0n]
+				case 'canRetireOwnerInterval':
+					return false
+				case 'getOwnerForkBranches':
+					return [request.args?.[0] === 0n && state.selected ? [1n] : [], 0n]
 				case 'getOwnerInterval':
-					return { generation: 1n, startPosition: 1n, endPosition: 2n, shares: 1n, repIndex: 0n, feeIndex: 0n, open: false, active: true }
+					return { generation: 1n, startPosition: 1n, endPosition: 2n, shares: 1n, repIndex: 0n, feeIndex: 0n, open: false, active: true, canRetire: false }
 				case 'choices':
 					return [request.args?.[0] === 0n && state.selected, 37n, 0n]
 				case 'previewClaim':

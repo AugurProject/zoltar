@@ -51,7 +51,7 @@
 							<td><code>deployPortfolioSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)</code><wbr /></td>
 							<td>Anyone, within their own caller-address namespace</td>
 							<td>The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another pool.</td>
-							<td>Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Portfolio admission calls this from the portfolio contract, after enforcing its immutable question horizon.</td>
+							<td>Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Portfolio admission calls this from the portfolio contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.</td>
 							<td><code>SharedPriceFeedSet</code>, feed <code>CoordinatorRegistered</code>, <code>SecurityPoolRegistered</code>, and <code>DeploySecurityPool</code></td>
 						</tr>
 						<tr>

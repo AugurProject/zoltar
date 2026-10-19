@@ -3,13 +3,14 @@ pragma solidity 0.8.35;
 
 import { SecurityPoolPortfolioVault, ISecurityPoolPortfolio } from './SecurityPoolPortfolioVault.sol';
 import { SecurityPoolPortfolioRecoveryDeployer } from './SecurityPoolPortfolioRecoveryDeployer.sol';
+import { SecurityPoolPortfolioQuoteDeployer } from './SecurityPoolPortfolioQuoteDeployer.sol';
 
 /// @dev Shared creation code with a separate deterministic vault namespace for every caller.
 contract SecurityPoolPortfolioVaultDeployer {
 	SecurityPoolPortfolioRecoveryDeployer public immutable helpers;
 
-	constructor() {
-		helpers = new SecurityPoolPortfolioRecoveryDeployer();
+	constructor(SecurityPoolPortfolioQuoteDeployer quoteDeployer) {
+		helpers = new SecurityPoolPortfolioRecoveryDeployer(quoteDeployer);
 	}
 
 	function createVault(address owner) external returns (SecurityPoolPortfolioVault) {

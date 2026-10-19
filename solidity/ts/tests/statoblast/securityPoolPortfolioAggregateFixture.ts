@@ -3,12 +3,12 @@ import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArti
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 export const aggregatePortfolioAbi = portfolioArtifact.abi
 
-export function useAggregatePortfolioFixture() {
-	const fixture = useSecurityPoolPortfolioFixture()
+export function useAggregatePortfolioFixture(economics: Partial<typeof portfolioEconomics> = {}) {
+	const fixture = useSecurityPoolPortfolioFixture(economics)
 	const deposit = async (amount = 5_000n * unit, owner = fixture.owner(), minimumShares = 1n) => {
 		await approveToken(owner, getRepTokenAddress(fixture.base.genesisUniverse), fixture.portfolio)
 		return await writeContractAndWait(owner, () => owner.writeContract({ abi: aggregatePortfolioAbi, address: fixture.portfolio, functionName: 'deposit', args: [amount, minimumShares] }))

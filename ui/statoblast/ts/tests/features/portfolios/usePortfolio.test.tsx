@@ -11,6 +11,7 @@ import {
 	getInfraContractAddresses,
 	getSecurityPoolPortfolioRuntimeCode,
 	getSecurityPoolPortfolioQuoteRuntimeCode,
+	getSecurityPoolPortfolioQuoteDeployerRuntimeCode,
 	getSecurityPoolPortfolioRecoveryRuntimeCode,
 	getSecurityPoolPortfolioVaultRuntimeCode,
 	getSecurityPoolPortfolioVaultDeployerRuntimeCode,
@@ -30,6 +31,7 @@ const quoteHelper = getAddress('0x00000000000000000000000000000000000000e1')
 const recoveryLedger = getAddress('0x00000000000000000000000000000000000000e2')
 const forkController = getAddress('0x00000000000000000000000000000000000000e3')
 const helpers = getAddress('0x00000000000000000000000000000000000000e4')
+const quoteDeployer = getInfraContractAddresses().securityPoolPortfolioQuoteDeployer
 const owner = getAddress('0x0000000000000000000000000000000000000011')
 const manager = getAddress('0x0000000000000000000000000000000000000022')
 const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/portfolios?portfolio=${manager}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
@@ -41,6 +43,7 @@ async function renderDeferredPortfolio() {
 		getChainId: async () => (++reads === 1 ? await firstChainId.promise : 1),
 		getCode: async ({ address }: { address: Address }) => {
 			if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+			if (address === quoteDeployer) return getSecurityPoolPortfolioQuoteDeployerRuntimeCode()
 			if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 			if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
@@ -52,6 +55,10 @@ async function renderDeferredPortfolio() {
 			if (request.functionName === 'zoltar' && request.address === forkController) return getInfraContractAddresses().zoltar
 			if (request.functionName === 'getContext') return { ledger: recoveryLedger, universeId: 0n }
 			if (request.functionName === 'fixedOwnership') return false
+			if (request.functionName === 'quoteDeployer') return quoteDeployer
+			if (request.functionName === 'targetHealthFactorBps') return 12000n
+			if (request.functionName === 'purchaseFeeBps') return 100n
+			if (request.functionName === 'minimumPurchaseFeeAttoEth') return 1000n
 			if (request.functionName === 'quoteHelper') return quoteHelper
 			if (request.functionName === 'recoveryLedger') return recoveryLedger
 			if (request.functionName === 'vaultDeployer') return deployer
@@ -122,6 +129,7 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 		getChainId: async () => 1,
 		getCode: async ({ address }: { address: Address }) => {
 			if (address === forkController) return getSecurityPoolPortfolioForkControllerRuntimeCode()
+			if (address === quoteDeployer) return getSecurityPoolPortfolioQuoteDeployerRuntimeCode()
 			if (address === helpers) return getSecurityPoolPortfolioRecoveryDeployerRuntimeCode()
 			if (address === quoteHelper) return getSecurityPoolPortfolioQuoteRuntimeCode()
 			if (address === recoveryLedger) return getSecurityPoolPortfolioRecoveryRuntimeCode()
@@ -149,6 +157,14 @@ function registryFixture(questionCount = 300n, options: { observationRead?: () =
 						return { ledger: recoveryLedger, universeId: 0n }
 					case 'fixedOwnership':
 						return false
+					case 'quoteDeployer':
+						return quoteDeployer
+					case 'targetHealthFactorBps':
+						return 12000n
+					case 'purchaseFeeBps':
+						return 100n
+					case 'minimumPurchaseFeeAttoEth':
+						return 1000n
 					case 'quoteHelper':
 						return quoteHelper
 					case 'recoveryLedger':

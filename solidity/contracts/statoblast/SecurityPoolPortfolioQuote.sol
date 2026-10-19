@@ -1,16 +1,29 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool, PoolAccountingSnapshot } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, PoolAccountingSnapshot, SystemState } from './interfaces/ISecurityPool.sol';
+import { IShareToken } from './interfaces/IShareToken.sol';
+import { IERC1155 } from './interfaces/IERC1155.sol';
+import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
+import { IERC165 } from './interfaces/IERC165.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { OpenOraclePriceCoordinator } from './OpenOraclePriceCoordinator.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
-/// @notice Stateless native-accounting previews shared by a portfolio and its allocation custody.
-contract SecurityPoolPortfolioQuote {
-	uint256 private constant MINIMUM_HEALTH_FACTOR_BPS = 12_000;
-	uint256 private constant RESERVATION_FEE_BPS = 100;
-	uint256 private constant MINIMUM_RESERVATION_FEE_ATTO_ETH = 0.001 ether;
+/// @notice Immutable portfolio economics, native-accounting previews and atomic complete-set delivery.
+contract SecurityPoolPortfolioQuote is IERC1155Receiver {
+	address public immutable portfolio;
+	uint256 public immutable targetHealthFactorBps;
+	uint256 public immutable purchaseFeeBps;
+	uint256 public immutable minimumPurchaseFeeAttoEth;
+
+	constructor(address _portfolio, uint256 _targetHealthFactorBps, uint256 _purchaseFeeBps, uint256 _minimumPurchaseFeeAttoEth) {
+		portfolio = _portfolio;
+		targetHealthFactorBps = _targetHealthFactorBps;
+		purchaseFeeBps = _purchaseFeeBps;
+		minimumPurchaseFeeAttoEth = _minimumPurchaseFeeAttoEth;
+	}
 
 	struct MintPlan {
 		bool reusePosition;
@@ -33,6 +46,36 @@ contract SecurityPoolPortfolioQuote {
 		uint256 multiplier;
 		uint256 minimumDeposit;
 		bool freshPrice;
+	}
+
+	/// @notice Mint with the supplied ETH and deliver exactly the newly minted complete sets.
+	/// @dev Existing tokens and forced ETH are excluded. This grants no reserve-allocation authority.
+	function buyCompleteSets(ISecurityPool pool, address recipient, uint256 minimumShares) external payable returns (uint256 minted) {
+		require(msg.sender == portfolio, 'Only portfolio');
+		require(msg.value > 0, 'Mint collateral not funded');
+		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
+		uint248 universeId = pool.universeId();
+		IShareToken token = pool.shareToken();
+		uint256 beforeShares = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
+		pool.createCompleteSet{value: msg.value}();
+		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
+		require(minted >= minimumShares, 'Minimum shares not met');
+		uint256[] memory ids = new uint256[](3);
+		uint256[] memory amounts = new uint256[](3);
+		for (uint256 index; index < 3; index++) {
+			ids[index] = token.getTokenId(universeId, BinaryOutcomes.BinaryOutcome(index));
+			amounts[index] = minted;
+		}
+		IERC1155(address(token)).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
+	}
+
+	/// @notice Native lifecycle checks shared by admission, purchase and quote entry points.
+	function requireEligible(ISecurityPool pool, uint256 questionId, uint248 universeId, uint256 horizon) external view {
+		uint256 end = pool.questionData().getQuestionEndDate(questionId);
+		require(block.timestamp < end, 'Question has already ended');
+		require(end - block.timestamp <= horizon, 'Question exceeds pool horizon');
+		require(pool.zoltar().getForkTime(universeId) == 0, 'Universe already forked');
+		require(pool.systemState() == SystemState.Operational, 'Question pool inactive');
 	}
 
 	function rebalancePlan(ISecurityPool pool, address custody) external view returns (uint256 retainedCommitment, uint256 releaseAttoRep) {
@@ -69,8 +112,8 @@ contract SecurityPoolPortfolioQuote {
 		// Charge every purchase for its standalone backing, including capacity reuse.
 		// A dust mint that also repairs old backing must pay for all newly locked REP,
 		// whether that capital comes from the reserve or historical custody cash.
-		uint256 feeBacking = Math.max(_requiredBacking(state, mintAttoEth, MINIMUM_HEALTH_FACTOR_BPS), plan.depositAttoRep);
-		plan.feeAttoEth = Math.max(Math.mulDiv(Math.mulDiv(feeBacking, 1e18, state.price, Math.Rounding.Ceil), RESERVATION_FEE_BPS, 10_000, Math.Rounding.Ceil), MINIMUM_RESERVATION_FEE_ATTO_ETH);
+		uint256 feeBacking = Math.max(_requiredBacking(state, mintAttoEth, targetHealthFactorBps), plan.depositAttoRep);
+		plan.feeAttoEth = Math.max(Math.mulDiv(Math.mulDiv(feeBacking, 1e18, state.price, Math.Rounding.Ceil), purchaseFeeBps, 10_000, Math.Rounding.Ceil), minimumPurchaseFeeAttoEth);
 	}
 
 	function _quoteState(ISecurityPool pool, address custody) private view returns (QuoteState memory state) {
@@ -101,12 +144,12 @@ contract SecurityPoolPortfolioQuote {
 	}
 
 	/// @dev Mutates the in-memory state to the exact post-rebalance native unit ratio.
-	function _rebalance(QuoteState memory state) private pure returns (uint256 requested, uint256 released) {
+	function _rebalance(QuoteState memory state) private view returns (uint256 requested, uint256 released) {
 		state.commitment =
 			state.collateral > state.others ? Math.min(state.commitment, state.collateral - state.others) : 0;
 		if (!state.freshPrice) return (0, 0);
 		uint256 held = _held(state);
-		uint256 required = _requiredBacking(state, state.commitment, MINIMUM_HEALTH_FACTOR_BPS);
+		uint256 required = _requiredBacking(state, state.commitment, targetHealthFactorBps);
 		if (held <= required) return (0, 0);
 		uint256 poolRequired = _requiredBacking(state, state.others + state.commitment, 10_000);
 		if (state.totalHeld <= poolRequired) return (0, 0);
@@ -125,7 +168,7 @@ contract SecurityPoolPortfolioQuote {
 		state.totalHeld -= released;
 	}
 
-	function _mintBackingQuote(QuoteState memory state, uint256 mintAttoEth) private pure returns (uint256 depositAttoRep, uint256 nextCommitment, bool needsCommitment) {
+	function _mintBackingQuote(QuoteState memory state, uint256 mintAttoEth) private view returns (uint256 depositAttoRep, uint256 nextCommitment, bool needsCommitment) {
 		uint256 requiredCommitment = state.collateral + mintAttoEth;
 		nextCommitment =
 			requiredCommitment > state.others
@@ -134,7 +177,7 @@ contract SecurityPoolPortfolioQuote {
 		if (nextCommitment <= state.commitment) return (0, nextCommitment, false);
 		needsCommitment = true;
 		uint256 held = _held(state);
-		uint256 requiredRep = _requiredBacking(state, nextCommitment, MINIMUM_HEALTH_FACTOR_BPS);
+		uint256 requiredRep = _requiredBacking(state, nextCommitment, targetHealthFactorBps);
 		if (requiredRep > held) depositAttoRep = requiredRep - held;
 		// Native deposits round backing units down; cover the last unit at the projected pool rate.
 		if (depositAttoRep > 0 && state.totalUnits > 0 && state.totalHeld > 0)
@@ -150,5 +193,16 @@ contract SecurityPoolPortfolioQuote {
 		uint256 required = Math.mulDiv(commitment, state.price, 1e18, Math.Rounding.Ceil);
 		required = Math.mulDiv(required, state.multiplier, 10_000, Math.Rounding.Ceil);
 		return Math.max(Math.mulDiv(required, healthFactorBps, 10_000, Math.Rounding.Ceil), state.minimumDeposit);
+	}
+	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+		return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC1155Receiver).interfaceId;
+	}
+
+	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+		return IERC1155Receiver.onERC1155Received.selector;
+	}
+
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
+		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}
 }

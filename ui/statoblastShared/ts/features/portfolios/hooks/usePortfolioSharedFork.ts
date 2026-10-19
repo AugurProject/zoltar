@@ -12,7 +12,7 @@ import {
 	type PortfolioSharedForkSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorMessage, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { portfolioReadClient, type PortfolioTransaction } from '../../../protocol/securityPoolPortfolio.js'
 import { loadSharedForkOutcome, loadSharedForkPreparation } from '../../../protocol/securityPoolSharedFork.js'
@@ -49,12 +49,13 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 	const contextInput = useSignal('0')
 	const outcomeInput = useSignal('')
 	const positionInput = useSignal('')
-	const page = useSignal(0n)
+	const intervalCursors = useSignal<bigint[]>([0n])
+	const branchCursors = useSignal<bigint[]>([0n])
 	const refreshCount = useSignal(0)
 	const contextId = index(contextInput.value)
 	const outcomeIndex = index(outcomeInput.value)
 	const positionId = index(positionInput.value)
-	const key = `${portfolio.portfolio}:${portfolio.owner}:${portfolio.blockHash}:${contextInput.value}:${page.value}:${outcomeInput.value}:${positionInput.value}:${refreshCount.value}`
+	const key = `${portfolio.portfolio}:${portfolio.owner}:${portfolio.blockHash}:${contextInput.value}:${intervalCursors.value.at(-1)}:${branchCursors.value.at(-1)}:${outcomeInput.value}:${positionInput.value}:${refreshCount.value}`
 	type Loaded = {
 		key: string
 		backend: typeof backend
@@ -71,7 +72,15 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 	const state = current?.snapshot
 	const read = async (selectedContext = contextId, selectedOutcome = outcomeIndex) => {
 		if (selectedContext === undefined) throw new Error(copy.invalidContext)
-		return loadPortfolioSharedForkSnapshot({ client: portfolioReadClient(backend.createReadClient()), portfolio: portfolio.portfolio, owner: portfolio.owner, contextId: selectedContext, intervalStart: page.value * 64n, ...(selectedOutcome === undefined ? {} : { outcomeIndex: selectedOutcome }) })
+		return loadPortfolioSharedForkSnapshot({
+			client: portfolioReadClient(backend.createReadClient()),
+			portfolio: portfolio.portfolio,
+			owner: portfolio.owner,
+			contextId: selectedContext,
+			intervalCursor: intervalCursors.value.at(-1) ?? 0n,
+			branchCursor: branchCursors.value.at(-1) ?? 0n,
+			...(selectedOutcome === undefined ? {} : { outcomeIndex: selectedOutcome }),
+		})
 	}
 	const load = async () => {
 		const snapshot = await read()
@@ -100,7 +109,8 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 		contextInput.value = '0'
 		outcomeInput.value = ''
 		positionInput.value = ''
-		page.value = 0n
+		intervalCursors.value = [0n]
+		branchCursors.value = [0n]
 	}, [backend, portfolio.portfolio, portfolio.owner])
 	useEffect(() => {
 		let active = true
@@ -111,7 +121,13 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 					if (active) loaded.value = { key, backend, ...result }
 				})
 				.catch(error => {
-					if (active) loaded.value = { key, backend, error: getErrorMessage(error, copy.loadFailed) }
+					if (active) {
+						if (getErrorDetail(error)?.includes('cursor retired')) {
+							intervalCursors.value = [0n]
+							branchCursors.value = [0n]
+						}
+						loaded.value = { key, backend, error: getErrorMessage(error, copy.loadFailed) }
+					}
 				})
 		return () => {
 			active = false
@@ -142,7 +158,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 		baseReason ??
 		(state?.contextId === 0n ? copy.rootRecovery : undefined) ??
 		(positionInput.value.trim() !== '' ? (positionReason ?? current?.recoveryPreparation?.reason) : undefined) ??
-		((position === undefined || position.recoveryComplete) && state?.recoverableRepAttoRep === 0n && state.recoverableFeesAttoEth === 0n ? emptyProceedsReason : undefined)
+		((position === undefined || position.recoveryComplete) && state?.recoverableRepAttoRep === 0n && state.recoverableFeesAttoEth === 0n && !state.intervals.some(interval => interval.canRetire) ? emptyProceedsReason : undefined)
 	const interval = intervals.find(entry => positionId !== undefined && entry.startPosition <= positionId && (entry.open || entry.endPosition >= positionId))
 	const individualReason =
 		baseReason ??
@@ -185,7 +201,8 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 			contextInput.value = value
 			outcomeInput.value = ''
 			positionInput.value = ''
-			page.value = 0n
+			intervalCursors.value = [0n]
+			branchCursors.value = [0n]
 		},
 		setOutcome: (value: string) => {
 			outcomeInput.value = value
@@ -208,24 +225,34 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 		refresh: () => {
 			refreshCount.value += 1
 		},
+		hasPreviousPage: intervalCursors.value.length > 1,
+		hasPreviousBranchPage: branchCursors.value.length > 1,
 		previousPage: () => {
-			if (page.value > 0n) page.value -= 1n
+			if (intervalCursors.value.length > 1) intervalCursors.value = intervalCursors.value.slice(0, -1)
 		},
 		nextPage: () => {
-			if (state !== undefined && (page.value + 1n) * 64n < state.intervalCount) page.value += 1n
+			if (state !== undefined && state.nextIntervalCursor !== 0n) intervalCursors.value = [...intervalCursors.value, state.nextIntervalCursor]
+		},
+		previousBranchPage: () => {
+			if (branchCursors.value.length > 1) branchCursors.value = branchCursors.value.slice(0, -1)
+		},
+		nextBranchPage: () => {
+			if (state !== undefined && state.nextBranchCursor !== 0n) branchCursors.value = [...branchCursors.value, state.nextBranchCursor]
 		},
 		openContext: (id: bigint) => {
 			contextInput.value = String(id)
 			outcomeInput.value = ''
 			positionInput.value = ''
-			page.value = 0n
+			intervalCursors.value = [0n]
+			branchCursors.value = [0n]
 		},
 		openChild: () => {
 			if (state !== undefined && state.childContextId > 0n) {
 				contextInput.value = String(state.childContextId)
 				outcomeInput.value = ''
 				positionInput.value = ''
-				page.value = 0n
+				intervalCursors.value = [0n]
+				branchCursors.value = [0n]
 			}
 		},
 		choose: () =>
@@ -286,7 +313,7 @@ export function usePortfolioSharedFork({ snapshot: portfolio, actions, onConfirm
 					validateBeforeSubmit: async () => {
 						const latest = await read(snapshot.contextId)
 						assertIntervals(latest, intervalIds)
-						if (chosenPosition === undefined && latest.recoverableRepAttoRep === 0n && latest.recoverableFeesAttoEth === 0n) throw new Error(copy.noProceeds)
+						if (chosenPosition === undefined && latest.recoverableRepAttoRep === 0n && latest.recoverableFeesAttoEth === 0n && !latest.intervals.some(interval => intervalIds.includes(interval.intervalId) && interval.canRetire)) throw new Error(copy.noProceeds)
 					},
 				}
 			}),

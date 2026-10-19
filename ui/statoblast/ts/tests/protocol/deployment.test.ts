@@ -4,7 +4,7 @@ import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-s
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
@@ -27,7 +27,31 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'openOracle', 'securityPoolOperationsDelegate', 'securityPoolPortfolioVaultDeployer', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual([
+			'escalationGameClaimDelegate',
+			'escalationGameDepositDelegate',
+			'openOracle',
+			'securityPoolOperationsDelegate',
+			'securityPoolPortfolioQuoteDeployer',
+			'securityPoolPortfolioVaultDeployer',
+			'securityPoolUtils',
+			'uniformPriceDualCapBatchAuctionFactory',
+		])
+	})
+
+	test('deploys the quote factory separately and binds the vault deployer to its canonical address', async () => {
+		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, simulationProfile]) {
+			const steps = getDeploymentSteps(profile)
+			const quote = steps.find(step => step.id === 'securityPoolPortfolioQuoteDeployer')
+			const vaults = steps.find(step => step.id === 'securityPoolPortfolioVaultDeployer')
+			if (quote === undefined || vaults === undefined) throw new Error('Missing portfolio infrastructure deployment step')
+			expect(vaults.dependencies).toContain(quote.id)
+			expect(steps.indexOf(quote)).toBeLessThan(steps.indexOf(vaults))
+			const constructor = encodeAbiParameters([{ type: 'address' }], [quote.address]).slice(2)
+			expect((await captureDeploymentInitCode(vaults.deploy)).endsWith(constructor)).toBe(true)
+			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioVaultDeployer).toBe(constructor)
+			expect(getDeploymentStepConstructorArguments(profile).securityPoolPortfolioQuoteDeployer).toBe('')
+		}
 	})
 
 	test('deploys both shared escalation delegates before binding them to the factory', async () => {
@@ -48,7 +72,7 @@ describe('statoblast deployment steps', () => {
 			const steps = getDeploymentSteps(profile)
 			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 			if (oracleStep === undefined) throw new Error(`Missing deployment status oracle step for ${profile.id}`)
-			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'escalationGameFactory', 'securityPoolFactory', 'securityPoolPortfolioVaultDeployer']
+			const statoblastStepIds = ['securityPoolForker', 'escalationGameClaimDelegate', 'escalationGameDepositDelegate', 'escalationGameFactory', 'securityPoolFactory', 'securityPoolPortfolioQuoteDeployer', 'securityPoolPortfolioVaultDeployer']
 			for (const stepId of statoblastStepIds) {
 				if (steps.every(step => step.id !== stepId)) throw new Error(`Missing statoblast deployment step ${stepId} for ${profile.id}`)
 			}

@@ -154,6 +154,12 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolUtils',
 	},
+	securityPoolPortfolioQuoteDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioQuoteDeployer.sol',
+		compilerProfile: 'main',
+		contractName: 'SecurityPoolPortfolioQuoteDeployer',
+		linksLibraries: true,
+	},
 	securityPoolPortfolioVaultDeployer: {
 		artifactPath: 'contracts/statoblast/SecurityPoolPortfolioVaultDeployer.sol',
 		compilerProfile: 'main',

@@ -7,27 +7,30 @@ import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Constants } from '../Constants.sol';
 import { Zoltar } from '../Zoltar.sol';
-import { IERC1155 } from './interfaces/IERC1155.sol';
-import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
-import { IERC165 } from './interfaces/IERC165.sol';
-import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolPortfolioVaultDeployer } from './SecurityPoolPortfolioVaultDeployer.sol';
 import { SecurityPoolPortfolioPosition } from './SecurityPoolPortfolioPosition.sol';
 import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
 import { SecurityPoolPortfolioRecovery } from './SecurityPoolPortfolioRecovery.sol';
 import { SecurityPoolPortfolioForkController } from './SecurityPoolPortfolioForkController.sol';
+import { SecurityPoolPortfolioState } from './SecurityPoolPortfolioState.sol';
+import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Common idle REP reserve with allocation-time ownership of each question position.
 /// @dev Reserve shares own idle REP and future allocations. Existing positions retain their owners,
 /// fees and obligations; they can be materialized independently without visiting other questions.
-contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
+contract SecurityPoolPortfolio is SecurityPoolPortfolioState, ISecurityPoolPortfolio {
 	using SafeERC20Ops for IERC20;
 
 	uint256 private constant MAX_QUESTION_PAGE = 64;
 	uint256 private constant FEE_PRECISION = 1e36;
 	uint256 private constant MAX_POOL_SHARES = FEE_PRECISION;
-	uint256 private constant RECOVERY_BOUNTY_ATTO_ETH = 0.00025 ether;
+	ISecurityPoolQuestionAdmissionPolicy public immutable questionAdmissionPolicy;
+	uint256 public immutable targetHealthFactorBps;
+	uint256 public immutable purchaseFeeBps;
+	uint256 public immutable minimumPurchaseFeeAttoEth;
+	uint256 public immutable completionRewardAttoEth;
+	uint256 public immutable ownershipChangeFeeAttoEth;
 	ISecurityPoolFactory public immutable factory;
 	uint248 public immutable originUniverseId;
 	uint256 public immutable statoblastSecurityMultiplierBps;
@@ -39,75 +42,19 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	SecurityPoolPortfolioRecovery public immutable recoveryLedger;
 	address public immutable forkController;
 	Zoltar private immutable zoltar;
-	mapping(uint256 => bytes32) public questionOriginIds;
-	mapping(address => SecurityPoolPortfolioVault) public vaultOf;
-	uint256[] private questions;
-	bool private entered;
-	WithdrawalRequest[] private withdrawalRequests;
-	uint256 public totalSupply;
-	uint256 private shareGeneration = 1;
-	uint256 public ownershipVersion = 1;
-	uint256 public idleRepAttoRep;
-	uint256 private feeIndex;
-	uint256 public positionCount;
-	mapping(uint256 => uint256) private snapshotGenerations;
-	mapping(uint256 => uint256) private closedFeeIndexes;
-	mapping(uint256 => mapping(address => uint256)) private shareBalances;
-	mapping(uint256 => mapping(address => Checkpoint[])) private balanceCheckpoints;
-	mapping(address => OwnerFees) private ownerFees;
-	mapping(uint256 => Position) public positions;
-	mapping(uint256 => mapping(address => bool)) private positionClaimed;
-	mapping(address => address) private positionSourcePools;
-	mapping(uint256 => uint256) private positionVersions;
-	mapping(uint256 => uint256) private reusablePositions;
-	mapping(uint256 => bool) public positionRecoveryComplete;
-	mapping(uint256 => uint256) private sharedMigratedShares;
-	mapping(uint256 => uint256) public recoveryBounties;
-	mapping(address => uint256) public processingRewards;
-	uint256 public recoveredRepAttoRep;
-	uint256 public recoveredFeesAttoEth;
 
-	struct WithdrawalRequest {
-		SecurityPoolPortfolioVault vault;
-		uint256 requestId;
-	}
-
-	struct Checkpoint {
-		uint256 snapshotId;
-		uint256 shares;
-	}
-
-	struct OwnerFees {
-		uint256 generation;
-		uint256 index;
-		uint256 accruedAttoEth;
-	}
-
-	struct Position {
-		uint256 questionId;
-		uint256 totalShares;
-		uint256 remainingShares;
-		SecurityPoolPortfolioPosition custody;
-	}
-
-	event QuestionRegistered(uint256 indexed questionId, bytes32 indexed originId, ISecurityPool indexed originPool);
-	event VaultCreated(address indexed owner, SecurityPoolPortfolioVault indexed vault);
-	event CompleteSetsFunded(uint256 indexed questionId, address indexed payer, address indexed recipient, uint256 amountAttoEth, uint256 mintedAttoShares);
-	event PurchaseFeesPaid(uint256 indexed questionId, address indexed payer, uint256 feesAttoEth);
-	event WithdrawalQueued(uint256 indexed index, SecurityPoolPortfolioVault indexed vault, uint256 requestId);
-	event Deposited(address indexed owner, uint256 amountAttoRep, uint256 shares, uint256 generation);
-	event Withdrawn(address indexed owner, uint256 shares, uint256 idleAttoRep, uint256 generation);
-	event PositionAllocated(uint256 indexed questionId, uint256 indexed positionId, SecurityPoolPortfolioPosition indexed custody, uint256 shares, uint256 generation);
-	event PositionRebalanced(uint256 indexed positionId, uint256 reserveRepAttoRep, uint256 reserveFeesAttoEth);
-	event QuestionPositionClaimed(uint256 indexed positionId, address indexed owner, SecurityPoolPortfolioVault indexed vault, uint256 shares);
-	event FeesClaimed(address indexed owner, uint256 amountAttoEth);
-	event ShareGenerationStarted(uint256 indexed generation);
-	event PositionRecovered(uint256 indexed positionId, uint256 repAttoRep, uint256 feesAttoEth, bool complete);
-	event RecoveryCollected(address indexed owner, uint256 repAttoRep, uint256 feesAttoEth);
-	event RecoveryRewardCredited(uint256 indexed positionId, address indexed processor, uint256 amountAttoEth);
-	event ReservePrecisionRolledOver(uint256 indexed positionId, uint256 indexed generation, uint256 residualAttoRep);
-
-	constructor(ISecurityPoolFactory _factory, ISecurityPool initialOriginPool, uint256 _maximumQuestionHorizonSeconds, SecurityPoolPortfolioVaultDeployer _vaultDeployer) {
+	constructor(ISecurityPoolFactory _factory, ISecurityPool initialOriginPool, uint256 _maximumQuestionHorizonSeconds, SecurityPoolPortfolioVaultDeployer _vaultDeployer, ISecurityPoolQuestionAdmissionPolicy _questionAdmissionPolicy, EconomicsConfig memory config) {
+		require(address(_questionAdmissionPolicy).code.length > 0, 'Admission policy has no code');
+		require(config.targetHealthFactorBps >= 10_000, 'Health factor below native floor');
+		require(config.purchaseFeeBps <= 10_000, 'Purchase fee exceeds 100 percent');
+		require(config.minimumPurchaseFeeAttoEth >= config.completionRewardAttoEth, 'Purchase fee does not fund completion');
+		require(config.ownershipChangeFeeAttoEth == 0 || config.completionRewardAttoEth > 0, 'Ownership fee needs completion reward');
+		questionAdmissionPolicy = _questionAdmissionPolicy;
+		targetHealthFactorBps = config.targetHealthFactorBps;
+		purchaseFeeBps = config.purchaseFeeBps;
+		minimumPurchaseFeeAttoEth = config.minimumPurchaseFeeAttoEth;
+		completionRewardAttoEth = config.completionRewardAttoEth;
+		ownershipChangeFeeAttoEth = config.ownershipChangeFeeAttoEth;
 		require(_maximumQuestionHorizonSeconds > 0 && _maximumQuestionHorizonSeconds <= type(uint48).max, 'Invalid question horizon');
 		maximumQuestionHorizonSeconds = _maximumQuestionHorizonSeconds;
 		require(address(_factory).code.length > 0, 'Factory has no code');
@@ -118,7 +65,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		repToken = IERC20(address(initialOriginPool.repToken()));
 		require(address(_vaultDeployer).code.length > 0, 'Vault deployer has no code');
 		vaultDeployer = _vaultDeployer;
-		quoteHelper = _vaultDeployer.helpers().createQuote();
+		quoteHelper = _vaultDeployer.helpers().createQuote(config.targetHealthFactorBps, config.purchaseFeeBps, config.minimumPurchaseFeeAttoEth);
 		recoveryLedger = _vaultDeployer.helpers().createRootRecovery();
 		forkController = address(new SecurityPoolPortfolioForkController(initialOriginPool, recoveryLedger, quoteHelper, _vaultDeployer.helpers()));
 		statoblastSecurityMultiplierBps = initialOriginPool.statoblastSecurityMultiplierBps();
@@ -127,7 +74,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		require(address(initialOriginPool.parent()) == address(0), 'Choose an origin pool');
 		require(address(initialOriginPool.securityPoolFactory()) == address(_factory), 'Pool factory mismatch');
 		require(address(_factory.getSecurityPool(seedOriginId, originUniverseId)) == address(initialOriginPool), 'Pool is not canonical');
-		_requireEligible(initialOriginPool, initialOriginPool.questionId());
+		quoteHelper.requireEligible(initialOriginPool, initialOriginPool.questionId(), originUniverseId, maximumQuestionHorizonSeconds);
 		_factory.initializePortfolioPriceFeed(initialOriginPool);
 	}
 
@@ -144,6 +91,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	}
 
 	function addQuestion(uint256 questionId) public returns (ISecurityPool pool) {
+		_requireQuestionAllowed(questionId);
 		bytes32 registeredOrigin = questionOriginIds[questionId];
 		if (registeredOrigin != bytes32(0)) return factory.getSecurityPool(registeredOrigin, originUniverseId);
 		bytes32 originId = factory.getPortfolioOriginId(address(this), originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
@@ -151,7 +99,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		if (address(pool) == address(0)) {
 			pool = factory.deployPortfolioSecurityPool(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		}
-		_requireEligible(pool, questionId);
+		quoteHelper.requireEligible(pool, questionId, originUniverseId, maximumQuestionHorizonSeconds);
 		questionOriginIds[questionId] = originId;
 		questions.push(questionId);
 		emit QuestionRegistered(questionId, originId, pool);
@@ -206,6 +154,12 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		_creditRecovery(positionId, rep, fees);
 	}
 
+	/// @dev Called only after the migration has returned and credited all final parent cash.
+	function finalizeForkPosition(uint256 positionId) external onlyForkController {
+		_closeForkedGeneration();
+		if (positionRecoveryComplete[positionId]) recoveryLedger.markPositionComplete(positionId);
+	}
+
 	function recoverForkPosition(uint256 positionId, address processor) external onlyForkController nonReentrant {
 		_recoverPosition(positionId, processor);
 	}
@@ -251,38 +205,62 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	}
 
 	/// @notice Join the idle reserve and future allocations, without acquiring existing positions.
-	function deposit(uint256 amountAttoRep, uint256 minimumShares) external nonReentrant returns (uint256 mintedShares) {
+	function deposit(uint256 amountAttoRep, uint256 minimumShares) external payable nonReentrant returns (uint256 mintedShares) {
+		_chargeOwnershipChangeFee(false);
+		mintedShares = _deposit(msg.sender, amountAttoRep, minimumShares);
+		repToken.safeTransferFrom(msg.sender, address(this), amountAttoRep);
+	}
+
+	function _deposit(address owner, uint256 amountAttoRep, uint256 minimumShares) private returns (uint256 mintedShares) {
 		require(amountAttoRep > 0, 'Deposit amount zero');
 		require(zoltar.getForkTime(originUniverseId) == 0, 'Universe already forked');
 		mintedShares = totalSupply == 0 ? amountAttoRep : Math.mulDiv(amountAttoRep, totalSupply, idleRepAttoRep);
 		require(mintedShares > 0 && mintedShares >= minimumShares, 'Minimum pool shares not met');
 		require(mintedShares <= MAX_POOL_SHARES - totalSupply, 'Pool share precision exhausted');
-		_settleOwnerFees(msg.sender);
-		_checkpointOwner(msg.sender);
-		ownershipVersion++;
-		shareBalances[shareGeneration][msg.sender] += mintedShares;
-		recoveryLedger.setOwnerBalance(msg.sender, shareGeneration, balanceOf(msg.sender));
+		_settleOwnerFees(owner);
+		_checkpointOwner(owner);
+		shareBalances[shareGeneration][owner] += mintedShares;
+		ownershipVersion = recoveryLedger.setOwnerBalance(owner, shareGeneration, balanceOf(owner));
 		totalSupply += mintedShares;
 		idleRepAttoRep += amountAttoRep;
-		repToken.safeTransferFrom(msg.sender, address(this), amountAttoRep);
-		_createVault(msg.sender);
-		emit Deposited(msg.sender, amountAttoRep, mintedShares, shareGeneration);
+		_createVault(owner);
+		emit Deposited(owner, amountAttoRep, mintedShares, shareGeneration);
 	}
 
-	/// @notice Return proportional idle REP. Existing allocations remain separate historical rights.
-	function withdraw(uint256 shares, uint256 minimumIdleAttoRep) external nonReentrant returns (uint256 returnedAttoRep) {
-		require(shares > 0 && shares <= balanceOf(msg.sender), 'Invalid share withdrawal');
+	/// @notice Return proportional idle REP. A full exit never requires an ownership-change fee.
+	function withdraw(uint256 shares, uint256 minimumIdleAttoRep) external payable nonReentrant returns (uint256 returnedAttoRep) {
+		uint256 ownerBalance = balanceOf(msg.sender);
+		require(shares > 0 && shares <= ownerBalance, 'Invalid share withdrawal');
+		_chargeOwnershipChangeFee(shares == ownerBalance);
 		_settleOwnerFees(msg.sender);
 		_checkpointOwner(msg.sender);
 		returnedAttoRep = Math.mulDiv(idleRepAttoRep, shares, totalSupply);
 		require(returnedAttoRep >= minimumIdleAttoRep, 'Minimum idle REP not met');
-		ownershipVersion++;
 		shareBalances[shareGeneration][msg.sender] -= shares;
-		recoveryLedger.setOwnerBalance(msg.sender, shareGeneration, balanceOf(msg.sender));
+		ownershipVersion = recoveryLedger.setOwnerBalance(msg.sender, shareGeneration, balanceOf(msg.sender));
 		totalSupply -= shares;
 		idleRepAttoRep -= returnedAttoRep;
 		if (returnedAttoRep > 0) repToken.safeTransfer(msg.sender, returnedAttoRep);
 		emit Withdrawn(msg.sender, shares, returnedAttoRep, shareGeneration);
+	}
+
+	/// @notice Fee for a deposit or partial withdrawal now; full withdrawals always cost zero.
+	function quoteOwnershipChangeFee() public view returns (uint256) {
+		return
+			recoveryLedger.unfinishedPositionCount() > 0 && zoltar.getForkTime(originUniverseId) == 0
+				? ownershipChangeFeeAttoEth
+				: 0;
+	}
+
+	function _chargeOwnershipChangeFee(bool fullExit) private {
+		uint256 fee = fullExit ? 0 : quoteOwnershipChangeFee();
+		require(msg.value >= fee, 'Ownership change fee not funded');
+		maintenanceBudgetAttoEth += fee;
+		if (fee > 0) {
+			recoveryLedger.creditMaintenance(fee);
+			emit OwnershipChangeFeePaid(msg.sender, fee);
+		}
+		_sendEth(msg.sender, msg.value - fee);
 	}
 
 	function reusablePositionId(uint256 questionId) public view returns (uint256) {
@@ -309,15 +287,30 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	}
 
 	function _recoverPosition(uint256 positionId, address processor) private {
+		_recoverPosition(positionId, processor, false);
+	}
+
+	/// @notice Release safe surplus to matching reserve owners, otherwise credit historical owners.
+	function recyclePosition(uint256 positionId) external nonReentrant {
+		_recoverPosition(positionId, msg.sender, true);
+	}
+
+	function _recoverPosition(uint256 positionId, address processor, bool recycle) private {
+		_closeForkedGeneration();
 		Position storage position = positions[positionId];
 		require(address(position.custody) != address(0), 'Unknown allocation position');
 		// Another owner may have completed recovery or taken the last position since review.
 		if (positionRecoveryComplete[positionId] || position.remainingShares == 0) return;
 		(uint256 rep, uint256 fees, bool complete) = position.custody.recover();
-		_creditRecovery(positionId, rep, fees);
+		if (recycle && positionVersions[positionId] == ownershipVersion && totalSupply > 0) {
+			idleRepAttoRep += rep;
+			_creditFees(fees);
+			emit PositionRebalanced(positionId, rep, fees);
+		} else _creditRecovery(positionId, rep, fees);
 		if (complete && !positionRecoveryComplete[positionId]) {
 			positionRecoveryComplete[positionId] = true;
 			if (reusablePositions[position.questionId] == positionId) delete reusablePositions[position.questionId];
+			recoveryLedger.markPositionComplete(positionId);
 			_creditRecoveryReward(positionId, processor);
 		}
 		emit PositionRecovered(positionId, rep, fees, complete);
@@ -357,9 +350,8 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 			emit ReservePrecisionRolledOver(positionId, shareGeneration, residual);
 		}
 		closedFeeIndexes[shareGeneration] = feeIndex;
-		recoveryLedger.closeGeneration(shareGeneration);
+		ownershipVersion = recoveryLedger.closeGeneration(shareGeneration);
 		shareGeneration++;
-		ownershipVersion++;
 		totalSupply = 0;
 		feeIndex = 0;
 		emit ShareGenerationStarted(shareGeneration);
@@ -367,7 +359,8 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 
 	function quoteMint(uint256 questionId, uint256 mintAttoEth) external view returns (uint256 depositAttoRep, uint256 purchaseFeeAttoEth, uint256 availableAttoRep) {
 		ISecurityPool pool = getPool(questionId, originUniverseId);
-		_requireEligible(pool, questionId);
+		_requireQuestionAllowed(questionId);
+		quoteHelper.requireEligible(pool, questionId, originUniverseId, maximumQuestionHorizonSeconds);
 		require(mintAttoEth > 0, 'Mint collateral not funded');
 		SecurityPoolPortfolioQuote.MintPlan memory plan = _mintPlan(pool, mintAttoEth, reusablePositionId(questionId), true);
 		return (plan.depositAttoRep, plan.feeAttoEth, plan.availableAttoRep);
@@ -384,21 +377,9 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		require(mintAttoEth > 0 && msg.value >= mintAttoEth, 'Mint collateral not funded');
 		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
 		ISecurityPool pool = addQuestion(questionId);
-		_requireEligible(pool, questionId);
+		quoteHelper.requireEligible(pool, questionId, originUniverseId, maximumQuestionHorizonSeconds);
 		uint256 feeAttoEth = _allocateForMint(questionId, pool, mintAttoEth, msg.value - mintAttoEth);
-		uint256 beforeShares = pool.shareToken().balanceOfOutcome(originUniverseId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
-		pool.createCompleteSet{value: mintAttoEth}();
-		uint256 minted =
-			pool.shareToken().balanceOfOutcome(originUniverseId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) -
-				beforeShares;
-		require(minted >= minimumShares, 'Minimum shares not met');
-		uint256[] memory ids = new uint256[](3);
-		uint256[] memory amounts = new uint256[](3);
-		for (uint256 index; index < 3; index++) {
-			ids[index] = pool.shareToken().getTokenId(originUniverseId, BinaryOutcomes.BinaryOutcome(index));
-			amounts[index] = minted;
-		}
-		IERC1155(address(pool.shareToken())).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
+		uint256 minted = quoteHelper.buyCompleteSets{value: mintAttoEth}(pool, recipient, minimumShares);
 		emit CompleteSetsFunded(questionId, msg.sender, recipient, mintAttoEth, minted);
 		emit PurchaseFeesPaid(questionId, msg.sender, feeAttoEth);
 		_sendEth(msg.sender, msg.value - mintAttoEth - feeAttoEth);
@@ -417,8 +398,8 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 			if (plan.reserveFunded) require(totalSupply > 0, 'No underwriting capital');
 			if (!plan.reusePosition) {
 				positionId = _createPosition(questionId, pool);
-				recoveryBounties[positionId] = RECOVERY_BOUNTY_ATTO_ETH;
-				ownersFee -= RECOVERY_BOUNTY_ATTO_ETH;
+				recoveryBounties[positionId] = completionRewardAttoEth;
+				ownersFee -= completionRewardAttoEth;
 			}
 			SecurityPoolPortfolioPosition custody = positions[positionId].custody;
 			if (plan.reserveFunded && plan.depositAttoRep > 0) {
@@ -477,6 +458,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 	}
 
 	function _claimPosition(address owner, uint256 positionId, uint256 intervalId) private {
+		_closeForkedGeneration();
 		require(!SecurityPoolPortfolioForkController(payable(forkController)).isIntervalSelected(0, owner, intervalId), 'Interval has shared fork choice');
 		uint256 shares = getOwnerPositionShares(positionId, owner);
 		require(shares > 0, 'No allocation position');
@@ -497,6 +479,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		}
 		SecurityPoolPortfolioVault vault = _createVault(owner);
 		position.custody.release(address(vault), shares, denominator);
+		if (positionRecoveryComplete[positionId]) recoveryLedger.markPositionComplete(positionId);
 		emit QuestionPositionClaimed(positionId, owner, vault, shares);
 	}
 
@@ -511,25 +494,48 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 		uint256 amount = recoveryBounties[positionId];
 		if (amount == 0) return;
 		delete recoveryBounties[positionId];
-		processingRewards[processor] += amount;
+		uint256 supplement = recoveryLedger.takeMaintenanceReward(positionId, completionRewardAttoEth);
+		maintenanceBudgetAttoEth -= supplement;
+		processingRewards[processor] += amount + supplement;
 		emit RecoveryRewardCredited(positionId, processor, amount);
+		if (supplement > 0) emit MaintenanceRewardCredited(positionId, processor, supplement);
 	}
 
 	/// @notice Recover selected allocations for all owners, then collect the caller's proceeds and fees.
 	/// @dev Empty positionIds collects already released proceeds. Both lists are caller-sized; no registry scan.
 	function claimRecovered(uint256[] calldata intervalIds, uint256[] calldata positionIds) external nonReentrant {
+		(uint256 rep, uint256 fees, bool retired) = _collectRecovery(intervalIds, positionIds);
+		require(rep > 0 || fees > 0 || retired, 'No recovered proceeds');
+		if (rep > 0) repToken.safeTransfer(msg.sender, rep);
+		_sendEth(msg.sender, fees);
+		emit RecoveryCollected(msg.sender, rep, fees);
+	}
+
+	/// @notice Owner-authorized reinvestment at the current idle-reserve exchange rate.
+	function claimRecoveredAndDeposit(uint256[] calldata intervalIds, uint256[] calldata positionIds, uint256 minimumShares) external payable nonReentrant returns (uint256 mintedShares) {
+		(uint256 rep, uint256 fees, ) = _collectRecovery(intervalIds, positionIds);
+		_chargeOwnershipChangeFee(false);
+		mintedShares = _deposit(msg.sender, rep, minimumShares);
+		_sendEth(msg.sender, fees);
+		emit RecoveryCollected(msg.sender, rep, fees);
+		emit RecoveryRedeposited(msg.sender, rep, mintedShares);
+	}
+
+	function _collectRecovery(uint256[] calldata intervalIds, uint256[] calldata positionIds) private returns (uint256 rep, uint256 fees, bool retired) {
+		_closeForkedGeneration();
 		for (uint256 index; index < positionIds.length; index++) _recoverPosition(positionIds[index], msg.sender);
-		(uint256 rep, uint256 fees) = recoveryLedger.claim(msg.sender, intervalIds);
+		(rep, fees, retired) = recoveryLedger.claim(msg.sender, intervalIds);
 		recoveredRepAttoRep -= rep;
 		recoveredFeesAttoEth -= fees;
 		_settleOwnerFees(msg.sender);
 		fees += ownerFees[msg.sender].accruedAttoEth + processingRewards[msg.sender];
 		ownerFees[msg.sender].accruedAttoEth = 0;
 		processingRewards[msg.sender] = 0;
-		require(rep > 0 || fees > 0, 'No recovered proceeds');
-		if (rep > 0) repToken.safeTransfer(msg.sender, rep);
-		_sendEth(msg.sender, fees);
-		emit RecoveryCollected(msg.sender, rep, fees);
+	}
+
+	function _closeForkedGeneration() private {
+		if (zoltar.getForkTime(originUniverseId) != 0)
+			ownershipVersion = recoveryLedger.closeGeneration(shareGeneration);
 	}
 
 	function _checkpointOwner(address owner) private {
@@ -589,32 +595,7 @@ contract SecurityPoolPortfolio is ISecurityPoolPortfolio, IERC1155Receiver {
 			zoltar.getForkTime(originUniverseId) != 0;
 	}
 
-	function _requireEligible(ISecurityPool pool, uint256 questionId) private view {
-		uint256 end = pool.questionData().getQuestionEndDate(questionId);
-		require(block.timestamp < end, 'Question has already ended');
-		require(end - block.timestamp <= maximumQuestionHorizonSeconds, 'Question exceeds pool horizon');
-		require(zoltar.getForkTime(originUniverseId) == 0, 'Universe already forked');
-		require(pool.systemState() == SystemState.Operational, 'Question pool inactive');
+	function _requireQuestionAllowed(uint256 questionId) private view {
+		require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 	}
-
-	function _sendEth(address recipient, uint256 amount) private {
-		if (amount == 0) return;
-		(bool sent, ) = payable(recipient).call{value: amount}('');
-		require(sent, 'ETH transfer failed');
-	}
-
-	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC1155Receiver).interfaceId;
-	}
-
-	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
-		return IERC1155Receiver.onERC1155Received.selector;
-	}
-
-	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
-		return IERC1155Receiver.onERC1155BatchReceived.selector;
-	}
-
-	/// @dev Only proceeds returned by a reusable position with current owners enter the reserve fee index.
-	receive() external payable {}
 }

@@ -38,9 +38,36 @@ export function PortfoliosSection({ parameters, enabled, environmentKey, activeU
 				</MetricGrid>
 				<details>
 					<summary>{copy.deploy}</summary>
-					<PortfolioInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={actions.busy !== undefined} />
-					<PortfolioInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={actions.busy !== undefined} numeric />
-					<PortfolioButton model={actions} action='deployPortfolio' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} onClick={actions.deploy} />
+					<div className='form-grid portfolio-creation-form'>
+						<PortfolioInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={actions.busy !== undefined} />
+						<ViewTabs
+							ariaLabel={copy.admissionMode}
+							variant='segmented'
+							value={actions.admissionMode}
+							onChange={actions.setAdmissionMode}
+							options={[
+								{ value: 'open', label: copy.admissionOpen },
+								{ value: 'fixed', label: copy.admissionFixed },
+							]}
+						/>
+						<UserMessage detail={actions.admissionMode === 'open' ? copy.admissionOpenHint : copy.admissionFixedHint} />
+						{actions.admissionMode === 'fixed' ? <PortfolioInput label={copy.fixedQuestionIds} hint={copy.fixedQuestionIdsHint} value={actions.fixedQuestions} onChange={actions.setFixedQuestions} disabled={actions.busy !== undefined} /> : undefined}
+						<PortfolioInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={actions.busy !== undefined} numeric />
+						<div className='field-row'>
+							<PortfolioInput label={copy.targetHealthPercent} hint={copy.targetHealthHint} value={actions.economicsDraft.targetHealthPercent} onChange={value => actions.setEconomicsField('targetHealthPercent', value)} disabled={actions.busy !== undefined} numeric />
+							<PortfolioInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={actions.busy !== undefined} numeric />
+						</div>
+						<div className='field-row'>
+							<PortfolioInput label={copy.minimumPurchaseFee} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={actions.busy !== undefined} numeric />
+							<PortfolioInput label={copy.completionReward} value={actions.economicsDraft.completionReward} onChange={value => actions.setEconomicsField('completionReward', value)} disabled={actions.busy !== undefined} numeric />
+						</div>
+						<PortfolioInput label={copy.ownershipChangeFee} hint={copy.ownershipChangeFeeHint} value={actions.economicsDraft.ownershipChangeFee} onChange={value => actions.setEconomicsField('ownershipChangeFee', value)} disabled={actions.busy !== undefined} numeric />
+						<UserMessage detail={copy.immutableEconomics} />
+						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
+						<PortfolioButton model={actions} action='deployPortfolioAdmission' label={copy.deployAdmission} pendingLabel={copy.deployingAdmission} reason={actions.admissionDeployReason} onClick={actions.deployAdmission} />
+						{actions.admissionAddress === undefined ? undefined : <code>{actions.admissionAddress}</code>}
+						<PortfolioButton model={actions} action='deployPortfolio' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} onClick={actions.deploy} />
+					</div>
 				</details>
 			</SectionBlock>
 			{model.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={model.error} />}

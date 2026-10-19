@@ -28,6 +28,7 @@ import {
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
+	statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer,
 	statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
@@ -54,6 +55,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+		securityPoolPortfolioQuoteDeployer: statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer,
 		securityPoolPortfolioVaultDeployer: statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
@@ -71,6 +73,7 @@ const {
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
 	getSecurityPoolOperationsDelegateByteCode,
+	getSecurityPoolPortfolioQuoteDeployerByteCode,
 	getSecurityPoolPortfolioVaultDeployerByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
@@ -191,6 +194,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'escalationGameDepositDelegate', address: infraContracts.escalationGameDepositDelegate },
 		{ id: 'escalationGameFactory', address: infraContracts.escalationGameFactory },
 		{ id: 'securityPoolFactory', address: infraContracts.securityPoolFactory },
+		{ id: 'securityPoolPortfolioQuoteDeployer', address: infraContracts.securityPoolPortfolioQuoteDeployer },
 		{ id: 'securityPoolPortfolioVaultDeployer', address: infraContracts.securityPoolPortfolioVaultDeployer },
 	] as const
 }
@@ -223,6 +227,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
 		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),
 		securityPoolFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolFactory'),
+		securityPoolPortfolioQuoteDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioQuoteDeployer'),
 		securityPoolPortfolioVaultDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolPortfolioVaultDeployer'),
 	}
 }
@@ -261,6 +266,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['escalationGameDepositDelegate']) await deployBytecode('escalationGameDepositDelegate', `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`)
 	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameClaimDelegate, contractAddresses.escalationGameDepositDelegate))
 	if (!existence['securityPoolFactory']) await deployBytecode('securityPoolFactory', getSecurityPoolFactoryByteCode(contractAddresses))
+	if (!existence['securityPoolPortfolioQuoteDeployer']) await deployBytecode('securityPoolPortfolioQuoteDeployer', getSecurityPoolPortfolioQuoteDeployerByteCode())
 	if (!existence['securityPoolPortfolioVaultDeployer']) await deployBytecode('securityPoolPortfolioVaultDeployer', getSecurityPoolPortfolioVaultDeployerByteCode())
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {

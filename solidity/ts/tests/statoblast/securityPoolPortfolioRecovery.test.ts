@@ -5,7 +5,21 @@ import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnv
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
-import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { requireBigInt, setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+
+const retirementAbi = parseAbi([
+	'function markPositionComplete(uint256 positionId)',
+	'function positionComplete(uint256 positionId) view returns (bool)',
+	'function unfinishedPositionCount() view returns (uint256)',
+	'function getOwnerActiveIntervalCount(address owner) view returns (uint256)',
+	'function canRetireOwnerInterval(address owner,uint256 intervalId) view returns (bool)',
+	'function getOwnerActiveIntervals(address owner,uint256 cursor,uint256 count) view returns (uint256[] intervalIds,uint256 nextCursor)',
+	'function setOwnerBalance(address owner,uint256 generation,uint256 shares) returns (uint256)',
+	'function closeGeneration(uint256 generation) returns (uint256)',
+	'function creditMaintenance(uint256 amount)',
+	'function takeMaintenanceReward(uint256 positionId,uint256 cap) returns (uint256)',
+	'function claim(address owner,uint256[] intervalIds) returns (uint256 rep,uint256 eth,bool retired)',
+])
 
 describe('Statoblast: aggregate allocation recovery accounting', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -23,12 +37,16 @@ describe('Statoblast: aggregate allocation recovery accounting', () => {
 	const preview = async (owner: Address, id = 0n) => [...(await client.readContract({ ...target(), functionName: 'claimableInterval', args: [owner, id] }))]
 	const claim = async (owner: Address, ids = [0n]) => {
 		const result = await client.readContract({ ...target(), functionName: 'claim', args: [owner, ids], account: client.account.address })
-		expect(await client.readContract({ ...target(), functionName: 'previewClaim', args: [owner, ids] })).toEqual(result)
+		const amounts = [result[0], result[1]]
+		expect([...(await client.readContract({ ...target(), functionName: 'previewClaim', args: [owner, ids] }))]).toEqual(amounts)
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'claim', args: [owner, ids] }))
-		return [...result]
+		return amounts
 	}
 	const exclude = async (owner: Address, id: bigint, position: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'excludePosition', args: [owner, id, position] }))
 	const closeGeneration = async (generation: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'closeGeneration', args: [generation] }))
+	const retirementTarget = () => ({ abi: retirementAbi, address: ledger })
+	const complete = async (position: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...retirementTarget(), functionName: 'markPositionComplete', args: [position] }))
+	const active = async (owner: Address, cursor = 0n, pageSize = 64n) => await client.readContract({ ...retirementTarget(), functionName: 'getOwnerActiveIntervals', args: [owner, cursor, pageSize] })
 
 	beforeAll(async () => {
 		const ethereum = getAnvilWindowEthereum()
@@ -79,6 +97,52 @@ describe('Statoblast: aggregate allocation recovery accounting', () => {
 		expect(await claim(bob, [0n, 1n])).toEqual([100n, 60n])
 	})
 
+	test('consecutive owner round trips restore only the proven cohort and transient cohorts stay unique', async () => {
+		const change = async (owner: Address, shares: bigint, generation = 1n) => {
+			const version = await client.readContract({ ...retirementTarget(), functionName: 'setOwnerBalance', args: [owner, generation, shares], account: client.account.address })
+			await balance(owner, shares, generation)
+			return requireBigInt(version, 'Ownership version')
+		}
+		const aliceVersion = await change(alice, 100n)
+		await append()
+		const transientVersion = await change(bob, 40n)
+		await append()
+		expect(await change(bob, 0n)).toBe(aliceVersion)
+		expect(await change(bob, 20n)).toBeGreaterThan(transientVersion)
+		await change(alice, 90n)
+		expect(await change(bob, 0n)).toBeGreaterThan(transientVersion)
+		const closedVersion = requireBigInt(await client.readContract({ ...retirementTarget(), functionName: 'closeGeneration', args: [1n], account: client.account.address }), 'Closed generation ownership version')
+		await closeGeneration(1n)
+		expect(await change(alice, 0n)).toBe(closedVersion)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'closeGeneration', args: [1n], account: client.account.address })).toBe(closedVersion)
+		expect(await change(alice, 100n, 2n)).toBeGreaterThan(closedVersion)
+	})
+
+	test('maintenance rewards belong only to allocations unfinished when the fee was paid', async () => {
+		const fund = async (amount: bigint) => writeContractAndWait(client, () => client.writeContract({ ...retirementTarget(), functionName: 'creditMaintenance', args: [amount] }))
+		const take = async (position: bigint, cap: bigint) => {
+			const reward = await client.readContract({ ...retirementTarget(), functionName: 'takeMaintenanceReward', args: [position, cap], account: client.account.address })
+			await writeContractAndWait(client, () => client.writeContract({ ...retirementTarget(), functionName: 'takeMaintenanceReward', args: [position, cap] }))
+			return reward
+		}
+		await append()
+		await append()
+		await fund(100n)
+		await complete(1n)
+		await append()
+		await fund(100n)
+		// The first allocation froze before the second fee, and the newest missed the first.
+		expect(await take(1n, 100n)).toBe(50n)
+		await complete(2n)
+		expect(await take(2n, 60n)).toBe(60n)
+		await complete(3n)
+		expect(await take(3n, 100n)).toBe(50n)
+		expect(await take(2n, 100n)).toBe(0n)
+		await expect(fund(1n)).rejects.toThrow('No unfinished allocations')
+		await fund(0n)
+		await expect(take(0n, 100n)).rejects.toThrow('Unknown allocation position')
+	})
+
 	test('personal balance changes preserve late returns after withdrawing all idle shares', async () => {
 		await balance(alice, 100n)
 		await append()
@@ -112,6 +176,125 @@ describe('Statoblast: aggregate allocation recovery accounting', () => {
 		expect((await interval(alice)).open).toBe(false)
 		expect(await claim(alice, [0n, 1n])).toEqual([40n, 4n])
 		expect(await claim(bob)).toEqual([20n, 2n])
+	})
+
+	test('claiming an empty closed generation retires its interval without affecting future ownership', async () => {
+		await balance(alice, 100n)
+		await closeGeneration(1n)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'claim', args: [alice, [0n]], account: client.account.address })).toEqual([0n, 0n, true])
+		expect(await claim(alice)).toEqual([0n, 0n])
+		expect((await interval(alice)).active).toBe(false)
+		await balance(alice, 100n, 2n)
+		await append()
+		await credit(1n, 10n, 1n, 100n)
+		expect(await claim(alice, [1n])).toEqual([10n, 1n])
+	})
+
+	test('fork-frozen generation closure is idempotent and idle withdrawals preserve historical weights', async () => {
+		await balance(alice, 100n)
+		await append()
+		await closeGeneration(1n)
+		await balance(alice, 0n)
+		await append()
+		await closeGeneration(1n)
+		expect(await count(alice)).toBe(1n)
+		expect((await interval(alice)).shares).toBe(100n)
+		expect((await interval(alice)).endPosition).toBe(1n)
+		await credit(1n, 10n, 1n, 100n)
+		await complete(1n)
+		expect(await claim(alice)).toEqual([10n, 1n])
+		expect((await interval(alice)).active).toBe(false)
+		await balance(alice, 20n)
+		expect(await count(alice)).toBe(1n)
+	})
+
+	test('closed intervals wait for every terminal position while an open owner keeps future rights', async () => {
+		await balance(alice, 40n)
+		await balance(bob, 60n)
+		await append()
+		await append()
+		await balance(alice, 0n)
+		await credit(2n, 100n, 10n, 100n)
+		await complete(2n)
+		await complete(2n)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'canRetireOwnerInterval', args: [alice, 0n] })).toBe(false)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'unfinishedPositionCount' })).toBe(1n)
+		expect(await claim(alice)).toEqual([40n, 4n])
+		expect((await interval(alice)).active).toBe(true)
+		await credit(1n, 200n, 20n, 100n)
+		await complete(1n)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'canRetireOwnerInterval', args: [alice, 0n] })).toBe(true)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'canRetireOwnerInterval', args: [bob, 0n] })).toBe(false)
+		expect(await claim(alice)).toEqual([80n, 8n])
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'canRetireOwnerInterval', args: [alice, 0n] })).toBe(false)
+		expect((await interval(alice)).active).toBe(false)
+		expect(await active(alice)).toEqual([[], 0n])
+		expect(await claim(bob)).toEqual([180n, 18n])
+		expect((await interval(bob)).active).toBe(true)
+		await append()
+		await credit(3n, 60n, 6n, 60n)
+		expect(await claim(bob)).toEqual([60n, 6n])
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'unfinishedPositionCount' })).toBe(1n)
+		await expect(credit(1n, 1n, 0n, 100n)).rejects.toThrow('Allocation recovery is complete')
+	})
+
+	test('completion tree growth preserves old terminal counts across new ancestors', async () => {
+		await balance(alice, 100n)
+		await append()
+		await complete(1n)
+		await append()
+		await complete(2n)
+		await append()
+		await complete(3n)
+		await append()
+		await balance(alice, 0n)
+		await claim(alice)
+		expect((await interval(alice)).active).toBe(true)
+		await complete(4n)
+		await claim(alice)
+		expect((await interval(alice)).active).toBe(false)
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'unfinishedPositionCount' })).toBe(0n)
+	})
+
+	test('retiring terminal intervals retains fractional cash across later generations', async () => {
+		await balance(alice, 1n)
+		await balance(bob, 1n)
+		await append()
+		await credit(1n, 1n, 1n, 2n)
+		await complete(1n)
+		await closeGeneration(1n)
+		expect(await claim(alice)).toEqual([0n, 0n])
+		expect((await interval(alice)).active).toBe(false)
+		expect((await client.readContract({ ...target(), functionName: 'ownerCredits', args: [alice] }))[2]).toBe(precision / 2n)
+		await balance(alice, 1n, 2n)
+		await balance(bob, 1n, 2n)
+		await append()
+		await credit(2n, 1n, 1n, 2n)
+		await complete(2n)
+		await closeGeneration(2n)
+		expect(await claim(alice, [1n])).toEqual([1n, 1n])
+		expect(await claim(bob, [0n, 1n])).toEqual([1n, 1n])
+		expect(await active(alice)).toEqual([[], 0n])
+		expect(await active(bob)).toEqual([[], 0n])
+	})
+
+	test('active pagination unlinks middle and head intervals without scanning retired history', async () => {
+		await balance(alice, 100n)
+		for (let id = 1n; id <= 4n; id++) {
+			await append()
+			await balance(alice, 100n + id)
+		}
+		expect(await active(alice, 0n, 2n)).toEqual([[0n, 1n], 3n])
+		await complete(2n)
+		await claim(alice, [1n])
+		expect(await active(alice, 0n, 2n)).toEqual([[0n, 2n], 4n])
+		await complete(1n)
+		await claim(alice, [0n])
+		expect(await active(alice, 0n, 2n)).toEqual([[2n, 3n], 5n])
+		expect(await active(alice, 5n, 2n)).toEqual([[4n], 0n])
+		await expect(active(alice, 2n, 2n)).rejects.toThrow('Owner interval cursor retired')
+		await expect(active(alice, 0n, 0n)).rejects.toThrow('Choose positive interval page size')
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'getOwnerActiveIntervalCount', args: [alice] })).toBe(3n)
 	})
 
 	test('an in-kind exit excludes only its leaf and preserves earlier proceeds without duplicate payment', async () => {
@@ -238,6 +421,9 @@ describe('Statoblast: aggregate allocation recovery accounting', () => {
 		await credit(1n, 100n, 10n, 100n)
 		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'claim', args: [alice, [0n]] }))).rejects.toThrow('Only portfolio')
 		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...target(), functionName: 'excludePosition', args: [alice, 0n, 1n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...retirementTarget(), functionName: 'markPositionComplete', args: [1n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...retirementTarget(), functionName: 'creditMaintenance', args: [1n] }))).rejects.toThrow('Only portfolio')
+		await expect(writeContractAndWait(outsider, () => outsider.writeContract({ ...retirementTarget(), functionName: 'takeMaintenanceReward', args: [1n, 1n] }))).rejects.toThrow('Only portfolio')
 		expect(await claim(alice)).toEqual([100n, 10n])
 	})
 
@@ -273,6 +459,8 @@ describe('Statoblast: sparse shared fork recovery accounting', () => {
 		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'claim', args: [owner, ids] }))
 		return [...amounts]
 	}
+	const retirementTarget = () => ({ abi: retirementAbi, address: ledger })
+	const complete = async (position: bigint) => await writeContractAndWait(client, () => client.writeContract({ ...retirementTarget(), functionName: 'markPositionComplete', args: [position] }))
 
 	beforeAll(async () => {
 		const ethereum = getAnvilWindowEthereum()
@@ -312,6 +500,7 @@ describe('Statoblast: sparse shared fork recovery accounting', () => {
 		await expect(register(alice, 1n, 1n, 0n)).rejects.toThrow('Invalid imported shares')
 		await expect(register(alice, 1n, 1n, 10n ** 36n + 1n)).rejects.toThrow('Invalid imported shares')
 		await register(alice, 1n, 2n, 60n)
+		await expect(complete(1n)).rejects.toThrow('Fork imports not sealed')
 		await expect(credit(1n, 1n, 0n, 60n)).rejects.toThrow('Fork imports not sealed')
 		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'excludePosition', args: [alice, 0n, 1n] }))).rejects.toThrow('Fork imports not sealed')
 		await seal()
@@ -323,6 +512,69 @@ describe('Statoblast: sparse shared fork recovery accounting', () => {
 		await expect(writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'closeGeneration', args: [1n] }))).rejects.toThrow('Fixed recovery ownership')
 		await expect(weight(0n)).rejects.toThrow('Unknown allocation position')
 		await expect(weight(4_097n)).rejects.toThrow('Unknown allocation position')
+	})
+
+	test('shared recovery retires an owner interval without changing frozen cohort denominators', async () => {
+		await register(alice, 1n, 3n, 60n)
+		await register(bob, 1n, 3n, 40n)
+		await seal()
+		await credit(1n, 100n, 10n, 100n)
+		await complete(1n)
+		await complete(3n)
+		expect(await claim(alice, [0n])).toEqual([60n, 6n])
+		expect((await client.readContract({ ...target(), functionName: 'getOwnerInterval', args: [alice, 0n] })).active).toBe(true)
+		await credit(2n, 200n, 20n, 100n)
+		await complete(2n)
+		expect(await claim(alice, [0n])).toEqual([120n, 12n])
+		expect((await client.readContract({ ...target(), functionName: 'getOwnerInterval', args: [alice, 0n] })).active).toBe(false)
+		expect(await weight(1n)).toBe(100n)
+		expect(await weight(2n)).toBe(100n)
+		expect(await claim(bob, [0n])).toEqual([120n, 12n])
+	})
+
+	test('active page gas is independent of retired choice history', async () => {
+		const page = { ...retirementTarget(), functionName: 'getOwnerActiveIntervals', args: [bob, 0n, 1n] } as const
+		await register(bob, 1n, 1n, 1n)
+		const initialGas = await client.estimateContractGas(page)
+		await retire(bob, 0n)
+		for (let id = 1n; id < 64n; id++) {
+			await register(bob, 1n, 1n, 1n)
+			await retire(bob, id)
+		}
+		await register(bob, 1n, 1n, 1n)
+		expect(await client.readContract(page)).toEqual([[64n], 0n])
+		const retiredHistoryGas = await client.estimateContractGas(page)
+		expect(retiredHistoryGas).toBeLessThanOrEqual(initialGas + 100n)
+		console.info('Active interval page gas, before/after 64 retired intervals:', initialGas.toString(), retiredHistoryGas.toString())
+		expect(await client.readContract({ ...retirementTarget(), functionName: 'getOwnerActiveIntervalCount', args: [bob] })).toBe(1n)
+	})
+
+	test('single-operation gas grows logarithmically across a thousandfold allocation history', async () => {
+		const measure = async (points: bigint) => {
+			const data = concatHex([`0x${artifact.evm.bytecode.object}`, encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'bool' }], [client.account.address, points, true])])
+			const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
+			if (receipt.contractAddress === undefined) throw new Error('Gas comparison ledger deployment address missing')
+			const address = receipt.contractAddress
+			await writeContractAndWait(client, () => client.writeContract({ abi: importedAbi, address, functionName: 'importInterval', args: [alice, 1n, points, 100n] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: importedAbi, address, functionName: 'sealImports' }))
+			const creditCall = { abi: artifact.abi, address, functionName: 'credit', args: [1n, 100n, 10n, 100n] } as const
+			const creditGas = await client.estimateContractGas(creditCall)
+			await writeContractAndWait(client, () => client.writeContract(creditCall))
+			const completeGas = await client.estimateContractGas({ abi: retirementAbi, address, functionName: 'markPositionComplete', args: [1n] })
+			await writeContractAndWait(client, () => client.writeContract({ abi: retirementAbi, address, functionName: 'markPositionComplete', args: [1n] }))
+			const claimGas = await client.estimateContractGas({ abi: artifact.abi, address, functionName: 'claim', args: [alice, [0n]] })
+			return { creditGas, completeGas, claimGas }
+		}
+		const small = await measure(63n)
+		const large = await measure(65_535n)
+		console.info('Recovery gas across 63 and 65,535 allocation slots:', small, large)
+		// 1,040x more allocation slots adds only ten tree levels, not a registry traversal.
+		expect(large.creditGas).toBeLessThan(small.creditGas * 3n)
+		expect(large.completeGas).toBeLessThan(small.completeGas * 3n)
+		expect(large.claimGas).toBeLessThan(small.claimGas * 3n)
+		expect(large.creditGas).toBeLessThan(1_000_000n)
+		expect(large.completeGas).toBeLessThan(500_000n)
+		expect(large.claimGas).toBeLessThan(500_000n)
 	})
 
 	test('a revoked choice can rejoin without resurrecting the retired interval or growing another owner history', async () => {

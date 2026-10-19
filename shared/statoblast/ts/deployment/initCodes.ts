@@ -81,6 +81,7 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolFactory: ContractArtifact
 	securityPoolForker: ContractArtifact
 	securityPoolOperationsDelegate: BytecodeArtifact
+	securityPoolPortfolioQuoteDeployer: BytecodeArtifact
 	securityPoolPortfolioVaultDeployer: BytecodeArtifact
 	securityPoolUtils: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
@@ -120,7 +121,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
 	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: applyLibraries(artifacts.securityPoolForker.evm.bytecode.object), args: [zoltar] })
 	const getSecurityPoolOperationsDelegateByteCode = () => applyLibraries(artifacts.securityPoolOperationsDelegate.evm.bytecode.object)
-	const getSecurityPoolPortfolioVaultDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioVaultDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioQuoteDeployerByteCode = () => applyLibraries(artifacts.securityPoolPortfolioQuoteDeployer.evm.bytecode.object)
+	const getSecurityPoolPortfolioVaultDeployerByteCode = () => concatHex([applyLibraries(artifacts.securityPoolPortfolioVaultDeployer.evm.bytecode.object), encodeAbiParameters([{ type: 'address' }], [getWorkerAddress(getSecurityPoolPortfolioQuoteDeployerByteCode())])])
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
 		encodeDeployData({
 			abi: artifacts.securityPoolFactory.abi,
@@ -159,6 +161,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			proxyDeployerAddress,
 			securityPoolUtilsBytecode: bytecodeOf(artifacts.securityPoolUtils),
 			securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
+			securityPoolPortfolioQuoteDeployerBytecode: getSecurityPoolPortfolioQuoteDeployerByteCode(),
 			securityPoolPortfolioVaultDeployerBytecode: getSecurityPoolPortfolioVaultDeployerByteCode(),
 			uniformPriceDualCapBatchAuctionFactoryBytecode: bytecodeOf(artifacts.uniformPriceDualCapBatchAuctionFactory),
 			zeroSalt,
@@ -174,6 +177,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolForkerByteCode,
 		getSecurityPoolOperationsDelegateByteCode,
+		getSecurityPoolPortfolioQuoteDeployerByteCode,
 		getSecurityPoolPortfolioVaultDeployerByteCode,
 		getShareTokenFactoryByteCode,
 	}

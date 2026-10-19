@@ -11,7 +11,7 @@ import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../../testSu
 import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { aggregatePortfolioAbi, useAggregatePortfolioFixture } from './securityPoolPortfolioAggregateFixture'
-import { unit } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, unit } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: automatic aggregate underwriting', () => {
 	const { fixture, deposit, mint, assets, fees, shares, custody, rebalance, positionCount } = useAggregatePortfolioFixture()
@@ -133,7 +133,7 @@ describe('Statoblast: automatic aggregate underwriting', () => {
 		const { base, owner } = fixture
 		await base.mockWindow.setTime(base.questionData.endTime - 29n * DAY)
 		const vaultDeployer = await owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'vaultDeployer' })
-		const hash = await owner().sendTransaction({ data: encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, pool(), 30n * DAY, vaultDeployer] }) })
+		const hash = await owner().sendTransaction({ data: encodeDeployData({ abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object), args: [getInfraContractAddresses().securityPoolFactory, pool(), 30n * DAY, vaultDeployer, fixture.questionAdmissionPolicy, portfolioEconomics] }) })
 		const receipt = await owner().waitForTransactionReceipt({ hash })
 		const portfolio: Address | undefined = receipt.contractAddress
 		if (!portfolio) throw new Error('Missing horizon portfolio')

@@ -121,6 +121,10 @@ for (const scenario of [
 const allocation = { positionId: 1n, questionId: 51n, custody: parent, ownerShares: 10n, remainingShares: 10n, reusable: false, recoveryComplete: false, recoveryBountyAttoEth: 0n, questionEndTime: 500n, operational: false, resolved: false, claimReason: undefined }
 const snapshot: PortfolioAggregateSnapshot = {
 	portfolio,
+	questionAdmissionPolicy: portfolio,
+	economics: { targetHealthFactorBps: 12000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 1000n, completionRewardAttoEth: 250n, ownershipChangeFeeAttoEth: 1000n },
+	ownershipChangeFeeAttoEth: 0n,
+	maintenanceBudgetAttoEth: 0n,
 	owner,
 	chainId: 1,
 	blockNumber: 9n,
@@ -136,8 +140,9 @@ const snapshot: PortfolioAggregateSnapshot = {
 	claimableFeesAttoEth: 0n,
 	recoveryLedger: game,
 	intervalCount: 1n,
-	intervalStart: 0n,
-	intervals: [{ intervalId: 0n, generation: 1n, startPosition: 1n, endPosition: 0n, shares: 10n, open: true, active: true }],
+	intervalCursor: 0n,
+	nextIntervalCursor: 0n,
+	intervals: [{ intervalId: 0n, generation: 1n, startPosition: 1n, endPosition: 0n, shares: 10n, open: true, active: true, canRetire: false }],
 	recoverableRepAttoRep: 0n,
 	recoverableFeesAttoEth: 0n,
 	processingRewardsAttoEth: 0n,

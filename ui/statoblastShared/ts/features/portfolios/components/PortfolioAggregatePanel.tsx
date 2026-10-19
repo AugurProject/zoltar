@@ -1,6 +1,6 @@
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { useId } from 'preact/hooks'
-import { toHex } from '@zoltar/core-shared/evm/ethereum'
+import { toHex, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -20,6 +20,7 @@ import * as sharedForkCopy from '../../../copy/portfolioSharedFork.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof usePortfolioAggregate>
+const admissionLabels = { open: copy.admissionOpen, fixed: copy.admissionFixed, custom: copy.admissionCustom }
 
 function allocationStatus(allocation: Model['allocations'][number], forked: boolean) {
 	if (allocation.recoveryComplete) return forked ? sharedForkCopy.sourceRecovered : copy.recoveryComplete
@@ -35,6 +36,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 	return (
 		<>
 			<SectionBlock title={copy.sharedFund} description={copy.sharedFundHint}>
+				{model.admission?.mode === 'custom' ? <UserMessage tone='warning' detail={copy.unsupportedAdmission} /> : undefined}
 				{model.readError === undefined ? undefined : <UserMessage tone='error' detail={model.readError} />}
 				<MetricGrid>
 					<MetricField label={copy.poolAssets} loading={model.loading}>
@@ -50,6 +52,41 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 						<CurrencyValue value={snapshot?.ownerAssetsAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				</MetricGrid>
+				<MetricGrid>
+					<MetricField label={copy.admissionMode} loading={model.loading}>
+						{model.admission === undefined ? undefined : admissionLabels[model.admission.mode]}
+					</MetricField>
+					<MetricField label={copy.targetHealthPercent} loading={model.loading}>
+						{snapshot === undefined ? undefined : formatUnits(snapshot.economics.targetHealthFactorBps, 2)}
+					</MetricField>
+					<MetricField label={copy.purchaseFeePercent} loading={model.loading}>
+						{snapshot === undefined ? undefined : formatUnits(snapshot.economics.purchaseFeeBps, 2)}
+					</MetricField>
+					<MetricField label={copy.minimumPurchaseFee} loading={model.loading}>
+						<CurrencyValue value={snapshot?.economics.minimumPurchaseFeeAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={copy.completionReward} loading={model.loading}>
+						<CurrencyValue value={snapshot?.economics.completionRewardAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+					<MetricField label={copy.maintenanceBudget} loading={model.loading}>
+						<CurrencyValue value={snapshot?.maintenanceBudgetAttoEth} suffix={commonCopy.eth} />
+					</MetricField>
+				</MetricGrid>
+				{model.admission?.mode === 'fixed' ? (
+					<details>
+						<summary>{copy.fixedQuestionIds}</summary>
+						<UserMessage detail={copy.approvedQuestionCount(model.admission.questionCount)} />
+						<UserMessage detail={copy.admissionFixedHint} />
+						<ul>
+							{model.admission.questions.map(questionId => (
+								<li key={String(questionId)}>
+									<code>{toHex(questionId)}</code>
+								</li>
+							))}
+						</ul>
+						<PaginationControls hasPreviousPage={model.admission.questionStart > 0n} hasNextPage={model.admission.questionStart + 64n < model.admission.questionCount} loading={model.loading} onPreviousPage={model.previousApprovedQuestionPage} onNextPage={model.nextApprovedQuestionPage} />
+					</details>
+				) : undefined}
 			</SectionBlock>
 			<SectionBlock title={copy.combinedRecovery} description={copy.combinedRecoveryHint}>
 				<MetricGrid>
@@ -63,13 +100,26 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 				{pagedRecovery ? (
 					<>
 						<UserMessage detail={copy.recoveryPageHint} />
-						<UserMessage detail={copy.recoveryPageRange(snapshot.intervalStart, snapshot.intervals.length, snapshot.intervalCount)} />
+						<UserMessage detail={copy.activeRecoveryPage(snapshot.intervals.length, snapshot.intervalCount)} />
 					</>
 				) : undefined}
 				<PortfolioInput label={copy.recoveryBatchLabel} hint={copy.recoveryBatchHint} value={model.recoveryBatchSize} onChange={model.setRecoveryBatchSize} disabled={actions.busy !== undefined} numeric />
 				{model.recoveryPositionCount > 0 ? <UserMessage detail={copy.readyRecoveryPositions(model.recoveryPositionCount)} /> : undefined}
 				<PortfolioButton model={actions} action='collectPortfolioRecovery' label={copy.collectRecovered} pendingLabel={copy.collectingRecovered} reason={model.collectReason} onClick={model.collectRecovered} />
-				<PaginationControls hasPreviousPage={(snapshot?.intervalStart ?? 0n) > 0n} hasNextPage={snapshot !== undefined && snapshot.intervalStart + 64n < snapshot.intervalCount} loading={model.loading} onPreviousPage={model.previousIntervalPage} onNextPage={model.nextIntervalPage} />
+				<details>
+					<summary>{copy.redepositRecovered}</summary>
+					<div className='form-grid'>
+						<UserMessage detail={copy.redepositHint} />
+						<PortfolioInput label={copy.redepositMinimum} value={model.redepositMinimum} onChange={model.setRedepositMinimum} disabled={actions.busy !== undefined} numeric />
+						<MetricGrid>
+							<MetricField label={copy.currentOwnershipFee} loading={model.loading}>
+								<CurrencyValue value={snapshot?.ownershipChangeFeeAttoEth} suffix={commonCopy.eth} />
+							</MetricField>
+						</MetricGrid>
+						<PortfolioButton model={actions} action='redepositPortfolioRecovery' label={copy.redepositRecovered} pendingLabel={copy.redepositingRecovered} reason={model.redepositReason} onClick={model.redepositRecovered} />
+					</div>
+				</details>
+				<PaginationControls hasPreviousPage={model.hasPreviousIntervalPage} hasNextPage={snapshot !== undefined && snapshot.nextIntervalCursor !== 0n} loading={model.loading} onPreviousPage={model.previousIntervalPage} onNextPage={model.nextIntervalPage} />
 			</SectionBlock>
 			{snapshot !== undefined && snapshot.forkTime > 0n ? <PortfolioSharedFork snapshot={snapshot} actions={actions} onConfirmed={model.refresh} /> : undefined}
 			<SectionBlock title={copy.depositPoolRep} description={copy.depositPoolHint}>
@@ -93,6 +143,9 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 					tokenSymbol={commonCopy.rep}
 					tokenUnits={18}
 				/>
+				<MetricField label={copy.currentOwnershipFee} loading={model.loading}>
+					<CurrencyValue value={snapshot?.ownershipChangeFeeAttoEth} suffix={commonCopy.eth} />
+				</MetricField>
 				<PortfolioButton model={actions} action='depositPortfolioRep' label={copy.depositPoolRep} pendingLabel={copy.depositingPoolRep} reason={model.depositReason} onClick={model.deposit} />
 			</SectionBlock>
 			<SectionBlock title={copy.mint} description={copy.mintHint}>
@@ -131,6 +184,9 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 					<PortfolioInput label={copy.fundSharesToWithdraw} value={model.withdrawalShares} onChange={model.setWithdrawalShares} disabled={actions.busy !== undefined} numeric />
 					<PortfolioInput label={copy.minimumIdleRep} value={model.withdrawalMinimum} onChange={model.setWithdrawalMinimum} disabled={actions.busy !== undefined} numeric />
 				</MetricGrid>
+				<MetricField label={copy.currentOwnershipFee} loading={model.loading}>
+					<CurrencyValue value={model.withdrawalFee} suffix={commonCopy.eth} />
+				</MetricField>
 				<PortfolioButton model={actions} action='withdrawPortfolioFund' label={copy.withdrawFund} pendingLabel={copy.withdrawingFund} reason={model.withdrawalReason} onClick={model.withdraw} />
 			</SectionBlock>
 			<SectionBlock title={copy.allocationPositions} description={copy.allocationPositionsHint}>
@@ -154,6 +210,7 @@ export function PortfolioAggregatePanel({ model, actions }: { model: Model; acti
 							{claim.remainingShares === 0n || claim.recoveryComplete ? undefined : <UserMessage detail={claim.reusable ? copy.reusablePositionHint : copy.historicalPositionHint} />}
 							{claim.recoveryComplete && snapshot !== undefined && snapshot.forkTime > 0n ? <UserMessage detail={sharedForkCopy.sourceRecoveredHint} /> : undefined}
 							<div className='actions'>
+								<PortfolioButton model={actions} action={`recyclePortfolioPosition:${claim.positionId}`} label={copy.recyclePosition} pendingLabel={copy.recyclingPosition} reason={claim.rebalanceReason} onClick={() => model.recyclePosition(claim.positionId)} />
 								<PortfolioButton model={actions} action={`rebalancePortfolioPosition:${claim.positionId}`} label={copy.rebalancePosition} pendingLabel={copy.rebalancingPosition} reason={claim.rebalanceReason} onClick={() => model.rebalancePosition(claim.positionId)} />
 							</div>
 							<details>

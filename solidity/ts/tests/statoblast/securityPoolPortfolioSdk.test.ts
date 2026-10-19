@@ -6,7 +6,7 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { applyLibraries, getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
-import { emptyOperations, maximumQuestionHorizonSeconds, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { portfolioEconomics, emptyOperations, maximumQuestionHorizonSeconds, unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
 
 describe('Statoblast: portfolio SDK against native contracts', () => {
 	const fixture = useSecurityPoolPortfolioFixture()
@@ -21,6 +21,8 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 				vaultDeployer: getInfraContractAddresses().securityPoolPortfolioVaultDeployer,
 				initialOriginPool: fixture.base.securityPoolAddresses.securityPool,
 				maximumQuestionHorizonSeconds,
+				questionAdmissionPolicy: fixture.questionAdmissionPolicy,
+				economics: portfolioEconomics,
 				artifact: { abi: portfolioArtifact.abi, bytecode: applyLibraries(portfolioArtifact.evm.bytecode.object) },
 			}),
 		)
@@ -31,7 +33,7 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 		expect(empty).toMatchObject({ originUniverseId: fixture.base.genesisUniverse, forkTime: 0n, repToken: getRepTokenAddress(fixture.base.genesisUniverse), shares: 0n, totalShares: 0n, assetsAttoRep: 0n, allowanceAttoRep: 0n, positionCount: 0n, positionStart: 0n, positions: [], questionCount: 0n, questions: [] })
 		expect(empty.walletAttoRep).toBeGreaterThan(100n * unit)
 		await approveToken(client, empty.repToken, portfolio)
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner: client.account.address, portfolio, amountAttoRep: 100n * unit, minimumShares: 100n * unit })))
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner: client.account.address, portfolio, amountAttoRep: 100n * unit, minimumShares: 100n * unit, maximumOwnershipFeeAttoEth: 0n })))
 		const funded = await loadPortfolioAggregateSnapshot({ client, portfolio, owner: client.account.address })
 		expect(funded).toMatchObject({ shares: 100n * unit, totalShares: 100n * unit, assetsAttoRep: 100n * unit, ownerAssetsAttoRep: 100n * unit, reserveAttoRep: 100n * unit, positionCount: 0n, positions: [], questionCount: 0n, questions: [] })
 		expect((await client.getBlock({ blockNumber: funded.blockNumber })).hash).toBe(funded.blockHash)
@@ -42,7 +44,7 @@ describe('Statoblast: portfolio SDK against native contracts', () => {
 		const owner = client.account.address
 		const portfolio = fixture.portfolio
 		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), portfolio)
-		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner, portfolio, amountAttoRep: 5_000n * unit, minimumShares: 5_000n * unit })))
+		await writeContractAndWait(client, () => client.sendTransaction(buildPortfolioDepositRequest({ owner, portfolio, amountAttoRep: 5_000n * unit, minimumShares: 5_000n * unit, maximumOwnershipFeeAttoEth: 0n })))
 		await fixture.refreshPrice(fixture.base.questionId)
 		const funded = await loadPortfolioAggregateSnapshot({ client, portfolio, owner })
 		const quote = await loadPortfolioMintQuote({ client, snapshot: funded, questionId: fixture.base.questionId, mintAttoEth: 100n * unit })

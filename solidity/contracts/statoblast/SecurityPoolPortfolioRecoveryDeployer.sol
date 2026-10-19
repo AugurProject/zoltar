@@ -5,9 +5,17 @@ import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolPortfolioPosition } from './SecurityPoolPortfolioPosition.sol';
 import { SecurityPoolPortfolioQuote } from './SecurityPoolPortfolioQuote.sol';
 import { SecurityPoolPortfolioRecovery } from './SecurityPoolPortfolioRecovery.sol';
+import { SecurityPoolPortfolioQuoteDeployer } from './SecurityPoolPortfolioQuoteDeployer.sol';
 
 /// @notice Deploy portfolio accounting and custody with authority bound to the requesting controller.
 contract SecurityPoolPortfolioRecoveryDeployer {
+	SecurityPoolPortfolioQuoteDeployer public immutable quoteDeployer;
+
+	constructor(SecurityPoolPortfolioQuoteDeployer _quoteDeployer) {
+		require(address(_quoteDeployer).code.length > 0, 'Quote deployer has no code');
+		quoteDeployer = _quoteDeployer;
+	}
+
 	function createRootRecovery() external returns (SecurityPoolPortfolioRecovery) {
 		return new SecurityPoolPortfolioRecovery(msg.sender, 0, false);
 	}
@@ -16,8 +24,8 @@ contract SecurityPoolPortfolioRecoveryDeployer {
 		return new SecurityPoolPortfolioRecovery(msg.sender, positionCount, true);
 	}
 
-	function createQuote() external returns (SecurityPoolPortfolioQuote) {
-		return new SecurityPoolPortfolioQuote();
+	function createQuote(uint256 targetHealthFactorBps, uint256 purchaseFeeBps, uint256 minimumPurchaseFeeAttoEth) external returns (SecurityPoolPortfolioQuote) {
+		return quoteDeployer.createQuote(msg.sender, targetHealthFactorBps, purchaseFeeBps, minimumPurchaseFeeAttoEth);
 	}
 
 	function createPosition(ISecurityPool pool, SecurityPoolPortfolioQuote quote, ISecurityPool incomingParent, address incomingSource) external returns (SecurityPoolPortfolioPosition) {

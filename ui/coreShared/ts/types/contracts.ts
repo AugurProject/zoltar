@@ -16,6 +16,7 @@ export type DeploymentStepId =
 	| 'escalationGameDepositDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'
+	| 'securityPoolPortfolioQuoteDeployer'
 	| 'securityPoolPortfolioVaultDeployer'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 

@@ -740,6 +740,14 @@
 		"./simulation/portfolioScenarioMint.js": {
 			"bun": "./ts/simulation/portfolioScenarioMint.ts",
 			"default": "./js/simulation/portfolioScenarioMint.js"
+		},
+		"./features/portfolios/lib/creation.js": {
+			"bun": "./ts/features/portfolios/lib/creation.ts",
+			"default": "./js/features/portfolios/lib/creation.js"
+		},
+		"./protocol/securityPoolPortfolioAdmission.js": {
+			"bun": "./ts/protocol/securityPoolPortfolioAdmission.ts",
+			"default": "./js/protocol/securityPoolPortfolioAdmission.js"
 		}
 	},
 	"version": "1.0.0"

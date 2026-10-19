@@ -1,10 +1,21 @@
 import { encodeFunctionData, getAddress, isAddress, parseAbi, zeroAddress, type Address, type AbiValue, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import type { PortfolioEconomicsConfig } from './securityPoolPortfolio.js'
 import type { PortfolioReadClient } from './securityPoolPortfolioRead.js'
 
 const abi = parseAbi([
-	'function deposit(uint256 amountAttoRep,uint256 minimumShares) returns (uint256)',
-	'function withdraw(uint256 shares,uint256 minimumIdleAttoRep) returns (uint256)',
+	'function deposit(uint256 amountAttoRep,uint256 minimumShares) payable returns (uint256)',
+	'function withdraw(uint256 shares,uint256 minimumIdleAttoRep) payable returns (uint256)',
 	'function claimRecovered(uint256[] intervalIds,uint256[] positionIds)',
+	'function claimRecoveredAndDeposit(uint256[] intervalIds,uint256[] positionIds,uint256 minimumShares) payable',
+	'function recyclePosition(uint256 positionId)',
+	'function targetHealthFactorBps() view returns (uint256)',
+	'function purchaseFeeBps() view returns (uint256)',
+	'function minimumPurchaseFeeAttoEth() view returns (uint256)',
+	'function completionRewardAttoEth() view returns (uint256)',
+	'function ownershipChangeFeeAttoEth() view returns (uint256)',
+	'function quoteOwnershipChangeFee() view returns (uint256)',
+	'function maintenanceBudgetAttoEth() view returns (uint256)',
+	'function questionAdmissionPolicy() view returns (address)',
 	'function rebalancePosition(uint256 positionId)',
 	'function claimPosition(uint256 positionId,uint256 intervalId)',
 	'function balanceOf(address owner) view returns (uint256)',
@@ -29,7 +40,9 @@ const abi = parseAbi([
 	'function isIntervalSelected(uint256 contextId,address owner,uint256 intervalId) view returns (bool)',
 	'function recoveryBounties(uint256 positionId) view returns (uint256)',
 	'function processingRewards(address owner) view returns (uint256)',
-	'function getOwnerIntervalCount(address owner) view returns (uint256)',
+	'function canRetireOwnerInterval(address owner,uint256 intervalId) view returns (bool)',
+	'function getOwnerActiveIntervalCount(address owner) view returns (uint256)',
+	'function getOwnerActiveIntervals(address owner,uint256 cursor,uint256 count) view returns (uint256[] intervalIds,uint256 nextCursor)',
 	'function getOwnerInterval(address owner,uint256 intervalId) view returns ((uint256 generation,uint256 startPosition,uint256 endPosition,uint256 shares,uint256 repIndex,uint256 feeIndex,bool open,bool active))',
 	'function previewClaim(address owner,uint256[] intervalIds) view returns (uint256 rep,uint256 eth)',
 	'function questionCount() view returns (uint256)',
@@ -64,17 +77,17 @@ function request(owner: Address, portfolio: Address, functionName: string, args:
 }
 
 /** Approve the portfolio REP token separately before depositing into its common underwriting fund. */
-export function buildPortfolioDepositRequest(parameters: { owner: Address; portfolio: Address; amountAttoRep: bigint; minimumShares: bigint }) {
+export function buildPortfolioDepositRequest(parameters: { owner: Address; portfolio: Address; amountAttoRep: bigint; minimumShares: bigint; maximumOwnershipFeeAttoEth: bigint }) {
 	const amount = uint(parameters.amountAttoRep, 'REP deposit')
 	if (amount === 0n) throw new Error('Enter a positive REP deposit.')
-	return request(parameters.owner, parameters.portfolio, 'deposit', [amount, uint(parameters.minimumShares, 'Minimum fund shares')])
+	return { ...request(parameters.owner, parameters.portfolio, 'deposit', [amount, uint(parameters.minimumShares, 'Minimum fund shares')]), value: uint(parameters.maximumOwnershipFeeAttoEth, 'Ownership fee budget') }
 }
 
 /** Burns the owner's fund shares; native question positions remain subject to their existing locks. */
-export function buildPortfolioFundWithdrawalRequest(parameters: { owner: Address; portfolio: Address; shares: bigint; minimumIdleAttoRep: bigint }) {
+export function buildPortfolioFundWithdrawalRequest(parameters: { owner: Address; portfolio: Address; shares: bigint; minimumIdleAttoRep: bigint; maximumOwnershipFeeAttoEth: bigint }) {
 	const shares = uint(parameters.shares, 'Fund shares')
 	if (shares === 0n) throw new Error('Enter a positive fund share amount.')
-	return request(parameters.owner, parameters.portfolio, 'withdraw', [shares, uint(parameters.minimumIdleAttoRep, 'Minimum idle REP')])
+	return { ...request(parameters.owner, parameters.portfolio, 'withdraw', [shares, uint(parameters.minimumIdleAttoRep, 'Minimum idle REP')]), value: uint(parameters.maximumOwnershipFeeAttoEth, 'Ownership fee budget') }
 }
 
 function orderedIds(values: readonly bigint[], label: string) {
@@ -89,6 +102,19 @@ export function buildPortfolioClaimRecoveredRequest(parameters: { owner: Address
 	return request(parameters.owner, parameters.portfolio, 'claimRecovered', [orderedIds(parameters.intervalIds, 'Owner interval id'), orderedIds(parameters.positionIds ?? [], 'Position id')])
 }
 
+export function buildPortfolioClaimAndDepositRequest(parameters: { owner: Address; portfolio: Address; intervalIds: readonly bigint[]; positionIds?: readonly bigint[]; minimumShares: bigint; maximumOwnershipFeeAttoEth: bigint }) {
+	return {
+		...request(parameters.owner, parameters.portfolio, 'claimRecoveredAndDeposit', [orderedIds(parameters.intervalIds, 'Owner interval id'), orderedIds(parameters.positionIds ?? [], 'Position id'), uint(parameters.minimumShares, 'Minimum fund shares')]),
+		value: uint(parameters.maximumOwnershipFeeAttoEth, 'Ownership fee budget'),
+	}
+}
+
+export function buildPortfolioRecyclePositionRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint }) {
+	const positionId = uint(parameters.positionId, 'Position id')
+	if (positionId === 0n) throw new Error('Choose an allocation position.')
+	return request(parameters.processor, parameters.portfolio, 'recyclePosition', [positionId])
+}
+
 export function buildPortfolioPositionRebalanceRequest(parameters: { processor: Address; portfolio: Address; positionId: bigint }) {
 	return request(parameters.processor, parameters.portfolio, 'rebalancePosition', [uint(parameters.positionId, 'Position id')])
 }
@@ -100,6 +126,10 @@ export function buildPortfolioPositionClaimRequest(parameters: { owner: Address;
 
 export type PortfolioAggregateSnapshot = {
 	portfolio: Address
+	economics: PortfolioEconomicsConfig
+	questionAdmissionPolicy: Address
+	ownershipChangeFeeAttoEth: bigint
+	maintenanceBudgetAttoEth: bigint
 	owner: Address
 	chainId: number
 	blockNumber: bigint
@@ -115,8 +145,9 @@ export type PortfolioAggregateSnapshot = {
 	claimableFeesAttoEth: bigint
 	recoveryLedger: Address
 	intervalCount: bigint
-	intervalStart: bigint
-	intervals: { intervalId: bigint; generation: bigint; startPosition: bigint; endPosition: bigint; shares: bigint; open: boolean; active: boolean; sharedForkSelected?: boolean }[]
+	intervalCursor: bigint
+	nextIntervalCursor: bigint
+	intervals: { intervalId: bigint; generation: bigint; startPosition: bigint; endPosition: bigint; shares: bigint; open: boolean; active: boolean; canRetire: boolean; sharedForkSelected?: boolean }[]
 	recoverableRepAttoRep: bigint
 	recoverableFeesAttoEth: bigint
 	processingRewardsAttoEth: bigint
@@ -133,13 +164,13 @@ export type PortfolioAggregateSnapshot = {
 }
 
 /** Reserve balances and bounded allocation/question pages share one mined block. */
-export async function loadPortfolioAggregateSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; positionStart?: bigint; questionStart?: bigint; intervalStart?: bigint }): Promise<PortfolioAggregateSnapshot> {
+export async function loadPortfolioAggregateSnapshot(parameters: { client: PortfolioReadClient; portfolio: Address; owner: Address; positionStart?: bigint; questionStart?: bigint; intervalCursor?: bigint }): Promise<PortfolioAggregateSnapshot> {
 	const { client } = parameters
 	const portfolio = address(parameters.portfolio)
 	const owner = address(parameters.owner)
 	const positionStart = uint(parameters.positionStart ?? 0n, 'Position page start')
 	const questionStart = uint(parameters.questionStart ?? 0n, 'Question page start')
-	const intervalStart = uint(parameters.intervalStart ?? 0n, 'Recovery history page start')
+	const intervalCursor = uint(parameters.intervalCursor ?? 0n, 'Recovery history page start')
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
 	const { number: blockNumber, hash: blockHash, timestamp } = block
 	if (blockNumber === undefined || blockHash === undefined) throw new Error('Portfolio snapshot requires a mined block.')
@@ -157,6 +188,14 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		read(portfolio, 'recoveryLedger'),
 		read(portfolio, 'processingRewards', [owner]),
 		read(portfolio, 'forkController'),
+		read(portfolio, 'targetHealthFactorBps'),
+		read(portfolio, 'purchaseFeeBps'),
+		read(portfolio, 'minimumPurchaseFeeAttoEth'),
+		read(portfolio, 'completionRewardAttoEth'),
+		read(portfolio, 'ownershipChangeFeeAttoEth'),
+		read(portfolio, 'quoteOwnershipChangeFee'),
+		read(portfolio, 'maintenanceBudgetAttoEth'),
+		read(portfolio, 'questionAdmissionPolicy'),
 	])
 	const originUniverseId = uint(values[0], 'Universe id')
 	// The shared feed exists before any question is registered. Its configuration
@@ -173,27 +212,41 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	const assetsAttoRep = uint(values[4], 'Fund assets')
 	const claimableFeesAttoEth = uint(values[5], 'Claimable fees')
 	const multiplier = uint(values[6], 'Security multiplier')
+	const economics = {
+		targetHealthFactorBps: uint(values[12], 'Target health'),
+		purchaseFeeBps: uint(values[13], 'Purchase fee'),
+		minimumPurchaseFeeAttoEth: uint(values[14], 'Minimum purchase fee'),
+		completionRewardAttoEth: uint(values[15], 'Completion reward'),
+		ownershipChangeFeeAttoEth: uint(values[16], 'Ownership change fee'),
+	}
+	const ownershipChangeFeeAttoEth = uint(values[17], 'Quoted ownership fee')
+	const maintenanceBudgetAttoEth = uint(values[18], 'Maintenance budget')
+	const questionAdmissionPolicy = address(values[19])
 	const reserveAttoRep = assetsAttoRep
-	const reserveCapacityAttoEth = price === 0n ? 0n : (((reserveAttoRep * 10n ** 18n) / price) * 100_000_000n) / ((multiplier > 10_500n ? multiplier : 10_500n) * 12_000n)
+	const reserveCapacityAttoEth = price === 0n ? 0n : (((reserveAttoRep * 10n ** 18n) / price) * 100_000_000n) / ((multiplier > 10_500n ? multiplier : 10_500n) * economics.targetHealthFactorBps)
 	const positionCount = uint(values[7], 'Position count')
 	const questionCount = uint(values[8], 'Question count')
 	const recoveryLedger = address(values[9])
 	const processingRewardsAttoEth = uint(values[10], 'Processing rewards')
 	const forkController = address(values[11])
-	const intervalCountValue = await read(recoveryLedger, 'getOwnerIntervalCount', [owner])
-	const intervalCount = uint(intervalCountValue, 'Recovery history count')
-	if (intervalStart > intervalCount) throw new Error('Recovery history page is out of bounds.')
-	const intervalPageCount = intervalCount - intervalStart < 64n ? intervalCount - intervalStart : 64n
+	const [intervalCountValue, intervalPageValue] = await Promise.all([read(recoveryLedger, 'getOwnerActiveIntervalCount', [owner]), read(recoveryLedger, 'getOwnerActiveIntervals', [owner, intervalCursor, 64n])])
+	const intervalCount = uint(intervalCountValue, 'Active recovery history count')
+	const intervalPage = tuple(intervalPageValue, 2)
+	if (!Array.isArray(intervalPage[0]) || intervalPage[0].length > 64) throw new Error('Invalid active ownership history page.')
+	const intervalIds = intervalPage[0].map(value => uint(value, 'Owner interval id'))
+	const nextIntervalCursor = uint(intervalPage[1], 'Next ownership cursor')
+	if (intervalIds.some((id, index) => id + 1n < intervalCursor || (index > 0 && id <= (intervalIds[index - 1] ?? id)))) throw new Error('Invalid active ownership history order.')
+	const lastId = intervalIds.at(-1)
+	if (nextIntervalCursor !== 0n && (lastId === undefined || nextIntervalCursor <= lastId + 1n)) throw new Error('Invalid active ownership continuation.')
 	const intervals = await Promise.all(
-		Array.from({ length: Number(intervalPageCount) }, async (_, index) => {
-			const intervalId = intervalStart + BigInt(index)
-			const [value, sharedForkSelected] = await Promise.all([read(recoveryLedger, 'getOwnerInterval', [owner, intervalId]), forkTime > 0n ? read(forkController, 'isIntervalSelected', [0n, owner, intervalId]) : Promise.resolve(false)])
+		intervalIds.map(async intervalId => {
+			const [value, canRetire, sharedForkSelected] = await Promise.all([read(recoveryLedger, 'getOwnerInterval', [owner, intervalId]), read(recoveryLedger, 'canRetireOwnerInterval', [owner, intervalId]), forkTime > 0n ? read(forkController, 'isIntervalSelected', [0n, owner, intervalId]) : Promise.resolve(false)])
 			const fields = ['generation', 'startPosition', 'endPosition', 'shares', 'repIndex', 'feeIndex', 'open', 'active']
 			const entry = Array.isArray(value) ? tuple(value, fields.length) : fields.map(field => (value !== null && typeof value === 'object' ? Reflect.get(value, field) : undefined))
 			const open = entry[6]
 			const active = entry[7]
-			if (typeof open !== 'boolean' || typeof active !== 'boolean' || typeof sharedForkSelected !== 'boolean') throw new Error('Invalid recovery interval state.')
-			return { intervalId, generation: uint(entry[0], 'Recovery generation'), startPosition: uint(entry[1], 'First allocation'), endPosition: uint(entry[2], 'Last allocation'), shares: uint(entry[3], 'Recovery shares'), open, active, sharedForkSelected }
+			if (typeof open !== 'boolean' || typeof active !== 'boolean' || typeof canRetire !== 'boolean' || typeof sharedForkSelected !== 'boolean') throw new Error('Invalid recovery interval state.')
+			return { intervalId, generation: uint(entry[0], 'Recovery generation'), startPosition: uint(entry[1], 'First allocation'), endPosition: uint(entry[2], 'Last allocation'), shares: uint(entry[3], 'Recovery shares'), open, active, canRetire, sharedForkSelected }
 		}),
 	)
 	const proceeds = tuple(await read(recoveryLedger, 'previewClaim', [owner, intervals.filter(interval => interval.active).map(interval => interval.intervalId)]), 2)
@@ -240,6 +293,10 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 	if (latestBlock.hash !== blockHash || latestChain !== chainId) throw new Error('Chain changed while reading the portfolio. Refresh and try again.')
 	return {
 		portfolio,
+		economics,
+		questionAdmissionPolicy,
+		ownershipChangeFeeAttoEth,
+		maintenanceBudgetAttoEth,
 		owner,
 		chainId,
 		blockNumber,
@@ -255,7 +312,8 @@ export async function loadPortfolioAggregateSnapshot(parameters: { client: Portf
 		claimableFeesAttoEth,
 		recoveryLedger,
 		intervalCount,
-		intervalStart,
+		intervalCursor,
+		nextIntervalCursor,
 		intervals,
 		recoverableRepAttoRep,
 		recoverableFeesAttoEth,

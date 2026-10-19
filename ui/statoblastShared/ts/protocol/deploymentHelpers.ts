@@ -11,6 +11,7 @@ import {
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
 	statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote,
+	statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer,
 	statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery,
 	statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController,
 	statoblast_SecurityPoolPortfolioRecoveryDeployer_SecurityPoolPortfolioRecoveryDeployer,
@@ -43,6 +44,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+		securityPoolPortfolioQuoteDeployer: statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer,
 		securityPoolPortfolioVaultDeployer: statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer,
 		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
@@ -59,6 +61,7 @@ export const {
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
 	getSecurityPoolOperationsDelegateByteCode,
+	getSecurityPoolPortfolioQuoteDeployerByteCode,
 	getSecurityPoolPortfolioVaultDeployerByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
@@ -69,6 +72,7 @@ export const getSecurityPoolPortfolioRuntimeCode = () => statoblastInitCodes.app
 export const getSecurityPoolPortfolioRecoveryRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioRecovery_SecurityPoolPortfolioRecovery.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioForkControllerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioForkController_SecurityPoolPortfolioForkController.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioRecoveryDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioRecoveryDeployer_SecurityPoolPortfolioRecoveryDeployer.evm.deployedBytecode.object)
+export const getSecurityPoolPortfolioQuoteDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioQuoteDeployer_SecurityPoolPortfolioQuoteDeployer.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioQuoteRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioQuote_SecurityPoolPortfolioQuote.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioVaultRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVault_SecurityPoolPortfolioVault.evm.deployedBytecode.object)
 export const getSecurityPoolPortfolioVaultDeployerRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.deployedBytecode.object)
@@ -95,7 +99,8 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		openOracle: '',
 		priceCoordinatorDeploymentWorker: '',
 		sharedPoolPriceFeedDeploymentWorker: '',
-		securityPoolPortfolioVaultDeployer: '',
+		securityPoolPortfolioQuoteDeployer: '',
+		securityPoolPortfolioVaultDeployer: constructorArgumentsFromInitCode(getSecurityPoolPortfolioVaultDeployerByteCode(), statoblast_SecurityPoolPortfolioVaultDeployer_SecurityPoolPortfolioVaultDeployer.evm.bytecode.object),
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
 		openOraclePriceCoordinatorFactory: constructorArgumentsFromInitCode(getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress), statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
 		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),

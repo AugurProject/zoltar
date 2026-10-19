@@ -17,7 +17,7 @@ import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 contract SecurityPoolPortfolioPosition {
 	using SafeERC20Ops for IERC20;
 
-	uint256 private constant MINIMUM_HEALTH_FACTOR_BPS = 12_000;
+	uint256 private immutable targetHealthFactorBps;
 	address public immutable portfolio;
 	ISecurityPool public immutable pool;
 	SecurityPoolPortfolioQuote private immutable quoteHelper;
@@ -30,6 +30,7 @@ contract SecurityPoolPortfolioPosition {
 		portfolio = _portfolio;
 		pool = _pool;
 		quoteHelper = _quoteHelper;
+		targetHealthFactorBps = _quoteHelper.targetHealthFactorBps();
 		incomingParent = _incomingParent;
 		incomingSource = _incomingSource;
 	}
@@ -59,7 +60,7 @@ contract SecurityPoolPortfolioPosition {
 		(, uint256 commitment, , ) = pool.securityVaults(address(this));
 		if (retainedCommitment < commitment) pool.setUnderwritingLimit(retainedCommitment);
 		if (releaseAttoRep > 0)
-			pool.openOraclePriceCoordinator().vaultOperations().submitVaultOperations(VaultOperationsInput(0, false, 0, new VaultLiquidationInput[](0), releaseAttoRep, MINIMUM_HEALTH_FACTOR_BPS, 300), 0, 0, 0);
+			pool.openOraclePriceCoordinator().vaultOperations().submitVaultOperations(VaultOperationsInput(0, false, 0, new VaultLiquidationInput[](0), releaseAttoRep, targetHealthFactorBps, 300), 0, 0, 0);
 		if (!returnToReserve) return (0, 0);
 		IERC20 repToken = IERC20(address(pool.repToken()));
 		repReturned = repToken.balanceOf(address(this));
@@ -124,7 +125,7 @@ contract SecurityPoolPortfolioPosition {
 					address(game) != address(0) && !game.forkContinuation() && game.totalDisputeStakedAttoRep() > 0;
 				// Preserve backing units that may receive ordinary-game residual after principal claims settle.
 				if (releaseAttoRep > 0 && !residualPending)
-					pool.openOraclePriceCoordinator().vaultOperations().submitVaultOperations(VaultOperationsInput(0, false, 0, new VaultLiquidationInput[](0), releaseAttoRep, MINIMUM_HEALTH_FACTOR_BPS, 300), 0, 0, 0);
+					pool.openOraclePriceCoordinator().vaultOperations().submitVaultOperations(VaultOperationsInput(0, false, 0, new VaultLiquidationInput[](0), releaseAttoRep, targetHealthFactorBps, 300), 0, 0, 0);
 			}
 		}
 		(rep, fees) = _collect();
