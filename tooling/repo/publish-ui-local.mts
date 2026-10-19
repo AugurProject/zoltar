@@ -4,7 +4,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { repositoryRoot } from './root.mts'
 
 /**
- * Builds all three UIs and pins them on the IPFS node that is already running on the host.
+ * Builds all UIs and pins them on the IPFS node that is already running on the host.
  * Run it with `bun run ui:publish:local`; publish.bat is a Windows double-click wrapper around that command.
  */
 const defaultLocalIpfsApi = '/dns4/host.docker.internal/tcp/5001'
@@ -36,8 +36,8 @@ export function localPublishSteps(kuboImage: string, ipfsApi: string): PublishSt
 			quiet: true,
 			failure: 'Could not connect to your local IPFS API from Docker. Start your IPFS node and ensure its API is reachable from Docker at host.docker.internal:5001, or set IPFS_API to its Kubo API multiaddress.',
 		},
-		{ description: 'Building Zoltar, Statoblast, Trading, and the IPFS publisher...', command: ['docker', 'build', '--target', 'local-publisher', '-f', 'ui/Dockerfile', '.', '-t', localPublisherImage], quiet: false, failure: 'Building the local publisher image failed.' },
-		{ description: 'Publishing all three UIs...', command: ['docker', 'run', '--rm', hostGateway, '-e', `IPFS_API=${ipfsApi}`, localPublisherImage], quiet: false, failure: 'Publishing to your local IPFS node failed.' },
+		{ description: 'Building Zoltar, Statoblast, Trading, OpenOracle, and the IPFS publisher...', command: ['docker', 'build', '--target', 'local-publisher', '-f', 'ui/Dockerfile', '.', '-t', localPublisherImage], quiet: false, failure: 'Building the local publisher image failed.' },
+		{ description: 'Publishing all UIs...', command: ['docker', 'run', '--rm', hostGateway, '-e', `IPFS_API=${ipfsApi}`, localPublisherImage], quiet: false, failure: 'Publishing to your local IPFS node failed.' },
 	]
 }
 
@@ -49,7 +49,7 @@ async function publishLocal() {
 		const child = Bun.spawn({ cmd: [...step.command], cwd: repositoryRoot, stdin: 'inherit', stdout: step.quiet ? 'ignore' : 'inherit', stderr: 'inherit' })
 		if ((await child.exited) !== 0) throw new Error(step.failure)
 	}
-	console.log('All three UIs are pinned on your local IPFS node. Keep it running to serve them.')
+	console.log('All UIs are pinned on your local IPFS node. Keep it running to serve them.')
 }
 
 if (import.meta.main) {

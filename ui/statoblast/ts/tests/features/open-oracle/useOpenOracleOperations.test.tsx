@@ -215,6 +215,27 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating OpenOracle.')
 	})
 
+	test('keeps equivalent numeric report IDs actionable after loading', async () => {
+		const report = createOpenOracleReportDetails({ currentReporter: WALLET_ADDRESS, currentTime: 11n, reportTimestamp: 1n, settlementTime: 10n })
+		const settleOracleReport = mock(async () => ({ action: 'settle' as const, hash: STATE_HASH }))
+		const dependencies = createOpenOracleOperationsDependencies({ loadOpenOracleReportDetails: async () => report, settleOracleReport })
+		let state: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		trackCleanup((await renderIntoDocument(<Harness />)).cleanup)
+		await act(async () => {
+			await requireHookState(state).loadOracleReport('0001')
+		})
+		expect(requireHookState(state).openOracleForm.reportId).toBe('1')
+		expect(requireHookState(state).openOracleReportDetails?.reportId).toBe(REPORT_ID)
+		await act(async () => {
+			await requireHookState(state).settleReport()
+		})
+		expect(requireHookState(state).openOracleError).toBeUndefined()
+		expect(settleOracleReport).toHaveBeenCalledTimes(1)
+	})
+
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {
 		const secondReportId = 2n
 		const dependencies = createOpenOracleOperationsDependencies({

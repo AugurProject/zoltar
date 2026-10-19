@@ -40,7 +40,7 @@ test('registry tasks carry explicit working directories and derive canonical tas
 			expect(task.cwd === '.' || task.cwd === project.path).toBe(true)
 		}
 	expect(taskProjects('setup').map(project => project.id)).toContain('ui-trading')
-	expect(projectsInTaskGroup('build', 'ui').at(-1)?.id).toBe('ui-trading')
+	expect(projectsInTaskGroup('build', 'ui').at(-1)?.id).toBe('ui-openoracle')
 	expect(taskProjects('test').map(project => project.id)).toContain('chaos')
 })
 

@@ -221,6 +221,26 @@
         "typescript": "5.8.2",
       },
     },
+    "ui/openoracle": {
+      "name": "@zoltar/ui-openoracle",
+      "version": "1.0.0",
+      "dependencies": {
+        "@preact/signals": "2.0.1",
+        "@tevm/common": "1.0.0-rc.151",
+        "@tevm/memory-client": "1.0.0-rc.151",
+        "@zoltar/core-shared": "workspace:1.0.0",
+        "@zoltar/open-oracle-shared": "workspace:1.0.0",
+        "@zoltar/statoblast-shared": "workspace:1.0.0",
+        "@zoltar/ui-core-shared": "workspace:1.0.0",
+        "@zoltar/ui-statoblast-shared": "workspace:1.0.0",
+        "@zoltar/ui-zoltar-shared": "workspace:1.0.0",
+        "preact": "10.26.4",
+      },
+      "devDependencies": {
+        "bun-types": "1.4.2",
+        "typescript": "5.8.2",
+      },
+    },
     "ui/statoblast": {
       "name": "@zoltar/ui-statoblast",
       "version": "1.0.0",
@@ -761,6 +781,8 @@
     "@zoltar/trading-shared": ["@zoltar/trading-shared@workspace:shared/trading"],
 
     "@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@workspace:ui/coreShared"],
+
+    "@zoltar/ui-openoracle": ["@zoltar/ui-openoracle@workspace:ui/openoracle"],
 
     "@zoltar/ui-statoblast": ["@zoltar/ui-statoblast@workspace:ui/statoblast"],
 

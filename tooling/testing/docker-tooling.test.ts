@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerInstructions, parseDockerfile, requireDockerStage } from './packaging-parsers.ts'
+import { UI_APP_IDS } from '../ui/appIds.mts'
 
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 
@@ -59,7 +60,7 @@ describe('Docker tooling dependencies', () => {
 			}
 		})
 	}
-	for (const appId of ['zoltar', 'statoblast', 'trading']) {
+	for (const appId of UI_APP_IDS) {
 		test(`${appId} runtime includes the server's transitive imports`, async () => {
 			const stage = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), `local-runtime-${appId}`)
 			const root = await mkdtemp(join(tmpdir(), 'ui-docker-runtime-'))

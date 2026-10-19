@@ -58,7 +58,7 @@ function emitListeners(listeners: ReturnType<typeof createListenerMap>, eventNam
 	}
 }
 
-function resolveWorkerPath(appId: 'zoltar' | 'statoblast' | 'trading' = 'zoltar') {
+function resolveWorkerPath(appId: 'zoltar' | 'statoblast' | 'trading' | 'openoracle' = 'zoltar') {
 	const currentUrl = new URL(import.meta.url)
 	if (currentUrl.protocol === 'file:') return new URL(`../../../${appId}/ts/simulation/tevmWorker.ts`, import.meta.url)
 	if (currentUrl.pathname.includes('/assets/')) return new URL('./tevmWorker.worker.js', import.meta.url)
@@ -95,7 +95,7 @@ export async function createSimulationBackend(
 		savedStateId,
 		scenario,
 		walletMode = DEFAULT_SIMULATION_WALLET_MODE,
-	}: { appId?: 'zoltar' | 'statoblast' | 'trading'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
+	}: { appId?: 'zoltar' | 'statoblast' | 'trading' | 'openoracle'; initialBootstrapError?: string; savedState?: SavedSimulationStateEnvelopeV1; savedStateId?: string; scenario?: SimulationScenario; walletMode?: SimulationWalletMode },
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]

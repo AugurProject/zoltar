@@ -6,7 +6,7 @@ import { isStoredRecord } from './storedValueReader.js'
  * Everything is scoped by app, network, and entity kind so a pool favorited on one network never
  * appears on another. Values are versioned, size-capped, and bigint-safe.
  */
-export type LocalEntityApp = 'zoltar' | 'statoblast' | 'trading'
+export type LocalEntityApp = 'zoltar' | 'statoblast' | 'trading' | 'openoracle'
 export type LocalEntityKind = 'pool' | 'question' | 'market' | 'oracleReport'
 export type LocalEntityScope = Readonly<{ app: LocalEntityApp; kind: LocalEntityKind; network: string }>
 export type FavoriteEntry = Readonly<{ id: string; addedAt: number }>

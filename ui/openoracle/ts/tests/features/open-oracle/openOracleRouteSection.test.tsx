@@ -1,5 +1,3 @@
-import { ReportingOracleBlocker } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingOracleBlocker.js'
-import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 /// <reference types="bun-types" />
 
 import { signal } from '@preact/signals'
@@ -16,7 +14,8 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from 
 import type { OpenOracleActionResult, OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
-import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
+import { PriceRequestStatusSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -254,8 +253,10 @@ describe('OpenOracleSection route create view', () => {
 			await Promise.resolve()
 		})
 		expect(formChanges).toEqual([{ reportId: '12' }])
-		expect(viewChanges).toEqual(['selected-report'])
+		expect(viewChanges).toEqual([])
 		expect(loadedReportIds).toEqual(['12'])
+		// Opening the report preserves its receipt feedback when history returns to create.
+		expect(documentQueries.getByRole('heading', { name: 'Report created' })).not.toBeNull()
 	})
 
 	test('keeps standalone create disabled off Sepolia and explains recovery', async () => {
@@ -1264,6 +1265,43 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
+	test('keeps both report surfaces on the same chain clock and live settlement countdown', async () => {
+		const reportProps = createOpenOracleSectionProps({
+			activeView: 'selected-report',
+			openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
+			openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 105n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 2n, timeType: true }),
+			openOracleReportLookupState: 'ready',
+		})
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<section aria-label='Statoblast report'>
+					<PriceRequestStatusSection {...reportProps} />
+				</section>
+				<section aria-label='OpenOracle report'>
+					<OpenOracleSection {...reportProps} />
+				</section>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const surfaces = ['Statoblast report', 'OpenOracle report'].map(name => within(document.body).getByRole('region', { name }))
+		for (const surface of surfaces) {
+			expect(within(surface).getByText('Can settle in 2s')).not.toBeNull()
+			expect(within(surface).getByText('Dispute window open')).not.toBeNull()
+			expectTransactionButtonDisabled(surface, 'Settle report')
+		}
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		for (const surface of surfaces) {
+			expect(within(surface).getByText('Can settle in 1s')).not.toBeNull()
+			expectTransactionButtonDisabled(surface, 'Settle report')
+		}
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		for (const surface of surfaces) {
+			expect(within(surface).queryByText('Can settle in 1s')).toBeNull()
+			expect(within(surface).getByText('Ready to settle')).not.toBeNull()
+			expectTransactionButtonEnabled(surface, 'Settle report')
+		}
+	})
+
 	test('counts down to settlement and enables the report action at zero', async () => {
 		await withFakeClock(async clock => {
 			const reloads: string[] = []
@@ -1658,23 +1696,7 @@ describe('OpenOracleSection route create view', () => {
 				await act(() => fireEvent.click(fix))
 				expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 			})
-	test('prepares the pending reporting price report and settles with one click', async () => {
-		const settle = mock(() => undefined)
-		const load = mock(() => undefined)
-		const oracle = createOpenOracleSectionProps({
-			onSettleReport: settle,
-			onLoadOracleReport: load,
-			openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
-			openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, reportTimestamp: 100n, settlementTime: 2n, timeType: true }),
-		})
-		const rendered = await renderIntoDocument(<ReportingOracleBlocker blocked manager={createOracleManagerDetails({ pendingReportId: 7n, pendingReportReadyAtTimestamp: 102n })} now={200n} onRequest={() => undefined} requestReason={undefined} onRefresh={() => undefined} oracle={oracle} onViewReport={() => undefined} />)
-		cleanupRenderedComponent = rendered.cleanup
-		expect(load).toHaveBeenCalledWith('7')
-		expect(settle).toHaveBeenCalledTimes(0)
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Settle report #7' }))
-		expect(settle).toHaveBeenCalledTimes(1)
-		expect(within(document.body).queryByRole('dialog')).toBeNull()
-	})
+
 	for (const [account, fixLabel] of [
 		[createAccountState({ address: undefined }), 'Connect wallet'],
 		[createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],

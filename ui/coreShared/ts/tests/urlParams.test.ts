@@ -42,8 +42,9 @@ void describe('url params', () => {
 	void test('reads and writes an open oracle report id query param', () => {
 		expect(readOpenOracleReportIdQueryParam('?openOracleReportId=42')).toBe('42')
 		expect(readOpenOracleReportIdQueryParam('?openOracleReportId=')).toBe(undefined)
-		expect(writeOpenOracleReportIdQueryParam('', '42')).toBe('?openOracleReportId=42&openOracleView=selected-report')
-		expect(writeOpenOracleReportIdQueryParam('?foo=bar', '42')).toBe('?foo=bar&openOracleReportId=42&openOracleView=selected-report')
+		expect(writeOpenOracleReportIdQueryParam('', '42')).toBe('?openOracleReportId=42')
+		expect(writeOpenOracleReportIdQueryParam('?foo=bar', '42')).toBe('?foo=bar&openOracleReportId=42')
+		expect(writeOpenOracleReportIdQueryParam('?openOracleView=browse', '42')).toBe('?openOracleView=browse&openOracleReportId=42')
 		expect(writeOpenOracleReportIdQueryParam('?foo=bar&openOracleReportId=42', undefined)).toBe('?foo=bar')
 	})
 

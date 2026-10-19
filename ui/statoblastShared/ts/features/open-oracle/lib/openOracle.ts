@@ -13,7 +13,7 @@ import { getOpenOracleDisputeSubmissionReserve, getOpenOracleDisputeSubmissionTi
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import type { TokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
+import { addOpenOracleBountyBuffer, OPEN_ORACLE_PRICE_UNITS } from '../../../protocol/openOracleMath.js'
 import { getOpenOracleCreateParameterValidation } from '../../../protocol/openOracleValidation.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
@@ -24,7 +24,7 @@ import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.
 const OPEN_ORACLE_UNKNOWN_SCALE_DECIMALS = 255
 type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
-export { addOpenOracleBountyBuffer }
+export { addOpenOracleBountyBuffer, OPEN_ORACLE_PRICE_UNITS }
 export type OpenOracleDisputeInputField = 'disputeNewAmount1' | 'disputeNewAmount2'
 export type OpenOracleGateMessage = { kind: 'hidden-loading' | 'visible'; message: string } | { kind: 'incomplete'; message?: undefined }
 type OpenOracleReportActionAvailability = {
@@ -383,6 +383,14 @@ export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDe
 		message: undefined,
 	}
 }
+export function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
+	if ((currentTimestamp === undefined || report.currentTime === currentTimestamp) && (currentBlockNumber === undefined || report.currentBlockNumber === currentBlockNumber)) return report
+	return {
+		...report,
+		currentBlockNumber: currentBlockNumber ?? report.currentBlockNumber,
+		currentTime: currentTimestamp ?? report.currentTime,
+	}
+}
 export function getOpenOracleLiveReportDetails<TReport extends Pick<OpenOracleReportDetails, 'currentTime' | 'timeType'>>(report: TReport, elapsedSeconds: bigint): TReport {
 	if (!report.timeType || elapsedSeconds <= 0n) return report
 	return { ...report, currentTime: report.currentTime + elapsedSeconds }
@@ -400,6 +408,10 @@ export function getOpenOracleLifecycleBoundaryOffsets(report: Pick<OpenOracleRep
 		.filter(boundary => boundary > report.currentTime)
 		.map(boundary => boundary - report.currentTime)
 }
+export function getOpenOracleSettleRemaining(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'reportTimestamp' | 'settlementTime' | 'timeType'>) {
+	return report.reportTimestamp + report.settlementTime - getOpenOracleLifecycleClockValue(report)
+}
+
 export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
 	if (!hasOpenOracleAtomicInitialReport(report))
 		return {
@@ -411,10 +423,8 @@ export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDet
 			canAct: false,
 			message: 'This report is already settled.',
 		}
-	const currentClock = getOpenOracleLifecycleClockValue(report)
-	const settlementStart = report.reportTimestamp + report.settlementTime
-	if (currentClock < settlementStart) {
-		const remaining = settlementStart - currentClock
+	const remaining = getOpenOracleSettleRemaining(report)
+	if (remaining > 0n) {
 		return {
 			canAct: false,
 			message: `This report can be settled in ${formatOpenOracleLifecycleRemaining(remaining, report.timeType)} if no disputes occur.`,
@@ -504,13 +514,12 @@ export function formatOpenOracleSecondsInputHint(input: string) {
 }
 
 const OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS = 36
-const OPEN_ORACLE_PRICE_DECIMALS = 30n
 /** Implied price of the entered report amounts, in quote tokens per base token scaled by 10^30 like stored report prices. */
 export function getOpenOracleImpliedPrice({ token1Amount, token2Amount }: { token1Amount: string; token2Amount: string }) {
 	const amount1 = tryParseDecimalInput(token1Amount, OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS)
 	const amount2 = tryParseDecimalInput(token2Amount, OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS)
 	if (amount1 === undefined || amount2 === undefined || amount1 <= 0n || amount2 <= 0n) return undefined
-	return (amount2 * 10n ** OPEN_ORACLE_PRICE_DECIMALS) / amount1
+	return (amount2 * 10n ** BigInt(OPEN_ORACLE_PRICE_UNITS)) / amount1
 }
 
 /**

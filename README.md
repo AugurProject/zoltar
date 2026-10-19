@@ -19,9 +19,9 @@ It also contains the OpenOracle price feed integration, the Statoblast Trading e
 | Directory                                     | Contents                                                                                                                                                                             |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `solidity/`                                   | Contracts, protocol test support, tests, and generated contract artifacts; Trading contracts live under `solidity/contracts/trading/`                                                |
-| `ui/coreShared/`                              | Runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces                                                |
+| `ui/coreShared/`                              | Runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all four interfaces                                                |
 | `ui/zoltarShared/`, `ui/statoblastShared/`    | Reusable product libraries without application bootstrap, routing, or pages                                                                                                          |
-| `ui/zoltar/`, `ui/statoblast/`, `ui/trading/` | The Zoltar oracle, Augur Statoblast market, and Statoblast Trading interfaces; each is its own package with a dev server and production build                                        |
+| `ui/zoltar/`, `ui/statoblast/`, `ui/trading/`, `ui/openoracle/` | The Zoltar, Statoblast, Trading, and OpenOracle interfaces; each is its own package with a dev server and production build                                        |
 | [`shared/`](./shared/README.md)               | Independently built Core, Zoltar, OpenOracle, Statoblast, and Trading runtime packages used by Solidity tooling and the UI; `shared/trading/ts/trading/` holds the reusable AMM math |
 | `docs/`                                       | The published protocol documentation                                                                                                                                                 |
 | `tooling/`                                    | Typed repository metadata plus CI, contract-safety, documentation, testing, and UI build orchestration; `scripts/` retains only the pinned Uniswap deployment artifact               |
@@ -30,7 +30,9 @@ It also contains the OpenOracle price feed integration, the Statoblast Trading e
 | [`testnetwork/`](./testnetwork/README.md)     | Docker Compose setup for the repository-pinned local Anvil network                                                                                                                   |
 | [`reth/`](./reth/README.md)                   | Docker Compose setup for a pruned Sepolia Reth and Lighthouse node                                                                                                                   |
 
-The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, and runtime-neutral primitives live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
+The runnable packages (`ui/zoltar`, `ui/statoblast`, `ui/trading`, and `ui/openoracle`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, and runtime-neutral primitives live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
+
+OpenOracle owns report browsing, standalone report creation, disputes, settlement, and withdrawals. Statoblast keeps pool price requests, request status, and finalization.
 
 ## Prerequisites
 
@@ -124,13 +126,14 @@ Each serve command first builds the selected app and its dependencies, then serv
 | Zoltar      | `bun run app:serve:zoltar`     | `bun run app:watch:zoltar`     | http://localhost:4153  |
 | Statoblast  | `bun run app:serve:statoblast` | `bun run app:watch:statoblast` | http://localhost:12347 |
 | Trading     | `bun run app:serve:trading`    | `bun run app:watch:trading`    | http://localhost:4163  |
+| OpenOracle | `bun run app:serve:openoracle` | `bun run app:watch:openoracle` | http://localhost:4173 |
 
 ### Which command do I run?
 
 | I want to…                                        | Run                                                                                                  |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Set up a fresh checkout                           | `bun run setup`                                                                                      |
-| Develop one app                                   | `bun run app:serve:<app>` or `bun run app:watch:<app>` (`zoltar`, `statoblast`, `trading`)          |
+| Develop one app                                   | `bun run app:serve:<app>` or `bun run app:watch:<app>` (`zoltar`, `statoblast`, `trading`, `openoracle`)          |
 | Regenerate contract bindings and vendor assets    | `bun run generate` (contracts only: `bun run compile-contracts`)                                    |
 | Build every UI app and test bundle                | `bun run ui:build` (production bundles: `bun run ui:build:prod`)                                    |
 | Type-check                                        | `bun run tsc`                                                                                        |
@@ -186,7 +189,7 @@ Use `GAS_COST_ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when
 
 ## Publishing the UIs to a local IPFS node
 
-With Docker and a local IPFS (Kubo) node running, `bun run ui:publish:local` builds Zoltar, Statoblast, and Trading in Docker and pins all three on that node. Set `IPFS_API` to the node's Kubo API multiaddress when it is not reachable at `/dns4/host.docker.internal/tcp/5001`. On Windows, double-clicking `publish.bat` runs the same command; it needs Bun and the repository dependencies installed. `bun run ui:publish:ipfs` publishes through the release publisher image instead.
+With Docker and a local IPFS (Kubo) node running, `bun run ui:publish:local` builds Zoltar, Statoblast, Trading, and OpenOracle in Docker and pins all four on that node. Set `IPFS_API` to the node's Kubo API multiaddress when it is not reachable at `/dns4/host.docker.internal/tcp/5001`. On Windows, double-clicking `publish.bat` runs the same command; it needs Bun and the repository dependencies installed. `bun run ui:publish:ipfs` publishes through the release publisher image instead.
 
 ## Agent configuration
 

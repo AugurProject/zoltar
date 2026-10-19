@@ -10,8 +10,8 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '@zoltar/ui-statoblast-shared/types/contracts.js'
-import { renderSelectedReportActionSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleReportContent.js'
-import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleReportContent.js'
+import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import type { OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
@@ -267,7 +267,7 @@ function createReportPage(pageIndex: number, reportCount: bigint, reports: OpenO
 }
 
 function seedFavoriteReports(reports: readonly OpenOracleReportSummary[]) {
-	const scope = getLocalEntityScope('statoblast', 'oracleReport')
+	const scope = getLocalEntityScope('openoracle', 'oracleReport')
 	openOracleReportDownloadStore.record(
 		scope,
 		reports.map(report => ({ data: report, id: report.reportId.toString() })),
@@ -538,7 +538,7 @@ void describe('OpenOracleSection', () => {
 				},
 			},
 			() => {
-				const scope = getLocalEntityScope('statoblast', 'oracleReport')
+				const scope = getLocalEntityScope('openoracle', 'oracleReport')
 				openOracleReportDownloadStore.record(
 					scope,
 					[createReportSummary(4n), createReportSummary(3n)].map(report => ({ data: report, id: report.reportId.toString() })),
@@ -579,7 +579,7 @@ void describe('OpenOracleSection', () => {
 			await typeSearch('')
 			await selectStatus('settled')
 			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #2'])
-			expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'oracleReport'))).toHaveLength(12)
+			expect(readFavoriteEntries(getLocalEntityScope('openoracle', 'oracleReport'))).toHaveLength(12)
 		} finally {
 			await browse.cleanup()
 		}
@@ -588,7 +588,7 @@ void describe('OpenOracleSection', () => {
 	void test('opens a cached report ID from empty favorites without a downloaded shortcut', async () => {
 		const onLoadOracleReport = mock(async (_reportId: string) => undefined)
 		const browse = await renderBrowseSection({ onLoadOracleReport }, () => {
-			openOracleReportDownloadStore.record(getLocalEntityScope('statoblast', 'oracleReport'), [{ data: createReportSummary(4n), id: '4' }])
+			openOracleReportDownloadStore.record(getLocalEntityScope('openoracle', 'oracleReport'), [{ data: createReportSummary(4n), id: '4' }])
 		})
 		try {
 			expect(within(document.body).getByText('No favorite reports yet')).not.toBeNull()
@@ -607,7 +607,7 @@ void describe('OpenOracleSection', () => {
 			await clickButton('Favorite: REPv2 / WETH · report #3')
 			expect(getRenderedReportTitles()).toEqual([])
 			expect(within(document.body).getByText('Favorites (0)')).not.toBeNull()
-			const scope = getLocalEntityScope('statoblast', 'oracleReport')
+			const scope = getLocalEntityScope('openoracle', 'oracleReport')
 			expect(readFavoriteEntries(scope)).toEqual([])
 			expect(openOracleReportDownloadStore.read(scope).map(entry => entry.id)).toEqual(['3'])
 		} finally {
@@ -618,12 +618,14 @@ void describe('OpenOracleSection', () => {
 	void test('offers to open a report ID that is not downloaded', async () => {
 		const onOpenOracleFormChange = mock((_update: Partial<OpenOracleFormState>) => undefined)
 		const onActiveViewChange = mock((_view: string) => undefined)
-		const browse = await renderBrowseSection({ onActiveViewChange, onOpenOracleFormChange })
+		const onLoadOracleReport = mock((_reportId: string | undefined) => undefined)
+		const browse = await renderBrowseSection({ onActiveViewChange, onLoadOracleReport, onOpenOracleFormChange })
 		try {
 			await typeSearch('#42')
 			await clickButton('Open report #42')
 			expect(onOpenOracleFormChange).toHaveBeenCalledWith({ reportId: '42' })
-			expect(onActiveViewChange).toHaveBeenCalledWith('selected-report')
+			expect(onLoadOracleReport).toHaveBeenCalledWith('42')
+			expect(onActiveViewChange).not.toHaveBeenCalled()
 		} finally {
 			await browse.cleanup()
 		}
@@ -649,7 +651,7 @@ void describe('OpenOracleSection', () => {
 		})
 		try {
 			await flushAsyncWork()
-			const scope = getLocalEntityScope('statoblast', 'oracleReport')
+			const scope = getLocalEntityScope('openoracle', 'oracleReport')
 			expect(openOracleReportDownloadStore.read(scope).map(entry => entry.id)).toEqual(['9'])
 			expect(readFavoriteEntries(scope)).toEqual([])
 		} finally {
@@ -662,7 +664,7 @@ void describe('OpenOracleSection', () => {
 		const selectedProps = { activeView: 'selected-report' as const, openOracleReportDetails: openedReport, openOracleReportLookupState: 'ready' as const }
 		const browse = await renderBrowseSection(selectedProps)
 		try {
-			const scope = getLocalEntityScope('statoblast', 'oracleReport')
+			const scope = getLocalEntityScope('openoracle', 'oracleReport')
 			const star = within(document.body).getByRole('button', { name: 'Favorite: Report #7' })
 			expect(star.getAttribute('aria-pressed')).toBe('true')
 			expect(readFavoriteEntries(scope).map(entry => entry.id)).toEqual(['7'])
