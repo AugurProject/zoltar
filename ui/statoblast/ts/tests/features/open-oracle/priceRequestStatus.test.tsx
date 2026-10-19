@@ -9,6 +9,7 @@ import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accou
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { PriceRequestStatusSection, type PriceRequestStatusProps } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 import { getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -141,6 +142,28 @@ describe('Statoblast price requests', () => {
 	test('keeps the finalization control disabled while its transaction is pending', async () => {
 		const rendered = await renderRequest({ openOracleActiveAction: 'settle' })
 		expectTransactionButtonDisabled(rendered.container, 'Settling report…')
+	})
+
+	test.each([
+		{ reportId: '7', locked: true },
+		{ reportId: '8', locked: false },
+	])('applies a restored pending settlement lock for report $reportId', async ({ reportId, locked }) => {
+		const onSettleReport = mock(() => undefined)
+		const rendered = lifecycle.trackRendered(
+			await renderIntoDocument(
+				<TransactionActionButtonLockProvider lock={{ lockedScopes: [[`open-oracle-report:${reportId}`]], promptOpen: false }}>
+					<PriceRequestStatusSection {...props({ onSettleReport, openOracleActiveAction: undefined })} />
+				</TransactionActionButtonLockProvider>,
+			),
+		)
+		if (locked) {
+			expectTransactionButtonDisabled(rendered.container, 'Settle report')
+			expect(rendered.container.textContent).toContain('Waiting for a pending transaction on this item.')
+		} else {
+			expectTransactionButtonEnabled(rendered.container, 'Settle report')
+		}
+		fireEvent.click(within(rendered.container).getByRole('button', { name: 'Settle report' }))
+		expect(onSettleReport).toHaveBeenCalledTimes(locked ? 0 : 1)
 	})
 })
 

@@ -11,6 +11,7 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWalletActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as copy from '../../../copy/openOracle.js'
@@ -70,6 +71,7 @@ export function PriceRequestStatusSection({ accountState, onLoadOracleReport, on
 						{!report.isDistributed && remaining > 0n ? <p className='detail'>{copy.formatSettleCountdown(remaining, report.timeType)}</p> : undefined}
 						<div className='actions'>
 							<TransactionActionButton
+								scope={createTransactionScope('open-oracle-report', report.reportId.toString())}
 								idleLabel={copy.settleReport}
 								pendingLabel={copy.settlingReport}
 								pending={openOracleActiveAction === 'settle'}
