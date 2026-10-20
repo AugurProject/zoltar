@@ -32,6 +32,7 @@ globalThis.global ??= globalThis
 const APP_TITLES: Record<string, string> = {
 	zoltar: 'Zoltar',
 	statoblast: 'Augur Statoblast',
+	openoracle: 'OpenOracle',
 	trading: 'Statoblast Trading',
 }
 

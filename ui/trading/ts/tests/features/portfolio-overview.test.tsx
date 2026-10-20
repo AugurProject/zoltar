@@ -30,6 +30,7 @@ const openMarket = liveMarketFixture({
 	lpTotalSupply: 10n * SET,
 })
 const resolvedMarket: LiveMarket = { ...openMarket, pool: resolvedPool, title: 'Resolved market', questionOutcome: 1 }
+const forkedMarket: LiveMarket = { ...openMarket, pool: resolvedPool, title: 'Forked market', universeForkTime: 1n, systemState: 1 }
 
 function scope(pool: Address) {
 	return { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }
@@ -113,7 +114,6 @@ describe('portfolio overview', () => {
 	})
 
 	test('lists every reason the total leaves value out', async () => {
-		const forkedMarket: LiveMarket = { ...openMarket, pool: resolvedPool, title: 'Forked market', universeForkTime: 1n, systemState: 1 }
 		const rendered = await renderIntoDocument(
 			<LivePortfolio
 				entries={[
@@ -130,6 +130,35 @@ describe('portfolio overview', () => {
 		const summary = rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent
 		expect(summary).toContain('Excludes 1 position without a price')
 		expect(summary).toContain('Excludes shares that pay at resolution')
+	})
+
+	test('lists a market that needs several actions once, with a link for each', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market: forkedMarket, balances: { scope: scope(resolvedPool), yes: SET, no: 0n, invalid: 0n, lp: SET }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('[aria-label="Portfolio summary"]')?.textContent).toContain('Needs attention1')
+		const rows = rendered.container.querySelectorAll('.portfolio-action-items li')
+		expect(rows).toHaveLength(1)
+		expect(Array.from(rows[0]?.querySelectorAll('.badge') ?? [], badge => badge.textContent)).toEqual(['Fork migration', 'Trading ended'])
+		expect(Array.from(rows[0]?.querySelectorAll('a') ?? [], link => [link.textContent, link.getAttribute('href')])).toEqual([
+			['Migrate', `#/market/${resolvedPool}`],
+			['Remove liquidity', `#/liquidity/${resolvedPool}`],
+		])
+	})
+
+	test('shows unpriced values as a muted dash rather than a headline 0 ETH or Unavailable', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market: forkedMarket, balances: { scope: scope(resolvedPool), yes: SET, no: SET, invalid: SET, lp: SET }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
+		cleanupRendered = rendered.cleanup
+		const total = rendered.container.querySelector('.portfolio-summary-grid strong.is-unpriced')
+		expect(total?.querySelector('[aria-hidden="true"]')?.textContent).toBe('—')
+		expect(total?.querySelector('.visually-hidden')?.textContent).toBe('Unavailable')
+		expect(total?.textContent).not.toContain('0 ETH')
+		const rowValue = rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] .portfolio-position-value strong.is-unpriced`)
+		expect(rowValue?.querySelector('[aria-hidden="true"]')?.textContent).toBe('—')
+		// The row's value caption says the shares must migrate, so no holding or LP claim repeats that redemption is unavailable.
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] .portfolio-holdings`)?.textContent).not.toContain('Redemption unavailable')
+		const details = rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] details`)
+		expect(details?.textContent).toContain('LP Yes claim1 Yes (1 ETH if the question resolves Yes)')
+		expect(details?.textContent).not.toContain('Redemption unavailable')
 	})
 
 	test('offers the wallet action inline while disconnected and hides the summary', async () => {

@@ -4,8 +4,11 @@ import * as simulationCopy from '../copy/simulation.js'
 import type { BadgeTone } from '../types/components.js'
 import { Badge } from './Badge.js'
 
-export function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
+type ScenarioStatus = { badgeTone: BadgeTone; compactLabel?: string; label: string }
+
+export function getScenarioStatus(parameters: { bootstrapError: string | undefined; bootstrapWarning: string | undefined; isBootstrapped: boolean }): ScenarioStatus {
 	if (parameters.bootstrapError !== undefined) return { badgeTone: 'blocked', label: commonCopy.error }
+	if (parameters.isBootstrapped && parameters.bootstrapWarning !== undefined) return { badgeTone: 'warning', compactLabel: simulationCopy.warningLabel, label: simulationCopy.readyWithWarningLabel }
 	if (parameters.isBootstrapped) return { badgeTone: 'ok', label: simulationCopy.ready }
 	return { badgeTone: 'pending', label: simulationCopy.bootstrapping }
 }
@@ -18,7 +21,7 @@ type SimulationStripSummaryProps = {
 	bootstrapping: boolean
 	detailsOpen: boolean
 	scenarioLabel: string
-	status: { badgeTone: BadgeTone; label: string }
+	status: ScenarioStatus
 }
 
 /**
@@ -32,7 +35,18 @@ export function SimulationStripSummary({ accountLabel, bootstrapLabel, bootstrap
 		<summary>
 			<span className='simulation-strip'>
 				<h2 className='simulation-strip-title'>{appCopy.browserSimulation}</h2>
-				<Badge tone={status.badgeTone}>{status.label}</Badge>
+				<Badge tone={status.badgeTone} ariaLabel={status.label}>
+					{status.compactLabel === undefined ? (
+						status.label
+					) : (
+						<>
+							<span className='simulation-strip-status-full'>{status.label}</span>
+							<span aria-hidden='true' className='simulation-strip-status-compact'>
+								{status.compactLabel}
+							</span>
+						</>
+					)}
+				</Badge>
 				<strong className='simulation-strip-scenario'>{scenarioLabel}</strong>
 				{bootstrapping ? (
 					<span className='simulation-strip-progress'>

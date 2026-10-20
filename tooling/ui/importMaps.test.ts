@@ -51,7 +51,7 @@ for (const appId of UI_APP_IDS) {
 		expect(imports['@tevm/common']).toBe('./vendor/tevm/common/index.js')
 		expect(imports['@zoltar/ui-core-shared/']).toBe('/ui/coreShared/js/')
 		expect(imports['@zoltar/ui-zoltar-shared/']).toBe('/ui/zoltarShared/js/')
-		if (appId === 'statoblast' || appId === 'trading') expect(imports['@zoltar/ui-statoblast-shared/']).toBe('/ui/statoblastShared/js/')
+		if (appId === 'statoblast' || appId === 'trading' || appId === 'openoracle') expect(imports['@zoltar/ui-statoblast-shared/']).toBe('/ui/statoblastShared/js/')
 		else expect(imports['@zoltar/ui-statoblast-shared/']).toBeUndefined()
 		if (appId === 'trading') {
 			expect(imports['@zoltar/trading-shared/trading/math']).toBe('../shared/trading/js/trading/math.js')

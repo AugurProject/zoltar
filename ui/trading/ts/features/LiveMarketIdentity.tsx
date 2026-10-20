@@ -1,6 +1,6 @@
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { shareBalanceScope, type LiveMarket } from '../protocol/live.js'
 import { identityCopy } from '../copy/identity.js'
@@ -16,10 +16,10 @@ export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket
 	return (
 		<>
 			<MetricField label={identityCopy.securityPoolAddress}>
-				<ReadOnlyAddressValue address={scope.pool} responsiveAbbreviation />
+				<AddressValue address={scope.pool} />
 			</MetricField>
 			<MetricField label={identityCopy.shareTokenAddress}>
-				<ReadOnlyAddressValue address={scope.shareToken} responsiveAbbreviation />
+				<AddressValue address={scope.shareToken} />
 			</MetricField>
 			<MetricField label={identityCopy.currentUniverseId}>{identity.currentUniverseId.toString()}</MetricField>
 			<MetricField label={identityCopy.originUniverseId}>{identity.originUniverseId?.toString() ?? identityCopy.unavailable}</MetricField>

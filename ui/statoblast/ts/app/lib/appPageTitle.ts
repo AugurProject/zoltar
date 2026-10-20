@@ -1,21 +1,19 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as glossaryCopy from '@zoltar/ui-statoblast-shared/copy/glossary.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
-import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
 import { abbreviateAddress, isHexAddressInput, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 
 export type AppPageTitleInput = {
-	activeOpenOracleView: OpenOracleView
 	activeSecurityPoolsView: SecurityPoolsView
 	route: StatoblastRoute
 }
 
-export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route }: AppPageTitleInput) {
+export function getAppPageTitle({ activeSecurityPoolsView, route }: AppPageTitleInput) {
 	if (route === 'deploy') return appCopy.deployContracts
 	if (route === 'pools') {
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool
@@ -25,11 +23,7 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 		// Matches the browse view's visible heading, so the tab title and page announcement name what the user sees.
 		return commonCopy.browsePools
 	}
-	if (route === 'open-oracle') {
-		if (activeOpenOracleView === 'create') return statoblastAppCopy.createOracleReport
-		if (activeOpenOracleView === 'selected-report') return statoblastAppCopy.oracleReportDetails
-		return statoblastAppCopy.openOracle
-	}
+	if (route === 'open-oracle') return openOracleCopy.priceReports
 	return appCopy.pageNotFoundTitle
 }
 

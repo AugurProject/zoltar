@@ -45,6 +45,7 @@ describe('simulation Uniswap quotes', () => {
 			bootstrapError: undefined,
 			bootstrapLabel: undefined,
 			bootstrapProgress: undefined,
+			bootstrapWarning: undefined,
 			blockCountSinceReset: 0n,
 			currentTimestamp: 0n,
 			currentScenario: 'baseline',

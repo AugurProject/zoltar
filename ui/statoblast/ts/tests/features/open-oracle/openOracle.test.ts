@@ -31,7 +31,8 @@ import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-cor
 
 import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
-const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
+// Anvil installs this REP fixture; mainnet supplies the WETH and Uniswap quote addresses.
+const REP_ADDRESS = getAddress(addressString(GENESIS_REPUTATION_TOKEN))
 const USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
 const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -225,7 +226,7 @@ describe('OpenOracle helpers', () => {
 		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
-		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: REP_ADDRESS, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = {
 			...createConnectedReadClient(),
 			getLogs: async () => {
@@ -267,7 +268,7 @@ describe('OpenOracle helpers', () => {
 		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
-		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, genesisRepTokenAddress: REP_ADDRESS, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = {
 			...createConnectedReadClient(),
 			getLogs: async () => {

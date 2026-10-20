@@ -7,7 +7,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -16,7 +16,7 @@ import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as appCopy from '../copy/app.js'
 import * as deploymentCopy from '../copy/deployment.js'
 import { deployContractsGuideHref } from '../lib/docsLinks.js'
-import { deploymentProgress, PlaceholderDeployAction, tradingDeploymentScope } from './tradingDeploymentPresentation.js'
+import { deploymentProgress, PlaceholderDeployAction } from './tradingDeploymentPresentation.js'
 
 import { useTradingDeploymentSetup, type TradingDeploymentSetupOptions } from './useTradingDeploymentSetup.js'
 
@@ -27,7 +27,10 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 	if (walletControlRequestNonce === undefined)
 		standaloneWalletButton =
 			wallet.account !== undefined ? (
-				<WalletConnectionControl disabled={actions.busy} ariaLabel={appCopy.disconnectWalletLabel(wallet.account)} title={appCopy.disconnectWallet} onClick={actions.disconnectWallet} label={<ReadOnlyAddressValue address={wallet.account} responsiveAbbreviation />} />
+				<>
+					<AddressValue address={wallet.account} />
+					<WalletConnectionControl disabled={actions.busy} ariaLabel={appCopy.disconnectWalletLabel(wallet.account)} title={appCopy.disconnectWallet} onClick={actions.disconnectWallet} label={appCopy.disconnectWallet} />
+				</>
 			) : (
 				<WalletConnectionControl disabled={!wallet.canConnect} pending={wallet.connecting} onClick={() => void actions.connectWallet()} pendingLabel={appCopy.connectingWallet} label={appCopy.connectWallet} />
 			)
@@ -48,7 +51,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 					<DataGrid dense>
 						<MetricField label={deploymentCopy.deployingTo}>{network.core.chainName}</MetricField>
 						<MetricField label={deploymentCopy.securityPoolFactory}>
-							<ReadOnlyAddressValue address={network.core.securityPoolFactory} responsiveAbbreviation />
+							<AddressValue address={network.core.securityPoolFactory} />
 						</MetricField>
 					</DataGrid>
 				)}
@@ -62,7 +65,7 @@ export function TradingDeploymentSetup(options: TradingDeploymentSetupOptions) {
 								// Every contract keeps its own deploy action in place; a deployed one stays, disabled, and says so.
 								action: (
 									<TransactionActionButton
-										scope={tradingDeploymentScope}
+										scope={actions.scope}
 										availability={availability}
 										disabledReasonElementId={externalReasonId}
 										idleLabel={deploymentCopy.formatDeployStep(step.label)}

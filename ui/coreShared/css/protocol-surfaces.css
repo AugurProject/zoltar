@@ -314,7 +314,6 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 	overflow-wrap: anywhere;
 }
 
-.transaction-object-context .address-value.copyable,
 .transaction-object-context .identifier-value.copyable {
 	display: block;
 	width: 100%;
@@ -731,15 +730,12 @@ html:has(.global-transaction-dialog-nonblocking) {
 }
 
 .global-transaction-detail-address {
-	display: inline-flex;
-	max-width: 100%;
 	vertical-align: baseline;
 }
 
 /* Text with embedded addresses flows inline and wraps between values; addresses shorten only when they cannot fit.
  * An inline address sits on the text baseline like a link, so it drops the standalone control's touch-target box. */
-.global-transaction-detail-text .copy-value-wrap,
-.global-transaction-detail-text .address-value.copyable {
+.global-transaction-detail-text .copy-value-wrap {
 	display: inline-flex;
 	min-height: 0;
 	margin: 0;
@@ -946,7 +942,7 @@ html:has(.global-transaction-dialog-nonblocking) {
 }
 
 /* Copyable values center their text inside a touch-sized button, so center the label against them. */
-.global-transaction-notice-row:has(.address-value.copyable, .identifier-value.copyable) {
+.global-transaction-notice-row:has(.address-control, .identifier-value.copyable) {
 	align-items: center;
 }
 
@@ -2392,11 +2388,28 @@ html:has(.global-transaction-dialog-nonblocking) {
 	gap: var(--space-3);
 }
 
-/* Target rows carry status badges, not metrics, so they flow as content-sized chips. */
-.fork-target-picker .migration-outcome-metrics {
+/* A target row reads as one line: the child universe, then its status badges at the row's end. A disabled reason wraps onto its own line below them. */
+.fork-target-picker .migration-outcome-select {
+	padding: var(--space-3) var(--space-4);
+}
+
+.fork-target-picker .migration-outcome-copy {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--space-2);
+}
+
+.fork-target-picker .migration-outcome-label {
+	flex: 1 1 auto;
+}
+
+.fork-target-picker .migration-outcome-metrics {
+	display: contents;
+}
+
+.fork-target-picker .migration-outcome-metrics > :not(.badge) {
+	flex-basis: 100%;
 }
 
 .fork-target-shortcuts {

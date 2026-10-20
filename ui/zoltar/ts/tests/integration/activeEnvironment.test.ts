@@ -3,14 +3,15 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { getChainDisplayLabel, getWalletScopedAccountAddress, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, getActiveSimulationController, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import { createSimulationBackend } from '@zoltar/ui-core-shared/simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { parseSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/tests/simulation/savedStateStorage.js'
 
@@ -43,6 +44,46 @@ afterEach(() => {
 })
 
 void describe('active environment', () => {
+	void test('selects either genesis token after network resolution with hash parameters taking precedence', async () => {
+		for (const genesisOutcome of ['yes', 'no'] as const) {
+			const backend = await initializeActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia&genesis=yes', hash: `#/zoltar?genesis=${genesisOutcome}` }, { createInjectedBackend: ({ profile }) => createFakeBackend({ profile }) })
+			expect(backend.profile.genesisOutcome).toBe(genesisOutcome)
+			expect(backend.profile.genesisRepTokenAddress).toBe(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, genesisOutcome).genesisRepTokenAddress)
+		}
+	})
+
+	void test('boots the No genesis with its own funded token and ordinary universe zero', async () => {
+		const dom = installDomEnvironment()
+		const backend = await initializeActiveEnvironment({ hostname: 'localhost', search: '?simulate=1&simScenario=deployed&genesis=no' })
+		if (backend.id !== 'simulation') throw new Error('Expected simulation backend')
+		const simulation = getActiveSimulationController()
+		if (simulation === undefined) throw new Error('Expected simulation controller')
+		try {
+			await backend.waitUntilReady()
+			const account = (await backend.getAccounts())[0]
+			if (account === undefined) throw new Error('Expected funded QA account')
+			expect(backend.profile.genesisOutcome).toBe('no')
+			expect(await loadErc20Balance(backend.createReadClient(), backend.profile.genesisRepTokenAddress, account)).toBeGreaterThan(0n)
+			expect(await loadZoltarUniverseSummary(backend.createReadClient(), 0n)).toMatchObject({ universeId: 0n, reputationToken: backend.profile.genesisRepTokenAddress, hasForked: false })
+			const deployment = await loadDeploymentStatusOracleSnapshot(backend.createReadClient())
+			expect(deployment.applicationDeploymentComplete).toBe(true)
+			const record = persistSavedSimulationState(await simulation.exportState('No genesis'))
+			const mismatch = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=yes&simState=${record.id}` })
+			await mismatch.waitUntilReady()
+			expect(mismatch.profile.genesisOutcome).toBe('yes')
+			expect(mismatch.bootstrapError).toBeUndefined()
+			expect(getActiveSimulationController()?.bootstrapWarning).toBe('Saved simulation state "No genesis" belongs to Augur v2 › No. Falling back to the baseline scenario.')
+			expect(getActiveSimulationController()?.simulationSource.kind).toBe('scenario')
+			const restored = await initializeActiveEnvironment({ hostname: 'localhost', search: `?simulate=1&genesis=no&simState=${record.id}` })
+			await restored.waitUntilReady()
+			expect(restored.profile.genesisOutcome).toBe('no')
+			expect(getActiveSimulationController()?.simulationSource.kind).toBe('saved-state')
+			expect(await loadErc20Balance(restored.createReadClient(), restored.profile.genesisRepTokenAddress, account)).toBeGreaterThan(0n)
+		} finally {
+			await getActiveSimulationController()?.dispose()
+			dom.cleanup()
+		}
+	})
 	void test('uses the injected backend by default when no environment has been initialized', () => {
 		expect(getActiveBackend().id).toBe('injected')
 		expect(getActiveBackend().profile.id).toBe('sepolia')
@@ -410,7 +451,8 @@ void describe('active environment', () => {
 			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
 			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
 			expect(simulationBackend.currentScenario).toBe('baseline')
-			expect(simulationBackend.bootstrapError).toContain('could not be loaded')
+			expect(simulationBackend.bootstrapError).toBeUndefined()
+			expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
 		} finally {
 			domEnvironment.cleanup()
 		}
@@ -440,7 +482,8 @@ void describe('active environment', () => {
 			if (backend.id !== 'simulation') throw new Error('Expected the simulation backend')
 			const simulationBackend = backend as Awaited<ReturnType<typeof createSimulationBackend>>
 			expect(simulationBackend.currentScenario).toBe('baseline')
-			expect(simulationBackend.bootstrapError).toContain('could not be loaded')
+			expect(simulationBackend.bootstrapError).toBeUndefined()
+			expect(simulationBackend.bootstrapWarning).toContain('could not be loaded')
 		} finally {
 			domEnvironment.cleanup()
 		}
@@ -455,7 +498,7 @@ void describe('simulation backend', () => {
 		coldBaselineBackend = await createSimulationBackend({ scenario: 'baseline' })
 		warmBaselineBackend = await createBootstrappedSimulationBackendWithRetry('baseline')
 		await warmBaselineBackend.setTransactionDelayMilliseconds(0)
-	}, 180_000)
+	}, simulationSetupTimeoutMs)
 
 	beforeEach(async () => {
 		await resetSelectedAccountAndTransactionDelay(coldBaselineBackend)

@@ -1,4 +1,16 @@
 import { useEffect, useRef } from 'preact/hooks'
+import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
+
+/** A new URL selection is loaded by route synchronization; refreshing the same report keeps its history entry. */
+export function selectOpenOracleReport({ reportId, selectedReportId, selectionVisible = true, onSelectReport, onRefreshReport }: { reportId: string; selectedReportId: string; selectionVisible?: boolean; onSelectReport: (reportId: string) => void; onRefreshReport: (reportId: string) => void }) {
+	const parsedReportId = tryParseBigIntInput(reportId)
+	const sameSelection = reportId.trim() === selectedReportId.trim() || (parsedReportId !== undefined && parsedReportId === tryParseBigIntInput(selectedReportId))
+	if (!selectionVisible || !sameSelection) {
+		onSelectReport(reportId.trim())
+		return
+	}
+	onRefreshReport(reportId)
+}
 
 type OpenOracleRouteSyncOptions = {
 	activeEnvironmentNonce: number

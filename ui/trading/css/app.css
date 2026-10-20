@@ -41,6 +41,38 @@
 	border-radius: inherit;
 	background: var(--outcome-yes);
 }
+/* The market page's open conditional odds are its headline: large labels over a thicker bar, the No label always over the No side. */
+.probability--headline .probability__labels {
+	font-size: var(--font-title);
+}
+.probability--headline .probability__labels span:last-child {
+	margin-inline-start: auto;
+	text-align: end;
+}
+.probability--headline .probability__track {
+	height: 1rem;
+}
+/* Once trading closes the odds are history: a labelled, muted bar at the compact size. */
+.market-odds-closed {
+	display: grid;
+	gap: var(--space-2);
+}
+.market-odds-closed .probability__labels span {
+	color: var(--text-secondary);
+}
+.market-odds-closed .probability__track {
+	opacity: 0.55;
+}
+@media (max-width: 80rem) {
+	.probability--headline .probability__labels {
+		font-size: var(--font-lg);
+	}
+}
+@media (max-width: 40rem) {
+	.probability--headline .probability__labels {
+		font-size: var(--font-body);
+	}
+}
 .probability__marker {
 	position: absolute;
 	top: -4px;
@@ -457,6 +489,11 @@ button.outcome-button--no:hover:not(:disabled) {
 	color: var(--muted);
 	font-size: var(--font-label);
 }
+/* A note about the whole position sits under its heading, warning-toned and quiet, before any holding. */
+.market-position .market-position-note {
+	margin: 0;
+	font-size: var(--font-label);
+}
 .portfolio-holdings.market-holdings {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -529,18 +566,6 @@ button.outcome-button--no:hover:not(:disabled) {
 	}
 }
 
-/* Fork migration targets: the fork question the shared target picker belongs to. */
-.fork-question-summary {
-	display: grid;
-	gap: var(--space-1);
-}
-.fork-question-summary span {
-	color: var(--muted);
-	font-size: var(--font-label);
-}
-.fork-question-summary strong {
-	overflow-wrap: anywhere;
-}
 .fork-migration-context {
 	display: grid;
 	gap: var(--space-4);
@@ -626,7 +651,7 @@ button.outcome-button--no:hover:not(:disabled) {
 	flex-wrap: wrap;
 	flex: 1;
 	justify-content: flex-end;
-	min-width: 0;
+	min-width: min-content;
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
@@ -693,6 +718,10 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 .portfolio-position-row > .portfolio-holdings {
 	grid-area: holdings;
+	/* Balances fill the row in 13rem columns, so a position's holdings read as one compact block beside its value. */
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+	gap: var(--space-3) var(--space-5);
 }
 .portfolio-position-row > .portfolio-position-values {
 	grid-area: value;
@@ -725,10 +754,15 @@ button.outcome-button--no:hover:not(:disabled) {
 	gap: var(--space-1);
 	overflow-wrap: anywhere;
 }
+/* A position's exit value is its headline; the complete-set redemption value beside it is secondary. */
 .portfolio-position-value strong {
-	font-size: var(--font-lg);
+	font-size: var(--font-title);
 	font-weight: 600;
 	line-height: var(--line-height-snug);
+}
+/* In a liquidity preview the LP amount and the shares returned with it are spaced like one list, so each payout caption reads with its own figure. */
+.exchange-preview .decision-amount + .portfolio-holdings {
+	margin-top: var(--space-4);
 }
 .portfolio-holdings {
 	display: flex;
@@ -757,12 +791,23 @@ button.outcome-button--no:hover:not(:disabled) {
 	gap: var(--space-4) var(--space-5);
 }
 .portfolio-position-value.is-secondary strong {
-	font-size: 1.25rem;
+	font-size: var(--font-body);
+	color: var(--text-secondary);
+}
+/* An unpriced value is a muted dash, so it never reads as a headline figure. */
+.portfolio-position-value strong.is-unpriced,
+.portfolio-summary-grid strong.is-unpriced {
+	color: var(--muted);
 }
 
 /* Portfolio summary strip and the list of positions that need attention. */
 .portfolio-summary-grid {
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+}
+/* The portfolio totals lead the page at title size. */
+.portfolio-summary-grid strong {
+	font-size: var(--font-title);
+	line-height: var(--line-height-tight);
 }
 .portfolio-action-items {
 	display: grid;
@@ -779,17 +824,31 @@ button.outcome-button--no:hover:not(:disabled) {
 	padding: 0;
 	list-style: none;
 }
+/* One row per market: the title with its state badges, the soonest deadline, then one link per action. */
 .portfolio-action-items li {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto auto;
+	grid-template-columns: minmax(0, 1fr) auto auto;
 	align-items: center;
 	gap: var(--space-2) var(--space-4);
 	padding: var(--space-3) 0;
 	border-top: 1px solid var(--divider-subtle);
 }
+.portfolio-action-item-subject {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	min-width: 0;
+}
 .portfolio-action-item-title {
 	min-width: 0;
 	overflow-wrap: anywhere;
+}
+.portfolio-action-item-links {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--space-2);
 }
 .portfolio-action-item-deadline {
 	color: var(--muted);
@@ -805,13 +864,9 @@ button.outcome-button--no:hover:not(:disabled) {
 		grid-column: 1 / -1;
 	}
 	.portfolio-action-items li {
-		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-columns: minmax(0, 1fr);
 	}
-	.portfolio-action-item-deadline {
-		grid-column: 1 / -1;
-	}
-	.portfolio-action-items li .button-link {
-		grid-column: 1 / -1;
-		justify-self: start;
+	.portfolio-action-item-links {
+		justify-content: flex-start;
 	}
 }

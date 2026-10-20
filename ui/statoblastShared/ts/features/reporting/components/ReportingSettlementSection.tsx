@@ -1,5 +1,6 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getViewerPositions } from '../lib/reportingViewerStatus.js'
+import { renderRepAmount } from './RepAmount.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
@@ -211,7 +212,7 @@ export function ReportingSettlementSection({
 
 				{activeReportingDetails === undefined
 					? undefined
-					: getViewerPositions(activeReportingDetails).map(position => (
+					: getViewerPositions(activeReportingDetails, renderRepAmount).map(position => (
 							<p key={position.side.key} className='reporting-position escalation-side-value'>
 								<span>
 									{position.side.label} · {position.positionStatus}

@@ -201,6 +201,7 @@
 	--simulation-accent: rgba(255, 227, 145, 1);
 	--simulation-text: rgba(255, 244, 218, 1);
 	--simulation-text-secondary: rgba(255, 242, 213, 0.82);
+	--simulation-text-warning: light-dark(rgba(255, 227, 145, 1), rgba(245, 200, 106, 1));
 	--simulation-border: color-mix(in srgb, var(--simulation-accent) 40%, transparent);
 	--simulation-border-subtle: color-mix(in srgb, var(--simulation-accent) 24%, transparent);
 	--simulation-border-hover: rgba(255, 236, 180, 0.56);
@@ -226,7 +227,6 @@
 	--radius-circle: 50%;
 	--radius-shell: var(--radius-overlay);
 	--radius-section: var(--radius-normal);
-	--radius-panel: var(--radius-normal);
 	--radius-record: var(--radius-normal);
 	--radius-control: var(--radius-compact);
 	--divider-subtle: light-dark(rgba(30, 50, 80, 0.1), rgba(159, 180, 207, 0.1));
@@ -263,7 +263,8 @@
 	--accent: var(--accent-zoltar);
 }
 
-:root[data-product="statoblast"] {
+:root[data-product="statoblast"],
+:root[data-product="openoracle"] {
 	--accent: var(--accent-statoblast);
 }
 

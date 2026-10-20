@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS, parseShardOption } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
+import { TEST_BUILD_TARGET_IDS } from '../ui/tests.mts'
 import { createBalancedTestShards, discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
 	createTestFingerprints,
@@ -77,7 +78,7 @@ describe('canonical test discovery', () => {
 
 	test('Bun default discovery ignores every generated UI test tree', async () => {
 		const bunfig = await readFile('bunfig.toml', 'utf8')
-		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
+		for (const packageId of TEST_BUILD_TARGET_IDS) {
 			expect(bunfig).toContain(`ui/${packageId}/js/tests/**`)
 		}
 	})

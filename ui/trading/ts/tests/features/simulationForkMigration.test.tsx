@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -21,6 +21,7 @@ function forkedScenarioConfiguration(backend: SimulationBackend) {
 	const addresses = getInfraContractAddresses(backend.profile)
 	const plan = getTradingDeploymentPlan(
 		{
+			genesisOutcome: 'yes',
 			chainId: backend.profile.chain.id,
 			chainName: backend.profile.displayName,
 			defaultRpcUrl: 'http://127.0.0.1/',
@@ -47,7 +48,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		backend = await createBootstrappedSimulationBackendWithRetry(FORKED_TRADING_SIMULATION_SCENARIO, 1, 'trading')
 		await backend.setTransactionDelayMilliseconds(0)
 		await backend.setQueryDelayMilliseconds(0)
-	}, 300_000)
+	}, simulationSetupTimeoutMs)
 
 	afterAll(async () => {
 		if (backend !== undefined) await backend.dispose()
@@ -74,70 +75,82 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
 		const context = await loadForkMigrationContext(client, market)
 		expect(context.kind).toBe('categorical')
+		expect(context.question).toMatchObject({ title: 'Will this resolve?', marketType: 'binary', outcomeLabels: ['Yes', 'No'], outcomesComplete: true })
+		expect(context.question.createdAt).toBeGreaterThan(0n)
+		expect(context.question.endTime).toBeGreaterThan(0n)
 		expect(context.availableTargets.map(target => target.label)).toEqual(['Invalid', 'Yes', 'No'])
 		expect(context.availableTargets.find(target => target.label === 'Yes')?.canonicalPool).toBeDefined()
 	}, 60_000)
 
-	test('enables Fork migration behind the full-balance acknowledgment and migrates the shares on chain', async () => {
-		activateSimulationBackendProfile(backend)
-		const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=trading-forked')
-		const restore = installActiveEnvironmentForTesting(backend, backend)
-		const configuration = forkedScenarioConfiguration(backend)
-		const client = backend.createReadClient()
-		const { markets } = await discoverLiveUniverseMarketPage(client, configuration, 0n)
-		const market = markets[0]
-		const account = backend.accounts[0]
-		if (market === undefined || account === undefined) throw new Error('Forked scenario market or wallet is missing')
-		const balances = await loadLiveBalances(client, market, account)
-		let refreshes = 0
-		const rendered = await renderIntoDocument(
-			<LiveSettlementControls
-				nowSeconds={100n}
-				configuration={configuration}
-				market={market}
-				balances={balances}
-				balanceState='ready'
-				balanceError={undefined}
-				account={account}
-				walletClient={createTradingWalletClient(backend.getProvider(), account)}
-				networkMismatchReason={undefined}
-				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
-				settings={DEFAULT_TRADE_SETTINGS}
-				externallyLocked={false}
-				refresh={async () => {
-					refreshes += 1
-				}}
-				onKnownReceipt={() => undefined}
-				executeWithCurrentWalletContext={async (_account, _networkFailure, _accountFailure, action) => await action()}
-				createGuardedWalletWrite={() => async write => await write()}
-				retryBalances={async () => undefined}
-				onWorkflowLockChange={() => undefined}
-			/>,
-		)
-		try {
-			expect(operationButton('Migrate').disabled).toBe(false)
-			expect(operationButton('Migrate').getAttribute('aria-pressed')).toBe('true')
-			expect(operationButton('Redeem sets').disabled).toBe(true)
-			await waitFor(() => expect(document.body.textContent).toContain('Will this resolve?'), { timeout: 10_000 })
-			const yesTarget = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Yes') === true && candidate.closest('[aria-label="Settlement operation"]') === null && candidate.closest('.enum-dropdown') === null)
-			if (!(yesTarget instanceof HTMLButtonElement)) throw new Error('Missing Yes fork target')
-			await act(() => yesTarget.click())
-			await waitFor(() => expect(document.body.textContent).toContain('Migrates your entire balance'), { timeout: 10_000 })
-			const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
-			if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
-			expect(acknowledgment.checked).toBe(false)
-			expect(acknowledgment.closest('label')?.textContent).toContain('into the selected child universes and permanently locks my Yes transfers')
-			expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
-			await act(() => acknowledgment.click())
-			// The action also waits for the migration quote, which can land just after the acknowledgment.
-			await waitFor(() => expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(false), { timeout: 10_000 })
-			await act(() => buttonByLabel('Migrate to 1 child universe').click())
-			await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.'), { timeout: 20_000 })
-			expect(refreshes).toBeGreaterThan(0)
-		} finally {
-			await rendered.cleanup()
-			restore()
-			dom.cleanup()
-		}
-	}, 60_000)
+	// The limit leaves each of the test's four simulation waits room to report on its own, plus the transactions between them.
+	test(
+		'enables Fork migration behind the full-balance acknowledgment and migrates the shares on chain',
+		async () => {
+			activateSimulationBackendProfile(backend)
+			const dom = installDomEnvironment('http://localhost/#/market?simulate=1&simScenario=trading-forked')
+			const restore = installActiveEnvironmentForTesting(backend, backend)
+			const configuration = forkedScenarioConfiguration(backend)
+			const client = backend.createReadClient()
+			const { markets } = await discoverLiveUniverseMarketPage(client, configuration, 0n)
+			const market = markets[0]
+			const account = backend.accounts[0]
+			if (market === undefined || account === undefined) throw new Error('Forked scenario market or wallet is missing')
+			const balances = await loadLiveBalances(client, market, account)
+			let refreshes = 0
+			const rendered = await renderIntoDocument(
+				<LiveSettlementControls
+					nowSeconds={100n}
+					configuration={configuration}
+					market={market}
+					balances={balances}
+					balanceState='ready'
+					balanceError={undefined}
+					account={account}
+					walletClient={createTradingWalletClient(backend.getProvider(), account)}
+					networkMismatchReason={undefined}
+					wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
+					settings={DEFAULT_TRADE_SETTINGS}
+					externallyLocked={false}
+					refresh={async () => {
+						refreshes += 1
+					}}
+					onKnownReceipt={() => undefined}
+					executeWithCurrentWalletContext={async (_account, _networkFailure, _accountFailure, action) => await action()}
+					createGuardedWalletWrite={() => async write => await write()}
+					retryBalances={async () => undefined}
+					onWorkflowLockChange={() => undefined}
+				/>,
+			)
+			try {
+				expect(operationButton('Migrate').disabled).toBe(false)
+				expect(operationButton('Migrate').getAttribute('aria-pressed')).toBe('true')
+				expect(operationButton('Redeem sets').disabled).toBe(true)
+				await waitFor(() => expect(document.body.textContent).toContain('Will this resolve?'), simulationWaitOptions)
+				expect(document.body.textContent).toContain('Fork question')
+				expect(document.body.textContent).toContain('Binary')
+				expect(document.body.textContent).toContain('Created')
+				expect(document.body.textContent).toContain('End time')
+				const yesTarget = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.includes('Yes') === true && candidate.closest('[aria-label="Settlement operation"]') === null && candidate.closest('.enum-dropdown') === null)
+				if (!(yesTarget instanceof HTMLButtonElement)) throw new Error('Missing Yes fork target')
+				await act(() => yesTarget.click())
+				await waitFor(() => expect(document.body.textContent).toContain('Migrates your entire balance'), simulationWaitOptions)
+				const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
+				if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
+				expect(acknowledgment.checked).toBe(false)
+				expect(acknowledgment.closest('label')?.textContent).toContain('into the selected child universes and permanently locks my Yes transfers')
+				expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
+				await act(() => acknowledgment.click())
+				// The action also waits for the migration quote, which can land just after the acknowledgment.
+				await waitFor(() => expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(false), simulationWaitOptions)
+				await act(() => buttonByLabel('Migrate to 1 child universe').click())
+				await waitFor(() => expect(document.body.textContent).toContain('Migrate to 1 child universe confirmed.'), simulationWaitOptions)
+				expect(refreshes).toBeGreaterThan(0)
+			} finally {
+				await rendered.cleanup()
+				restore()
+				dom.cleanup()
+			}
+		},
+		4 * simulationWaitOptions.timeout + 60_000,
+	)
 })

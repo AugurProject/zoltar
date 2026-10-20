@@ -15,6 +15,8 @@ import type { LiveTradingControllerServices } from '../../features/live/liveTrad
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE, setRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
 import { connectedWalletServices, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
@@ -92,11 +94,35 @@ describe('trading header', () => {
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
 		// The header names the universe with the shared switcher, which links back to the universe browser.
 		const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value .universe-switcher')
-		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Genesis')
+		expect(universeSwitcher?.querySelector('.universe-switcher-label')?.textContent).toBe('Augur v2 › Yes')
 		expect(rendered.container.querySelector('.universe-identity-backdrop')?.getAttribute('data-universe-id')).toBe('0')
-		expect(universeSwitcher?.getAttribute('aria-label')).toBe('Universe: Genesis. Browse universes')
+		expect(universeSwitcher?.getAttribute('aria-label')).toBe('Universe: Augur v2 › Yes. Browse universes')
 		expect(universeSwitcher?.getAttribute('href')).toContain('#/universe')
 	})
+
+	for (const outcome of ['yes', 'no'] as const) {
+		test(`keeps the ${outcome} root context and Alpha leaf visible for a bounded header summary`, async () => {
+			window.history.replaceState(undefined, '', `/?genesis=${outcome === 'yes' ? 'no' : 'yes'}#/market?universe=21`)
+			setRuntimeNetworkProfile(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, outcome))
+			const rendered = await renderIntoDocument(
+				<App
+					initializeEnvironment={async () => undefined}
+					loadLiveDeployment={async () => configuration}
+					liveTradingServices={{ ...offlineControllerServices, discoverUniverses: async () => emptyDiscoveryPage([0n, 21n], 21n) }}
+					loadUniverseSummary={async () => createUniverseSummary({ universeId: 21n, outcomeLabel: 'Alpha', relatedUniversesLoaded: false, hasForked: true })}
+				/>,
+			)
+			cleanupRendered = rendered.cleanup
+			const root = outcome === 'yes' ? 'Augur v2 › Yes' : 'Augur v2 › No'
+			await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label-parent')?.textContent).toBe(`${root} ·`))
+			const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .universe-switcher')
+			expect(universeSwitcher?.querySelector('.universe-switcher-label-leaf')?.textContent).toBe('Alpha')
+			expect(universeSwitcher?.getAttribute('aria-label')).toBe(`Universe: ${root} · Alpha, forked. Browse universes`)
+			expect(universeSwitcher?.getAttribute('title')).toBe(`${root} · Alpha`)
+			expect(universeSwitcher?.getAttribute('href')).toContain('universe=21')
+			expect(universeSwitcher?.querySelector('.universe-switcher-badge')?.textContent).toBe('Forked')
+		})
+	}
 
 	test('rewrites a malformed or empty universe request to the discovered universe instead of keeping a value the routes ignore', async () => {
 		for (const universe of ['abc', '-1', '']) {
@@ -152,7 +178,7 @@ describe('trading header', () => {
 			await Bun.sleep(20)
 		})
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0'))
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes'))
 	})
 
 	test('settles on the discovered universe without re-discovering in a loop', async () => {
@@ -164,11 +190,11 @@ describe('trading header', () => {
 				return emptyDiscoveryPage([0n], 0n)
 			},
 		})
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes'))
 		// The confirmed universe is re-requested once; a confirmed answer must not read as foreign and restart discovery.
 		await act(async () => await Bun.sleep(300))
 		expect(discoveries).toBeLessThanOrEqual(2)
-		expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis')
+		expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes')
 		expect(window.location.hash).toBe('#/market')
 	})
 
@@ -182,6 +208,10 @@ describe('trading header', () => {
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
 		// The header learns about the failure through the route's state effect, one commit after the route itself.
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable'))
+		const universeValue = rendered.container.querySelector('.header-toolbar-controls .toolbar-field.universe .toolbar-field-value')
+		expect(universeValue?.querySelector('.unavailable-value')?.textContent).toBe('Unavailable')
+		expect(universeValue?.querySelector('[data-universe-id]')).toBeNull()
+		expect(universeValue?.querySelector('a')).toBeNull()
 	})
 
 	test('shows wallet connection failures on the universe route', async () => {
@@ -189,7 +219,7 @@ describe('trading header', () => {
 		const rendered = await renderConfiguredApp({
 			discoverUniverses: async () => emptyDiscoveryPage([0n], 0n),
 		})
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Augur v2 › Yes'))
 		await clickConnectWallet(rendered.container)
 		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No browser wallet was found'))
 	})
@@ -279,10 +309,11 @@ describe('trading header', () => {
 		const balances = <TradingBalanceGroup walletSummary={{ account, ethAttoEth: 10n ** 18n, repAttoRep: 2n * 10n ** 18n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />
 		const live = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} accountMetrics={balances} networkName='Local' simulation={false} />)
 		cleanupRendered = live.cleanup
-		expect(live.container.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(live.container.querySelector('.account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
 		expect(live.container.querySelector('.wallet-button')).toBeNull()
 		await act(() => live.container.querySelector<HTMLButtonElement>('.account-menu-trigger')?.click())
-		expect(live.container.querySelector('.account-menu-popover button.address-value')?.getAttribute('title')).toBe(account)
+		expect(live.container.querySelector(`.account-menu-controls [role="button"][aria-label="Copy address ${account}"]`)).not.toBeNull()
+		expect(live.container.querySelector(`.account-menu-controls a[href="https://sepolia.etherscan.io/address/${account}"]`)).not.toBeNull()
 		expect(live.container.querySelector('.account-menu-network')?.textContent).toContain('Local')
 		expect(live.container.querySelector('.account-menu-popover [data-wallet-asset="ETH"]')?.textContent).toContain('1.00')
 		expect(live.container.querySelector('.account-menu-popover [data-wallet-asset="REP"]')).toBeNull()
@@ -294,7 +325,7 @@ describe('trading header', () => {
 
 		const simulated = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} accountMetrics={balances} simulation />)
 		cleanupRendered = simulated.cleanup
-		expect(simulated.container.querySelector('.account-menu-trigger .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(simulated.container.querySelector('.account-menu-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
 		await act(() => simulated.container.querySelector<HTMLButtonElement>('.account-menu-trigger')?.click())
 		expect(simulated.container.querySelector('.account-menu-popover [data-wallet-asset="ETH"]')).not.toBeNull()
 		expect(simulated.container.querySelector('.wallet-button')).toBeNull()
@@ -314,6 +345,33 @@ describe('trading header', () => {
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'missing', routeOwnsLiveWallet: true })).toBe(false)
 		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'verified', routeOwnsLiveWallet: false })).toBe(false)
 		expect(hasTradingWalletControls({ deploymentSetupActive: true, liveDeploymentStatus: 'missing', routeOwnsLiveWallet: false })).toBe(true)
+	})
+
+	test('keeps a deployment account copyable and linked independently of its disconnect action', async () => {
+		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
+		let disconnects = 0
+		const rendered = await renderIntoDocument(
+			<TradingWalletControls
+				account={undefined}
+				deploymentSetupActive
+				deploymentWalletState={{ account, connecting: false, ready: true }}
+				liveDeploymentStatus='missing'
+				onDeploymentWalletRequest={() => disconnects++}
+				onWalletConnectRequest={() => undefined}
+				routeOwnsLiveWallet={false}
+				simulation={false}
+				workflowLocked={false}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${account}"]`)).not.toBeNull()
+		expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${account}"]`)).not.toBeNull()
+		const disconnect = rendered.container.querySelector<HTMLButtonElement>('.wallet-button')
+		expect(disconnect?.textContent).toBe('Disconnect')
+		expect(disconnect?.getAttribute('aria-label')).toBe(`Disconnect ${account}`)
+		expect(rendered.container.querySelector('a a, a button, a [role=button], button a, button button, button [role=button], [role=button] a')).toBeNull()
+		await act(() => disconnect?.click())
+		expect(disconnects).toBe(1)
 	})
 
 	test('omits the toolbar controls slot on routes without wallet or universe context', async () => {

@@ -1,8 +1,7 @@
-import { useMemo } from 'preact/hooks'
+import { useMemo, useRef } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import * as appCopy from '../../copy/app.js'
-import { AddressValue } from '../../components/AddressValue.js'
-import { WalletChipLabel } from '../../components/WalletChip.js'
+import { WalletChip } from '../../components/WalletChip.js'
 import { useDisclosurePopover } from '../../hooks/useDisclosurePopover.js'
 import { abbreviateAddress } from '../../lib/address.js'
 
@@ -18,21 +17,23 @@ type AccountMenuProps = {
 }
 
 /**
- * The top bar's account control: a wallet chip that discloses a popover with the full address, balances,
- * network details, and wallet actions. Keeping balances behind the chip holds the top bar to one row.
+ * The top bar's account identity and independent disclosure control for balances, network details,
+ * and wallet actions. The address remains copyable and linked while the popover is closed.
  */
 export function AccountMenu({ actions, address, metrics, network, tone = 'ok' }: AccountMenuProps) {
 	const popover = useDisclosurePopover()
-	const widthConstraint = useMemo(() => ({ slot: popover.containerRef, control: popover.triggerProps.ref }), [popover.containerRef, popover.triggerProps.ref])
+	const controlsRef = useRef<HTMLSpanElement>(null)
+	const widthConstraint = useMemo(() => ({ slot: popover.containerRef, control: controlsRef }), [popover.containerRef])
 	return (
 		<div className='account-menu' ref={popover.containerRef}>
-			<button {...popover.triggerProps} className='account-menu-trigger' aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(address))} onClick={popover.toggle}>
-				<WalletChipLabel address={address} tone={tone} widthConstraint={widthConstraint} />
-				<span className='account-menu-caret' aria-hidden='true' />
-			</button>
+			<span className='account-menu-controls' ref={controlsRef}>
+				<WalletChip address={address} tone={tone} widthConstraint={widthConstraint} />
+				<button {...popover.triggerProps} className='account-menu-trigger' aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(address))} onClick={popover.toggle}>
+					<span className='account-menu-caret' aria-hidden='true' />
+				</button>
+			</span>
 			{popover.open ? (
 				<div className='account-menu-popover' id={popover.panelId} role='group' aria-label={appCopy.accountDetails}>
-					<AddressValue address={address} />
 					{network === undefined ? undefined : <dl className='account-menu-network'>{network}</dl>}
 					{metrics === undefined ? undefined : <div className='account-menu-metrics'>{metrics}</div>}
 					{actions === undefined ? undefined : <div className='account-menu-actions'>{actions}</div>}

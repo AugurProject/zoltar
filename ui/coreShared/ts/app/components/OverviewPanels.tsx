@@ -45,7 +45,8 @@ export type OverviewPanelsProps = {
 	/** Primary navigation for the top bar, supplied by `AppHeaderShell`. */
 	navigation?: ComponentChildren
 	applicationTitle: string
-	activeUniverseId: bigint
+	/** Omit universe context for applications, such as the oracle console, that operate independently of universes. */
+	activeUniverseId: bigint | undefined
 	accountState: AccountState
 	isConnectingWallet: boolean
 	isManagingWallet: boolean
@@ -56,7 +57,8 @@ export type OverviewPanelsProps = {
 	/** Interactive universe control, such as the shared universe switcher, shown in place of the plain universe label. */
 	universeControl?: ComponentChildren
 	universeForkTime?: bigint | undefined
-	universeHasForked?: boolean | undefined
+	/** Shows the app-wide notice that the active universe forked; an app leaves it off where its own view already states the fork. */
+	showUniverseForkedNotice?: boolean | undefined
 	/** Where the fork notice's "Migrate REP" action leads; each application links to its own migration flow. */
 	migrateRepHref?: string | undefined
 	universePresentation: UserMessagePresentation | undefined
@@ -179,7 +181,7 @@ export function OverviewPanels({
 	showWethBalance = false,
 	universeControl,
 	universeForkTime,
-	universeHasForked,
+	showUniverseForkedNotice,
 	universePresentation,
 	universeRepBalanceAttoRep,
 	isRefreshing,
@@ -197,7 +199,7 @@ export function OverviewPanels({
 	const balances: WalletBalanceMetric[] = [
 		{ asset: commonCopy.eth, loading: showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.ethBalanceAttoEth : undefined },
 		...(showWethBalance ? [{ asset: commonCopy.weth, loading: showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.wethBalanceAttoEth : undefined }] : []),
-		{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined },
+		...(activeUniverseId === undefined ? [] : [{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined }]),
 	]
 	const accountControl = (() => {
 		if (accountState.address === undefined) return <WalletConnectionControl onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
@@ -247,11 +249,15 @@ export function OverviewPanels({
 			}
 			controls={
 				<>
-					<ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>
+					{activeUniverseId === undefined ? undefined : (
+						<ToolbarField className='universe' hideLabel label={commonCopy.universe}>
+							{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}
+						</ToolbarField>
+					)}
 					{accountControl}
 				</>
 			}
-			notices={universeHasForked ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
+			notices={showUniverseForkedNotice ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
 			footer={
 				universePresentation === undefined ? undefined : (
 					<StateHint

@@ -16,14 +16,14 @@ export function getStatoblastOverviewUniverse({ loadingZoltarForkAccess, zoltarF
 		isLoadingUniverseRepBalance: loadingZoltarForkAccess,
 		migrateRepHref: migrationActive ? undefined : buildRouteHref('#/pools/migrate', getTopLevelRouteSearch('pools')),
 		universeForkTime: zoltarUniverse?.forkTime,
-		universeHasForked: zoltarUniverse?.hasForked,
+		showUniverseForkedNotice: zoltarUniverse?.hasForked,
 		universeRepBalanceAttoRep: zoltarForkRepBalanceAttoRep,
 	}
 }
 
 /**
  * The top bar's universe state, as in Zoltar: a `?universe=` that names no deployed universe shows the shared not-found hint with
- * its Go to Genesis universe recovery on every Statoblast view, instead of labelling the universe as if it existed.
+ * its Go to root universe recovery on every Statoblast view, instead of labelling the universe as if it existed.
  */
 export function getStatoblastUniversePresentation({ canReadOnchainData, loadingZoltarUniverse, zoltarUniverse, zoltarUniverseMissing }: { canReadOnchainData: boolean; loadingZoltarUniverse: boolean; zoltarUniverse: object | undefined; zoltarUniverseMissing: boolean }) {
 	const universeState = resolveLoadableValueState({ isLoading: loadingZoltarUniverse, isMissing: zoltarUniverseMissing, value: zoltarUniverse })

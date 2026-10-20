@@ -1,32 +1,22 @@
-import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { buildPoolsRouteHash, parsePoolsRouteHash, writePoolsLocationSearch } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
-import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
-import type { RouteTabDefinition, ViewTabOption } from '@zoltar/ui-core-shared/types/components.js'
+import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 
 type PoolsListView = Exclude<SecurityPoolsView, 'operate'>
-
-function getOpenOracleViewOptions(routeHash: string, search: string): ViewTabOption<OpenOracleView>[] {
-	return [
-		{ href: buildRouteHref(routeHash, writeOpenOracleViewQueryParam(search, 'browse')), label: appCopy.browseReports, value: 'browse' },
-		{ href: buildRouteHref(routeHash, writeOpenOracleViewQueryParam(search, 'create')), label: appCopy.createReport, value: 'create' },
-		{ href: buildRouteHref(routeHash, writeOpenOracleViewQueryParam(search, 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
-	]
-}
 
 export function getPoolsViewHref(view: PoolsListView) {
 	const search = writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(parseRouteHash(window.location.hash).routeHash), { view })
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 
-/** One primary row: pool entry and the standalone OpenOracle tool; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
+/** Pools and price requests share one primary row; Deploy joins while deployment is incomplete, and the other sections are disabled while required contracts are missing. */
 export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }: { applicationDeploymentMissing: boolean; route: string; showDeployTab: boolean }): RouteTabDefinition[] {
 	return withDeploymentTab({
 		deploymentMissing: applicationDeploymentMissing,
@@ -35,24 +25,12 @@ export function getStatoblastRouteTabs({ applicationDeploymentMissing, route, sh
 		route,
 		tabs: [
 			{ hash: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools, route: 'pools' },
-			{ hash: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.openOracle, route: 'open-oracle' },
+			{ hash: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports, route: 'open-oracle' },
 		],
 	})
 }
 
-export function getRouteSecondaryNavigation({
-	activeOpenOracleView,
-	activeSecurityPoolsView,
-	route,
-	setOpenOracleView,
-	setSecurityPoolsView,
-}: {
-	activeOpenOracleView: OpenOracleView
-	activeSecurityPoolsView: SecurityPoolsView
-	route: string
-	setOpenOracleView: (view: OpenOracleView) => void
-	setSecurityPoolsView: (view: SecurityPoolsView) => void
-}) {
+export function getRouteSecondaryNavigation({ activeSecurityPoolsView, route, setSecurityPoolsView }: { activeSecurityPoolsView: SecurityPoolsView; route: string; setSecurityPoolsView: (view: SecurityPoolsView) => void }) {
 	// A pool page is its own record with a back link and stage tabs; the list views would only compete with them.
 	const poolsViews =
 		activeSecurityPoolsView === 'operate'
@@ -68,12 +46,10 @@ export function getRouteSecondaryNavigation({
 						...(activeSecurityPoolsView === 'migrate' ? [{ href: getPoolsViewHref('migrate'), label: zoltarCopy.migrateRep, value: 'migrate' as const }] : []),
 					],
 				})
-	const openOracleViews = createSecondaryNavigation<OpenOracleView>({ ariaLabel: statoblastAppCopy.oracleReportViews, value: activeOpenOracleView, onChange: setOpenOracleView, options: getOpenOracleViewOptions(statoblastRouting.getHash('open-oracle'), getRouteHashSearch()) })
-	return resolveSecondaryNavigation({ route, secondaryByRoute: { 'open-oracle': openOracleViews, pools: poolsViews } })
+	return resolveSecondaryNavigation({ route, secondaryByRoute: { pools: poolsViews } })
 }
 
-export function getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route }: { activeOpenOracleView: OpenOracleView; activeSecurityPoolsView: SecurityPoolsView; route: string }) {
+export function getTransactionRouteKey({ activeSecurityPoolsView, route }: { activeSecurityPoolsView: SecurityPoolsView; route: string }) {
 	if (route === 'pools') return `${route}:${activeSecurityPoolsView}`
-	if (route === 'open-oracle') return `${route}:${activeOpenOracleView}`
 	return route
 }

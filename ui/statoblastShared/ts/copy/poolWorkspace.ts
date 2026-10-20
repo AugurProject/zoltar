@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as securityPoolCopy from './securityPool.js'
 
 export const poolDetails = 'Pool details'
@@ -7,7 +8,6 @@ export const moreToolsShort = 'More'
 export const formatMoreToolsActive = (view: string) => `More: ${view}`
 export const poolAddressAndRefresh = 'Pool address'
 export const capacityLabel = 'Open interest / commitment'
-export const capacityUnavailable = 'The pool commitment is unavailable.'
 export const stagedOperationCount = (count: bigint) => `${count.toString()} staged ${count === 1n ? 'operation' : 'operations'}`
 export const vaults = (count: bigint) => `${count.toString()} ${count === 1n ? 'vault' : 'vaults'}`
 export const myVault = 'My vault'
@@ -32,6 +32,11 @@ export const lifecycleStepLabels = {
 	truthAuction: commonCopy.truthAuction,
 } as const
 export const lifecycleStepPosition = (step: number, total: number) => `${step.toString()} of ${total.toString()}`
+export const lifecycleStepSkipped = 'skipped'
+
+export const formatSkippedLifecycleStep = (label: string) => `${label} (${lifecycleStepSkipped})`
+
+export const formatShareOfTarget = (percent: CopyTemplateValue) => `${percent}% of target`
 export const nextActions = 'Next actions'
 export const nothingToDoNow = 'Nothing needs your action on this pool right now.'
 export const deadlineLabel = 'By'
@@ -42,7 +47,7 @@ export const actionLabels = {
 	connectWallet: 'Connect a wallet to see actions for your positions',
 	depositRep: 'Deposit REP to back this pool',
 	escalationStake: 'Your escalation deposits are locked',
-	exitVaultCommitment: 'Set your commitment limit to 0 ETH to redeem vault REP',
+	exitVaultCommitment: 'Redeem your vault REP',
 	finalizeTruthAuction: 'Finalize the truth auction',
 	manageVault: 'Manage your vault',
 	migrateVault: 'Migrate your vault',
@@ -64,5 +69,4 @@ export const actionButtonLabels = {
 	trading: 'Open shares',
 	vaults: 'Open vaults',
 } as const
-export const copyPoolAddress = 'Copy'
 export const actionShownBelow = 'Shown below'

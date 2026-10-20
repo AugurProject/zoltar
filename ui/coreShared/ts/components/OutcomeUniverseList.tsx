@@ -1,0 +1,56 @@
+import type { ComponentChildren } from 'preact'
+import { useId } from 'preact/hooks'
+import { Badge } from './Badge.js'
+import { OutcomeSelectionList } from './OutcomeSelectionList.js'
+import * as commonCopy from '../copy/common.js'
+import * as universeCopy from '../copy/universes.js'
+
+type Outcome = { key: string; exists?: boolean; label: string; selected?: boolean; disabled?: boolean; pendingLabel?: string | undefined; details?: ComponentChildren; actions?: ComponentChildren; onSelect: () => void }
+
+/**
+ * Outcome names and deployment status stay consistent while navigation and selection keep their own semantics.
+ * `pendingLabel` replaces the row label and accessible name without adding a progress row. The caller disables pending controls.
+ * Unknown deployment status omits its badge; callers may disable navigation explicitly while it is pending.
+ * `notDeployedDetail` explains a not-yet-deployed child beside its badge, inside the row's description, so a disabled row says why.
+ */
+export function OutcomeUniverseList({ outcomes, selection = false, emptyMessage, className = '', notDeployedDetail }: { outcomes: readonly Outcome[]; selection?: boolean; emptyMessage?: ComponentChildren; className?: string; notDeployedDetail?: ComponentChildren }) {
+	const statusId = useId()
+	return (
+		<OutcomeSelectionList
+			className={className}
+			emptyMessage={emptyMessage}
+			items={outcomes.map(outcome => ({
+				key: outcome.key,
+				ariaLabel: outcome.pendingLabel ?? (selection ? outcome.label : universeCopy.formatOpenChildUniverse(outcome.label)),
+				...(outcome.exists === undefined ? {} : { describedById: `${statusId}-${outcome.key}` }),
+				label: (
+					<>
+						{selection ? (
+							<span aria-hidden='true' className='migration-outcome-checkbox'>
+								{outcome.selected ? '✓' : ''}
+							</span>
+						) : undefined}
+						{outcome.pendingLabel ?? outcome.label}
+						{!selection && outcome.exists !== false && outcome.pendingLabel === undefined ? <span aria-hidden='true'>{universeCopy.openOutcomeArrowTail}</span> : undefined}
+					</>
+				),
+				details:
+					outcome.exists === undefined && outcome.details === undefined ? undefined : (
+						<>
+							{outcome.exists === undefined ? undefined : (
+								<span className={!outcome.exists && notDeployedDetail !== undefined ? 'migration-outcome-status-detail' : undefined} id={`${statusId}-${outcome.key}`}>
+									<Badge tone={outcome.exists ? 'ok' : 'muted'}>{outcome.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
+									{outcome.exists || notDeployedDetail === undefined ? undefined : <span className='detail'> {notDeployedDetail}</span>}
+								</span>
+							)}
+							{outcome.details}
+						</>
+					),
+				disabled: outcome.disabled ?? outcome.exists === false,
+				...(selection && outcome.selected !== undefined ? { selected: outcome.selected } : {}),
+				actions: outcome.actions,
+				onSelect: outcome.onSelect,
+			}))}
+		/>
+	)
+}

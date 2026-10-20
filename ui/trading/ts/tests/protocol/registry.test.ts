@@ -7,7 +7,10 @@ import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-st
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const addresses = getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE)
-const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan({ chainId: 11155111, chainName: 'Sepolia', defaultRpcUrl: 'http://localhost', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30), 'http://localhost')
+const configuration = deploymentConfigurationForPlan(
+	getTradingDeploymentPlan({ genesisOutcome: 'yes', chainId: 11155111, chainName: 'Sepolia', defaultRpcUrl: 'http://localhost', id: 'sepolia', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30),
+	'http://localhost',
+)
 
 test('pages the current pool registry and filters the requested universe without logs', async () => {
 	const ranges: unknown[] = []

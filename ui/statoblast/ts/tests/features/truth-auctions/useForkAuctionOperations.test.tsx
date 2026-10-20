@@ -15,13 +15,14 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { createTruthAuctionMetrics } from '../security-pools/workflow/builders.js'
 
 type UseForkAuctionOperationsState = ReturnType<typeof useForkAuctionOperations>
 type TestForkAuctionWriteClient = { kind: 'injected-write-client' }
@@ -51,29 +52,6 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 		truthAuctionAddress: TRUTH_AUCTION_ADDRESS,
 		truthAuctionStartedAt: 100n,
 		universeId: 1n,
-		...overrides,
-	}
-}
-
-function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
-	return {
-		accumulatedBidAttoEth: 1n * 10n ** 18n,
-		auctionEndsAt: 400n,
-		clearingPrice: undefined,
-		clearingTick: undefined,
-		bidAtClearingTickAttoEth: 0n,
-		attoEthRaiseCap: 100n * 10n ** 18n,
-		attoEthRaised: 1n * 10n ** 18n,
-		finalized: false,
-		hitCap: false,
-		maxAttoRepBeingSold: 100n * 10n ** 18n,
-		minBidSizeAttoEth: 1n * 10n ** 18n,
-		attoRepPurchasableAtBid: 1n * 10n ** 18n,
-		timeRemaining: 150n,
-		totalAttoRepPurchased: 0n,
-		underfunded: false,
-		underfundedThreshold: undefined,
-		underfundedWinningAttoEth: 0n,
 		...overrides,
 	}
 }

@@ -4,10 +4,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import { walkFiles } from '../repo/walk.mts'
-import { getUiAppDependencyOrder, getUiAppPaths, getUiPackageRoot, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
+import { getUiAppContractProject, getUiAppDependencyOrder, getUiAppPaths, getUiPackageRoot, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
 import { isWatchedContractSource } from './watchContractSources.mts'
 
 const appId = parseUiAppIdFromProcess('the UI watch process')
+const contractProject = getUiAppContractProject(appId)
 const appPaths = getUiAppPaths(appId)
 const UI_ROOT_PATH = appPaths.coreSharedRoot
 const APP_ROOT_PATH = appPaths.appRoot
@@ -19,7 +20,7 @@ const SHARED_TSCONFIG_PATHS = SHARED_SOURCE_ROOT_PATHS.map(sourceRoot => path.jo
 const SOLIDITY_CONTRACTS_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')
 const SOLIDITY_ABI_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'compile.ts')
-const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', appId, 'Contracts.json')
+const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', contractProject, 'Contracts.json')
 const PROJECT_ARTIFACT_BUILD_PATH = appPaths.projectArtifactsScript
 const BUNDLER_PATHS_BUILD_PATH = appPaths.bundlerPathsScript
 const TYPE_SCRIPT_PROJECT_ROOT_PATHS = getUiAppDependencyOrder(appId).map(packageId => getUiPackageRoot(appPaths.uiRoot, packageId))
@@ -29,7 +30,7 @@ const VENDOR_BUILD_PATH = appPaths.vendorBuildScript
 const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH, path.join(APP_ROOT_PATH, 'package.json')]
 const WORKER_BUILD_PATH = appPaths.workersBuildScript
 const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]
-const liveReloadEndpoints: Record<UiAppId, string> = { statoblast: 'http://127.0.0.1:12347/__live-reload', trading: 'http://127.0.0.1:4163/__live-reload', zoltar: 'http://127.0.0.1:4153/__live-reload' }
+const liveReloadEndpoints: Record<UiAppId, string> = { openoracle: 'http://127.0.0.1:4173/__live-reload', statoblast: 'http://127.0.0.1:12347/__live-reload', trading: 'http://127.0.0.1:4163/__live-reload', zoltar: 'http://127.0.0.1:4153/__live-reload' }
 const LIVE_RELOAD_ENDPOINT = liveReloadEndpoints[appId]
 const BUN_EXECUTABLE_PATH = process.execPath
 
@@ -314,12 +315,12 @@ const refreshContractSourceWatchers = async () => {
 			true,
 			changedPath => {
 				void refreshContractSourceWatchers()
-				if (isWatchedContractSource(changedPath, REPOSITORY_ROOT_PATH, appId)) void runContractBuild(toUiRelativePath(changedPath))
+				if (isWatchedContractSource(changedPath, REPOSITORY_ROOT_PATH, contractProject)) void runContractBuild(toUiRelativePath(changedPath))
 			},
 			contractSourceWatchers.register,
 		)
 	}
-	const files = (await getAllFiles(SOLIDITY_CONTRACTS_ROOT_PATH)).filter(filePath => isWatchedContractSource(filePath, REPOSITORY_ROOT_PATH, appId))
+	const files = (await getAllFiles(SOLIDITY_CONTRACTS_ROOT_PATH)).filter(filePath => isWatchedContractSource(filePath, REPOSITORY_ROOT_PATH, contractProject))
 	for (const filePath of files) {
 		watchFileWithCleanup(
 			filePath,

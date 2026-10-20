@@ -1,0 +1,9 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' role='img' aria-labelledby='openoracle-title' data-motif='connected-evidence'>
+	<title id='openoracle-title'>OpenOracle</title>
+	<rect width='64' height='64' rx='15' fill='#08111d' />
+	<path d='M19 32h14m0 0 12-14M33 32h15M33 32l12 14' fill='none' stroke='#54c7df' stroke-linecap='round' stroke-linejoin='round' stroke-width='5' />
+	<circle cx='18' cy='32' r='6' fill='#e7f3ff' />
+	<circle cx='46' cy='18' r='5' fill='#54c7df' />
+	<circle cx='49' cy='32' r='5' fill='#54c7df' />
+	<circle cx='46' cy='46' r='5' fill='#54c7df' />
+</svg>
