@@ -36,7 +36,7 @@ export function App() {
 	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const urlState = useStatoblastUrlState()
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolAddress, securityPoolQuestionId, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, vaultAddress } = urlState
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, securityPoolQuestionId, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setSecurityPoolsView, vaultAddress } = urlState
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
 	const repPrices = useRepPrices()
@@ -88,15 +88,12 @@ export function App() {
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
 	const { zoltarUniverse, zoltarUniverseError } = marketCreation
-	const { activeOpenOracleView, loadOracleReport, onViewPendingReport, openOracleRouteContentProps, openOraclePriceCoordinator, setOpenOracleReportId } = useOpenOracleRoute({
+	const { loadOracleReport, onViewPendingReport, openOracleRouteContentProps, openOraclePriceCoordinator, setOpenOracleReportId } = useOpenOracleRoute({
 		accountState,
-		activeEnvironmentNonce,
 		canReadOnchainData,
 		navigate,
-		openOracleView,
 		route,
 		setOpenOracleReport,
-		setOpenOracleView,
 		urlOpenOracleReportId,
 		walletScopedHookConfig,
 	})
@@ -128,7 +125,6 @@ export function App() {
 		showWethBalance: true,
 	}
 	const invalidRouteState = getInvalidStatoblastRouteState({
-		openOracleView,
 		pageSearch: window.location.search,
 		resolvedRoute,
 		search: parseRouteHash(window.location.hash).search,
@@ -141,7 +137,7 @@ export function App() {
 		tabs: getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }),
 		onRouteChange: navigate,
 	}
-	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
+	const pageTitle = getAppPageTitle({ activeSecurityPoolsView, route: activeRoute })
 	// Only the document title names the pool, so the pool loading in does not move focus to the page heading again.
 	const documentTitleDetail = activeRoute === 'pools' && activeSecurityPoolsView === 'operate' ? getPoolDocumentTitleDetail({ requestedPoolAddress: securityPoolAddress, selectedPool }) : undefined
 	const formatDocumentTitle = useCallback((title: string) => formatAppDocumentTitle(title, documentTitleDetail), [documentTitleDetail])
@@ -165,8 +161,8 @@ export function App() {
 		urlVaultAddress: vaultAddress,
 		walletBootstrapComplete,
 	})
-	const secondaryNavigation = getRouteSecondaryNavigation({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute, setOpenOracleView, setSecurityPoolsView })
-	const transactionRouteKey = getTransactionRouteKey({ activeOpenOracleView, activeSecurityPoolsView, route })
+	const secondaryNavigation = getRouteSecondaryNavigation({ activeSecurityPoolsView, route: activeRoute, setSecurityPoolsView })
+	const transactionRouteKey = getTransactionRouteKey({ activeSecurityPoolsView, route })
 
 	return (
 		<UniverseNamesProvider includeRelatedUniverses={includeRelatedUniverses} universe={zoltarUniverse}>

@@ -7,6 +7,7 @@ import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSe
 import ts from 'typescript'
 import { kuboImageFromDockerfile, localPublishSteps } from '../repo/publish-ui-local.mts'
 import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
+import { isUiAppId, UI_APP_IDS } from './appIds.mts'
 
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 const dockerignore = join(repositoryRoot, '.dockerignore')
@@ -29,11 +30,12 @@ describe('UI Docker packaging', () => {
 			for (const instruction of stage.instructions) {
 				if (instruction.keyword === 'COPY') copies.push(instruction.value)
 				if (instruction.keyword !== 'RUN') continue
-				const app = /production\.mts (zoltar|statoblast|trading)/u.exec(instruction.value)?.[1]
+				const app = /production\.mts (\S+)/u.exec(instruction.value)?.[1]
 				if (app === undefined) continue
-				// Trading and Statoblast both consume the shared oracle stylesheet.
+				expect(isUiAppId(app)).toBe(true)
+				// The Statoblast-based apps consume the shared oracle stylesheet.
 				const packages = ['zoltarShared']
-				if (app === 'statoblast' || app === 'trading') packages.push('statoblastShared')
+				if (app === 'statoblast' || app === 'trading' || app === 'openoracle') packages.push('statoblastShared')
 				if (app === 'trading') packages.push('trading')
 				for (const sharedPackage of packages) {
 					expect(copies).toContain(`./ui/${sharedPackage}/css/ /source/ui/${sharedPackage}/css/`)
@@ -60,8 +62,9 @@ describe('UI Docker packaging', () => {
 					}
 				}
 				if (instruction.keyword !== 'RUN') continue
-				const app = /build-shared\.mts (zoltar|statoblast|trading)/u.exec(instruction.value)?.[1]
-				if (app !== 'zoltar' && app !== 'statoblast' && app !== 'trading') continue
+				const app = /build-shared\.mts (\S+)/u.exec(instruction.value)?.[1]
+				if (app === undefined) continue
+				if (!isUiAppId(app)) throw new Error(`Unknown application in shared-build command: ${app}`)
 				for (const entry of sharedPackageClosure(appSharedPackages[app])) {
 					const errors: ts.Diagnostic[] = []
 					const parsed = ts.getParsedCommandLineOfConfigFile(
@@ -150,9 +153,9 @@ describe('UI Docker packaging', () => {
 		for (const forbidden of ['./shared/', './solidity/contracts/', './shared/statoblast/ts/', './shared/openOracle/ts/', './shared/trading/ts/', './ui/statoblastShared/ts/']) expect(upstreamCopies.some(copy => copy.startsWith(`${forbidden} `))).toBe(false)
 		expect(requireDockerStage(stages, 'zoltar-builder').base).toBe('common-builder')
 		expect(requireDockerStage(stages, 'statoblast-dependencies').base).toBe('common-builder')
-		for (const app of ['statoblast', 'trading']) expect(requireDockerStage(stages, `${app}-builder`).base).toBe('statoblast-dependencies')
+		for (const app of ['statoblast', 'trading', 'openoracle']) expect(requireDockerStage(stages, `${app}-builder`).base).toBe('statoblast-dependencies')
 
-		for (const appId of ['zoltar', 'statoblast', 'trading']) {
+		for (const appId of UI_APP_IDS) {
 			const builder = requireDockerStage(stages, `${appId}-builder`)
 			const runtime = requireDockerStage(stages, `local-runtime-${appId}`)
 			expect(dockerInstructions(runtime, 'COPY').some(copy => copy.includes(`--from=${appId}-builder`) && copy.endsWith(`/source/ui/${appId}/dist/ /app/ui/${appId}/`))).toBe(true)
@@ -239,7 +242,7 @@ describe('UI Docker packaging', () => {
 		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
 		const publisher = requireDockerStage(stages, 'publisher')
 		const hashCommand = dockerInstructions(publisher, 'RUN').find(command => command.includes('--only-hash'))
-		expect(hashCommand).toContain('for app in zoltar statoblast trading; do')
+		expect(hashCommand).toContain('for app in zoltar statoblast trading openoracle; do')
 		expect(hashCommand).toContain('ipfs add --cid-version 1 --pin=true --quieter --only-hash --recursive "/export/$app"')
 		expect(hashCommand).toContain('> "/ipfs_hash_${app}.txt"')
 		expect(dockerInstructions(publisher, 'COPY')).toContain('--chmod=755 ./tooling/ui/docker-local-publisher-entrypoint.sh /publish.sh')
@@ -248,7 +251,7 @@ describe('UI Docker packaging', () => {
 	test('local and release publishers use the same complete export tree', async () => {
 		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
 		const exports = dockerInstructions(requireDockerStage(stages, 'ipfs-export'), 'COPY')
-		for (const app of ['zoltar', 'statoblast', 'trading']) {
+		for (const app of UI_APP_IDS) {
 			expect(exports).toContain(`--from=builder /source/ui/${app}/dist/index.html /export/${app}/index.html`)
 		}
 		for (const name of ['publisher', 'local-publisher']) {

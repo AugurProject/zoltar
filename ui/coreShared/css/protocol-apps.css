@@ -1,21 +1,24 @@
-/* Zoltar and Statoblast remain separate operational products on one foundation. */
+/* Zoltar and Statoblast remain separate operational products on one foundation, shared with OpenOracle. */
 :root[data-product="zoltar"] body::before {
 	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-zoltar) 10%, transparent), transparent 28%), linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 58%);
 }
 
-:root[data-product="statoblast"] body::before {
+:root[data-product="statoblast"] body::before,
+:root[data-product="openoracle"] body::before {
 	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-statoblast) 11%, transparent), transparent 28%), linear-gradient(180deg, color-mix(in srgb, var(--bg-deep) 90%, var(--accent-statoblast)) 0%, var(--bg-deep) 58%);
 }
 
 :root[data-product="zoltar"] .route-header h1,
-:root[data-product="statoblast"] .route-header h1 {
+:root[data-product="statoblast"] .route-header h1,
+:root[data-product="openoracle"] .route-header h1 {
 	font-size: var(--font-h1);
 	line-height: var(--line-height-display);
 	letter-spacing: -0.025em;
 }
 
 :root[data-product="zoltar"] :where(.record-list, .entity-list) > .entity-card,
-:root[data-product="statoblast"] :where(.record-list, .entity-list) > .entity-card {
+:root[data-product="statoblast"] :where(.record-list, .entity-list) > .entity-card,
+:root[data-product="openoracle"] :where(.record-list, .entity-list) > .entity-card {
 	border-width: 0 0 1px;
 	border-radius: 0;
 	background: transparent;

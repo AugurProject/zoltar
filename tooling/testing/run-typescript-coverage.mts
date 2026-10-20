@@ -1,5 +1,7 @@
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import { mergeLcovRecords, parseLcov, renderLcovRecords } from './coverage-report.mts'
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { getWeightedTestFiles } from './run-balanced-test-shard.mts'
@@ -7,6 +9,17 @@ import { createBalancedTestShards, discoverTestFiles, toBunTestPath, type Weight
 import { isMissingPathError } from '../repo/fs.mts'
 
 export const TYPESCRIPT_COVERAGE_SHARD_COUNT = 4
+
+/** Tests can load shared packages through emitted JavaScript; retain maps so their hits count against TypeScript. */
+export async function prepareCoverageSourceMaps(repositoryRoot = process.cwd(), packages: readonly { path: string }[] = sharedPackages) {
+	const compiler = fileURLToPath(import.meta.resolve('typescript/bin/tsc'))
+	for (const entry of packages) {
+		const child = Bun.spawn([process.execPath, compiler, '--project', resolve(repositoryRoot, entry.path, 'tsconfig.json'), '--sourceMap'], { cwd: repositoryRoot, stdout: 'inherit', stderr: 'inherit' })
+		const exitCode = await child.exited
+		if (exitCode !== 0) return exitCode
+	}
+	return 0
+}
 
 export function createTypeScriptCoverageShards(testFiles: readonly WeightedTestFile[], shardCount = TYPESCRIPT_COVERAGE_SHARD_COUNT) {
 	return createBalancedTestShards(testFiles, shardCount).map(shard => shard.files)
@@ -92,6 +105,9 @@ async function main() {
 			console.error(`TypeScript coverage failed; the last complete capture remains at ${relative(repositoryRoot, coverageDirectory)}`)
 			return exitCode
 		}
+		// Build-isolation tests can replace emitted output. Restore maps after them before reporting its coverage.
+		const sourceMapsExitCode = await prepareCoverageSourceMaps(repositoryRoot)
+		if (sourceMapsExitCode !== 0) return sourceMapsExitCode
 
 		const stagingDirectory = join(workingDirectory, 'complete')
 		await mkdir(stagingDirectory)

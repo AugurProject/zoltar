@@ -99,6 +99,16 @@ describe('OverviewPanels', () => {
 		},
 	})
 
+	test('omits universe context and REP balances for an app without a universe', async () => {
+		await renderOverviewPanels({ activeUniverseId: undefined, accountState: connectedAccount, repPrices: undefined, showWethBalance: true })
+		expect(document.body.textContent).not.toContain('Genesis')
+		openAccountMenu()
+		await waitFor(() => {
+			expect(document.body.textContent).toContain('WETH')
+			expect(document.body.textContent).not.toContain('REP')
+		})
+	})
+
 	test('shows an enabled connect wallet button when disconnected and idle', async () => {
 		const documentQueries = await renderOverviewPanels()
 		const connectButton = documentQueries.getByRole('button', { name: 'Connect wallet' })

@@ -45,7 +45,8 @@ export type OverviewPanelsProps = {
 	/** Primary navigation for the top bar, supplied by `AppHeaderShell`. */
 	navigation?: ComponentChildren
 	applicationTitle: string
-	activeUniverseId: bigint
+	/** Omit universe context for applications, such as the oracle console, that operate independently of universes. */
+	activeUniverseId: bigint | undefined
 	accountState: AccountState
 	isConnectingWallet: boolean
 	isManagingWallet: boolean
@@ -198,7 +199,7 @@ export function OverviewPanels({
 	const balances: WalletBalanceMetric[] = [
 		{ asset: commonCopy.eth, loading: showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.ethBalanceAttoEth : undefined },
 		...(showWethBalance ? [{ asset: commonCopy.weth, loading: showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.wethBalanceAttoEth : undefined }] : []),
-		{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined },
+		...(activeUniverseId === undefined ? [] : [{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined }]),
 	]
 	const accountControl = (() => {
 		if (accountState.address === undefined) return <WalletConnectionControl onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
@@ -248,7 +249,7 @@ export function OverviewPanels({
 			}
 			controls={
 				<>
-					<ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>
+					{activeUniverseId === undefined ? undefined : <ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>}
 					{accountControl}
 				</>
 			}

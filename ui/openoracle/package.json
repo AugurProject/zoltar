@@ -1,0 +1,35 @@
+{
+	"description": "OpenOracle reports, disputes, settlement, and withdrawals",
+	"name": "@zoltar/ui-openoracle",
+	"private": true,
+	"repository": {},
+	"license": "Unlicense",
+	"type": "module",
+	"devDependencies": {
+		"bun-types": "1.4.2",
+		"typescript": "5.8.2"
+	},
+	"dependencies": {
+		"@preact/signals": "2.0.1",
+		"@zoltar/ui-core-shared": "workspace:1.0.0",
+		"@zoltar/ui-statoblast-shared": "workspace:1.0.0",
+		"@zoltar/ui-zoltar-shared": "workspace:1.0.0",
+		"preact": "10.26.4",
+		"@tevm/memory-client": "1.0.0-rc.151",
+		"@tevm/common": "1.0.0-rc.151",
+		"@zoltar/core-shared": "workspace:1.0.0",
+		"@zoltar/open-oracle-shared": "workspace:1.0.0",
+		"@zoltar/statoblast-shared": "workspace:1.0.0"
+	},
+	"scripts": {
+		"generate": "bun ../../tooling/contracts/build-app-contracts.mts openoracle && bun ../../tooling/repo/build-shared.mts openoracle && bun ../../tooling/ui/vendor.mts openoracle --scoped-artifacts",
+		"vendor": "bun ../../tooling/ui/vendor.mts openoracle",
+		"build:workers": "bun ../../tooling/ui/workers.mts openoracle",
+		"build:tests": "bun ../../tooling/ui/tests.mts openoracle",
+		"build": "bun ../../tooling/ui/apps.mts openoracle",
+		"build:prod": "bun run build && bun ../../tooling/ui/production.mts openoracle",
+		"watch": "bun run generate && bun ../../tooling/ui/watch.mts openoracle",
+		"serve": "bun ../../tooling/ui/dev-server.ts openoracle"
+	},
+	"version": "1.0.0"
+}

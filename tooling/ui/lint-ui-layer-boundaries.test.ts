@@ -1,3 +1,4 @@
+import { sharedImportBoundaryViolation } from '../repo/check-shared-boundaries.mts'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { collectExportedTypeNames, findUiExportsManifestViolations, findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
@@ -42,6 +43,11 @@ test('keeps runnable applications as dependency leaves behind shared-library API
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/trading.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
+})
+
+test('keeps the OpenOracle console behind shared APIs', () => {
+	expect(findUiLayerBoundaryViolations('ui/openoracle/ts/app/App.tsx', "import { App } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+	expect(findUiLayerBoundaryViolations('ui/openoracle/ts/app/App.tsx', "import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'")).toEqual([])
 })
 
 test('prevents shared libraries from reaching back into applications', () => {
@@ -130,4 +136,9 @@ test('exports manifest guard requires existing source targets and explicit tsx e
 	])
 	expect(findUiExportsManifestViolations('coreShared', { './components/Widget.js': { default: './js/components/Widget.js' } }, sourceFiles)).toEqual([{ detail: 'exports entry ./components/Widget.js has no bun-condition source target', packageId: 'coreShared' }])
 	expect(findUiExportsManifestViolations('coreShared', { './*': { bun: './ts/*.ts', default: './js/*.js' } }, sourceFiles)).toEqual([{ detail: '.tsx module ts/components/Widget.tsx needs an explicit exports entry so bun resolves it to sources when built output is absent', packageId: 'coreShared' }])
+})
+
+test('checks the OpenOracle app runtime package dependencies', () => {
+	expect(sharedImportBoundaryViolation('ui/openoracle/ts/app/App.tsx', '@zoltar/open-oracle-shared/openOracle/openOracle')).toBeUndefined()
+	expect(sharedImportBoundaryViolation('ui/openoracle/ts/app/App.tsx', '@zoltar/trading-shared/trading/positions')).toContain('must not depend')
 })

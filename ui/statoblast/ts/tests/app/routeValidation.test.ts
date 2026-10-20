@@ -6,7 +6,7 @@ import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from '.
 type RouteValidationInput = Parameters<typeof getInvalidStatoblastRouteState>[0]
 
 function validateRoute(overrides: Partial<RouteValidationInput>) {
-	return getInvalidStatoblastRouteState({ openOracleView: '', pageSearch: '', resolvedRoute: 'pools', search: '', selectedPoolView: '', ...overrides })
+	return getInvalidStatoblastRouteState({ pageSearch: '', resolvedRoute: 'pools', search: '', selectedPoolView: '', ...overrides })
 }
 
 function isRouteInvalid(overrides: Partial<RouteValidationInput>) {
@@ -24,16 +24,12 @@ describe('statoblast route validation', () => {
 		}
 	})
 
-	test('rejects empty and unknown OpenOracle views', () => {
-		expect(validateRoute({ resolvedRoute: 'open-oracle', search: '?openOracleView=' }).hasInvalidOpenOracleView).toBe(true)
-		expect(validateRoute({ openOracleView: 'browse', search: '?openOracleView=browse' }).hasInvalidOpenOracleView).toBe(false)
-		expect(validateRoute({ openOracleView: 'invalid', resolvedRoute: 'open-oracle', search: '?openOracleView=invalid' }).hasInvalidOpenOracleView).toBe(true)
-		expect(validateRoute({ openOracleView: 'selected-report', resolvedRoute: 'open-oracle', search: '?openOracleView=selected-report&openOracleReportId=9' }).hasInvalidOpenOracleView).toBe(false)
-	})
-
-	test('accepts a remembered OpenOracle view while visiting Pools or Deploy', () => {
-		for (const resolvedRoute of ['pools', 'deploy'] as const) {
-			expect(validateRoute({ openOracleView: 'selected-report', resolvedRoute, search: '?openOracleView=selected-report&openOracleReportId=9' }).hasInvalidOpenOracleView).toBe(false)
+	test('rejects every removed oracle view on all Statoblast routes', () => {
+		for (const resolvedRoute of ['open-oracle', 'pools', 'deploy'] as const) {
+			for (const view of ['', 'browse', 'create', 'selected-report', 'invalid']) {
+				expect(validateRoute({ resolvedRoute, search: `?openOracleView=${view}&openOracleReportId=9` }).hasInvalidOpenOracleView).toBe(true)
+			}
+			expect(isRouteInvalid({ resolvedRoute, search: '?openOracleReportId=9' })).toBe(false)
 		}
 	})
 

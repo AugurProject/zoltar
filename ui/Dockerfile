@@ -36,6 +36,7 @@ COPY ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ui/statoblastShared/package.json /source/ui/statoblastShared/package.json
 COPY ui/trading/package.json /source/ui/trading/package.json
+COPY ui/openoracle/package.json /source/ui/openoracle/package.json
 COPY ui/zoltar/package.json /source/ui/zoltar/package.json
 COPY ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
 RUN bun install --frozen-lockfile
@@ -125,6 +126,28 @@ ENV PORT=8011
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
 CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
+FROM statoblast-dependencies AS openoracle-builder
+
+RUN bun ./tooling/ui/vendor.mts openoracle --scoped-artifacts
+COPY ./ui/openoracle/tsconfig.json /source/ui/openoracle/tsconfig.json
+COPY ./ui/openoracle/index.html /source/ui/openoracle/index.html
+COPY ./ui/openoracle/favicon.svg /source/ui/openoracle/favicon.svg
+COPY ./ui/openoracle/ts/ /source/ui/openoracle/ts/
+RUN cd /source/ui/openoracle && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts openoracle
+
+FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-openoracle
+
+WORKDIR /app
+COPY --from=openoracle-builder --chown=bun:bun /source/ui/openoracle/dist/ /app/ui/openoracle/
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
+USER bun
+EXPOSE 4173
+ENV UI_APP=openoracle
+ENV PORT=4173
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:4173/'); process.exit(response.ok ? 0 : 1)" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
+
 # Build Trading as an application leaf.
 FROM statoblast-dependencies AS trading-builder
 COPY ./shared/trading/tsconfig.json /source/shared/trading/
@@ -158,6 +181,7 @@ FROM common-builder AS builder
 COPY --from=zoltar-builder /source/ui/zoltar/dist/ /source/ui/zoltar/dist/
 COPY --from=statoblast-builder /source/ui/statoblast/dist/ /source/ui/statoblast/dist/
 COPY --from=trading-builder /source/ui/trading/dist/ /source/ui/trading/dist/
+COPY --from=openoracle-builder /source/ui/openoracle/dist/ /source/ui/openoracle/dist/
 
 # Shared export tree for the release and local publishers.
 FROM scratch AS ipfs-export
@@ -173,6 +197,11 @@ COPY --from=builder /source/ui/statoblast/dist/favicon.svg /export/statoblast/fa
 COPY --from=builder /source/ui/statoblast/dist/assets/ /export/statoblast/assets/
 COPY --from=builder /source/ui/statoblast/dist/css/ /export/statoblast/css/
 COPY --from=builder /source/ui/statoblast/dist/vendor/ /export/statoblast/vendor/
+COPY --from=builder /source/ui/openoracle/dist/index.html /export/openoracle/index.html
+COPY --from=builder /source/ui/openoracle/dist/favicon.svg /export/openoracle/favicon.svg
+COPY --from=builder /source/ui/openoracle/dist/assets/ /export/openoracle/assets/
+COPY --from=builder /source/ui/openoracle/dist/css/ /export/openoracle/css/
+COPY --from=builder /source/ui/openoracle/dist/vendor/ /export/openoracle/vendor/
 COPY --from=builder /source/ui/trading/dist/index.html /export/trading/index.html
 COPY --from=builder /source/ui/trading/dist/favicon.svg /export/trading/favicon.svg
 COPY --from=builder /source/ui/trading/dist/core-deployments.json /export/trading/core-deployments.json
@@ -211,7 +240,7 @@ COPY --from=ipfs-export /export/ /export/
 RUN ipfs init
 
 # Compute each app root CID with the same options as the upload script.
-RUN for app in zoltar statoblast trading; do \
+RUN for app in zoltar statoblast trading openoracle; do \
 	ipfs add --cid-version 1 --pin=true --quieter --only-hash --recursive "/export/$app" > "/ipfs_hash_${app}.txt" || exit 1; \
 	done
 

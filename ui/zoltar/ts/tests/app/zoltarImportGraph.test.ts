@@ -114,7 +114,7 @@ function collectForbiddenProductReferences(source: string, modulePath: string) {
 }
 
 function isAllowedTechnicalProductString(modulePath: string, value: string) {
-	if (value === 'statoblast') return modulePath.endsWith('/lib/activeEnvironment.ts') || modulePath.endsWith('/simulation/tevmBackend.ts') || modulePath.endsWith('/lib/localEntityStore.ts')
+	if (value === 'statoblast' || value === 'openoracle') return modulePath.endsWith('/lib/activeEnvironment.ts') || modulePath.endsWith('/simulation/tevmBackend.ts') || modulePath.endsWith('/lib/localEntityStore.ts')
 	if (value === 'statoblast_Multicall3_Multicall3') return modulePath.endsWith('/protocol/deployment.ts') || modulePath.endsWith('/protocol/zoltarDeploymentHelpers.ts') || modulePath.endsWith('/protocol/contractLabels.ts')
 	if (value === 'statoblast_WETH9_WETH9') return modulePath.endsWith('/simulation/bootstrap.ts')
 	return false

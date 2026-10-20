@@ -5,10 +5,10 @@ import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRout
 
 installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
-test('shows one primary row with Pools and OpenOracle', () => {
+test('shows pool operations and price requests', () => {
 	const tabs = getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'OpenOracle'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Price reports'])
 	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
 })
 
@@ -29,7 +29,7 @@ test('disables the other sections with a reason while required contracts are mis
 
 test('lists pool views as paths without a Manage Pool peer and preserves the universe', () => {
 	const setSecurityPoolsView = mock(() => undefined)
-	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView })
+	const navigation = getRouteSecondaryNavigation({ activeSecurityPoolsView: 'browse', route: 'pools', setSecurityPoolsView })
 	if (navigation === undefined) throw new Error('Expected secondary navigation')
 	// Browse search opens a pasted pool address, so there is no separate Open pool view.
 	expect(navigation.options.map(option => option.value)).toEqual(['browse', 'create', 'universes'])
@@ -41,33 +41,12 @@ test('lists pool views as paths without a Manage Pool peer and preserves the uni
 })
 
 test('hides the list views on a pool page', () => {
-	expect(getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'operate', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
+	expect(getRouteSecondaryNavigation({ activeSecurityPoolsView: 'operate', route: 'pools', setSecurityPoolsView: () => undefined })).toBeUndefined()
 })
 
-test('routes OpenOracle view changes to their owner and preserves universe links', () => {
-	const setOpenOracleView = mock(() => undefined)
-	const setSecurityPoolsView = mock(() => undefined)
-	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'open-oracle', setOpenOracleView, setSecurityPoolsView })
-	if (navigation === undefined) throw new Error('Expected secondary navigation')
-	navigation.onChange('create')
-	navigation.onChange('invalid')
-	expect(setOpenOracleView).toHaveBeenCalledTimes(1)
-	expect(setOpenOracleView).toHaveBeenCalledWith('create')
-	expect(setSecurityPoolsView).not.toHaveBeenCalled()
-	for (const option of navigation.options) {
-		expect(option.href).toStartWith('#/open-oracle?')
-		const query = new URLSearchParams(option.href?.split('?')[1])
-		expect(query.get('universe')).toBe('7')
-		expect(query.get('openOracleView')).toBe(option.value)
-	}
-})
-
-test('uses the route and active view to isolate transaction presentation', () => {
-	const views = { activeOpenOracleView: 'selected-report', activeSecurityPoolsView: 'operate' } as const
-	expect(getTransactionRouteKey({ ...views, route: 'pools' })).toBe('pools:operate')
-	expect(getTransactionRouteKey({ ...views, route: 'open-oracle' })).toBe('open-oracle:selected-report')
-	expect(getTransactionRouteKey({ ...views, route: 'deploy' })).toBe('deploy')
-	expect(getRouteSecondaryNavigation({ ...views, route: 'not-found', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
+test('price requests expose no standalone report navigation', () => {
+	expect(getRouteSecondaryNavigation({ activeSecurityPoolsView: 'browse', route: 'open-oracle', setSecurityPoolsView: () => undefined })).toBeUndefined()
+	expect(getTransactionRouteKey({ activeSecurityPoolsView: 'browse', route: 'open-oracle' })).toBe('open-oracle')
 })
 
 test('lands on Browse pools by default and rejects the removed portfolio route', () => {
@@ -83,8 +62,8 @@ test('treats a malformed pools path as not found instead of falling back to Brow
 })
 
 test('keeps the active migration screen in navigation with the same universe', () => {
-	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'migrate', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })
+	const navigation = getRouteSecondaryNavigation({ activeSecurityPoolsView: 'migrate', route: 'pools', setSecurityPoolsView: () => undefined })
 	expect(navigation?.value).toBe('migrate')
 	expect(navigation?.options.find(option => option.value === 'migrate')?.href).toBe('#/pools/migrate?universe=7')
-	expect(getTransactionRouteKey({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'migrate', route: 'pools' })).toBe('pools:migrate')
+	expect(getTransactionRouteKey({ activeSecurityPoolsView: 'migrate', route: 'pools' })).toBe('pools:migrate')
 })

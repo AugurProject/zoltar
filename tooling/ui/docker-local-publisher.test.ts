@@ -49,8 +49,8 @@ describe('local Docker IPFS publisher', () => {
 	test('uploads and pins each app separately and prints root links', async () => {
 		const result = await runPublisher(0, cid)
 		expect(result.status).toBe(0)
-		expect(result.args).toEqual(['zoltar', 'statoblast', 'trading'].flatMap(app => ['--api', '/dns4/host.docker.internal/tcp/5001', 'add', '--cid-version', '1', '--pin=true', '--quieter', '--recursive', `/export/${app}`]))
-		for (const app of ['zoltar', 'statoblast', 'trading']) {
+		expect(result.args).toEqual(['zoltar', 'statoblast', 'trading', 'openoracle'].flatMap(app => ['--api', '/dns4/host.docker.internal/tcp/5001', 'add', '--cid-version', '1', '--pin=true', '--quieter', '--recursive', `/export/${app}`]))
+		for (const app of ['zoltar', 'statoblast', 'trading', 'openoracle']) {
 			expect(result.stdout).toContain(`${app}: ipfs://${cid}${app}/`)
 		}
 		expect(result.stdout).not.toContain('localhost:8088')
