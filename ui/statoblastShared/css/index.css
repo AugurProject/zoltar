@@ -1942,65 +1942,6 @@
 	border-top: 0;
 }
 
-.security-pool-browse-vault-list {
-	display: grid;
-	gap: var(--space-2);
-}
-
-.security-pool-browse-vault-row {
-	display: grid;
-	gap: var(--space-2);
-	padding: var(--space-1) 0;
-	border-bottom: 1px solid var(--border-subtle);
-}
-
-.security-pool-browse-vault-row:last-child {
-	border-bottom: 0;
-	padding-bottom: 0;
-}
-
-.security-pool-browse-vault-row-top {
-	display: grid;
-	grid-template-columns: minmax(0, 1.35fr) minmax(10.5rem, 0.72fr) minmax(10.5rem, 0.72fr) minmax(8.3rem, 0.52fr);
-	gap: var(--space-3);
-	align-items: start;
-}
-
-.security-pool-browse-vault-row-top-compact {
-	grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(8.5rem, 0.72fr));
-	align-items: start;
-}
-
-.security-pool-browse-vault-row-top-compact:where(.with-bad-debt) {
-	grid-template-columns: minmax(0, 1.45fr) repeat(4, minmax(8.5rem, 0.72fr));
-}
-
-.security-pool-browse-vault-row-id,
-.security-pool-browse-vault-row-kpi {
-	display: grid;
-	gap: var(--space-1);
-	min-width: 0;
-}
-
-.security-pool-browse-vault-row-id span,
-.security-pool-browse-vault-row-kpi span {
-	font-size: var(--font-label);
-	color: var(--muted);
-}
-
-.security-pool-browse-vault-row-id strong,
-.security-pool-browse-vault-row-kpi strong {
-	font-size: var(--font-value);
-	font-family: var(--font-family-mono);
-	font-variant-numeric: tabular-nums;
-	overflow-wrap: anywhere;
-}
-
-.security-pool-browse-vault-row-id strong {
-	display: block;
-	min-width: 0;
-}
-
 .vault-position-list {
 	display: grid;
 	gap: var(--space-4);
@@ -2096,20 +2037,7 @@
 	min-width: 0;
 }
 
-.security-pool-browse-vault-row-title {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr);
-	gap: var(--space-2);
-	align-items: start;
-	min-width: 0;
-}
-.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
-	align-self: center;
-	flex: 1 1 auto;
-	min-width: 0;
-}
-.vault-position-strip-title .address-control,
-.security-pool-browse-vault-row-id .address-control {
+.vault-position-strip-title .address-control {
 	width: 100%;
 }
 
@@ -2117,14 +2045,6 @@
 .vault-position-strip-meta {
 	line-height: var(--line-height-tight);
 	font-size: var(--font-label);
-}
-
-/* The health chip and any selection badge sit side by side and wrap under the address on narrow rows. */
-.vault-position-strip-meta {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2);
 }
 
 .vault-position-strip-actions {
@@ -2315,10 +2235,6 @@
 
 	.security-pool-strip-stats {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.security-pool-browse-vault-row-top-compact {
-		grid-template-columns: minmax(0, 1fr);
 	}
 }
 
@@ -2571,33 +2487,8 @@
 		width: 100%;
 	}
 
-	.security-pool-detail-rail,
-	.security-pool-browse-vault-row-top,
-	.security-pool-browse-vault-row-top-compact {
+	.security-pool-detail-rail {
 		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.security-pool-browse-vault-row-title,
-	.security-pool-browse-vault-row-id,
-	.security-pool-browse-vault-row-kpi,
-	.security-pool-browse-vault-row-id strong,
-	.security-pool-browse-vault-row-kpi strong {
-		min-width: 0;
-	}
-
-	.security-pool-browse-vault-row-title {
-		align-items: flex-start;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-
-	.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
-		align-self: stretch;
-		width: 100%;
-	}
-
-	.security-pool-browse-vault-row-id .address-control {
-		max-width: 100%;
 	}
 }
 

@@ -353,7 +353,7 @@ export function buildTruthAuctionDepthPoints({
 }
 
 /** The ETH a finalized auction raised: only the winning bids when it ended underfunded. */
-export function getFinalizedTruthAuctionRaisedAttoEth(truthAuction: TruthAuctionMetrics) {
+function getFinalizedTruthAuctionRaisedAttoEth(truthAuction: TruthAuctionMetrics) {
 	return truthAuction.underfunded ? (truthAuction.underfundedWinningAttoEth ?? 0n) : truthAuction.attoEthRaised
 }
 
