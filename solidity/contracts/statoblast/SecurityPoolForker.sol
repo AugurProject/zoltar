@@ -239,11 +239,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data = forkDataByPool[securityPool];
 	}
 
-	function _getEscalationGame(ISecurityPool securityPool) private view returns (EscalationGame escalationGame) {
-		escalationGame = securityPool.escalationGame();
-		require(address(escalationGame) == address(0x0) || address(escalationGame.securityPool()) == address(securityPool), 'Escalation game pool');
-	}
-
 	function _prepareForkState(ISecurityPool securityPool, EscalationGame escalationGame) private returns (SecurityPoolForkerForkData storage data) {
 		if (!securityPool.shareToken().isAuthorized(address(securityPool))) revert('Pool is not authorized');
 		uint248 universe = securityPool.universeId();
@@ -486,7 +481,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function _getEscalationAuctionableRep(ISecurityPool securityPool, SecurityPoolForkerForkData storage parentData) private view returns (uint256) {
 		if (!parentData.unresolvedEscalationAtFork) return 0;
-		EscalationGame game = securityPool.escalationGame();
+		EscalationGame game = _getEscalationGame(securityPool);
 		return address(game) == address(0x0) ? 0 : game.totalDisputeStakedAttoRep();
 	}
 
@@ -554,7 +549,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 combinedRepBeforeAttoRep = _getPoolAuctionableRepAtFork(parentData) + disputeStakedRepBeforeAttoRep;
 		disputeStakedRepSoldAttoRep = Math.mulDiv(repPurchasedAttoRep, disputeStakedRepBeforeAttoRep, combinedRepBeforeAttoRep);
 		if (disputeStakedRepSoldAttoRep == 0) return 0;
-		securityPool.escalationGame().applyTruthAuctionHaircut(disputeStakedRepSoldAttoRep);
+		_getEscalationGame(securityPool).applyTruthAuctionHaircut(disputeStakedRepSoldAttoRep);
 	}
 
 	/// @notice Finalizes the child pool's truth auction after the auction period and installs the post-auction pool state; callable by anyone.

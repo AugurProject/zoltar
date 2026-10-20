@@ -23,7 +23,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	}
 
 	function claimForkedEscalationDeposits(ISecurityPool parent, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] calldata depositIndexes) public {
-		EscalationGame escalationGame = parent.escalationGame();
+		EscalationGame escalationGame = _getEscalationGame(parent);
 		// A non-decision alone does not authorize forked escrow claims; fork-time escrow state is also required.
 		// This module is embedded in SecurityPoolForker's creation code. Data-free
 		// guards keep that initcode below EIP-3860's hard deployment limit.
@@ -93,7 +93,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			vault
 		];
 		if (!entitlement.initialized) {
-			_initializeEscalationMigrationEntitlement(parent, parent.escalationGame(), vault, entitlement);
+			_initializeEscalationMigrationEntitlement(parent, _getEscalationGame(parent), vault, entitlement);
 		}
 		if (address(childEscalationGame) == address(0x0)) revert();
 		escalationEntitlementMaterializedByPoolVaultAndOutcome[parent][vault][childOutcomeIndex] = true;

@@ -78,7 +78,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Checkpoints the vault fees, then changes the [underwriting commitment](./glossary.html#underwriting-commitment) independently of REP ownership and recalculates retention. A call that repeats the current value returns before the checkpoint and changes nothing.',
 			declarations: [{ name: 'setUnderwritingLimit' }],
 			preconditions:
-				'Operational pool (`Pool inactive`) in an unforked universe (`Forked`); a resolved operational pool may still reduce a commitment after an unrelated late fork. Increases require open admission, a fresh price (`Stale price`), and both full-commitment backing checks (`Vault backing insufficient`). Reductions, including a zero exit, must leave total commitments at least equal to tracked settlement collateral (`Commitments below collateral`).',
+				'Operational pool (`Pool inactive`) in an unforked universe (`Forked`); a resolved operational pool may still reduce a commitment after an unrelated late fork. Increases require open admission, a fresh price (`Stale price`), and both full-commitment backing checks (`Vault backing insufficient`). Reductions, including a zero exit, must leave total commitments at least equal to tracked settlement collateral (`Commitments below collateral`), except once the outcome is final and the pool can no longer fork: it inherited a fixed fork outcome, or its escalation game settled before any fork.',
 			signals: 'Fee-accrual and retention-change `PoolAccountingCheckpoint` events when due; then `UnderwritingLimitSet`, `VaultAccountingCheckpoint`, and `PoolAccountingCheckpoint`; no event for a call that repeats the current value',
 		},
 		{

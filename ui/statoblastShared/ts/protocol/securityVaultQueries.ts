@@ -1,8 +1,9 @@
 import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
-import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary, SecurityVaultDetails } from '../types/contracts.js'
 
@@ -102,6 +103,27 @@ async function loadEscalationVaultData(client: Pick<ReadClient, 'multicall' | 'r
 		if (typeof value !== 'bigint') throw new Error('Unexpected escalation vault response')
 		return { disputeStakedAttoRep: value }
 	})
+}
+
+// Mirrors SecurityPoolOperationsDelegate._isResolvedWithoutForkPath: once the outcome is final and the
+// pool can never fork, commitment reductions need not cover settlement collateral.
+async function loadResolvedWithoutForkPath(client: Pick<ReadClient, 'getBlock' | 'readContract'>, securityPoolAddress: Address, blockNumber: bigint) {
+	const [securityPoolFactory, escalationGameAddress] = await Promise.all([
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityPoolFactory', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [], blockNumber }),
+	])
+	if (await client.readContract({ abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'getSecurityPoolHasInheritedForkOutcome', address: securityPoolFactory, args: [securityPoolAddress], blockNumber })) return true
+	if (sameAddress(escalationGameAddress, zeroAddress)) return false
+	const [questionResolution, escalationEndDate, zoltarAddress, universeId, block] = await Promise.all([
+		client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getQuestionResolution', address: escalationGameAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', address: escalationGameAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'zoltar', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [], blockNumber }),
+		client.getBlock({ blockNumber }),
+	])
+	if (getReportingOutcomeKey(questionResolution) === 'none') return false
+	const forkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getForkTime', address: zoltarAddress, args: [universeId], blockNumber })
+	return escalationEndDate < (forkTime === 0n ? block.timestamp : forkTime)
 }
 
 function hasCurrentSecurityVaultState(vaultData: readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]) {
@@ -282,6 +304,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		capacityBackingFactorsBps,
 		statoblastSecurityMultiplierBps,
 		settlementCollateralAttoEth,
+		resolvedWithoutForkPath,
 	] = await Promise.all([
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [], blockNumber }),
@@ -299,6 +322,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', address: securityPoolAddress, args: [], blockNumber }),
+		loadResolvedWithoutForkPath(client, securityPoolAddress, blockNumber),
 	])
 	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [], blockNumber })
 
@@ -308,6 +332,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	return {
 		statoblastSecurityMultiplierBps,
 		settlementCollateralAttoEth,
+		resolvedWithoutForkPath,
 		associatedRepPerCapacityBps: capacityBackingFactorsBps[0],
 		badDebtAttoEth,
 		currentRetentionRate,

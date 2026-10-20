@@ -85,6 +85,8 @@ export type SecurityVaultDetails = {
 	statoblastSecurityMultiplierBps?: bigint
 	targetBackingFactorBps?: bigint
 	settlementCollateralAttoEth?: bigint
+	/** The outcome is final and the pool can never fork, so reductions need not keep commitments covering settlement collateral. */
+	resolvedWithoutForkPath?: boolean
 	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
 	currentRetentionRate: bigint

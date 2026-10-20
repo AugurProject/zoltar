@@ -21,7 +21,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	const { PRICE_PRECISION, repDeposit, statoblastSecurityMultiplierBps, genesisUniverse } = fixture
 
-	test('blocks REP recycling while commitments remain and preserves resolved-market liquidation closure', async () => {
+	test('blocks REP recycling while a commitment remains, allows a full exit, and preserves resolved-market liquidation closure', async () => {
 		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
@@ -70,13 +70,25 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		const victimRepImmediatelyBeforeAttempt = victimRepBefore
 		const attackerWalletBefore = await getERC20Balance(client, childRep, attacker.account.address)
 		await assert.rejects(redeemRepFromVault(attacker, child.securityPool, attacker.account.address), /Exit commitment before REP redemption/)
-		await assert.rejects(setUnderwritingLimit(attacker, child.securityPool, 0n), /Commitments below collateral/)
-		const recycledRep = (await getERC20Balance(client, childRep, attacker.account.address)) - attackerWalletBefore
-		strictEqualTypeSafe(recycledRep, 0n, 'REP cannot be recycled out of an outstanding commitment')
+		const attackerVaultBefore = await getSecurityVault(client, child.securityPool, attacker.account.address)
+		assert.ok(attackerVaultBefore.repBackingUnits > 0n, 'rejected redemption preserves the backing claim')
+		assert.ok(attackerVaultBefore.underwritingLimitAttoEth > 0n, 'rejected redemption preserves the standing commitment')
+		const attackerOwnRep = await client.readContract({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			address: child.securityPool,
+			functionName: 'backingUnitsToAttoRep',
+			args: [attackerVaultBefore.repBackingUnits],
+		})
 
-		const ghostVault = await getSecurityVault(client, child.securityPool, attacker.account.address)
-		assert.ok(ghostVault.repBackingUnits > 0n, 'rejected redemption preserves the backing claim')
-		assert.ok(ghostVault.underwritingLimitAttoEth > 0n, 'rejected redemption preserves the standing commitment')
+		// The inherited outcome stops this child from forking again and liquidation is closed, so remaining
+		// claims rest on pool-held ETH. A vault may give up its whole commitment and then take back its own REP.
+		await setUnderwritingLimit(attacker, child.securityPool, 0n)
+		await redeemRepFromVault(attacker, child.securityPool, attacker.account.address)
+		const recycledRep = (await getERC20Balance(client, childRep, attacker.account.address)) - attackerWalletBefore
+		strictEqualTypeSafe(recycledRep, attackerOwnRep, 'an exited vault recovers exactly its own REP')
+		const exitedVault = await getSecurityVault(client, child.securityPool, attacker.account.address)
+		strictEqualTypeSafe(exitedVault.underwritingLimitAttoEth, 0n, 'no ghost commitment remains after the exit')
+		strictEqualTypeSafe(exitedVault.repBackingUnits, 0n, 'the exited vault keeps no backing claim')
 
 		strictEqualTypeSafe(
 			await client.readContract({
@@ -89,13 +101,13 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 			'the inherited fixed outcome must close collateralized operations even though the child stays operational for redemptions',
 		)
 		strictEqualTypeSafe(await getLastPrice(client, child.openOraclePriceCoordinator), PRICE_PRECISION, 'the fixed-outcome child should inherit the original REP price')
-		const ghostOpenInterest = await client.readContract({
+		const victimOpenInterest = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: child.securityPool,
 			functionName: 'getVaultOpenInterestAttoEth',
-			args: [attacker.account.address],
+			args: [client.account.address],
 		})
-		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.openOraclePriceCoordinator, OperationType.Liquidation, attacker.account.address, ghostOpenInterest), /Escalation resolved/)
+		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.openOraclePriceCoordinator, OperationType.Liquidation, client.account.address, victimOpenInterest), /Escalation resolved/)
 		await approveToken(attacker, childRep, child.securityPool)
 		await assert.rejects(depositRepToVault(attacker, child.securityPool, repDeposit, 1_000_000n))
 
@@ -107,7 +119,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 				args: [],
 			}),
 			0n,
-			'the rejected ghost liquidation must not create synthetic bad debt',
+			'the rejected liquidation must not create synthetic bad debt',
 		)
 
 		const victimVaultAfter = await getSecurityVault(client, child.securityPool, client.account.address)
@@ -117,7 +129,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 			functionName: 'backingUnitsToAttoRep',
 			args: [victimVaultAfter.repBackingUnits],
 		})
-		strictEqualTypeSafe(victimRepAfter, victimRepImmediatelyBeforeAttempt, 'the honest migrated vault must retain all REP after the blocked attack')
+		strictEqualTypeSafe(victimRepAfter, victimRepImmediatelyBeforeAttempt, 'the honest migrated vault must retain all REP after the attacker exits')
 		strictEqualTypeSafe(await getERC20Balance(client, childRep, attacker.account.address), attackerWalletBefore + recycledRep, 'the attacker must recover only its own redeemed REP')
 	})
 })

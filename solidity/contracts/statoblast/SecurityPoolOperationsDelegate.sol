@@ -119,7 +119,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		context.updateVaultFees(vault);
 		uint256 nextTotalAttoEth = totalUnderwritingLimitAttoEth - oldLimitAttoEth + limitAttoEth;
-		if (limitAttoEth < oldLimitAttoEth)
+		if (limitAttoEth < oldLimitAttoEth && !_isResolvedWithoutForkPath(context))
 			require(nextTotalAttoEth >= settlementCollateralAttoEth, 'Commitments below collateral');
 		if (limitAttoEth > oldLimitAttoEth) {
 			require(pool.openOraclePriceCoordinator().isPriceValid(), 'Stale price');
@@ -133,6 +133,19 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		emit UnderwritingLimitSet(vault, limitAttoEth, nextTotalAttoEth);
 		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
 		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
+	}
+
+	// The outcome is final and the pool can never fork: an inherited fork outcome makes
+	// `activateForkMode` revert, and a game settled before any fork fails the forker's
+	// `Resolved` check. Liquidation is closed once resolved, so remaining winner claims are
+	// backed only by pool-held ETH and commitments no longer need to cover them.
+	function _isResolvedWithoutForkPath(ISecurityPoolRepDepositContext context) private view returns (bool) {
+		ISecurityPool pool = ISecurityPool(payable(address(this)));
+		if (pool.securityPoolFactory().getSecurityPoolHasInheritedForkOutcome(pool)) return true;
+		if (address(escalationGame) == address(0x0)) return false;
+		if (escalationGame.getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None) return false;
+		uint256 forkTime = IZoltarForkState(context.zoltar()).getForkTime(context.universeId());
+		return escalationGame.getEscalationGameEndDate() < (forkTime == 0 ? block.timestamp : forkTime);
 	}
 
 	function _requireLimitBacked(ISecurityPool pool, address vault, uint256 limitAttoEth) private view {
