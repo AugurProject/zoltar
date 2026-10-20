@@ -187,7 +187,7 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	if (limitAttoEth === undefined) return undefined
 	if (limitAttoEth < 0n) return 'Commitment limit cannot be negative.'
 	const total = details.totalUnderwritingLimitAttoEth - details.underwritingLimitAttoEth + limitAttoEth
-	if (limitAttoEth < details.underwritingLimitAttoEth && total < details.settlementCollateralAttoEth) return 'Total commitments must cover outstanding settlement collateral.'
+	if (limitAttoEth < details.underwritingLimitAttoEth && details.resolvedWithoutForkPath !== true && total < details.settlementCollateralAttoEth) return 'Total commitments must cover outstanding settlement collateral.'
 	if (limitAttoEth > details.underwritingLimitAttoEth && repPerEthPrice !== undefined && poolSecurityMultiplierBps !== undefined) {
 		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, underwritingLimitAttoEth: limitAttoEth, disputeStakedAttoRep: details.disputeStakedAttoRep, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps }))
 			return 'Deposit more REP before increasing this commitment limit.'

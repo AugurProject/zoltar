@@ -652,7 +652,9 @@ describe('Statoblast invariant harness', () => {
 				assert.ok(roundedClaims <= totalAttoRep, `${label}: rounded claims cannot exceed pool-held REP`)
 				assert.ok(totalAttoRep - roundedClaims <= repBackingVaultCount, `${label}: REP rounding dust should be bounded by REP-backed vault count`)
 				strictEqualTypeSafe(ethBalanceAttoEth, collateral + accountingSnapshot.unallocatedAccruedFeesAttoEth + accountingSnapshot.totalClaimableVaultFeesAttoEth, `${label}: pool ETH should equal collateral plus named fee liabilities when no surplus was injected`)
-				assert.ok(totalUnderwritingLimitAttoEth >= collateral, `${label}: open interest should remain underwritingLimitAttoEth-backed`)
+				// Once resolved, a pool with no fork path may let commitments fall below its ETH-funded collateral.
+				const escalationResolved = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'isEscalationResolved', args: [] })
+				if (!escalationResolved) assert.ok(totalUnderwritingLimitAttoEth >= collateral, `${label}: open interest should remain underwritingLimitAttoEth-backed`)
 			}
 
 			const readModelSnapshot = async () => ({

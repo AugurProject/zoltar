@@ -19,7 +19,7 @@ import {
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 
 /** A vault in an empty pool, where deposits convert to backing units without rounding. */
@@ -218,6 +218,10 @@ void describe('security vault helpers', () => {
 		const readValues: Record<string, unknown> = {
 			currentRetentionRate: 0n,
 			escalationGame: getAddress('0x00000000000000000000000000000000000000e1'),
+			getEscalationGameEndDate: 0n,
+			getForkTime: 0n,
+			getQuestionResolution: 1n,
+			getSecurityPoolHasInheritedForkOutcome: false,
 			getTotalPoolHeldAttoRep: 100n * 10n ** 18n,
 			getVaultCapacityBackingFactorsBps: [0n, 0n],
 			getVaultOpenInterestAttoEth: 0n,
@@ -225,6 +229,7 @@ void describe('security vault helpers', () => {
 			minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
 			openOraclePriceCoordinator: getAddress('0x00000000000000000000000000000000000000d1'),
 			repToken: getAddress('0x00000000000000000000000000000000000000a2'),
+			securityPoolFactory: getAddress('0x00000000000000000000000000000000000000f2'),
 			securityVaults: [50n * 10n ** 18n, 0n, 0n, 0n],
 			settlementCollateralAttoEth: 0n,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -233,12 +238,17 @@ void describe('security vault helpers', () => {
 			totalUnderwritingLimitAttoEth: 0n,
 			universeId: 0n,
 			vaultBadDebtAttoEth: 0n,
+			zoltar: getAddress('0x00000000000000000000000000000000000000f1'),
 		}
 		const client = createConnectedReadClient()
 		const getCode: typeof client.getCode = async () => '0x01'
 		const getBlockNumber: typeof client.getBlockNumber = async () => pinnedBlockNumber
 		client.getCode = getCode
 		client.getBlockNumber = getBlockNumber
+		client.getBlock = async request => {
+			readBlockNumbers.set('getBlock', request?.blockNumber)
+			return createBlockWithTimestamp(1n)
+		}
 		client.readContract = createReadContractStub(async request => {
 			readBlockNumbers.set(request.functionName, request.blockNumber)
 			if (!(request.functionName in readValues)) throw new Error(`Unexpected read: ${request.functionName}`)
@@ -252,9 +262,46 @@ void describe('security vault helpers', () => {
 		const details = await loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))
 
 		expect(details?.totalPoolHeldRepBalanceAttoRep).toBe(100n * 10n ** 18n)
+		expect(details?.resolvedWithoutForkPath).toBe(true)
 		// A read left on the latest block could mix the vault's units with pool totals from another block in the deposit rounding.
-		expect([...readBlockNumbers.keys()].sort()).toEqual([...Object.keys(readValues), 'escalation multicall'].sort())
+		expect([...readBlockNumbers.keys()].sort()).toEqual([...Object.keys(readValues), 'escalation multicall', 'getBlock'].sort())
 		for (const [read, blockNumber] of readBlockNumbers) expect({ read, blockNumber }).toEqual({ read, blockNumber: pinnedBlockNumber })
+	})
+
+	// Mirrors SecurityPoolOperationsDelegate._isResolvedWithoutForkPath at block timestamp 100.
+	void test.each([
+		['an inherited fork outcome without a game', true, zeroAddress, 3n, 0n, 0n, true],
+		['a game settled before now with no fork', false, getAddress('0x00000000000000000000000000000000000000e1'), 1n, 50n, 0n, true],
+		['a game settled before a later fork', false, getAddress('0x00000000000000000000000000000000000000e1'), 1n, 50n, 60n, true],
+		['no escalation game', false, zeroAddress, 1n, 50n, 0n, false],
+		['a game without a resolution', false, getAddress('0x00000000000000000000000000000000000000e1'), 3n, 50n, 0n, false],
+		['a game still running', false, getAddress('0x00000000000000000000000000000000000000e1'), 1n, 100n, 0n, false],
+		['a fork at the game end date', false, getAddress('0x00000000000000000000000000000000000000e1'), 1n, 50n, 50n, false],
+	] as const)('reports whether the commitment floor is waived: %s', async (_name, hasInheritedForkOutcome, escalationGame, questionResolution, escalationEndDate, forkTime, expected) => {
+		const readValues: Record<string, unknown> = {
+			escalationGame,
+			getEscalationGameEndDate: escalationEndDate,
+			getForkTime: forkTime,
+			getQuestionResolution: questionResolution,
+			getSecurityPoolHasInheritedForkOutcome: hasInheritedForkOutcome,
+			securityPoolFactory: getAddress('0x00000000000000000000000000000000000000f2'),
+			getVaultCapacityBackingFactorsBps: [0n, 0n],
+			securityVaults: [0n, 0n, 0n, 0n],
+			symbol: 'REP',
+			zoltar: getAddress('0x00000000000000000000000000000000000000f1'),
+		}
+		const client = createConnectedReadClient()
+		const getCode: typeof client.getCode = async () => '0x01'
+		const getBlockNumber: typeof client.getBlockNumber = async () => 77n
+		client.getCode = getCode
+		client.getBlockNumber = getBlockNumber
+		client.getBlock = async () => createBlockWithTimestamp(100n)
+		client.readContract = createReadContractStub(async request => (request.functionName in readValues ? readValues[request.functionName] : 0n))
+		client.multicall = createMulticallStub(async request => request.contracts.map(() => 0n))
+
+		const details = await loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))
+
+		expect(details?.resolvedWithoutForkPath).toBe(expected)
 	})
 
 	void test('returns zero or no withdrawal when balance inputs are missing or blocked', () => {

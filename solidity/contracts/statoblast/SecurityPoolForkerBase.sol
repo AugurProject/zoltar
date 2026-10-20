@@ -38,6 +38,12 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 			Math.mulDiv(repBackingUnits, securityPool.repToken().balanceOf(address(securityPool)), totalRepBackingUnits);
 	}
 
+	// A pool reports its own escalation game, so a fake pool could name a canonical one.
+	function _getEscalationGame(ISecurityPool securityPool) internal view returns (EscalationGame escalationGame) {
+		escalationGame = securityPool.escalationGame();
+		require(address(escalationGame) == address(0x0) || address(escalationGame.securityPool()) == address(securityPool), 'Escalation game pool');
+	}
+
 	function _validateChildEscalationGame(ISecurityPool child, EscalationGame childEscalationGame) internal view {
 		require(address(childEscalationGame) == address(0x0) || address(childEscalationGame.securityPool()) == address(child), 'Child game');
 	}
@@ -61,7 +67,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal virtual returns (EscalationGame) {
 		_validateChildEscalationGame(child, childEscalationGame);
-		EscalationGame parentEscalationGame = parent.escalationGame();
+		EscalationGame parentEscalationGame = _getEscalationGame(parent);
 		if (
 			forkDataByPool[parent].unresolvedEscalationAtFork &&
 			address(parentEscalationGame) != address(0x0) &&

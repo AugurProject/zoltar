@@ -229,16 +229,17 @@ describe('useSecurityVaultOperations', () => {
 	})
 
 	test.each([
-		['zero exit', '0', 0n, undefined],
-		['partial reduction', '2', 2n * 10n ** 18n, undefined],
-		['uncovered reduction', '0', 1n, 'Total commitments must cover outstanding settlement collateral'],
-		['increase', '6', 0n, 'New vault REP backing is unavailable'],
-	] as const)('closed admission permits only safe commitment reductions: %s', async (_name, limit, collateral, error) => {
+		['zero exit', '0', 0n, false, undefined],
+		['partial reduction', '2', 2n * 10n ** 18n, false, undefined],
+		['uncovered reduction', '0', 1n, false, 'Total commitments must cover outstanding settlement collateral'],
+		['uncovered exit once resolved without a fork path', '0', 1n, true, undefined],
+		['increase', '6', 0n, false, 'New vault REP backing is unavailable'],
+	] as const)('closed admission permits only safe commitment reductions: %s', async (_name, limit, collateral, resolvedWithoutForkPath, error) => {
 		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))
 		const dependencies = createSecurityVaultOperationsDependencies({
 			queueOracleManagerOperation,
 			isSecurityPoolVaultAdmissionClosed: mock(async () => true),
-			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 5n * 10n ** 18n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: collateral })),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 5n * 10n ** 18n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: collateral, resolvedWithoutForkPath })),
 		})
 		let state: UseSecurityVaultOperationsState | undefined
 		const Harness = createHarness(dependencies, next => {
