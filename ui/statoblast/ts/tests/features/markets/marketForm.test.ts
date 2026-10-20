@@ -6,12 +6,11 @@ import { getDefaultForkAuctionFormState, getDefaultMarketFormState, getDefaultSe
 describe('market form defaults', () => {
 	test('returns stable default form snapshots across all supported forms', () => {
 		expect(getDefaultMarketFormState().marketType).toBe('binary')
-		expect(getDefaultMarketFormState().categoricalOutcomes).toEqual(['Yes', 'No'])
+		// Categorical outcomes start empty: a default Yes/No pair would create the Binary question's ID.
+		expect(getDefaultMarketFormState().categoricalOutcomes).toEqual(['', ''])
 		expect(getDefaultSecurityPoolFormState().statoblastSecurityMultiplierBps).toBe('2')
 		expect(getDefaultSecurityPoolFormState().initialReportPriorityFeeNanoEth).toBe('10')
-		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('')
-		expect(getDefaultSecurityVaultFormState().repWithdrawAmount).toBe('')
-		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('5')
+		expect(getDefaultSecurityVaultFormState()).toEqual({ selectedVaultOwner: '', securityPoolAddress: '' })
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')
 		expect(getDefaultTradingFormState().completeSetAmount).toBe('')
 		expect(getDefaultTradingFormState().redeemAmount).toBe('')

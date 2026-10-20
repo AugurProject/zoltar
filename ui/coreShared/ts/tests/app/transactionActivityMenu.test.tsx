@@ -65,7 +65,7 @@ test('lists recent transactions with their status and a pending count', async ()
 	expect(items).toHaveLength(2)
 	expect(items[0]?.textContent).toContain('Depositing REP')
 	expect(items[0]?.textContent).toContain('Pending')
-	expect(items[1]?.textContent).toContain('Rejected in wallet')
+	expect(items[1]?.textContent).toContain('Canceled in wallet')
 	expect(
 		within(panel)
 			.getByRole('link', { name: `View transaction ${pendingHash} on explorer (opens in a new tab)` })

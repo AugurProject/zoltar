@@ -22,6 +22,12 @@ function joinIds(...ids: Array<string | undefined>) {
 	return joined === '' ? undefined : joined
 }
 
+/** True when a text description already contains the unit as a word, such as `REP` in `Balance: 1 200 REP`. */
+function namesUnit(description: ComponentChildren, unit: ComponentChildren) {
+	if (typeof description !== 'string' || typeof unit !== 'string' || unit === '') return false
+	return description.split(/[\s.,;:()]+/).includes(unit)
+}
+
 export function FormInput({ action, adornment, 'aria-describedby': ariaDescribedBy, className = '', error, errorId: fixedErrorId, hint, hintId: fixedHintId, invalid = false, liveError = false, ...props }: FormInputProps) {
 	const generatedErrorId = useId()
 	const generatedHintId = useId()
@@ -30,8 +36,11 @@ export function FormInput({ action, adornment, 'aria-describedby': ariaDescribed
 	const isInvalid = invalid || hasError
 	const errorId = hasError ? (fixedErrorId ?? generatedErrorId) : undefined
 	const hintId = hint === undefined ? undefined : (fixedHintId ?? generatedHintId)
+	// The unit badge is aria-hidden and reaches assistive technology through the description, unless the visible hint or
+	// error already names it; otherwise a balance hint would read as "Balance: 1 200 REP REP".
+	const adornmentDescribes = adornment !== undefined && !namesUnit(error, adornment) && !namesUnit(hint, adornment)
 	const adornmentId = adornment === undefined ? undefined : generatedAdornmentId
-	const describedBy = joinIds(typeof ariaDescribedBy === 'string' ? ariaDescribedBy : undefined, errorId, hintId, adornmentId)
+	const describedBy = joinIds(typeof ariaDescribedBy === 'string' ? ariaDescribedBy : undefined, errorId, hintId, adornmentDescribes ? adornmentId : undefined)
 	const nextClassName = ['form-input', isInvalid ? 'is-invalid' : '', className].filter(Boolean).join(' ')
 	const input = <input {...props} aria-describedby={describedBy} aria-invalid={isInvalid ? 'true' : undefined} className={nextClassName} />
 	const adornedInput =

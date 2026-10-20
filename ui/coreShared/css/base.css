@@ -53,13 +53,22 @@ body::before {
 		radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 25%), radial-gradient(circle at 86% 0%, color-mix(in srgb, var(--accent-strong) 8%, transparent), transparent 24%), linear-gradient(180deg, var(--surface-section-opaque) 0%, var(--bg) 45%, var(--bg-deep) 100%);
 }
 
-main {
+.app-frame {
 	width: min(88rem, 100%);
 	margin: 0 auto;
 	padding: 1.5rem 1.5rem 4rem;
 	display: flex;
 	flex-direction: column;
 	gap: 1rem;
+}
+
+/* The banner and main landmarks split the frame's column, and each keeps the frame's vertical rhythm. */
+.app-header,
+.app-frame > main {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	min-width: 0;
 }
 
 .visually-hidden {
@@ -352,7 +361,7 @@ button {
 		color var(--transition-fast);
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--interactive-bg-hover);
 	border-color: var(--interactive-border-hover);
 }
@@ -363,7 +372,7 @@ button.secondary {
 	border-color: var(--control-border);
 }
 
-button.secondary:hover:not(:disabled) {
+button.secondary:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--interactive-bg-active);
 	border-color: var(--interactive-border-hover);
 	color: var(--text);
@@ -379,7 +388,7 @@ button.primary {
 		var(--shadow-control);
 }
 
-button.primary:hover:not(:disabled) {
+button.primary:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--primary-button-bg-hover);
 	border-color: var(--primary-button-border-hover);
 	color: var(--primary-button-text);
@@ -392,7 +401,7 @@ button.quiet {
 	padding-inline: 0.45rem;
 }
 
-button.quiet:hover:not(:disabled) {
+button.quiet:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--interactive-bg-hover);
 	color: var(--text);
 	border-color: var(--interactive-border-hover);
@@ -507,7 +516,7 @@ button.destructive {
 	border-color: var(--danger-border);
 }
 
-button.destructive:hover:not(:disabled) {
+button.destructive:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--danger-soft);
 	border-color: var(--danger-border-strong);
 }
@@ -517,13 +526,14 @@ button.destructive-subtle {
 	border-color: var(--danger-border);
 }
 
-button.destructive-subtle:hover:not(:disabled) {
+button.destructive-subtle:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--danger-soft);
 	border-color: var(--danger-border-strong);
 }
 
-/* One disabled treatment for every button tone: the dashed border marks it as unavailable, so a disabled primary action never reads as an enabled secondary one. */
-button:disabled {
+/* One disabled treatment for every button tone: the dashed border marks it as unavailable, so a disabled primary action never reads as an enabled secondary one. A button that keeps keyboard focus while unavailable is aria-disabled instead and looks the same. */
+button:disabled,
+button[aria-disabled="true"] {
 	border-color: var(--disabled-control-border);
 	border-style: dashed;
 	background: var(--disabled-control-bg);
@@ -532,11 +542,13 @@ button:disabled {
 	cursor: not-allowed;
 }
 
-button.primary:disabled {
+button.primary:disabled,
+button.primary[aria-disabled="true"] {
 	font-weight: inherit;
 }
 
-button.quiet:disabled {
+button.quiet:disabled,
+button.quiet[aria-disabled="true"] {
 	border-color: transparent;
 	background: transparent;
 	color: var(--disabled-control-text);
@@ -731,7 +743,7 @@ button.quiet:disabled {
 
 .universe-link:focus-visible,
 .security-pool-link:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 }
 
@@ -867,7 +879,7 @@ button.quiet:disabled {
 }
 
 .notice-dismiss:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--danger-border-strong) 72%, var(--color-white) 28%);
+	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 }
 

@@ -117,6 +117,8 @@ function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
 						poolOracleManagerDetails.value = refreshedManagerDetails
 						if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available.')
 						if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('An oracle price request is already pending.')
+						// The refreshed details carry the current fee into the dialog, so a retry reviews and sends it instead of failing again at submission.
+						if (refreshedManagerDetails.requestPriceCostAttoEth > reviewedRequestValueAttoEth) throw new Error('The oracle fee increased. Review the request again before sending.')
 						const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 						const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
 						if (initialReportFunding.currentRepBalanceAttoRep < initialReportFunding.requiredRepAttoRep) {

@@ -176,7 +176,8 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('1.987158 Yes')
 		expect(rendered.container.textContent).toContain('1.9558 ETH if the question resolves Yes')
-		expect(rendered.container.textContent).toContain('Yes (1.9558 ETH if the question resolves Yes)')
+		// The payout is stated once, on the line under the quantity it belongs to.
+		expect(rendered.container.querySelector('.transaction-review-primary .trade-estimate-value-detail')?.textContent).toBe('1.9558 ETH if the question resolves Yes · 0 ETH if No')
 		expect(rendered.container.textContent).not.toContain('sale')
 	})
 

@@ -12,6 +12,7 @@ import type { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-or
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { useSecurityPoolDiscovery } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolDiscovery.js'
 import { useSecurityVaultOperations } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingForm.js'
@@ -81,7 +82,7 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		zoltarUniverseHasForked,
 	})
 	const { createPool, marketDetails, securityPoolForm, securityPoolResult, setSecurityPoolForm } = poolCreation
-	const vault = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
+	const vault = useSecurityVaultOperations({ accountAddress: walletScopedHookConfig.accountAddress, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const reporting = useReportingOperations({
 		...walletScopedHookConfig,
 		selectedSecurityPoolAddress: securityPoolAddress,
@@ -92,6 +93,8 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 	// Only the pool this session just created waits for the registry to list it; any other unknown address resolves as not found at once.
 	const overview = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce, expectedSecurityPoolAddress: securityPoolResult?.securityPoolAddress })
 	const { checkedSecurityPoolAddress, loadSecurityPools, refreshSecurityPools, securityPools } = overview
+	// Browse pools pages through the factory registry; a new environment, or reads becoming available, restarts it from the first page.
+	const poolDiscovery = useSecurityPoolDiscovery({ enabled: canReadOnchainData, environmentRefreshKey: activeEnvironmentNonce })
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload, and again
 	// when the view returns, because a report settled from another route can change it without a new block arriving.
 	const poolViewActive = route === 'pools' && securityPoolsView === 'operate'
@@ -110,7 +113,6 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const forkAuction = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
-	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails: priceCoordinator.poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
 	const selectedPoolRepPrice = resolveRepPrice({
@@ -151,20 +153,6 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		void loadSecurityPools(nextSecurityPoolAddress)
 		if (nextSecurityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase()) void vault.loadSecurityVault()
 	}
-	const { securityVaultResult } = vault
-	useEffect(() => {
-		const securityVaultRepRefreshHash =
-			securityVaultResult?.action === 'setVaultUnderwritingLimit' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
-				? securityVaultResult.hash
-				: undefined
-		if (securityVaultRepRefreshHash === undefined) {
-			lastSecurityVaultRepRefreshHash.current = undefined
-			return
-		}
-		if (lastSecurityVaultRepRefreshHash.current === securityVaultRepRefreshHash) return
-		lastSecurityVaultRepRefreshHash.current = securityVaultRepRefreshHash
-		void loadZoltarForkAccess()
-	}, [loadZoltarForkAccess, securityVaultResult])
 	const { poolPriceOracleResult } = priceCoordinator
 	useEffect(() => {
 		const stagedVaultRepRefreshHash = poolPriceOracleResult?.action === 'executeStagedOperation' && poolPriceOracleResult.stagedExecution?.success === true && poolPriceOracleResult.stagedExecution.operation === 'withdrawRep' ? poolPriceOracleResult.hash : undefined
@@ -231,6 +219,14 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 			onBrowseStateChange: urlState.setPoolBrowseState,
 			activeUniverseId,
 			currentTimestamp,
+			discovery: {
+				contextKey: `${activeEnvironmentNonce.toString()}:${canReadOnchainData ? 'ready' : 'waiting'}`,
+				error: poolDiscovery.securityPoolPageError,
+				loading: poolDiscovery.loadingSecurityPoolPage,
+				onLoadPage: poolDiscovery.loadSecurityPoolPage,
+				page: poolDiscovery.securityPoolPage,
+			},
+			onCreatePool: () => setSecurityPoolsView('create'),
 			securityPools,
 		},
 		securityPools,

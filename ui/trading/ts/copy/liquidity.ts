@@ -11,8 +11,9 @@ export const addLiquidityAction = 'Add liquidity'
 export const removeLiquidityAction = 'Remove liquidity'
 export { amount } from '@zoltar/ui-core-shared/copy/common.js'
 export const lp = 'LP'
-export const conditionalYesPrice = 'Conditional Yes price'
-export const conditionalYesPriceValidation = 'Enter a conditional Yes price above 0% and below 100%, with at most two decimal places.'
+/** The starting price is conditional on a valid resolution, like every displayed price, and the label says so. */
+export const conditionalYesPrice = 'Yes price if not Invalid'
+export const conditionalYesPriceValidation = 'Enter a Yes price above 0% and below 100%, with at most two decimal places.'
 export const additionGuidance = 'Your ETH mints equal Yes, No, and Invalid shares. The trading pool keeps the Yes and No shares it needs; Invalid shares and any leftover Yes or No shares go to your wallet.'
 
 const removalLead = 'Removing liquidity returns Yes and No shares to your wallet, not ETH.'
@@ -28,8 +29,7 @@ export function formatRemovalGuidance(path: MarketSettlementPath | undefined) {
 
 export const marketNotInitializedReason = 'Create the market first.'
 export const noLiquidityToRemoveReason = 'The market has no liquidity yet.'
-export const invalidLpAmount = 'Enter an LP amount with at most 18 decimal places.'
-export { invalidEthAmount } from './tradeTicket.js'
+export { max } from '@zoltar/ui-core-shared/copy/common.js'
 export const estimateNote = 'Estimate from the current trading pool state.'
 export const estimateHeading = 'Liquidity estimate'
 export const completeSetSharesCreated = 'Complete sets created'
@@ -44,7 +44,8 @@ export function approximateRemovalValue(amount: string) {
 }
 
 export const youProvide = 'You provide'
-export { youReceiveEstimate as youReceive } from './tradeTicket.js'
+export const youRemove = 'You remove'
+export { minimumReceived, youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const previewDetails = 'Liquidity breakdown'
 
 export const localEstimateNote = `${estimateNote} ${recheckedBeforeWallet}`

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { arrangeMarkets, coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketYesTenths, type MarketFilter } from '../../lib/marketListing.js'
 import { DEFAULT_MARKET_LIST_OPTIONS, marketTicketHref, readMarketListParams, readMarketViewParam, readTicketParam, withoutRouteStateParams, writeMarketListParams, writeMarketViewParam, writeTicketParam } from '../../lib/routeState.js'
 import type { LiveMarket } from '../../protocol/live.js'
+import { marketsCopy } from '../../copy/markets.js'
 import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress as address, listingMarketFixture as market } from '../support/liveMarketFixture.js'
 
 const NOW = FIXTURE_NOW
@@ -15,10 +16,14 @@ describe('market odds and liquidity', () => {
 		expect(marketOddsPercent(skewed)).toEqual({ yes: 62, no: 38 })
 	})
 
-	test('keeps whole-percent odds summing to 100 when rounding', () => {
+	test('keeps tenth-of-a-percent odds, the precision of the market page bar, with No as 100 minus Yes', () => {
 		const odds = marketOddsPercent(market({ pool: address('01'), yesReserve: 1_000n - 625n, noReserve: 625n }))
-		expect(odds).toEqual({ yes: 63, no: 37 })
-		expect((odds?.yes ?? 0) + (odds?.no ?? 0)).toBe(100)
+		expect(odds).toEqual({ yes: 62.5, no: 37.5 })
+		const thirds = marketOddsPercent(market({ pool: address('01'), yesReserve: 2n, noReserve: 1n }))
+		expect(thirds).toEqual({ yes: 33.3, no: 66.7 })
+		expect(marketsCopy.formatOutcomePrice(marketsCopy.yes, thirds?.yes ?? 0)).toBe('Yes 33.3%')
+		expect(marketsCopy.formatOutcomePrice(marketsCopy.no, thirds?.no ?? 0)).toBe('No 66.7%')
+		expect(marketsCopy.formatOutcomePrice(marketsCopy.yes, 62)).toBe('Yes 62.0%')
 	})
 
 	test('has no odds without a funded pair or authoritative data', () => {

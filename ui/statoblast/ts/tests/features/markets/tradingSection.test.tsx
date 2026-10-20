@@ -316,6 +316,15 @@ void describe('TradingSection', () => {
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 		})
 
+	test('says to enter an amount while the mint dialog has none', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '' }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
+		expect(state.disabled).toBe(true)
+		expect(state.reason).toBe('Enter a mint amount.')
+	})
+
 	test('explains a mint action that becomes unavailable while its dialog is open', async () => {
 		const props = createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
 		const rendered = await renderIntoDocument(<TradingSection {...props} />)

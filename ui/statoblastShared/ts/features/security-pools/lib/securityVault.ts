@@ -1,5 +1,4 @@
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
-import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails, SecurityVaultDetails } from '../../../types/contracts.js'
@@ -13,15 +12,6 @@ export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
-
-export function parseTargetHealthFactorBps(value: string, label = 'Target backing ratio', minimumBps = BPS_DENOMINATOR) {
-	const trimmed = value.trim()
-	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with up to four decimal places.`)
-	const [whole = '', fraction = ''] = trimmed.split('.')
-	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatMultiplier(minimumBps, 4)}.`)
-	return factorBps
-}
 
 function getMigrationSecurityMultiplierBps(poolSecurityMultiplierBps: bigint) {
 	const multiplier = BPS_DENOMINATOR + (poolSecurityMultiplierBps - BPS_DENOMINATOR) / 2n
@@ -47,36 +37,13 @@ export function doesLoadedSecurityVaultMatchSelection({ accountAddress, security
 	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultOwner)
 }
 
-/** The vault read supplies the backing and both pool totals from one block, so the unit conversion never mixes reads. */
-type SecurityVaultDepositState = Pick<SecurityVaultDetails, 'totalPoolHeldRepBalanceAttoRep' | 'totalRepBackingUnits' | 'vaultAttoRepBacking'>
-
-/**
- * Mirrors how a deposit is credited: REP converts to backing units with a floor, and the vault minimum is checked after
- * converting those units back to REP against the post-deposit pool. The round trip can lose attoREP whenever the pool's
- * REP per backing unit is not exact, so a deposit of exactly the minimum can still fall short.
- */
-function getCreditedVaultDepositAttoRep(depositAmount: bigint, vault: SecurityVaultDepositState | undefined) {
-	const totalPoolHeldAttoRep = vault?.totalPoolHeldRepBalanceAttoRep
-	const totalRepBackingUnits = vault?.totalRepBackingUnits
-	if (depositAmount <= 0n || totalPoolHeldAttoRep === undefined || totalRepBackingUnits === undefined) return depositAmount
-	if (totalRepBackingUnits === 0n || totalPoolHeldAttoRep === 0n) return depositAmount
-	const creditedBackingUnits = (depositAmount * totalRepBackingUnits) / totalPoolHeldAttoRep
-	return (creditedBackingUnits * (totalPoolHeldAttoRep + depositAmount)) / (totalRepBackingUnits + creditedBackingUnits)
-}
-
-/** The pool stores its effective minimum (theoretical supply / 100_000 when unconfigured); an unloaded minimum is unknown, so it never flags a deposit. */
-export function isSecurityVaultDepositBelowMinimum(vault: SecurityVaultDepositState | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep: bigint | undefined) {
-	if (depositAmount === undefined || depositAmount <= 0n || minimumVaultRepDepositAttoRep === undefined) return false
-	// The contract checks the whole vault after every deposit, so an existing vault below the minimum must also reach it.
-	return (vault?.vaultAttoRepBacking ?? 0n) + getCreditedVaultDepositAttoRep(depositAmount, vault) < minimumVaultRepDepositAttoRep
-}
-
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
 	if (securityVaultDetails === undefined) return false
 	return securityVaultDetails.vaultAttoRepBacking > 0n || securityVaultDetails.underwritingLimitAttoEth > 0n || securityVaultDetails.claimableFeesAttoEth > 0n || securityVaultDetails.disputeStakedAttoRep > 0n || securityVaultDetails.badDebtAttoEth > 0n
 }
 
-function getCapacityOwnershipBackedRepFloor(underwritingLimitAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
+/** The REP a commitment requires at `statoblastSecurityMultiplierBps`, rounded up as `SecurityPoolUtils.isVaultHealthyAtFactor` does. */
+export function getCapacityOwnershipBackedRepFloor(underwritingLimitAttoEth: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (underwritingLimitAttoEth === undefined || underwritingLimitAttoEth <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return undefined
 	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return undefined
@@ -141,13 +108,6 @@ function capWithdrawalAtVaultMinimum(coverageMaximumAttoRep: bigint, vaultAttoRe
 	return coverageMaximumAttoRep < partialMaximumAttoRep ? coverageMaximumAttoRep : partialMaximumAttoRep
 }
 
-/** True when the requested withdrawal leaves less than the vault minimum, so the contract withdraws the whole vault instead. */
-export function doesVaultWithdrawalExitEntireVault(withdrawAmount: bigint | undefined, vaultAttoRepBacking: bigint | undefined, minimumVaultRepDepositAttoRep: bigint | undefined) {
-	if (withdrawAmount === undefined || withdrawAmount <= 0n || vaultAttoRepBacking === undefined || minimumVaultRepDepositAttoRep === undefined) return false
-	if (withdrawAmount >= vaultAttoRepBacking) return true
-	return vaultAttoRepBacking - withdrawAmount < minimumVaultRepDepositAttoRep
-}
-
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {
 	if (timeoutMinutes === undefined || timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return undefined
 	return timeoutMinutes * 60n
@@ -161,25 +121,11 @@ export function getStagedOperationTimeoutFieldError(value: string) {
 	return undefined
 }
 
-export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'managerAddress' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint) {
-	if (managerAddress === undefined || oracleManagerDetails === undefined) return false
-	if (!sameAddress(managerAddress, oracleManagerDetails.managerAddress)) return false
-	return isOracleManagerPriceUsable(oracleManagerDetails, currentTimestamp)
-}
-
 export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint | undefined) {
 	if (oracleManagerDetails?.isPriceValid !== true) return false
 	if (currentTimestamp === undefined) return true
 	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails.lastSettlementTimestamp)
 	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
-}
-
-/** Inverts both rounded collateral requirements used by liquidation. */
-export function getMaximumHealthyCommitment(details: Pick<SecurityVaultDetails, 'vaultAttoRepBacking' | 'disputeStakedAttoRep'> | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
-	if (details === undefined || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps < BPS_DENOMINATOR) return undefined
-	const associatedBase = ((details.vaultAttoRepBacking + details.disputeStakedAttoRep) * BPS_DENOMINATOR) / multiplierBps
-	const freeBase = (details.vaultAttoRepBacking * BPS_DENOMINATOR) / getMigrationSecurityMultiplierBps(multiplierBps)
-	return ((associatedBase < freeBase ? associatedBase : freeBase) * PRICE_PRECISION) / repPerEthPrice
 }
 
 export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetails | undefined, limitAttoEth?: bigint, repPerEthPrice?: bigint, poolSecurityMultiplierBps?: bigint) {

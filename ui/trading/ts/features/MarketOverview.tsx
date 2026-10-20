@@ -10,14 +10,15 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { MarketResolution } from '../components/MarketResolution.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { liveCopy } from '../copy/live.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import { marketsCopy } from '../copy/markets.js'
-import { marketYesTenths } from '../lib/marketListing.js'
-import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
+import { marketPriceState, marketYesTenths } from '../lib/marketListing.js'
+import type { LiveMarket } from '../protocol/live.js'
 import { formatMarketLiquidity } from './MarketCard.js'
 import { marketStatusLabel, marketStatusTone } from './marketStatus.js'
 
@@ -86,27 +87,22 @@ export function MarketPageHeader({ market, nowSeconds, headingRef, actions }: { 
 	)
 }
 
-/** Open odds lead the column; once the market takes no new risk they are history, so they step down to a labelled, muted bar. */
-function MarketOdds({ tradingClosed, yesTenths }: { tradingClosed: boolean; yesTenths: number | undefined }) {
+/** The price, or the outcome that replaced it once the question resolved. Open odds lead the column; a market that stopped trading steps down to its last price, muted. */
+function MarketPrice({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
+	const priceState = marketPriceState(market, nowSeconds)
+	if (priceState.kind === 'resolved') return <MarketResolution outcome={priceState.outcome} />
+	const yesTenths = marketYesTenths(market)
 	if (yesTenths === undefined) return <UserMessage className='detail' detail={marketsCopy.priceUnavailable} />
-	if (!tradingClosed) return <ProbabilityBar variant='headline' yesPercent={yesTenths / 10} />
-	return (
-		<div className='market-odds-closed'>
-			<span className='metric-label'>{marketsCopy.lastConditionalPrices}</span>
-			<ProbabilityBar yesPercent={yesTenths / 10} />
-		</div>
-	)
+	return priceState.kind === 'last' ? <ProbabilityBar last yesPercent={yesTenths / 10} /> : <ProbabilityBar variant='headline' yesPercent={yesTenths / 10} />
 }
 
 /** The market page's reading column: conditional odds, the facts that decide a trade, the wallet's position, the question's own description, and contracts. */
 export function MarketOverview({ market, nowSeconds, position }: { market: LiveMarket; nowSeconds: bigint; position: ComponentChildren }) {
-	const yesTenths = marketYesTenths(market)
-	const tradingClosed = !marketAcceptsNewRisk(market, nowSeconds)
 	const description = market.description.trim()
 	const liquidity = formatMarketLiquidity(market)
 	return (
 		<div className='market-overview'>
-			<MarketOdds yesTenths={yesTenths} tradingClosed={tradingClosed} />
+			<MarketPrice market={market} nowSeconds={nowSeconds} />
 			<DataGrid className='market-facts'>
 				<MetricField label={liveCopy.questionEnd}>
 					<TimestampValue timestamp={market.endTime} relative={false} />

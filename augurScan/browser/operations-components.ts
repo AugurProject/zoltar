@@ -1,6 +1,7 @@
 import * as Plot from '@observablehq/plot'
 import type { JsonRecord } from './api-validation.ts'
-import { exactNumber } from './format.ts'
+import { exactNumber, utcDateTime } from './format.ts'
+import { identifierCopyButton } from './identifier-copy.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import { blockRangeError, filterFormDestination } from './operations-presentation.ts'
 import { sparklineBuckets } from './operations-sparkline.ts'
@@ -24,7 +25,7 @@ export const createOperationsComponents = () => {
 				const sparkline = Plot.plot({ width: 180, height: 38, margin: 0, style: { background: 'transparent' }, x: { axis: null }, y: { axis: null, domain: [0, Math.max(1, ...points.map(point => point.y))] }, marks: [Plot.lineY(points, { x: 'x', y: 'y', stroke: '#56d7d0' })] })
 				sparkline.querySelector('style')?.remove()
 				sparkline.setAttribute('role', 'img')
-				sparkline.setAttribute('aria-label', `${label}: indexed transitions from ${range[0]} to ${range[1]}`)
+				sparkline.setAttribute('aria-label', `${label}: indexed transitions from ${utcDateTime(range[0])} to ${utcDateTime(range[1])}`)
 				card.append(sparkline)
 			}
 		}
@@ -37,7 +38,16 @@ export const createOperationsComponents = () => {
 		if (row instanceof HTMLAnchorElement && href !== undefined) row.href = href
 		const copy = element('div')
 		copy.append(element('strong', '', title), element('span', '', status))
-		if (identity !== undefined && identity !== '') copy.append(element('code', '', shortIdentifier(identity, 12, 8)))
+		if (identity !== undefined && identity !== '') {
+			const shortened = shortIdentifier(identity, 12, 8)
+			const code = element('code', '', shortened)
+			copy.append(code)
+			if (shortened !== identity) {
+				code.title = identity
+				// A button inside a link is invalid HTML; a linked row leads to the identifier's own page instead.
+				if (!(row instanceof HTMLAnchorElement)) copy.append(identifierCopyButton(identity))
+			}
+		}
 		row.append(copy)
 		if (typeof block === 'string' || typeof block === 'number') {
 			const evidence = element('div', 'operations-evidence')
@@ -74,6 +84,15 @@ export const createOperationsComponents = () => {
 	return { operationCard, operationRow, exactEvidenceRow, operationsPanel }
 }
 
+/** Identifies a filter form by its route and the URL it was filled from; a live re-render with the same identity keeps the rendered form. */
+const filterFormKey = (actionPath: string, pageUrl: URL, chainId: string, isDemo: boolean): string => `${actionPath}|${chainId}|${isDemo ? 'demo' : ''}|${pageUrl.search}`
+
+/** Returns the filter form already rendered in `container` for the same route and parameters, so typed but unapplied values survive a live re-render. */
+export const retainedFilterForm = (container: ParentNode, next: HTMLFormElement): HTMLFormElement => {
+	for (const child of container.children) if (child instanceof HTMLFormElement && child.dataset['filterKey'] !== undefined && child.dataset['filterKey'] === next.dataset['filterKey']) return child
+	return next
+}
+
 /** Applies a filter form through in-place navigation after validating its block-number fields. */
 const bindFilterForm = (form: HTMLFormElement, actionPath: string, blockFields: readonly string[], navigate: (destination: URL) => void): void => {
 	const inputs = () => [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[name], select[name]')]
@@ -107,6 +126,7 @@ export const renderOperationsTimelineFilters = (pageUrl: URL, chainId: string, i
 	form.className = 'filters operations-filters'
 	form.method = 'get'
 	form.action = '/operations/timeline'
+	form.dataset['filterKey'] = filterFormKey('/operations/timeline', pageUrl, chainId, isDemo)
 	form.setAttribute('role', 'search')
 	form.setAttribute('aria-label', 'Timeline filters')
 	const field = (label: string, name: string, placeholder: string, inputMode?: 'numeric') => {
@@ -160,6 +180,7 @@ export const renderOperationsRiskSnapshotFilter = (pageUrl: URL, chainId: string
 	form.className = 'filters operations-filters operations-as-of-filter'
 	form.method = 'get'
 	form.action = '/operations/risk'
+	form.dataset['filterKey'] = filterFormKey('/operations/risk', pageUrl, chainId, isDemo)
 	const label = document.createElement('label')
 	const input = document.createElement('input')
 	input.type = 'search'

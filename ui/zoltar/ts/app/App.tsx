@@ -32,7 +32,7 @@ import { getZoltarTabLabel, getZoltarTabView, getZoltarViewHref, isUniverseForke
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 
 export function App() {
-	const { activeUniverseId, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
+	const { activeUniverseId, forkQuestionId, setActiveUniverseId, setForkQuestionId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<ZoltarRoute>(route, 'not-found', ZOLTAR_ROUTES)
 	const invalidRoute = isInvalidZoltarRoute({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
@@ -68,7 +68,7 @@ export function App() {
 	})
 	const { transactionState } = transactionTray
 	const includeRelatedUniverses = activeRoute === 'zoltar' && activeZoltarView === 'migrate'
-	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, includeRelatedUniverses, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	const operations = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, includeRelatedUniverses, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce, zoltarForkQuestionId: forkQuestionId })
 	const { loadingZoltarForkAccess, loadingZoltarUniverse, loadZoltarUniverse, zoltarForkRepBalanceAttoRep, zoltarUniverse, zoltarUniverseError, zoltarUniverseMissing } = operations
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
@@ -90,6 +90,7 @@ export function App() {
 		environmentRefreshKey: activeEnvironmentNonce,
 		isConnectingWallet: overviewWalletProps.isConnectingWallet,
 		onConnectWallet: overviewWalletProps.onConnect,
+		onForkQuestionIdChange: setForkQuestionId,
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		onRetryUniverse: () => void loadZoltarUniverse({ clearCurrentState: false }),
 		onSwitchNetwork: overviewWalletProps.onSwitchNetwork,
@@ -124,16 +125,15 @@ export function App() {
 				currentTimestamp={currentTimestamp}
 				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
 				notices={
+					// A universe read failure is reported by the views that need the universe, each with its own Retry, so it is not repeated here.
 					<AppStatusNotices
 						errorMessages={errorMessages}
-						loadingZoltarUniverse={loadingZoltarUniverse}
-						onRetryZoltarUniverse={() => void loadZoltarUniverse({ clearCurrentState: false })}
+						isDeploymentRoute={activeRoute === 'deploy'}
 						onRetryReadBackend={() => void retryReadBackend()}
 						readBackendMessage={readBackendMessage}
 						readBackendStatus={readBackendStatus}
 						simulationBootstrapError={environmentBootstrapError}
 						showApplicationDeploymentWarning={applicationDeploymentMissing}
-						zoltarUniverseError={zoltarUniverseError}
 					/>
 				}
 				header={

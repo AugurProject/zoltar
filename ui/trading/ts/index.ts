@@ -11,4 +11,5 @@ installTradingRouting()
 registerTradingSimulationScenario()
 const defaultSimulationUrl = withDefaultTradingSimulationScenario(window.location.href)
 if (defaultSimulationUrl !== undefined) window.history.replaceState({}, '', defaultSimulationUrl)
+// mountApp removes the static loading placeholder before its first render, as in the other apps.
 void mountApp({ applicationTitle: appName, initialize: initializeTradingActiveEnvironment, root: () => createElement(App, null), target: root })

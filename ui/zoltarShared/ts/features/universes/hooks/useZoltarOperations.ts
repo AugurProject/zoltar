@@ -13,6 +13,8 @@ type UseZoltarOperationsParameters = TransactionLifecycleParameters &
 		includeRelatedUniverses?: boolean
 		deploymentStatuses: DeploymentStatus[]
 		environmentRefreshKey: number
+		/** The question chosen to fork the selected universe; apps without a fork workflow leave it empty. */
+		zoltarForkQuestionId?: string
 	}
 
 export function useZoltarOperations({
@@ -29,6 +31,7 @@ export function useZoltarOperations({
 	onTransactionRequested,
 	onTransactionSubmitted,
 	refreshState,
+	zoltarForkQuestionId = '',
 }: UseZoltarOperationsParameters) {
 	const { createChildUniverse: createUniverseChildUniverse, ...universe } = useZoltarUniverse({
 		accountAddress,
@@ -61,6 +64,7 @@ export function useZoltarOperations({
 		// The overview header always displays the connected wallet's REP balance.
 		// Keep fork access loaded whenever the app has enough context to do so.
 		shouldAutoLoadForkAccess: autoLoadInitialData,
+		zoltarForkQuestionId,
 		zoltarUniverse: universe.zoltarUniverse,
 	})
 	const refreshZoltarForkAccess = useCallback(

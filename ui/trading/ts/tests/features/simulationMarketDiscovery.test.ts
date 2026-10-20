@@ -376,9 +376,11 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						await waitFor(() => expect(summary?.status).toBe('ready'), simulationWaitOptions)
 						expect(rendered.container.textContent).not.toContain('Connect a wallet to load')
 						if (route !== 'portfolio') {
-							// Fresh browser lists have no favorites; simulation registry seeding does not trigger scans.
+							// A fresh browser has no favorites: the market lists show the registry's seeded market, and the saved-pool list stays empty.
+							const listsSeededMarket = route !== 'create-market' && scenario === FUNDED_TRADING_SIMULATION_SCENARIO
 							expect(rendered.container.querySelector('form.market-list-search')).not.toBeNull()
-							expect(rendered.container.querySelectorAll('.market-record')).toHaveLength(0)
+							await waitFor(() => expect(rendered.container.querySelectorAll('.market-record')).toHaveLength(listsSeededMarket ? 1 : 0), { timeout: 10_000 })
+							if (listsSeededMarket) expect(rendered.container.querySelector('.market-record')?.textContent).toContain('Will this resolve?')
 							expect(rendered.container.querySelector('.discovery-control')).toBeNull()
 						}
 					} finally {

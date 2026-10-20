@@ -488,6 +488,7 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	}
 }
+/** @internal The UI stages vault operations through the vault operations bundle; tests stage single coordinator operations with this. */
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const validateBeforeSubmit = async () => {

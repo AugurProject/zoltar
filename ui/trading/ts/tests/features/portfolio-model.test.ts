@@ -143,6 +143,20 @@ describe('portfolio rows', () => {
 		expect(closed.actionItems.map(item => item.kind)).toEqual(['redeem'])
 	})
 
+	test('does not ask for attention over rounding dust that redeems or withdraws for less than the smallest displayed ETH', () => {
+		// 10^14 attoETH is the smallest displayed amount; one attoShare less is dust.
+		const dust = 10n ** 14n - 1n
+		const closedDust = row(entry({ endTime: NOW - 1n }, { yes: dust, no: dust, invalid: dust, lp: dust }))
+		expect(closedDust.actionItems).toEqual([])
+		// Dust stays redeemable from the row; it only stops counting as needing attention.
+		expect(closedDust.canRedeem).toBe(true)
+		expect(row(entry({ questionOutcome: 1 }, { yes: dust, lp: dust })).actionItems).toEqual([])
+		expect(row(entry({ endTime: NOW + WEEK }, { lp: dust })).actionItems).toEqual([])
+		// At the display threshold the same holdings need attention again.
+		const threshold = 10n ** 14n
+		expect(row(entry({ endTime: NOW - 1n }, { yes: threshold, no: threshold, invalid: threshold, lp: 2n * threshold })).actionItems.map(item => item.kind)).toEqual(['redeem', 'withdraw-liquidity'])
+	})
+
 	test('does not price a closed market at pool exits, which stop when trading closes', () => {
 		const insured = row(entry({ endTime: NOW - 1n }, { yes: (3n * SET) / 2n, invalid: SET }))
 		expect(insured.valuation).toEqual({ kind: 'complete-sets', attoEth: 0n, pendingResolution: true })

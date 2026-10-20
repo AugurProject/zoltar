@@ -27,15 +27,17 @@ export const renderActivityRow = (deps: ActivityRowDeps, log: ActivityRecord) =>
 		functionName: log.function_name,
 		actionSummary: log.action_summary,
 	})
+	// The column header is visual only; each cell names its own field so it reads correctly alone and in the stacked layouts.
+	const fieldLabel = (text: string) => element('span', 'sr-only activity-field-label', text)
 	const chain = element('span', 'cell chain-block')
 	const openCue = element('span', 'row-open-cue', '›')
 	openCue.setAttribute('aria-hidden', 'true')
 	const blockLink = element('a', '', `#${number(log.block_number)}`)
 	blockLink.className = 'address-link activity-target'
 	blockLink.href = `/block/${log.block_number}?chainId=${log.chain_id}${isDemo ? '&demo=1' : ''}`
-	chain.append(blockLink, openCue)
+	chain.append(fieldLabel('Block'), blockLink, openCue)
 	const timestamp = element('time', 'cell cell-time')
-	timestamp.append(element('span', '', time(log.block_timestamp)), element('span', 'activity-age', `· ${age(log.block_timestamp)}`))
+	timestamp.append(fieldLabel('Time'), element('span', 'activity-time-value', time(log.block_timestamp)), element('span', 'activity-age', `· ${age(log.block_timestamp)}`))
 	timestamp.dataset['time'] = log.block_timestamp
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)
@@ -43,18 +45,22 @@ export const renderActivityRow = (deps: ActivityRowDeps, log: ActivityRecord) =>
 	contractLink.className = 'cell address-link activity-target activity-contract-link'
 	contractLink.href = `/address/${log.emitter_address}?chainId=${log.chain_id}${isDemo ? '&demo=1' : ''}`
 	contractLink.title = log.contract_label ? `${log.contract_label} · ${log.emitter_address}` : log.emitter_address
-	contractLink.replaceChildren(element('span', 'contract-name', log.contract_label || short(log.emitter_address, 10, 8)))
-	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
+	contractLink.replaceChildren(fieldLabel('Contract'), element('span', 'contract-name', log.contract_label || short(log.emitter_address, 10, 8)))
+	const event = element('button', 'cell event-name')
+	event.append(fieldLabel('Event'), log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Toggle ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
 	event.setAttribute('aria-expanded', String(eventDrawerFor(key) !== undefined))
-	const tx = element('a', '', `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
-	tx.className = 'cell cell-tx activity-target'
+	const tx = element('a', 'cell cell-tx activity-target')
+	tx.append(fieldLabel('Transaction'), `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
 	tx.href = `/tx/${log.tx_hash}?chainId=${log.chain_id}${isDemo ? '&demo=1' : ''}`
-	const origin = element('a', 'cell cell-origin activity-target', log.origin_address ? short(log.origin_address, 6, 4) : '—')
+	const origin = element('a', 'cell cell-origin activity-target')
+	origin.append(fieldLabel('Origin'), log.origin_address ? short(log.origin_address, 6, 4) : '—')
 	if (log.origin_address) origin.href = `/address/${log.origin_address}?chainId=${log.chain_id}${isDemo ? '&demo=1' : ''}`
-	const action = element('span', 'cell cell-function', log.function_name === 'deploy' ? (log.action_summary ?? 'Deploy contract') : (log.function_name ?? (log.to_address === null ? 'Deploy contract' : 'Unknown call')))
-	action.title = `Transaction action: ${log.function_signature ?? log.action_summary ?? action.textContent ?? ''}`
+	const actionText = log.function_name === 'deploy' ? (log.action_summary ?? 'Deploy contract') : (log.function_name ?? (log.to_address === null ? 'Deploy contract' : 'Unknown call'))
+	const action = element('span', 'cell cell-function')
+	action.append(fieldLabel('Function'), actionText)
+	action.title = `Transaction action: ${log.function_signature ?? log.action_summary ?? actionText}`
 	row.append(chain, timestamp, contractLink, event, action, tx, origin, element('p', 'activity-summary-text', log.summary))
 	row.addEventListener('click', click => {
 		if (click.target instanceof Element && click.target.closest('a')) return

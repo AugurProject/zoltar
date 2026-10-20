@@ -56,6 +56,9 @@ function getReportOutcomeSection() {
 	return getClosestSection(within(document.body).getByRole('heading', { name: 'Report outcome' }))
 }
 
+/** A pool without commitments or a vault minimum, so the whole vault backing can be reported. */
+const UNCOMMITTED_VAULT_REPORTING_LIMITS = { minimumVaultRepDepositAttoRep: 0n, repPerEthPrice: ATTO_REP, statoblastSecurityMultiplierBps: 20_000n, totalPoolHeldAttoRep: rep(100n), totalRepBackingUnits: rep(100n), totalUnderwritingLimitAttoEth: 0n, underwritingLimitAttoEth: 0n, vaultRepBackingUnits: rep(10n) }
+
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return marketDetailsFixture({
 		endTime: 100n,
@@ -104,6 +107,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
 		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
+		viewerVaultReportingLimits: UNCOMMITTED_VAULT_REPORTING_LIMITS,
 		...overrides,
 	}
 }
@@ -149,6 +153,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 1n * ATTO_REP,
 		viewerVaultRepBackingAttoRep: 11n * ATTO_REP,
+		viewerVaultReportingLimits: UNCOMMITTED_VAULT_REPORTING_LIMITS,
 	}
 
 	return {
@@ -184,6 +189,7 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 0n,
 		viewerVaultRepBackingAttoRep: 10n * ATTO_REP,
+		viewerVaultReportingLimits: UNCOMMITTED_VAULT_REPORTING_LIMITS,
 		...overrides,
 	}
 }
@@ -277,7 +283,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const button = within(document.body).getByRole('button', { name: /Report Yes/ })
 		if (remaining > 60n) expectTransactionButtonEnabled(document.body, button.textContent ?? '')
-		else expectTransactionButtonDisabled(document.body, button.textContent ?? '', 'The response window ends too soon. Wait for the result before settling deposits.')
+		else expectTransactionButtonDisabled(document.body, button.textContent ?? '', 'The response window ends too soon to report. Wait for the result.')
 		expect(within(document.body).queryByText('Resolved as Yes.')).toBeNull()
 	})
 
@@ -512,7 +518,8 @@ describe('ReportingSection', () => {
 			})
 			expect(amountInput().value).toBe('225000')
 			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225\u00a0000 REP')
-			expectTransactionButtonEnabled(document.body, 'Approve 225 000 REP')
+			// The shared approval control abbreviates large approvals and keeps the exact amount in the button title.
+			expectTransactionButtonEnabled(document.body, 'Approve 225k REP')
 			const label = 'Report No & trigger fork · 225 000 REP…'
 			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.')
 			await act(() => {
@@ -887,6 +894,22 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Only 2 REP is available in your pool vault. Reduce the amount or select Wallet REP.')
 	})
 
+	test('offers only the vault REP the pool lets a committed vault report', async () => {
+		// The pool keeps 1.5× its 4 ETH of commitments at 1 REP/ETH (6 REP) in pool-held REP, so 6 of the vault's 10 REP can move.
+		const viewerVaultReportingLimits = { minimumVaultRepDepositAttoRep: rep(1n), repPerEthPrice: ATTO_REP, statoblastSecurityMultiplierBps: 20_000n, totalPoolHeldAttoRep: rep(12n), totalRepBackingUnits: rep(12n), totalUnderwritingLimitAttoEth: rep(4n), underwritingLimitAttoEth: rep(2n), vaultRepBackingUnits: rep(10n) }
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness initialProps={{ reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerPoolHeldVaultRepBackingAttoRep: rep(10n), viewerVaultReportingLimits }), reportingForm: createReportingForm({ contributionFunding: 'vault', reportAmount: '7', selectedOutcome: 'no' }) }} />,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Available: 6 REP.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('No'), 'Only 6 REP is available in your pool vault. Reduce the amount or select Wallet REP.')
+		await act(async () => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
+		})
+		expect((document.getElementById('reporting-contribution-amount') as HTMLInputElement).value).toBe('6')
+		expectTransactionButtonEnabled(document.body, reportingButtonLabel('No'))
+	})
+
 	test('switches ordinary reporting between wallet REP and pool vault REP', async () => {
 		const rendered = await renderIntoDocument(
 			<ReportingSectionHarness
@@ -984,16 +1007,43 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
+		const approvalButton = within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ })
 		const reportAction = reportButton.closest('.tx-action')
 		const actionRow = reportButton.closest('.actions')
 		const disabledReason = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
-		expect(actionRow?.classList.contains('reporting-wallet-action-row')).toBe(true)
-		expect(Array.from(actionRow?.children ?? []).filter(child => child.classList.contains('tx-action'))).toHaveLength(2)
+		// The approval prerequisite sits before the report it unlocks, in the same action region.
+		expect(approvalButton.compareDocumentPosition(reportButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(approvalButton.closest('.reporting-shared-action-region')).toBe(reportButton.closest('.reporting-shared-action-region'))
 		expect(actionRow?.contains(disabledReason)).toBe(false)
 		expect(reportAction?.contains(disabledReason)).toBe(false)
 		expect(reportButton.closest('.reporting-shared-action-region')?.contains(disabledReason)).toBe(true)
 		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ }))
 		expect(approvalCalls).toBe(1)
+	})
+
+	test('approves a custom wallet REP amount through the shared approval control', async () => {
+		const approvedAmounts: Array<bigint | undefined> = []
+		const rendered = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					onApproveReportingRep: amount => {
+						approvedAmounts.push(amount)
+					},
+					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerPoolHeldVaultRepBackingAttoRep: 0n, viewerVaultExists: false, viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const approvalAmount = document.body.querySelector('.approval-amount-field input')
+		if (!(approvalAmount instanceof HTMLInputElement)) throw new Error('Expected the approval amount field')
+		await act(async () => {
+			fireEvent.input(approvalAmount, { target: { value: '8' } })
+		})
+		await act(async () => {
+			fireEvent.click(within(document.body).getByRole('button', { name: /^Approve 8\sREP$/ }))
+		})
+		expect(approvedAmounts).toEqual([rep(8n)])
 	})
 
 	test('preserves the wallet-report action positions after REP approval', async () => {
@@ -2813,7 +2863,7 @@ describe('ReportingSection', () => {
 			)
 			cleanupRenderedComponent = rendered.cleanup
 			expect(within(document.body).getAllByRole('button', { name: 'Switch to Sepolia' })).toHaveLength(1)
-			expectWalletFixDescribesAction(document.body, 'Approve 5 REP', 'Switch to Sepolia')
+			expectWalletFixDescribesAction(document.body, 'Approve REP', 'Switch to Sepolia')
 			expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Switch to Sepolia')
 		})
 

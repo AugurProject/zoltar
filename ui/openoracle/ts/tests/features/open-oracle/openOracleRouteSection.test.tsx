@@ -86,6 +86,8 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionTestPr
 					token2Balance: openOracleTokenAccessState.token2Balance,
 					token2BalanceError: openOracleTokenAccessState.token2BalanceError,
 					token2Decimals: openOracleTokenAccessState.token2Decimals ?? openOracleReportDetails.token2Decimals,
+					walletEthBalanceAttoEth: undefined,
+					wethAddress: undefined,
 				}))
 
 	return {
@@ -106,6 +108,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionTestPr
 		onOpenOracleFormChange: () => undefined,
 		onSettleReport: () => undefined,
 		onWithdrawOpenOracleBalance: () => undefined,
+		onWrapDisputeWeth: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleActiveWithdrawalBalance: undefined,
 		openOracleCreateForm,
@@ -1072,7 +1075,8 @@ describe('OpenOracleSection route create view', () => {
 		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([])
 		// The ETH sent is derived from the settler reward, so it is shown read-only instead of asked for twice.
 		expect(document.body.querySelector('input[aria-label="ETH value to send"]')).toBeNull()
-		expect(getDescriptionTexts(settlerRewardInput)).toEqual([openOracleCopy.settlerRewardHelpText, 'ETH'])
+		// The help text already names ETH, so the hidden unit badge is not read a second time.
+		expect(getDescriptionTexts(settlerRewardInput)).toEqual([openOracleCopy.settlerRewardHelpText])
 		expect(getDescriptionTexts(multiplierInput)).toEqual([openOracleCopy.escalationMultiplierHelpText, '×'])
 		expect((multiplierInput as HTMLInputElement).value).toBe('1')
 		expect(multiplierInput.getAttribute('inputmode')).toBe('decimal')
@@ -1509,9 +1513,12 @@ describe('OpenOracleSection route create view', () => {
 		expect(queries.getByText(openOracleCopy.loadingOracleBalances)).not.toBeNull()
 		await act(() => render(<OpenOracleSection {...props} openOracleWithdrawableBalancesLoading />, rendered.container))
 		expect(queries.queryByText(openOracleCopy.noOracleBalances) === null).toBe(true)
+		expectTransactionButtonDisabled(document.body, 'Withdraw ETH', openOracleCopy.loadingOracleBalances)
 		await act(() => render(<OpenOracleSection {...props} openOracleWithdrawableBalances={{ ethAttoEth: 0n, token1: 0n, token2: 0n }} />, rendered.container))
 		expect(queries.getByText(openOracleCopy.noOracleBalances)).not.toBeNull()
 		expect(queries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
+		// Every withdraw button stays in place, disabled with the shared reason, rather than disappearing at a zero balance.
+		for (const symbol of ['ETH', props.openOracleReportDetails?.token1Symbol, props.openOracleReportDetails?.token2Symbol]) expectTransactionButtonDisabled(document.body, `Withdraw ${symbol ?? ''}`, openOracleCopy.noOracleBalances)
 	})
 
 	test('shows independent credited-balance withdrawals after settlement', async () => {
@@ -1540,7 +1547,7 @@ describe('OpenOracleSection route create view', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
+		expectTransactionButtonDisabled(document.body, `Withdraw ${reportDetails.token2Symbol}`, openOracleCopy.nothingToWithdraw)
 		expect(withdrawnBalances).toEqual(['ethAttoEth'])
 	})
 

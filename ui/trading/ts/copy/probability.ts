@@ -1,24 +1,31 @@
-import { outcomeLabel, yes } from './outcomes.js'
+import { invalid, outcomeLabel, yes } from './outcomes.js'
 
-function conditionalYesPriceLabel(percent: string) {
-	return `Conditional ${yes} price ${percent} percent`
+// Visible prices must say they are conditional on a valid resolution; the trading pool has no view on Invalid.
+const ifNotInvalid = `if not ${invalid}`
+
+/** Names what every displayed Yes / No price is conditional on. */
+const priceIfNotInvalid = `Price ${ifNotInvalid}`
+/** The same price on a market that no longer trades: the pool's last price, not a live one. */
+const lastPriceIfNotInvalid = `Last price ${ifNotInvalid}`
+
+function conditionalYesPriceLabel(percent: string, last = false) {
+	return `${yes} ${last ? 'last price' : 'price'} ${ifNotInvalid}: ${percent} percent`
 }
 
 function conditionalYesMoveLabel(before: string, after: string) {
-	return `Conditional ${yes} price moves from ${before} to ${after} percent after this trade`
+	return `${yes} price ${ifNotInvalid} moves from ${before} to ${after} percent after this trade`
 }
 
-// Visible prices must say they are conditional on a valid resolution; the trading pool has no view on Invalid.
 function probabilityLabel(outcome: 'YES' | 'NO', percent: string) {
-	return `Conditional ${outcomeLabel(outcome)} ${percent}%`
+	return `${outcomeLabel(outcome)} ${percent}%`
 }
 
 function probabilityMoveLabel(outcome: 'YES' | 'NO', before: string, after: string) {
-	return `Conditional ${outcomeLabel(outcome)} ${before}% → ${after}%`
+	return `${outcomeLabel(outcome)} ${before}% → ${after}%`
 }
 
 function beforePriceLabel(percent: string) {
 	return `Before this trade: ${percent}%`
 }
 
-export const probabilityCopy = { conditionalYesPriceLabel, conditionalYesMoveLabel, probabilityLabel, probabilityMoveLabel, beforePriceLabel } as const
+export const probabilityCopy = { priceIfNotInvalid, lastPriceIfNotInvalid, conditionalYesPriceLabel, conditionalYesMoveLabel, probabilityLabel, probabilityMoveLabel, beforePriceLabel } as const

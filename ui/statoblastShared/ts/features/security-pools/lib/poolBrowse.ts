@@ -77,6 +77,9 @@ function decodeCachedSecurityPool(value: unknown) {
 
 export const securityPoolDownloadStore = createDownloadedEntityStore(decodeCachedSecurityPool, 150)
 
+/** Pools read per registry page; each pool summary is a multicall plus its question, so pages stay small. */
+export const SECURITY_POOL_PAGE_SIZE = 10
+
 function getPoolLifecycleState(pool: ListedSecurityPool) {
 	return evaluateSecurityPoolState({
 		lifecycleState: deriveSecurityPoolLifecycleState({

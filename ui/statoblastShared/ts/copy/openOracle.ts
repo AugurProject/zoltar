@@ -48,6 +48,17 @@ export const disputeWalletRequiredReason = commonCopy.formatConnectWalletBefore(
 export const settlementWalletRequiredReason = commonCopy.formatConnectWalletBefore('settling the report')
 export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
+export const wrapEth = 'Wrap ETH'
+export const formatWrapEthAmount = (amount: string) => `Wrap ${amount} ETH`
+export const wrappingEth = 'Wrapping ETH…'
+export const disputeAmountsRequiredBeforeWrap = 'Enter valid dispute amounts before wrapping ETH.'
+export const wrapEthNotNeeded = 'Not needed. Your WETH covers this dispute.'
+export const loadingWethBalance = 'Loading current WETH balance…'
+export const loadingEthBalance = 'Loading ETH balance…'
+export const formatInsufficientEthToWrap = (required: string, available: string) => `Insufficient ETH to wrap. Need ${required} ETH, wallet has ${available} ETH.`
+export const formatWrapEthFirst = (amount: string) => `Wrap ${amount} ETH to WETH first.`
+export const wrapEthFailed = 'Failed to wrap ETH'
+export const wrapEthDisputeOnly = 'ETH can only be wrapped for a report that is open to disputes.'
 export const disputeEscalationStopAmountHelpText = 'Base token amount that ends escalation.'
 export const ethSent = 'ETH sent'
 export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} required`
@@ -65,6 +76,8 @@ export const oracleBalancesDetail = 'Settlement rewards, returned report liquidi
 export const noOracleBalances = 'No withdrawable oracle balances are available for this token pair.'
 export const noWithdrawableBalanceForAsset = 'No withdrawable balance is available for this asset.'
 export const loadingOracleBalances = 'Loading oracle balances…'
+export const nothingToWithdraw = 'Nothing to withdraw.'
+export const oracleBalancesUnavailable = 'Oracle balances unavailable.'
 export const withdrawBalance = (tokenSymbol: string) => `Withdraw ${tokenSymbol}`
 export const withdrawingBalance = (tokenSymbol: string) => `Withdrawing ${tokenSymbol}…`
 export const checkingWithdrawalBalance = (tokenSymbol: string) => `Checking ${tokenSymbol} balance…`

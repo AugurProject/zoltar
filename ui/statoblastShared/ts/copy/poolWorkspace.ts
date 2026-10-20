@@ -19,6 +19,7 @@ export const healthUnknown = 'Health unavailable'
 export const poolPriceUnavailable = 'Oracle price unavailable'
 export const poolPriceExpired = 'Oracle price expired'
 export const openVault = 'Open vault'
+export const formatOpenVaultLabel = (vaultAddress: string) => `Open vault: ${vaultAddress}`
 
 export const allVaults = 'All vaults'
 

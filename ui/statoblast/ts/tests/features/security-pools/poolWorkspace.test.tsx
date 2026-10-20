@@ -17,6 +17,7 @@ import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/sec
 import { createAccountState, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps, createTruthAuctionMetrics, migratingPoolState, truthAuctionPoolState } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { addOpenOracleBountyBuffer } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
 installStatoblastRouting()
 const { renderLoadedPool, renderWorkflow, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
@@ -206,6 +207,24 @@ test('requests a new price straight from the pool oracle row', async () => {
 	expect(row?.classList.contains('warning')).toBe(true)
 	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price…' })))
 	expect(opened.length > 0).toBe(true)
+})
+
+test('gives the open price request dialog the live oracle fee rather than the fee it opened with', async () => {
+	const requestValues: bigint[] = []
+	const managerWithCost = (requestPriceCostAttoEth: bigint) => createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n, requestPriceCostAttoEth })
+	const overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {
+		accountState: createAccountState({ address: '0x0000000000000000000000000000000000000001', ethBalanceAttoEth: 10n ** 21n }),
+		poolOracleManagerDetails: managerWithCost(10n),
+		RequestPriceModal: ({ review }) => {
+			if (review !== undefined) requestValues.push(review.requestValueAttoEth)
+			return null
+		},
+	}
+	const rendered = await renderLoadedPool(overrides)
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Request new price…' })))
+	expect(requestValues.at(-1)).toBe(addOpenOracleBountyBuffer(10n))
+	await rendered.rerender(createLoadedPoolProps({ ...overrides, poolOracleManagerDetails: managerWithCost(20n) }))
+	expect(requestValues.at(-1)).toBe(addOpenOracleBountyBuffer(20n))
 })
 
 test('shows the stage, marks the open tab row, and offers controls that leave it', async () => {
@@ -463,8 +482,8 @@ test('labels a passed migration deadline as ended', async () => {
 })
 
 test('leads a pool in its truth auction with the ETH it raises against the target and the auction deadline', async () => {
-	// Before finalization the clearing amount, capped at the target, is what the auction raises; the auction card names it the same way.
-	const truthAuction = createTruthAuctionMetrics({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n })
+	// Before finalization the auction raises what finalizing now would, by the contract's own preview; the auction card names it the same way.
+	const truthAuction = createTruthAuctionMetrics({ accumulatedBidAttoEth: 10n ** 18n, attoEthRaiseCap: 4n * 10n ** 18n, attoEthRaised: 0n, auctionEndsAt: 100n + 3n * 86_400n, finalizationPreview: { attoEthRaised: 10n ** 18n, attoRepSold: 0n } })
 	await renderPoolPage(createSelectedPool(truthAuctionPoolState), { forkAuction: createForkAuctionProps({ forkAuctionDetails: createForkAuctionDetails({ ...truthAuctionPoolState, truthAuction }) }) }, 100n)
 	expect(getStripFigures()).toEqual(['ETH raised: 1.00 ETH / 4.00 ETH', 'Auction ends: in 3d', 'Pool stage: Truth auction'])
 	expect(document.querySelector('.pool-overview-header .progress-meter-detail')?.textContent).toBe('25% of target')

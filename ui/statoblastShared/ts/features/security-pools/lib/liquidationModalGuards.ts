@@ -6,10 +6,10 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
-import type { LiquidationApprovalDetails, OracleManagerDetails, SecurityPoolOverviewActionResult } from '../../../types/contracts.js'
+import type { LiquidationApprovalDetails, LiquidationFundingPreview, OracleManagerDetails, SecurityPoolOverviewActionResult } from '../../../types/contracts.js'
 
 export const ZERO_LIQUIDATION_APPROVAL_ID = `0x${'00'.repeat(32)}`
 
@@ -154,6 +154,12 @@ export function getApprovalClampedLiquidationAmount({ delegatedReceiver, liquida
 	return clampedAmount
 }
 
+/** A queued liquidation funds its OpenOracle initial report from wallet REP, so a shortfall the funding preview shows blocks the send before preparation. */
+export function getInitialReportRepShortfallReason(fundingPreview: Pick<LiquidationFundingPreview, 'currentRepBalanceAttoRep' | 'initialReportRepRequiredAttoRep'> | undefined) {
+	if (fundingPreview === undefined || fundingPreview.currentRepBalanceAttoRep >= fundingPreview.initialReportRepRequiredAttoRep) return undefined
+	return liquidationCopy.formatInitialReportRepShortfall(formatAdditionalCurrencyBalance(fundingPreview.initialReportRepRequiredAttoRep - fundingPreview.currentRepBalanceAttoRep, commonCopy.rep))
+}
+
 export function getLiquidationLifecycleBlocker(poolState: SecurityPoolStateModel | undefined) {
 	if (poolState === undefined || poolState.actions.queueLiquidation.enabled) return undefined
 	switch (poolState.lifecycleState) {
@@ -185,11 +191,14 @@ export function getLiquidationBlockers({
 	liquidationReceiverVaultSummaryError,
 	liquidationReceiverVaultSummaryResolved,
 	liquidationSecurityPoolAddress,
+	liquidationTargetVaultSummaryError,
 	liquidationTimeoutSeconds,
 	loadingLiquidationApproval,
 	loadingLiquidationFundingPreview,
 	loadingLiquidationReceiverVaultSummary,
+	loadingLiquidationTargetVaultSummary,
 	queueLiquidationEthGuardMessage,
+	queueLiquidationRepGuardMessage,
 	sameVaultWarning,
 	trimmedLiquidationReceiverVault,
 	trimmedLiquidationTargetVault,
@@ -206,11 +215,14 @@ export function getLiquidationBlockers({
 	liquidationReceiverVaultSummaryError: string | undefined
 	liquidationReceiverVaultSummaryResolved: boolean
 	liquidationSecurityPoolAddress: Address | undefined
+	liquidationTargetVaultSummaryError: string | undefined
 	liquidationTimeoutSeconds: bigint | undefined
 	loadingLiquidationApproval: boolean
 	loadingLiquidationFundingPreview: boolean
 	loadingLiquidationReceiverVaultSummary: boolean
+	loadingLiquidationTargetVaultSummary: boolean
 	queueLiquidationEthGuardMessage: string | undefined
+	queueLiquidationRepGuardMessage: string | undefined
 	sameVaultWarning: string | undefined
 	trimmedLiquidationReceiverVault: string
 	trimmedLiquidationTargetVault: string
@@ -222,6 +234,8 @@ export function getLiquidationBlockers({
 		{ loading: true, reason: liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined },
 		{ loading: true, reason: liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.selectedPoolDetailsLoading : undefined },
 		{ reason: trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined },
+		{ loading: true, reason: loadingLiquidationTargetVaultSummary ? liquidationCopy.loadingTargetVault : undefined },
+		{ reason: liquidationTargetVaultSummaryError },
 		{ reason: trimmedLiquidationReceiverVault === '' ? liquidationCopy.receiverVaultRequired : undefined },
 		{ reason: trimmedLiquidationReceiverVault !== '' && tryParseAddressInput(trimmedLiquidationReceiverVault) === undefined ? liquidationCopy.receiverVaultAddressInvalid : undefined },
 		{ loading: delegatedReceiver && loadingLiquidationApproval, reason: delegatedApprovalReason },
@@ -236,6 +250,7 @@ export function getLiquidationBlockers({
 		{ loading: true, reason: liquidationExecutionMode === 'queue' && !liquidationFundingPreviewLoaded ? liquidationCopy.loadingQueueFunding : undefined },
 		{ reason: deterministicLiquidationReason },
 		{ reason: directLiquidationReason },
+		{ reason: queueLiquidationRepGuardMessage },
 		{ reason: queueLiquidationEthGuardMessage },
 	]
 }

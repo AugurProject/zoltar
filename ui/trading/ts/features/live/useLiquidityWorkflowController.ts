@@ -10,8 +10,8 @@ import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
 import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useTransactionSubmission } from './useTransactionSubmission.js'
 import { liquidityHoldingFeeBlocker } from '../../protocol/holdingFees.js'
-import { maximumAfterSlippage } from '../../protocol/tradeQuote.js'
-import { estimateLiquidity } from './liquidityEstimate.js'
+import { liquiditySlippageBounds } from '../../protocol/liquidity.js'
+import { estimateLiquidity, type LiquidityPreview } from './liquidityEstimate.js'
 
 export function liquidityOperationAvailable(operation: LiquidityOperation, market: LiveMarket, nowSeconds: bigint) {
 	return operation === 'remove' || marketAcceptsNewRisk(market, nowSeconds)
@@ -25,6 +25,12 @@ function poolInitialized(market: LiveMarket) {
 function defaultLiquidityOperation(market: LiveMarket, nowSeconds: bigint): LiquidityOperation {
 	if (!poolInitialized(market)) return 'initialize'
 	return marketAcceptsNewRisk(market, nowSeconds) ? 'add' : 'remove'
+}
+
+/** The previewed amounts a liquidity transaction approves; its signed bounds are these adjusted by the slippage setting. */
+function liquidityExpectation(estimate: LiquidityPreview) {
+	if (estimate.operation === 'remove') return { expectedLiquidity: 0n, expectedYes: estimate.yesOut, expectedNo: estimate.noOut, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
+	return { expectedLiquidity: estimate.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: estimate.yesUsed, expectedNoDeposit: estimate.noUsed }
 }
 
 export function useLiquidityWorkflowController({
@@ -71,11 +77,12 @@ export function useLiquidityWorkflowController({
 		failureFallback: liquidityCopy.transactionFailed,
 	})
 	const estimate = parsed === undefined ? undefined : estimateLiquidity(market, operation, parsed, conditionalBps)
+	const bounds = estimate === undefined ? undefined : liquiditySlippageBounds(liquidityExpectation(estimate), settings.slippageBps)
 	let previewBlocker: string | undefined
-	if (estimate === undefined) {
+	if (estimate === undefined || bounds === undefined) {
 		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
 	} else if (estimate.operation === 'add')
-		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, maximumAfterSlippage(estimate.yesUsed, settings.slippageBps), maximumAfterSlippage(estimate.noUsed, settings.slippageBps), capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
+		previewBlocker = liquidityHoldingFeeBlocker(market, estimate.amount, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,
 			noUsed: estimate.noUsed,
@@ -110,11 +117,7 @@ export function useLiquidityWorkflowController({
 					conditionalYesBps: conditionalBps ?? 5_000n,
 					deadline: { validityMinutes: settings.validityMinutes },
 					slippageBps: settings.slippageBps,
-					expectedLiquidity: estimate.operation === 'remove' ? 0n : estimate.liquidity,
-					expectedYes: estimate.operation === 'remove' ? estimate.yesOut : 0n,
-					expectedNo: estimate.operation === 'remove' ? estimate.noOut : 0n,
-					expectedYesDeposit: estimate.operation === 'remove' ? 0n : estimate.yesUsed,
-					expectedNoDeposit: estimate.operation === 'remove' ? 0n : estimate.noUsed,
+					...liquidityExpectation(estimate),
 				}
 			},
 			send: async (prepared, requestSignature) => {
@@ -140,6 +143,8 @@ export function useLiquidityWorkflowController({
 		conditionalBps,
 		operationAvailable,
 		estimate,
+		/** The minimums and maximums the transaction signs for this estimate, shown in the preview. */
+		bounds,
 		previewBlocker,
 		transaction,
 		selectOperation(next: LiquidityOperation) {

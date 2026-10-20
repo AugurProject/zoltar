@@ -4,15 +4,13 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
-import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
-import type { SecurityVaultFormState } from '../types/app.js'
-import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '../types/contracts.js'
+import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, TradingActionResult } from '../types/contracts.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 import { formatInitialReportPriorityFee, formatInitialReportPriorityFeeInput } from './security-pools/lib/priorityFee.js'
@@ -67,81 +65,6 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 
 export function createSecurityPoolCreationWarningPresentation(result: SecurityPoolCreationResult, message: string) {
 	return withWarning(createSecurityPoolCreationSuccessPresentation(result), message)
-}
-
-type SecurityVaultTransactionContext = {
-	repAmountAttoRep?: bigint | undefined
-	repTokenSymbol?: string | undefined
-	securityPoolAddress?: string | undefined
-	universeId?: bigint | undefined
-	vaultAddress?: string | undefined
-}
-
-function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContext | undefined) {
-	if (context === undefined) return undefined
-	return [
-		...(context.repAmountAttoRep === undefined ? [] : [{ label: commonCopy.amount, value: formatCurrencyBalanceWithUnit(context.repAmountAttoRep, context.repTokenSymbol ?? commonCopy.rep) }]),
-		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]),
-		...(context.vaultAddress === undefined || context.vaultAddress.trim() === '' ? [] : [{ label: securityPoolCopy.vault, value: <AddressValue address={context.vaultAddress} /> }]),
-	]
-}
-
-/** The REP a vault deposit or withdrawal moves, so its review and result state the amount, not only the addresses. */
-export function getSecurityVaultActionRepAmount(actionName: SecurityVaultActionResult['action'], form: Pick<SecurityVaultFormState, 'depositAmount' | 'repWithdrawAmount'>) {
-	let input: string | undefined
-	if (actionName === 'depositRepToVault') input = form.depositAmount
-	if (actionName === 'queueWithdrawRep') input = form.repWithdrawAmount
-	const amount = input === undefined ? undefined : tryParseRepAmountInput(input)
-	return amount !== undefined && amount > 0n ? amount : undefined
-}
-
-function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
-	if (actionName === 'setVaultUnderwritingLimit') return securityPoolCopy.setCommitmentLimit
-	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
-	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
-	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)
-	return humanizeTransactionAction(actionName)
-}
-
-export function createSecurityVaultTransactionIntent(actionName: SecurityVaultActionResult['action'], context?: SecurityVaultTransactionContext) {
-	return buildIntent({
-		action: actionName,
-		rows: getSecurityVaultTransactionRows(context),
-		scope: securityPoolTransactionScope(context?.securityPoolAddress),
-		source: 'security-vault',
-		submittedTitle: getSecurityVaultActionTitle(actionName, context?.repTokenSymbol),
-		universeId: context?.universeId,
-	})
-}
-
-export function createSecurityVaultSuccessPresentation(result: SecurityVaultActionResult, context?: SecurityVaultTransactionContext) {
-	// A staged operation that ran and reverted is a failure, not a completed vault action.
-	if (result.stagedExecution?.success === false) {
-		return buildPresentation({
-			detail: result.stagedExecution.errorMessage ?? securityPoolCopy.stagedOperationFailedDetail,
-			hash: result.hash,
-			rows: [...(getSecurityVaultTransactionRows(context) ?? []), { label: commonCopy.stagedOperation, value: `#${result.stagedExecution.operationId.toString()}` }],
-			title: getSecurityVaultActionTitle(result.action, context?.repTokenSymbol),
-			tone: 'error',
-			universeId: context?.universeId,
-		})
-	}
-	let queuedOperationDetail: string | undefined
-	if (result.queuedOperation !== undefined && result.stagedExecution === undefined) {
-		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedOperationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedOperationManualExecutionDetail(result.queuedOperation.operationId.toString())
-	}
-	return buildPresentation({
-		...(queuedOperationDetail === undefined ? {} : { detail: queuedOperationDetail }),
-		hash: result.hash,
-		rows: [...(getSecurityVaultTransactionRows(context) ?? []), ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
-		title: getSecurityVaultActionTitle(result.action, context?.repTokenSymbol),
-		tone: 'success',
-		universeId: context?.universeId,
-	})
-}
-
-export function createSecurityVaultWarningPresentation(result: SecurityVaultActionResult, message: string, context?: SecurityVaultTransactionContext) {
-	return withWarning(createSecurityVaultSuccessPresentation(result, context), message)
 }
 
 type TradingTransactionContext = PoolUniverseTransactionContext & {

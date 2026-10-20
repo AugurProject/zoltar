@@ -4,6 +4,7 @@ import type { ScannerLiveState } from './scanner-live-state.ts'
 import { decodeNetworkResponse } from './api-decoding.ts'
 import { isCurrentCanonicalGeneration } from './live-refresh.ts'
 import { nativeSymbolFor, unavailableNetworkNotice } from './network-freshness.ts'
+import { applyNetworkSelection, unappliedNetworkChoice } from './network-selection.ts'
 
 interface NetworkRouteDeps {
 	lookup: (selector: string) => HTMLElement
@@ -16,7 +17,8 @@ interface NetworkRouteDeps {
 	canonicalState: CanonicalState
 	api: (path: string) => Promise<unknown>
 	writeSnapshot: (snapshot: { items: NetworkRecord[]; freshnessThresholdMs?: number; clientClockOffsetMs: number; writtenAt: number }) => void
-	resetSelectedNetworkContext: () => void
+	/** Called after the applied network changed; block numbers are kept only when no network had been applied yet. */
+	resetSelectedNetworkContext: (options: { readonly keepBlockNumbers: boolean }) => void
 	renderNetworks: (items: NetworkRecord[]) => void
 	getLatestNetworks: () => NetworkRecord[]
 	updateFreshness: () => void
@@ -32,14 +34,15 @@ export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 		const chainId = selectedChainId()
 		if (chainId) url.searchParams.set('chainId', chainId)
 		else url.searchParams.delete('chainId')
-		history.replaceState(null, '', url)
+		// The periodic status poll calls this with an unchanged network; an unchanged URL and links are left alone.
+		if (url.href !== location.href) history.replaceState(null, '', url)
 		deps.setPageUrl(url)
-		for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a, .operations-nav a')) {
+		for (const link of document.querySelectorAll<HTMLAnchorElement>('.brand-block, .product-nav a, .operations-nav a')) {
 			const destination = new URL(link.href)
 			if (chainId) destination.searchParams.set('chainId', chainId)
 			else destination.searchParams.delete('chainId')
 			if (isDemo) destination.searchParams.set('demo', '1')
-			link.href = destination.href
+			if (link.href !== destination.href) link.href = destination.href
 		}
 	}
 
@@ -70,12 +73,14 @@ export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 
 	const reconcileNetworkOptions = (items: NetworkRecord[]) => {
 		const selected = selectedChainId()
-		globalNetworkFilter.replaceChildren(...items.map((network: { name: string; chain_id: string }) => new Option(network.name, network.chain_id)))
+		const unappliedChoice = unappliedNetworkChoice(globalNetworkFilter)
+		// Rebuilding unchanged options every poll would reset an open or keyboard-focused network picker.
+		const optionsChanged = globalNetworkFilter.options.length !== items.length || items.some((network, index) => globalNetworkFilter.options[index]?.value !== String(network.chain_id) || globalNetworkFilter.options[index]?.text !== network.name)
+		if (optionsChanged) globalNetworkFilter.replaceChildren(...items.map((network: { name: string; chain_id: string }) => new Option(network.name, network.chain_id)))
 		const selectedIsIndexed = [...globalNetworkFilter.options].some(option => option.value === selected)
-		globalNetworkFilter.value = selectedIsIndexed ? selected : String(items[0]?.chain_id ?? '')
+		applyNetworkSelection(globalNetworkFilter, selectedIsIndexed ? selected : String(items[0]?.chain_id ?? ''), unappliedChoice)
 		const shown = items[0]
 		if (selected !== '' && !selectedIsIndexed && shown !== undefined) showNetworkNotice(unavailableNetworkNotice(selected, shown.name))
-		globalNetworkFilter.dataset['restored'] = 'true'
 		syncNetworkUrl()
 		updateNetworkLabels()
 	}
@@ -112,7 +117,8 @@ export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 				if (freshnessThresholdMs !== undefined && Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) liveState.networkFreshnessThresholdMs = freshnessThresholdMs
 				const previousNetwork = selectedChainId()
 				reconcileNetworkOptions(items)
-				if (previousNetwork !== selectedChainId()) resetSelectedNetworkContext()
+				// A page opened without a chain adopts the default network, which its block numbers were written for; any later change is a switch.
+				if (previousNetwork !== selectedChainId()) resetSelectedNetworkContext({ keepBlockNumbers: previousNetwork === '' })
 				if (resumeGeneration === liveState.networkResumeGeneration) liveState.awaitingResumedNetworkStatus = false
 				liveState.lastNetworkRequestFailed = false
 				renderNetworks(items)

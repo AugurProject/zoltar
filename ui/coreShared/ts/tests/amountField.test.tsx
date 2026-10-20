@@ -57,7 +57,8 @@ describe('AmountField', () => {
 		const adornment = renderedComponent.container.querySelector('.form-input-adornment')
 		const hint = within(document.body).getByText('Balance: 1 200 REP', { selector: 'p.field-hint' })
 		expect(adornment?.textContent).toBe('REP')
-		expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([hint.id, adornment?.id])
+		// The balance hint already names the unit, so the hidden adornment is not read a second time.
+		expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([hint.id])
 		expect(input.getAttribute('aria-invalid')).toBeNull()
 	})
 
@@ -108,7 +109,7 @@ describe('AmountField', () => {
 	})
 
 	test('disables Max with a visible reason that describes the button instead of a hover title', async () => {
-		const renderedComponent = await renderIntoDocument(<Harness fillMax={{ amount: undefined, unavailableReason: 'Loading wallet balance.' }} label='Amount' />)
+		const renderedComponent = await renderIntoDocument(<Harness fillMax={{ amount: undefined, unavailableReason: 'Loading wallet balance.' }} label='Amount' percentPresets={[25, 50]} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const maxButton = within(document.body).getByRole('button', { name: 'Max' })
@@ -117,6 +118,12 @@ describe('AmountField', () => {
 		expect(maxButton.title).toBe('')
 		const reason = within(document.body).getByText('Loading wallet balance.', { selector: 'p.field-hint' })
 		expect(maxButton.getAttribute('aria-describedby')).toBe(reason.id)
+		// The percentage shortcuts are unavailable for the same reason, so they name it too.
+		for (const preset of within(document.body).getAllByRole('button', { name: /%$/ })) {
+			if (!(preset instanceof HTMLButtonElement)) throw new Error('Expected a button')
+			expect(preset.disabled).toBe(true)
+			expect(preset.getAttribute('aria-describedby')).toBe(reason.id)
+		}
 	})
 
 	test('leaves a Max reason the form already presents to the form', async () => {

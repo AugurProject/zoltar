@@ -1,6 +1,5 @@
 import * as pricingCopy from '@zoltar/ui-core-shared/copy/pricing.js'
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export const createPoolDescriptionLead = 'Set up a '
 export const createPoolDescriptionTail = ' for one question. Vaults secure it with REP; traders mint its shares with ETH.'
@@ -22,20 +21,13 @@ export const createQuestionAndPoolReviewTitle = 'Create question and security po
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
 export const badDebt = 'Bad debt'
-export const formatDepositRepToVault = (tokenSymbol: CopyTemplateValue) => `Deposit ${tokenSymbol}`
-export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositing ${tokenSymbol}…`
-export const depositRepToVaultDescription = 'Increase the vault’s collateral.'
 export const loadingVault = 'Loading vault details…'
 export const openPool = 'Open pool'
 export const formatOpenPoolLabel = (questionTitle: string, securityPoolAddress: string) => `Open pool: ${questionTitle} (${securityPoolAddress})`
-export const priceValidUntil = 'Price valid until'
 export const selectedVaultOwner = 'Vault owner address'
 export const missingVaultDetail = 'This vault does not exist.'
-export const missingVaultRepBalanceReason = 'No REP is available in the active universe. Obtain or migrate REP into this universe before creating a vault.'
 export const withdrawRep = 'Withdraw REP'
-export const formatWithdrawRep = (tokenSymbol: CopyTemplateValue) => `Withdraw ${tokenSymbol}`
 export const claimFees = 'Claim fees'
-export const claimFeesDescription = 'Paid to the vault owner.'
 export const escalationWithdrawalRequiredDetail = 'Settle escalation deposits before redeeming REP.'
 export const openInterestFeeYear = 'Open interest fee / year'
 export const totalPoolHeldAttoRep = 'Pool-held REP'
@@ -44,7 +36,13 @@ export const searchPools = 'Search or paste a pool address'
 export const sortPools = 'Sort'
 export const remainingCapacity = 'Remaining capacity'
 export const noFavoritePools = 'No favorite pools yet'
-export const noFavoritePoolsDetail = 'Open a pool by address to add it here.'
+export const noFavoritePoolsDetail = 'Pools you star or open appear here.'
+export const noFavoritePoolsWithDownloadsDetail = 'Star a downloaded pool, or open one, to keep it here.'
+export const showDownloadedPools = 'Show downloaded pools'
+export const noDownloadedPools = 'No downloaded pools yet'
+export const noSecurityPools = 'No pools yet'
+export const noSecurityPoolsDetail = 'Create the first pool for a question.'
+export const poolPageLoadError = 'Unable to load pools.'
 export const openPoolAtAddress = 'Open pool at this address'
 export const formatOtherUniversePoolsHidden = (count: CopyTemplateValue) => `${count} more in other universes.`
 export const formatPoolUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
@@ -122,9 +120,6 @@ export const activeUniverseSeparator = 'but the app is currently set to'
 export const universeMismatchDetail = 'Pool actions are locked until the app uses the same universe.'
 export const switchToPoolUniverse = 'Switch to pool universe'
 export const returnToCurrentUniverse = 'Return to current universe'
-export const refreshVaultActionsDetail = 'Refresh the vault to use these actions.'
-export const vaultMinimumLoading = 'Loading the pool minimum REP…'
-export const retryVaultActionsDetail = 'Retry loading the vault to use these actions.'
 export const invalidVaultAddressHint = 'Try another vault owner address.'
 export const forkAlreadyTriggeredSettlementReason = 'The universe fork has already been triggered for this pool. Continue in Fork & migration.'
 export const poolForkMigrationStatus = 'This pool has already entered Fork & migration.'
@@ -157,87 +152,23 @@ export const securityMultiplierInputUnit = 'times'
 export const stagedOperationFailedDetail = 'The staged operation did not execute.'
 export const claimableFees = 'Claimable fees'
 export const claimingFees = 'Claiming fees…'
-export const missingVaultDepositDetail = 'This vault does not exist. Deposit REP to create it.'
-export const formatRepDepositAmount = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} deposit amount`
-export const formatInsufficientRepBalanceDetail = (amount: string, tokenSymbol: CopyTemplateValue = commonCopy.rep) => `Insufficient ${tokenSymbol} balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0${tokenSymbol}.`
-export const connectWalletBeforeClaimingFees = commonCopy.formatConnectWalletBefore('claiming fees')
-export const connectWalletBeforeDepositingRep = commonCopy.formatConnectWalletBefore('depositing REP')
-export const connectWalletBeforeRedeemingRep = commonCopy.formatConnectWalletBefore('redeeming REP')
-export const connectWalletBeforeWithdrawingRep = commonCopy.formatConnectWalletBefore('withdrawing REP')
-export const selectOwnVaultToClaimFees = 'Select your own vault to claim fees.'
-export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.'
-export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'
-export const selectOwnVaultToWithdrawRep = 'Select your own vault to withdraw REP.'
 export const executionWindow = 'Execution window (minutes)'
 export const executionWindowHelpText = 'Queued operations expire 1–5 whole minutes after oracle settlement.'
 export const executionWindowRangeError = 'Enter an execution window of 1–5 whole minutes.'
 export const formatExecutionWindowResolvedDetail = (duration: string) => `Queued operations expire ${duration} after oracle settlement.`
 export const owned = 'Owned'
 export const readOnlyBadgeLabel = 'Read only'
-export const refreshingWithdrawalStatusDetail = 'Checking whether the withdrawal was queued or executed immediately.'
-export const refreshingWithdrawalState = 'Refreshing withdrawal status'
-export const repAvailableToQueue = 'REP available to queue'
-export const actionRejectedDetail = 'The security pool rejected the operation.'
-export const repWithdrawalExecuted = 'REP withdrawal executed'
-export const repWithdrawalFailed = 'REP withdrawal failed'
-export const immediateWithdrawalRejectedDetail = 'The withdrawal was attempted immediately, but the security pool rejected it.'
-export const repWithdrawalQueued = 'REP withdrawal queued'
-export const repWithdrawalSubmitted = 'REP withdrawal submitted'
-export const formatRedeemRepFromVault = (tokenSymbol: CopyTemplateValue) => `Redeem ${tokenSymbol}`
 export const formatRedeemingRep = (tokenSymbol: CopyTemplateValue) => `Redeeming ${tokenSymbol}…`
-export const redeemableAttoRep = 'Redeemable REP'
-export const repRedemptionDescription = 'Recover remaining REP after escalation deposits settle.'
-export const formatRepWithdrawAmount = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdrawal amount`
-export const repWithdrawal = 'REP withdrawal'
-export const repWithdrawalDescription = 'Executes immediately with a valid oracle price; otherwise queued.'
-export const selectedVaultDetailsUnavailable = 'Selected vault details are unavailable.'
 export const associatedRepPerCapacity = 'Associated backing ratio'
 export const poolHeldRepPerCapacity = 'Pool-held REP per committed ETH'
 export const vaultHealthHealthy = 'Healthy'
 export const vaultHealthNearMinimum = 'Near minimum'
 export const vaultHealthUnderwater = 'Underwater'
-export const securityVault = 'Security vault'
-export const immediateWithdrawalSuccessDetail = 'A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.'
-export const vault = 'Vault'
 export const noClaimableFeesReason = 'No fees are available to claim.'
-export const vaultActions = 'Vault actions'
-export const vaultActionsEndedDetail = 'REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.'
-export const vaultActionsForkMigrationDetail = 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.'
-export const vaultActionsTruthAuctionDetail = 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.'
-export const vaultDepositAdmissionClosedDetail = 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.'
-export const vaultLookup = 'Vault lookup'
-export const vaultMissing = 'Vault missing'
-export const vaultSummary = 'Vault summary'
-export const withdrawableAttoRep = 'Withdrawable REP'
-export const formatWithdrawingRep = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}…`
 
 export const setCommitmentLimit = 'Set commitment limit'
-export const settingCommitmentLimit = 'Setting commitment limit'
-export const settingCommitmentLimitPending = 'Setting commitment limit…'
-export const minimumBackingRatio = 'Minimum backing ratio'
-export const commitmentLimitHelpText = 'The most ETH of open interest your vault agrees to back. Depositing REP does not change it.'
-export const queueCommitmentChangeFundingAction = 'queue this commitment limit change'
-export const setCommitmentLimitDescription = 'Set your standing ETH commitment limit.'
 export const currentCommitment = 'Current commitment'
-export const resultingCommitment = 'Resulting commitment'
 export const commitmentLimit = 'Commitment limit'
-
-export const commitmentLimitChangeQueued = 'Commitment limit change queued'
-export const commitmentLimitChangeExecuted = 'Commitment limit changed'
-export const commitmentLimitChangeFailed = 'Commitment limit change failed'
-export const commitmentLimitChangeSubmitted = 'Commitment limit change submitted'
-export const refreshingCommitmentStatus = 'Refreshing commitment status'
-export const refreshingCommitmentStatusDetail = 'Checking the commitment limit change result.'
-export const commitmentLimitChangeSuccessDetail = 'The commitment limit has been updated. REP deposits leave this limit unchanged.'
-export const queuedVaultAutomaticExecution = 'Executes automatically when the oracle report settles.'
-
-export const queuedVaultOperationExpired = 'Queued operation expired'
-export const queuedVaultOperationExpiredDetail = 'The execution window ended before this operation completed.'
-export const queuedVaultOperationSuperseded = 'Commitment limit change replaced'
-export const queuedVaultOperationSupersededDetail = 'A newer commitment limit change replaced this request.'
-
-export const queuedVaultOperationManualRefreshDetail = 'If this operation is still pending, execute it manually after a valid oracle price is available.'
-export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
 
 export const operationDetails = 'Operation details'
 export const openOperationById = 'Open operation by ID'
@@ -247,34 +178,15 @@ export const manualInitialPriceError = 'Enter a positive initial report price.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
 
-export const oracleOperationExecutesImmediately = 'Executes immediately with the current oracle price.'
-export const oracleOperationQueuesForSettlement = 'Queues for execution after oracle settlement.'
-export const oracleOperationMayNeedManualExecution = 'Queues; manual execution may be needed after oracle settlement.'
-export const oracleOperationExecutionLoading = 'Checking whether this operation will execute immediately or queue.'
-
 export const liquidationWalletRequiredReason = 'Connect a wallet to liquidate a vault.'
-export const withdrawalUnavailableReason = 'REP withdrawal is unavailable in this pool state.'
-export const redemptionUnavailableReason = 'REP redemption is unavailable in this pool state.'
-export const noWithdrawableRepReason = 'No REP is available to withdraw.'
-
-export const maximumHealthyCommitment = 'Maximum before liquidation'
-export const commitmentUnchanged = 'Enter a commitment limit different from the current one.'
-export const commitmentPriceUnavailable = 'A REP price is needed to estimate a liquidation-safe maximum.'
-export const commitmentRiskAtOraclePriceWarning = 'This limit would make your vault liquidatable at the current OpenOracle price.'
-export const commitmentRiskAtUiPriceWarning = 'This limit would make your vault liquidatable at the selected UI price. The execution price may differ.'
-export const commitmentRiskAcknowledgement = 'I understand that my vault could be liquidated immediately.'
-export const commitmentRiskRequired = 'Confirm the immediate liquidation risk to continue.'
-export const commitmentDirectExitDetail = 'The question has resolved, so this change goes straight to the pool without an oracle price. Commitments can only be lowered now; set 0 ETH to unlock REP redemption.'
-export const commitmentIncreaseAfterResolutionError = 'Commitments can only be lowered after the question resolves.'
-export const formatWithdrawEntireVaultNotice = (minimum: CopyTemplateValue) => `This leaves less than the ${minimum} vault minimum, so the whole vault is withdrawn instead.`
 export const customApprovalAmountDisclosure = 'Advanced: custom approval amount'
 
 export const questionEndedReason = 'This question has already ended.'
 
-export const commitmentNeedsOracleReport = 'A new OpenOracle report is needed to change the commitment limit. Set its initial price and fund the report when submitting the change.'
-export const vaultActionsNeedOracleReport = 'A valid OpenOracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.'
 export const openPriceOracle = 'Open price oracle'
 
+export const oracleOperationPreparing = 'Preparing the transaction steps…'
+export const oracleOperationPreparationFailed = 'Preparing the transaction steps failed. Retry to continue.'
 export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires within a minute, before this transaction could confirm. Wait about a minute for it to expire, then submit again and fund a new oracle report.'
 export const formatOracleOperationPriceExpiresTooSoon = (seconds: bigint) => {
 	const duration = seconds === 1n ? '1 second' : `${seconds.toString()} seconds`

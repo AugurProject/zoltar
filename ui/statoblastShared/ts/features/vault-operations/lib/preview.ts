@@ -5,7 +5,11 @@ import { getSecurityVaultWithdrawableRepAmount, getVaultBackingFactorAdjustmentG
 import * as copy from '../../../copy/vaultOperations.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
 
-export function previewVaultOperations(pool: ListedSecurityPool, owned: SecurityVaultDetails, targets: SecurityPoolVaultSummary[], input: VaultOperationsInput, price: bigint, minLiquidationPriceDistanceBps?: bigint, isPriceValid = true) {
+/**
+ * `price` is the price the bundle executes or proposes. Commitment and withdrawal coverage are checked at it unless
+ * `enforceCoverage` is false, which callers pass only while that price is unknown and `price` is an estimate.
+ */
+export function previewVaultOperations(pool: ListedSecurityPool, owned: SecurityVaultDetails, targets: SecurityPoolVaultSummary[], input: VaultOperationsInput, price: bigint, minLiquidationPriceDistanceBps?: bigint, enforceCoverage = true) {
 	let receiver: SecurityPoolVaultSummary = {
 		vaultAddress: owned.vaultAddress,
 		vaultAttoRepBacking: owned.vaultAttoRepBacking + input.depositAttoRep,
@@ -18,7 +22,7 @@ export function previewVaultOperations(pool: ListedSecurityPool, owned: Security
 		const reason = getVaultBackingFactorAdjustmentGuard(
 			{ ...owned, vaultAttoRepBacking: receiver.vaultAttoRepBacking, totalUnderwritingLimitAttoEth: pool.totalUnderwritingLimitAttoEth, settlementCollateralAttoEth: pool.settlementCollateralAttoEth },
 			input.commitmentAttoEth,
-			isPriceValid ? price : undefined,
+			enforceCoverage ? price : undefined,
 			pool.statoblastSecurityMultiplierBps,
 		)
 		if (reason !== undefined) throw new Error(reason)
@@ -59,7 +63,7 @@ export function previewVaultOperations(pool: ListedSecurityPool, owned: Security
 	})
 	if (input.withdrawAttoRep > 0n) {
 		if (receiver.disputeStakedAttoRep > 0n) throw new Error(copy.withdrawEscrow)
-		if (isPriceValid && withdrawable !== undefined && input.withdrawAttoRep > withdrawable) throw new Error(copy.withdrawCoverage)
+		if (enforceCoverage && withdrawable !== undefined && input.withdrawAttoRep > withdrawable) throw new Error(copy.withdrawCoverage)
 	}
 	const afterRequestedWithdrawal = receiver.vaultAttoRepBacking - input.withdrawAttoRep
 	const backing = input.withdrawAttoRep > 0n && afterRequestedWithdrawal < (owned.minimumVaultRepDepositAttoRep ?? 0n) ? 0n : afterRequestedWithdrawal

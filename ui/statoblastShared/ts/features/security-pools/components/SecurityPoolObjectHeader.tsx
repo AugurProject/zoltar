@@ -23,7 +23,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { getFinalizedTruthAuctionRaisedAttoEth } from '../../truth-auctions/lib/truthAuctionBook.js'
+import { getTruthAuctionOverviewProgress } from '../../truth-auctions/lib/truthAuctionBook.js'
 import { isMigrationClosed } from '../../../protocol/forkMigrationTiming.js'
 import { hasTruthAuctionEnded } from '../../../protocol/truthAuctionTiming.js'
 import { formatPercentOfLimit, getPoolStripStage, type PoolForkTimeline } from '../lib/poolStrip.js'
@@ -87,9 +87,9 @@ function getTruthAuctionProgressDetail(auction: TruthAuctionMetrics, amountAttoE
 	return percent === undefined ? undefined : copy.formatShareOfTarget(percent)
 }
 
-/** What the auction raises against its target: the clearing amount, capped at the target, until it finalizes, then what it raised. */
+/** What the auction raises against its target, by the same rule as the auction card: the finalization preview until it finalizes, then what it raised. */
 function TruthAuctionProgressFigure({ auction }: { auction: TruthAuctionMetrics }) {
-	const amountAttoEth = auction.finalized ? getFinalizedTruthAuctionRaisedAttoEth(auction) : auction.accumulatedBidAttoEth
+	const amountAttoEth = getTruthAuctionOverviewProgress(auction)?.attoEthRaised ?? 0n
 	return (
 		<div className='pool-meter'>
 			<ProgressMeter label={forkAuctionCopy.attoEthRaised} maxValue={auction.attoEthRaiseCap} value={amountAttoEth} valueText={<AmountOfLimit amount={amountAttoEth} limit={auction.attoEthRaiseCap} />} detail={getTruthAuctionProgressDetail(auction, amountAttoEth)} />

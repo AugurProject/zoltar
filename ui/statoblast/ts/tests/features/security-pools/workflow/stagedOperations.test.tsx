@@ -16,7 +16,6 @@ installTestRouting()
 describe('SecurityPoolWorkflowSection: staged operations', () => {
 	const { renderWorkflow, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
 	const managedPool = () => createSelectedPool({ managerAddress: zeroAddress })
-	const validPriceWithoutPendingOperation = () => createOracleManagerDetails({ isPriceValid: true, pendingOperation: undefined, pendingOperationSlotId: 0n })
 	const liquidationTargetProps = { liquidationManagerAddress: zeroAddress, liquidationSecurityPoolAddress: zeroAddress, liquidationTargetVault: zeroAddress } as const
 	const immediateLiquidationOracle = () => createOracleManagerDetails({ isPriceValid: true, managerAddress: zeroAddress, pendingOperation: undefined })
 	const liquidationFailure = (operationId: bigint) => ({ errorMessage: 'Local Underwriting commitments broken', operation: 'liquidation', operationId, success: false }) as const
@@ -65,19 +64,6 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(card?.textContent).toContain('Can settle in 9s')
 		})
 	})
-
-	const openWithdrawDialog = async (poolOracleManagerDetails: SecurityPoolWorkflowRouteContentProps['poolOracleManagerDetails'], securityVault: Partial<SecurityVaultRouteContentProps>) => {
-		await renderSelectedPool({
-			poolOracleManagerDetails,
-			securityVault: createSecurityVaultProps({ securityVaultDetails: createSecurityVaultDetails(), securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '1' }), ...securityVault }),
-			selectedPoolView: 'vaults',
-		})
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
-		})
-		return within(documentQueries.getByRole('dialog', { name: 'Withdraw REP' }))
-	}
 
 	const getLiquidationDialog = () => within(within(document.body).getByRole('dialog', { name: 'Execute vault liquidation' }))
 
@@ -194,89 +180,6 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(loadPoolOracleManagerCalls).toEqual([])
 		})
 
-		test('refreshes staged operations after queueing a vault withdrawal', async () => {
-			const loadPoolOracleManagerCalls: string[] = []
-			const managerAddress = '0x00000000000000000000000000000000000000aa'
-			await renderSelectedPool({
-				onLoadPoolOracleManager: managerAddressInput => {
-					loadPoolOracleManagerCalls.push(managerAddressInput)
-				},
-				poolOracleManagerDetails: createOracleManagerDetails({ managerAddress }),
-				securityPools: [createSelectedPool({ managerAddress })],
-				securityVault: createSecurityVaultProps({
-					securityVaultResult: {
-						action: 'queueWithdrawRep',
-						hash: '0x00000000000000000000000000000000000000000000000000000000000000bb',
-						stagedExecution: { errorMessage: undefined, operation: 'withdrawRep', operationId: 7n, success: true },
-					},
-				}),
-			})
-
-			expect(loadPoolOracleManagerCalls).toEqual([managerAddress])
-		})
-
-		test('keeps the withdraw modal open and links to the queued staged operation', async () => {
-			const selectedViews: string[] = []
-			await renderSelectedPool({
-				onSelectedPoolViewChange: view => {
-					selectedViews.push(view ?? '')
-				},
-				poolOracleManagerDetails: createOracleManagerDetails({
-					pendingOperation: { amount: 5n * 10n ** 18n, operator: zeroAddress, operation: 'withdrawRep', operationId: 7n, targetVault: zeroAddress },
-					pendingOperationSlotId: 7n,
-				}),
-				securityVault: createSecurityVaultProps({
-					securityVaultDetails: createSecurityVaultDetails(),
-					securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '1' }),
-					securityVaultResult: { action: 'queueWithdrawRep', hash: '0x00000000000000000000000000000000000000000000000000000000000000bb' },
-				}),
-				selectedPoolView: 'vaults',
-			})
-
-			const documentQueries = within(document.body)
-			expect(documentQueries.queryByText('A REP withdrawal was queued for the selected vault.')).toBeNull()
-			expect(documentQueries.queryByText('Next: Review the queued entry in Staged operations and execute it when the oracle price is valid.')).toBeNull()
-
-			await act(() => {
-				fireEvent.click(documentQueries.getAllByRole('button', { name: 'Withdraw REP' })[0] as HTMLElement)
-			})
-
-			const dialogQueries = within(documentQueries.getByRole('dialog', { name: 'Withdraw REP' }))
-			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
-			expect(dialogQueries.getByText('#7')).not.toBeNull()
-			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' }).closest('.actions')).toBeNull()
-
-			await act(() => {
-				fireEvent.click(dialogQueries.getByRole('button', { name: 'View in staged operations' }))
-			})
-
-			expect(selectedViews).toEqual(['staged-operations'])
-			expect(dialogQueries.getByRole('heading', { name: 'Withdraw REP' })).not.toBeNull()
-			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
-		})
-
-		test('shows manual execution guidance for overflow queued withdrawals', async () => {
-			const dialogQueries = await openWithdrawDialog(
-				createOracleManagerDetails({
-					isPriceValid: false,
-					pendingOperation: { amount: 3n * 10n ** 18n, operator: zeroAddress, operation: 'liquidation', operationId: 6n, targetVault: '0x0000000000000000000000000000000000000001' },
-					pendingOperationSlotId: 6n,
-				}),
-				{
-					securityVaultResult: {
-						action: 'queueWithdrawRep',
-						hash: '0x00000000000000000000000000000000000000000000000000000000000000bc',
-						queuedOperationState: { status: 'manual-queued' },
-						queuedOperation: { isPendingSlot: false, operation: 'withdrawRep', operationId: 11n },
-					},
-				},
-			)
-
-			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal queued' })).not.toBeNull()
-			expect(dialogQueries.getByText('#11')).not.toBeNull()
-			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
-		})
-
 		test('explains automatic execution while the queued operation waits for oracle settlement', async () => {
 			await renderSelectedPool({
 				poolOracleManagerDetails: createOracleManagerDetails({
@@ -333,35 +236,6 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(document.body.textContent).toContain('Request a new price in Price oracle before executing this operation.')
 		})
 
-		test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {
-			const dialogQueries = await openWithdrawDialog(validPriceWithoutPendingOperation(), {
-				securityVaultResult: {
-					action: 'queueWithdrawRep',
-					stagedExecution: { operation: 'withdrawRep', operationId: 0n, success: true },
-					hash: '0x00000000000000000000000000000000000000000000000000000000000000bb',
-				},
-			})
-
-			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal executed' })).not.toBeNull()
-			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
-			expect(dialogQueries.getByText('A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.')).not.toBeNull()
-		})
-
-		test('shows withdraw failure details when the staged execution event reports a rejection', async () => {
-			const dialogQueries = await openWithdrawDialog(validPriceWithoutPendingOperation(), {
-				securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '10000' }),
-				securityVaultResult: {
-					action: 'queueWithdrawRep',
-					hash: '0x00000000000000000000000000000000000000000000000000000000000000be',
-					stagedExecution: { errorMessage: 'Local Underwriting commitments broken', operation: 'withdrawRep', operationId: 8n, success: false },
-				},
-			})
-
-			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Underwriting commitments broken')).not.toBeNull()
-			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
-		})
-
 		test('shows liquidation successful in the selected pool workflow after an immediate execution', async () => {
 			await renderSelectedPool({
 				...liquidationTargetProps,
@@ -393,17 +267,6 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 
 	describe('refresh side effects', () => {
 		test.each<[string, Parameters<typeof renderRefreshScenario>[0], Array<string | undefined>]>([
-			[
-				'refreshes the selected pool and loaded vault after an immediate REP withdrawal execution',
-				{
-					poolOracleManagerDetails: validPriceWithoutPendingOperation(),
-					securityVault: {
-						securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '1' }),
-						securityVaultResult: { action: 'queueWithdrawRep', hash: '0x00000000000000000000000000000000000000000000000000000000000000dd' },
-					},
-				},
-				[undefined],
-			],
 			[
 				'refreshes the selected pool and loaded vault after withdrawing escalation deposits from reporting',
 				{
@@ -469,7 +332,6 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 		})
 
 		test.each<[string, Parameters<typeof renderRefreshScenario>[0]]>([
-			['refreshes loaded reporting after depositing REP into the selected vault', { securityVault: { securityVaultForm: createSecurityVaultProps().securityVaultForm, securityVaultResult: { action: 'depositRepToVault', hash: '0x00000000000000000000000000000000000000000000000000000000000000df' } } }],
 			[
 				'refreshes loaded reporting after executing a staged REP withdrawal',
 				{
@@ -478,7 +340,6 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 						hash: '0x00000000000000000000000000000000000000000000000000000000000000cf',
 						stagedExecution: { errorMessage: undefined, operation: 'withdrawRep', operationId: 15n, success: true },
 					},
-					securityVault: { securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '1' }) },
 				},
 			],
 		])('%s', async (_name, scenario) => {

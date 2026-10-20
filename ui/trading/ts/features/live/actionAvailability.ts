@@ -1,6 +1,9 @@
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
+import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { LiquidityOperation } from '../../protocol/live.js'
+import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import * as copy from '../../copy/availability.js'
 import type { BalanceState } from './liveTradingTypes.js'
 
@@ -39,6 +42,24 @@ function insufficientReason(requested: bigint | undefined, available: bigint | u
 	return requested > available ? reason : undefined
 }
 
+/**
+ * Why the wallet cannot fund a liquidity amount: removals spend LP tokens; deposits spend ETH and, like trades, leave
+ * the gas reserve in the wallet so the transaction can still be sent.
+ */
+export function liquidityShortfallReason(operation: LiquidityOperation, requested: bigint | undefined, walletEthAttoEth: bigint | undefined, lpBalance: bigint | undefined) {
+	if (operation === 'remove') return insufficientReason(requested, lpBalance, copy.insufficientLpReason)
+	if (requested === undefined || walletEthAttoEth === undefined) return undefined
+	if (requested > walletEthAttoEth) return copy.insufficientEthReason
+	if (requested > getSpendableEthBalance(walletEthAttoEth)) return copy.gasReserveReason(formatTrimmedUnits(ETH_GAS_RESERVE_ATTO_ETH))
+	return undefined
+}
+
+/** A deposit cannot be checked against an ETH balance that has not loaded, so it waits for the balance or says it is unavailable. */
+function unknownEthReason({ operation, walletEthAttoEth, walletEthStatus }: Pick<LiquidityAvailabilityInputs, 'operation' | 'walletEthAttoEth' | 'walletEthStatus'>) {
+	if (operation === 'remove' || walletEthAttoEth !== undefined) return undefined
+	return walletEthStatus === 'error' ? copy.balancesUnavailableReason : copy.balancesLoadingReason
+}
+
 /** Adding liquidity to a closed market can still be undone by removing it; creating a closed market cannot happen at all. */
 function closedLiquidityReason({ operation, marketClosed, newRiskBlocker }: Pick<LiquidityAvailabilityInputs, 'operation' | 'marketClosed' | 'newRiskBlocker'>) {
 	if (operation === 'remove' || !marketClosed) return undefined
@@ -67,21 +88,25 @@ export type LiquidityAvailabilityInputs = WalletInputs &
 		submissionBlocker?: string | undefined
 		/** Initialize and add: ETH to deposit. Remove: LP tokens to burn. */
 		requestedAmount: bigint | undefined
+		/** Why the typed amount cannot be read, such as a stray separator; it replaces the generic missing-amount reason. */
+		amountError?: string | undefined
 		walletEthAttoEth: bigint | undefined
+		/** The wallet ETH read behind `walletEthAttoEth`, so an unknown balance waits or reports the failed read. */
+		walletEthStatus: WalletSummaryState['status']
 		lpBalance: bigint | undefined
 		initializePriceValid: boolean
 	}>
 
 export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs): ActionAvailability {
-	const insufficient = inputs.operation === 'remove' ? insufficientReason(inputs.requestedAmount, inputs.lpBalance, copy.insufficientLpReason) : insufficientReason(inputs.requestedAmount, inputs.walletEthAttoEth, copy.insufficientEthReason)
 	return withLoading(
 		createActionAvailability(
 			walletReason(inputs),
 			closedLiquidityReason(inputs),
 			inputs.submissionBlocker,
 			balanceReason(inputs),
-			insufficient,
-			copy.amountReason(inputs.requestedAmount),
+			unknownEthReason(inputs),
+			liquidityShortfallReason(inputs.operation, inputs.requestedAmount, inputs.walletEthAttoEth, inputs.lpBalance),
+			inputs.amountError ?? copy.amountReason(inputs.requestedAmount),
 			inputs.operation === 'initialize' && !inputs.initializePriceValid ? copy.initializePriceInvalidReason : undefined,
 			workflowReason(inputs),
 			inputs.previewBlocker,

@@ -104,7 +104,19 @@ function exitPosition(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpT
 }
 
 function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
-	return leftover.some(amount => amount > 0n && attoSharesToCollateralAttoEth(amount, market) >= DISPLAY_DUST_ATTO_ETH)
+	return leftover.some(amount => amount > 0n && !isDust(amount, market))
+}
+
+/** Shares that pay less than the smallest displayed ETH amount even if their outcome wins are rounding dust, not something to act on. */
+function isDust(attoShares: bigint, market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
+	return attoSharesToCollateralAttoEth(attoShares, market) < DISPLAY_DUST_ATTO_ETH
+}
+
+/** LP whose larger reserve claim is dust is a rounding remainder; withdrawing it is not worth an action item. */
+function holdsLiquidity(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpTotalSupply' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>, lp: bigint) {
+	if (lp === 0n) return false
+	const claims = lpReserveClaims(market, lp)
+	return !isDust(claims.yes > claims.no ? claims.yes : claims.no, market)
 }
 
 /** Winning shares, including the winning side of the account's LP claim, once the question has resolved. */
@@ -153,14 +165,17 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	// While trading is open, exits replace redemption; the settlement workspace opens once the market closes.
 	const canRedeem = state !== 'open' && (availability.canRedeemWinningShares || availability.canRedeemCompleteSets)
 	const item = (kind: PortfolioActionKind, action: PortfolioAction, deadline: bigint | undefined = undefined): PortfolioActionItem => ({ kind, action, pool: market.pool, deadline, sellSide })
+	// Dust stays redeemable and withdrawable from the row, but rounding remainders never keep a position in "Needs attention".
+	const redemptionNeedsAttention = canRedeem && ((availability.canRedeemWinningShares && !isDust(availability.winningBalance, market)) || (availability.canRedeemCompleteSets && !isDust(availability.completeSets, market)))
+	const liquidityNeedsAttention = holdsLiquidity(market, balances.lp)
 	const actionItems: PortfolioActionItem[] = []
-	if (canRedeem) actionItems.push(item('redeem', 'redeem'))
+	if (redemptionNeedsAttention) actionItems.push(item('redeem', 'redeem'))
 	// A balance migrated into a child universe stays locked in the wallet; once every held share has a migration it no longer needs attention.
 	if (state === 'settlement-required' && availability.canMigrateShares && !forkMigrationSettled(balances)) actionItems.push(item('settle', 'settle'))
-	if (state !== 'open' && balances.lp > 0n) actionItems.push(item('withdraw-liquidity', 'withdraw-liquidity'))
+	if (state !== 'open' && liquidityNeedsAttention) actionItems.push(item('withdraw-liquidity', 'withdraw-liquidity'))
 	const closesSoon = state === 'open' && market.endTime > nowSeconds && market.endTime - nowSeconds <= TRADING_CLOSES_SOON_SECONDS
 	if (closesSoon && canSell) actionItems.push(item('trading-closes', 'sell', market.endTime))
-	else if (closesSoon && balances.lp > 0n) actionItems.push(item('trading-closes', 'withdraw-liquidity', market.endTime))
+	else if (closesSoon && liquidityNeedsAttention) actionItems.push(item('trading-closes', 'withdraw-liquidity', market.endTime))
 	return { entry, state, valuation, canSell, sellSide, canRedeem, actionItems }
 }
 

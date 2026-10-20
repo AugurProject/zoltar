@@ -56,6 +56,8 @@ export type OpenOracleDisputeSubmissionDetails = {
 	token2Approval: TokenApprovalRequirement
 	token2ContributionAmount: bigint | undefined
 	token2Decimals: number | undefined
+	/** The ETH-to-WETH wrap step before the approvals; undefined when neither report token is WETH. `amountAttoEth` is the WETH the wallet lacks for this dispute. */
+	wethWrap: { amountAttoEth: bigint | undefined; blockMessage: OpenOracleGateMessage | undefined } | undefined
 }
 export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to settle report') {
 	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)

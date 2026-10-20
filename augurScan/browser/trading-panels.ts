@@ -35,54 +35,57 @@ const shareUnit = (item: JsonRecord): string => {
 }
 
 /** @internal Exported for presentation unit tests. */
-export const tradingActivitySummary = (item: JsonRecord): string => {
+export const tradingActivitySummary = (item: JsonRecord, nativeSymbol: string): string => {
 	const parts = [exactUnit(text(item['shares']) ?? '0', 18, shareUnit(item))]
 	const ethIn = text(item['eth_in_atto_eth'])
 	const ethOut = text(item['eth_out_atto_eth'])
-	if (ethIn !== undefined && ethIn !== '0') parts.push(`${exactUnit(ethIn, 18, 'ETH')} paid`)
-	else if (ethOut !== undefined && ethOut !== '0') parts.push(`${exactUnit(ethOut, 18, 'ETH')} received`)
-	else parts.push('No ETH moved')
+	if (ethIn !== undefined && ethIn !== '0') parts.push(`${exactUnit(ethIn, 18, nativeSymbol)} paid`)
+	else if (ethOut !== undefined && ethOut !== '0') parts.push(`${exactUnit(ethOut, 18, nativeSymbol)} received`)
+	else parts.push(`No ${nativeSymbol} moved`)
 	const seconds = text(item['timestamp_seconds'])
 	if (seconds !== undefined) parts.push(utcDateTime(Number(seconds) * 1000))
 	return parts.join(' · ')
 }
 
-export const tradingVolumeRows = (summary: JsonRecord, { operationRow, operationCounted }: { readonly operationRow: Components['operationRow']; readonly operationCounted: (value: unknown, singular: string, plural?: string) => string }) => [
-	operationRow('24-hour ETH volume', `${exactUnit(text(summary['eth_volume_24h_atto_eth']) ?? '0', 18, 'ETH')} · ${operationCounted(summary['eth_trade_count_24h'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
-	operationRow('Seven-day ETH volume', exactUnit(text(summary['eth_volume_7d_atto_eth']) ?? '0', 18, 'ETH'), undefined, undefined),
-	operationRow('All-time ETH volume', `${exactUnit(text(summary['eth_volume_atto_eth']) ?? '0', 18, 'ETH')} · ${operationCounted(summary['eth_trade_count'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
+export const tradingVolumeRows = (summary: JsonRecord, { operationRow, operationCounted, nativeSymbol }: { readonly operationRow: Components['operationRow']; readonly operationCounted: (value: unknown, singular: string, plural?: string) => string; readonly nativeSymbol: string }) => [
+	operationRow('24-hour volume', `${exactUnit(text(summary['eth_volume_24h_atto_eth']) ?? '0', 18, nativeSymbol)} · ${operationCounted(summary['eth_trade_count_24h'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
+	operationRow('Seven-day volume', exactUnit(text(summary['eth_volume_7d_atto_eth']) ?? '0', 18, nativeSymbol), undefined, undefined),
+	operationRow('All-time volume', `${exactUnit(text(summary['eth_volume_atto_eth']) ?? '0', 18, nativeSymbol)} · ${operationCounted(summary['eth_trade_count'], 'enter or exit', 'enters and exits')}`, undefined, undefined),
 ]
 
-export const tradingActivityPanel = (activity: unknown, { operationRow, operationsPanel, operationsHref }: { readonly operationRow: Components['operationRow']; readonly operationsPanel: Components['operationsPanel']; readonly operationsHref: (pathname: string) => string }) => {
+export const tradingActivityPanel = (
+	activity: unknown,
+	{ operationRow, operationsPanel, operationsHref, nativeSymbol }: { readonly operationRow: Components['operationRow']; readonly operationsPanel: Components['operationsPanel']; readonly operationsHref: (pathname: string) => string; readonly nativeSymbol: string },
+) => {
 	const page = isRecord(activity) ? activity : {}
 	const items = operationRecords(page['items'])
 	return operationsPanel(
 		'Recent market activity',
-		items.map(item => operationRow(tradingActivityTitle(item), tradingActivitySummary(item), String(item['account'] ?? ''), item['block_number'], operationsHref(`/tx/${String(item['tx_hash'] ?? '')}`))),
+		items.map(item => operationRow(tradingActivityTitle(item), tradingActivitySummary(item, nativeSymbol), String(item['account'] ?? ''), item['block_number'], operationsHref(`/tx/${String(item['tx_hash'] ?? '')}`))),
 		'No trading activity is indexed for this market.',
 		{ label: `Indexed trades, liquidity, and redemptions${page['hasMore'] === true ? ` · latest ${items.length} shown` : ''}` },
 	)
 }
 
-const signedEth = (value: unknown): string => {
+const signedEth = (value: unknown, nativeSymbol: string): string => {
 	const amount = text(value)
 	if (amount === undefined) return 'unavailable'
-	return `${amount.startsWith('-') || amount === '0' ? '' : '+'}${exactUnit(amount, 18, 'ETH')}`
+	return `${amount.startsWith('-') || amount === '0' ? '' : '+'}${exactUnit(amount, 18, nativeSymbol)}`
 }
 
 /** @internal Exported for presentation unit tests. */
-export const tradingPnlSummary = (item: JsonRecord): string => {
+export const tradingPnlSummary = (item: JsonRecord, nativeSymbol: string): string => {
 	const valuation = isRecord(item['valuation']) ? item['valuation'] : {}
-	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', 18, 'ETH')} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
+	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', 18, nativeSymbol)} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
 	const reason = String(valuation['reason'] ?? 'no valuation')
 	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${reason.charAt(0).toLowerCase()}${reason.slice(1)})`
 	return [
-		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', 18, 'ETH')} paid in`,
-		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', 18, 'ETH')} received`,
+		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', 18, nativeSymbol)} paid in`,
+		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', 18, nativeSymbol)} received`,
 		holdings,
-		`realized ${signedEth(item['realized_pnl_atto_eth'])}`,
-		`unrealized ${signedEth(item['unrealized_pnl_atto_eth'])}`,
-		`net ${signedEth(item['net_pnl_atto_eth'])}`,
+		`realized ${signedEth(item['realized_pnl_atto_eth'], nativeSymbol)}`,
+		`unrealized ${signedEth(item['unrealized_pnl_atto_eth'], nativeSymbol)}`,
+		`net ${signedEth(item['net_pnl_atto_eth'], nativeSymbol)}`,
 	].join(' · ')
 }
 
@@ -99,13 +102,20 @@ export const tradingPnlPanel = (
 		operationsPanel,
 		operationsHref,
 		element,
-	}: { readonly operationRow: Components['operationRow']; readonly operationsPanel: Components['operationsPanel']; readonly operationsHref: (pathname: string) => string; readonly element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K] },
+		nativeSymbol,
+	}: {
+		readonly operationRow: Components['operationRow']
+		readonly operationsPanel: Components['operationsPanel']
+		readonly operationsHref: (pathname: string) => string
+		readonly element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K]
+		readonly nativeSymbol: string
+	},
 ) => {
 	const record = isRecord(pnl) ? pnl : {}
 	const panel = operationsPanel(
 		'Trading profit and loss',
 		operationRecords(record['items']).map(item => {
-			const row = operationRow(String(item['question_title'] ?? 'Augur AMM market'), tradingPnlSummary(item), String(item['market_address'] ?? ''), undefined, operationsHref(`/operations/trading/${encodeURIComponent(String(item['market_address'] ?? ''))}`))
+			const row = operationRow(String(item['question_title'] ?? 'Augur AMM market'), tradingPnlSummary(item, nativeSymbol), String(item['market_address'] ?? ''), undefined, operationsHref(`/operations/trading/${encodeURIComponent(String(item['market_address'] ?? ''))}`))
 			const copy = row.querySelector('div')
 			copy?.insertBefore(element('span', '', tradingPnlHoldings(item)), copy.querySelector('code'))
 			return row

@@ -17,7 +17,7 @@ const market = smallReserveMarketFixture({ pool, pair, shareToken, universeId: 7
 
 /** The ticket names the network fix; the market's position section owns the balance failure and its retry. */
 function positionControls(networkMismatchReason: string | undefined) {
-	const wallet = { connected: true, networkMismatchReason, actionLabel: networkMismatchReason === undefined ? 'Connect wallet' : 'Switch to Browser simulation', walletEthAttoEth: undefined, connect: async () => undefined }
+	const wallet = { connected: true, networkMismatchReason, actionLabel: networkMismatchReason === undefined ? 'Connect wallet' : 'Switch to Browser simulation', walletEthAttoEth: undefined, walletEthState: 'loading' as const, connect: async () => undefined }
 	const holdings = { balances: undefined, balanceState: 'error' as const, balanceError: 'Balance refresh failed.', retry: async () => undefined }
 	return (
 		<>

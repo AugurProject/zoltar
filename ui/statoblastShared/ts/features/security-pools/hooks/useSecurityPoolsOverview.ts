@@ -17,8 +17,10 @@ import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
+import { getInitialReportRepShortfallReason } from '../lib/liquidationModalGuards.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useLiquidationReceiverVault } from './useLiquidationReceiverVault.js'
+import { useLiquidationVaultSummary } from './useLiquidationVaultSummary.js'
 import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
@@ -68,6 +70,15 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		latestEnvironmentRefreshKey,
 		liquidationSecurityPoolAddress,
 		loadSecurityPoolVaultSummary: dependencies.loadSecurityPoolVaultSummary,
+		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
+	})
+	// A target outside the pool's vault preview is read on demand, so any registered vault can be liquidated.
+	const target = useLiquidationVaultSummary({
+		copy: { invalidAddress: liquidationCopy.targetVaultAddressInvalid, loadFailed: liquidationCopy.targetVaultLoadFailed, vaultLabel: commonCopy.targetVault },
+		latestEnvironmentRefreshKey,
+		liquidationSecurityPoolAddress,
+		loadSecurityPoolVaultSummary: dependencies.loadSecurityPoolVaultSummary,
+		vaultAddress: liquidationTargetVault,
 		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
 	})
 	const liquidationModalOpen = useSignal(false)
@@ -247,47 +258,46 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return result !== undefined && getCurrentLiquidationApprovalRequestKey() === requestKey
 	}
 
-	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => {
+	/** Drops every chain read the liquidation dialog holds (funding, approval quota, receiver, and target), so its load effects read them again. */
+	const resetLiquidationReads = () => {
 		nextLiquidationFundingPreviewLoad()
-		liquidationFundingPrice.value = undefined
 		nextLiquidationApprovalLoad()
-		securityPoolOverviewError.value = undefined
-		securityPoolLiquidationError.value = undefined
-		securityPoolOverviewFeedback.value = undefined
-		securityPoolOverviewResult.value = undefined
+		receiver.resetSummary()
+		target.reset()
 		liquidationFundingPreview.value = undefined
 		liquidationFundingPreviewError.value = undefined
 		liquidationFundingPreviewErrorKey.value = undefined
 		liquidationFundingPreviewLoadingKey.value = undefined
 		liquidationFundingPreviewResolvedKey.value = undefined
+		liquidationApprovalDetails.value = undefined
+		liquidationApprovalError.value = undefined
+		liquidationApprovalLoadingKey.value = undefined
+	}
+
+	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => {
+		resetLiquidationReads()
+		liquidationFundingPrice.value = undefined
+		securityPoolOverviewError.value = undefined
+		securityPoolLiquidationError.value = undefined
+		securityPoolOverviewFeedback.value = undefined
+		securityPoolOverviewResult.value = undefined
 		liquidationManagerAddress.value = managerAddress
 		liquidationSecurityPoolAddress.value = securityPoolAddress
 		liquidationTargetVault.value = vaultAddress
 		receiver.changeReceiverVault(accountAddress ?? '')
 		liquidationApprovalId.value = `0x${'00'.repeat(32)}`
-		liquidationApprovalDetails.value = undefined
-		liquidationApprovalError.value = undefined
-		liquidationApprovalLoadingKey.value = undefined
+		// Every target starts from an empty amount, so a queued plan never prepares from an amount entered for another vault.
+		liquidationDebtEthAmount.value = '0'
 		liquidationTimeoutMinutes.value = DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString()
 		liquidationModalOpen.value = true
 	}
 
 	const closeLiquidationModal = () => {
-		nextLiquidationFundingPreviewLoad()
+		resetLiquidationReads()
 		liquidationFundingPrice.value = undefined
-		nextLiquidationApprovalLoad()
-		receiver.resetSummary()
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewFeedback.value = undefined
 		securityPoolOverviewResult.value = undefined
-		liquidationFundingPreview.value = undefined
-		liquidationFundingPreviewError.value = undefined
-		liquidationFundingPreviewErrorKey.value = undefined
-		liquidationFundingPreviewLoadingKey.value = undefined
-		liquidationFundingPreviewResolvedKey.value = undefined
-		liquidationApprovalDetails.value = undefined
-		liquidationApprovalError.value = undefined
-		liquidationApprovalLoadingKey.value = undefined
 		liquidationModalOpen.value = false
 	}
 
@@ -374,7 +384,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						liquidationFundingPreview.value = fundingPreview
 						liquidationFundingPreviewResolvedKey.value = fundingPreviewKey
 					}
-					if (fundingPreview.currentRepBalanceAttoRep < fundingPreview.initialReportRepRequiredAttoRep) throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingPreview.initialReportRepRequiredAttoRep - fundingPreview.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
+					const repShortfallReason = getInitialReportRepShortfallReason(fundingPreview)
+					if (repShortfallReason !== undefined) throw new Error(repShortfallReason)
 					const walletBalanceAttoEth = fundingPreview.totalWalletEthRequiredAttoEth === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					ensureFundingContextIsCurrent()
 					if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < fundingPreview.totalWalletEthRequiredAttoEth)
@@ -396,6 +407,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
 					}
 					completedResult = nextResult
+					// The liquidation consumed approval quota and changed both vaults and the wallet's funding, so the next attempt re-reads them.
+					resetLiquidationReads()
 					securityPoolLiquidationError.value = undefined
 					securityPoolOverviewResult.value = nextResult
 					securityPoolOverviewFeedback.value = getLiquidationFeedbackFromResult(nextResult)
@@ -432,6 +445,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationReceiverVaultSummary: receiver.summary,
 		liquidationReceiverVaultSummaryError: receiver.summaryError,
 		liquidationReceiverVaultSummaryResolved: receiver.resolved,
+		liquidationTargetVaultSummary: target.summary,
+		liquidationTargetVaultSummaryError: target.summaryError,
 		liquidationTimeoutMinutes: liquidationTimeoutMinutes.value,
 		checkedSecurityPoolAddress: checkedSecurityPoolAddress.value,
 		hasLoadedSecurityPools: securityPoolsLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
@@ -441,10 +456,12 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		loadingLiquidationFundingPreview: loadingCurrentLiquidationFundingPreview,
 		loadingLiquidationApproval: loadingCurrentLiquidationApproval,
 		loadingLiquidationReceiverVaultSummary: receiver.loading,
+		loadingLiquidationTargetVaultSummary: target.loading,
 		closeLiquidationModal,
 		loadLiquidationFundingPreview,
 		loadLiquidationApproval,
 		loadLiquidationReceiverVaultSummary: receiver.loadReceiverVaultSummary,
+		loadLiquidationTargetVaultSummary: target.load,
 		openLiquidationModal,
 		queueLiquidation,
 		securityPoolOverviewActiveAction: securityPoolOverviewActiveAction.value,
@@ -462,6 +479,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			liquidationTimeoutMinutes.value = value
 		},
 		setLiquidationTargetVault: (value: string) => {
+			target.reset()
 			liquidationTargetVault.value = value
 		},
 		setLiquidationReceiverVault: receiver.changeReceiverVault,

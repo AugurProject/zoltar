@@ -256,8 +256,10 @@ test('Trading keeps the shared shell, route header, section, field, and button s
 for (const initializationFails of [false, true]) {
 	test(`Trading keeps its static loading fallback until initialization ${initializationFails ? 'fails' : 'succeeds'}, then replaces it with one shared application landmark`, async () => {
 		const dom = installDomEnvironment('http://localhost/?genesis=yes')
-		const placeholder = document.createElement('main')
-		placeholder.textContent = 'Loading…'
+		// The same static fallback every app's index.html ships.
+		const placeholder = document.createElement('div')
+		placeholder.className = 'app-frame'
+		placeholder.innerHTML = '<main>Loading…</main>'
 		document.body.append(placeholder)
 		const ready = createDeferred<void>()
 		const environment = await import('@zoltar/ui-core-shared/lib/activeEnvironment.js')

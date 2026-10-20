@@ -1,6 +1,8 @@
 import type { ComponentChildren } from 'preact'
+import { useId } from 'preact/hooks'
 import { WalletConnectionControl, WalletNetworkControl } from '../../components/WalletConnectionControl.js'
 import * as appCopy from '../../copy/app.js'
+import * as userMessagesCopy from '../../copy/userMessages.js'
 import * as commonCopy from '../../copy/common.js'
 import { Badge } from '../../components/Badge.js'
 import { CurrencyValue } from '../../components/CurrencyValue.js'
@@ -10,6 +12,7 @@ import { MetricField } from '../../components/MetricField.js'
 import { StateHint } from '../../components/StateHint.js'
 import { ToolbarField } from '../../components/ToolbarField.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
+import { UserMessage } from '../../components/UserMessage.js'
 import { WarningSurface } from '../../components/WarningSurface.js'
 import { getChainDisplayLabel, isActiveAppChain } from '../../wallet/network.js'
 import { renderRepPriceSourceLabel, type RepPriceFailure, type RepPriceSource } from '../../lib/repPriceSource.js'
@@ -50,6 +53,11 @@ export type OverviewPanelsProps = {
 	accountState: AccountState
 	isConnectingWallet: boolean
 	isManagingWallet: boolean
+	/** False when the browser exposes no wallet; Connect is then disabled with the reason. Defaults to true. */
+	hasInjectedWallet?: boolean | undefined
+	/** The outcome of the last failed connect, switch, change, or disconnect request, shown under the top bar until dismissed. */
+	walletActionMessage?: string | undefined
+	onDismissWalletActionMessage?: (() => void) | undefined
 	walletBootstrapComplete: boolean
 	/** The connected account's REP balance in the active universe. */
 	universeRepBalanceAttoRep: bigint | undefined
@@ -167,6 +175,7 @@ export function OverviewPanels({
 	applicationTitle,
 	activeUniverseId,
 	accountState,
+	hasInjectedWallet = true,
 	isConnectingWallet,
 	isManagingWallet,
 	isLoadingUniverseRepBalance,
@@ -174,6 +183,7 @@ export function OverviewPanels({
 	onConnect,
 	onChangeWallet,
 	onDisconnectWallet,
+	onDismissWalletActionMessage,
 	onGoToGenesisUniverse,
 	onSwitchNetwork,
 	readBackendStatus,
@@ -185,8 +195,13 @@ export function OverviewPanels({
 	universePresentation,
 	universeRepBalanceAttoRep,
 	isRefreshing,
+	walletActionMessage,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
+	const noWalletReasonId = useId()
+	const showsNoWalletReason = accountState.address === undefined && !hasInjectedWallet
+	// A connect request from elsewhere on the page without a wallet repeats the reason the top bar already shows.
+	const visibleWalletActionMessage = showsNoWalletReason && walletActionMessage === userMessagesCopy.walletInstallationRequired ? undefined : walletActionMessage
 	const isBrowserSimulationReadBackend = readBackendStatus?.rpcUrl === 'browser-simulation'
 	const activeNetworkProfile = getActiveNetworkProfile()
 	const walletOnActiveNetwork = isActiveAppChain(accountState.chainId)
@@ -202,7 +217,7 @@ export function OverviewPanels({
 		...(activeUniverseId === undefined ? [] : [{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined }]),
 	]
 	const accountControl = (() => {
-		if (accountState.address === undefined) return <WalletConnectionControl onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
+		if (accountState.address === undefined) return <WalletConnectionControl disabled={!hasInjectedWallet} disabledReasonElementId={noWalletReasonId} onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
 		// The simulation harness owns the simulated wallet session, so its popover lists balances without wallet actions.
 		const actions = isBrowserSimulationReadBackend ? undefined : (
 			<>
@@ -257,7 +272,18 @@ export function OverviewPanels({
 					{accountControl}
 				</>
 			}
-			notices={showUniverseForkedNotice ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
+			notices={
+				<>
+					{/* Wallet outcomes sit directly under the account control instead of in the page-level error stack. */}
+					{showsNoWalletReason ? (
+						<p className='detail disabled-reason wallet-connection-reason' id={noWalletReasonId}>
+							{userMessagesCopy.walletInstallationRequired}
+						</p>
+					) : undefined}
+					{visibleWalletActionMessage === undefined ? undefined : <UserMessage placement='page' tone='neutral' announcement='polite' detail={visibleWalletActionMessage} dismiss={onDismissWalletActionMessage === undefined ? undefined : { label: appCopy.dismissNotice, onDismiss: onDismissWalletActionMessage }} />}
+					{showUniverseForkedNotice ? <UniverseForkNotice forkTime={universeForkTime} hasRepToMigrate={showAccountBalances && universeRepBalanceAttoRep !== undefined && universeRepBalanceAttoRep > 0n} migrateRepHref={migrateRepHref} /> : undefined}
+				</>
+			}
 			footer={
 				universePresentation === undefined ? undefined : (
 					<StateHint

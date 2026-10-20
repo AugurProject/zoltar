@@ -1,4 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { formatUniverseViewLabel } from '@zoltar/ui-core-shared/lib/universeLineage.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -34,6 +36,19 @@ export function resolveZoltarRouteGate({ universe, universeError, universeState,
 	const actions = getZoltarUniverseActions(universe)
 	if (view === 'fork' && !actions.canFork) return 'fork-unavailable'
 	return 'ready'
+}
+
+/**
+ * The "Use for fork" handoff from the question views. A missing universe can never fork, so the handoff is omitted;
+ * otherwise it stays in place and, while the selected universe's details are unavailable, names that reason.
+ */
+export type ForkHandoff = Readonly<{ kind: 'omitted' }> | Readonly<{ kind: 'forked' }> | Readonly<{ kind: 'offered'; universeReason: string | undefined }>
+
+export function getForkHandoff({ universe, universeError, universeState }: { universe: Pick<ZoltarUniverseSummary, 'hasForked'> | undefined; universeError: string | undefined; universeState: LoadableValueState }): ForkHandoff {
+	if (universeState === 'missing') return { kind: 'omitted' }
+	if (universe === undefined) return { kind: 'offered', universeReason: isUniverseUnavailable(universeError, universeState) ? zoltarCopy.universeUnavailableDetail : commonCopy.loadingUniverseDetails }
+	if (universe.hasForked) return { kind: 'forked' }
+	return { kind: 'offered', universeReason: undefined }
 }
 
 export type ZoltarNextStep =

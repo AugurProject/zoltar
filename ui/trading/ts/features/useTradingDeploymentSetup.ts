@@ -9,7 +9,7 @@ import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/t
 
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
 
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
+import { coreDeploymentChain, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, type InjectedEthereum } from '../protocol/injected.js'
 import { readInjectedChainIdNumber, requireInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
@@ -302,7 +302,7 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 			if (initialProvider !== undefined && selectedCore !== undefined) {
 				const currentChain = await readInjectedChainIdNumber(initialProvider)
 				if (currentChain !== selectedCore.chainId) {
-					await switchInjectedChain(initialProvider, selectedCore.chainId)
+					await switchInjectedChain(initialProvider, selectedCore.chainId, coreDeploymentChain(selectedCore, effectiveRpcUrl))
 					const switchedChain = await readInjectedChainIdNumber(initialProvider)
 					if (switchedChain !== selectedCore.chainId) throw new Error(deploymentCopy.walletMustUseNetwork(selectedCore.chainName))
 				}

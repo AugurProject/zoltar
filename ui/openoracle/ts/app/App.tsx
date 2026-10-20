@@ -47,7 +47,7 @@ export function App() {
 		isDeploymentRoute: route === 'deploy',
 		onchainStateDependencies,
 	})
-	const oracle = useOpenOracleOperations({ ...shell.walletScopedHookConfig, enabled: shell.canReadOnchainData && activeRoute === 'open-oracle' })
+	const oracle = useOpenOracleOperations({ ...shell.walletScopedHookConfig, enabled: shell.canReadOnchainData && activeRoute === 'open-oracle', walletEthBalanceAttoEth: shell.accountState.ethBalanceAttoEth })
 	const view = resolveEnumValue(state.view, state.reportId === '' ? 'browse' : 'selected-report', views)
 	const setView = (next: OpenOracleView) => navigateUrl('#/open-oracle', writeOpenOracleViewQueryParam(getRouteHashSearch(), next))
 	const loadReport = (reportId = oracle.openOracleForm.reportId) => {
@@ -110,6 +110,7 @@ export function App() {
 			notices={
 				<AppStatusNotices
 					errorMessages={shell.errorMessages}
+					isDeploymentRoute={activeRoute === 'deploy'}
 					onRetryReadBackend={() => void shell.retryReadBackend()}
 					readBackendMessage={shell.readBackendMessage}
 					readBackendStatus={shell.readBackendStatus}
@@ -141,6 +142,7 @@ export function App() {
 					onOpenOracleFormChange={update => oracle.setOpenOracleForm(current => ({ ...current, ...update }))}
 					onSettleReport={() => void oracle.settleReport()}
 					onWithdrawOpenOracleBalance={(balance, amount) => void oracle.withdrawBalance(balance, amount)}
+					onWrapDisputeWeth={() => void oracle.wrapDisputeWeth()}
 					openOracleForm={oracle.openOracleForm}
 				/>
 			) : undefined}

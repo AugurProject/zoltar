@@ -53,6 +53,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 	const kind = parts[0]
 	const identity = parts[1]
 	if ((kind !== 'tx' && kind !== 'block') || identity === undefined || parts.length !== 2) {
+		renderedEvidence.delete(content)
 		content.replaceChildren(node('h2', '', 'Page not found'), link('Back to activity', '/'))
 		content.removeAttribute('aria-busy')
 		return false
@@ -99,7 +100,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 			const receipt = isRecord(record['receipt']) ? record['receipt'] : {}
 			const traces = node('section', 'static-card')
 			traces.append(node('h3', '', 'Calls and ETH value flows'))
-			const calls = callTraceRows(receipt['callTrace'])
+			const calls = callTraceRows(receipt['callTrace'], nativeSymbolFor(chainId))
 			for (const call of calls) traces.append(node('p', 'data-note', call))
 			if (calls.length === 0) {
 				const unavailable = receipt['callTraceStatus'] === 'not-requested' ? 'Call traces were not requested for this transaction.' : 'Call traces unavailable for this transaction.'
@@ -135,10 +136,11 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 		return true
 	} catch (error) {
 		if (!isCurrent()) return false
-		if (live) {
+		if (live && renderedEvidence.has(content)) {
 			content.querySelector('.explorer-refresh-error')?.remove()
 			content.append(node('p', 'system-status error explorer-refresh-error', 'Could not refresh indexed evidence. The prior evidence remains visible.'))
-		} else {
+		} else if (!live || content.querySelector('.explorer-retry') === null) {
+			// A failed live refresh of a failure view keeps that view: there is no prior evidence, and its Retry keeps focus.
 			const retry = node('button', 'state-retry explorer-retry', 'Retry')
 			retry.type = 'button'
 			retry.addEventListener('click', () => void renderExplorerPage(path, chainId, api))

@@ -12,3 +12,6 @@ export { requestNewPrice as requestPrice } from './securityPool.js'
 export const retryRequired = 'Retry required'
 export const waitingForPriceRequest = 'Waiting for the current request to finish.'
 export const attemptedRepPerEthPrice = 'Attempted REP per ETH price'
+export const formatInvertedPriceWarning = (reference: string) => `This looks inverted (ETH per REP). Enter REP per ETH; the last known price is ${reference}\u00a0REP per ETH.`
+export const formatPriceAboveReferenceWarning = (reference: string) => `More than double the last known price of ${reference}\u00a0REP per ETH. Check the price before sending.`
+export const formatPriceBelowReferenceWarning = (reference: string) => `Less than half the last known price of ${reference}\u00a0REP per ETH. Check the price before sending.`

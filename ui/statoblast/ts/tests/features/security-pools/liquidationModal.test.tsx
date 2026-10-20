@@ -819,6 +819,64 @@ describe('LiquidationModal', () => {
 		expect(within(document.body).getByText('Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')).not.toBeNull()
 	})
 
+	test('blocks a queued liquidation before preparation when the wallet lacks the initial report REP', async () => {
+		const onQueueLiquidation = mock(() => undefined)
+		const renderedComponent = await renderLiquidationModal({
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * 10n ** 18n, underwritingLimitAttoEth: 0n, vaultAddress: defaultCallerVaultAddress }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+			liquidationFundingPreview: {
+				currentRepBalanceAttoRep: 3n * ATTO_ETH_PER_ETH,
+				currentWethBalanceAttoEth: 0n,
+				initialReportRepRequiredAttoRep: 10n * ATTO_ETH_PER_ETH,
+				initialReportWethRequiredAttoEth: 0n,
+				queueOperationValueAttoEth: 1n,
+				totalWalletEthRequiredAttoEth: 1n,
+				wethShortfallAttoEth: 0n,
+			},
+			onQueueLiquidation,
+			targetVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * 10n ** 18n, underwritingLimitAttoEth: 100n * 10n ** 18n }),
+			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
+
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7 more REP in this wallet to fund the initial report.')
+		expect(onQueueLiquidation).not.toHaveBeenCalled()
+	})
+
+	test('requests a target vault outside the pool preview once when the dialog opens', async () => {
+		const onLoadLiquidationTargetVaultSummary = mock(() => undefined)
+		const renderedComponent = await renderLiquidationModal({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }), onLoadLiquidationTargetVaultSummary, targetVaultSummary: undefined })
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadLiquidationTargetVaultSummary).toHaveBeenCalledTimes(1)
+	})
+
+	test('explains a loading target vault instead of waiting on it silently', async () => {
+		const onLoadLiquidationTargetVaultSummary = mock(() => undefined)
+		const renderedComponent = await renderLiquidationModal({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }), loadingLiquidationTargetVaultSummary: true, onLoadLiquidationTargetVaultSummary, targetVaultSummary: undefined })
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadLiquidationTargetVaultSummary).not.toHaveBeenCalled()
+		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation', 'Loading target vault…')
+	})
+
+	test('keeps liquidation disabled after a failed target vault read and retries it on request', async () => {
+		const onLoadLiquidationTargetVaultSummary = mock(() => undefined)
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }),
+			liquidationTargetVaultSummaryError: 'Vault read failed.',
+			onLoadLiquidationTargetVaultSummary,
+			targetVaultSummary: undefined,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(onLoadLiquidationTargetVaultSummary).not.toHaveBeenCalled()
+		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation', 'Vault read failed.')
+		await act(() => within(document.body).getByRole('button', { name: 'Retry target vault' }).click())
+		expect(onLoadLiquidationTargetVaultSummary).toHaveBeenCalledTimes(1)
+	})
+
 	test('allows queued liquidation when the entered amount exceeds the executable cap because execution will clamp it', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({

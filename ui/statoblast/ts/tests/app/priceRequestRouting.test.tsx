@@ -146,7 +146,8 @@ describe('Statoblast price request routing', () => {
 		await waitFor(() => expect(document.body.textContent).toContain('Report #7'))
 		expect(loadReport).toHaveBeenCalledTimes(1)
 		expect(window.history.length).toBe(historyLength + 1)
-		expect(window.location.hash).toBe('#/open-oracle?poolsView=browse&openOracleReportId=7')
+		// The request route carries only its own report, not the Pools view it was opened from; Back restores that view.
+		expect(window.location.hash).toBe('#/open-oracle?openOracleReportId=7')
 		await act(async () => {
 			const popped = new Promise<void>(resolve => window.addEventListener('popstate', () => resolve(), { once: true }))
 			window.history.back()

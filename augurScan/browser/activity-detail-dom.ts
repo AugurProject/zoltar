@@ -27,6 +27,7 @@ interface ActivityDetailDrawerLike {
 	dataset: DOMStringMap
 }
 
+/** @internal Exported for drawer-placement unit tests. */
 export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: ActivityDetailDrawerLike): boolean => {
 	const rows = Array.from(feed.querySelectorAll('.log-row[data-live-key]'))
 	const rowKeys = rows.flatMap(row => (row.dataset['liveKey'] === undefined ? [] : [row.dataset['liveKey']]))
@@ -35,6 +36,44 @@ export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: 
 	if (anchor === undefined) return false
 	anchor.after(drawer)
 	return true
+}
+
+interface ActivityDetailShellLike {
+	before(node: unknown): void
+}
+
+interface PinnableActivityDetailDrawerLike extends ActivityDetailDrawerLike {
+	readonly nextElementSibling: unknown
+}
+
+/**
+ * Anchors a detail drawer after its log row. A drawer whose row is not loaded, such as a deep-linked log beyond the first page,
+ * is pinned above the feed when `pin` allows it. Returns where the drawer now sits, or undefined when it has no place.
+ */
+export const placeOrPinActivityDetailDrawer = (feed: ActivityDetailFeedLike, feedShell: ActivityDetailShellLike | null, drawer: PinnableActivityDetailDrawerLike, pin: boolean): 'row' | 'pinned' | undefined => {
+	if (placeActivityDetailDrawer(feed, drawer)) {
+		delete drawer.dataset['placement']
+		return 'row'
+	}
+	if (!pin || feedShell === null) return undefined
+	drawer.dataset['placement'] = 'pinned'
+	if (drawer.nextElementSibling !== feedShell) feedShell.before(drawer)
+	return 'pinned'
+}
+
+interface RevealableActivityDetailDrawerLike {
+	readonly dataset: DOMStringMap
+	getBoundingClientRect(): { readonly top: number }
+}
+
+/**
+ * Decides how to bring a deep-linked drawer into view: with its log row above it when anchored, alone when pinned,
+ * or not at all when the drawer already starts in the upper part of the viewport.
+ */
+export const activityDetailRevealTarget = (drawer: RevealableActivityDetailDrawerLike, viewportHeight: number): 'row' | 'drawer' | undefined => {
+	const top = drawer.getBoundingClientRect().top
+	if (top >= 0 && top <= viewportHeight * 0.75) return undefined
+	return drawer.dataset['placement'] === 'pinned' ? 'drawer' : 'row'
 }
 
 export interface ActivityDetailFocusSnapshot {
@@ -97,12 +136,25 @@ export const restoreActivityDetailFocus = (drawer: ActivityDetailFocusDrawerLike
 
 interface ActivityDetailEscapeEvent {
 	readonly key: string
+	readonly defaultPrevented: boolean
+	readonly target: unknown
 	preventDefault(): void
 	stopPropagation(): void
 }
 
+interface ClosestLike {
+	closest(selectors: string): unknown
+}
+
+const isClosestLike = (value: unknown): value is ClosestLike => typeof value === 'object' && value !== null && 'closest' in value && typeof value.closest === 'function'
+
+// Escape in these controls belongs to them (clearing a field, closing search results or a dialog), not to an open log drawer.
+const escapeOwningControls = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), #global-search, dialog[open]'
+
 export const handleActivityDetailDrawerEscape = (event: ActivityDetailEscapeEvent, close: () => void): boolean => {
-	if (event.key !== 'Escape') return false
+	if (event.key !== 'Escape' || event.defaultPrevented) return false
+	const target = isClosestLike(event.target) ? event.target : undefined
+	if (target !== undefined && target.closest('.event-detail-drawer') === null && target.closest(escapeOwningControls) !== null) return false
 	event.preventDefault()
 	event.stopPropagation()
 	close()

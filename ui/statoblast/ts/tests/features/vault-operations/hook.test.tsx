@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { VaultOperationsInput } from '@zoltar/statoblast-shared/statoblast/vaultOperations'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -36,6 +37,9 @@ function dependencies(overrides: Partial<VaultOperationsDependencies> = {}): Vau
 		loadStatus: mock(async () => ({ status: 'queued' })),
 		quote: mock(async () => ({ managerAddress: pool.managerAddress, repToken: owned.repToken, balance: 10000n * unit, currentBacking: owned.vaultAttoRepBacking, resolved: false, validPrice: true, pendingReportId: 0n, needsReport: false, funding: undefined, requiredRep: 0n })),
 		queueCost: mock(async () => 0n),
+		loadPrerequisites: mock(async () => ({ wrapAttoEth: undefined, approvals: [] })),
+		approve: mock(async () => ({ hash: '0x03' as const })),
+		wrap: mock(async () => ({ hash: '0x04' as const })),
 		submit: mock(async () => confirmed),
 		...overrides,
 	}
@@ -286,6 +290,61 @@ describe('vault operations lifecycle', () => {
 		expect(current.state().quote).toBe(previous)
 	})
 
+	test('does not report an unchanged pool commitment on every block', async () => {
+		const loadOwned = mock(async () => owned)
+		const current = await mount(dependencies({ loadOwned }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		expect(current.poolChanged).toHaveBeenCalledWith(owned.totalUnderwritingLimitAttoEth)
+		current.poolChanged.mockClear()
+		const reads = loadOwned.mock.calls.length
+		await act(() => {
+			appBlockWatcher.reportBlock(9300n)
+			appBlockWatcher.reportBlock(9301n)
+		})
+		await waitFor(() => expect(loadOwned.mock.calls.length).toBeGreaterThan(reads))
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 0)))
+		expect(current.poolChanged).not.toHaveBeenCalled()
+	})
+
+	const staleManager = async () => createOracleManagerDetails({ isPriceValid: false, lastPrice: unit, minLiquidationPriceDistanceBps: 1000n })
+	const staleQuote = (price: bigint) => {
+		if (price <= 0n) throw new Error(vaultOperationsCopy.initialPriceNeeded)
+		return { managerAddress: pool.managerAddress, repToken: owned.repToken, balance: 10000n * unit, currentBacking: owned.vaultAttoRepBacking, resolved: false, validPrice: false, pendingReportId: 0n, needsReport: true, funding: undefined, requiredRep: 0n }
+	}
+
+	test('a blank initial report price is never replaced by the stale cached price', async () => {
+		const quote = mock(async (_pool: Address, _owner: Address, _input: VaultOperationsInput, price: bigint) => staleQuote(price))
+		const current = await mount(dependencies({ loadManager: staleManager, quote }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ commitment: '1' }))
+		await waitFor(() => expect(current.state().quoteError).toBe(vaultOperationsCopy.initialPriceNeeded))
+		expect(quote.mock.calls.every(call => call[3] === 0n)).toBe(true)
+		// The preview still estimates with the cached price.
+		expect(current.state().preview).toBeDefined()
+		await act(() => current.state().setDraft({ proposedPrice: '2' }))
+		await waitFor(() => expect(current.state().quote).toBeDefined())
+		expect(quote).toHaveBeenLastCalledWith(pool.securityPoolAddress, owner, expect.anything(), 2n * unit)
+	})
+
+	test('checks a commitment increase at the proposed price while the oracle price is stale', async () => {
+		const current = await mount(dependencies({ loadManager: staleManager, quote: async (_pool, _owner, _input, price) => staleQuote(price) }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		await act(() => current.state().setDraft({ commitment: '1000', proposedPrice: '1' }))
+		expect(current.state().inputError).toBe('Deposit more REP before increasing this commitment limit.')
+		await act(() => current.state().setDraft({ commitment: '100' }))
+		expect(current.state().inputError).toBeUndefined()
+	})
+
+	test('checks withdrawal coverage and offers an estimated maximum at the proposed price while the oracle price is stale', async () => {
+		const committed = { ...owned, vaultAttoRepBacking: 100n * unit, underwritingLimitAttoEth: 50n * unit, totalUnderwritingLimitAttoEth: 50n * unit }
+		const current = await mount(dependencies({ loadOwned: async () => committed, loadManager: staleManager, quote: async (_pool, _owner, _input, price) => staleQuote(price) }))
+		await waitFor(() => expect(current.state().loading).toBe(false))
+		expect(current.state().withdrawMaximum).toBeUndefined()
+		await act(() => current.state().setDraft({ withdraw: '60', proposedPrice: '1' }))
+		expect(current.state().inputError).toBe(vaultOperationsCopy.withdrawCoverage)
+		expect(current.state().withdrawMaximum).toBeDefined()
+	})
+
 	async function mountPanel(deps: VaultOperationsDependencies, selectedTarget = target, onViewStagedOperations: (operationId: bigint) => void = () => undefined) {
 		const rendered = await renderIntoDocument(
 			<VaultOperationsPanel
@@ -304,7 +363,7 @@ describe('vault operations lifecycle', () => {
 	test('keeps target address copy and explorer actions separate from liquidation selection', async () => {
 		const rendered = await mountPanel(dependencies())
 		const queries = within(rendered.container)
-		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		await waitFor(() => expect(rendered.container.textContent).toMatch(/Current REP backing1\s000\.00\sREP/))
 		const checkbox = queries.getByRole<HTMLInputElement>('checkbox')
 		const copy = queries.getByRole('button', { name: `Copy address ${targetAddress}` })
 		const targetChoice = copy.closest('.vault-operations-target-choice')
@@ -322,7 +381,7 @@ describe('vault operations lifecycle', () => {
 
 	test.each([0n, unit])('panel only enables fee claiming for positive fees (%s)', async fees => {
 		const rendered = await mountPanel(dependencies({ loadOwned: async () => ({ ...owned, underwritingLimitAttoEth: unit, claimableFeesAttoEth: fees }) }))
-		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		await waitFor(() => expect(rendered.container.textContent).not.toContain(vaultOperationsCopy.loading))
 		const claim = within(rendered.container).getByRole<HTMLButtonElement>('button', { name: 'Claim fees' })
 		await waitFor(() => expect(claim.disabled).toBe(fees === 0n))
 		if (fees === 0n) expect(rendered.container.textContent).toContain('No fees are available to claim')
@@ -341,7 +400,7 @@ describe('vault operations lifecycle', () => {
 	test('panel states why target lookup is disabled under the whole lookup row', async () => {
 		const rendered = await mountPanel(dependencies())
 		const queries = within(rendered.container)
-		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		await waitFor(() => expect(rendered.container.textContent).toMatch(/Current REP backing1\s000\.00\sREP/))
 		const input = queries.getByLabelText('Find target by address')
 		const add = queries.getByRole<HTMLButtonElement>('button', { name: 'Add target' })
 		const reasonId = add.getAttribute('aria-describedby')
@@ -349,20 +408,21 @@ describe('vault operations lifecycle', () => {
 		expect(reasonId).not.toBeNull()
 		expect(document.getElementById(reasonId ?? '')?.textContent).toBe('Enter a vault address.')
 		expect(input.getAttribute('aria-describedby')).toContain(reasonId ?? '')
-		expect(add.closest('.tx-action')?.textContent).not.toContain('Enter a vault address.')
+		// The field hint under the whole row is the only place the reason appears, never again beneath the button.
+		expect(rendered.container.textContent?.split('Enter a vault address.').length).toBe(2)
 	})
 
 	test('panel previews entered amounts in standard notation', async () => {
 		const rendered = await mountPanel(dependencies())
 		const queries = within(rendered.container)
-		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		await waitFor(() => expect(rendered.container.textContent).not.toContain(vaultOperationsCopy.loading))
 		await act(() => fireEvent.input(queries.getByLabelText('REP deposit amount (optional)'), { target: { value: '1234.5' } }))
 		await waitFor(() => expect(rendered.container.querySelector('.vault-operations-summary')?.textContent).toMatch(/Deposit1\s234\.50\sREP/))
 	})
 
 	test('panel presents confirmation in the submission area', async () => {
 		const rendered = await mountPanel(dependencies())
-		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		await waitFor(() => expect(rendered.container.textContent).not.toContain(vaultOperationsCopy.loading))
 		const deposit = within(rendered.container).getByLabelText('REP deposit amount (optional)')
 		await act(() => fireEvent.input(deposit, { target: { value: '5' } }))
 		const review = within(rendered.container).getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' })
@@ -384,6 +444,74 @@ describe('vault operations lifecycle', () => {
 		await waitFor(() => expect(queries.queryByRole('button', { name: 'View staged operations' })).not.toBeNull())
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'View staged operations' })))
 		expect(viewStaged).toHaveBeenCalledWith(42n)
+	})
+
+	test('panel offers the REP deposit approval inline and keeps Review disabled until it is approved', async () => {
+		let approved = 0n
+		const approve = mock(async (_owner: Address, _token: Address, _spender: Address, amount: bigint) => {
+			approved = amount
+			return { hash: '0x03' as const }
+		})
+		const submit = mock(async () => confirmed)
+		const loadPrerequisites = mock(async (_pool: Address, _owner: Address, input: VaultOperationsInput) => ({
+			wrapAttoEth: undefined,
+			approvals: [{ kind: 'deposit' as const, tokenAddress: owned.repToken, spender: pool.securityPoolAddress, requiredAmount: input.depositAttoRep, recommendedAmount: undefined, approvedAmount: approved }],
+		}))
+		const rendered = await mountPanel(dependencies({ approve, submit, loadPrerequisites }))
+		const queries = within(rendered.container)
+		await act(() => fireEvent.input(queries.getByLabelText('REP deposit amount (optional)'), { target: { value: '5' } }))
+		await waitFor(() => expect(rendered.container.textContent).toContain(vaultOperationsCopy.approvalRequired.deposit))
+		expect(queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' }).disabled).toBe(true)
+		const approveButton = await waitFor(() => {
+			const button = queries.getByRole<HTMLButtonElement>('button', { name: /^Approve .*REP$/ })
+			expect(button.disabled).toBe(false)
+			return button
+		})
+		await act(() => fireEvent.click(approveButton))
+		await waitFor(() => expect(queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' }).disabled).toBe(false))
+		expect(approve).toHaveBeenCalledTimes(1)
+		expect(approve).toHaveBeenCalledWith(owner, owned.repToken, pool.securityPoolAddress, 5n * unit, expect.anything())
+		expect(submit).not.toHaveBeenCalled()
+		expect(rendered.container.textContent).toContain('REP approved ✓')
+	})
+
+	test('panel offers the oracle report WETH wrap as its own transaction before Review', async () => {
+		let wrapped = false
+		const wrap = mock(async () => {
+			wrapped = true
+			return { hash: '0x04' as const }
+		})
+		const approve = mock(async () => ({ hash: '0x03' as const }))
+		const loadPrerequisites = mock(async () => ({
+			wrapAttoEth: wrapped ? 0n : unit / 100n,
+			approvals: [
+				{ kind: 'reportWeth' as const, tokenAddress: targetAddress, spender: pool.managerAddress, requiredAmount: unit / 100n, recommendedAmount: unit / 50n, approvedAmount: unit },
+				{ kind: 'reportRep' as const, tokenAddress: owned.repToken, spender: pool.managerAddress, requiredAmount: unit, recommendedAmount: 2n * unit, approvedAmount: 2n * unit },
+			],
+		}))
+		const rendered = await mountPanel(dependencies({ loadManager: staleManager, quote: async (_pool, _owner, _input, price) => staleQuote(price), wrap, approve, loadPrerequisites }))
+		const queries = within(rendered.container)
+		await waitFor(() => expect(rendered.container.textContent).not.toContain(vaultOperationsCopy.loading))
+		await act(() => fireEvent.input(queries.getByLabelText(/^Commitment limit/), { target: { value: '1' } }))
+		await act(() => fireEvent.input(queries.getByLabelText('Initial report price'), { target: { value: '1' } }))
+		const wrapButton = () => queries.getByRole<HTMLButtonElement>('button', { name: /^Wrap ETH into WETH/ })
+		await waitFor(() => expect(wrapButton().disabled).toBe(false))
+		expect(rendered.container.textContent).toContain(vaultOperationsCopy.wrapRequired)
+		expect(queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' }).disabled).toBe(true)
+		await act(() => fireEvent.click(wrapButton()))
+		await waitFor(() => expect(queries.getByRole<HTMLButtonElement>('button', { name: 'Review vault operations' }).disabled).toBe(false))
+		expect(wrap).toHaveBeenCalledTimes(1)
+		expect(wrap).toHaveBeenCalledWith(owner, unit / 100n, expect.anything())
+		expect(approve).not.toHaveBeenCalled()
+		expect(wrapButton().disabled).toBe(true)
+	})
+
+	test('panel warns when the typed initial report price looks inverted', async () => {
+		const rendered = await mountPanel(dependencies({ loadManager: async () => createOracleManagerDetails({ isPriceValid: false, lastPrice: 300n * unit, minLiquidationPriceDistanceBps: 1000n }), quote: async (_pool, _owner, _input, price) => staleQuote(price) }))
+		const queries = within(rendered.container)
+		await waitFor(() => expect(rendered.container.textContent).not.toContain(vaultOperationsCopy.loading))
+		await act(() => fireEvent.input(queries.getByLabelText('Initial report price'), { target: { value: '0.0033' } }))
+		expect(rendered.container.textContent).toContain('This looks inverted (ETH per REP).')
 	})
 
 	test('review uses only the button to indicate its pending state', async () => {

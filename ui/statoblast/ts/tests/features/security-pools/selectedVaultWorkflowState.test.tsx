@@ -13,6 +13,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 installTestRouting()
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ComponentChild } from 'preact'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 
@@ -50,7 +51,7 @@ function VaultSelectionHarness({ exists = true, loaded = true, connected = true,
 						onSecurityVaultFormChange: form => {
 							if (form.selectedVaultOwner !== undefined) setOwner(getAddress(form.selectedVaultOwner))
 						},
-						securityVaultForm: { depositAmount: '', repWithdrawAmount: '', targetHealthFactor: '', securityPoolAddress: zeroAddress, selectedVaultOwner: owner },
+						securityVaultForm: { securityPoolAddress: zeroAddress, selectedVaultOwner: owner },
 					}),
 				})}
 			/>
@@ -99,7 +100,7 @@ test('opening another directory vault loads and renders that owner’s data', as
 	const address = within(document.body).getByRole('button', { name: 'Copy address ' + otherOwner })
 	const row = address.closest('.vault-position-strip')
 	if (!(row instanceof HTMLElement)) throw new Error('Expected vault record')
-	await act(() => fireEvent.click(within(row).getByRole('button', { name: 'Open vault' })))
+	await act(() => fireEvent.click(within(row).getByRole('button', { name: `Open vault: ${otherOwner}` })))
 	expect(loads).toContain(otherOwner)
 	expect(within(document.body).getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
 	expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('false')
@@ -152,7 +153,7 @@ test('follows URL-controlled vault views instead of resetting them to the wallet
 		controlledVaultView: 'vault-by-address',
 		onVaultViewChange: view => selectedViews.push(view),
 		securityVault: createSecurityVaultProps({
-			securityVaultForm: { depositAmount: '', repWithdrawAmount: '', targetHealthFactor: '', securityPoolAddress: zeroAddress, selectedVaultOwner: otherOwner },
+			securityVaultForm: { securityPoolAddress: zeroAddress, selectedVaultOwner: otherOwner },
 		}),
 	})
 	const rendered = await renderHarness(<SecurityPoolWorkflowSection {...props} />)
@@ -198,12 +199,12 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 		return within(row)
 	}
 	expect(document.querySelector('.vault-more-actions')).toBeNull()
-	expect(getRow(walletOwner).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
-	const healthyButton = getRow(otherOwner).getByRole('button', { name: 'Liquidate vault' })
+	expect(getRow(walletOwner).queryByRole('button', { name: /^Liquidate vault/ })).toBeNull()
+	const healthyButton = getRow(otherOwner).getByRole('button', { name: `Liquidate vault: ${otherOwner}` })
 	expect(healthyButton.hasAttribute('disabled')).toBe(true)
 	const reason = document.getElementById(healthyButton.getAttribute('aria-describedby') ?? '')
 	expect(reason?.textContent).toBe('The target vault is not liquidatable at the current price.')
-	const unhealthyButton = getRow(unhealthyOwner).getByRole('button', { name: 'Liquidate vault' })
+	const unhealthyButton = getRow(unhealthyOwner).getByRole('button', { name: `Liquidate vault: ${unhealthyOwner}` })
 	expect(unhealthyButton.hasAttribute('disabled')).toBe(false)
 	// The underwater vault leads the list with its verdict, and its liquidation is the row's main action.
 	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
@@ -211,12 +212,46 @@ test('offers directory liquidation only for other vaults and shows why a healthy
 	const firstRow = rows[0]
 	if (!(firstRow instanceof HTMLElement)) throw new Error('Expected vault record')
 	expect(firstRow.classList.contains('is-underwater')).toBe(true)
-	expect(within(firstRow).getByRole('button', { name: 'Liquidate vault' })).toBe(unhealthyButton)
+	expect(within(firstRow).getByRole('button', { name: /^Liquidate vault/ })).toBe(unhealthyButton)
 	expect(unhealthyButton.classList.contains('primary')).toBe(true)
 	expect(healthyButton.classList.contains('secondary')).toBe(true)
 	expect(getRow(walletOwner).getByText('Owned')).not.toBeNull()
 	await act(() => fireEvent.click(unhealthyButton))
 	expect(opened).toEqual([unhealthyOwner])
+})
+
+test('names each directory row’s actions after the vault they act on', async () => {
+	await renderVaultDirectory([createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }), createSecurityVaultDetails({ vaultAddress: unhealthyOwner, vaultAttoRepBacking: 1n * 10n ** 18n })], {
+		accountState: createAccountState({ address: walletOwner }),
+		poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n }),
+		repPerEthPrice: 10n ** 18n,
+	})
+	// Each row's actions keep their visible text but name the vault they act on.
+	for (const owner of [otherOwner, unhealthyOwner]) {
+		expect(within(document.body).getByRole('button', { name: `Open vault: ${owner}` }).textContent).toBe('Open vault')
+		expect(within(document.body).getByRole('button', { name: `Liquidate vault: ${owner}` }).textContent).toBe('Liquidate vault')
+	}
+})
+
+test('checks a vault opened by address outside the vault preview before offering its liquidation', async () => {
+	await renderHarness(
+		<SecurityPoolWorkflowSection
+			{...createSecurityPoolWorkflowProps({
+				accountState: createAccountState({ address: walletOwner }),
+				controlledVaultView: 'vault-by-address',
+				poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n }),
+				securityPoolAddress: zeroAddress,
+				// The pool lists a bounded vault preview, so this vault is known only from its own details read.
+				securityPools: [createSelectedPool({ hasLoadedVaults: true, statoblastSecurityMultiplierBps: 20_000n, vaultCount: 60n, vaults: [] })],
+				securityVault: createSecurityVaultProps({
+					securityVaultDetails: createSecurityVaultDetails({ vaultAddress: otherOwner, vaultAttoRepBacking: 17n * 10n ** 18n }),
+					securityVaultForm: { depositAmount: '', repWithdrawAmount: '', targetHealthFactor: '', securityPoolAddress: zeroAddress, selectedVaultOwner: otherOwner },
+				}),
+				selectedPoolView: 'vaults',
+			})}
+		/>,
+	)
+	expect(getTransactionButtonState(document.body, 'Liquidate vault').reason).toBe('The target vault is not liquidatable at the current price.')
 })
 
 test('keeps a blocked liquidation secondary even when the UI price reads the vault as underwater', async () => {
@@ -226,7 +261,7 @@ test('keeps a blocked liquidation secondary even when the UI price reads the vau
 		repPerEthPrice: 10n ** 18n,
 	})
 	expect(document.querySelector('.vault-position-strip .vault-health')?.textContent).toBe('Underwater')
-	const liquidateButton = within(document.body).getByRole('button', { name: 'Liquidate vault' })
+	const liquidateButton = within(document.body).getByRole('button', { name: /^Liquidate vault/ })
 	expect(liquidateButton.hasAttribute('disabled')).toBe(true)
 	expect(liquidateButton.classList.contains('secondary')).toBe(true)
 })
@@ -240,7 +275,7 @@ test('keeps every liquidation secondary but available while the protocol price i
 	})
 	const rows = Array.from(document.querySelectorAll('.vault-position-strip'))
 	expect(rows.map(row => row.querySelector('.vault-health')?.textContent)).toEqual(['Underwater', 'Healthy'])
-	const liquidateButtons = within(document.body).getAllByRole('button', { name: 'Liquidate vault' })
+	const liquidateButtons = within(document.body).getAllByRole('button', { name: /^Liquidate vault/ })
 	expect(liquidateButtons).toHaveLength(2)
 	expect(liquidateButtons.map(button => [button.hasAttribute('disabled'), button.classList.contains('secondary')])).toEqual([
 		[false, true],
@@ -273,6 +308,6 @@ test('shows no health verdicts or risk ordering in an ended pool, where liquidat
 test('removes the liquidation launcher from the connected wallet’s own vault', async () => {
 	await renderHarness(<VaultSelectionHarness />)
 	expect(within(document.body).getByRole('button', { name: 'My vault' }).getAttribute('aria-pressed')).toBe('true')
-	expect(within(document.body).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
+	expect(within(document.body).queryByRole('button', { name: /^Liquidate vault/ })).toBeNull()
 	expect(document.body.textContent).not.toContain('Choose another vault to liquidate.')
 })

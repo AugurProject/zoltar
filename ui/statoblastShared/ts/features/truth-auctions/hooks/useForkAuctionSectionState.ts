@@ -173,9 +173,9 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		return { kind: 'timestamp', timestamp: auctionWindow.endsAt }
 	})()
 	const activeTickSummaries = truthAuctionBookData.tickSummaries
-	const truthAuctionOverviewProgress = getTruthAuctionOverviewProgress(truthAuctionStatus, activeTickSummaries)
-	const displayedEthRaisedAttoEth = truthAuctionOverviewProgress?.attoEthRaised ?? truthAuctionStatus?.attoEthRaised ?? 0n
-	const displayedRepSoldAttoRep = truthAuctionOverviewProgress?.attoRepSold ?? truthAuctionStatus?.totalAttoRepPurchased ?? 0n
+	const truthAuctionOverviewProgress = getTruthAuctionOverviewProgress(truthAuctionStatus)
+	const displayedEthRaisedAttoEth = truthAuctionOverviewProgress?.attoEthRaised ?? 0n
+	const displayedRepSoldAttoRep = truthAuctionOverviewProgress?.attoRepSold ?? 0n
 	const ethRaisedProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedEthRaisedAttoEth, truthAuctionStatus.attoEthRaiseCap)
 	const repSoldProgress = truthAuctionStatus === undefined ? 0 : clampPercentage(displayedRepSoldAttoRep, truthAuctionStatus.maxAttoRepBeingSold)
 	const truthAuctionDepthPoints = buildTruthAuctionDepthPoints({
@@ -341,7 +341,12 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 			},
 		})
 	}
+	// The migration badge, its figures and the migration actions share one verdict on whether the window has closed.
+	const migrationEnd = getMigrationEnd({ auctionStartedAt: hasStartedTruthAuction ? effectiveTruthAuctionStartedAt : undefined, currentTimestamp: context.effectiveCurrentTimestamp, migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt })
+	// SecurityPoolForker.migrateRepToZoltar and claimForkedEscalationDeposits revert once the parent's migration window closes.
+	const migrationWindowClosedGuardMessage = getMigrationWindowClosedGuardMessage({ currentTimestamp: context.effectiveCurrentTimestamp, migrationEnd })
 	const claimSelectedParentEscalationDepositsGuardMessage = (() => {
+		if (migrationWindowClosedGuardMessage !== undefined) return migrationWindowClosedGuardMessage
 		if (claimParentEscalationBalanceGuardMessage !== undefined) return claimParentEscalationBalanceGuardMessage
 		if (context.loadingReportingDetails) return forkAuctionCopy.eligibleDepositsLoading
 		if (context.reportingDetails?.status !== 'active') return forkAuctionCopy.escalationDepositDetailsUnavailable
@@ -351,12 +356,10 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (selectedParentEscalationClaimDepositIndexes.length > 0) return undefined
 		return forkAuctionCopy.parentEscalationClaimSelectionRequired
 	})()
-	// The migration badge, its figures and the migration actions share one verdict on whether the window has closed.
-	const migrationEnd = getMigrationEnd({ auctionStartedAt: hasStartedTruthAuction ? effectiveTruthAuctionStartedAt : undefined, currentTimestamp: context.effectiveCurrentTimestamp, migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt })
-	const migrationWindowClosedGuardMessage = getMigrationWindowClosedGuardMessage({ currentTimestamp: context.effectiveCurrentTimestamp, migrationEnd })
 	const migrateUnresolvedEscalationGuardMessage = (() => {
 		const timingGuard = migrationEnd?.ended === true ? forkAuctionCopy.parentMigrationExpiredDetail : getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: context.effectiveCurrentTimestamp, migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt })
 		if (timingGuard !== undefined) return timingGuard
+		if (isMigrationExpired) return forkAuctionCopy.parentMigrationExpiredDetail
 		if (context.loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
 		if (selectedOutcomeEscalationEntitlementMaterialized) return forkAuctionCopy.formatEntitlementAlreadyMaterialized(context.selectedOutcomeLabel)
 		if (hasStoredEscalationMigrationEntitlement) return undefined
@@ -367,6 +370,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	})()
 	const seedStatusCheckingMessage = context.loadingSelectedOutcomeMigrationSeedStatus ? forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(context.selectedOutcomeLabel) : undefined
 	const migratePoolToUniverseAvailability = (() => {
+		if (migrationWindowClosedGuardMessage !== undefined) return { disabled: true, reason: migrationWindowClosedGuardMessage }
 		if (seedStatusCheckingMessage !== undefined) return { disabled: true, loading: true, reason: seedStatusCheckingMessage }
 		const seedStatus = context.selectedOutcomeMigrationSeedStatus
 		// Pool-held REP that is split but not yet swept waits in the migration proxy until a vault migration deploys the child pool.
@@ -403,14 +407,21 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const onFinalizeTruthAuctionForSelectedAuction = () => {
 		context.onFinalizeTruthAuction(context.selectedAuctionPoolAddress, context.selectedAuctionUniverseId)
 	}
-	const settlementActionAvailabilityMessage = getTruthAuctionSettlementActionAvailabilityMessage({
-		claimingAvailable: context.selectedAuctionContext?.claimingAvailable,
-		selectedClaimRows: selectedClaimSettlementBidRows,
-		selectedRows: selectedSettlementBidRows,
-		selectionHasClaims: settlementSelectionHasClaims,
-		selectionHasRefunds: settlementSelectionHasRefunds,
-		truthAuction: truthAuctionStatus,
-	})
+	// The settle action stays in place once the auction shows; with no bids to settle it says why instead of asking for a selection.
+	const settlementActionAvailabilityMessage = (() => {
+		if (!hasSettleableBids) {
+			if (viewerTruthAuctionBidsError !== undefined) return viewerTruthAuctionBidsError
+			return hasLoadedViewerTruthAuctionBids ? forkAuctionCopy.noBidsToSettle : forkAuctionCopy.loadingYourBids
+		}
+		return getTruthAuctionSettlementActionAvailabilityMessage({
+			claimingAvailable: context.selectedAuctionContext?.claimingAvailable,
+			selectedClaimRows: selectedClaimSettlementBidRows,
+			selectedRows: selectedSettlementBidRows,
+			selectionHasClaims: settlementSelectionHasClaims,
+			selectionHasRefunds: settlementSelectionHasRefunds,
+			truthAuction: truthAuctionStatus,
+		})
+	})()
 	const onSettleSelectedBidsForSelectedAuction = () => {
 		submitSelectedSettlementBids()
 	}
@@ -514,7 +525,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		isSettleSelectedBidsInProgress,
 		settlementActionDescription,
 		hasUnsettledRefundableBids,
-		hasSettleableBids,
 		setSelectedSettlementBidKeys,
 		hasImportedForkSettlementDeposits,
 		onWithdrawForkedEscalationSubmit,

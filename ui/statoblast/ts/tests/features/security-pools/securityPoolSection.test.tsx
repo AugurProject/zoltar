@@ -130,21 +130,21 @@ describe('SecurityPoolSection', () => {
 	})
 
 	test('shows a failed pool write only in the shared transaction dialog', async () => {
-		const transaction = { detail: 'Rejected in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Security pool creation', tone: 'error' as const }
+		const transaction = { detail: 'Canceled in wallet.', dismissKey: 'transaction-request-pool-write', title: 'Security pool creation', tone: 'error' as const }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={transaction}>
-				<SecurityPoolSection {...createProps({ securityPoolError: 'Rejected in wallet.' })} />
+				<SecurityPoolSection {...createProps({ securityPoolError: 'Canceled in wallet.' })} />
 				<GlobalTransactionDialog transaction={transaction} />
 			</GlobalTransactionPresentationProvider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const queries = within(document.body)
 		const dialog = queries.getByRole('region', { name: 'Transaction status' })
-		expect(within(dialog).getByText('Rejected in wallet.')).not.toBeNull()
-		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Rejected in wallet.')
+		expect(within(dialog).getByText('Canceled in wallet.')).not.toBeNull()
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Canceled in wallet.')
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Dismiss' })))
 		expect(queries.queryByRole('region', { name: 'Transaction status' })).toBeNull()
-		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Rejected in wallet.')
+		expect(document.querySelector('.workflow-stack')?.textContent).not.toContain('Canceled in wallet.')
 		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 	})
 
@@ -262,6 +262,8 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Existing Pools')
 		expect(documentQueries.getByText('Initial open interest fee / year')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
+		// The creation form states the fee to two decimals instead of the six used to compute it.
+		expect(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)).toBe('9.46%')
 		expect(documentQueries.queryByRole('textbox', { name: 'Open interest fee / year (%)' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
 		expect(document.body.textContent?.includes('Pool creation turns a binary question into a collateralized trading surface.')).toBe(false)

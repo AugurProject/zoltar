@@ -310,7 +310,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
 
-	test('submits the buffered ETH cost directly from the price input form', async () => {
+	test('submits the live buffered ETH cost from the price input form, not the cost when the dialog opened', async () => {
 		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string; universeId: bigint }> = []
 		const pool = createSelectedPool()
 		const baseProps = createLoadedPoolProps({
@@ -326,12 +326,11 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(within(dialog).queryByText(/≈/)).toBeNull()
 		expect(requests).toEqual([])
 
-		await rerender({ ...baseProps, poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n }) })
-		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
-
 		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Initial report price (REP per ETH)' }), { target: { value: '3' } })
+		// The oracle fee follows the base fee; a rise while the dialog is open keeps the typed price and sends the new buffered fee.
+		await rerender({ ...baseProps, poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n }) })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Request new price' }))
-		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
+		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 3_600_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
 	})
 
 	describe('focus after a price request closes', () => {

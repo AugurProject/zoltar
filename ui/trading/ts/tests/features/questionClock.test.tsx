@@ -134,7 +134,10 @@ describe('probability bar', () => {
 			const rendered = await renderIntoDocument(h(ProbabilityBar, { yesPercent }))
 			try {
 				const labels = [...rendered.container.querySelectorAll('.probability__labels span')].map(label => label.textContent)
-				expect(labels).toEqual([`Conditional Yes ${yes}%`, `Conditional No ${no}%`])
+				expect(labels).toEqual([`Yes ${yes}%`, `No ${no}%`])
+				// The caption and the accessible name say what the prices are conditional on.
+				expect(rendered.container.querySelector('.probability__caption')?.textContent).toBe('Price if not Invalid')
+				expect(rendered.container.querySelector('figure')?.getAttribute('aria-label')).toBe(`Yes price if not Invalid: ${yes} percent`)
 			} finally {
 				await rendered.cleanup()
 			}

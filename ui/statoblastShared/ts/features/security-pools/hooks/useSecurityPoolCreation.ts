@@ -29,7 +29,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
-		activeUniverseId?: bigint | undefined
+		activeUniverseId: bigint
 		deploymentStatuses: DeploymentStatus[]
 		enabled: boolean
 		newQuestionForm?: MarketFormState | undefined
@@ -113,13 +113,13 @@ export function useSecurityPoolCreation({
 
 		await duplicateOriginPoolCheckLoad.track(async () => {
 			try {
-				const exists = await withReadTimeout(originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas))
+				const exists = await withReadTimeout(originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, activeUniverseId))
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
 				duplicateOriginPoolAddress.value = undefined
 				if (!exists) return
 				try {
-					const address = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas))
+					const address = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, activeUniverseId))
 					if (isCurrent()) duplicateOriginPoolAddress.value = address
 				} catch (error) {
 					if (!isRecoverableContractReadError(error)) throw error
@@ -156,7 +156,7 @@ export function useSecurityPoolCreation({
 				const fee = tryParseInitialReportPriorityFeeInput(securityPoolForm.value.initialReportPriorityFeeNanoEth)
 				if (multiplier === undefined || fee === undefined) return
 				try {
-					const poolAddress = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, multiplier, fee))
+					const poolAddress = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, multiplier, fee, activeUniverseId))
 					if (isCurrent()) existingQuestionCheck.value = { status: 'existing', questionId: formatQuestionIdHex(questionId), poolAddress }
 				} catch (error) {
 					if (!isRecoverableContractReadError(error)) throw error
@@ -167,7 +167,7 @@ export function useSecurityPoolCreation({
 				if (isCurrent()) existingQuestionCheck.value = { status: 'error' }
 			}
 		})()
-	}, [enabled, newQuestionForm, questionDataDeployed, securityPoolForm.value.statoblastSecurityMultiplierBps, securityPoolForm.value.initialReportPriorityFeeNanoEth, existingQuestionCheckRetry.value])
+	}, [activeUniverseId, enabled, newQuestionForm, questionDataDeployed, securityPoolForm.value.statoblastSecurityMultiplierBps, securityPoolForm.value.initialReportPriorityFeeNanoEth, existingQuestionCheckRetry.value])
 
 	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
@@ -266,12 +266,12 @@ export function useSecurityPoolCreation({
 
 					if (newQuestionForm !== undefined && newQuestionForm.marketType !== 'binary') throw new Error('Security pools require a binary question')
 					const newQuestion = newQuestionForm === undefined ? undefined : createMarketParameters(newQuestionForm)
-					const parameters = createSecurityPoolParameters(newQuestion === undefined ? submittedSecurityPoolForm : { ...submittedSecurityPoolForm, marketId: formatQuestionIdHex(getQuestionId(newQuestion.questionData, newQuestion.outcomeLabels)) })
+					const parameters = { ...createSecurityPoolParameters(newQuestion === undefined ? submittedSecurityPoolForm : { ...submittedSecurityPoolForm, marketId: formatQuestionIdHex(getQuestionId(newQuestion.questionData, newQuestion.outcomeLabels)) }), universeId: activeUniverseId }
 					capturedQuestionId = parameters.questionId
 					if (newQuestion !== undefined && (await loadMarketDetails(createConnectedReadClient(), parameters.questionId)).exists) {
 						let poolAddress: Address | undefined
 						try {
-							poolAddress = await getOriginSecurityPoolAddress(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)
+							poolAddress = await getOriginSecurityPoolAddress(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas, parameters.universeId)
 						} catch (error) {
 							if (!isRecoverableContractReadError(error)) throw error
 							// The question is already known to exist even if the pool lookup fails.
@@ -294,7 +294,7 @@ export function useSecurityPoolCreation({
 						}
 						throw new Error(securityPoolCopy.ineligibleQuestionDetail)
 					}
-					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)) {
+					if (await originSecurityPoolExists(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas, parameters.universeId)) {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
 							marketDetails.value = details
 						}
@@ -303,7 +303,7 @@ export function useSecurityPoolCreation({
 							duplicateOriginPoolAddress.value = undefined
 						}
 						try {
-							const address = await getOriginSecurityPoolAddress(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas)
+							const address = await getOriginSecurityPoolAddress(createConnectedReadClient(), parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas, parameters.universeId)
 							if (isCurrentSubmittedPool(parameters)) duplicateOriginPoolAddress.value = address
 						} catch (error) {
 							if (!isRecoverableContractReadError(error)) throw error
@@ -344,7 +344,7 @@ export function useSecurityPoolCreation({
 	useEffect(() => {
 		if (!enabled) return
 		void loadDuplicateOriginPoolState()
-	}, [enabled, securityPoolForm.value.initialReportPriorityFeeNanoEth, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
+	}, [activeUniverseId, enabled, securityPoolForm.value.initialReportPriorityFeeNanoEth, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
 
 	useEffect(() => {
 		if (!enabled) return

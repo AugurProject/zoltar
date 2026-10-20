@@ -1,6 +1,6 @@
 import { buildRouteHref, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useId, useState } from 'preact/hooks'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { UniverseScalarPicker, resolveScalarUniverseSelection } from './UniverseScalarPicker.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -58,6 +58,10 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 	const selectedChild = visibleOutcomes[0]
 	const resolvingSelection = onScalarOutcomesChange !== undefined && selection?.outcomeIndex !== undefined && selectedChild === undefined
 	const deploymentReason = deploymentDisabledReason({ exists: false })
+	// Every undeployed row shares one deployment reason, so it is shown once and each disabled Deploy button points at it.
+	const sharedDeploymentReason = deploymentReason ?? (pendingOutcomeIndex === undefined ? undefined : zoltarCopy.childDeploymentPendingReason)
+	const sharedDeploymentReasonId = useId()
+	const showSharedDeploymentReason = sharedDeploymentReason !== undefined && visibleOutcomes.some(outcome => !outcome.exists && outcome.outcomeIndex !== pendingOutcomeIndex)
 	return (
 		<div className='form-grid'>
 			{outcomes.some(outcome => outcome.selected) ? (
@@ -86,9 +90,14 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 						onClick={() => {
 							if (selection.outcomeIndex !== undefined) onDeployChildUniverse(selection.outcomeIndex)
 						}}
-						availability={{ disabled: resolvingSelection || disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: resolvingSelection ? commonCopy.loadingWithEllipsis : deploymentReason }}
+						availability={{ disabled: resolvingSelection || disabled || pendingOutcomeIndex !== undefined || deploymentReason !== undefined, reason: resolvingSelection ? commonCopy.loadingWithEllipsis : (deploymentReason ?? (pendingOutcomeIndex === selection.outcomeIndex ? undefined : sharedDeploymentReason)) }}
 					/>
 				</div>
+			) : undefined}
+			{showSharedDeploymentReason ? (
+				<p className='detail' id={sharedDeploymentReasonId}>
+					{sharedDeploymentReason}
+				</p>
 			) : undefined}
 			<OutcomeUniverseList
 				selection
@@ -96,6 +105,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 				emptyMessage={scalarQuestion === undefined ? zoltarCopy.migrationChildUniversesEmpty : undefined}
 				outcomes={visibleOutcomes.map(outcome => {
 					const deployReason = deploymentDisabledReason(outcome)
+					const deployingThisOutcome = pendingOutcomeIndex === outcome.outcomeIndex
 					return {
 						actions: outcome.exists ? (
 							<UniverseLink href={browser === undefined ? undefined : buildRouteHref(browser.routeHash, writeUniverseQueryParam(browser.search, outcome.universeId))} className='button-link secondary-link' universeId={outcome.universeId}>
@@ -105,11 +115,12 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 							<TransactionActionButton
 								tone='secondary'
 								showDisabledReason={false}
+								disabledReasonElementId={showSharedDeploymentReason && !deployingThisOutcome ? sharedDeploymentReasonId : undefined}
 								idleLabel={zoltarCopy.formatDeployChildUniverse(outcome.label)}
 								pendingLabel={marketCopy.deployingUniverse}
-								pending={pendingOutcomeIndex === outcome.outcomeIndex}
+								pending={deployingThisOutcome}
 								onClick={() => onDeployChildUniverse(outcome.outcomeIndex)}
-								availability={{ disabled: pendingOutcomeIndex !== undefined || deployReason !== undefined, reason: deployReason }}
+								availability={{ disabled: pendingOutcomeIndex !== undefined || deployReason !== undefined, reason: deployReason ?? (deployingThisOutcome ? undefined : sharedDeploymentReason) }}
 							/>
 						),
 						details: (

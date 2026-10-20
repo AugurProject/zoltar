@@ -1,6 +1,6 @@
 import type { NetworkRecord } from './browser-types.ts'
 import { exactNumber } from './format.ts'
-import { type IndexerProgressSample, indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel, indexerProgressEstimate, indexerTimeLagLabel } from './network-freshness.ts'
+import { type IndexerProgressSample, indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel, indexerProgressEstimate, indexerRetryNotice, indexerTimeLagLabel } from './network-freshness.ts'
 
 export const networkIndicator = (input: {
 	readonly network?: NetworkRecord | undefined
@@ -14,7 +14,8 @@ export const networkIndicator = (input: {
 }): { tone: string; label: string; statusLabel: string; blockLabel: string; title: string } => {
 	const { network } = input
 	const stale = network !== undefined && (indexerHeadFreshness(network, input.now).stale || !network.last_success_at || input.now - new Date(network.last_success_at).getTime() > input.freshnessThresholdMs)
-	const title = network === undefined ? 'Network status unavailable' : `${network.name} · ${network.phase} · indexed block #${exactNumber(network.indexed_block)} · observed block #${exactNumber(network.observed_block)} · ${indexerLagLabel(network)}`
+	const retryNotice = indexerRetryNotice(network)
+	const title = network === undefined ? 'Network status unavailable' : `${network.name} · ${network.phase} · indexed block #${exactNumber(network.indexed_block)} · observed block #${exactNumber(network.observed_block)} · ${indexerLagLabel(network)}${retryNotice === undefined ? '' : ` · ${retryNotice}`}`
 	if (input.demo) {
 		if (input.failed) return { tone: 'error', label: 'Demo · unavailable', statusLabel: 'Demo · unavailable', blockLabel: '', title: 'Demo fixture network status unavailable' }
 		if (network === undefined) return { tone: 'live', label: 'Demo · loading', statusLabel: 'Demo · loading', blockLabel: '', title: 'Demo fixture status loading' }

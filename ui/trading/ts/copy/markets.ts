@@ -1,25 +1,34 @@
 import type { CoarseDuration } from '../lib/marketListing.js'
 import { liquidity } from './app.js'
 import { no, yes } from './outcomes.js'
+import { probabilityCopy } from './probability.js'
 
 function durationText(duration: CoarseDuration) {
 	if (duration.unit === 'minute' && duration.amount === 0n) return 'under a minute'
 	return `${duration.amount.toString()} ${duration.unit}${duration.amount === 1n ? '' : 's'}`
 }
 
+/** Prices show one decimal everywhere, matching the market page's probability bar. */
+function formatPercent(percent: number) {
+	return percent.toFixed(1)
+}
+
 function formatOutcomePrice(outcome: string, percent: number) {
-	return `${outcome} ${percent.toString()}%`
+	return `${outcome} ${formatPercent(percent)}%`
 }
 
 export const marketsCopy = {
 	yes,
 	no,
 	formatOutcomePrice,
-	buyOutcomeAt: (outcome: string, percent: number) => `Buy ${outcome} at a conditional ${percent.toString()}%`,
-	conditionalPrice: 'Conditional price',
-	formatConditionalPrices: (yesPercent: number, noPercent: number) => `Conditional price: ${formatOutcomePrice(yes, yesPercent)}, ${formatOutcomePrice(no, noPercent)}`,
-	priceUnavailable: 'The conditional price appears once the market has liquidity.',
-	lastConditionalPrices: 'Last conditional prices before trading closed',
+	buyOutcomeAt: (outcome: string, percent: number) => `Buy ${outcome}: ${formatPercent(percent)}%, the price if not Invalid`,
+	/** Captions the Yes / No prices with what they are conditional on; a market that stopped trading shows its last price. */
+	conditionalPrice: probabilityCopy.priceIfNotInvalid,
+	lastConditionalPrice: probabilityCopy.lastPriceIfNotInvalid,
+	formatConditionalPrices: (caption: string, yesPercent: number, noPercent: number) => `${caption}: ${formatOutcomePrice(yes, yesPercent)}, ${formatOutcomePrice(no, noPercent)}`,
+	priceUnavailable: 'The price appears once the market has liquidity.',
+	/** Replaces the price on a resolved market, whose shares now pay out by outcome instead of trading. */
+	finalOutcome: 'Final outcome',
 	liquidity,
 	closes: 'Closes',
 	ended: 'Ended',
@@ -38,6 +47,13 @@ export const marketsCopy = {
 	resultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'market' : 'markets'}` : `${shown.toString()} of ${loaded.toString()} markets`),
 	poolResultCount: (shown: number, loaded: number) => (shown === loaded ? `${loaded.toString()} ${loaded === 1 ? 'security pool' : 'security pools'}` : `${shown.toString()} of ${loaded.toString()} security pools`),
 	clearFilters: 'Clear filters',
+	/** The market list pages through every market the registry lists in the selected universe; favorites lead it. */
+	otherMarkets: 'Other markets',
+	loadingMarkets: 'Loading markets…',
+	noMarketsInUniverse: 'No markets in this universe yet',
+	noMarketsInUniverseDetail: 'Create one from a security pool, or paste a security pool address above.',
+	registryFailedLead: 'Market discovery failed',
+	pageRange: (first: bigint, last: bigint, total: bigint) => `Markets ${first.toString()}–${last.toString()} of ${total.toString()}`,
 	questionDescription: 'Question description',
 	noQuestionDescription: 'This question has no description.',
 	contracts: 'Contracts',

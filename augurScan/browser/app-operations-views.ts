@@ -2,13 +2,14 @@ import type { OperationsResponse } from './api-validation.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import type { ScannerContext } from './app-context.ts'
 import { element, lookup } from './app-dom.ts'
-import { counted, exactTimestamp, renderRetryStatus } from './app-presentation.ts'
+import { counted, renderRetryStatus } from './app-presentation.ts'
 import { exactNumber } from './format.ts'
 import { createOperationsComponents } from './operations-components.ts'
 import { createOperationsData, operationsHistoryOffset, operationsRiskHistoryKeys } from './operations-data.ts'
-import { renderOperationsDetail } from './operations-detail.ts'
+import { renderOperationsDetail, showOperationsDetailTab } from './operations-detail.ts'
 import { createOperationsLoader } from './operations-loader.ts'
 import { renderOperationsOverview } from './operations-overview.ts'
+import { operationsRenderSignature } from './operations-render-signature.ts'
 import { createOperationsRouteView } from './operations-route-view.ts'
 
 /** Wires the operations overview and detail pages to the shared scanner state. */
@@ -36,7 +37,7 @@ export const createOperationsViews = (context: ScannerContext) => {
 	})
 	const { captureOperationsRenderContext, restoreOperationsRenderContext, operationNumber, operationCounted, operationsHref, approvalTransitionSummary, operationsCatalogSection, operationsSectionFilters } = routeView
 
-	const renderOperations = (response: OperationsResponse, preservedContext?: OperationsRenderContext) =>
+	const renderOperations = (response: OperationsResponse, preservedContext?: OperationsRenderContext, live?: boolean) =>
 		renderOperationsOverview(
 			{
 				lookup,
@@ -46,7 +47,6 @@ export const createOperationsViews = (context: ScannerContext) => {
 				requiredChainId,
 				element,
 				number: exactNumber,
-				exactTimestamp,
 				operationNumber,
 				operationCounted,
 				operationsHref,
@@ -65,9 +65,10 @@ export const createOperationsViews = (context: ScannerContext) => {
 			},
 			response,
 			preservedContext,
+			live,
 		)
 
-	const renderOperationsDetailPage = (response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext) =>
+	const renderOperationsDetailPage = (response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext, live?: boolean) =>
 		renderOperationsDetail(
 			{
 				lookup,
@@ -94,6 +95,11 @@ export const createOperationsViews = (context: ScannerContext) => {
 				consumeDemoRiskHistoryAutoLoad: () => {
 					operationsState.demoRiskHistoryAutoLoadConsumed = true
 				},
+				selectTab: destination => {
+					if (destination.href === location.href) return
+					history.pushState(null, '', destination)
+					state.pageUrl = new URL(location.href)
+				},
 				setDetailState: detailState => {
 					operationsState.detailState = detailState
 				},
@@ -103,6 +109,7 @@ export const createOperationsViews = (context: ScannerContext) => {
 			response,
 			route,
 			preservedContext,
+			live,
 		)
 
 	const loadOperations = createOperationsLoader({
@@ -116,10 +123,20 @@ export const createOperationsViews = (context: ScannerContext) => {
 		data: operationsData,
 		renderOperations,
 		renderOperationsDetailPage,
+		renderSignature: response =>
+			operationsRenderSignature(response, {
+				chainId: requiredChainId(),
+				url: new URL(location.href),
+				networkName: state.networkRenderState.latestNetworks.find(network => String(network.chain_id) === requiredChainId())?.name,
+				liveConnected: elements.connection.classList.contains('live'),
+			}),
 		renderRetryStatus,
 	})
 
-	return { components, routeView, loadOperations }
+	/** Applies the detail tab named by the current URL to the rendered page, as after history traversal between tabs. */
+	const showDetailTab = () => showOperationsDetailTab(lookup('#operations-content'), state.pageUrl.searchParams.get('tab'))
+
+	return { components, routeView, loadOperations, showDetailTab }
 }
 
 export type OperationsViews = ReturnType<typeof createOperationsViews>

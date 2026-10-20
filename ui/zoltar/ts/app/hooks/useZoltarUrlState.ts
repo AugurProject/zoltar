@@ -1,16 +1,29 @@
 import { useCallback } from 'preact/hooks'
 import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { hasInvalidUniverseQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { hasInvalidUniverseQueryParam, readStringQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, setOrDeleteSearchParam, updateSearchParams, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+
+/** The question chosen to fork the selected universe, kept as typed so the fork page can explain an invalid ID. */
+const FORK_QUESTION_QUERY_PARAM = 'forkQuestion'
 
 type ZoltarUrlState = {
 	activeUniverseId: bigint
+	forkQuestionId: string
 	zoltarView: string
+}
+
+function readForkQuestionQueryParam(search: string) {
+	return readStringQueryParam(search, FORK_QUESTION_QUERY_PARAM)
+}
+
+function writeForkQuestionQueryParam(search: string, questionId: string | undefined) {
+	return updateSearchParams(search, params => setOrDeleteSearchParam(params, FORK_QUESTION_QUERY_PARAM, questionId))
 }
 
 function readZoltarUrlState(search: string): ZoltarUrlState {
 	return {
 		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
+		forkQuestionId: readForkQuestionQueryParam(search) ?? '',
 		zoltarView: readZoltarViewQueryParam(search) ?? '',
 	}
 }
@@ -23,7 +36,7 @@ function getZoltarSearch(search: string) {
 	const filteredSearch = getTopLevelRouteSearch('zoltar', search)
 	const zoltarView = readZoltarViewQueryParam(search)
 	const universeSearch = hasInvalidUniverseQueryParam(search) ? filteredSearch : writeUniverseQueryParam(filteredSearch, readUniverseQueryParam(search))
-	return writeZoltarViewQueryParam(universeSearch, zoltarView)
+	return writeForkQuestionQueryParam(writeZoltarViewQueryParam(universeSearch, zoltarView), readForkQuestionQueryParam(search))
 }
 
 export function useZoltarUrlState() {
@@ -43,12 +56,21 @@ export function useZoltarUrlState() {
 	)
 	const setZoltarView = useCallback((view: string | undefined) => updateZoltarView(view, 'push'), [updateZoltarView])
 	const replaceZoltarView = useCallback((view: string | undefined) => updateZoltarView(view, 'replace'), [updateZoltarView])
+	// The fork question follows the user across views and reloads; editing it replaces the entry instead of adding one per keystroke.
+	const setForkQuestionId = useCallback(
+		(questionId: string) => {
+			applyUrlStateUpdate(writeForkQuestionQueryParam(getOwnedSearch(), questionId), 'replace')
+		},
+		[applyUrlStateUpdate, getOwnedSearch],
+	)
 
 	return {
 		activeUniverseId: state.activeUniverseId,
+		forkQuestionId: state.forkQuestionId,
 		zoltarView: state.zoltarView,
 		replaceZoltarView,
 		setActiveUniverseId,
+		setForkQuestionId,
 		setZoltarView,
 	}
 }

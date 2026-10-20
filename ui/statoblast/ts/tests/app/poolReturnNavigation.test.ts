@@ -22,7 +22,7 @@ test('preserves the selected pool and tab through Advanced navigation and refres
 	installStatoblastRouting()
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}/vaults?universe=7`)
 	window.history.replaceState({}, '', '#/pools?universe=7')
-	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7&poolsView=browse')
+	expect(getRouteHref('open-oracle')).toBe('#/open-oracle?universe=7')
 })
 
 test('does not remember incomplete pool addresses or invent a pool tab', () => {
@@ -35,10 +35,10 @@ test('does not remember incomplete pool addresses or invent a pool tab', () => {
 	expect(getRouteHref('pools')).toBe(`#/pools/${pool}?openOracleReportId=42`)
 })
 
-test('keeps Advanced report, browser controls, vault context and universe across primary routes', () => {
+test('keeps Advanced report, vault context and universe across primary routes', () => {
 	const pool = '0x1111111111111111111111111111111111111111'
 	const vault = '0x2222222222222222222222222222222222222222'
-	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report&poolSearch=hello&poolFilter=ended&poolSort=endTime`)
+	window.history.replaceState({}, '', `#/open-oracle?universe=7&securityPool=${pool}&selectedPoolView=vaults&vault=${vault}&vaultView=vault-by-address&openOracleReportId=42&openOracleView=selected-report`)
 	const pools = getRouteHref('pools')
 	const params = new URLSearchParams(pools.split('?')[1])
 	expect(params.has('openOracleView')).toBe(false)
@@ -50,17 +50,22 @@ test('keeps Advanced report, browser controls, vault context and universe across
 	expect(new URLSearchParams(getRouteHref('open-oracle').split('?')[1]).get('openOracleReportId')).toBe('42')
 })
 
-test('returns to Browse or Universes with the same list controls and selected universe', () => {
-	for (const [path, view] of [
-		['#/pools', 'browse'],
-		['#/pools/universes', 'universes'],
-	]) {
-		window.history.replaceState({}, '', path + '?universe=7&poolSearch=hello')
+test('keeps the pool list controls out of Advanced and Deploy links and returns to the same list view and controls', () => {
+	for (const path of ['#/pools', '#/pools/universes']) {
+		window.history.replaceState({}, '', path + '?universe=7&poolSearch=hello&poolSort=endTime&poolFilter=ended')
+		expect(getRouteHref('deploy')).toBe('#/deploy?universe=7')
 		const advanced = getRouteHref('open-oracle')
-		expect(advanced).toContain('poolsView=' + view)
+		expect(advanced).toBe('#/open-oracle?universe=7')
 		window.history.replaceState({}, '', advanced)
-		expect(getRouteHref('pools')).toBe(path + '?universe=7&poolSearch=hello')
+		expect(getRouteHref('pools')).toBe(path + '?universe=7&poolSearch=hello&poolSort=endTime&poolFilter=ended')
 	}
+})
+
+test('opens Browse without stale list controls after a reload on Advanced', () => {
+	window.history.replaceState({}, '', '#/pools/universes?universe=7&poolSearch=hello')
+	window.history.replaceState({}, '', getRouteHref('open-oracle'))
+	installStatoblastRouting()
+	expect(getRouteHref('pools')).toBe('#/pools?universe=7')
 })
 
 test('uses the Favorites browser when no pool context was selected', () => {

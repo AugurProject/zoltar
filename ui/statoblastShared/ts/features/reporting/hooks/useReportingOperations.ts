@@ -14,6 +14,7 @@ import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome } from '../lib/reportingForm.js'
+import { getReportableVaultRepAttoRep } from '../lib/reportingMaxContribution.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getEscalationDepositClaimAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -281,15 +282,17 @@ export function useReportingOperations(
 		} else {
 			if ((!latestDetails.viewerVaultExists || latestDetails.viewerPoolHeldVaultRepBackingAttoRep === 0n) && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.noVaultRepSelectWallet)
 			if (!latestDetails.viewerVaultExists) throw new Error('This report uses pool-held REP backing. Deposit REP into your vault before reporting.')
-			const poolHeldVaultRepBackingAttoRep = latestDetails.viewerPoolHeldVaultRepBackingAttoRep ?? 0n
-			if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(poolHeldVaultRepBackingAttoRep, 'REP')))
-			if (contributionPreview.actualDepositAmount > poolHeldVaultRepBackingAttoRep) throw new Error(`Insufficient pool-held vault REP backing. Deposit ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - poolHeldVaultRepBackingAttoRep, 'REP')} into your vault before reporting.`)
+			const reportableVaultRepAttoRep = getReportableVaultRepAttoRep(latestDetails)
+			if (reportableVaultRepAttoRep === undefined) throw new Error(reportingCopy.loadingPoolHeldVaultRepBacking)
+			if (contributionPreview.actualDepositAmount > reportableVaultRepAttoRep && !(latestDetails.status === 'active' && latestDetails.forkContinuation)) throw new Error(reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(reportableVaultRepAttoRep, 'REP')))
+			if (contributionPreview.actualDepositAmount > reportableVaultRepAttoRep) throw new Error(`Insufficient pool-held vault REP backing. Deposit ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - reportableVaultRepAttoRep, 'REP')} into your vault before reporting.`)
 		}
 		if (!isCurrentSelection()) return undefined
 		return { actualDepositAmount: contributionPreview.actualDepositAmount, walletDepositAmount: getReportingWalletDepositAmount(latestDetails, contributionPreview.actualDepositAmount), contributionFunding, latestDetails, reportAmount, selectedOutcome }
 	}
 
-	const approveRepForReporting = async () =>
+	/** Approves the amount chosen in the approval control, or exactly this report's wallet deposit by default. */
+	const approveRepForReporting = async (amountAttoRep?: bigint) =>
 		await runReportingAction(
 			'approveReportingRep',
 			async (walletAddress, securityPoolAddress, currentForm, isCurrentSelection, context) => {
@@ -297,8 +300,9 @@ export function useReportingOperations(
 				if (preflight === undefined) return undefined
 				if (preflight.walletDepositAmount === undefined) throw new Error(reportingCopy.loadingVaultFunding)
 				if (preflight.contributionFunding !== 'wallet') throw new Error('This report uses vault backing and does not require wallet REP approval.')
-				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.walletDepositAmount) throw new Error('The security pool already has enough REP allowance for this report.')
-				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.walletDepositAmount)), amountAttoRep: preflight.walletDepositAmount }
+				const approvalAmountAttoRep = amountAttoRep ?? preflight.walletDepositAmount
+				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= approvalAmountAttoRep) throw new Error('The security pool already has enough REP allowance for this report.')
+				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
 			'Failed to approve REP for reporting',
 		)

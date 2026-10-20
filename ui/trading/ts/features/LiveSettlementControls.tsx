@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyInputBalance, formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core-shared/forms/amountInput.js'
 import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeWithValue } from '../lib/shareValue.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
@@ -55,6 +56,8 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	else if (market.universeForkTime !== 0n) initialOperation = 'migrate-shares'
 	const [operation, setOperation] = useState<SettlementOperation>(initialOperation)
 	const [amount, setAmount] = useState('')
+	// Max fills a readable ETH amount but redeems the exact complete sets it was pressed for, so no remainder is left behind.
+	const [maxFill, setMaxFill] = useState<Readonly<{ text: string; completeSets: bigint }>>()
 	const [sourceOutcome, setSourceOutcome] = useState<ShareOutcome>('YES')
 	// The loaded context stays in view while it reloads (after a confirmed migration, for example) so the picker does not collapse.
 	const [forkContext, setForkContext] = useState<Readonly<{ key: string; context: ForkMigrationContext }>>()
@@ -67,7 +70,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
 	const parsedAmountAttoEth = tryParseNonNegativeDecimalInput(amount)
-	const parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
+	const maxFillCurrent = maxFill !== undefined && maxFill.text === amount && maxFill.completeSets === availability.completeSets
+	let parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
+	if (maxFillCurrent) parsedAmount = maxFill.completeSets
+	// A typed amount that cannot be read says what is wrong with it: a stray separator, too many decimals, or not a number.
+	const amountFormatError = operation === 'redeem-complete-set' ? getAmountInputErrorMessage(validateAmountInput(amount)) : undefined
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
 	const unavailableReason = settlementUnavailableReason(operation, market, balances)
@@ -82,7 +89,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const forkContextLoading = forkContextState === 'loading' || forkContextState === 'idle'
 	// A child universe that already holds this share's whole balance would migrate nothing, and the contract reverts.
 	const alreadyMigratedTarget = selectedForkTargets.find(target => targetMigrationComplete(target, sourceOutcome, sourceBalance))
-	let inputBlocker = settlementInputBlocker(operation, unavailableReason, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
+	let inputBlocker = unavailableReason ?? amountFormatError ?? settlementInputBlocker(operation, unavailableReason, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
 	if (operation === 'migrate-shares' && operationAvailable) {
 		// The loading line above the picker names what is loading; the action only needs to say it is waiting.
 		if (forkContextLoading) inputBlocker = commonCopy.loadingWithEllipsis
@@ -98,7 +105,10 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		sourceOutcome,
 		targetOutcomeIndexes,
 		inputBlocker,
-		onRedemptionConfirmed: () => setAmount(''),
+		onRedemptionConfirmed: () => {
+			setAmount('')
+			setMaxFill(undefined)
+		},
 		onMigrationConfirmed: () => {
 			// The confirmed migration changes what each child universe holds; the next migration needs a new acknowledgment.
 			setMigrationAcknowledgedKey(undefined)
@@ -163,7 +173,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 
 	const amountId = useId()
 	let amountFieldError: string | undefined
-	if (amount.trim() !== '' && operationAvailable) amountFieldError = parsedAmountAttoEth === undefined ? settlementCopy.invalidEthAmount : inputBlocker
+	if (amount.trim() !== '' && operationAvailable) amountFieldError = inputBlocker
 	const selectOperation = (next: SettlementOperation) => {
 		invalidateSettlementInputs()
 		setOperation(next)
@@ -182,7 +192,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	// Shown before the action once there is a balance to move and a branch to move it to.
 	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market, 4, 'nearest', { noteRedemption: false }) : undefined
 	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
-	// Max fills a readable ETH amount: six decimals, rounded down so it never exceeds what the sets redeem for.
+	// Max shows a readable ETH amount: six decimals, rounded down so it never reads above what the sets redeem for.
 	const maxRedeemAttoEth = redeemableAttoEth === undefined || redeemableAttoEth < MAX_FILL_STEP_ATTO_ETH ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % MAX_FILL_STEP_ATTO_ETH)
 	const completeSetHint = redeemableAttoEth === undefined ? undefined : settlementCopy.completeSetsHeld(formatCompleteSetQuantity(availability.completeSets, 4, 'down'), formatCollateralEth(availability.completeSets, market, 'down'))
 	return (
@@ -212,7 +222,9 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 												disabled={workflowLocked}
 												onClick={() => {
 													invalidateSettlementInputs()
-													setAmount(formatCurrencyInputBalance(maxRedeemAttoEth ?? redeemableAttoEth, 18))
+													const text = formatCurrencyInputBalance(maxRedeemAttoEth ?? redeemableAttoEth, 18)
+													setAmount(text)
+													setMaxFill({ text, completeSets: availability.completeSets })
 												}}
 											>
 												{settlementCopy.max}

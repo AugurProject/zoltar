@@ -9,11 +9,11 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from '@zoltar/ui-statoblast-shared/features/security-pools/components/OracleInitialPriceFields.js'
 
-function PriceHarness({ fetchPrice }: { fetchPrice: (managerAddress: Address, onProgress?: OraclePriceQueryProgress) => Promise<bigint> }) {
+function PriceHarness({ fetchPrice, referencePrice }: { fetchPrice: (managerAddress: Address, onProgress?: OraclePriceQueryProgress) => Promise<bigint>; referencePrice?: bigint }) {
 	const [value, onChange] = useState<OracleInitialPriceInput>({ price: '' })
 	return (
 		<>
-			<OracleInitialPriceFields managerAddress={zeroAddress} fieldId='initial-price' value={value} onChange={onChange} disabled={false} fetchPrice={fetchPrice} />
+			<OracleInitialPriceFields managerAddress={zeroAddress} fieldId='initial-price' value={value} onChange={onChange} disabled={false} fetchPrice={fetchPrice} referencePrice={referencePrice} />
 			<button disabled={parseOracleInitialPrice(value).error !== undefined}>Submit</button>
 		</>
 	)
@@ -99,6 +99,23 @@ test('keeps quote failures inline and allows retry or manual pricing', async () 
 		})
 		expect(document.body.textContent).not.toContain('Quote unavailable')
 		expect(page.getByRole('button', { name: 'Submit' }).hasAttribute('disabled')).toBe(false)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('warns without blocking when a typed price looks inverted against the last known price', async () => {
+	const dom = installDomEnvironment()
+	const rendered = await renderIntoDocument(<PriceHarness fetchPrice={async () => 2n * 10n ** 18n} referencePrice={300n * 10n ** 18n} />)
+	try {
+		const page = within(document.body)
+		const input = page.getByRole('textbox', { name: 'Initial report price (REP per ETH)' })
+		await act(() => fireEvent.input(input, { target: { value: '0.0033' } }))
+		expect(document.body.textContent).toContain('This looks inverted (ETH per REP).')
+		expect(page.getByRole('button', { name: 'Submit' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.input(input, { target: { value: '310' } }))
+		expect(document.body.textContent).not.toContain('last known price')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

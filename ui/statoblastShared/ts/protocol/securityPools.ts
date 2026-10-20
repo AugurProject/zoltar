@@ -5,7 +5,8 @@ import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '..
 
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ListedSecurityPool } from '../types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolRegistryPage } from '../types/contracts.js'
+import { getProtocolPageOffset } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { readWithRpcStateRetries } from '@zoltar/ui-core-shared/lib/rpcStateRetries.js'
 
 import { requireSecurityPoolDeploymentTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
@@ -13,7 +14,7 @@ import { getInfraContractAddresses } from './deploymentHelpers.js'
 
 import { loadSecurityPoolDetails } from './securityPoolSnapshot.js'
 import { SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT } from './securityVaultQueries.js'
-export { isSecurityPoolVaultAdmissionClosed, loadSecurityPoolVaultSummary, loadSecurityVaultDetails } from './securityVaultQueries.js'
+export { loadSecurityPoolVaultSummary, loadSecurityVaultDetails } from './securityVaultQueries.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 type LoadAllSecurityPoolsOptions = {
@@ -130,6 +131,23 @@ function applyChildForkActivityHints(pools: ListedSecurityPool[]) {
 			hasForkActivity: true,
 		}
 	})
+}
+
+/** One page of the factory's pool registry, newest deployment first, with pool summaries only (no vault positions). */
+export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number, pageSize: number): Promise<SecurityPoolRegistryPage> {
+	const skippedCount = getProtocolPageOffset(pageIndex, pageSize)
+	const poolCount = await client.readContract({
+		address: getInfraContractAddresses().securityPoolFactory,
+		abi: securityPoolFactoryAbi,
+		functionName: 'securityPoolDeploymentCount',
+		args: [],
+	})
+	if (skippedCount >= poolCount) return { pageIndex, pageSize, poolCount, pools: [] }
+	const endIndex = poolCount - skippedCount
+	const startIndex = endIndex > BigInt(pageSize) ? endIndex - BigInt(pageSize) : 0n
+	const deployments = await loadSecurityPoolDeployments(client, startIndex, endIndex - startIndex)
+	const pools = await loadListedSecurityPools(client, [...deployments].reverse(), { vaultDetailMode: 'selected', vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT })
+	return { pageIndex, pageSize, poolCount, pools: applyChildForkActivityHints(pools) }
 }
 
 export async function loadAllSecurityPools(client: ReadClient, options: LoadAllSecurityPoolsOptions = {}): Promise<ListedSecurityPool[]> {

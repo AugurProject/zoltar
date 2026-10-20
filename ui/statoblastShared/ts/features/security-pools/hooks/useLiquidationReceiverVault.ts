@@ -1,13 +1,10 @@
 import { useSignal, type ReadonlySignal } from '@preact/signals'
 import { useEffect, useRef, type MutableRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import * as liquidationCopy from '../../../copy/liquidation.js'
+import { useLiquidationVaultSummary } from './useLiquidationVaultSummary.js'
 
 type UseLiquidationReceiverVaultParameters = {
 	accountAddress: Address | undefined
@@ -20,72 +17,17 @@ type UseLiquidationReceiverVaultParameters = {
 /** Liquidation receiver vault input, its vault-summary read, and the wallet-follow default. */
 export function useLiquidationReceiverVault({ accountAddress, latestEnvironmentRefreshKey, liquidationSecurityPoolAddress, loadSecurityPoolVaultSummary, waitForSecurityPoolReadBackend }: UseLiquidationReceiverVaultParameters) {
 	const receiverVault = useSignal('')
-	const summary = useSignal<SecurityPoolVaultSummary | undefined>(undefined)
-	const summaryError = useSignal<string | undefined>(undefined)
-	const summaryResolvedKey = useSignal<string | undefined>(undefined)
-	const summaryLoadingKey = useSignal<string | undefined>(undefined)
-	const summaryLoad = useLoadController()
-	const nextSummaryLoad = useRequestGuard()
-
-	const getCurrentRequestKey = () => {
-		const securityPoolAddress = liquidationSecurityPoolAddress.value
-		if (securityPoolAddress === undefined) return undefined
-		const receiver = tryParseAddressInput(receiverVault.value)
-		if (receiver === undefined) return undefined
-		return `${latestEnvironmentRefreshKey.current}:${securityPoolAddress.toLowerCase()}:${receiver.toLowerCase()}`
-	}
-
-	/** Cancels any in-flight summary read and clears the loaded summary state. */
-	const resetSummary = () => {
-		nextSummaryLoad()
-		summary.value = undefined
-		summaryError.value = undefined
-		summaryResolvedKey.value = undefined
-		summaryLoadingKey.value = undefined
-	}
-
-	const loadReceiverVaultSummary = async () => {
-		const securityPoolAddress = liquidationSecurityPoolAddress.value
-		if (securityPoolAddress === undefined) {
-			summaryError.value = liquidationCopy.selectedPoolDetailsLoading
-			return false
-		}
-		let receiver: Address
-		try {
-			receiver = parseAddressInput(receiverVault.value, liquidationCopy.receiverVault)
-		} catch (error) {
-			summary.value = undefined
-			summaryError.value = getErrorMessage(error, liquidationCopy.receiverVaultAddressInvalid)
-			return false
-		}
-		const requestKey = `${latestEnvironmentRefreshKey.current}:${securityPoolAddress.toLowerCase()}:${receiver.toLowerCase()}`
-		const isCurrent = nextSummaryLoad()
-		const result = await summaryLoad.run({
-			isCurrent,
-			onStart: () => {
-				summary.value = undefined
-				summaryError.value = undefined
-				summaryResolvedKey.value = undefined
-				summaryLoadingKey.value = requestKey
-			},
-			waitUntilReady: waitForSecurityPoolReadBackend,
-			load: async () => await loadSecurityPoolVaultSummary(securityPoolAddress, receiver),
-			onSuccess: loadedSummary => {
-				if (getCurrentRequestKey() !== requestKey) return
-				summary.value = loadedSummary
-				summaryResolvedKey.value = requestKey
-			},
-			onError: error => {
-				if (getCurrentRequestKey() !== requestKey) return
-				summaryError.value = getErrorMessage(error, 'Failed to load the receiver vault.')
-			},
-		})
-		if (summaryLoadingKey.value === requestKey) summaryLoadingKey.value = undefined
-		return result !== undefined && getCurrentRequestKey() === requestKey
-	}
+	const summary = useLiquidationVaultSummary({
+		copy: { invalidAddress: liquidationCopy.receiverVaultAddressInvalid, loadFailed: liquidationCopy.receiverVaultLoadFailed, vaultLabel: liquidationCopy.receiverVault },
+		latestEnvironmentRefreshKey,
+		liquidationSecurityPoolAddress,
+		loadSecurityPoolVaultSummary,
+		vaultAddress: receiverVault,
+		waitForSecurityPoolReadBackend,
+	})
 
 	const changeReceiverVault = (value: string) => {
-		resetSummary()
+		summary.reset()
 		receiverVault.value = value
 	}
 
@@ -100,16 +42,14 @@ export function useLiquidationReceiverVault({ accountAddress, latestEnvironmentR
 		if (receiverFollowsWallet) changeReceiverVault(accountAddress ?? '')
 	}, [accountAddress])
 
-	const currentRequestKey = getCurrentRequestKey()
-	const resolved = currentRequestKey !== undefined && summaryResolvedKey.value === currentRequestKey
 	return {
 		changeReceiverVault,
-		loadReceiverVaultSummary,
-		loading: currentRequestKey !== undefined && summaryLoadingKey.value === currentRequestKey && summaryLoad.isLoading.value,
+		loadReceiverVaultSummary: summary.load,
+		loading: summary.loading,
 		receiverVault,
-		resetSummary,
-		resolved,
-		summary: resolved ? summary.value : undefined,
-		summaryError: summaryError.value,
+		resetSummary: summary.reset,
+		resolved: summary.resolved,
+		summary: summary.summary,
+		summaryError: summary.summaryError,
 	}
 }

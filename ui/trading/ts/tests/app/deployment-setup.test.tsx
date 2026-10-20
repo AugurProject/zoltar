@@ -767,6 +767,46 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(false)
 	})
 
+	test('adds the deployment network to a wallet that does not know it, then switches to it', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		let walletChainId = 1
+		let knowsNetwork = false
+		const added: unknown[] = []
+		const provider: InjectedEthereum = {
+			request: async ({ method, params }) => {
+				if (method === 'eth_chainId') return `0x${walletChainId.toString(16)}`
+				if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [testWalletAccount]
+				if (method === 'wallet_addEthereumChain' && Array.isArray(params)) {
+					added.push(params[0])
+					knowsNetwork = true
+					return null
+				}
+				if (method === 'wallet_switchEthereumChain') {
+					// EIP-3326: a wallet that does not know the chain rejects the switch with code 4902.
+					if (!knowsNetwork) throw Object.assign(new Error('Unrecognized chain ID'), { code: 4902 })
+					walletChainId = core.chainId
+					return null
+				}
+				throw new Error(`Unexpected wallet method ${method}`)
+			},
+		}
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => deploymentClient(),
+			connectWallet: async () => ({ account: testWalletAccount, chainId: walletChainId }),
+			getWalletProvider: () => provider,
+			loadCoreDeployments: async () => [core],
+		}
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy trading factory')
+		await connectDeploymentWallet(rendered.container)
+		await waitForConnectedWallet(rendered.container)
+		expect(added).toHaveLength(1)
+		expect(added[0]).toMatchObject({ chainId: '0xaa36a7', chainName: core.chainName, nativeCurrency: { decimals: 18, symbol: 'ETH' } })
+		expect(walletChainId).toBe(core.chainId)
+		expect(rendered.container.textContent).not.toContain('The connected wallet must use')
+	})
+
 	test('follows a simulated wallet onto the wrong network and switches it back', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const provider = createSimulationProvider({

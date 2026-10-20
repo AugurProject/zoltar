@@ -65,17 +65,25 @@ export function ForkAuctionOutcomePoolNotice({ error, loading, onRetry, outcomeL
 	)
 }
 
-export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finalized, onOpenSettlement, truthAuctionEndsAt }: { actionButton: ComponentChildren; currentTimestamp: bigint | undefined; finalized: boolean; onOpenSettlement: (() => void) | undefined; truthAuctionEndsAt: bigint | undefined }) {
+export function ForkAuctionEndedNotice({ currentTimestamp, finalized, onOpenSettlement, truthAuctionEndsAt }: { currentTimestamp: bigint | undefined; finalized: boolean; onOpenSettlement: (() => void) | undefined; truthAuctionEndsAt: bigint | undefined }) {
 	const hasEndedByTime = truthAuctionEndsAt !== undefined && currentTimestamp !== undefined && hasTruthAuctionEnded(currentTimestamp, truthAuctionEndsAt)
 	if (!finalized && !hasEndedByTime) return undefined
-	let actions = finalized ? undefined : actionButton
-	if (finalized && onOpenSettlement !== undefined)
-		actions = (
+	const actions =
+		finalized && onOpenSettlement !== undefined ? (
 			<button className='primary' onClick={onOpenSettlement} type='button'>
 				{forkAuctionCopy.openSettlement}
 			</button>
-		)
+		) : undefined
 	return <UserMessage placement='page' tone='success' title={forkAuctionCopy.auctionEndedTitle} detail={finalized ? forkAuctionCopy.finalizedSettlementDetail : forkAuctionCopy.truthAuctionFinalizationRequiredDetail} actions={actions} />
+}
+
+/** The finalize step stays in place for the whole auction: disabled while bidding runs and once finalized, each with its reason. */
+export function ForkAuctionFinalizeSection({ actionButton }: { actionButton: ComponentChildren }) {
+	return (
+		<SectionBlock title={forkAuctionCopy.finalizeTruthAuction} variant='embedded'>
+			<div className='actions'>{actionButton}</div>
+		</SectionBlock>
+	)
 }
 
 export function ForkAuctionStartSection({ actionButton, bypassReason, readyInText }: { actionButton: ComponentChildren; bypassReason: string | undefined; readyInText: string | undefined }) {

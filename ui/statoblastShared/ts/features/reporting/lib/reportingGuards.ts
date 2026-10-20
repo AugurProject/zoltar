@@ -22,6 +22,7 @@ export function getReportingReportGuardMessage({
 	walletFundingAvailable = false,
 	walletDepositAmount = actualDepositAmount,
 	viewerPoolHeldVaultRepBackingAttoRep,
+	viewerReportableVaultRepAttoRep,
 	viewerVaultExists,
 	viewerWalletRepAllowanceAttoRep,
 	viewerWalletRepBalanceAttoRep,
@@ -40,6 +41,8 @@ export function getReportingReportGuardMessage({
 	walletFundingAvailable?: boolean | undefined
 	walletDepositAmount?: bigint | undefined
 	viewerPoolHeldVaultRepBackingAttoRep: bigint | undefined
+	/** The part of the backing the pool lets this vault report now (see `getReportableVaultRepAttoRep`). */
+	viewerReportableVaultRepAttoRep: bigint | undefined
 	viewerVaultExists: boolean
 	viewerWalletRepAllowanceAttoRep?: bigint | undefined
 	viewerWalletRepBalanceAttoRep?: bigint | undefined
@@ -48,8 +51,7 @@ export function getReportingReportGuardMessage({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return reportingCopy.loadingReportingDetails
 	if (selectedOutcome === undefined) return reportingCopy.reportOutcomeSelectionRequired
-	if (reportAmount.trim() === '') return undefined
-	if (selectedAmount === undefined || selectedAmount <= 0n) return undefined
+	if (reportAmount.trim() === '' || selectedAmount === undefined || selectedAmount <= 0n) return reportingCopy.reportAmountRequired
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason
 	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would become dispute-staked for this report.'
 	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {
@@ -66,10 +68,10 @@ export function getReportingReportGuardMessage({
 		return undefined
 	}
 	if (walletFundingAvailable && (!viewerVaultExists || (viewerPoolHeldVaultRepBackingAttoRep ?? 1n) === 0n)) return reportingCopy.noVaultRepSelectWallet
-	if (walletFundingAvailable && viewerPoolHeldVaultRepBackingAttoRep !== undefined && actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(viewerPoolHeldVaultRepBackingAttoRep, 'REP'))
+	if (walletFundingAvailable && viewerReportableVaultRepAttoRep !== undefined && actualDepositAmount > viewerReportableVaultRepAttoRep) return reportingCopy.insufficientVaultRepSelectWallet(formatCurrencyBalanceWithUnit(viewerReportableVaultRepAttoRep, 'REP'))
 	if (!viewerVaultExists) return 'This report uses pool-held REP backing. Deposit REP into your vault before reporting.'
-	if (viewerPoolHeldVaultRepBackingAttoRep === undefined) return reportingCopy.loadingPoolHeldVaultRepBacking
-	if (actualDepositAmount > viewerPoolHeldVaultRepBackingAttoRep) return `Deposit ${formatAdditionalCurrencyBalance(actualDepositAmount - viewerPoolHeldVaultRepBackingAttoRep, 'REP')} into your vault’s pool-held backing before reporting.`
+	if (viewerReportableVaultRepAttoRep === undefined) return reportingCopy.loadingPoolHeldVaultRepBacking
+	if (actualDepositAmount > viewerReportableVaultRepAttoRep) return `Deposit ${formatAdditionalCurrencyBalance(actualDepositAmount - viewerReportableVaultRepAttoRep, 'REP')} into your vault’s pool-held backing before reporting.`
 	return undefined
 }
 

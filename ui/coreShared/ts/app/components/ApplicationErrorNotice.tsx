@@ -24,29 +24,32 @@ export function ApplicationErrorNotice({ errorMessage, onRetry }: ApplicationErr
 		}
 	}
 
+	// The same frame and main landmark as the application, so the notice keeps the page's layout and landmarks.
 	return (
-		<main>
-			<UserMessage
-				placement='page'
-				tone='error'
-				announcement='assertive'
-				detail={
-					<>
-						<h1>{appCopy.applicationErrorTitle}</h1>
-						<p>{errorMessage}</p>
-					</>
-				}
-				actions={
-					<>
-						<button type='button' disabled={retryInProgress} onClick={retry}>
-							{retryInProgress ? commonCopy.retrying : commonCopy.retry}
-						</button>
-						<button type='button' className='secondary' onClick={() => window.location.reload()}>
-							{appCopy.reloadApplication}
-						</button>
-					</>
-				}
-			/>
-		</main>
+		<div className='app-frame'>
+			<main>
+				<UserMessage
+					placement='page'
+					tone='error'
+					announcement='assertive'
+					detail={
+						<>
+							<h1>{appCopy.applicationErrorTitle}</h1>
+							<p>{errorMessage}</p>
+						</>
+					}
+					actions={
+						<>
+							<button type='button' disabled={retryInProgress} onClick={retry}>
+								{retryInProgress ? commonCopy.retrying : commonCopy.retry}
+							</button>
+							<button type='button' className='secondary' onClick={() => window.location.reload()}>
+								{appCopy.reloadApplication}
+							</button>
+						</>
+					}
+				/>
+			</main>
+		</div>
 	)
 }

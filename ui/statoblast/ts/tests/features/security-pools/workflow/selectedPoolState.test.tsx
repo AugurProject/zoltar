@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import {
@@ -29,7 +29,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	// Renders the workflow with one loaded pool at the given address selected and checked.
 	const renderPoolAt = async (securityPoolAddress: Address, pool: Partial<ListedSecurityPool> = {}, overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}) =>
 		await renderWorkflow(createLoadedPoolProps({ checkedSecurityPoolAddress: securityPoolAddress, securityPoolAddress, securityPools: [createSelectedPool({ securityPoolAddress, ...pool })], ...overrides }))
-	const filledVaultForm = (securityPoolAddress: Address, selectedVaultOwner: Address = zeroAddress) => createSecurityVaultForm({ depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2', securityPoolAddress, selectedVaultOwner })
+	const filledVaultForm = (securityPoolAddress: Address, selectedVaultOwner: Address = zeroAddress) => createSecurityVaultForm({ securityPoolAddress, selectedVaultOwner })
 	const validOracle = () => createOracleManagerDetails({ isPriceValid: true })
 	const vaultOperationsParameters = { accountAddress: zeroAddress, refreshState: async () => undefined, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined }
 	const openMyVault = async () => {
@@ -116,7 +116,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(tabList).getByRole('tab', { name: 'Vaults' }).getAttribute('aria-selected')).toBe('true')
 		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
 		expect(routeSurface.querySelectorAll('.section-block.default')).toHaveLength(0)
-		expectSectionVariant('Vault actions', 'plain')
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' }))
@@ -330,11 +329,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: 'My vault' })
 		expect(vaultSummaryHeading).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Vault owner address' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Vault actions' })).not.toBeNull()
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'More tools' })))
 		expect(documentQueries.getByRole('button', { name: 'Staged operations' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Price oracle' })).not.toBeNull()
-		expect(documentQueries.getAllByRole('button', { name: 'Claim fees' }).length).toBeGreaterThan(0)
 		const vaultSummarySection = vaultSummaryHeading.closest('.entity-card')
 		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a selected vault summary card')
 		expect(within(vaultSummarySection).queryByText('Approved REP')).toBeNull()
@@ -414,7 +411,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 
 		await openAllVaults()
-		const reviewLiquidationButton = within(document.body).getByRole('button', { name: 'Liquidate vault' })
+		const reviewLiquidationButton = within(document.body).getByRole('button', { name: `Liquidate vault: ${vaultAddress}` })
 		if (!(reviewLiquidationButton instanceof HTMLButtonElement)) throw new Error('Expected Liquidate vault button')
 		expect(reviewLiquidationButton.disabled).toBe(false)
 
@@ -459,35 +456,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(document.body).getByText('Pool-held REP')).not.toBeNull()
 	})
 
-	test('claims fees directly from the selected vault', async () => {
-		let claims = 0
-		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
-		await renderLoadedPool({
-			securityPools: [createSelectedPool({ vaultCount: 1n, vaults: [createSecurityPoolVaultSummary({ vaultAddress })] })],
-			securityVault: createSecurityVaultProps({
-				onRedeemFees: () => {
-					claims += 1
-				},
-				accountState: createAccountState({ address: vaultAddress }),
-				selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
-				securityVaultDetails: createSecurityVaultDetails({ vaultAddress }),
-				securityVaultForm: createSecurityVaultForm({ selectedVaultOwner: vaultAddress }),
-			}),
-		})
-
-		const documentQueries = within(document.body)
-		await openMyVault()
-		const claimFeesButton = documentQueries.getAllByRole('button', { name: 'Claim fees' })[0]
-		if (!(claimFeesButton instanceof HTMLElement)) throw new Error('Expected claim fees launcher button')
-
-		await act(() => {
-			fireEvent.click(claimFeesButton)
-		})
-
-		expect(documentQueries.queryByRole('dialog')).toBeNull()
-		expect(claims).toBe(1)
-	})
-
 	test.each([
 		['auto-loads the selected vault when a routed pool opens in the vault view', zeroAddress, [undefined]],
 		['does not auto-load the selected vault until the vault form has the selected pool address', '', []],
@@ -514,7 +482,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			{
 				securityVault: createSecurityVaultProps({
 					securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: stalePoolAddress }),
-					securityVaultForm: createSecurityVaultForm({ depositAmount: '10', repWithdrawAmount: '1', targetHealthFactor: '2', securityPoolAddress: selectedPoolAddress }),
+					securityVaultForm: createSecurityVaultForm({ securityPoolAddress: selectedPoolAddress }),
 				}),
 				selectedPoolView: 'vaults',
 			},
@@ -523,40 +491,11 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
 		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
-		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Claim fees']) {
-			expectTransactionButtonDisabled(document.body, actionLabel)
-			expect(getTransactionButtonState(document.body, actionLabel).reason).toBeUndefined()
-			expect(documentQueries.getByRole('button', { name: actionLabel }).getAttribute('aria-describedby')).toBeNull()
-		}
 		// The wallet's own vault never offers liquidation, so it has no launcher to block.
 		expect(documentQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 	})
 
-	test('shows an Ended badge, allows REP redemption, and blocks ended-pool settlement-collateral actions in the vault workflow', async () => {
-		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
-		await renderPoolAt(
-			selectedPoolAddress,
-			{ questionOutcome: 'yes' },
-			{
-				poolOracleManagerDetails: validOracle(),
-				securityVault: createSecurityVaultProps({
-					// Redemption requires the commitment to be exited first.
-					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, securityPoolAddress: selectedPoolAddress, underwritingLimitAttoEth: 0n }),
-					securityVaultForm: filledVaultForm(selectedPoolAddress),
-					walletRepBalanceAttoRep: 10n * 10n ** 18n,
-				}),
-				selectedPoolView: 'vaults',
-			},
-		)
-
-		expectTransactionButtonDisabled(document.body, 'Deposit REP')
-		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonEnabled(document.body, 'Claim fees')
-		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.')
-		expect(within(document.body).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
-	})
-
-	test('shows a vault-missing notice and hides the embedded summary for an empty selected vault', async () => {
+	test('hides the summary and the liquidation launcher for an empty selected vault', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b3')
 		await renderPoolAt(
 			selectedPoolAddress,
@@ -572,11 +511,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		await openMyVault()
-		expect(documentQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
-		for (const actionLabel of ['Withdraw REP', 'Claim fees']) {
-			expect(getTransactionButtonState(document.body, actionLabel).reason).toBe('This vault does not exist.')
-		}
 		expect(documentQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
@@ -624,9 +559,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				onOpenLiquidationModal: (_manager, _pool, target) => {
 					openedTarget = target
 				},
-				poolOracleManagerDetails: validOracle(),
+				// At 1 REP per ETH, 1 REP cannot back a 2 ETH commitment, so this vault outside the vault preview is liquidatable.
+				poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 10n ** 18n }),
 				securityVault: createSecurityVaultProps({
-					securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: otherVaultAddress }),
+					securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress, vaultAddress: otherVaultAddress, vaultAttoRepBacking: 10n ** 18n }),
 					securityVaultForm: filledVaultForm(selectedPoolAddress, otherVaultAddress),
 				}),
 				selectedPoolView: 'vaults',
@@ -716,7 +652,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		await openAllVaults()
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Open vault' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: `Open vault: ${vaultAddress}` }))
 		})
 
 		expect(formChanges).toContainEqual({ selectedVaultOwner: vaultAddress })

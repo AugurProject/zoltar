@@ -28,6 +28,7 @@ import {
 	ZERO_LIQUIDATION_APPROVAL_ID,
 	getApprovalClampedLiquidationAmount,
 	getDelegatedLiquidationApprovalReason,
+	getInitialReportRepShortfallReason,
 	getLiquidationBlockers,
 	getLiquidationButtonLabels,
 	getLiquidationExecutionMode,
@@ -75,6 +76,9 @@ type LiquidationModalProps = {
 	receiverVaultSummary?: SecurityPoolVaultSummary | undefined
 	callerVaultSummary?: SecurityPoolVaultSummary | undefined
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
+	liquidationTargetVaultSummaryError?: string | undefined
+	loadingLiquidationTargetVaultSummary?: boolean | undefined
+	onLoadLiquidationTargetVaultSummary?: (() => void) | undefined
 	liquidationTargetVault: string
 	liquidationReceiverVault?: string | undefined
 	liquidationApprovalId?: string | undefined
@@ -133,6 +137,9 @@ export function LiquidationModal({
 	receiverVaultSummary: loadedReceiverVaultSummary,
 	callerVaultSummary,
 	targetVaultSummary,
+	liquidationTargetVaultSummaryError,
+	loadingLiquidationTargetVaultSummary = false,
+	onLoadLiquidationTargetVaultSummary = () => undefined,
 	onLiquidationAmountChange,
 	onLiquidationReceiverVaultChange = () => undefined,
 	onLiquidationApprovalIdChange = () => undefined,
@@ -178,6 +185,12 @@ export function LiquidationModal({
 		if (!showLiquidationModal || !delegatedReceiver || !hasValidReceiverVault || liquidationReceiverVaultSummaryResolved || liquidationReceiverVaultSummaryError !== undefined || loadingLiquidationReceiverVaultSummary) return
 		onLoadLiquidationReceiverVaultSummary()
 	}, [delegatedReceiver, hasValidReceiverVault, liquidationReceiverVaultSummaryError, liquidationReceiverVaultSummaryResolved, loadingLiquidationReceiverVaultSummary, onLoadLiquidationReceiverVaultSummary, showLiquidationModal])
+	const hasValidTargetVault = tryParseAddressInput(liquidationTargetVault) !== undefined
+	// A target outside the pool's vault preview has no summary yet, so the dialog reads it once and offers a retry if that read fails.
+	useEffect(() => {
+		if (!showLiquidationModal || !hasValidTargetVault || targetVaultSummary !== undefined || liquidationTargetVaultSummaryError !== undefined || loadingLiquidationTargetVaultSummary) return
+		onLoadLiquidationTargetVaultSummary()
+	}, [hasValidTargetVault, liquidationTargetVaultSummaryError, loadingLiquidationTargetVaultSummary, onLoadLiquidationTargetVaultSummary, showLiquidationModal, targetVaultSummary])
 	const receiverVaultSummary = delegatedReceiver ? loadedReceiverVaultSummary : (loadedReceiverVaultSummary ?? callerVaultSummary)
 	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = tryParseEthAmountInput(liquidationDebtEthAmount)
@@ -227,6 +240,7 @@ export function LiquidationModal({
 	const liquidationMaxActionAmount = hasUsableOraclePrice ? protocolLiquidationMaxAmount : computedLiquidationMaxAmount
 	const liquidationMaxUnavailableReason = (() => {
 		if (liquidationMaxActionAmount !== undefined) return liquidationCopy.maxTransferableNone
+		if (targetVaultSummary === undefined && hasValidTargetVault) return liquidationTargetVaultSummaryError ?? liquidationCopy.loadingTargetVault
 		return liquidationExecutionMode === 'queue' ? liquidationCopy.maxTransferableQueuedNeedsPrice : liquidationCopy.maxTransferableNeedsPrice
 	})()
 	const liquidationMaxUnavailable = liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n
@@ -285,6 +299,7 @@ export function LiquidationModal({
 					requiredCostAttoEth: liquidationFundingPreview?.totalWalletEthRequiredAttoEth,
 					walletBalanceAttoEth,
 				})
+	const queueLiquidationRepGuardMessage = liquidationExecutionMode === 'queue' ? getInitialReportRepShortfallReason(liquidationFundingPreview) : undefined
 	const liquidationLifecycleBlocker = getLiquidationLifecycleBlocker(poolState)
 	const liquidationEnabled = liquidationLifecycleBlocker === undefined
 	const walletGuard = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain })
@@ -302,11 +317,14 @@ export function LiquidationModal({
 		liquidationReceiverVaultSummaryError,
 		liquidationReceiverVaultSummaryResolved,
 		liquidationSecurityPoolAddress,
+		liquidationTargetVaultSummaryError,
 		liquidationTimeoutSeconds,
 		loadingLiquidationApproval,
 		loadingLiquidationFundingPreview,
 		loadingLiquidationReceiverVaultSummary,
+		loadingLiquidationTargetVaultSummary,
 		queueLiquidationEthGuardMessage,
+		queueLiquidationRepGuardMessage,
 		sameVaultWarning,
 		trimmedLiquidationReceiverVault,
 		trimmedLiquidationTargetVault,
@@ -352,6 +370,7 @@ export function LiquidationModal({
 					trimmedLiquidationReceiverVault={trimmedLiquidationReceiverVault}
 					trimmedLiquidationTargetVault={trimmedLiquidationTargetVault}
 				/>
+				<RetryableNotice disabled={loadingLiquidationTargetVaultSummary} message={liquidationTargetVaultSummaryError} onRetry={onLoadLiquidationTargetVaultSummary} retryLabel={liquidationCopy.retryTargetVault} />
 				{sameVaultWarning === undefined ? null : (
 					<WarningSurface as='section' surface='flat' variant='compact'>
 						<div className='entity-card-header'>
@@ -430,7 +449,9 @@ export function LiquidationModal({
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
 				{approvalClampedNotice === undefined ? null : <UserMessage tone='warning' announcement='polite' detail={approvalClampedNotice} />}
-				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={fieldsLocked} fieldId={initialPriceFieldId} /> : undefined}
+				{needsInitialPrice ? (
+					<OracleInitialPriceFields managerAddress={liquidationManagerAddress} referencePrice={poolOraclePrice !== undefined && poolOraclePrice > 0n ? poolOraclePrice : repPerEthPrice} value={initialPrice} onChange={changeInitialPrice} disabled={fieldsLocked} fieldId={initialPriceFieldId} />
+				) : undefined}
 				{liquidationEffectPreview === undefined ? null : <LiquidationEffectPreviewSection estimated={!hasUsableOraclePrice} preview={liquidationEffectPreview} />}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (
 					<div className='actions'>

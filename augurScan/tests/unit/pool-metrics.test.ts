@@ -15,30 +15,33 @@ test('matches Statoblast annual fee presentation, including normal limits and no
 		[1000000000000000000n, '0'],
 	]
 	for (const [rate, millionths] of expected) expect(annualFeeMillionths(rate)).toBe(millionths)
-	expect(annualFeeText('1000000000000000000')).toBe('0 %')
-	expect(annualFeeText('0')).toBe('100 %')
+	expect(annualFeeText('1000000000000000000')).toBe('0%')
+	expect(annualFeeText('0')).toBe('100%')
 	for (const invalid of [undefined, null, '', 'bad', '-1']) expect(annualFeeMillionths(invalid)).toBeUndefined()
 })
 
 test('derives pool metrics from one tagged snapshot without treating missing values as zero', () => {
-	const rows = poolSummaryMetrics({
-		currentRetentionRate: String(1000000000000000000n),
-		settlementCollateralAttoEth: String(42n * 10n ** 18n),
-		currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
-		totalPoolHeldAttoRep: String(120n * 10n ** 18n),
-		totalUnderwritingLimitAttoEth: String(100n * 10n ** 18n),
-		securityMultiplierBps: '25000',
-	})
-	expect(rows).toContainEqual(['Annual open-interest fee', '0 %'])
-	expect(rows).toContainEqual(['Open interest', '42 ETH'])
-	expect(rows).toContainEqual(['Minting capacity', '50 ETH'])
-	expect(rows).toContainEqual(['Capacity used', '84 %'])
+	const rows = poolSummaryMetrics(
+		{
+			currentRetentionRate: String(1000000000000000000n),
+			settlementCollateralAttoEth: String(42n * 10n ** 18n),
+			currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
+			totalPoolHeldAttoRep: String(120n * 10n ** 18n),
+			totalUnderwritingLimitAttoEth: String(100n * 10n ** 18n),
+			securityMultiplierBps: '25000',
+		},
+		'SepoliaETH',
+	)
+	expect(rows).toContainEqual(['Annual open-interest fee', '0%'])
+	expect(rows).toContainEqual(['Open interest', '42 SepoliaETH'])
+	expect(rows).toContainEqual(['Minting capacity', '50 SepoliaETH'])
+	expect(rows).toContainEqual(['Capacity used', '84%'])
 	expect(rows).toContainEqual(['Pool-held REP', '120 REP'])
 	expect(rows).toContainEqual(['REP per committed ETH', '1.2 REP/ETH'])
 	expect(rows).toContainEqual(['Security multiplier', '2.5 ×'])
-	expect(poolSummaryMetrics({}).every(([, value]) => value === 'Unavailable')).toBe(true)
-	expect(poolSummaryMetrics({ settlementCollateralAttoEth: String(6n), currentMintingCapacityAttoEth: String(5n) })).toContainEqual(['Capacity used', '120 %'])
-	expect(poolSummaryMetrics({ settlementCollateralAttoEth: String(6n), currentMintingCapacityAttoEth: String(0n) })).toContainEqual(['Capacity used', 'Unavailable'])
+	expect(poolSummaryMetrics({}, 'ETH').every(([, value]) => value === 'Unavailable')).toBe(true)
+	expect(poolSummaryMetrics({ settlementCollateralAttoEth: String(6n), currentMintingCapacityAttoEth: String(5n) }, 'ETH')).toContainEqual(['Capacity used', '120%'])
+	expect(poolSummaryMetrics({ settlementCollateralAttoEth: String(6n), currentMintingCapacityAttoEth: String(0n) }, 'ETH')).toContainEqual(['Capacity used', 'Unavailable'])
 })
 
 test('renders the production tagged pool snapshot without renaming its fields', async () => {
@@ -66,11 +69,11 @@ test('renders the production tagged pool snapshot without renaming its fields', 
 	})
 	expect(snapshot.readStatus).toBe('success')
 	if (snapshot.readResult === undefined) throw new Error('Expected tagged pool snapshot')
-	expect(poolSummaryMetrics(snapshot.readResult)).toEqual([
-		['Annual open-interest fee', '0 %'],
+	expect(poolSummaryMetrics(snapshot.readResult, 'ETH')).toEqual([
+		['Annual open-interest fee', '0%'],
 		['Open interest', '42 ETH'],
 		['Minting capacity', '50 ETH'],
-		['Capacity used', '84 %'],
+		['Capacity used', '84%'],
 		['Pool-held REP', '120 REP'],
 		['REP per committed ETH', '1.2 REP/ETH'],
 		['Security multiplier', '2.5 ×'],

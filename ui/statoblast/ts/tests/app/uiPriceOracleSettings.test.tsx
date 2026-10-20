@@ -2,6 +2,7 @@
 
 import { expect, mock, test } from 'bun:test'
 import { UiPriceOracleSettings, readUiPriceOracle } from '../../app/UiPriceOracleSettings.js'
+import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -79,6 +80,19 @@ test('applies an oracle choice in memory and reports a storage write failure', a
 		await rendered.cleanup()
 		if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
 		else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
+		domEnvironment.cleanup()
+	}
+})
+
+test('names the price source by its label alone and describes it with the helper text', async () => {
+	const domEnvironment = installDomEnvironment('http://localhost/#/markets')
+	const rendered = await renderIntoDocument(<UiPriceOracleSettings priceOracle='open-oracle-fallback' onPriceOracleChange={() => undefined} />)
+	try {
+		const priceSelect = within(rendered.container).getByRole('combobox', { name: 'UI price oracle' })
+		const descriptions = (priceSelect.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
+		expect(descriptions).toEqual([appCopy.uiPriceOracleScope, appCopy.openOracleFallbackUiPriceDetail])
+	} finally {
+		await rendered.cleanup()
 		domEnvironment.cleanup()
 	}
 })

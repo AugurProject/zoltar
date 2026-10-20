@@ -1,8 +1,10 @@
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { getReportableVaultRepAttoRep } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingMaxContribution.js'
 import { redeemRepFromVaultFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
-import { quoteVaultOperations, submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
+import { loadVaultOperationsPrerequisites, quoteVaultOperations, submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
+import { wrapWeth } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { loadOracleManagerDetails, loadQueuedVaultOperationState, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
@@ -12,7 +14,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
-import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { loadSecurityPoolVaultSummary, loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { DAY } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
@@ -23,7 +25,7 @@ import { createQuestion } from '../../../../../../solidity/ts/testSupport/simula
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { useSepoliaAnvilUiEnvironment } from './testSupport/sepoliaAnvilUi.js'
 import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
-import { depositRepToVault, setUnderwritingLimit } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRepToVault, setUnderwritingLimit, updateVaultFees } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
 import { createWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { approveToken } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
@@ -79,6 +81,45 @@ describe('Security vault integration', () => {
 		expect(details?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
 	})
 
+	test('reports the fees a vault can redeem before the vault is checkpointed', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(client, mockWindow, manager)
+		await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)
+		await createCompleteSet(client, securityPoolAddress, 10n ** 18n)
+		await mockWindow.advanceTime(30n * DAY)
+		// Fees accrue to the pool fee index; the vault's stored balance only grows when that vault is checkpointed.
+		expect((await getSecurityVault(client, securityPoolAddress, walletAddress)).claimableFeesAttoEth).toBe(0n)
+		const pendingFees = (await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.claimableFeesAttoEth
+		if (pendingFees === undefined) throw new Error('Expected security vault details to load')
+		expect(pendingFees).toBeGreaterThan(0n)
+		// Pool and liquidation lists read vaults through the summary loader, which checkpoints the same way.
+		expect((await loadSecurityPoolVaultSummary(uiReadClient, securityPoolAddress, walletAddress)).claimableFeesAttoEth).toBe(pendingFees)
+		await updateVaultFees(client, securityPoolAddress, walletAddress)
+		const checkpointedFees = (await getSecurityVault(client, securityPoolAddress, walletAddress)).claimableFeesAttoEth
+		// The checkpoint lands in a later block, so it can only add the fees of the extra seconds.
+		expect(checkpointedFees).toBeGreaterThanOrEqual(pendingFees)
+		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.claimableFeesAttoEth).toBe(checkpointedFees)
+	})
+
+	test('reports exactly the vault REP the pool lets a committed vault move', async () => {
+		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+		await manipulatePriceOracle(client, mockWindow, manager)
+		await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 4_000n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)
+		await mockWindow.advanceTime(366n * DAY)
+		await manipulatePriceOracle(client, mockWindow, manager)
+		const details = await loadReportingDetails(uiReadClient, securityPoolAddress, walletAddress)
+		const reportable = getReportableVaultRepAttoRep(details)
+		if (reportable === undefined) throw new Error('Expected the reportable vault REP to load')
+		// 4,000 ETH at 1 REP/ETH keeps a 1.5× migration reserve of 6,000 REP in the pool, less the rounding margin.
+		expect(details.viewerPoolHeldVaultRepBackingAttoRep).toBe(depositAmount)
+		expect(reportable).toBeLessThan(4_000n * 10n ** 18n)
+		expect(reportable).toBeGreaterThan(4_000n * 10n ** 18n - 10n)
+		await expect(reportOutcomeInSecurityPool(uiWriteClient, securityPoolAddress, 'yes', reportable + 10n ** 18n, reportable + 10n ** 18n, 'vault')).rejects.toThrow('backing insufficient')
+		await reportOutcomeInSecurityPool(uiWriteClient, securityPoolAddress, 'yes', reportable, reportable, 'vault')
+		const reported = await loadReportingDetails(uiReadClient, securityPoolAddress, walletAddress)
+		expect(reported.viewerVaultDisputeStakedAttoRep).toBe(reportable)
+	})
+
 	test('submits a direct commitment exit after resolution and redeems REP without an oracle', async () => {
 		const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
 		await manipulatePriceOracle(client, mockWindow, manager)
@@ -115,6 +156,38 @@ describe('Security vault integration', () => {
 		}
 		await redeemRepFromVaultFromSecurityPool(uiWriteClient, securityPoolAddress, walletAddress)
 		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.vaultAttoRepBacking).toBe(0n)
+	})
+	test('reads the funding prerequisites the bundle plan checks, so completing them inline leaves only the bundle to review', async () => {
+		const input = { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }
+		const price = 10n ** 18n
+		const quote = await quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, input, price)
+		expect(quote.needsReport).toBe(true)
+		const before = await loadVaultOperationsPrerequisites(uiReadClient, securityPoolAddress, walletAddress, input, quote)
+		expect(before.approvals.map(approval => approval.kind)).toEqual(['deposit', 'reportWeth', 'reportRep'])
+		expect(before.approvals.every(approval => approval.approvedAmount < approval.requiredAmount)).toBe(true)
+		const wrapAttoEth = before.wrapAttoEth ?? 0n
+		if (wrapAttoEth > 0n) await wrapWeth(uiWriteClient, wrapAttoEth)
+		for (const approval of before.approvals) await approveErc20(uiWriteClient, approval.tokenAddress, approval.spender, approval.recommendedAmount ?? approval.requiredAmount, 'approve')
+		const after = await loadVaultOperationsPrerequisites(uiReadClient, securityPoolAddress, walletAddress, input, await quoteVaultOperations(uiReadClient, securityPoolAddress, walletAddress, input, price))
+		expect(after.wrapAttoEth).toBe(0n)
+		expect(after.approvals.every(approval => approval.approvedAmount >= approval.requiredAmount)).toBe(true)
+		const scope = new AbortController()
+		const reviewed = createReviewedClient(uiWriteClient, undefined, scope.signal)
+		const action = submitVaultOperations(reviewed, securityPoolAddress, input, price).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))))
+		try {
+			for (let attempt = 0; attempt < 200 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 10))
+			const steps = transactionSteps.value?.steps ?? []
+			expect(steps.at(-1)?.phase).toBe('review')
+			expect(steps.slice(0, -1).every(step => step.phase === 'skipped')).toBe(true)
+			transactionSteps.value?.confirmStep(steps.length - 1)
+			const result = await action
+			if (result instanceof Error) throw result
+			expect(result.queuedOperation?.operation).toBe('vaultOperations')
+		} finally {
+			scope.abort()
+			transactionSteps.value = undefined
+			await action
+		}
 	})
 	test('a queued withdrawal-only bundle does not block a commitment bundle quote', async () => {
 		await submitVaultOperations(uiWriteClient, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: false, commitmentAttoEth: 0n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n)

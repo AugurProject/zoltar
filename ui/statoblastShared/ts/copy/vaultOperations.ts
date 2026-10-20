@@ -7,6 +7,7 @@ export const formatMinimumBacking = (amount: string) => `Minimum vault backing: 
 export const unchanged = 'Leave blank to keep the current commitment.'
 export const withdraw = 'REP withdrawal amount (optional)'
 export const withdrawHint = 'Runs after the commitment change and liquidations.'
+export const withdrawEstimateHint = 'Runs after the commitment change and liquidations. Max is estimated at the initial report price.'
 export const liquidations = 'Liquidate other vaults'
 export const liquidationHint = 'Selected targets transfer commitment and REP into your vault.'
 export const noTargets = 'No other vaults with commitments are listed.'
@@ -57,6 +58,16 @@ const targetCommitment = 'Commitment'
 const targetMaximum = 'Maximum liquidatable'
 export const pendingCommitment = 'A commitment operation is already pending for your vault.'
 export const depositApprovalPurpose = 'Vault deposit'
+export const reportApprovalPurpose = 'Oracle report'
+export const prerequisites = 'Funding and approvals'
+export const approvalAction = 'submitting vault operations'
+export const wrapRequired = 'Wrap ETH into WETH for the oracle report first.'
+export const approvalRequired = {
+	deposit: 'Approve REP for the vault deposit first.',
+	reportWeth: 'Approve WETH for the oracle report first.',
+	reportRep: 'Approve REP for the oracle report first.',
+} as const
+export const prerequisiteFailure = 'Funding transaction failed.'
 export const otherReportSponsor = 'Another wallet sponsors the pending report. Wait for settlement.'
 export const settlementCapacity = 'Not enough automatic settlement capacity. Wait for pending operations to finish.'
 export const minimumDeposit = 'The resulting vault deposit is below the pool minimum.'
@@ -91,7 +102,7 @@ export const redeemRep = 'Redeem REP'
 export const feesConfirmed = 'Vault fees claimed'
 export const repConfirmed = 'Vault REP redeemed'
 export const questionNotFinal = 'REP redemption requires a final question outcome.'
-export const unavailableMaximum = 'A valid oracle price is needed to calculate the maximum.'
+export const unavailableMaximum = 'Enter an initial report price to calculate the maximum.'
 export const resolvedIncrease = 'Commitment cannot increase after resolution.'
 export const reviewCommitment = 'Review commitment reduction'
 export const noWithdrawal = 'No REP is available to withdraw while retaining the required backing.'

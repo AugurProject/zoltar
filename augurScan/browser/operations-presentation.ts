@@ -1,4 +1,5 @@
 import type { JsonRecord, JsonValue } from './api-validation.ts'
+import { exactUnit } from './format.ts'
 
 export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
@@ -149,20 +150,26 @@ export const operationsDetailSummaryPresentation = (
 
 export const operationsDetailEvidencePanelVisible = (kind: OperationsDetailKind, itemCount: number, hasMore: boolean, focusedContinuation: boolean): boolean => (kind === 'pool' || kind === 'vault' ? itemCount > 0 || hasMore || focusedContinuation : true)
 
+// Debt amounts are attoETH of the chain's native currency; nonces are identifiers, shown as written.
 const approvalFieldDefinitions = [
-	['maxCumulativeDebtAttoEth', 'maximum cumulative debt', 'attoETH'],
-	['maxDebtPerLiquidationAttoEth', 'maximum debt per liquidation', 'attoETH'],
-	['reservedDebtAttoEth', 'reserved debt', 'attoETH'],
-	['consumedDebtAttoEth', 'consumed debt', 'attoETH'],
-	['releasedDebtAttoEth', 'released debt', 'attoETH'],
-	['resultingAvailableDebtAttoEth', 'resulting available debt', 'attoETH'],
-	['resultingReservedDebtAttoEth', 'resulting reserved debt', 'attoETH'],
-	['resultingConsumedDebtAttoEth', 'resulting consumed debt', 'attoETH'],
-	['previousNonce', 'previous nonce', ''],
-	['newNonce', 'new nonce', ''],
+	['maxCumulativeDebtAttoEth', 'maximum cumulative debt', 'native'],
+	['maxDebtPerLiquidationAttoEth', 'maximum debt per liquidation', 'native'],
+	['reservedDebtAttoEth', 'reserved debt', 'native'],
+	['consumedDebtAttoEth', 'consumed debt', 'native'],
+	['releasedDebtAttoEth', 'released debt', 'native'],
+	['resultingAvailableDebtAttoEth', 'resulting available debt', 'native'],
+	['resultingReservedDebtAttoEth', 'resulting reserved debt', 'native'],
+	['resultingConsumedDebtAttoEth', 'resulting consumed debt', 'native'],
+	['previousNonce', 'previous nonce', 'nonce'],
+	['newNonce', 'new nonce', 'nonce'],
 ] as const
 
-export const approvalTransitionFields = (data: Readonly<Record<string, unknown>>): Array<{ readonly label: string; readonly value: string; readonly unit: string }> => approvalFieldDefinitions.flatMap(([key, label, unit]) => (typeof data[key] === 'string' ? [{ label, value: data[key], unit }] : []))
+export const approvalTransitionFields = (data: Readonly<Record<string, unknown>>, nativeSymbol: string): Array<{ readonly label: string; readonly value: string }> =>
+	approvalFieldDefinitions.flatMap(([key, label, kind]) => {
+		const value = data[key]
+		if (typeof value !== 'string') return []
+		return [{ label, value: kind === 'native' ? exactUnit(value, 18, nativeSymbol) : value }]
+	})
 
 /** The URL a filter form opens: its action path plus every field the user actually filled in. */
 export const filterFormDestination = (actionPath: string, origin: string, fields: Iterable<readonly [string, string]>): URL => {

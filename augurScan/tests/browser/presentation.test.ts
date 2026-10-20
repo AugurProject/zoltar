@@ -14,7 +14,7 @@ for (const viewport of qaViewports) {
 					const { evaluate, waitFor } = session
 					await waitFor(`document.querySelectorAll('.event-name').length > 5`)
 					expect(await evaluate(`document.querySelector('.activity-contract-link .contract-name').textContent`)).toBe('OpenOracle')
-					expect(await evaluate(`document.querySelector('.cell-function')?.textContent`)).toBe('checkpoint')
+					expect(await evaluate(`document.querySelector('.cell-function')?.lastChild?.textContent`)).toBe('checkpoint')
 					expect(await evaluate(`document.querySelectorAll('.log-row a').length > 0`)).toBe(true)
 					for (const selector of ['.chain-block .activity-target', '.activity-contract-link', '.cell-tx', '.cell-origin']) {
 						expect(await evaluate(`document.querySelector('.log-row ${selector}').classList.contains('activity-target')`)).toBe(true)

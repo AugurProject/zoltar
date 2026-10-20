@@ -5,17 +5,18 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, normalizeText, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, normalizeText, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolDiscoveryPage } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { SecurityPoolDiscoveryProps, SecurityPoolsOverviewSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
+import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -74,10 +75,38 @@ function seedDownloadedPools(pools: readonly ListedSecurityPool[], { favorite = 
 	for (const pool of [...pools].reverse()) setEntityFavorite(scope, pool.securityPoolAddress, true)
 }
 
+/** A registry read that settles without a page, so a test sees only the pools it seeded locally. */
+function createIdleDiscovery(overrides: Partial<SecurityPoolDiscoveryProps> = {}): SecurityPoolDiscoveryProps {
+	return { contextKey: 'test', error: undefined, loading: false, onLoadPage: async () => undefined, page: undefined, ...overrides }
+}
+
 function createProps(overrides: Partial<SecurityPoolsOverviewSectionProps> = {}): SecurityPoolsOverviewSectionProps {
 	const securityPools = overrides.securityPools ?? [createSecurityPool()]
 	seedDownloadedPools(securityPools)
-	return { activeUniverseId: 1n, currentTimestamp: undefined, onSelectSecurityPool: () => undefined, ...overrides, securityPools }
+	return { activeUniverseId: 1n, currentTimestamp: undefined, discovery: createIdleDiscovery(), onSelectSecurityPool: () => undefined, ...overrides, securityPools }
+}
+
+type RegistryPageLoad = (pageIndex: number, pageSize: number) => Promise<readonly ListedSecurityPool[]>
+
+/** Serves pages of an in-memory factory registry the way the route's discovery hook does: each page echoes its request key. */
+function DiscoveringOverview({ loadRegistryPage, registrySize, ...props }: Omit<SecurityPoolsOverviewSectionProps, 'discovery'> & { loadRegistryPage: RegistryPageLoad; registrySize: number }) {
+	const [page, setPage] = useState<SecurityPoolDiscoveryPage | undefined>(undefined)
+	const [error, setError] = useState<string | undefined>(undefined)
+	const onLoadPage = async (pageIndex: number, pageSize: number, requestKey: string) => {
+		setError(undefined)
+		try {
+			const pools = await loadRegistryPage(pageIndex, pageSize)
+			setPage({ pageIndex, pageSize, poolCount: BigInt(registrySize), pools: [...pools], requestKey })
+		} catch (loadError) {
+			setError(loadError instanceof Error ? loadError.message : 'Registry read failed')
+			throw loadError
+		}
+	}
+	return <SecurityPoolsOverviewSection {...props} discovery={createIdleDiscovery({ error, onLoadPage, page })} />
+}
+
+function createRegistry(pools: readonly ListedSecurityPool[]): RegistryPageLoad {
+	return async (pageIndex, pageSize) => pools.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
 }
 
 installTestRouting()
@@ -683,26 +712,25 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 	}
 
-	test('lists favorite pools from the local cache without scanning the chain', async () => {
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [createNumberedPool(1), createNumberedPool(2)] })} />)
+	test('opens on saved favorites and loads the first registry page in the background', async () => {
+		const onLoadPage = mock(async (_pageIndex: number, _pageSize: number, _requestKey: string) => undefined)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ discovery: createIdleDiscovery({ onLoadPage }), securityPools: [createNumberedPool(1), createNumberedPool(2)] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1', 'Numbered pool 2'])
-		expect(within(document.body).getByText('Favorites (2)')).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Favorites (2)' }).getAttribute('aria-pressed')).toBe('true')
 		expect(document.body.textContent).not.toContain('Search this page')
-		await act(async () => {
-			await new Promise(resolve => setTimeout(resolve, 0))
-		})
-		expect(within(document.body).queryByRole('button', { name: /Discover|Downloaded/ })).toBeNull()
+		await waitFor(() => expect(onLoadPage).toHaveBeenCalledTimes(1))
+		expect(onLoadPage.mock.calls[0]?.slice(0, 2)).toEqual([0, 10])
 	})
 
-	test('excludes unstarred cached pools from the list and search', async () => {
+	test('excludes unstarred cached pools from the favorites list and search', async () => {
 		seedDownloadedPools([createNumberedPool(9)], { favorite: false })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [createNumberedPool(1)] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1'])
-		expect(within(document.body).getByText('Favorites (1)')).not.toBeNull()
-		expect(document.body.textContent).not.toMatch(/Downloaded|Discover/)
+		expect(within(document.body).getByRole('button', { name: 'Favorites (1)' }).getAttribute('aria-pressed')).toBe('true')
+		expect(within(document.body).getByRole('button', { name: 'Downloaded (2)' }).getAttribute('aria-pressed')).toBe('false')
 		await typeSearch('Numbered pool 9')
 		expect(getRenderedPoolTitles()).toEqual([])
 		expect(within(document.body).getByText('No pools match the current search and filter settings.')).not.toBeNull()
@@ -762,8 +790,12 @@ describe('SecurityPoolsOverviewSection', () => {
 			fireEvent.click(star)
 		})
 		expect(getRenderedPoolTitles()).toEqual([])
-		expect(documentQueries.getByText('No favorite pools yet')).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Show downloaded pools' })).toBeNull()
+		await waitFor(() => expect(documentQueries.getByText('No favorite pools yet')).not.toBeNull())
+		expect(documentQueries.getByText('Star a downloaded pool, or open one, to keep it here.')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Show downloaded pools' }))
+		})
+		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1'])
 		expect(securityPoolDownloadStore.read(getLocalEntityScope('statoblast', 'pool'))).toHaveLength(1)
 		expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'pool'))).toEqual([])
 	})
@@ -833,7 +865,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 1n)
 	})
 
-	test('offers to open a pasted address from the empty favorites state when only downloads exist', async () => {
+	test('opens on downloaded pools without favorites and offers to open a pasted address none of them matches', async () => {
 		seedDownloadedPools([createNumberedPool(5)], { favorite: false })
 		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
 		const address = '0x00000000000000000000000000000000000000Cd'
@@ -848,6 +880,81 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(address, 1n)
 	})
+	test('lists the first registry page on entry when no pools are saved in this browser', async () => {
+		const registry = [createNumberedPool(1), createNumberedPool(2), createNumberedPool(3)]
+		const loadRegistryPage = mock(createRegistry(registry))
+		const renderedComponent = await renderIntoDocument(<DiscoveringOverview activeUniverseId={1n} currentTimestamp={undefined} loadRegistryPage={loadRegistryPage} registrySize={registry.length} securityPools={[]} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1', 'Numbered pool 2', 'Numbered pool 3']))
+		expect(loadRegistryPage).toHaveBeenCalledTimes(1)
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Downloaded (3)' }).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.queryByText('No favorite pools yet')).toBeNull()
+		// The whole registry fit on one page, so there is nothing more to load.
+		expect(documentQueries.queryByRole('button', { name: 'Show more' })).toBeNull()
+	})
+
+	test('loads further registry pages only on request and keeps favorites separate', async () => {
+		const registry = Array.from({ length: 12 }, (_, index) => createNumberedPool(index + 1))
+		seedDownloadedPools([createNumberedPool(40, { marketDetails: createMarketDetails({ title: 'Saved favorite' }) })])
+		const loadRegistryPage = mock(createRegistry(registry))
+		const renderedComponent = await renderIntoDocument(<DiscoveringOverview activeUniverseId={1n} currentTimestamp={undefined} loadRegistryPage={loadRegistryPage} registrySize={registry.length} securityPools={[]} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		expect(getRenderedPoolTitles()).toEqual(['Saved favorite'])
+		await waitFor(() => expect(documentQueries.getByText('10 of 12 pools checked')).not.toBeNull())
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Downloaded (11)' }))
+		})
+		expect(getRenderedPoolTitles()).toHaveLength(11)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Show more' }))
+		})
+		await waitFor(() => expect(getRenderedPoolTitles()).toHaveLength(13))
+		expect(loadRegistryPage.mock.calls.map(call => call[0])).toEqual([0, 1])
+		expect(documentQueries.queryByRole('button', { name: 'Show more' })).toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Favorites (1)' }))
+		})
+		expect(getRenderedPoolTitles()).toEqual(['Saved favorite'])
+	})
+
+	test('offers a retry when the first registry page fails to load', async () => {
+		const registry = [createNumberedPool(1)]
+		let reads = 0
+		const loadRegistryPage = mock(async (pageIndex: number, pageSize: number) => {
+			reads += 1
+			if (reads === 1) throw new Error('Registry read failed')
+			return await createRegistry(registry)(pageIndex, pageSize)
+		})
+		const renderedComponent = await renderIntoDocument(<DiscoveringOverview activeUniverseId={1n} currentTimestamp={undefined} loadRegistryPage={loadRegistryPage} registrySize={registry.length} securityPools={[]} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		await waitFor(() => expect(documentQueries.getByText('Registry read failed')).not.toBeNull())
+		expect(getRenderedPoolTitles()).toEqual([])
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+		})
+		await waitFor(() => expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1']))
+		expect(documentQueries.queryByText('Registry read failed')).toBeNull()
+	})
+
+	test('offers pool creation when the registry has no pools', async () => {
+		const onCreatePool = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(<DiscoveringOverview activeUniverseId={1n} currentTimestamp={undefined} loadRegistryPage={createRegistry([])} onCreatePool={onCreatePool} registrySize={0} securityPools={[]} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		await waitFor(() => expect(documentQueries.getByText('No pools yet')).not.toBeNull())
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create pool' }))
+		})
+		expect(onCreatePool).toHaveBeenCalledTimes(1)
+	})
+
 	test('uses restored browser controls and follows history-driven updates', async () => {
 		const updates: Array<Partial<NonNullable<SecurityPoolsOverviewSectionProps['browseState']>>> = []
 		const props = createProps({
