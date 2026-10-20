@@ -2,6 +2,9 @@ import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, 
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import type { ForkQuestionDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { getMarketType } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import type { LiveMarket } from './live.js'
 
 const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -26,7 +29,7 @@ export type ForkTarget = Readonly<{
 type ForkQuestionBase = Readonly<{
 	parentUniverseId: bigint
 	questionId: bigint
-	title: string
+	question: ForkQuestionDetails
 	availableTargets: readonly ForkTarget[]
 }>
 
@@ -106,12 +109,18 @@ export async function loadForkMigrationContext(client: PublicClient, market: Pic
 	const universe = await client.readContract({ abi: zoltarForkAbi, address: zoltar, functionName: 'universes', args: [market.universeId] })
 	const forkQuestionId = universe[1]
 	if (forkQuestionId === 0n) throw new Error('Forked universe has no fork question')
-	const [question, outcomeLabels] = await Promise.all([client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'questions', args: [forkQuestionId] }), loadOutcomeLabels(client, questionData, forkQuestionId)])
-	const [title, , , , numTicks, displayValueMin, displayValueMax, answerUnit] = question
+	const [storedQuestion, createdAt, outcomeLabels] = await Promise.all([
+		client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'questions', args: [forkQuestionId] }),
+		client.readContract({ abi: forkQuestionAbi, address: questionData, functionName: 'questionCreatedTimestamp', args: [forkQuestionId] }),
+		loadOutcomeLabels(client, questionData, forkQuestionId),
+	])
+	const [title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit] = storedQuestion
+	const questionFields = { title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
+	const question: ForkQuestionDetails = { ...questionFields, createdAt, questionId: formatQuestionIdHex(forkQuestionId), marketType: getMarketType(questionFields, outcomeLabels), outcomeLabels, outcomesComplete: true }
 	if (outcomeLabels.length > 0) {
 		const entries = [{ outcomeIndex: 0n, label: 'Invalid' }, ...outcomeLabels.map((label, index) => ({ outcomeIndex: BigInt(index + 1), label }))]
 		const availableTargets = await Promise.all(entries.map(async entry => await targetWithCanonicalPool(client, market, entry.outcomeIndex, entry.label, account)))
-		return { kind: 'categorical', parentUniverseId: market.universeId, questionId: forkQuestionId, title, availableTargets }
+		return { kind: 'categorical', parentUniverseId: market.universeId, questionId: forkQuestionId, question, availableTargets }
 	}
 	if (numTicks === 0n) throw new Error('Fork question has neither categorical outcomes nor scalar ticks')
 	const availableTargets = await loadScalarTargets(client, zoltar, questionData, market, forkQuestionId, account)
@@ -119,7 +128,7 @@ export async function loadForkMigrationContext(client: PublicClient, market: Pic
 		kind: 'scalar',
 		parentUniverseId: market.universeId,
 		questionId: forkQuestionId,
-		title,
+		question,
 		numTicks,
 		displayValueMin,
 		displayValueMax,

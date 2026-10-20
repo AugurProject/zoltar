@@ -18,7 +18,7 @@
 			<section id="before-you-start">
 				<h2>Before you start</h2>
 				<p>Statoblast is the market layer built on <a href="../explanation/zoltar.html">Zoltar</a>, the forkable oracle: a SecurityPool holds the ETH behind one question's outcome shares, and <a href="../reference/glossary.html#vault">vault</a> owners back it with <a href="../reference/glossary.html#rep">REP</a>. <a href="../explanation/statoblast.html">How Statoblast works</a> explains the model; this tutorial only walks through it.</p>
-				<p>Run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/?simulate=1&amp;simScenario=deployed</code>. That browser-local simulator has the contracts deployed, no pools yet, and a wallet holding ETH and REP; the screenshots below come from it. It never reflects live chain state.</p>
+				<p>Run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/?simulate=1&amp;genesis=yes&amp;simScenario=deployed</code>. That browser-local simulator has the contracts deployed, no pools yet, and a wallet holding ETH and REP; the screenshots below come from it. It never reflects live chain state.</p>
 			</section>
 			<section id="create">
 				<h2>Create the question and pool</h2>
@@ -78,7 +78,7 @@
 				</figure>
 				<p>Return to the pool with the browser's Back button. In <strong>My vault</strong>, <strong>Commitment limit</strong> now reads 10.00 ETH and the panel shows <strong>Vault operations executed</strong>.</p>
 				<figure class="screenshot" id="fig-statoblast-vault-commitment" aria-labelledby="fig-statoblast-vault-commitment-caption">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/vault-commitment.png"><img width="755" height="316" src="../assets/screenshots/statoblast/vault-commitment.png" alt="The My vault summary showing a Commitment limit of 10.00 ETH and Vault REP backing of 1 000.00 REP." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/vault-commitment.png"><img width="755" height="322" src="../assets/screenshots/statoblast/vault-commitment.png" alt="The My vault summary showing a Commitment limit of 10.00 ETH and Vault REP backing of 1 000.00 REP." loading="lazy" /></a>
 					<figcaption id="fig-statoblast-vault-commitment-caption"><span class="figure-label">The applied commitment.</span> The pool can now accept up to 10 ETH of collateral.</figcaption>
 				</figure>
 			</section>

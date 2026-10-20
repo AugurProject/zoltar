@@ -4,12 +4,19 @@ import { getRegisteredSimulationScenarios, getSimulationScenarioDescription } fr
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { initializeOpenOracleActiveEnvironment } from '../../app/activeEnvironment.js'
 import { registerStatoblastSimulationScenarios } from '@zoltar/ui-statoblast-shared/simulation/registerStatoblastScenarios.js'
+import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 
 test('initializes the requested public network for the standalone oracle app', async () => {
 	await initializeOpenOracleActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia' })
 	expect(getActiveNetworkProfile().id).toBe('sepolia')
+	expect(getActiveNetworkProfile().genesisOutcome).toBe('yes')
+})
+
+test('accepts an optional No REP currency profile without requiring a Zoltar deployment', async () => {
+	await initializeOpenOracleActiveEnvironment({ hostname: 'localhost', search: '?network=sepolia&genesis=no' })
+	expect(getActiveNetworkProfile()).toEqual(getGenesisNetworkProfile(SEPOLIA_NETWORK_PROFILE, 'no'))
 })
 
 test('registers the pool-backed report fixtures used by the standalone oracle simulation', () => {

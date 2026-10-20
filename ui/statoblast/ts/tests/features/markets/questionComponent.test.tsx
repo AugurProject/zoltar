@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { Question } from '@zoltar/ui-core-shared/components/Question.js'
+import { ForkQuestion, Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -34,6 +34,25 @@ describe('Question component', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('shows all fork facts, including start time, scalar range, unit, and complete resolution paragraphs', async () => {
+		const question = createQuestion({ title: 'Highest temperature?', description: 'Use the final station report.\n\nDiscard provisional measurements.', marketType: 'scalar', startTime: 150n, numTicks: 100n, displayValueMin: -10n * 10n ** 18n, displayValueMax: 40n * 10n ** 18n, answerUnit: '°C', outcomeLabels: [] })
+		const rendered = await renderIntoDocument(<ForkQuestion question={question} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('h4')?.textContent).toBe('Fork question')
+		expect(document.querySelectorAll('.question-summary-heading p')).toHaveLength(2)
+		for (const value of [question.questionId, 'Starts', '1970-01-01 00:02:30 UTC', 'End time', '-10 to 40\u00a0°C', '100', 'Answer unit', 'Scalar, Invalid']) expect(document.body.textContent).toContain(value)
+	})
+
+	test('labels a bounded outcome page without inventing Invalid or hiding the rest of the question', async () => {
+		const rendered = await renderIntoDocument(<ForkQuestion question={{ ...createQuestion({ marketType: 'categorical', outcomeLabels: ['Eleventh', 'Twelfth'] }), outcomesComplete: false }} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Outcomes on this page')
+		expect(document.body.textContent).toContain('Eleventh, Twelfth')
+		expect(document.body.textContent).not.toContain('Invalid')
+		expect(document.body.textContent).toContain('Description')
+		expect(document.body.textContent).toContain('End time')
 	})
 
 	test('inherits the shared chain timestamp for route-level relative time rendering', async () => {

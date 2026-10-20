@@ -249,7 +249,11 @@ export function OverviewPanels({
 			}
 			controls={
 				<>
-					{activeUniverseId === undefined ? undefined : <ToolbarField label={commonCopy.universe}>{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}</ToolbarField>}
+					{activeUniverseId === undefined ? undefined : (
+						<ToolbarField className='universe' hideLabel label={commonCopy.universe}>
+							{universeControl ?? <span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>}
+						</ToolbarField>
+					)}
 					{accountControl}
 				</>
 			}

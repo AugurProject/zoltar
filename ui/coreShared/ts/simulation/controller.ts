@@ -9,6 +9,8 @@ export type SimulationController = {
 	bootstrapError: string | undefined
 	bootstrapLabel: string | undefined
 	bootstrapProgress: number | undefined
+	/** A recovered startup issue that remains visible until the scenario is reset. */
+	bootstrapWarning: string | undefined
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	currentScenario: SimulationScenario

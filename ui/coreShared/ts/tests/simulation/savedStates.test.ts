@@ -1,13 +1,15 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { parseSavedSimulationStateEnvelope } from './savedStateStorage.js'
+import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
-function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: string }) {
+function createSerializedSavedState({ genesisOutcome, name, savedAt }: { genesisOutcome?: GenesisOutcome; name: string; savedAt: string }) {
 	return serializeSavedSimulationStateEnvelope({
 		baseScenario: 'baseline',
+		...(genesisOutcome === undefined ? {} : { genesisOutcome }),
 		name,
 		savedAt,
 		state: {
@@ -157,6 +159,40 @@ describe('saved simulation states', () => {
 			if (backupValue === null) throw new Error('Expected corrupted saved-state backup to be written')
 			return JSON.parse(backupValue)
 		}
+
+		test('exposes the parsed genesis root in summaries and treats absent genesis as Yes', () => {
+			const yes = persistSavedSimulationState(createSerializedSavedState({ genesisOutcome: 'yes', name: 'Yes baseline', savedAt: '2026-06-02T12:34:56.000Z' }))
+			const no = persistSavedSimulationState(createSerializedSavedState({ genesisOutcome: 'no', name: 'No baseline', savedAt: '2026-06-02T12:35:56.000Z' }))
+			const legacyYes = persistSavedSimulationState(createSerializedSavedState({ name: 'Older Yes baseline', savedAt: '2026-06-02T12:36:56.000Z' }))
+
+			expect(yes.genesisOutcome).toBe('yes')
+			expect(no.genesisOutcome).toBe('no')
+			expect(legacyYes.genesisOutcome).toBe('yes')
+			const records = getSavedSimulationStateStorageSummary().records
+			expect(records).toHaveLength(3)
+			expect(records.map(record => [record.id, record.genesisOutcome])).toEqual(
+				expect.arrayContaining([
+					[legacyYes.id, 'yes'],
+					[no.id, 'no'],
+					[yes.id, 'yes'],
+				]),
+			)
+		})
+
+		test('reads summaries without re-parsing validated snapshots', () => {
+			const yes = persistSavedSimulationState(createSerializedSavedState({ name: 'Yes baseline', savedAt: '2026-06-02T12:34:56.000Z' }))
+			const no = persistSavedSimulationState(createSerializedSavedState({ genesisOutcome: 'no', name: 'No baseline', savedAt: '2026-06-02T12:35:56.000Z' }))
+			const parse = spyOn(JSON, 'parse')
+			try {
+				const summary = getSavedSimulationStateStorageSummary()
+				expect(summary.records.map(record => record.genesisOutcome)).toEqual(expect.arrayContaining(['yes', 'no']))
+				for (const record of [yes, no]) {
+					expect(parse.mock.calls.filter(([serialized]) => serialized === record.serialized)).toHaveLength(1)
+				}
+			} finally {
+				parse.mockRestore()
+			}
+		})
 
 		test('persists, lists, and deletes saved states from local storage', () => {
 			const first = persistSavedSimulationState(createSerializedSavedState({ name: 'Saved baseline', savedAt: '2026-06-02T12:34:56.000Z' }))

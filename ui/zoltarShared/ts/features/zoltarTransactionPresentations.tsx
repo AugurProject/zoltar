@@ -1,5 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as marketCopy from '../copy/market.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -60,7 +61,14 @@ function getQuestionUniverseTransactionRows(context: QuestionUniverseTransaction
 }
 
 export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork', context?: QuestionUniverseTransactionContext) {
-	return buildIntent({ action: actionName, scope: universeTransactionScope(context?.universeId), rows: getQuestionUniverseTransactionRows(context), source: 'zoltar', submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar, universeId: context?.universeId })
+	return buildIntent({
+		action: actionName,
+		scope: universeTransactionScope(context?.universeId, getActiveNetworkProfile().genesisRepTokenAddress),
+		rows: getQuestionUniverseTransactionRows(context),
+		source: 'zoltar',
+		submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar,
+		universeId: context?.universeId,
+	})
 }
 
 export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResult) {
@@ -85,7 +93,7 @@ function getChildUniverseTransactionRows(context: ChildUniverseTransactionContex
 }
 
 export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'zoltar', context?: ChildUniverseTransactionContext) {
-	return buildIntent({ action: 'createChildUniverse', scope: universeTransactionScope(context?.universeId), rows: getChildUniverseTransactionRows(context), source, submittedTitle: transactionCopy.deployingChildUniverse, universeId: context?.universeId })
+	return buildIntent({ action: 'createChildUniverse', scope: universeTransactionScope(context?.universeId, getActiveNetworkProfile().genesisRepTokenAddress), rows: getChildUniverseTransactionRows(context), source, submittedTitle: transactionCopy.deployingChildUniverse, universeId: context?.universeId })
 }
 
 export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult, outcomeLabel: string) {
@@ -111,7 +119,7 @@ function getZoltarMigrationTransactionRows(context: ZoltarMigrationTransactionCo
 }
 
 export function createZoltarMigrationTransactionIntent(context?: ZoltarMigrationTransactionContext) {
-	return buildIntent({ action: 'split', scope: universeTransactionScope(context?.universeId), rows: getZoltarMigrationTransactionRows(context), source: 'zoltar', submittedTitle: transactionCopy.migratingRep, universeId: context?.universeId })
+	return buildIntent({ action: 'split', scope: universeTransactionScope(context?.universeId, getActiveNetworkProfile().genesisRepTokenAddress), rows: getZoltarMigrationTransactionRows(context), source: 'zoltar', submittedTitle: transactionCopy.migratingRep, universeId: context?.universeId })
 }
 
 export function createZoltarMigrationSuccessPresentation(result: ZoltarMigrationActionResult, outcomeLabels: readonly string[]) {

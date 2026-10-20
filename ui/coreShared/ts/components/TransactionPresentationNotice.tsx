@@ -6,8 +6,6 @@ import { Badge } from './Badge.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import { AddressValue, FittedAddressValue } from './AddressValue.js'
-import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import { buildAddressExplorerUrl } from '../wallet/networkProfile.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
 
 type TransactionPresentationNoticeProps = {
@@ -61,17 +59,11 @@ function TransactionDetailValue({ value }: { value: ComponentChildren }) {
 	const addressValue = parseAddressDetailValue(value)
 	if (addressValue === undefined) return typeof value === 'string' ? <TransactionDetailText value={value} /> : <>{value}</>
 	const { address, label } = addressValue
-	const explorerUrl = buildAddressExplorerUrl(getActiveNetworkProfile(), address)
 	// A long address abbreviates to fit its column rather than wrapping into a narrow stack of characters.
 	return (
 		<span className='global-transaction-identifier'>
 			{label === undefined ? undefined : <span className='global-transaction-identifier-label'>{label}</span>}
 			<AddressValue address={address} />
-			{explorerUrl === undefined ? undefined : (
-				<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(address)}>
-					{transactionCopy.explorer}
-				</a>
-			)}
 		</span>
 	)
 }

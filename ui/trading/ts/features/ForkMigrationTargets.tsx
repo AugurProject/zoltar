@@ -1,6 +1,7 @@
 import { ForkTargetPicker, type ForkTargetOption } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkTargetPicker.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
+import { ForkQuestion } from '@zoltar/ui-core-shared/components/Question.js'
 import { createScalarForkTarget, migratedSharesOf, targetMigrationComplete, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
 import type { ShareOutcome } from '../protocol/live.js'
 import { formatOutcomeQuantity } from '../lib/shareValue.js'
@@ -66,12 +67,7 @@ export function ForkMigrationTargets({
 						}
 			}
 			selectedOutcomeIndexes={selectedTargets.map(target => target.outcomeIndex)}
-			summary={
-				<div className='fork-question-summary'>
-					<span>{context.kind === 'scalar' ? forkCopy.scalarForkQuestion : forkCopy.categoricalForkQuestion}</span>
-					<strong>{context.title}</strong>
-				</div>
-			}
+			summary={<ForkQuestion question={context.question} />}
 		/>
 	)
 }

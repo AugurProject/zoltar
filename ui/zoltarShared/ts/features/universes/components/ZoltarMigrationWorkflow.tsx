@@ -4,6 +4,7 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { universeTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { ZoltarMigrationSection } from './ZoltarMigrationSection.js'
 import type { useZoltarOperations } from '../hooks/useZoltarOperations.js'
@@ -15,7 +16,7 @@ export function ZoltarMigrationWorkflow({ universeBrowserHref, accountState, act
 	return (
 		<>
 			{/* A pending fork or migration locks only this universe's actions. */}
-			<TransactionScopeProvider scope={universeTransactionScope(activeUniverseId)}>
+			<TransactionScopeProvider scope={universeTransactionScope(activeUniverseId, getActiveNetworkProfile().genesisRepTokenAddress)}>
 				<SectionBlock variant='plain'>
 					<ZoltarMigrationSection
 						universeBrowserHref={universeBrowserHref}

@@ -184,6 +184,6 @@ describe('CurrencyValue', () => {
 		expect(copyButton.textContent).toBe('999\u00a0999\u00a0990\u00a0000.00 ETH')
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
-		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe('999 999 990 000')
+		expect(documentQueries.getByLabelText('Exact value for manual copy').textContent).toBe('999 999 990 000')
 	})
 })

@@ -192,6 +192,19 @@ describe('OpenOracleSection route create view', () => {
 		},
 	})
 
+	test('keeps create-summary token addresses copyable and linked to Etherscan', async () => {
+		const token1Address = '0x2000000000000000000000000000000000000000'
+		const token2Address = '0x3000000000000000000000000000000000000000'
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ openOracleCreateForm: { ...getDefaultOpenOracleCreateFormState(), token1Address, token2Address } })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const context = rendered.container.querySelector('.mobile-workflow-context')
+		if (context === null) throw new Error('Expected the report summary')
+		for (const address of [token1Address, token2Address]) {
+			expect(within(context).getByRole('button', { name: `Copy address ${address}` })).not.toBeNull()
+			expect(context.querySelector(`a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
+		}
+	})
+
 	test('renders create-success handoff actions in create view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

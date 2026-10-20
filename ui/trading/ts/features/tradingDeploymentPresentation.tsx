@@ -1,6 +1,7 @@
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import * as appCopy from '../copy/app.js'
@@ -32,7 +33,9 @@ export function inspectionPresentation(
 }
 
 // A deployment still pending after the setup route was left keeps the deploy action locked when the route returns.
-export const tradingDeploymentScope = createTransactionScope('trading-deployment', 'factory')
+export function tradingDeploymentScope() {
+	return createTransactionScope('trading-deployment', `${getActiveNetworkProfile().genesisRepTokenAddress}:factory`)
+}
 
 /**
  * Why one contract's deploy action is unavailable, so each disabled control explains itself instead of silently ignoring
@@ -94,7 +97,7 @@ export function contractStatusPresentation(deployed: boolean | undefined, isNext
 export function PlaceholderDeployAction({ availability, externalReasonId }: { availability: ActionAvailability; externalReasonId: string | undefined }) {
 	return (
 		<TransactionActionButton
-			scope={tradingDeploymentScope}
+			scope={tradingDeploymentScope()}
 			availability={availability.disabled ? availability : { disabled: true, loading: true, reason: deploymentCopy.checkingNetwork }}
 			disabledReasonElementId={externalReasonId}
 			idleLabel={deploymentCopy.deployTradingContracts}

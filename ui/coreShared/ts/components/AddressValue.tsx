@@ -1,9 +1,11 @@
 import type { RefObject } from 'preact'
 import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
+import * as transactionCopy from '../copy/transaction.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
-import { abbreviateAddress } from '../lib/address.js'
+import { abbreviateAddress, isHexAddressInput } from '../lib/address.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
+import { buildAddressExplorerUrl, getRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
 import { CopyErrorMessage } from './CopyErrorMessage.js'
 import { CopyGlyph, CopyStatus } from './CopyStatus.js'
 
@@ -20,18 +22,20 @@ type AddressValueProps = {
 	abbreviated?: boolean
 	className?: string
 	compactAbbreviation?: boolean
-	copyable?: boolean
+	explorerProfile?: NetworkProfile | undefined
+	/** Keep the entire address visible, wrapping across lines when necessary. */
+	wrap?: boolean
 	widthConstraint?: AddressWidthConstraint | undefined
 }
 
-function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthConstraint }: { alwaysAbbreviated: boolean; address: string; compactAbbreviation: boolean; widthConstraint?: AddressWidthConstraint | undefined }) {
+function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthConstraint, wrap = false }: { alwaysAbbreviated: boolean; address: string; compactAbbreviation: boolean; widthConstraint?: AddressWidthConstraint | undefined; wrap?: boolean }) {
 	const container = useRef<HTMLSpanElement>(null)
 	const full = useRef<HTMLSpanElement>(null)
 	const [overflowing, setOverflowing] = useState(false)
 	useLayoutEffect(() => {
 		const element = container.current
 		const fullText = full.current
-		if (element === null || fullText === null) return
+		if (element === null || fullText === null || wrap) return
 		const measure = () => {
 			const slot = widthConstraint?.slot.current
 			const control = widthConstraint?.control.current
@@ -46,8 +50,9 @@ function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthCon
 		if (widthConstraint?.slot.current) observer.observe(widthConstraint.slot.current)
 		if (widthConstraint?.control.current) observer.observe(widthConstraint.control.current)
 		return () => observer.disconnect()
-	}, [address, alwaysAbbreviated, widthConstraint])
+	}, [address, alwaysAbbreviated, widthConstraint, wrap])
 	const shortForm = compactAbbreviation ? abbreviateAddress(address, 6, 4) : abbreviateAddress(address)
+	if (wrap) return <span className='address-value-wrapped'>{address}</span>
 	// The short form is what sighted users read; the full address stays in the text for assistive technology and text search.
 	if (alwaysAbbreviated)
 		return (
@@ -68,7 +73,9 @@ function AddressText({ alwaysAbbreviated, address, compactAbbreviation, widthCon
 	)
 }
 
-export function ReadOnlyAddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, widthConstraint }: Omit<AddressValueProps, 'copyable'>) {
+export function AddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, explorerProfile, widthConstraint, wrap = false }: AddressValueProps) {
+	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
+
 	if (address === undefined) {
 		const placeholder = getMetricPlaceholderPresentation(address)?.placeholder
 		return (
@@ -77,24 +84,48 @@ export function ReadOnlyAddressValue({ abbreviated = false, address, className =
 			</span>
 		)
 	}
-	return (
-		<span className={`address-value ${className}`} title={address}>
-			<AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} widthConstraint={widthConstraint} />
-		</span>
-	)
-}
-
-export function AddressValue({ abbreviated = false, address, className = '', compactAbbreviation = false, copyable = true, widthConstraint }: AddressValueProps) {
-	const { copied, copyError, copyErrorId, copyText } = useCopyToClipboard(address)
-
-	if (address === undefined || !copyable) return <ReadOnlyAddressValue abbreviated={abbreviated} address={address} className={className} compactAbbreviation={compactAbbreviation} widthConstraint={widthConstraint} />
+	const validAddress = isHexAddressInput(address)
+	const href = validAddress ? buildAddressExplorerUrl(explorerProfile ?? getRuntimeNetworkProfile(), address) : undefined
+	const text = <AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} widthConstraint={widthConstraint} wrap={wrap} />
+	const unavailableReason = validAddress ? commonCopy.addressExplorerUnavailable : commonCopy.addressExplorerInvalid
 
 	return (
-		<span className='copy-value-wrap'>
-			<button type='button' className={`address-value copyable ${className}`} data-copied={copied.value} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} aria-describedby={copyError.value === undefined ? undefined : copyErrorId} onClick={() => copyText(address)}>
-				<AddressText alwaysAbbreviated={abbreviated} address={address} compactAbbreviation={compactAbbreviation} widthConstraint={widthConstraint} />
-				<CopyGlyph />
-			</button>
+		<span className='copy-value-wrap address-copy-control'>
+			<span className={`address-control${wrap ? ' address-control-wrap' : ''}`}>
+				{href === undefined ? (
+					<span role='link' aria-disabled='true' aria-label={commonCopy.formatLabelValue(address, unavailableReason)} className={`address-value address-value-unavailable ${className}`} title={unavailableReason}>
+						{text}
+					</span>
+				) : (
+					<a className={`address-value address-value-link ${className}`} href={href} target='_blank' rel='noopener noreferrer' title={address} aria-label={transactionCopy.formatViewAddressOnExplorer(address)}>
+						{text}
+					</a>
+				)}
+				{/* Copy stays available inside disabled transaction fieldsets, which also disable native buttons. */}
+				<span
+					role='button'
+					tabIndex={0}
+					className='address-copy-button'
+					data-copied={copied.value}
+					title={address}
+					aria-label={commonCopy.formatCopyAddressValue(address)}
+					aria-describedby={copyError.value === undefined ? undefined : copyErrorId}
+					onClick={() => copyText(address)}
+					onKeyDown={event => {
+						if (event.key === ' ') event.preventDefault()
+						if (event.key !== 'Enter') return
+						event.preventDefault()
+						if (!event.repeat) void copyText(address)
+					}}
+					onKeyUp={event => {
+						if (event.key !== ' ') return
+						event.preventDefault()
+						void copyText(address)
+					}}
+				>
+					<CopyGlyph />
+				</span>
+			</span>
 			<CopyStatus copied={copied.value} message={commonCopy.copiedAddress} />
 			<CopyErrorMessage id={copyErrorId} manualValue={address} message={copyError.value} />
 		</span>

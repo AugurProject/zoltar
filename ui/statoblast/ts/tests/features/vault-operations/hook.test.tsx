@@ -301,6 +301,25 @@ describe('vault operations lifecycle', () => {
 		return rendered
 	}
 
+	test('keeps target address copy and explorer actions separate from liquidation selection', async () => {
+		const rendered = await mountPanel(dependencies())
+		const queries = within(rendered.container)
+		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))
+		const checkbox = queries.getByRole<HTMLInputElement>('checkbox')
+		const copy = queries.getByRole('button', { name: `Copy address ${targetAddress}` })
+		const targetChoice = copy.closest('.vault-operations-target-choice')
+		if (targetChoice === null) throw new Error('Expected a liquidation target')
+		const explorer = within(targetChoice).getByRole('link')
+		expect(copy.closest('label') === null).toBe(true)
+		expect(explorer.getAttribute('href')).toBe(`https://etherscan.io/address/${targetAddress}`)
+		expect(explorer.closest('label') === null).toBe(true)
+		expect(checkbox.checked).toBe(false)
+		await act(() => fireEvent.click(copy))
+		expect(checkbox.checked).toBe(false)
+		await act(() => fireEvent.click(checkbox))
+		expect(checkbox.checked).toBe(true)
+	})
+
 	test.each([0n, unit])('panel only enables fee claiming for positive fees (%s)', async fees => {
 		const rendered = await mountPanel(dependencies({ loadOwned: async () => ({ ...owned, underwritingLimitAttoEth: unit, claimableFeesAttoEth: fees }) }))
 		await waitFor(() => expect(rendered.container.textContent).toContain('1k REP'))

@@ -3,6 +3,8 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { ForkMigrationTargets, MigratedShareLinks, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
@@ -17,17 +19,22 @@ installDomTestLifecycle({
 })
 
 function scalarContext(): Extract<ForkMigrationContext, { kind: 'scalar' }> {
+	const question = createMarketDetails({ title: 'Unrelated scalar fork', description: 'Use the published temperature reading.', marketType: 'scalar', outcomeLabels: [], questionId: '0x63', numTicks: 100n, displayValueMin: -50n * 10n ** 18n, displayValueMax: 50n * 10n ** 18n, answerUnit: '°C' })
 	return {
 		kind: 'scalar',
 		parentUniverseId: 7n,
 		questionId: 99n,
-		title: 'Unrelated scalar fork',
-		numTicks: 100n,
-		displayValueMin: -50n * 10n ** 18n,
-		displayValueMax: 50n * 10n ** 18n,
-		answerUnit: '°C',
+		question,
+		numTicks: question.numTicks,
+		displayValueMin: question.displayValueMin,
+		displayValueMax: question.displayValueMax,
+		answerUnit: question.answerUnit,
 		availableTargets: [],
 	}
+}
+
+function categoricalContext(targets: readonly ForkTarget[]): ForkMigrationContext {
+	return { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, question: createMarketDetails({ title: 'Unrelated category fork', description: 'Use the certified final tally.', marketType: 'categorical', outcomeLabels: targets.map(target => target.label), questionId: '0x58' }), availableTargets: targets }
 }
 
 const noMigratedShares = { invalid: 0n, yes: 0n, no: 0n }
@@ -76,6 +83,10 @@ describe('fork migration target selection', () => {
 		const context = scalarContext()
 		const rendered = await renderIntoDocument(<Harness context={context} />)
 		cleanup = rendered.cleanup
+		expect(within(rendered.container).getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(rendered.container.textContent).toContain('Use the published temperature reading.')
+		expect(rendered.container.textContent).toContain('Display range')
+		expect(rendered.container.textContent).toContain('0x63')
 		const tickInput = inputByLabel(rendered.container, 'Select scalar target')
 
 		for (const tick of ['0', '25', '50', '75', '1 00']) {
@@ -94,7 +105,9 @@ describe('fork migration target selection', () => {
 	})
 
 	test('rejects a human value beyond the range without selecting another outcome', async () => {
-		const rendered = await renderIntoDocument(<Harness context={{ ...scalarContext(), numTicks: BigInt(Number.MAX_SAFE_INTEGER) + 1n }} />)
+		const context = scalarContext()
+		const numTicks = BigInt(Number.MAX_SAFE_INTEGER) + 1n
+		const rendered = await renderIntoDocument(<Harness context={{ ...context, numTicks, question: { ...context.question, numTicks } }} />)
 		cleanup = rendered.cleanup
 		const valueInput = inputByLabel(rendered.container, 'Scalar value')
 		await input(valueInput, '51')
@@ -138,11 +151,15 @@ describe('fork migration target selection', () => {
 			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: noMigratedShares },
 			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, migrated: noMigratedShares },
 		]
-		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }
+		const context = categoricalContext(targets)
 		const rendered = await renderIntoDocument(<Harness context={context} />)
 		cleanup = rendered.cleanup
 
 		expect(rendered.container.querySelector('.migration-outcome-list')).not.toBeNull()
+		expect(within(rendered.container).getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(rendered.container.textContent).toContain('Use the certified final tally.')
+		expect(rendered.container.textContent).toContain('Categorical')
+		expect(rendered.container.textContent).toContain('0x58')
 
 		await click(buttonByText(rendered.container, 'Red'))
 		await click(buttonByText(rendered.container, 'Blue'))
@@ -158,7 +175,7 @@ describe('fork migration target selection', () => {
 			{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: childPool, migrated: { invalid: 0n, yes: 10n, no: 0n } },
 			{ outcomeIndex: 2n, universeId: 12n, label: 'Blue', canonicalPool: `0x${'22'.repeat(20)}`, migrated: noMigratedShares },
 		]
-		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }
+		const context = categoricalContext(targets)
 		const rendered = await renderIntoDocument(
 			<>
 				<Harness context={context} />
@@ -197,7 +214,7 @@ describe('fork migration target selection', () => {
 
 	test('treats a balance that grew after migrating as not yet migrated there', async () => {
 		const targets: readonly ForkTarget[] = [{ outcomeIndex: 1n, universeId: 11n, label: 'Red', canonicalPool: `0x${'11'.repeat(20)}`, migrated: { invalid: 0n, yes: 10n, no: 0n } }]
-		const context: ForkMigrationContext = { kind: 'categorical', parentUniverseId: 7n, questionId: 88n, title: 'Unrelated category fork', availableTargets: targets }
+		const context = categoricalContext(targets)
 		const rendered = await renderIntoDocument(<Harness context={context} sourceBalance={15n} />)
 		cleanup = rendered.cleanup
 		expect(buttonByText(rendered.container, 'Red').closest('.migration-outcome-row')?.textContent).not.toContain('Migrated')

@@ -5,8 +5,9 @@ import { registerStatoblastSimulationScenarios } from '@zoltar/ui-statoblast-sha
 import { initializeOpenOracleActiveEnvironment } from './app/activeEnvironment.js'
 import { installOpenOracleRouting } from './app/routing.js'
 import { App } from './app/App.js'
+import { applicationTitle } from './copy/app.js'
 
 installOpenOracleRouting()
 installStatoblastContractLabels()
 registerStatoblastSimulationScenarios()
-void mountApp({ initialize: initializeOpenOracleActiveEnvironment, root: () => createElement(App, {}) })
+void mountApp({ applicationTitle, requireGenesisSelection: false, initialize: initializeOpenOracleActiveEnvironment, root: () => createElement(App, {}) })
